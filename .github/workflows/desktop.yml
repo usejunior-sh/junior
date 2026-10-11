@@ -1,9 +1,10 @@
-# Builds Triage.app for both Mac architectures on a release tag and attaches
-# the zips to that tag's GitHub release, where install.sh downloads them.
+# Builds Triage.app for both Mac architectures on a release tag, attaches the
+# zips and install.sh to that tag's GitHub release, then publishes it.
 #
-# /release pushes the tag before it creates the release, so each job builds
-# first and then waits for the release to exist. Creating the release is not
-# this workflow's job.
+# /release pushes the tag and creates the release as a draft, so each job
+# builds first and then waits for the release to exist. Creating the release is
+# not this workflow's job; publishing it is. `releases/latest` skips drafts, so
+# `curl | sh` keeps installing the previous version until both zips are up.
 name: desktop
 
 on:
@@ -91,3 +92,25 @@ jobs:
 
       - name: Upload
         run: gh release upload "$TAG" "desktop/release/Triage-$VERSION-mac-${{ matrix.arch }}.zip" --repo "$GITHUB_REPOSITORY" --clobber
+
+  # Only once both archs are up: a published release without its zips is a
+  # broken `curl | sh` for anyone who installs in between.
+  publish:
+    name: Publish the release
+    needs: app
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      # The installer that matches this release; usetriage.sh/install.sh
+      # redirects to releases/latest/download/install.sh.
+      - name: Upload install.sh
+        run: gh release upload "$TAG" install.sh --repo "$GITHUB_REPOSITORY" --clobber
+
+      - name: Publish
+        run: gh release edit "$TAG" --draft=false --repo "$GITHUB_REPOSITORY"

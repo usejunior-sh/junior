@@ -87,8 +87,8 @@ Triage.app is a native window over the same server, with its own Node bundled, s
 launch it attaches to the triage that's already running, or starts one. Quitting the app leaves triage running, so live
 sessions and watches keep going. You still need Claude Code installed and logged in.
 
-Until usetriage.sh serves the script, use `https://raw.githubusercontent.com/usetriage/triage/main/install.sh`. The app is
-ad-hoc signed, not notarized: install it with the script, not a browser download. More in [desktop/README.md](desktop/README.md).
+Run the same line again to update. The app is ad-hoc signed, not notarized: install it with the script, not a browser
+download. More in [desktop/README.md](desktop/README.md).
 
 ## What's new in 0.9
 

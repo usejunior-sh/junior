@@ -34,6 +34,35 @@ die() {
   exit 1
 }
 
+# spin "label" cmd args… — runs cmd with a spinner beside the label, clears
+# the line when it's done, and returns cmd's status. For the quiet steps that
+# take seconds (unpacking ~700 MB, the LaunchAgent). Off a terminal, just runs.
+spin() {
+  label="$1"
+  shift
+  if [ ! -t 1 ]; then
+    "$@"
+    return
+  fi
+  "$@" &
+  pid=$!
+  i=0
+  while kill -0 "$pid" 2>/dev/null; do
+    case $((i % 10)) in
+      0) f='⠋' ;; 1) f='⠙' ;; 2) f='⠹' ;; 3) f='⠸' ;; 4) f='⠼' ;;
+      5) f='⠴' ;; 6) f='⠦' ;; 7) f='⠧' ;; 8) f='⠇' ;; *) f='⠏' ;;
+    esac
+    printf '\r  %s%s%s %s %s%ss%s' "$DIM" "$f" "$RESET" "$label" "$DIM" "$((i / 10))" "$RESET"
+    i=$((i + 1))
+    sleep 0.1
+  done
+  printf '\r%s[K' "$ESC"
+  wait "$pid"
+}
+
+# Silences a command but not the spinner around it: spin "…" quiet cmd…
+quiet() { "$@" >/dev/null 2>&1; }
+
 TMP=""
 cleanup() { if [ -n "$TMP" ]; then rm -rf "$TMP"; fi; }
 
@@ -52,11 +81,12 @@ detect_arch() {
   esac
 }
 
+# Read off where releases/latest redirects (…/releases/tag/v1.2.3), not the
+# API: that allows 60 unauthenticated calls an hour per IP, which one office
+# network can use up.
 latest_version() {
-  curl -fsSL -H 'Accept: application/vnd.github+json' \
-    "https://api.github.com/repos/$REPO/releases/latest" 2>/dev/null |
-    sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"v\{0,1\}\([^"]*\)".*/\1/p' |
-    head -n 1
+  curl -fsS -o /dev/null -w '%{redirect_url}' "https://github.com/$REPO/releases/latest" 2>/dev/null |
+    sed -n 's|.*/releases/tag/v\{0,1\}\([^/?#]*\)$|\1|p'
 }
 
 bundle_id() {
@@ -148,8 +178,7 @@ keep_running() {
     printf '    run %striage install%s when they finish to keep watches alive across reboots\n' "$BOLD" "$RESET"
     return 0
   fi
-  step "keeping triage running after reboot"
-  if "$node" "$cli" install >/dev/null 2>&1; then
+  if spin "keeping triage running after reboot" quiet "$node" "$cli" install; then
     ok "LaunchAgent installed ${DIM}(undo: triage uninstall)${RESET}"
   else
     printf '  %s!%s couldn%st install the LaunchAgent — watches will stop at the next reboot.\n' "$BOLD" "$RESET" "'"
@@ -199,17 +228,19 @@ main() {
     if [ -t 2 ]; then progress=--progress-bar; else progress=-sS; fi
     curl -fL "$progress" --retry 2 -o "$zip" "$url" ||
       die "download failed: $url
-    (a release's app can take ~15 min to appear after the tag — retry, or pin TRIAGE_VERSION)"
+    (a pinned TRIAGE_VERSION may predate the Mac app — try without it)"
     ok "downloaded v$version ($arch)"
   fi
 
   # Unpack and check it before touching what's installed.
-  ditto -x -k "$zip" "$TMP/unpacked" || die "not a zip archive"
+  spin "unpacking" ditto -x -k "$zip" "$TMP/unpacked" || die "not a zip archive"
+  ok "unpacked"
   new="$TMP/unpacked/$APP"
   [ -d "$new" ] || die "the archive has no $APP at its top level"
   [ "$(bundle_id "$new")" = "$BUNDLE_ID" ] || die "$APP in the archive isn't $BUNDLE_ID"
   xattr -dr com.apple.quarantine "$new" 2>/dev/null || true
-  codesign --verify --deep --strict "$new" 2>/dev/null || die "$APP failed its signature check"
+  spin "verifying the signature" codesign --verify --deep --strict "$new" 2>/dev/null ||
+    die "$APP failed its signature check"
   ok "signature verified"
 
   if [ -n "${TRIAGE_INSTALL_DIR:-}" ]; then
