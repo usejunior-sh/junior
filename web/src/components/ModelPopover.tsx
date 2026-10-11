@@ -1,27 +1,33 @@
 /**
- * One control for how a session thinks: model and effort. The chip reads
- * "Opus · high"; the popover holds a filterable model list, who is paying
- * (the workspace's Claude auth), and effort as a segmented row with the
- * levels a model cannot do struck through. Fast mode stays its own chip.
+ * One control for how a session thinks: agent, model and effort. The chip reads
+ * "Opus · high"; the popover holds a rail of agents (Claude, Codex) on the left,
+ * that agent's filterable model list, who is paying, and effort as a segmented
+ * row with the levels a model cannot do struck through. Fast mode stays its own chip.
  */
 import * as Popover from '@radix-ui/react-popover'
 import { Check, ChevronDown, Search, Sparkles } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import type { EffortLevel, ModelOption } from '../../../shared/protocol.js'
+import { EFFORT_LEVELS, PROVIDER_IDS, type EffortLevel, type ModelOption, type ProviderId } from '../../../shared/protocol.js'
 import { useWorkspaceId, useWorkspaces } from '../hooks.js'
-import { EFFORT_LABEL, findModel, reloadModels, useModelStore, useModels, usePickableModels } from '../models.js'
+import { EFFORT_LABEL, findModel, reloadProviderModels, useProviderModels } from '../models.js'
 import { isMobile } from '../useMobile.js'
+import { PROVIDER_LABEL, ProviderIcon } from './ProviderIcon.js'
 
 type Props = {
   /** The current model — an alias the user picked, or the wire id the SDK reported. */
   model?: string
   effort?: EffortLevel
-  /** `undefined` on either side means "whatever Claude Code defaults to". */
+  /** `undefined` on either side means "whatever the agent defaults to". */
   onModelChange: (model: string | undefined, effort: EffortLevel | undefined) => void
+  /**
+   * The agent the models are for. Given → the rail shows; absent → Claude, no
+   * rail (the Settings default picker).
+   */
+  provider?: ProviderId
+  /** Given → the rail can switch agents (a draft). Absent → it is locked: a session keeps its agent. */
+  onProviderChange?: (provider: ProviderId) => void
   disabled?: boolean
 }
-
-const ALL_EFFORTS: EffortLevel[] = ['low', 'medium', 'high', 'xhigh', 'max']
 
 const AUTH_LABEL = {
   inherit: 'your Claude login',
@@ -33,11 +39,12 @@ export function ModelPopover({
   model,
   effort,
   onModelChange,
+  provider,
+  onProviderChange,
   disabled,
 }: Props) {
-  const models = useModels()
-  const pickable = usePickableModels(model)
-  const { status } = useModelStore()
+  const agent = provider ?? 'claude'
+  const { all: models, pickable, status } = useProviderModels(agent, model)
   const workspaces = useWorkspaces()
   const workspaceId = useWorkspaceId()
   const workspace = workspaces.find((w) => w.id === workspaceId)
@@ -45,7 +52,10 @@ export function ModelPopover({
   const [q, setQ] = useState('')
 
   const selected = findModel(models, model)
-  const efforts = selected?.efforts ?? []
+  // No model on a Codex session means Codex's own default, which it lists first.
+  // Named in the chip and used for effort, never sent back as a pick.
+  const named = selected ?? (agent !== 'claude' && !model ? models[0] : undefined)
+  const efforts = named?.efforts ?? []
 
   const shown = useMemo(() => {
     const needle = q.trim().toLowerCase()
@@ -66,7 +76,14 @@ export function ModelPopover({
     onModelChange(selected?.id ?? model, level)
   }
 
-  const label = selected?.name ?? (models.length ? 'Model' : status === 'error' ? 'Models unavailable' : 'Loading models…')
+  function pickProvider(p: ProviderId) {
+    if (p === agent || !onProviderChange) return
+    setQ('')
+    onProviderChange(p)
+  }
+
+  const label = named?.name ?? (models.length ? 'Model' : status === 'error' ? 'Models unavailable' : 'Loading models…')
+  const agentDefault = agent === 'claude' ? 'Claude Code' : PROVIDER_LABEL[agent]
 
   return (
     <Popover.Root
@@ -74,18 +91,20 @@ export function ModelPopover({
       onOpenChange={(o) => {
         setOpen(o)
         if (!o) setQ('')
-        else if (status === 'error') void reloadModels(true)
+        else if (status === 'error') void reloadProviderModels(agent, true)
       }}
     >
       <Popover.Trigger asChild>
         <button
           type="button"
           className="chip model"
-          disabled={disabled || (models.length === 0 && status !== 'error')}
-          title="Model and effort for this session"
-          aria-label={`Model: ${label}${effort ? `, ${EFFORT_LABEL[effort].toLowerCase()} effort` : ''}`}
+          // A rail can still switch to an agent whose list loads, so only a
+          // rail-less picker waits for its models.
+          disabled={disabled || (models.length === 0 && status === 'loading' && !onProviderChange)}
+          title="Agent, model and effort for this session"
+          aria-label={`${agent !== 'claude' ? `${PROVIDER_LABEL[agent]} · ` : ''}Model: ${label}${effort ? `, ${EFFORT_LABEL[effort].toLowerCase()} effort` : ''}`}
         >
-          <Sparkles size={12} aria-hidden="true" />
+          {agent === 'claude' ? <Sparkles size={12} aria-hidden="true" /> : <ProviderIcon provider={agent} size={12} />}
           <span className="name">{label}</span>
           {effort && <span className="eff">{EFFORT_LABEL[effort].toLowerCase()}</span>}
           <ChevronDown size={11} aria-hidden="true" />
@@ -94,7 +113,7 @@ export function ModelPopover({
 
       <Popover.Portal>
         <Popover.Content
-          className="mpop"
+          className={`mpop${provider ? ' withRail' : ''}`}
           side="top"
           align="start"
           sideOffset={8}
@@ -108,94 +127,125 @@ export function ModelPopover({
             requestAnimationFrame(() => document.querySelector('.mpOpt.sel')?.scrollIntoView({ block: 'nearest' }))
           }}
         >
-          <label className="mpSearch">
-            <Search size={13} aria-hidden="true" />
-            <input
-              id="modelSearch"
-              placeholder="Search models…"
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-            />
-          </label>
-
-          {workspace && (
-            <div className="mpAuth">
-              <span className="dot sm" style={{ background: workspace.color }} aria-hidden="true" />
-              <span>
-                Runs on {AUTH_LABEL[workspace.authBackend]}
-                {workspace.authBackend === 'api-key' && workspace.apiKeyHint ? ` (${workspace.apiKeyHint})` : ''}
-              </span>
-              <span className="pill mute">{workspace.name}</span>
+          {provider && (
+            <div className="mpRail" role="radiogroup" aria-label="Agent">
+              {PROVIDER_IDS.map((p) => {
+                const on = p === agent
+                const locked = !onProviderChange && !on
+                return (
+                  <button
+                    key={p}
+                    type="button"
+                    role="radio"
+                    aria-checked={on}
+                    disabled={locked}
+                    className={`mpAgent${on ? ' on' : ''}`}
+                    title={locked ? `A session keeps its agent — start a new session to use ${PROVIDER_LABEL[p]}` : PROVIDER_LABEL[p]}
+                    onClick={() => pickProvider(p)}
+                  >
+                    <ProviderIcon provider={p} size={18} />
+                    <span>{PROVIDER_LABEL[p]}</span>
+                  </button>
+                )
+              })}
             </div>
           )}
+          <div className="mpMain">
+            <label className="mpSearch">
+              <Search size={13} aria-hidden="true" />
+              <input
+                id="modelSearch"
+                placeholder="Search models…"
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+              />
+            </label>
 
-          <div className="mpList" role="listbox" aria-label="Model">
-            {shown.map((m) => {
-              const on = m === selected
-              return (
-                <button
-                  key={m.id}
-                  type="button"
-                  role="option"
-                  aria-selected={on}
-                  className={`mpOpt${on ? ' sel' : ''}`}
-                  onClick={() => pickModel(m)}
-                >
-                  <span className="n">{m.name}</span>
-                  <span className="d">{m.description}</span>
-                  <Check size={13} aria-hidden="true" className="chk" />
-                </button>
-              )
-            })}
-            {shown.length === 0 && (
-              <div className="mpEmpty">
-                {models.length === 0 ? (
-                  <>
-                    Could not load models.{' '}
-                    <button type="button" className="btn ghost sm" onClick={() => void reloadModels(true)}>
-                      Retry
-                    </button>
-                  </>
-                ) : pickable.length === 0 ? (
-                  'Every model is hidden — pick some in Settings → Models.'
-                ) : (
-                  'No model matches.'
-                )}
+            {agent !== 'claude' ? (
+              <div className="mpAuth">
+                <ProviderIcon provider={agent} size={12} />
+                <span>Runs on your {PROVIDER_LABEL[agent]} login</span>
+              </div>
+            ) : workspace && (
+              <div className="mpAuth">
+                <span className="dot sm" style={{ background: workspace.color }} aria-hidden="true" />
+                <span>
+                  Runs on {AUTH_LABEL[workspace.authBackend]}
+                  {workspace.authBackend === 'api-key' && workspace.apiKeyHint ? ` (${workspace.apiKeyHint})` : ''}
+                </span>
+                <span className="pill mute">{workspace.name}</span>
               </div>
             )}
-          </div>
 
-          <div className="mpFoot" role="radiogroup" aria-label="Effort">
-            <span className="lbl">Effort</span>
-            <button
-              type="button"
-              role="radio"
-              aria-checked={!effort}
-              className={`eff${!effort ? ' on' : ''}`}
-              title="Whatever Claude Code defaults to"
-              onClick={() => pickEffort(undefined)}
-            >
-              Default
-            </button>
-            {ALL_EFFORTS.map((level) => {
-              const can = efforts.length === 0 || efforts.includes(level)
-              return (
-                <button
-                  key={level}
-                  type="button"
-                  role="radio"
-                  aria-checked={effort === level}
-                  disabled={!can}
-                  className={`eff${effort === level ? ' on' : ''}${can ? '' : ' blocked'}`}
-                  title={can ? EFFORT_LABEL[level] : `${selected?.name ?? 'This model'} does not offer ${EFFORT_LABEL[level].toLowerCase()}`}
-                  onClick={() => pickEffort(level)}
-                >
-                  {EFFORT_LABEL[level]}
-                </button>
-              )
-            })}
-          </div>
+            <div className="mpList" role="listbox" aria-label="Model">
+              {shown.map((m) => {
+                const on = m === selected
+                return (
+                  <button
+                    key={m.id}
+                    type="button"
+                    role="option"
+                    aria-selected={on}
+                    className={`mpOpt${on ? ' sel' : ''}`}
+                    onClick={() => pickModel(m)}
+                  >
+                    <span className="n">{m.name}</span>
+                    <span className="d">{m.description}</span>
+                    <Check size={13} aria-hidden="true" className="chk" />
+                  </button>
+                )
+              })}
+              {shown.length === 0 && (
+                <div className="mpEmpty">
+                  {models.length === 0 && status === 'loading' ? (
+                    `Loading ${PROVIDER_LABEL[agent]} models…`
+                  ) : models.length === 0 ? (
+                    <>
+                      Could not load {PROVIDER_LABEL[agent]} models.{' '}
+                      <button type="button" className="btn ghost sm" onClick={() => void reloadProviderModels(agent, true)}>
+                        Retry
+                      </button>
+                    </>
+                  ) : pickable.length === 0 ? (
+                    'Every model is hidden — pick some in Settings → Models.'
+                  ) : (
+                    'No model matches.'
+                  )}
+                </div>
+              )}
+            </div>
 
+            <div className="mpFoot" role="radiogroup" aria-label="Effort">
+              <span className="lbl">Effort</span>
+              <button
+                type="button"
+                role="radio"
+                aria-checked={!effort}
+                className={`eff${!effort ? ' on' : ''}`}
+                title={`Whatever ${agentDefault} defaults to`}
+                onClick={() => pickEffort(undefined)}
+              >
+                Default
+              </button>
+              {EFFORT_LEVELS.map((level) => {
+                const can = efforts.length === 0 || efforts.includes(level)
+                return (
+                  <button
+                    key={level}
+                    type="button"
+                    role="radio"
+                    aria-checked={effort === level}
+                    disabled={!can}
+                    className={`eff${effort === level ? ' on' : ''}${can ? '' : ' blocked'}`}
+                    title={can ? EFFORT_LABEL[level] : `${named?.name ?? 'This model'} does not offer ${EFFORT_LABEL[level].toLowerCase()}`}
+                    onClick={() => pickEffort(level)}
+                  >
+                    {EFFORT_LABEL[level]}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>

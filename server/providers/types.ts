@@ -1,7 +1,7 @@
 /**
  * The provider seam: everything triage asks of a coding agent, as one
- * interface. Claude Code (via the Agent SDK) is the only adapter today
- * (`claude.ts`); a second one implements this file, never the call sites.
+ * interface. Claude Code (via the Agent SDK, `claude.ts`) and Codex (via
+ * `codex app-server`, `codex.ts`) implement it; call sites never see either.
  *
  * Specs say what triage wants (a folder, a model, which tools, a veto on every
  * tool call); each adapter decides how its agent is told. What comes back is
@@ -24,11 +24,12 @@ import type {
   ImageMediaType,
   ModelOption,
   PermissionMode,
+  ProviderId,
   SdkMessage,
   WorkspaceAuthBackend,
 } from '../../shared/protocol.js'
 
-export type ProviderId = 'claude'
+export type { ProviderId }
 
 /**
  * What an adapter can do beyond the bare interface. A caller that needs one

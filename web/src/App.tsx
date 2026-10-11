@@ -793,6 +793,7 @@ export function App() {
       effort: s.effort,
       fastMode: s.fastMode,
       permissionMode: s.permissionMode,
+      provider: s.provider,
       images: s.images,
       mentions: s.mentions,
       itemId: s.itemId,
@@ -1214,6 +1215,7 @@ export function App() {
                   fastModeState={current.fastModeState}
                   fastModeDisabledReason={current.fastModeDisabledReason}
                   permissionMode={current.permissionMode}
+                  provider={current.provider ?? 'claude'}
                   onSend={sendMessage}
                   onInterrupt={interrupt}
                   onModelChange={setModel}

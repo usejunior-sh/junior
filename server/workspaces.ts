@@ -130,11 +130,15 @@ export function loadRegistry(): WorkspaceRegistry {
  * Every workspace names its provider. One saved before providers existed ran
  * on Claude, so it gets `claude` — and keeps everything else it had, its
  * config dir included (`claude/` is that provider's dir). True = changed.
+ *
+ * Only Claude can be a workspace's provider for now: watches, briefs, probes
+ * and team workers all run on it, and Codex is picked per chat session
+ * instead. A file naming another agent is put back on Claude.
  */
 export function migrateProviders(reg: WorkspaceRegistry): boolean {
   let changed = false
   for (const ws of reg.workspaces) {
-    if (toProviderId(ws.provider)) continue
+    if (toProviderId(ws.provider) === DEFAULT_PROVIDER) continue
     ws.provider = DEFAULT_PROVIDER
     changed = true
   }

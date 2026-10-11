@@ -7,6 +7,7 @@ import type {
   FastModeState,
   PermissionMode,
   Project,
+  ProviderId,
   ProjectsResponse,
   SessionStatus,
 } from '../../../shared/protocol.js'
@@ -26,6 +27,8 @@ type Props = {
   fastModeState?: FastModeState
   fastModeDisabledReason?: FastModeDisabledReason
   permissionMode?: PermissionMode
+  /** The agent the session runs on — shown, never changed: a session keeps its agent. */
+  provider: ProviderId
   onSend: (text: string, images?: ImageAttachment[], mentions?: Mention[]) => void
   onInterrupt: () => void
   onModelChange: (model: string | undefined, effort: EffortLevel | undefined) => void
@@ -48,6 +51,7 @@ export function Composer({
   fastModeState,
   fastModeDisabledReason,
   permissionMode,
+  provider,
   onSend,
   onInterrupt,
   onModelChange,
@@ -91,6 +95,7 @@ export function Composer({
       fastModeDisabledReason={fastModeDisabledReason}
       permissionMode={permissionMode}
       onModelChange={onModelChange}
+      provider={provider}
       onFastModeChange={onFastModeChange}
       onPermissionModeChange={onPermissionModeChange}
       running={running}

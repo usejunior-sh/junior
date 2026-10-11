@@ -8,6 +8,7 @@ import {
   type PermissionMode,
   type Project,
   type ProjectsResponse,
+  type ProviderId,
 } from '../../../shared/protocol.js'
 import type { Draft } from '../drafts.js'
 import { readSessionDefaults, writeSessionDefaults } from '../sessionDefaults.js'
@@ -23,6 +24,8 @@ export type NewSession = {
   effort?: EffortLevel
   fastMode?: boolean
   permissionMode?: PermissionMode
+  /** The agent the session runs on for life; absent = Claude. */
+  provider?: ProviderId
   images?: ImageAttachment[]
   mentions?: Mention[]
   /** the work item this session is dispatched for (recorded as a link) */
@@ -62,6 +65,11 @@ export function NewSessionComposer({ draft, onChange, onCreate }: Props) {
   const [effort, setEffort] = useState<EffortLevel | undefined>(defaults.effort)
   const [fastMode, setFastMode] = useState(defaults.fastMode)
   const [permissionMode, setPermissionMode] = useState<PermissionMode | undefined>(defaults.permissionMode)
+  // Every draft starts on Claude. The saved defaults are Claude's (its model
+  // ids, its fast mode), so they are neither carried into another agent nor
+  // overwritten by a pick made there.
+  const [provider, setProvider] = useState<ProviderId>('claude')
+  const onClaude = provider === 'claude'
 
   useEffect(() => {
     void fetch('/api/projects')
@@ -115,8 +123,9 @@ export function NewSessionComposer({ draft, onChange, onCreate }: Props) {
             firstMessage: text,
             model,
             effort,
-            fastMode,
+            fastMode: onClaude && fastMode,
             permissionMode,
+            ...(onClaude ? {} : { provider }),
             images,
             mentions,
             ...(draft.itemId ? { itemId: draft.itemId } : {}),
@@ -129,7 +138,15 @@ export function NewSessionComposer({ draft, onChange, onCreate }: Props) {
         onModelChange={(m, e) => {
           setModel(m)
           setEffort(e)
-          writeSessionDefaults({ model: m, effort: e })
+          if (onClaude) writeSessionDefaults({ model: m, effort: e })
+        }}
+        provider={provider}
+        onProviderChange={(p) => {
+          // Back on Claude: its saved defaults, re-read. Elsewhere: that agent's default model.
+          const d = p === 'claude' ? readSessionDefaults() : undefined
+          setProvider(p)
+          setModel(d?.model)
+          setEffort(d?.effort)
         }}
         onFastModeChange={(on) => {
           setFastMode(on)

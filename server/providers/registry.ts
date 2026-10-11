@@ -3,9 +3,10 @@
  * these keys; a second adapter is one more entry here.
  */
 import { claude } from './claude.js'
+import { codex } from './codex.js'
 import type { Provider, ProviderId } from './types.js'
 
-const PROVIDERS: Record<ProviderId, Provider> = { claude }
+const PROVIDERS: Record<ProviderId, Provider> = { claude, codex }
 
 /** What a workspace from before providers runs on. */
 export const DEFAULT_PROVIDER: ProviderId = 'claude'

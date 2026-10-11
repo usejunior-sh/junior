@@ -85,6 +85,14 @@ export type WorkspaceVerifyResponse =
  */
 export type SessionKind = 'chat' | 'watch-run' | 'brief'
 
+/**
+ * The coding agent a session runs on, fixed for its life. Chats can pick;
+ * watches, briefs and team workers are always `claude`.
+ */
+export const PROVIDER_IDS = ['claude', 'codex'] as const
+export type ProviderId = (typeof PROVIDER_IDS)[number]
+export const isProviderId = (v: unknown): v is ProviderId => PROVIDER_IDS.includes(v as ProviderId)
+
 // ---------------------------------------------------------------------------
 // Teams v2 (server/teams.ts, core/teams/recipe.ts): a team is a recipe file —
 // steps, fan-out, gates, budget — filled in by agents, which are Claude Code
@@ -202,7 +210,9 @@ export type PermissionMode = 'default' | 'acceptEdits' | 'auto' | 'bypassPermiss
 export type ToolEffect = 'read' | 'local-write' | 'external-write'
 
 /** How much thinking the model puts into a turn. The SDK's own scale. */
-export type EffortLevel = 'low' | 'medium' | 'high' | 'xhigh' | 'max'
+export const EFFORT_LEVELS = ['low', 'medium', 'high', 'xhigh', 'max'] as const
+export type EffortLevel = (typeof EFFORT_LEVELS)[number]
+export const isEffortLevel = (v: unknown): v is EffortLevel => EFFORT_LEVELS.includes(v as EffortLevel)
 
 /**
  * Fast mode: the same model served at up to ~2.5x the output tokens/second,
@@ -249,6 +259,8 @@ export type SessionSummary = {
   fastModeDisabledReason?: FastModeDisabledReason
   /** How much this session asks before acting. Absent = 'default'. */
   permissionMode?: PermissionMode
+  /** The agent this session runs on. Absent = 'claude'. */
+  provider?: ProviderId
   /** Pinned to the top of the sidebar. Absent = not pinned. */
   pinned?: boolean
   /** Current git branch of `cwd`, when it is a repo. Derived, not stored. */
@@ -1437,6 +1449,8 @@ export type ClientMessage =
       effort?: EffortLevel
       permissionMode?: PermissionMode
       fastMode?: boolean
+      /** The agent to run on, for the session's whole life. Omitted = 'claude'. */
+      provider?: ProviderId
       /** The work item this session is dispatched for — recorded as a `dispatch` link. */
       itemId?: string
     }

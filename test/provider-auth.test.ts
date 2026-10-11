@@ -46,6 +46,12 @@ test('an unknown provider id falls back to claude', () => {
   assert.equal(reg.workspaces[0].provider, 'claude')
 })
 
+test('a workspace naming codex is put back on claude — codex is picked per session', () => {
+  const reg = { ...legacy, workspaces: [{ ...legacy.workspaces[0], provider: 'codex' }] } as unknown as WorkspaceRegistry
+  assert.equal(ws.migrateProviders(reg), true)
+  assert.equal(reg.workspaces[0].provider, 'claude')
+})
+
 test('inherit spawns with no overrides', () => {
   const meta = { ...legacy.workspaces[0], authBackend: 'inherit' as const, provider: 'claude' as const }
   assert.equal(ws.envOverridesFor(meta), undefined)

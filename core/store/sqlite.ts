@@ -15,7 +15,8 @@ import { isArtifactAuthor, isLinkKind, isLinkRole } from '../../shared/protocol.
 import type { Provenance, WorkItem } from '../work/types.js'
 import type { ItemEvent, ItemEventKind, ItemStatus, StatusChange } from '../work/state.js'
 import { eventForStatus, shouldReopen } from '../work/state.js'
-import type { EffortLevel, PermissionMode } from '../../shared/protocol.js'
+import type { EffortLevel, PermissionMode, ProviderId } from '../../shared/protocol.js'
+import { isProviderId } from '../../shared/protocol.js'
 import type { NewWatch, Watch, WatchCadence, WatchConnector, WatchNotify, WatchRunResult, WatchRunStart, WatchRunStatus, WatchRunTrigger, WatchSlotFinish, WatchSlotRun, WatchSlotStatus, NewWatchSlotRun } from '../watch/types.js'
 import { WATCH_NOTIFY, WATCH_RUN_STATUSES } from '../watch/types.js'
 import { cronFromCadence } from '../watch/cron.js'
@@ -319,6 +320,9 @@ const MIGRATIONS: string[] = [
   `ALTER TABLE projects ADD COLUMN is_default INTEGER NOT NULL DEFAULT 0;
    CREATE UNIQUE INDEX IF NOT EXISTS idx_projects_default ON projects(is_default) WHERE is_default = 1;
    ALTER TABLE sessions ADD COLUMN project_id TEXT;`,
+  // 27: the agent a session runs on, fixed for its life. Every session before
+  // this ran on Claude, so the default backfills them.
+  `ALTER TABLE sessions ADD COLUMN provider TEXT NOT NULL DEFAULT 'claude';`,
 ]
 
 export function openSqliteStore(file: string): Store {
@@ -464,6 +468,7 @@ function ensureDurableSchema(db: DatabaseSync) {
   ensure('sessions', 'run_new', 'run_new INTEGER', s)
 
   ensure('sessions', 'project_id', 'project_id TEXT', s)
+  ensure('sessions', 'provider', "provider TEXT NOT NULL DEFAULT 'claude'", s)
 
   const wi = cols('work_items')
   ensure('work_items', 'due_at', 'due_at INTEGER', wi)
@@ -496,6 +501,7 @@ type SessionRow = {
   effort: string | null
   fast_mode: number
   permission_mode: string | null
+  provider: string | null
   pinned: number
   kind: string | null
   watch_id: string | null
@@ -525,6 +531,9 @@ const toEffort = (v: string | null): EffortLevel | null =>
 const toPermissionMode = (v: string | null): PermissionMode | null =>
   PERMISSION_MODES.includes(v as PermissionMode) ? (v as PermissionMode) : null
 
+/** An agent this build doesn't know reads back as Claude, the one every row started on. */
+const toProvider = (v: string | null): ProviderId => (isProviderId(v) ? v : 'claude')
+
 const toSession = (r: SessionRow): StoredSession => ({
   id: r.id,
   title: r.title,
@@ -535,6 +544,7 @@ const toSession = (r: SessionRow): StoredSession => ({
   effort: toEffort(r.effort),
   fastMode: r.fast_mode === 1,
   permissionMode: toPermissionMode(r.permission_mode),
+  provider: toProvider(r.provider),
   pinned: r.pinned === 1,
   kind: r.kind === 'watch-run' || r.kind === 'brief' ? r.kind : 'chat',
   watchId: r.watch_id,
@@ -558,14 +568,15 @@ class SqliteSessions implements SessionStore {
     const effort = s.effort ?? null
     const fastMode = s.fastMode ?? false
     const permissionMode = s.permissionMode ?? null
+    const provider: ProviderId = s.provider ?? 'claude'
     const kind: SessionKind = s.kind ?? 'chat'
     const watchId = s.watchId ?? null
     this.db
       .prepare(
-        `INSERT INTO sessions (id, title, cwd, project_id, sdk_session_id, model, effort, fast_mode, permission_mode, kind, watch_id, run_trigger, created_at, updated_at)
-         VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO sessions (id, title, cwd, project_id, sdk_session_id, model, effort, fast_mode, permission_mode, provider, kind, watch_id, run_trigger, created_at, updated_at)
+         VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
-      .run(s.id, s.title, s.cwd, s.projectId, model, effort, fastMode ? 1 : 0, permissionMode, kind, watchId, s.runTrigger ?? null, now, now)
+      .run(s.id, s.title, s.cwd, s.projectId, model, effort, fastMode ? 1 : 0, permissionMode, provider, kind, watchId, s.runTrigger ?? null, now, now)
     return {
       id: s.id,
       title: s.title,
@@ -575,6 +586,7 @@ class SqliteSessions implements SessionStore {
       effort,
       fastMode,
       permissionMode,
+      provider,
       kind,
       watchId,
       ...(s.runTrigger ? { runTrigger: s.runTrigger } : {}),

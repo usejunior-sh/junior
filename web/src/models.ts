@@ -8,8 +8,15 @@
  * retries on a backoff and on demand, and meanwhile the last good list (kept
  * in localStorage) stands in, so a flaky probe cannot empty the picker.
  */
-import { useSyncExternalStore } from 'react'
-import type { EffortLevel, ModelOption, ModelsResponse, SettingsResponse, WorkspaceSettings } from '../../shared/protocol.js'
+import { useEffect, useSyncExternalStore } from 'react'
+import type {
+  EffortLevel,
+  ModelOption,
+  ModelsResponse,
+  ProviderId,
+  SettingsResponse,
+  WorkspaceSettings,
+} from '../../shared/protocol.js'
 
 export type ModelsStatus = 'loading' | 'ready' | 'error'
 
@@ -19,7 +26,11 @@ type State = {
   custom: string[]
   status: ModelsStatus
   error?: string
+  /** Other agents' lists (Codex), fetched the first time a picker shows one. No hide-list or custom ids. */
+  others: Partial<Record<ProviderId, Catalog>>
 }
+
+type Catalog = { models: ModelOption[]; status: ModelsStatus; error?: string }
 
 const LAST_GOOD_KEY = 'triage.models.lastGood'
 const RETRY_MS = [3_000, 10_000, 30_000]
@@ -33,7 +44,7 @@ function readLastGood(): ModelOption[] {
   }
 }
 
-let state: State = { catalog: readLastGood(), hidden: [], custom: [], status: 'loading' }
+let state: State = { catalog: readLastGood(), hidden: [], custom: [], status: 'loading', others: {} }
 const listeners = new Set<() => void>()
 let inFlight: Promise<void> | null = null
 let retries = 0
@@ -84,6 +95,57 @@ export function reloadModels(refresh = false): Promise<void> {
     inFlight = null
   })
   return inFlight
+}
+
+const otherInFlight = new Map<ProviderId, Promise<void>>()
+
+/**
+ * Load another agent's list (`/api/models?provider=`). Not retried on a timer:
+ * an agent that isn't installed would fail forever — the picker offers Retry.
+ */
+export function reloadProviderModels(provider: ProviderId, refresh = false): Promise<void> {
+  if (provider === 'claude') return reloadModels(refresh)
+  const running = otherInFlight.get(provider)
+  if (running) return running
+  const prev = state.others[provider]
+  const setOther = (c: Catalog) => set({ others: { ...state.others, [provider]: c } })
+  setOther({ models: prev?.models ?? [], status: 'loading' })
+  const run = (async () => {
+    try {
+      const r = await fetch(`/api/models?provider=${provider}${refresh ? '&refresh=1' : ''}`)
+      const b = (await r.json()) as ModelsResponse
+      if (!b.ok) throw new Error(b.error)
+      setOther({ models: b.models, status: 'ready' })
+    } catch (e) {
+      setOther({ models: prev?.models ?? [], status: 'error', error: e instanceof Error ? e.message : String(e) })
+    }
+  })().finally(() => otherInFlight.delete(provider))
+  otherInFlight.set(provider, run)
+  return run
+}
+
+/**
+ * One agent's models for a picker: `all` to look a session's model up in,
+ * `pickable` to offer. Claude's is the catalog above, hide-list and custom ids
+ * applied; another agent's is its own list as it gave it.
+ */
+export function useProviderModels(
+  provider: ProviderId,
+  current?: string,
+): { all: ModelOption[]; pickable: ModelOption[]; status: ModelsStatus } {
+  const s = useModelStore()
+  const other = provider === 'claude' ? undefined : s.others[provider]
+  useEffect(() => {
+    if (provider !== 'claude' && !state.others[provider]) void reloadProviderModels(provider)
+  }, [provider])
+  if (provider !== 'claude') {
+    const models = other?.models ?? []
+    return { all: models, pickable: models, status: other?.status ?? 'loading' }
+  }
+  const all = merged(s)
+  const hidden = new Set(s.hidden)
+  const keep = findModel(all, current)
+  return { all, pickable: all.filter((m) => !hidden.has(m.id) || m === keep), status: s.status }
 }
 
 /** Save the user's hide-list and custom ids; the pickers follow immediately. */
@@ -143,11 +205,7 @@ export function useModels(): ModelOption[] {
  * in the list even when hidden, so a picker never contradicts its own session.
  */
 export function usePickableModels(current?: string): ModelOption[] {
-  const s = useModelStore()
-  const all = merged(s)
-  const hidden = new Set(s.hidden)
-  const keep = findModel(all, current)
-  return all.filter((m) => !hidden.has(m.id) || m === keep)
+  return useProviderModels('claude', current).pickable
 }
 
 /**

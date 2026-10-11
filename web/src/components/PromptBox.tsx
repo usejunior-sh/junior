@@ -9,6 +9,7 @@ import {
   type Mention,
   type MentionKind,
   type PermissionMode,
+  type ProviderId,
 } from '../../../shared/protocol.js'
 import { useAttachments } from '../attachments.js'
 import { activeCommand, insertCommand, useCommandSearch, useCommands, type CommandHit } from '../commands.js'
@@ -50,6 +51,10 @@ type Props = {
   fastModeDisabledReason?: FastModeDisabledReason
   permissionMode?: PermissionMode
   onModelChange: (model: string | undefined, effort: EffortLevel | undefined) => void
+  /** The agent this box sends to; shows the agent rail in the model picker. */
+  provider?: ProviderId
+  /** A draft can switch agents; a live session's rail is locked (omit this). */
+  onProviderChange?: (provider: ProviderId) => void
   onFastModeChange: (fastMode: boolean) => void
   onPermissionModeChange: (mode: PermissionMode) => void
   /** A turn is in flight — offer the interrupt button. */
@@ -94,6 +99,8 @@ export function PromptBox({
   fastModeDisabledReason,
   permissionMode,
   onModelChange,
+  provider,
+  onProviderChange,
   onFastModeChange,
   onPermissionModeChange,
   running,
@@ -405,16 +412,25 @@ export function PromptBox({
           >
             <ImagePlus aria-hidden="true" />
           </button>
-          <ModelPopover model={model} effort={effort} onModelChange={onModelChange} />
+          <ModelPopover
+            model={model}
+            effort={effort}
+            onModelChange={onModelChange}
+            provider={provider}
+            onProviderChange={onProviderChange}
+          />
           <PermissionModePicker mode={permissionMode} onChange={onPermissionModeChange} />
           <span className="spacer" />
-          <FastModeToggle
-            model={model}
-            fastMode={fastMode}
-            state={fastModeState}
-            reason={fastModeDisabledReason}
-            onChange={onFastModeChange}
-          />
+          {/* Fast mode is a Claude serving tier; other agents have no such switch. */}
+          {(provider ?? 'claude') === 'claude' && (
+            <FastModeToggle
+              model={model}
+              fastMode={fastMode}
+              state={fastModeState}
+              reason={fastModeDisabledReason}
+              onChange={onFastModeChange}
+            />
+          )}
           {running && onInterrupt && (
             <button id="stopBtn" onClick={onInterrupt} title="Interrupt the current turn" aria-label="Stop">
               <Square size={11} aria-hidden="true" />

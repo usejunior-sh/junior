@@ -44,6 +44,7 @@ import type {
   PermissionResult,
   PermissionUpdate,
   Provider,
+  ProviderId,
   RunSpec as AgentRunSpec,
   ToolCall,
   UserTurn,
@@ -120,7 +121,9 @@ import {
   MAX_MENTIONS_PER_MESSAGE,
   USAGE_WINDOWS,
   isArtifactAuthor,
+  isEffortLevel,
   isImageMediaType,
+  isProviderId,
   isLinkKind,
   isLinkRole,
   isMentionKind,
@@ -509,8 +512,9 @@ class WorkspaceRuntime {
   /** connector probes per project folder (its project + local MCP servers), for the watch picker */
   readonly folderProbes = new Map<string, ConnectorProbe>()
   readonly folderProbeInFlight = new Map<string, Promise<ConnectorProbe>>()
-  modelCache: ModelProbe | null = null
-  modelInFlight: Promise<ModelProbe> | null = null
+  /** model catalogs per agent: the workspace's own at boot, another's (Codex) on first ask */
+  readonly modelCache = new Map<ProviderId, ModelProbe>()
+  readonly modelInFlight = new Map<ProviderId, Promise<ModelProbe>>()
   /** `/` command lists, keyed by folder — a project's own commands live under it */
   readonly commandCache = new Map<string, CommandProbe>()
   readonly commandInFlight = new Map<string, Promise<CommandProbe>>()
@@ -667,6 +671,8 @@ class LiveSession {
   private costSeen = 0
   /** Whether this subprocess was spawned able to bypass permission checks. */
   private readonly bypassArmed: boolean
+  /** The agent this session runs on — its own, not the workspace's. */
+  readonly provider: Provider
 
   constructor(
     readonly rt: WorkspaceRuntime,
@@ -677,7 +683,8 @@ class LiveSession {
   ) {
     this.seq = lastSeq
     this.bypassArmed = row.permissionMode === 'bypassPermissions'
-    this.q = rt.provider.openSession(this.input, {
+    this.provider = providerFor(row.provider)
+    this.q = this.provider.openSession(this.input, {
       cwd: row.cwd,
       // Brief sessions: the headless contract rides in the system prompt so
       // it survives `resume` (.docs/next-version.md).
@@ -685,10 +692,11 @@ class LiveSession {
       // The triage inbox as in-process tools, so a chat can list/create/edit
       // work items directly — same tool surface as the stdio shim external
       // Claude Code sessions get (server/mcp.ts). Scoped to this workspace.
-      // Brief sessions add their own `write_brief` server on top.
+      // Brief sessions add their own `write_brief` server on top. An agent
+      // that can't host in-process servers (Codex) gets none of them: it
+      // reaches triage through its own configured `triage` MCP instead.
       mcpServers: {
-        triage: rt.triageMcp(),
-        ...(extras.mcp ?? {}),
+        ...(this.provider.capabilities.inProcessMcp ? { triage: rt.triageMcp(), ...(extras.mcp ?? {}) } : {}),
         ...((extras.externalMcp ?? {}) as McpServers),
       },
       ...(extras.tools ? { tools: extras.tools } : {}),
@@ -865,6 +873,9 @@ class LiveSession {
 
   /** Ask this session's subprocess what `/` offers in its folder. */
   private async refreshCommands() {
+    // The folder's command cache is the workspace agent's; another agent's
+    // list (Codex has none) would overwrite it for every draft in the folder.
+    if (this.provider.id !== this.rt.provider.id) return
     try {
       noteCommands(this.rt, this.row.cwd, (await this.q.commands()).map(toCommandInfo))
     } catch (err) {
@@ -1132,6 +1143,7 @@ function summarize(rt: WorkspaceRuntime, row: StoredSession): SessionSummary {
     fastModeState: l?.fastModeState,
     fastModeDisabledReason: l?.fastModeDisabledReason,
     permissionMode: row.permissionMode ?? undefined,
+    ...(row.provider !== DEFAULT_PROVIDER ? { provider: row.provider } : {}),
     pinned: row.pinned || undefined,
     branch: rt.branches.get(row.id),
     ...(row.kind !== 'chat' ? { kind: row.kind } : {}),
@@ -1425,7 +1437,7 @@ async function createSession(
   effort: EffortLevel | null,
   fastMode: boolean,
   permissionMode: PermissionMode | null,
-  opts: { kind?: SessionKind; spawn?: boolean; projectId?: string | null } = {},
+  opts: { kind?: SessionKind; spawn?: boolean; projectId?: string | null; provider?: ProviderId } = {},
 ): Promise<StoredSession> {
   const row = await rt.store.sessions.create({
     id: randomUUID(),
@@ -1436,6 +1448,7 @@ async function createSession(
     effort,
     fastMode,
     permissionMode,
+    ...(opts.provider ? { provider: opts.provider } : {}),
     ...(opts.kind ? { kind: opts.kind } : {}),
   })
   rt.rows.set(row.id, row)
@@ -3109,21 +3122,45 @@ function probeConnectors(rt: WorkspaceRuntime, cwd?: string): Promise<ConnectorP
 // the SDK (supportedModels()) rather than hardcoded — the catalog moves, an
 // org policy can shrink it, and an api-key workspace may see a different list
 // than a subscription one. Same throwaway-subprocess shape as the connector
-// probe, and the answer is stable enough to cache for the process.
+// probe, and the answer is stable enough to cache for the process. Cached per
+// agent: a chat can run on another one (Codex), whose list is its own.
 // ---------------------------------------------------------------------------
-function probeModels(rt: WorkspaceRuntime): Promise<ModelProbe> {
-  if (rt.modelInFlight) return rt.modelInFlight
-  rt.modelInFlight = (async () => {
+function probeModels(rt: WorkspaceRuntime, provider: ProviderId = rt.meta.provider): Promise<ModelProbe> {
+  const inFlight = rt.modelInFlight.get(provider)
+  if (inFlight) return inFlight
+  const run = (async () => {
     try {
-      const models = await rt.provider.models({ cwd: os.homedir(), env: rt.env })
-      rt.modelCache = { probedAt: Date.now(), models }
-      log('info', 'models', `probed: ${models.length} model(s) available`, { workspace: rt.meta.id })
-      return rt.modelCache
+      const models = await providerFor(provider).models({ cwd: os.homedir(), env: rt.env })
+      const probe = { probedAt: Date.now(), models }
+      rt.modelCache.set(provider, probe)
+      log('info', 'models', `probed ${provider}: ${models.length} model(s) available`, { workspace: rt.meta.id })
+      return probe
     } finally {
-      rt.modelInFlight = null
+      rt.modelInFlight.delete(provider)
     }
   })()
-  return rt.modelInFlight
+  rt.modelInFlight.set(provider, run)
+  return run
+}
+
+/**
+ * A session's model choice, checked against its agent's list where that list
+ * is the whole truth. Claude also takes aliases and ids it doesn't list, so its
+ * choice passes as sent. For Codex, an id it doesn't list is refused (null) —
+ * `turn/start` would fail on it — and an effort the model doesn't take is
+ * dropped to the model's default.
+ */
+async function checkModelChoice(
+  rt: WorkspaceRuntime,
+  provider: ProviderId,
+  model: string | null,
+  effort: EffortLevel | null,
+): Promise<{ model: string | null; effort: EffortLevel | null } | null> {
+  if (provider === 'claude' || model === null) return { model, effort }
+  const probe = rt.modelCache.get(provider) ?? (await probeModels(rt, provider))
+  const option = probe.models.find((m) => m.id === model)
+  if (!option) return null
+  return { model, effort: effort && option.efforts.includes(effort) ? effort : null }
 }
 
 // ---------------------------------------------------------------------------
@@ -3290,7 +3327,7 @@ function applyAuthChange(rt: WorkspaceRuntime): void {
   rt.refreshEnv()
   for (const s of rt.live.values()) s.stop() // next message revives with the new env
   rt.connectorCache = null
-  rt.modelCache = null
+  rt.modelCache.clear()
   probeConnectors(rt).catch(() => {})
   probeModels(rt).catch(() => {})
   log('info', 'workspaces', `auth backend now ${rt.meta.authBackend}`, { workspace: rt.meta.id })
@@ -5916,7 +5953,7 @@ const server = http.createServer(async (req, res) => {
       if (!rt) throw new Error('unknown workspace id')
       rt.refreshEnv()
       rt.connectorCache = null
-      rt.modelCache = null
+      rt.modelCache.clear()
       const [models, connectors, auth] = await Promise.all([
         probeModels(rt),
         probeConnectors(rt),
@@ -6736,10 +6773,17 @@ const server = http.createServer(async (req, res) => {
     return
   }
   if (url.pathname === '/api/models') {
+    // ?provider= names the agent whose list to read; absent = the workspace's.
+    const asked = url.searchParams.get('provider')
+    if (asked !== null && !isProviderId(asked)) {
+      json(400, { ok: false, error: `unknown provider: ${asked}` } satisfies ModelsResponse)
+      return
+    }
+    const provider = asked ?? rt.meta.provider
     let body: ModelsResponse
     try {
-      const probe =
-        rt.modelCache && url.searchParams.get('refresh') !== '1' ? rt.modelCache : await probeModels(rt)
+      const cached = url.searchParams.get('refresh') === '1' ? undefined : rt.modelCache.get(provider)
+      const probe = cached ?? (await probeModels(rt, provider))
       body = { ok: true, probedAt: probe.probedAt, models: probe.models }
     } catch (err) {
       body = { ok: false, error: String(err) }
@@ -7256,10 +7300,7 @@ async function pickNativeFolder(): Promise<string | null> {
   }
 }
 
-const EFFORT_LEVELS: EffortLevel[] = ['low', 'medium', 'high', 'xhigh', 'max']
-
-const effort = (v: unknown): EffortLevel | undefined =>
-  EFFORT_LEVELS.includes(v as EffortLevel) ? (v as EffortLevel) : undefined
+const effort = (v: unknown): EffortLevel | undefined => (isEffortLevel(v) ? v : undefined)
 
 const PERMISSION_MODES: PermissionMode[] = ['default', 'acceptEdits', 'auto', 'bypassPermissions', 'gated']
 
@@ -7353,6 +7394,8 @@ function parseClientMessage(raw: unknown): ClientMessage | null {
         effort: effort(m.effort),
         fastMode: m.fastMode === true,
         permissionMode: permissionMode(m.permissionMode),
+        // An agent this build doesn't know is dropped: the session runs on Claude.
+        provider: isProviderId(m.provider) ? m.provider : undefined,
         itemId: typeof m.itemId === 'string' && m.itemId ? m.itemId : undefined,
       }
     case 'set_model':
@@ -7497,7 +7540,7 @@ wss.on('connection', (ws, req) => {
             msg.effort ?? null,
             msg.fastMode === true,
             msg.permissionMode ?? null,
-            { projectId: project.id },
+            { projectId: project.id, provider: msg.provider },
           )
           // Dispatched from an item: the link is what the item page shows as "sessions".
           if (msg.itemId) await linkSessionToItem(rt, row.id, msg.itemId, 'dispatch').catch(() => {})
@@ -7519,8 +7562,17 @@ wss.on('connection', (ws, req) => {
         case 'set_model': {
           const row = rt.rows.get(msg.sessionId)
           if (!row) break
-          row.model = msg.model ?? null
-          row.effort = msg.effort ?? null
+          const choice = await checkModelChoice(rt, row.provider, msg.model ?? null, msg.effort ?? null).catch((err) => {
+            log('warn', 'models', `could not check ${row.provider} models: ${errText(err)}`, { workspace: rt.meta.id, session: row.id })
+            return null
+          })
+          if (!choice) {
+            log('warn', 'models', `refused ${row.provider} model ${msg.model}`, { workspace: rt.meta.id, session: row.id })
+            broadcastSessionList(rt) // puts the picker back on the stored choice
+            break
+          }
+          row.model = choice.model
+          row.effort = choice.effort
           await rt.store.sessions.setModel(row.id, row.model, row.effort)
           // A session with no subprocess picks the choice up from its row when
           // it is revived; a live one is switched in place.

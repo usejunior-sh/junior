@@ -25,6 +25,7 @@ import type {
   LinkRole,
   PermissionMode,
   Project,
+  ProviderId,
   SessionEvent,
   SessionKind,
 } from '../../shared/protocol.js'
@@ -50,6 +51,8 @@ export type StoredSession = {
   fastMode: boolean
   /** How much the session asks before acting; null = 'default' (ask). */
   permissionMode: PermissionMode | null
+  /** The agent the session runs on, fixed at creation; rows from before providers are 'claude'. */
+  provider: ProviderId
   /** Pinned sessions sort above the rest, whatever their last activity. */
   pinned: boolean
   /** chat (default) or watch-run. */
@@ -91,6 +94,8 @@ export type NewSession = {
   effort?: EffortLevel | null
   fastMode?: boolean
   permissionMode?: PermissionMode | null
+  /** omitted = 'claude' */
+  provider?: ProviderId
   kind?: SessionKind
   watchId?: string | null
   runTrigger?: WatchRunTrigger

@@ -2299,6 +2299,14 @@ dialog.itemComposer { width: 800px; max-width: calc(100vw - 48px); padding: 0; o
 .mpop { width: 440px; }
 .mpFoot { flex-wrap: nowrap; }
 .mpFoot .eff { padding: 0 8px; font-size: 0.8462rem; }
+/* The agent rail: one column of agents on the left, that agent's models beside it. */
+.mpop.withRail { width: 520px; display: flex; }
+.mpRail { flex: none; display: flex; flex-direction: column; gap: 2px; width: 72px; padding: 6px; border-right: 1px solid var(--hair); background: var(--wash-1); }
+.mpAgent { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; height: 56px; border: 1px solid transparent; border-radius: var(--r-sm); background: transparent; color: var(--ash); font-size: 0.7692rem; }
+.mpAgent:hover:not(:disabled), .mpAgent:focus-visible { background: var(--wash-2); color: var(--ink); outline: none; }
+.mpAgent.on { background: var(--card); border-color: var(--hair-strong); color: var(--ink); }
+.mpAgent:disabled { color: var(--stone); opacity: 0.5; cursor: not-allowed; }
+.mpMain { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .keysHint { color: var(--stone); font-size: 0.8462rem; display: flex; gap: 6px; align-items: center; margin-top: -6px; }
 .keysHint kbd { color: var(--ash); }
 
@@ -3531,7 +3539,9 @@ html.kbOpen .shell.mobile .panel { bottom: 0; }
     min-width: min(260px, calc(100vw - 16px)); max-width: calc(100vw - 16px);
   }
   .uiMenuItem { min-height: 44px; }
-  .mpop, .slPop { width: calc(100vw - 16px); max-width: none; }
+  .mpop, .mpop.withRail, .slPop { width: calc(100vw - 16px); max-width: none; }
+  .mpRail { width: 60px; padding: 4px; }
+  .mpAgent { min-height: 56px; }
   .wformSelect { width: 100%; }
 }
 @media (max-width: 767px), (pointer: coarse) and (max-height: 500px) {
