@@ -1774,7 +1774,10 @@ dialog.sheet[open] { display: grid; }
 .projRepo { font-family: var(--mono); font-size: 0.8462rem; color: var(--blue); min-width: 180px; }
 .projPath { font-family: var(--mono); font-size: 0.8462rem; color: var(--ash); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .projDelete { flex: none; background: none; border: none; color: var(--stone); font-size: 0.9231rem; width: 24px; height: 24px; border-radius: var(--r-xs); transition: color 0.1s, background 0.1s; display: inline-flex; align-items: center; justify-content: center; }
-.projDelete:hover { color: var(--red); background: var(--tint-red); }
+.projDelete:hover, .projDelete[data-state="open"] { color: var(--ink); background: var(--wash-2); }
+.projActionsGap { flex: none; width: 24px; }
+/* badge-pill: the one default project, named wherever projects are listed. */
+.projDefault { display: inline-flex; align-items: center; height: 18px; padding: 0 8px; margin-left: 6px; border-radius: var(--r-full); background: var(--elev); color: var(--body); font-size: 0.7692rem; letter-spacing: 0.01em; }
 .projModal { width: 460px; }
 /* Add-a-project is Radix-driven (it opens inside the settings dialog), so it
    centres itself rather than riding the browser's top layer, and sits above
@@ -1874,6 +1877,7 @@ dialog.itemComposer { width: 800px; max-width: calc(100vw - 48px); padding: 0; o
 
 /* ---------- workspace modal ---------- */
 .wsModal { width: 560px; max-height: 86vh; overflow-y: auto; }
+.wsModal label .hint { color: var(--stone); font-weight: normal; }
 .wsIntro { margin: 0 0 6px; font-size: 1rem; line-height: 1.55; color: var(--body); }
 .wsSteps { display: flex; gap: 6px; margin: 10px 0 4px; }
 .wsStep { font-size: 0.8462rem; color: var(--ash); height: 22px; display: inline-flex; align-items: center; padding: 0 9px; border-radius: var(--r-full); border: 1px solid var(--hair-strong); }

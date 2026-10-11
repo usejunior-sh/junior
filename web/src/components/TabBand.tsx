@@ -46,6 +46,7 @@ import {
   MenuTrigger,
 } from '../ui/Menu.js'
 import { MOD_LABEL } from '../keys.js'
+import { defaultProjectOf } from './ProjectPicker.js'
 
 const homely = (p: string) => p.replace(/^\/(?:Users|home)\/[^/]+/, '~')
 
@@ -469,7 +470,8 @@ function NewTabMenu({ onNew, onNewTerminal, terminalCwd }: Pick<Props, 'onNew' |
           <Terminal size={14} aria-hidden="true" />
           <span className="text">
             <span className="name">New terminal</span>
-            <span className="desc">{terminalCwd ? homely(terminalCwd) : 'Home folder'}</span>
+            {/* No folder in view: the server opens it in the default project. */}
+            <span className="desc">{homely(terminalCwd ?? defaultProjectOf(projects)?.path ?? '~')}</span>
           </span>
         </MenuItem>
         <MenuSeparator />
@@ -490,7 +492,7 @@ function NewTabMenu({ onNew, onNewTerminal, terminalCwd }: Pick<Props, 'onNew' |
               </MenuItem>
             ))}
             {projects.length > 0 && <MenuSeparator />}
-            <MenuItem onSelect={() => onNewTerminal(undefined)}>
+            <MenuItem onSelect={() => onNewTerminal('~')}>
               <Home size={14} aria-hidden="true" />
               Home folder
             </MenuItem>

@@ -6,6 +6,16 @@ import { Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from '../ui/M
 
 const homely = (p: string) => p.replace(/^\/(?:Users|home)\/[^/]+/, '~')
 
+/** Where work lands when nothing names a project. Every workspace has one once it has any project. */
+export const defaultProjectOf = (projects: readonly Project[]): Project | undefined =>
+  projects.find((p) => p.isDefault) ?? projects[0]
+
+/**
+ * Progressive disclosure (decision 549a251e): with one project there is
+ * nothing to choose, so pickers stay hidden and the default is implied.
+ */
+export const choosesProject = (projects: readonly Project[]) => projects.length > 1
+
 /**
  * Picking a project, in the two senses the app means it.
  *
@@ -39,7 +49,10 @@ function ProjectMenuBody({ projects, caption, leading, isOn, onPick }: MenuBodyP
           <MenuItem key={p.id} className={`projRowItem${on ? ' on' : ''}`} onSelect={() => onPick(p)}>
             <span className="pdot" style={{ background: projectColor(p.path) }} aria-hidden="true" />
             <span className="text">
-              <span className="name">{p.name}</span>
+              <span className="name">
+                {p.name}
+                {p.isDefault && <span className="projDefault">default</span>}
+              </span>
               <span className="desc">
                 {p.repo && <span className="repo">{p.repo}</span>}
                 {p.repo && <span className="sep">·</span>}
@@ -106,7 +119,7 @@ export function ProjectPicker({ projects, cwd, onPick, disabled }: Props) {
                 <span className="desc">
                   <span className="path">{homely(cwd)}</span>
                   <span className="sep">·</span>
-                  <span>not a saved project</span>
+                  <span>added as a project on send</span>
                 </span>
               </span>
               <Check className="check" size={13} aria-hidden="true" />

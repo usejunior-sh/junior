@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
-import { FolderOpen } from 'lucide-react'
+import { FolderOpen, MoreHorizontal } from 'lucide-react'
 import type { PickFolderResponse, Project, ProjectsResponse, WatchesResponse } from '../../../shared/protocol.js'
 import { onThisMac } from '../device.js'
 import { projectColor } from '../tabs.js'
+import { Menu, MenuContent, MenuItem, MenuTrigger } from '../ui/Menu.js'
 
 type LoadState =
   | { phase: 'loading' }
@@ -16,10 +17,15 @@ const tilde = (p: string) => p.replace(/^\/(?:Users|home)\/[^/]+/, '~')
  * The Projects settings tab. Adding or removing a project is a one-time act of
  * setup, so it lives here rather than in the rail; the frequent affordance —
  * "start a session in project X" — is the composer's ProjectPicker.
+ *
+ * One project is the default: where work lands when nothing names a project.
+ * It can be replaced, never removed (decision 549a251e).
  */
 export function ProjectsTab() {
   const [state, setState] = useState<LoadState>({ phase: 'loading' })
   const [adding, setAdding] = useState(false)
+  // A failed action keeps the list on screen and says why above it.
+  const [actionError, setActionError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     try {
@@ -45,6 +51,18 @@ export function ProjectsTab() {
     if (using.length && !confirm(`Remove “${p.name}”? ${using.length === 1 ? 'This watch' : `These ${using.length} watches`} will pause until you pick another project:\n\n${using.map((w) => `· ${w.title}`).join('\n')}`)) return
     const res = await fetch(`/api/projects?id=${encodeURIComponent(p.id)}`, { method: 'DELETE' })
     const body = (await res.json()) as ProjectsResponse
+    setActionError(body.ok ? null : body.error)
+    if (body.ok) setState({ phase: 'ready', projects: body.projects })
+  }
+
+  async function makeDefault(p: Project) {
+    const res = await fetch('/api/projects', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ id: p.id, makeDefault: true }),
+    })
+    const body = (await res.json()) as ProjectsResponse
+    setActionError(body.ok ? null : body.error)
     if (body.ok) setState({ phase: 'ready', projects: body.projects })
   }
 
@@ -52,6 +70,7 @@ export function ProjectsTab() {
     <section className="setSection">
       {state.phase === 'loading' && <div className="pickerLoading">Loading…</div>}
       {state.phase === 'error' && <div className="msg error">{state.message}</div>}
+      {actionError && <div className="msg error">{actionError}</div>}
 
       {state.phase === 'ready' && (
         <>
@@ -62,14 +81,29 @@ export function ProjectsTab() {
                   <span className="projName">
                     <span className="pdot" style={{ background: projectColor(p.path) }} aria-hidden="true" />
                     {p.name}
+                    {p.isDefault && <span className="projDefault">default</span>}
                   </span>
                   <span className="projRepo">{p.repo || '—'}</span>
                   <span className="projPath" title={p.path}>
                     {tilde(p.path)}
                   </span>
-                  <button className="projDelete" title="Remove project" onClick={() => void remove(p)}>
-                    ✕
-                  </button>
+                  {p.isDefault ? (
+                    <span className="projActionsGap" aria-hidden="true" />
+                  ) : (
+                    <Menu>
+                      <MenuTrigger asChild>
+                        <button className="projDelete" title="Project actions" aria-label={`Actions for ${p.name}`}>
+                          <MoreHorizontal size={14} aria-hidden="true" />
+                        </button>
+                      </MenuTrigger>
+                      <MenuContent align="end">
+                        <MenuItem onSelect={() => void makeDefault(p)}>Make default</MenuItem>
+                        <MenuItem className="danger" onSelect={() => void remove(p)}>
+                          Remove project
+                        </MenuItem>
+                      </MenuContent>
+                    </Menu>
+                  )}
                 </div>
               ))}
             </div>
@@ -105,7 +139,6 @@ function AddProjectModal({
   const [path, setPath] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
-  const [picking, setPicking] = useState(false)
 
   // Reseed each time the modal opens.
   useEffect(() => {
@@ -115,27 +148,7 @@ function AddProjectModal({
     setPath('')
     setError(null)
     setSaving(false)
-    setPicking(false)
   }, [open])
-
-  async function pickFolder() {
-    setPicking(true)
-    setError(null)
-    try {
-      const res = await fetch('/api/pick-folder', { method: 'POST' })
-      const body = (await res.json()) as PickFolderResponse
-      if (!body.ok) setError(body.error)
-      else if (!('cancelled' in body)) {
-        setPath(body.path)
-        // A folder with no name yet? Suggest the folder's basename.
-        setName((n) => n || body.path.replace(/\/+$/, '').split('/').pop() || '')
-      }
-    } catch (err) {
-      setError(String(err))
-    } finally {
-      setPicking(false)
-    }
-  }
 
   async function add() {
     setSaving(true)
@@ -192,26 +205,15 @@ function AddProjectModal({
             />
 
             <label>Folder</label>
-            {onThisMac() ? (
-            <div className="projPickRow">
-              <button type="button" className="projPick" disabled={picking} onClick={() => void pickFolder()}>
-                <FolderOpen size={14} aria-hidden="true" />
-                {picking ? 'Choosing…' : path ? 'Change folder…' : 'Select folder…'}
-              </button>
-              <span className={`projPickPath${path ? '' : ' empty'}`} title={path}>
-                {path ? tilde(path) : 'No folder selected'}
-              </span>
-            </div>
-            ) : (
-              <input
-                placeholder="~/Code/project"
-                autoCapitalize="off"
-                autoCorrect="off"
-                spellCheck={false}
-                value={path}
-                onChange={(e) => setPath(e.target.value)}
-              />
-            )}
+            <FolderField
+              value={path}
+              onChange={(p) => {
+                setPath(p)
+                // A folder with no name yet? Suggest the folder's basename.
+                setName((n) => n || folderName(p))
+              }}
+              onError={setError}
+            />
 
             {error && <div className="projError">{error}</div>}
 
@@ -234,5 +236,62 @@ function AddProjectModal({
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
+  )
+}
+
+export const folderName = (p: string) => p.replace(/\/+$/, '').split('/').pop() || ''
+
+/**
+ * A project folder: the OS-native chooser on this Mac (the server shells out
+ * to it — a browser can't read absolute paths), a typed path from a phone.
+ */
+export function FolderField({
+  value,
+  onChange,
+  onError,
+  autoFocus,
+}: {
+  value: string
+  onChange: (path: string) => void
+  onError: (message: string | null) => void
+  autoFocus?: boolean
+}) {
+  const [picking, setPicking] = useState(false)
+
+  async function pickFolder() {
+    setPicking(true)
+    onError(null)
+    try {
+      const res = await fetch('/api/pick-folder', { method: 'POST' })
+      const body = (await res.json()) as PickFolderResponse
+      if (!body.ok) onError(body.error)
+      else if (!('cancelled' in body)) onChange(body.path)
+    } catch (err) {
+      onError(String(err))
+    } finally {
+      setPicking(false)
+    }
+  }
+
+  return onThisMac() ? (
+    <div className="projPickRow">
+      <button type="button" className="projPick" autoFocus={autoFocus} disabled={picking} onClick={() => void pickFolder()}>
+        <FolderOpen size={14} aria-hidden="true" />
+        {picking ? 'Choosing…' : value ? 'Change folder…' : 'Select folder…'}
+      </button>
+      <span className={`projPickPath${value ? '' : ' empty'}`} title={value}>
+        {value ? tilde(value) : 'No folder selected'}
+      </span>
+    </div>
+  ) : (
+    <input
+      placeholder="~/Code/project"
+      autoCapitalize="off"
+      autoCorrect="off"
+      spellCheck={false}
+      autoFocus={autoFocus}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+    />
   )
 }

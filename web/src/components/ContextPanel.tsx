@@ -650,7 +650,7 @@ export function NewTerminalMenu({ defaultCwd, onNew, className }: { defaultCwd?:
           </MenuItem>
         ))}
         {projects.length > 0 && <MenuSeparator />}
-        <MenuItem onSelect={() => onNew(undefined)}>
+        <MenuItem onSelect={() => onNew('~')}>
           <Home size={14} aria-hidden="true" />
           Home folder
         </MenuItem>

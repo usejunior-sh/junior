@@ -43,6 +43,7 @@ import { REFINE_WATCH_KEY, WatchFormPage } from './components/WatchFormPage.js'
 import { WatchPage } from './components/WatchPage.js'
 import { ArtifactsPage } from './components/ArtifactsPage.js'
 import { ArtifactPage } from './components/ArtifactPage.js'
+import { DefaultProjectGate } from './components/DefaultProjectGate.js'
 import { WorkspaceModal, type WorkspaceModalMode } from './components/WorkspaceModal.js'
 import {
   itemHash,
@@ -1185,6 +1186,7 @@ export function App() {
         onClose={() => setSystem((s) => ({ ...s, open: false }))}
       />
       <WorkspaceModal mode={wsModal} onClose={() => setWsModal(null)} />
+      <DefaultProjectGate workspaceId={workspaceId} suspended={wsModal !== null || !onboarded} />
       <SettingsModal workspace={activeWorkspace} onOpenSystem={(tab) => setSystem({ open: true, tab })} />
     </div>
   )

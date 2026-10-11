@@ -1,7 +1,7 @@
 import { GitBranch } from 'lucide-react'
 import type { Project } from '../../../shared/protocol.js'
 import { projectColor } from '../tabs.js'
-import { ProjectPicker } from './ProjectPicker.js'
+import { choosesProject, ProjectPicker } from './ProjectPicker.js'
 
 type Props = {
   projects: readonly Project[]
@@ -21,7 +21,7 @@ export function PromptHead({ projects, cwd, branch, onPick }: Props) {
 
   return (
     <>
-      {onPick ? (
+      {onPick && (choosesProject(projects) || !project) ? (
         <ProjectPicker projects={projects} cwd={cwd} onPick={onPick} />
       ) : (
         <span className="chip ink" title={`Project folder: ${cwd}`}>

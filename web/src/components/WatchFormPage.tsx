@@ -33,7 +33,7 @@ import { useModels } from '../models.js'
 import { store } from '../store.js'
 import { projectColor } from '../tabs.js'
 import { Select, SelectItem } from '../ui/Select.js'
-import { ProjectIdPicker } from './ProjectPicker.js'
+import { choosesProject, defaultProjectOf, ProjectIdPicker } from './ProjectPicker.js'
 import { Markdown } from './Markdown.js'
 import { Transcript } from './Transcript.js'
 import { OUTPUTS, PRESETS, cronText, cronToPreset, fmtSlot, fmtUntil, nextRuns, presetToCron, type SchedulePreset } from '../watchUi.js'
@@ -150,6 +150,12 @@ export function WatchFormPage({ id, onNavigate }: { id: string | null; onNavigat
       .then((b) => b.ok && setDefaults({ timeoutMs: b.settings.watchTimeoutMs, budget: b.settings.watchBudgetUsd }))
       .catch(() => {})
   }, [id])
+
+  // A new watch runs in the default project until another is picked.
+  useEffect(() => {
+    const fallback = defaultProjectOf(projects)
+    if (fallback) setForm((f) => (f.projectId ? f : { ...f, projectId: fallback.id }))
+  }, [projects])
 
   useEffect(() => {
     if (id === null) return
@@ -343,6 +349,7 @@ export function WatchFormPage({ id, onNavigate }: { id: string | null; onNavigat
               />
             </div>
 
+            {(choosesProject(projects) || !project || configError) && (
             <div className="field">
               <label htmlFor="wf-project">
                 Project <span className="hint">· where the run works. It can read files here and nowhere else.</span>
@@ -366,6 +373,7 @@ export function WatchFormPage({ id, onNavigate }: { id: string | null; onNavigat
               )}
               {configError && <span className="formError">{configError}</span>}
             </div>
+            )}
 
             <div className="field">
               <label>

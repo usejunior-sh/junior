@@ -8,14 +8,16 @@
  * Editing an existing workspace lives in the settings modal (Workspace and
  * Claude auth tabs), which shares these cards and the verify panel.
  *
- * Three steps: identity → Claude auth (three cards, the tradeoffs spelled out
- * on each) → verify (a live probe with the workspace's own env, so a workspace
+ * Three steps: identity (name, colour, default project folder — every
+ * workspace has one, decision 549a251e) → Claude auth (three cards, the
+ * tradeoffs spelled out on each) → verify (a live probe with the workspace's own env, so a workspace
  * is never left silently broken — watches fail in the background, auth must be
  * proven in the foreground).
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { Workspace, WorkspaceAuthBackend, WorkspaceResponse } from '../../../shared/protocol.js'
+import type { ProjectsResponse, Workspace, WorkspaceAuthBackend, WorkspaceResponse } from '../../../shared/protocol.js'
 import { store } from '../store.js'
+import { FolderField, folderName } from './ProjectsTab.js'
 import { AuthCards, ColorPicker, VerifyPanel, verifyWorkspace, WORKSPACE_COLORS, type VerifyState } from './workspaceAuth.js'
 
 export type WorkspaceModalMode = { kind: 'create' } | { kind: 'onboarding'; workspace: Workspace }
@@ -35,6 +37,10 @@ export function WorkspaceModal({ mode, onClose }: Props) {
   const [name, setName] = useState('')
   const [color, setColor] = useState(WORKSPACE_COLORS[0])
   const [description, setDescription] = useState('')
+  // the default project's folder; onboarding an existing workspace starts from its current default
+  const [folder, setFolder] = useState('')
+  const [currentDefault, setCurrentDefault] = useState('')
+  const [folderError, setFolderError] = useState<string | null>(null)
   // auth
   const [authBackend, setAuthBackend] = useState<WorkspaceAuthBackend>('inherit')
   const [apiKey, setApiKey] = useState('')
@@ -54,6 +60,20 @@ export function WorkspaceModal({ mode, onClose }: Props) {
     setName(ws && ws.name !== 'Default' ? ws.name : '')
     setColor(ws?.color ?? WORKSPACE_COLORS[0])
     setDescription(ws?.description ?? '')
+    setFolder('')
+    setCurrentDefault('')
+    setFolderError(null)
+    if (ws) {
+      void fetch(`/api/projects?workspace=${encodeURIComponent(ws.id)}`)
+        .then((r) => r.json() as Promise<ProjectsResponse>)
+        .then((b) => {
+          const d = b.ok ? b.projects.find((p) => p.isDefault) : undefined
+          if (!d) return
+          setCurrentDefault(d.path)
+          setFolder((f) => f || d.path)
+        })
+        .catch(() => {})
+    }
     setAuthBackend(ws?.authBackend ?? 'inherit')
     setApiKey('')
     setTarget(ws)
@@ -105,18 +125,26 @@ export function WorkspaceModal({ mode, onClose }: Props) {
         authBackend,
         ...(apiKey.trim() ? { apiKey: apiKey.trim() } : {}),
       }
-      const url =
-        mode.kind === 'create'
-          ? '/api/workspaces'
-          : `/api/workspaces?id=${encodeURIComponent(mode.workspace.id)}`
+      // Once created, a retry (say the folder was refused) edits it rather than creating a second.
+      const url = target ? `/api/workspaces?id=${encodeURIComponent(target.id)}` : '/api/workspaces'
       const res = await fetch(url, {
-        method: mode.kind === 'create' ? 'POST' : 'PUT',
+        method: target ? 'PUT' : 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(payload),
       })
       const body = (await res.json()) as WorkspaceResponse
       if (!body.ok) throw new Error(body.error)
       setTarget(body.workspace)
+      if (folder.trim() && folder.trim() !== currentDefault) {
+        const pr = await fetch(`/api/projects?workspace=${encodeURIComponent(body.workspace.id)}`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ name: folderName(folder.trim()), path: folder.trim(), makeDefault: true }),
+        })
+        const pb = (await pr.json()) as ProjectsResponse
+        if (!pb.ok) throw new Error(`Default project: ${pb.error}`)
+        setCurrentDefault(folder.trim())
+      }
       setStep('verify')
       runVerify(body.workspace.id)
     } catch (err) {
@@ -124,7 +152,7 @@ export function WorkspaceModal({ mode, onClose }: Props) {
     } finally {
       setSaving(false)
     }
-  }, [mode, name, color, description, authBackend, apiKey, runVerify])
+  }, [mode, target, name, color, description, folder, currentDefault, authBackend, apiKey, runVerify])
 
   if (!mode) {
     return <dialog ref={dialog} className="wsModal" onClose={onClose} />
@@ -152,7 +180,7 @@ export function WorkspaceModal({ mode, onClose }: Props) {
       <div className="wsSteps" aria-hidden="true">
         {(['identity', 'auth', 'verify'] as Step[]).map((s, i) => (
           <span key={s} className={`wsStep${step === s ? ' active' : ''}`}>
-            {i + 1}. {s === 'identity' ? 'Name' : s === 'auth' ? 'Claude auth' : 'Verify'}
+            {i + 1}. {s === 'identity' ? 'Name & project' : s === 'auth' ? 'Claude auth' : 'Verify'}
           </span>
         ))}
       </div>
@@ -166,11 +194,16 @@ export function WorkspaceModal({ mode, onClose }: Props) {
             placeholder="e.g. Work, Personal"
             onChange={(e) => setName(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && name.trim()) setStep('auth')
+              if (e.key === 'Enter' && name.trim() && folder.trim()) setStep('auth')
             }}
           />
           <label>Color</label>
           <ColorPicker value={color} onChange={setColor} />
+          <label>
+            Default project <span className="hint">· the folder sessions, terminals and watches start in</span>
+          </label>
+          <FolderField value={folder} onChange={setFolder} onError={setFolderError} />
+          {folderError && <div className="projError">{folderError}</div>}
           <label>Description (optional)</label>
           <input
             value={description}
@@ -187,7 +220,7 @@ export function WorkspaceModal({ mode, onClose }: Props) {
                 Cancel
               </button>
             )}
-            <button type="button" className="go" disabled={!name.trim()} onClick={() => setStep('auth')}>
+            <button type="button" className="go" disabled={!name.trim() || !folder.trim()} onClick={() => setStep('auth')}>
               Next
             </button>
           </div>

@@ -59,7 +59,7 @@ import {
 } from '../itemUi.js'
 import { Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from '../ui/Menu.js'
 import { Select, SelectItem } from '../ui/Select.js'
-import { ProjectIdPicker } from './ProjectPicker.js'
+import { choosesProject, defaultProjectOf, ProjectIdPicker } from './ProjectPicker.js'
 import { anyDialogOpen, isGoSequence, isTypingTarget } from '../keys.js'
 import {
   SECTION_ORDER,
@@ -1221,7 +1221,13 @@ function ItemComposer({
               </SelectItem>
             ))}
           </Select>
-          <ProjectIdPicker projects={projects} value={projectId} onChange={setProjectId}>
+          {choosesProject(projects) && (
+          <ProjectIdPicker
+            projects={projects}
+            value={projectId || defaultProjectOf(projects)?.id || ''}
+            allowNone={false}
+            onChange={(id) => id && setProjectId(id)}
+          >
             {(current) => (
               <button type="button" className={`pill${current ? ' set' : ''}`} title="Project" aria-label="Project">
                 {current ? (
@@ -1233,6 +1239,7 @@ function ItemComposer({
               </button>
             )}
           </ProjectIdPicker>
+          )}
           <button
             type="button"
             className={`pill add${thumbs.length ? ' set' : ''}`}

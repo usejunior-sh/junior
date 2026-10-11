@@ -12,6 +12,7 @@ import {
 import type { Draft } from '../drafts.js'
 import { readSessionDefaults, writeSessionDefaults } from '../sessionDefaults.js'
 import { PromptBox } from './PromptBox.js'
+import { defaultProjectOf } from './ProjectPicker.js'
 import { PromptHead } from './PromptHead.js'
 
 export type NewSession = {
@@ -52,8 +53,10 @@ function titleFrom(text: string, mentions: readonly Mention[] = []): string {
 export function NewSessionComposer({ draft, onChange, onCreate }: Props) {
   const [projects, setProjects] = useState<Project[]>([])
   const [branch, setBranch] = useState<string | null>(null)
-  // No folder chosen yet → the first saved project, else home.
-  const cwd = draft.cwd ?? projects[0]?.path ?? '~'
+  // No folder chosen yet → the default project. Until projects load the
+  // server picks it: an empty cwd on send means "the default project".
+  const fallback = defaultProjectOf(projects)
+  const cwd = draft.cwd ?? fallback?.path ?? '~'
   const [model, setModel] = useState<string | undefined>(defaults.model)
   const [effort, setEffort] = useState<EffortLevel | undefined>(defaults.effort)
   const [fastMode, setFastMode] = useState(defaults.fastMode)
@@ -106,7 +109,7 @@ export function NewSessionComposer({ draft, onChange, onCreate }: Props) {
         onSubmit={(text, images, mentions) =>
           onCreate({
             title: draft.label ?? titleFrom(text, mentions),
-            cwd,
+            cwd: draft.cwd ?? fallback?.path ?? '',
             firstMessage: text,
             model,
             effort,

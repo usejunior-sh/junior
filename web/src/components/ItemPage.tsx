@@ -42,7 +42,7 @@ import { CreateBriefDialog } from './CreateBriefDialog.js'
 import { Markdown } from './Markdown.js'
 import { TeamPicker } from './TeamPicker.js'
 import { Menu, MenuContent, MenuItem, MenuTrigger } from '../ui/Menu.js'
-import { ProjectIdPicker } from './ProjectPicker.js'
+import { choosesProject, defaultProjectOf, ProjectIdPicker } from './ProjectPicker.js'
 import { ItemLinks } from './ItemLinks.js'
 
 type Props = {
@@ -766,8 +766,13 @@ export function ItemPage({ id, onDispatch, onNavigate, onDirty }: Props) {
               </MenuContent>
             </Menu>
           )}
-          {isOpen && item.source === 'manual' && (
-            <ProjectIdPicker projects={projects} value={item.projectId ?? ''} onChange={setProject}>
+          {isOpen && item.source === 'manual' && choosesProject(projects) && (
+            <ProjectIdPicker
+              projects={projects}
+              value={item.projectId ?? defaultProjectOf(projects)?.id ?? ''}
+              allowNone={false}
+              onChange={(id) => id && setProject(id)}
+            >
               {(current) => (
                 <button type="button" className="prioBar" title="Set project">
                   {current ? (
