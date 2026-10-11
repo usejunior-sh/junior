@@ -38,6 +38,8 @@ export type StoredSession = {
   id: string
   title: string
   cwd: string
+  /** The project the session runs in — stored, never derived from `cwd` (a worktree's folder isn't the project's). */
+  projectId: string | null
   /** Claude Code's own session id — the key for `resume` and the link to its transcript. */
   sdkSessionId: string | null
   /** The model the user picked; null = whatever Claude Code defaults to. */
@@ -83,6 +85,8 @@ export type NewSession = {
   id: string
   title: string
   cwd: string
+  /** null only for rows that predate projects; every new session names one */
+  projectId: string | null
   model?: string | null
   effort?: EffortLevel | null
   fastMode?: boolean
@@ -103,6 +107,8 @@ export interface SessionStore {
   get(id: string): Promise<StoredSession | null>
   /** All sessions: pinned first, then most recently active. */
   list(): Promise<StoredSession[]>
+  /** Give every session without a project the one `assign` picks for its cwd; returns how many were set. */
+  backfillProjects(assign: (cwd: string) => string | null): Promise<number>
   setSdkSessionId(id: string, sdkSessionId: string): Promise<void>
   /** Persist a model/effort switch, so a revived session keeps the choice. */
   setModel(id: string, model: string | null, effort: EffortLevel | null): Promise<void>
@@ -189,6 +195,9 @@ export interface ConfigStore {
 export interface ProjectStore {
   list(): Promise<Project[]>
   create(p: Project): Promise<void>
+  /** Make `id` the workspace's one default project. */
+  setDefault(id: string): Promise<void>
+  /** Throws for the default project — it can only be replaced. */
   remove(id: string): Promise<void>
   /** Delete the retired built-in scratch projects (a dev-build leftover); returns what was removed. */
   retireBuiltin(): Promise<Project[]>
@@ -315,6 +324,8 @@ export interface WorkItemStore {
   setImages(id: string, images: ItemImage[]): Promise<void>
   /** Replace the human's links on any item ([] clears). Never touched by ingestion. */
   setUrls(id: string, urls: string[]): Promise<void>
+  /** Give every item without a project the one `assign` picks; returns how many were set. */
+  backfillProjects(assign: (item: WorkItem) => string | null): Promise<number>
 }
 
 export type NewBriefJob = {

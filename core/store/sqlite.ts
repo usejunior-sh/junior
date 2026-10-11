@@ -311,6 +311,14 @@ const MIGRATIONS: string[] = [
   // label's default, resolved at read time. 'you' with no due_at = Later.
   `ALTER TABLE work_items ADD COLUMN due_at INTEGER;
    ALTER TABLE work_items ADD COLUMN due_source TEXT;`,
+  // 26: workspace → default project → checkout (decision 549a251e). Exactly one
+  // project is the default (the partial unique index holds it to one), and a
+  // session records its project instead of having it derived from `cwd` —
+  // worktree folders break path matching. Backfilled at boot, not here: it
+  // needs the default, which needs the session counts.
+  `ALTER TABLE projects ADD COLUMN is_default INTEGER NOT NULL DEFAULT 0;
+   CREATE UNIQUE INDEX IF NOT EXISTS idx_projects_default ON projects(is_default) WHERE is_default = 1;
+   ALTER TABLE sessions ADD COLUMN project_id TEXT;`,
 ]
 
 export function openSqliteStore(file: string): Store {
@@ -455,6 +463,8 @@ function ensureDurableSchema(db: DatabaseSync) {
   ensure('sessions', 'run_trigger', 'run_trigger TEXT', s)
   ensure('sessions', 'run_new', 'run_new INTEGER', s)
 
+  ensure('sessions', 'project_id', 'project_id TEXT', s)
+
   const wi = cols('work_items')
   ensure('work_items', 'due_at', 'due_at INTEGER', wi)
   ensure('work_items', 'due_source', 'due_source TEXT', wi)
@@ -480,6 +490,7 @@ type SessionRow = {
   id: string
   title: string
   cwd: string
+  project_id: string | null
   sdk_session_id: string | null
   model: string | null
   effort: string | null
@@ -518,6 +529,7 @@ const toSession = (r: SessionRow): StoredSession => ({
   id: r.id,
   title: r.title,
   cwd: r.cwd,
+  projectId: r.project_id,
   sdkSessionId: r.sdk_session_id,
   model: r.model,
   effort: toEffort(r.effort),
@@ -550,14 +562,15 @@ class SqliteSessions implements SessionStore {
     const watchId = s.watchId ?? null
     this.db
       .prepare(
-        `INSERT INTO sessions (id, title, cwd, sdk_session_id, model, effort, fast_mode, permission_mode, kind, watch_id, run_trigger, created_at, updated_at)
-         VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO sessions (id, title, cwd, project_id, sdk_session_id, model, effort, fast_mode, permission_mode, kind, watch_id, run_trigger, created_at, updated_at)
+         VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
-      .run(s.id, s.title, s.cwd, model, effort, fastMode ? 1 : 0, permissionMode, kind, watchId, s.runTrigger ?? null, now, now)
+      .run(s.id, s.title, s.cwd, s.projectId, model, effort, fastMode ? 1 : 0, permissionMode, kind, watchId, s.runTrigger ?? null, now, now)
     return {
       id: s.id,
       title: s.title,
       cwd: s.cwd,
+      projectId: s.projectId,
       model,
       effort,
       fastMode,
@@ -582,6 +595,26 @@ class SqliteSessions implements SessionStore {
       .prepare('SELECT * FROM sessions ORDER BY pinned DESC, updated_at DESC')
       .all() as SessionRow[]
     return rows.map(toSession)
+  }
+
+  async backfillProjects(assign: (cwd: string) => string | null): Promise<number> {
+    const rows = this.db.prepare('SELECT id, cwd FROM sessions WHERE project_id IS NULL').all() as { id: string; cwd: string }[]
+    const set = this.db.prepare('UPDATE sessions SET project_id = ? WHERE id = ?')
+    let n = 0
+    this.db.exec('BEGIN')
+    try {
+      for (const r of rows) {
+        const projectId = assign(r.cwd)
+        if (!projectId) continue
+        set.run(projectId, r.id)
+        n++
+      }
+      this.db.exec('COMMIT')
+    } catch (err) {
+      this.db.exec('ROLLBACK')
+      throw err
+    }
+    return n
   }
 
   async setSdkSessionId(id: string, sdkSessionId: string): Promise<void> {
@@ -1282,6 +1315,29 @@ class SqliteWorkItems implements WorkItemStore {
       .run(due?.at ?? null, due ? 'you' : null, Date.now(), id)
   }
 
+  async backfillProjects(assign: (item: WorkItem) => string | null): Promise<number> {
+    const rows = this.db
+      .prepare("SELECT id, payload FROM work_items WHERE json_extract(payload, '$.projectId') IS NULL")
+      .all() as { id: string; payload: string }[]
+    const set = this.db.prepare('UPDATE work_items SET payload = ? WHERE id = ?')
+    let n = 0
+    this.db.exec('BEGIN')
+    try {
+      for (const r of rows) {
+        const item = JSON.parse(r.payload) as WorkItem
+        const projectId = assign(item)
+        if (!projectId) continue
+        set.run(payloadOf({ ...item, projectId }), r.id)
+        n++
+      }
+      this.db.exec('COMMIT')
+    } catch (err) {
+      this.db.exec('ROLLBACK')
+      throw err
+    }
+    return n
+  }
+
   async createManual(item: NewManualItem): Promise<string> {
     const now = Date.now()
     const iso = new Date(now).toISOString()
@@ -1433,14 +1489,16 @@ class SqliteWorkItems implements WorkItemStore {
   }
 }
 
+type ProjectRow = { id: string; name: string; repo: string; path: string; is_default?: number }
+
 class SqliteProjects implements ProjectStore {
   constructor(private db: DatabaseSync) {}
 
   async list(): Promise<Project[]> {
     const rows = this.db
-      .prepare('SELECT id, name, repo, path FROM projects ORDER BY name COLLATE NOCASE')
-      .all() as Project[]
-    return rows.map((r) => ({ id: r.id, name: r.name, repo: r.repo, path: r.path }))
+      .prepare('SELECT id, name, repo, path, is_default FROM projects ORDER BY is_default DESC, name COLLATE NOCASE')
+      .all() as ProjectRow[]
+    return rows.map((r) => ({ id: r.id, name: r.name, repo: r.repo, path: r.path, ...(r.is_default ? { isDefault: true } : {}) }))
   }
 
   async create(p: Project): Promise<void> {
@@ -1449,17 +1507,32 @@ class SqliteProjects implements ProjectStore {
       .run(p.id, p.name, p.repo, p.path, Date.now())
   }
 
+  async setDefault(id: string): Promise<void> {
+    this.db.exec('BEGIN')
+    try {
+      this.db.prepare('UPDATE projects SET is_default = 0 WHERE is_default = 1').run()
+      const r = this.db.prepare('UPDATE projects SET is_default = 1 WHERE id = ?').run(id)
+      if (r.changes === 0) throw new Error('unknown project')
+      this.db.exec('COMMIT')
+    } catch (err) {
+      this.db.exec('ROLLBACK')
+      throw err
+    }
+  }
+
   async retireBuiltin(): Promise<Project[]> {
     // A short-lived dev build added a `builtin` column and a scratch project;
     // projects are always real folders now. Remove those rows, if any.
     const cols = new Set((this.db.prepare('PRAGMA table_info(projects)').all() as { name: string }[]).map((r) => r.name))
     if (!cols.has('builtin')) return []
-    const rows = this.db.prepare('SELECT id, name, repo, path FROM projects WHERE builtin = 1').all() as Project[]
+    const rows = this.db.prepare('SELECT id, name, repo, path FROM projects WHERE builtin = 1').all() as ProjectRow[]
     this.db.prepare('DELETE FROM projects WHERE builtin = 1').run()
-    return rows
+    return rows.map((r) => ({ id: r.id, name: r.name, repo: r.repo, path: r.path }))
   }
 
   async remove(id: string): Promise<void> {
+    const r = this.db.prepare('SELECT is_default FROM projects WHERE id = ?').get(id) as { is_default: number } | undefined
+    if (r?.is_default) throw new Error('the default project can only be replaced — make another project the default first')
     this.db.prepare('DELETE FROM projects WHERE id = ?').run(id)
   }
 }

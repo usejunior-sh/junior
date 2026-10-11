@@ -32,6 +32,8 @@ type Term = {
 
 export type CreateTerminalOptions = {
   cwd?: string
+  /** the project the shell belongs to; null only when the workspace has none */
+  projectId?: string | null
   title?: string
   /** typed into the shell once it is up, followed by Enter */
   command?: string
@@ -97,6 +99,7 @@ export class TerminalManager {
       id,
       title: opts.title?.trim() || `${path.basename(cwd) || cwd} · ${path.basename(shell)}`,
       cwd,
+      ...(opts.projectId ? { projectId: opts.projectId } : {}),
       shell: path.basename(shell),
       pid: proc.pid,
       status: 'running',

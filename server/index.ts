@@ -202,7 +202,7 @@ import {
 } from '../core/teams/engine.js'
 import type { StoredTurn } from '../core/store/types.js'
 import { openSqliteStore } from '../core/store/sqlite.js'
-import type { Store, StoredSession, UpsertOutcome } from '../core/store/types.js'
+import type { Store, StoredSession, UpsertOutcome, UpsertResult } from '../core/store/types.js'
 import { buildInbox } from '../core/work/inbox.js'
 import { BASE, rank } from '../core/work/score.js'
 import { LABEL_ORDER, isLabel, type Label } from '../core/work/labels.js'
@@ -1112,6 +1112,7 @@ function summarize(rt: WorkspaceRuntime, row: StoredSession): SessionSummary {
     id: row.id,
     title: row.title,
     cwd: row.cwd,
+    ...(row.projectId ? { projectId: row.projectId } : {}),
     status: l?.status ?? 'idle',
     updatedAt: row.updatedAt,
     // The user's pick wins: it is what the next turn runs on, and it is set
@@ -1365,6 +1366,47 @@ async function sessionFilePatch(
   return filePatch(root, turns[0].preTree, now, file)
 }
 
+/**
+ * The workspace's default project (decision 549a251e): where a session,
+ * terminal or item lands when nothing names a project. null only while the
+ * workspace has no projects at all — onboarding asks for one.
+ */
+async function defaultProject(rt: WorkspaceRuntime): Promise<Project | null> {
+  return (await rt.store.projects.list()).find((p) => p.isDefault) ?? null
+}
+
+/**
+ * Add a folder as a project; the workspace's first project becomes its
+ * default. Picking a folder that isn't a project adds it — there is no
+ * "unsaved folder" state.
+ */
+async function addProject(rt: WorkspaceRuntime, folder: string, name?: string, repo = ''): Promise<Project> {
+  const resolved = path.resolve(expandHome(folder))
+  const st = await stat(resolved).catch(() => null)
+  if (!st?.isDirectory()) throw new Error(`folder not found: ${resolved}`)
+  const projects = await rt.store.projects.list()
+  if (projects.some((p) => path.resolve(p.path) === resolved)) throw new Error(`${resolved} is already a project`)
+  const project: Project = { id: randomUUID(), name: name || path.basename(resolved) || resolved, repo, path: resolved }
+  await rt.store.projects.create(project)
+  if (!projects.some((p) => p.isDefault)) {
+    await rt.store.projects.setDefault(project.id)
+    project.isDefault = true
+  }
+  return project
+}
+
+/** The project a new session runs in: the one named, else the one at `cwd` — added if it isn't one yet. */
+async function projectForSession(rt: WorkspaceRuntime, cwd: string, projectId?: string): Promise<Project> {
+  const projects = await rt.store.projects.list()
+  if (projectId) {
+    const named = projects.find((p) => p.id === projectId)
+    if (!named) throw new Error('unknown project')
+    return named
+  }
+  const resolved = path.resolve(cwd)
+  return projects.find((p) => path.resolve(p.path) === resolved) ?? (await addProject(rt, resolved))
+}
+
 async function createSession(
   rt: WorkspaceRuntime,
   title: string,
@@ -1373,12 +1415,13 @@ async function createSession(
   effort: EffortLevel | null,
   fastMode: boolean,
   permissionMode: PermissionMode | null,
-  opts: { kind?: SessionKind; spawn?: boolean } = {},
+  opts: { kind?: SessionKind; spawn?: boolean; projectId?: string | null } = {},
 ): Promise<StoredSession> {
   const row = await rt.store.sessions.create({
     id: randomUUID(),
     title,
     cwd,
+    projectId: opts.projectId ?? (await defaultProject(rt))?.id ?? null,
     model,
     effort,
     fastMode,
@@ -1673,7 +1716,7 @@ async function reconcileGitHub(rt: WorkspaceRuntime, force = false): Promise<voi
       }
       const now = Date.now()
       const open = await fetchGitHub(repos, now)
-      for (const item of open) await rt.store.items.upsert(item)
+      for (const item of open) await upsertItem(rt, item)
 
       // Source-side completion: any tracked open/snoozed github item whose PR is
       // now merged/closed → done(system) with evidence.
@@ -2112,7 +2155,7 @@ function makeScanMcp(rt: WorkspaceRuntime, watch: Watch, runId: string, onUpsert
               ...(refs ? { refs } : {}),
             }
             const prov: Provenance = { watchId: watch.id, runId, at: now, why: args.why }
-            const { outcome, reopened } = await rt.store.items.upsert(item, prov)
+            const { outcome, reopened } = await upsertItem(rt, item, prov)
             onUpsert(outcome)
             invalidateInbox(rt)
             log('info', 'watch', `filed (${outcome}): ${item.title}`, {
@@ -2187,7 +2230,7 @@ function makeDigestMcp(rt: WorkspaceRuntime, watch: Watch, runId: string, onWrit
               ...(refs ? { refs } : {}),
             }
             const prov: Provenance = { watchId: watch.id, runId, at: Date.now(), why: 'digest rewritten' }
-            const { outcome, reopened } = await rt.store.items.upsert(item, prov)
+            const { outcome, reopened } = await upsertItem(rt, item, prov)
             await rt.store.links.add({ fromKind: 'artifact', fromId: artifact.id, toKind: 'item', toId: item.id, role: 'report' })
             written = true
             onWrite(outcome)
@@ -2531,6 +2574,7 @@ async function runWatch(rt: WorkspaceRuntime, run: QueuedRun, startedMs: number,
     id: randomUUID(),
     title: `Watch · ${watch.title}`,
     cwd: projectRow.path,
+    projectId: projectRow.id,
     kind: 'watch-run',
     watchId: watch.id,
     runTrigger: run.trigger,
@@ -3331,6 +3375,7 @@ function workspaceInfo(rt: WorkspaceRuntime) {
 
 /** Bring a runtime up: sessions, seeds, cached snapshot, background probes. */
 async function initRuntime(rt: WorkspaceRuntime): Promise<void> {
+  await migrateDefaultProject(rt)
   await loadSessions(rt)
   await markInterruptedRuns(rt)
   await migrateWatchProjects(rt)
@@ -3859,7 +3904,7 @@ async function sessionContextOp(rt: WorkspaceRuntime, rawId: unknown): Promise<S
 async function upsertItemOp(rt: WorkspaceRuntime, raw: unknown): Promise<UpsertOutcome> {
   const parsed = workItemFrom(raw)
   if ('error' in parsed) throw new Error(parsed.error)
-  const { outcome } = await rt.store.items.upsert(parsed.item)
+  const { outcome } = await upsertItem(rt, parsed.item)
   if (outcome !== 'unchanged') invalidateInbox(rt)
   return outcome
 }
@@ -3875,7 +3920,7 @@ async function resolveItemOp(rt: WorkspaceRuntime, rawId: unknown): Promise<void
 async function createManualOp(rt: WorkspaceRuntime, raw: unknown): Promise<string> {
   const { images, ...input } = await manualItemFrom(rt, raw)
   const id = `manual:${randomUUID()}`
-  await rt.store.items.createManual({ id, ...input })
+  await rt.store.items.createManual({ id, ...input, projectId: input.projectId ?? (await defaultProject(rt))?.id })
   // The item has to exist before its images can hang off it — the folder is
   // named after the id the line above minted.
   if (images?.length) await setItemImagesOp(rt, id, images)
@@ -4097,14 +4142,61 @@ async function writeSettings(rt: WorkspaceRuntime, raw: unknown): Promise<Worksp
   return readSettings(rt)
 }
 
-/** The folder an item's work lands in: its project, else the project whose repo it belongs to. */
+/** The folder an item's work lands in: its project, else the project whose repo it belongs to, else the default. */
 async function projectFor(rt: WorkspaceRuntime, item: WorkItem): Promise<Project | null> {
   const projects = await rt.store.projects.list()
   return (
     (item.projectId ? projects.find((p) => p.id === item.projectId) : undefined) ??
     projects.find((p) => p.repo && p.repo === item.repo) ??
+    projects.find((p) => p.isDefault) ??
     null
   )
+}
+
+/**
+ * Every source item lands with its project stored: the one it names, else the
+ * project whose repo it belongs to, else the default — so adding a project
+ * later doesn't move it. Only an insert takes it; a refresh keeps the stored one.
+ */
+async function upsertItem(rt: WorkspaceRuntime, item: WorkItem, prov?: Provenance): Promise<UpsertResult> {
+  const project = item.projectId ? null : await projectFor(rt, item)
+  return rt.store.items.upsert(project ? { ...item, projectId: project.id } : item, prov)
+}
+
+/**
+ * Boot: the workspace gets a default project if it has projects but none is
+ * the default (the one most sessions ran in), and every session and item
+ * saved before projects were stored gets one (decision 549a251e, migration).
+ * A workspace with no projects is left alone — onboarding asks for a folder.
+ */
+async function migrateDefaultProject(rt: WorkspaceRuntime): Promise<void> {
+  let projects = await rt.store.projects.list()
+  if (projects.length === 0) return
+  const resolved = projects.map((p) => ({ id: p.id, root: path.resolve(p.path) }))
+  // Longest root first, so a project nested in another claims its own sessions.
+  resolved.sort((a, b) => b.root.length - a.root.length)
+  const owner = (cwd: string) => {
+    const c = path.resolve(cwd)
+    return resolved.find((p) => c === p.root || c.startsWith(p.root + path.sep))?.id ?? null
+  }
+  if (!projects.some((p) => p.isDefault)) {
+    const counts = new Map<string, number>()
+    for (const s of await rt.store.sessions.list()) {
+      const id = s.projectId ?? owner(s.cwd)
+      if (id) counts.set(id, (counts.get(id) ?? 0) + 1)
+    }
+    const pick = [...projects].sort((a, b) => (counts.get(b.id) ?? 0) - (counts.get(a.id) ?? 0))[0]
+    await rt.store.projects.setDefault(pick.id)
+    log('info', 'projects', `default project: ${pick.name} (${counts.get(pick.id) ?? 0} sessions)`, { workspace: rt.meta.id })
+    projects = await rt.store.projects.list()
+  }
+  const fallback = projects.find((p) => p.isDefault)!.id
+  const sessions = await rt.store.sessions.backfillProjects((cwd) => owner(cwd) ?? fallback)
+  const items = await rt.store.items.backfillProjects((item) => {
+    const byRepo = item.repo ? projects.find((p) => p.repo && p.repo === item.repo) : undefined
+    return byRepo?.id ?? fallback
+  })
+  if (sessions || items) log('info', 'projects', `stored a project on ${sessions} sessions and ${items} items`, { workspace: rt.meta.id })
 }
 
 /** Record that a session works (dispatch) or documents (brief) an item; mirrored in memory for summaries. */
@@ -4332,7 +4424,7 @@ async function startBriefRun(rt: WorkspaceRuntime, job: BriefJob): Promise<void>
       null,
       false,
       'gated',
-      { kind: 'brief' },
+      { kind: 'brief', projectId: project?.id ?? null },
     )
     await linkSessionToItem(rt, row.id, item.id, 'brief')
   }
@@ -4598,7 +4690,7 @@ async function applyTeamActions(rt: WorkspaceRuntime, run: TeamRun, actions: Tea
         const lead = rt.rows.get(run.leadSessionId)
         const { writes, model, agent } = workerSpec(run, w)
         const effort = (agent?.effort ?? null) as EffortLevel | null
-        const row = await createSession(rt, `${w.label} · ${run.title}`, lead?.cwd ?? run.root ?? os.homedir(), model, effort, false, writes ? 'acceptEdits' : 'gated', { spawn: false })
+        const row = await createSession(rt, `${w.label} · ${run.title}`, lead?.cwd ?? run.root ?? os.homedir(), model, effort, false, writes ? 'acceptEdits' : 'gated', { spawn: false, projectId: lead?.projectId ?? null })
         w.sessionId = row.id
         rt.sessionTeam.set(row.id, run.id)
         await linkSessionToItem(rt, row.id, run.itemId, 'dispatch').catch(() => {})
@@ -4997,7 +5089,7 @@ async function planTeamOp(rt: WorkspaceRuntime, raw: unknown): Promise<string> {
   const entry = typeof r.team === 'string' && r.team ? (await rt.teamLibrary.list()).teams.find((t) => t.name === r.team) : null
   if (r.team && !entry?.recipe) throw new Error(entry ? `teams/${entry.name}.md has errors: ${entry.errors.join('; ')}` : `no team named "${r.team}"`)
   const recipe = entry?.recipe ?? null
-  const row = await createSession(rt, `${recipe?.label ?? 'Team'} · ${item.title}`.slice(0, 80), project.path, recipe?.lead.model ?? null, recipe?.lead.effort ?? null, false, null, { spawn: false })
+  const row = await createSession(rt, `${recipe?.label ?? 'Team'} · ${item.title}`.slice(0, 80), project.path, recipe?.lead.model ?? null, recipe?.lead.effort ?? null, false, null, { spawn: false, projectId: project.id })
   await linkSessionToItem(rt, row.id, item.id, 'dispatch')
   const live = await getOrRevive(rt, row.id)
   if (!live) throw new Error('could not start the lead session')
@@ -6114,12 +6206,21 @@ const server = http.createServer(async (req, res) => {
         const name = typeof parsed?.name === 'string' ? parsed.name.trim() : ''
         const repo = typeof parsed?.repo === 'string' ? parsed.repo.trim() : ''
         const rawPath = typeof parsed?.path === 'string' ? parsed.path.trim() : ''
-        if (!name || !rawPath) throw new Error('a project needs a name and a folder')
-        if (repo && !/^[\w.-]+\/[\w.-]+$/.test(repo)) throw new Error(`"${repo}" is not owner/name`)
-        const resolved = expandHome(rawPath)
-        const st = await stat(resolved).catch(() => null)
-        if (!st?.isDirectory()) throw new Error(`folder not found: ${resolved}`)
-        await rt.store.projects.create({ id: randomUUID(), name, repo, path: resolved })
+        const makeDefault = (parsed as { makeDefault?: unknown } | null)?.makeDefault === true
+        const id = typeof parsed?.id === 'string' ? parsed.id : ''
+        const atFolder = rawPath
+          ? (await rt.store.projects.list()).find((p) => path.resolve(p.path) === path.resolve(expandHome(rawPath)))
+          : undefined
+        if (makeDefault && (id || atFolder) && (!rawPath || atFolder)) {
+          // Replace the default: the one way to move it, since it can't be deleted.
+          // Onboarding names a folder; one that is already a project just becomes the default.
+          await rt.store.projects.setDefault(atFolder?.id ?? id)
+        } else {
+          if (!name || !rawPath) throw new Error('a project needs a name and a folder')
+          if (repo && !/^[\w.-]+\/[\w.-]+$/.test(repo)) throw new Error(`"${repo}" is not owner/name`)
+          const project = await addProject(rt, rawPath, name, repo)
+          if (makeDefault && !project.isDefault) await rt.store.projects.setDefault(project.id)
+        }
       } else if (req.method === 'DELETE') {
         const id = url.searchParams.get('id')
         if (id) {
@@ -7334,6 +7435,7 @@ function parseClientMessage(raw: unknown): ClientMessage | null {
         type: 'create_session',
         title: str(m.title),
         cwd: str(m.cwd),
+        projectId: typeof m.projectId === 'string' && m.projectId ? m.projectId : undefined,
         firstMessage: typeof m.firstMessage === 'string' ? m.firstMessage : undefined,
         images: imageAttachments(m.images),
         mentions: mentionList(m.mentions),
@@ -7400,6 +7502,7 @@ function parseClientMessage(raw: unknown): ClientMessage | null {
       return {
         type: 'terminal_create',
         cwd: typeof m.cwd === 'string' && m.cwd ? m.cwd : undefined,
+        projectId: typeof m.projectId === 'string' && m.projectId ? m.projectId : undefined,
         title: typeof m.title === 'string' && m.title ? m.title : undefined,
         command: typeof m.command === 'string' && m.command ? m.command : undefined,
       }
@@ -7454,16 +7557,19 @@ wss.on('connection', (ws, req) => {
     try {
       switch (msg.type) {
         case 'create_session': {
-          const cwd = expandHome(msg.cwd)
+          const fallback = msg.cwd ? null : await defaultProject(rt)
+          const cwd = expandHome(msg.cwd || fallback?.path || '~')
+          const project = await projectForSession(rt, cwd, msg.projectId ?? fallback?.id)
           const title = msg.title.trim() || `Session ${rt.rows.size + 1}`
           const row = await createSession(
             rt,
             title,
-            cwd,
+            msg.cwd ? cwd : project.path,
             msg.model ?? null,
             msg.effort ?? null,
             msg.fastMode === true,
             msg.permissionMode ?? null,
+            { projectId: project.id },
           )
           // Dispatched from an item: the link is what the item page shows as "sessions".
           if (msg.itemId) await linkSessionToItem(rt, row.id, msg.itemId, 'dispatch').catch(() => {})
@@ -7574,8 +7680,15 @@ wss.on('connection', (ws, req) => {
           break
         }
         case 'terminal_create': {
+          const cwd = msg.cwd ? path.resolve(expandHome(msg.cwd)) : undefined
+          const projects = await rt.store.projects.list()
+          const project =
+            (msg.projectId ? projects.find((p) => p.id === msg.projectId) : undefined) ??
+            (cwd ? projects.find((p) => path.resolve(p.path) === cwd) : undefined) ??
+            projects.find((p) => p.isDefault)
           const terminal = rt.terminals.create({
-            cwd: msg.cwd ? expandHome(msg.cwd) : undefined,
+            cwd: cwd ?? project?.path,
+            projectId: project?.id ?? null,
             title: msg.title,
             command: msg.command,
             env: rt.env,

@@ -234,6 +234,8 @@ export type SessionSummary = {
   id: string
   title: string
   cwd: string
+  /** the project the session runs in; absent only on rows older than projects */
+  projectId?: string
   status: SessionStatus
   /** The chosen model when the user picked one, else what the SDK reported. */
   model?: string
@@ -693,6 +695,8 @@ export type Project = {
   repo: string
   /** absolute local folder sessions run in */
   path: string
+  /** the workspace's default project — exactly one once the workspace has any */
+  isDefault?: boolean
 }
 
 export type ProjectsResponse =
@@ -1325,6 +1329,8 @@ export type TerminalSummary = {
   id: string
   title: string
   cwd: string
+  /** the project the shell was opened in */
+  projectId?: string
   /** the shell binary's basename, e.g. "zsh" */
   shell: string
   pid: number
@@ -1338,6 +1344,8 @@ export type ClientMessage =
       type: 'create_session'
       title: string
       cwd: string
+      /** The project to run in. Omitted = the project at `cwd`, added as one if it isn't yet. */
+      projectId?: string
       firstMessage?: string
       /** Images attached to that first message. */
       images?: ImageAttachment[]
@@ -1373,8 +1381,8 @@ export type ClientMessage =
       answers?: QuestionAnswers
     }
   | { type: 'interrupt'; sessionId: string }
-  /** Open a shell in `cwd` (default: the home folder); `command` is typed in first, if given. */
-  | { type: 'terminal_create'; cwd?: string; title?: string; command?: string }
+  /** Open a shell in `cwd` (default: the project's folder); `command` is typed in first, if given. */
+  | { type: 'terminal_create'; cwd?: string; projectId?: string; title?: string; command?: string }
   /** Keystrokes / pasted text — raw, exactly as the terminal emulator produced them. */
   | { type: 'terminal_input'; terminalId: string; data: string }
   | { type: 'terminal_resize'; terminalId: string; cols: number; rows: number }
