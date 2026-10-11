@@ -105,6 +105,9 @@ export function buildTranscript(
   // the init that follows it names the model the new process runs.
   let initSeen = false
   let resumed = false
+  // A result's total_cost_usd is cumulative for its subprocess, so a turn's own
+  // cost is the step from the last one. A new subprocess starts from zero.
+  let costSeen = 0
   // Turns are counted the way the server counts them: one per `result`, so a
   // marker can be matched to the snapshot pair that bracketed it.
   let turnSeq = 0
@@ -146,6 +149,7 @@ export function buildTranscript(
         break
       case 'subprocess':
         resumed = true
+        costSeen = 0
         break
       case 'permission_request': {
         // Main shows every prompt (that's where the reader usually is); an agent's view, only its own.
@@ -245,7 +249,11 @@ export function buildTranscript(
             item.endedAt = timeOf(ev)
           }
         } else if (m.type === 'result') {
-          const cost = m.total_cost_usd != null ? ` · $${m.total_cost_usd.toFixed(4)}` : ''
+          // A drop means a new subprocess the log never marked (one from before the marker existed).
+          const total = m.total_cost_usd
+          const turnCost = total == null ? null : total >= costSeen ? total - costSeen : total
+          if (total != null) costSeen = total
+          const cost = turnCost != null ? ` · $${turnCost.toFixed(4)}` : ''
           const secs = ((m.duration_ms ?? 0) / 1000).toFixed(1)
           turnSeq += 1
           items.push({

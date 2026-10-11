@@ -242,3 +242,13 @@ test('the relay main reads names the agent and carries the text unchanged', () =
   assert.match(framed, /SendMessage with to: "a1b2"/)
   assert.match(framed, /<message>\nOnly look in core\/\.\n<\/message>/)
 })
+
+test("a turn marker shows that turn's cost, not the subprocess's running total", () => {
+  const result = (total: number) => sdk({ type: 'result', subtype: 'success', total_cost_usd: total, duration_ms: 1000, num_turns: 1 })
+  const events: SessionEvent[] = [init(), result(2.252), init(), result(8.1682), { kind: 'subprocess' }, init(), result(0.5)]
+  const marks = buildTranscript(events).filter((i) => i.kind === 'meta' && i.turn).map((i) => (i.kind === 'meta' ? i.text : ''))
+  assert.deepEqual(
+    marks.map((t) => /\$([\d.]+)/.exec(t)?.[1]),
+    ['2.2520', '5.9162', '0.5000'],
+  )
+})
