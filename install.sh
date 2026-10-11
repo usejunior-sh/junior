@@ -21,50 +21,126 @@ BUNDLE_ID="sh.usetriage.app"
 KNOWN_IDS="sh.usetriage.app com.heytriage.app"
 
 if [ -t 1 ]; then
+  TTY=1
   ESC=$(printf '\033')
-  BOLD="${ESC}[1m" DIM="${ESC}[2m" GREEN="${ESC}[32m" RED="${ESC}[31m" RESET="${ESC}[0m"
+  BOLD="${ESC}[1m" DIM="${ESC}[2m" RED="${ESC}[31m" RESET="${ESC}[0m"
+  # The site's orange: truecolour where the terminal says it has it, else the
+  # nearest of the 256 (Terminal.app before macOS 26 has no truecolour).
+  case "${COLORTERM:-}" in
+    truecolor | 24bit) ORANGE="${ESC}[38;2;255;122;69m" ;;
+    *) ORANGE="${ESC}[38;5;209m" ;;
+  esac
 else
-  BOLD="" DIM="" GREEN="" RED="" RESET=""
+  TTY="" BOLD="" DIM="" RED="" RESET="" ORANGE=""
 fi
 
 step() { printf '  %s›%s %s\n' "$DIM" "$RESET" "$1"; }
-ok() { printf '  %s✓%s %s\n' "$GREEN" "$RESET" "$1"; }
+ok() { printf '  %s✓%s %s\n' "$ORANGE" "$RESET" "$1"; }
 die() {
   printf '  %s✗%s %s\n' "$RED" "$RESET" "$1" >&2
   exit 1
 }
 
-# spin "label" cmd args… — runs cmd with a spinner beside the label, clears
-# the line when it's done, and returns cmd's status. For the quiet steps that
-# take seconds (unpacking ~700 MB, the LaunchAgent). Off a terminal, just runs.
+# The pulse — a braille spinner and a row of ▰/▱ blocks — drawn on one line
+# that's redrawn in place. These set globals instead of printing, so a frame
+# costs no subshells.
+frame() {
+  case $(($1 % 10)) in
+    0) F='⠋' ;; 1) F='⠙' ;; 2) F='⠹' ;; 3) F='⠸' ;; 4) F='⠼' ;;
+    5) F='⠴' ;; 6) F='⠦' ;; 7) F='⠧' ;; 8) F='⠇' ;; *) F='⠏' ;;
+  esac
+}
+
+# blocks FROM COUNT WIDTH — BAR becomes WIDTH blocks, COUNT of them lit from FROM.
+blocks() {
+  BAR="" k=0
+  while [ "$k" -lt "$3" ]; do
+    if [ "$k" -ge "$1" ] && [ "$k" -lt $(($1 + $2)) ]; then
+      BAR="${BAR}${ORANGE}▰${RESET}"
+    else
+      BAR="${BAR}${DIM}▱${RESET}"
+    fi
+    k=$((k + 1))
+  done
+}
+
+pulse_start() { printf '%s[?25l' "$ESC"; }
+pulse_end() { printf '\r%s[K%s[?25h' "$ESC" "$ESC"; }
+
+# spin "label" cmd args… — runs cmd under the pulse, with a window of lit
+# blocks sweeping across (there's no percent to show), clears the line when
+# it's done, and returns cmd's status. Off a terminal, just runs.
 spin() {
   label="$1"
   shift
-  if [ ! -t 1 ]; then
+  if [ -z "$TTY" ]; then
     "$@"
     return
   fi
   "$@" &
   pid=$!
   i=0
+  pulse_start
   while kill -0 "$pid" 2>/dev/null; do
-    case $((i % 10)) in
-      0) f='⠋' ;; 1) f='⠙' ;; 2) f='⠹' ;; 3) f='⠸' ;; 4) f='⠼' ;;
-      5) f='⠴' ;; 6) f='⠦' ;; 7) f='⠧' ;; 8) f='⠇' ;; *) f='⠏' ;;
-    esac
-    printf '\r  %s%s%s %s %s%ss%s' "$DIM" "$f" "$RESET" "$label" "$DIM" "$((i / 10))" "$RESET"
+    frame "$i"
+    blocks $((i % 15 - 3)) 3 12
+    printf '\r  %s%s%s %s  %s' "$ORANGE" "$F" "$RESET" "$label" "$BAR"
     i=$((i + 1))
     sleep 0.1
   done
-  printf '\r%s[K' "$ESC"
+  pulse_end
   wait "$pid"
+}
+
+# fetch URL FILE — downloads under the pulse, the percent read off the file's
+# size against Content-Length (curl's own bar can't be styled). Off a
+# terminal, a plain quiet curl. Sets FETCHED_MB.
+fetch() {
+  if [ -z "$TTY" ]; then
+    curl -fL -sS --retry 2 -o "$2" "$1" || return 1
+  else
+    total=$(curl -fsSIL "$1" 2>/dev/null | tr -d '\r' |
+      awk 'tolower($1) == "content-length:" { n = $2 } END { print n + 0 }')
+    curl -fL -sS --retry 2 -o "$2" "$1" 2>"$TMP/curl.err" &
+    pid=$!
+    i=0
+    pulse_start
+    while kill -0 "$pid" 2>/dev/null; do
+      got=$(stat -f %z "$2" 2>/dev/null || echo 0)
+      frame "$i"
+      if [ "$total" -gt 0 ]; then
+        pct=$((got * 100 / total))
+        [ "$pct" -le 100 ] || pct=100
+        blocks 0 $((pct / 5)) 20
+        printf '\r  %s%s%s downloading  %s %s%3d%%%s  %s%d MB%s%s[K' "$ORANGE" "$F" "$RESET" "$BAR" \
+          "$BOLD" "$pct" "$RESET" "$DIM" $((got / 1048576)) "$RESET" "$ESC"
+      else
+        # No length from the server: sweep, and count what's arrived.
+        blocks $((i % 23 - 3)) 3 20
+        printf '\r  %s%s%s downloading  %s  %s%d MB%s%s[K' "$ORANGE" "$F" "$RESET" "$BAR" \
+          "$DIM" $((got / 1048576)) "$RESET" "$ESC"
+      fi
+      i=$((i + 1))
+      sleep 0.1
+    done
+    pulse_end
+    wait "$pid" || {
+      sed 's/^/    /' "$TMP/curl.err" >&2
+      return 1
+    }
+  fi
+  FETCHED_MB=$(($(stat -f %z "$2") / 1048576))
 }
 
 # Silences a command but not the spinner around it: spin "…" quiet cmd…
 quiet() { "$@" >/dev/null 2>&1; }
 
 TMP=""
-cleanup() { if [ -n "$TMP" ]; then rm -rf "$TMP"; fi; }
+cleanup() {
+  if [ -n "$TMP" ]; then rm -rf "$TMP"; fi
+  # Ctrl-C mid-pulse would otherwise leave the cursor hidden.
+  if [ -n "$TTY" ]; then printf '%s[?25h' "$ESC"; fi
+}
 
 detect_arch() {
   case "$(uname -m)" in
@@ -77,7 +153,7 @@ detect_arch() {
         echo x64
       fi
       ;;
-    *) die "unsupported architecture: $(uname -m)" ;;
+    *) die "unsupported architecture: $(uname -m) — we only build for Apple silicon and Intel" ;;
   esac
 }
 
@@ -130,13 +206,13 @@ daemon_inside() {
 # and no MCP server for an external Claude Code session.
 link_cli() {
   bin="${TRIAGE_BIN_DIR:-$HOME/.local/bin}"
-  mkdir -p "$bin" 2>/dev/null || { step "couldn't create $bin — skipping the triage command"; return 0; }
+  mkdir -p "$bin" 2>/dev/null || { step "couldn't create $bin — skipping the triage command, the app works without it"; return 0; }
   for name in triage triage-mcp; do
     target="$bin/$name"
     # Never clobber a real binary someone else installed; our own shim and a
     # symlink left dangling by `npm uninstall -g` are both fair game.
     if [ -e "$target" ] && ! grep -q 'Triage.app installer' "$target" 2>/dev/null; then
-      step "left $target alone — it isn't ours"
+      step "left $target alone — it isn't ours, and we don't touch other people's things"
       continue
     fi
     case "$name" in
@@ -174,36 +250,37 @@ keep_running() {
   # Installing stops whatever holds the port — fine when idle, not while a
   # session is mid-turn. Busy means we write nothing and say so.
   if [ "${live:-0}" -gt 0 ] 2>/dev/null; then
-    printf '  %s!%s %s live session(s) are running, so the restart was skipped —\n' "$BOLD" "$RESET" "$live"
-    printf '    run %striage install%s when they finish to keep watches alive across reboots\n' "$BOLD" "$RESET"
+    printf '  %s!%s %s session(s) mid-thought, so we didn%st restart triage under them.\n' "$BOLD" "$RESET" "$live" "'"
+    printf '    Run %striage install%s when they finish, so watches survive the next reboot.\n' "$BOLD" "$RESET"
     return 0
   fi
-  if spin "keeping triage running after reboot" quiet "$node" "$cli" install; then
-    ok "LaunchAgent installed ${DIM}(undo: triage uninstall)${RESET}"
+  if spin "asking launchd to keep triage alive" quiet "$node" "$cli" install; then
+    ok "LaunchAgent installed — triage now outlives reboots ${DIM}(undo: triage uninstall)${RESET}"
   else
     printf '  %s!%s couldn%st install the LaunchAgent — watches will stop at the next reboot.\n' "$BOLD" "$RESET" "'"
-    printf '    Try %striage install%s and read the error.\n' "$BOLD" "$RESET"
+    printf '    Run %striage install%s and read the error — it%ss usually specific.\n' "$BOLD" "$RESET" "'"
   fi
 }
 
 quit_app() {
   is_running "$1" || return 0
-  step "quitting the running Triage"
+  step "quitting the running Triage — it'll be right back"
   osascript -e "tell application id \"$1\" to quit" >/dev/null 2>&1 || true
   i=0
   while is_running "$1"; do
     i=$((i + 1))
-    [ "$i" -gt 20 ] && die "Triage is still running — quit it, then run this again"
+    [ "$i" -gt 20 ] && die "Triage won't quit — quit it yourself, then run this again"
     sleep 0.5
   done
 }
 
 main() {
-  [ "$(uname -s)" = Darwin ] || die "Triage.app is macOS only — on Linux, run: npm i -g usetriage"
+  [ "$(uname -s)" = Darwin ] || die "Triage.app is macOS only, for now — on Linux: npm i -g usetriage"
   major=$(sw_vers -productVersion | cut -d. -f1)
   [ "$major" -ge 12 ] || die "Triage.app needs macOS 12 or newer"
 
-  printf '\n  %striage%s %sfor macOS%s\n\n' "$BOLD" "$RESET" "$DIM" "$RESET"
+  printf '\n  %striage%s %sfor macOS%s\n' "$BOLD" "$RESET" "$DIM" "$RESET"
+  printf '  %syour work, ranked before you look%s\n\n' "$DIM" "$RESET"
 
   TMP=$(mktemp -d "${TMPDIR:-/tmp}/triage-install.XXXXXX")
   trap cleanup EXIT
@@ -220,16 +297,18 @@ main() {
     version="${version#v}"
     if [ -z "$version" ]; then
       version=$(latest_version)
-      [ -n "$version" ] || die "couldn't find the latest release — set TRIAGE_VERSION=x.y.z and retry"
+      [ -n "$version" ] || die "couldn't ask GitHub for the latest release — check your connection, or set TRIAGE_VERSION=x.y.z"
     fi
     asset="Triage-$version-mac-$arch.zip"
     url="https://github.com/$REPO/releases/download/v$version/$asset"
-    step "downloading $asset"
-    if [ -t 2 ]; then progress=--progress-bar; else progress=-sS; fi
-    curl -fL "$progress" --retry 2 -o "$zip" "$url" ||
+    [ -n "$TTY" ] || step "downloading $asset"
+    started=$(date +%s)
+    fetch "$url" "$zip" ||
       die "download failed: $url
     (a pinned TRIAGE_VERSION may predate the Mac app — try without it)"
-    ok "downloaded v$version ($arch)"
+    took=$(($(date +%s) - started))
+    case "$arch" in arm64) chip="Apple silicon" ;; *) chip=Intel ;; esac
+    ok "downloaded v$version ${DIM}($chip · $FETCHED_MB MB, mostly Chromium · ${took}s)${RESET}"
   fi
 
   # Unpack and check it before touching what's installed.
@@ -239,9 +318,9 @@ main() {
   [ -d "$new" ] || die "the archive has no $APP at its top level"
   [ "$(bundle_id "$new")" = "$BUNDLE_ID" ] || die "$APP in the archive isn't $BUNDLE_ID"
   xattr -dr com.apple.quarantine "$new" 2>/dev/null || true
-  spin "verifying the signature" codesign --verify --deep --strict "$new" 2>/dev/null ||
-    die "$APP failed its signature check"
-  ok "signature verified"
+  spin "checking the signature" codesign --verify --deep --strict "$new" 2>/dev/null ||
+    die "$APP failed its signature check — something changed it after we built it, so we're not installing it"
+  ok "signature checks out ${DIM}(ad-hoc — paying Apple \$99 is on the roadmap)${RESET}"
 
   if [ -n "${TRIAGE_INSTALL_DIR:-}" ]; then
     dir="$TRIAGE_INSTALL_DIR"
@@ -266,7 +345,7 @@ main() {
     is_ours "$old" || die "$dest is another app (${old:-no bundle id}) — move it aside or set TRIAGE_INSTALL_DIR"
     [ "$old" = "$BUNDLE_ID" ] || quit_app "$old"
     rm -rf "$dest" || die "couldn't remove the old $dest"
-    ok "replaced $dest"
+    ok "replaced the old $dest"
   else
     ok "installed $dest"
   fi
@@ -279,7 +358,7 @@ main() {
     for other in "/Applications/$APP" "$HOME/Applications/$APP"; do
       [ "$other" = "$dest" ] && continue
       if [ -d "$other" ] && is_ours "$(bundle_id "$other")"; then
-        rm -rf "$other" 2>/dev/null && ok "removed the older copy at $other"
+        rm -rf "$other" 2>/dev/null && ok "removed an older copy at $other — two of us confuses macOS"
       fi
     done
   fi
@@ -301,17 +380,18 @@ main() {
 
   cat <<EOF
 
-  ${BOLD}Triage is installed.${RESET}
+  ${ORANGE}${BOLD}Triage is installed.${RESET}
 
-  It opens a window on the triage daemon on this Mac — the one already
-  running, or one it starts for you on port 5178. Quitting the app leaves
-  triage running, so live sessions and watches keep going, and a LaunchAgent
-  brings it back after a reboot or a crash.
+  The app is only a window. Quit it and triage keeps working: live
+  sessions finish, watches fire, and launchd brings it back after a
+  reboot or a crash. Quitting the app doesn't send the staff home.
 
-  ${DIM}triage status${RESET}  what's running, and which build
-  ${DIM}triage uninstall${RESET}  stop it starting at login
+  ${DIM}triage status${RESET}     what's running, and which build
+  ${DIM}triage uninstall${RESET}  stop it starting at login — no hard feelings
 
-  Needs Claude Code installed and logged in: ${DIM}https://claude.com/claude-code${RESET}
+  One thing we can't bundle: Claude Code, logged in → ${DIM}https://claude.com/claude-code${RESET}
+  To update, run the same curl line. An auto-updater is on the roadmap,
+  right after paying Apple.
 
 EOF
 }
