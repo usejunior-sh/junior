@@ -170,6 +170,9 @@ export function CommandPalette({
   function runSelected() {
     const cmd = shown[clamped]
     if (!cmd) return
+    // Close the dialog now, so its focus restore lands before the command's
+    // target (a composer) mounts and focuses itself — not after, stealing it.
+    dialog.current?.close()
     onClose()
     cmd.run()
   }
