@@ -77,7 +77,7 @@ export function WatchFileEditor({ id, onNavigate }: { id?: string; onNavigate: (
   }
 
   return (
-    <div className="page wide">
+    <div className="page">
       <div className="glow blue" aria-hidden="true" />
       <div className="inner wfile">
         <div className="crumbs">

@@ -33,7 +33,7 @@ export function ArtifactsPage({ onOpen, onPin }: { onOpen: (id: string) => void;
   const rows = snap.artifacts.filter((a) => (filter === 'all' || a.author === filter) && (showFinished || !a.hidden))
 
   return (
-    <div id="artifactsPage" className="page">
+    <div id="artifactsPage" className="page full">
       <div className="inner">
         <div className="pageHead">
           <div>

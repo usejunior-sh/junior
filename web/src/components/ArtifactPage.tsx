@@ -39,7 +39,7 @@ export function ArtifactPage({
 /** `#/artifact/new` — a fresh full-page editor; saving lands on the new artifact's page. */
 function NewArtifactPage({ onNavigate }: { onNavigate: (hash: string) => void }) {
   return (
-    <div id="artifactPage" className="page wide artEditPage">
+    <div id="artifactPage" className="page artEditPage">
       <ArtifactEditor
         draftKey="new"
         initialTitle=""
@@ -167,7 +167,7 @@ function ExistingArtifactPage({ id, onNavigate, onDirty }: { id: string; onNavig
   // Edit mode takes the whole content area — long notes need the room.
   if (editing) {
     return (
-      <div id="artifactPage" className="page wide artEditPage">
+      <div id="artifactPage" className="page artEditPage">
         <ArtifactEditor
           draftKey={a.id}
           initialTitle={a.title}
@@ -185,7 +185,7 @@ function ExistingArtifactPage({ id, onNavigate, onDirty }: { id: string; onNavig
   const sessionTitle = (sid: string) => sessions.find((s) => s.id === sid)?.title ?? sid.slice(0, 8)
 
   return (
-    <div id="artifactPage" className="page wide">
+    <div id="artifactPage" className="page">
       <div className="inner">
         <button type="button" className="artBack" onClick={() => onNavigate('/artifacts')}>
           <ArrowLeft size={12} aria-hidden="true" /> Artifacts

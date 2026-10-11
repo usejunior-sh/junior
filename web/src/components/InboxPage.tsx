@@ -440,7 +440,7 @@ export function InboxPage({ onDispatch, onRefineWatch, onOpenItem, onPinItem, co
   }
 
   return (
-    <div className="page wide" id="inboxPage">
+    <div className="page full" id="inboxPage">
       <div className="glow blue" aria-hidden="true" />
       <div className="inner">
         <div className="pageHead">

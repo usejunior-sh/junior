@@ -160,7 +160,7 @@ export function WatchesPage({
   const open = (w: Watch) => onNavigate(`/watches/${encodeURIComponent(w.id)}`)
 
   return (
-    <div id="watchesPage" className="page wide">
+    <div id="watchesPage" className="page full">
       <div className="glow yellow" aria-hidden="true" />
       <div className="inner">
         <div className="watchHead">

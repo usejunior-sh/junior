@@ -173,7 +173,7 @@ export function WatchPage({ id, onNavigate }: { id: string; onNavigate: (hash: s
 
   if (watch === undefined) {
     return (
-      <div className="page wide">
+      <div className="page">
         <div className="probing">
           <span className="pip" /> Loading…
         </div>
@@ -182,7 +182,7 @@ export function WatchPage({ id, onNavigate }: { id: string; onNavigate: (hash: s
   }
   if (watch === null) {
     return (
-      <div className="page wide">
+      <div className="page">
         <div className="inner">
           <div className="crumbs">
             <button type="button" className="crumb link" onClick={() => onNavigate('/watches')}>
@@ -204,7 +204,7 @@ export function WatchPage({ id, onNavigate }: { id: string; onNavigate: (hash: s
   const edit = () => onNavigate(`/watches/${encodeURIComponent(watch.id)}/edit`)
 
   return (
-    <div className="page wide">
+    <div className="page">
       <div className="glow orange" aria-hidden="true" />
       <div className="inner">
         <div className="crumbs" style={{ marginBottom: 14 }}>

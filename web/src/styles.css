@@ -580,8 +580,11 @@ kbd { font-family: var(--mono); font-size: 0.8462rem; color: var(--ash); border:
 
 /* ---------- page shell (inbox / item / watches / projects / connectors) ---------- */
 .page { flex: 1; min-height: 0; overflow-y: auto; padding: 28px 40px 48px; position: relative; }
-.page .inner { max-width: 920px; }
-.page.wide .inner { max-width: 1100px; }
+/* width tiers: list pages (.full) fill the pane like Linear — the extra width
+   goes to the title column. Everything else is a centred 1100px column; forms
+   cap themselves narrower (.wform). */
+.page .inner { max-width: 1100px; margin: 0 auto; }
+.page.full .inner { max-width: none; }
 .pageHead { display: flex; align-items: flex-end; gap: 16px; margin-bottom: 18px; }
 .pageHead > div:first-child { min-width: 0; }
 .display { margin: 0; font-family: var(--display); font-weight: 400; font-size: 2.7692rem; line-height: 1; letter-spacing: -0.36px; color: var(--ink); }
@@ -2531,6 +2534,8 @@ dialog.briefDialog .knobs { display: flex; gap: 8px; align-items: center; flex-w
 .wtbl tr.off td { color: var(--stone); }
 .wtbl tr.off td.nm .t { color: var(--stone); }
 .wtbl td.sw { width: 36px; padding-right: 0; }
+/* the name column takes the slack on a wide pane; the rest hug their content */
+.wtbl td.nm { width: 100%; }
 .wtbl td.nm .t { background: none; border: 0; padding: 0; color: var(--ink); font-size: 1.0385rem; letter-spacing: -0.1px; cursor: pointer; text-align: left; }
 .wtbl td.nm .t:hover { text-decoration: underline; text-decoration-color: var(--stone); text-underline-offset: 3px; }
 .wtbl .mono { font-family: var(--mono); font-size: 0.8846rem; color: var(--ash); }
@@ -3301,7 +3306,7 @@ html.kbOpen .shell.mobile .panel { bottom: 0; }
   .wtbl tbody tr:last-child { border-bottom: 0; }
   .wtbl td, .wtbl tbody tr:hover td { display: block; height: auto; padding: 0; border: 0; background: none; }
   .wtbl td.sw { order: 1; width: auto; }
-  .wtbl td.nm { order: 2; flex: 1 1 0; min-width: 0; white-space: normal; }
+  .wtbl td.nm { order: 2; flex: 1 1 0; width: auto; min-width: 0; white-space: normal; }
   .wtbl td.acts { order: 3; width: auto; }
   .wtbl td.acts .iconBtn { width: 36px; height: 36px; }
   /* Uses on their own line under the name; then schedule, last run and the run dots. */
