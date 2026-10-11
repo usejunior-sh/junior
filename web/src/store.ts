@@ -11,6 +11,7 @@
  *                anything should re-render.
  */
 import type { BriefJob,
+  Build,
   ClientMessage,
   ServerMessage,
   SessionEvent,
@@ -44,6 +45,8 @@ export class Store {
   #workspaceId = ''
   #workspaces: readonly Workspace[] = []
   #onboarded = true
+  /** Which copy of triage this tab is talking to — null until `hello` lands. */
+  #build: Build | null = null
 
   #liveText = new Map<string, string>()
   /** Deltas received since the last animation frame. */
@@ -74,6 +77,7 @@ export class Store {
   getWorkspaceId = (): string => this.#workspaceId
   getWorkspaces = (): readonly Workspace[] => this.#workspaces
   getOnboarded = (): boolean => this.#onboarded
+  getBuild = (): Build | null => this.#build
   getTerminals = (): readonly TerminalSummary[] => this.#terminals
 
   subscribeStructural = (fn: () => void) => {
@@ -245,6 +249,7 @@ export class Store {
         this.#workspaces = msg.workspaces
         this.#onboarded = msg.onboarded
         this.#terminals = msg.terminals
+        this.#build = msg.build
         this.#notify()
         break
       case 'sessions':

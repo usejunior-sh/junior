@@ -1,8 +1,11 @@
 import { Activity, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronsUpDown, CircleHelp, Gauge, PanelLeft, Plus, Settings, Settings2, SquareArrowOutUpRight } from 'lucide-react'
 import { useRef, useState, type ReactNode } from 'react'
-import { goBack, goForward, useDesktopNav } from '../desktop.js'
+import { goBack, goForward, isDesktop, useDesktopNav } from '../desktop.js'
 import { MOD_LABEL } from '../keys.js'
-import type { Workspace } from '../../../shared/protocol.js'
+
+// Triage.app turns a same-origin window.open into its own window, not a tab.
+const NEW_TAB = isDesktop ? 'a new window' : 'a new tab'
+import type { Build, Workspace } from '../../../shared/protocol.js'
 import type { ConnState } from '../store.js'
 import { Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from '../ui/Menu.js'
 import { basePath } from '../workspaceUrl.js'
@@ -23,8 +26,31 @@ type Props = {
   onOpenSystem: (tab: 'status' | 'activity') => void
   onOpenSettings: () => void
   onHelp: () => void
+  /** Which copy of triage is answering; null until `hello` lands. */
+  build: Build | null
   /** Inside Triage.app: the bar is the window's title bar (see desktop.ts). */
   desktop?: { panelCollapsed: boolean; onTogglePanel: () => void }
+}
+
+/**
+ * Which build am I looking at — the badge that ends the "wait, which triage is
+ * this?" question. Three copies can run on one machine, so a released build
+ * says nothing (that is the normal case, and noise there would be ignored) and
+ * anything *ahead* of a release is called out. Clicking opens System status,
+ * where the package root on disk settles any remaining doubt.
+ */
+function BuildBadge({ build, onOpenSystem }: { build: Build | null; onOpenSystem: (tab: 'status') => void }) {
+  if (!build || build.channel === 'release') return null
+  const dev = build.channel === 'dev'
+  const title = dev
+    ? `Development build — the working tree as it is now, on ${build.home}`
+    : `Unreleased build${build.commit ? ` from ${build.commit}` : ''}${build.dirty ? ' (uncommitted changes)' : ''} — v${build.version}`
+  return (
+    <button type="button" className={`buildBadge ${build.channel}`} title={`${title}\nClick for system status`} onClick={() => onOpenSystem('status')}>
+      {dev ? 'Dev' : 'Preview'}
+      {build.dirty && <span className="buildDirty" aria-hidden="true" />}
+    </button>
+  )
 }
 
 const CONN_TITLE: Record<ConnState, string> = {
@@ -47,6 +73,7 @@ export function TopBar({
   onOpenSystem,
   onOpenSettings,
   onHelp,
+  build,
   desktop,
 }: Props) {
   if (desktop && !mobile) {
@@ -63,6 +90,7 @@ export function TopBar({
             onSettings={onWorkspaceSettings}
           />
         }
+        badge={<BuildBadge build={build} onOpenSystem={onOpenSystem} />}
         system={<SystemIcons conn={conn} onOpenSystem={onOpenSystem} onOpenSettings={onOpenSettings} onHelp={onHelp} />}
       />
     )
@@ -86,6 +114,7 @@ export function TopBar({
           onNew={onNewWorkspace}
           onSettings={onWorkspaceSettings}
         />
+        <BuildBadge build={build} onOpenSystem={onOpenSystem} />
         <button type="button" className="topIcon" aria-label={CONN_TITLE[conn]} onClick={() => onOpenSystem('status')}>
           <Gauge size={17} aria-hidden="true" />
           <span className={`connDot ${conn === 'connected' ? '' : conn === 'connecting' ? 'connecting' : 'down'}`} aria-hidden="true" />
@@ -106,6 +135,7 @@ export function TopBar({
         onNew={onNewWorkspace}
         onSettings={onWorkspaceSettings}
       />
+      <BuildBadge build={build} onOpenSystem={onOpenSystem} />
       <span className="spacer" />
       <SystemIcons conn={conn} onOpenSystem={onOpenSystem} onOpenSettings={onOpenSettings} onHelp={onHelp} />
     </header>
@@ -149,11 +179,13 @@ function DesktopBar({
   panelCollapsed,
   onTogglePanel,
   switcher,
+  badge,
   system,
 }: {
   panelCollapsed: boolean
   onTogglePanel: () => void
   switcher: ReactNode
+  badge: ReactNode
   system: ReactNode
 }) {
   const nav = useDesktopNav()
@@ -181,6 +213,7 @@ function DesktopBar({
       </div>
       <div className="dbMain">
         {switcher}
+        {badge}
         <span className="spacer" />
         {system}
       </div>
@@ -252,7 +285,7 @@ function WorkspaceSwitcher({
         {workspaces.map((w) => (
           <MenuItem
             key={w.id}
-            title={`${w.name} — ${MOD_LABEL}-click to open in a new tab`}
+            title={`${w.name} — ${MOD_LABEL}-click to open in ${NEW_TAB}`}
             onPointerDown={(e) => (newTab.current = e.metaKey || e.ctrlKey || e.button === 1)}
             onSelect={() => {
               if (newTab.current) openInNewTab(w.id)
@@ -272,7 +305,7 @@ function WorkspaceSwitcher({
             <span
               className="wsOpenTab"
               aria-hidden="true"
-              title={`Open in a new tab (${MOD_LABEL}-click)`}
+              title={`Open in ${NEW_TAB} (${MOD_LABEL}-click)`}
               onPointerDown={(e) => e.stopPropagation()}
               onPointerUp={(e) => e.stopPropagation()}
               onClick={(e) => {

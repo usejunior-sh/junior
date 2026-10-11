@@ -1,14 +1,14 @@
 /**
  * Find, start and restart the local triage daemon from the Electron main
- * process (ARCHITECTURE.md). The app attaches, it does not own: the daemon is
- * started with the same `cli.js start` path `triage start` uses, so it is
- * detached (or handed to the LaunchAgent) and survives the app quitting.
+ * process (ARCHITECTURE.md). The app attaches, it does not own: the daemon runs
+ * under the same LaunchAgent `triage install` writes, so it survives the app
+ * quitting — and a reboot, a logout and a crash, which is what watches need.
  *
  * Deliberately free of an `electron` import — packaging is detected from the
  * bundled runtime on disk — so this module also loads under plain node.
  */
 import { execFile, spawn } from 'node:child_process'
-import { accessSync, constants, existsSync } from 'node:fs'
+import { accessSync, constants, existsSync, readFileSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
@@ -158,16 +158,58 @@ function dedupe(dirs: string[]): string[] {
   return [...new Set(dirs.filter(Boolean))]
 }
 
-/** Find a running triage, or start one; resolves once /api/health answers. */
+/**
+ * Find a running triage, or start one; resolves once /api/health answers.
+ *
+ * Installing the app is the only step anyone takes, so the app — not the
+ * installer, which a drag-from-DMG user never runs — is what guarantees the
+ * LaunchAgent exists. Watches are a background promise, and a daemon this
+ * process merely detached dies at the next reboot.
+ */
 export async function ensureDaemon(onStatus?: (msg: string) => void): Promise<DaemonHealth> {
   const health = await probe()
   if (health === 'other') {
     throw new Error(`port ${PORT} is used by something that isn't triage — quit it, or set TRIAGE_APP_PORT to another port`)
   }
-  if (health) return health
+  if (health) {
+    // Someone else's daemon already holds the port. Write the agent for next
+    // login rather than restarting it underneath them.
+    if (agentNeedsWriting()) void runCli('install', ['--defer']).catch(() => {})
+    return health
+  }
   onStatus?.('Starting triage…')
-  const out = await runCli('start')
+  // `install` writes the agent and lets launchd start the server, so the daemon
+  // is launchd-owned from birth — no second restart to adopt it later. `start`
+  // already prefers an installed agent, so it is the fallback when we must not
+  // install one (an unpackaged dev app, or a plist that is already correct).
+  const out = await runCli(agentNeedsWriting() ? 'install' : 'start')
   return waitForHealth(out, () => true)
+}
+
+/** Mirrors LAUNCH_AGENT_LABEL in server/launchd.ts. */
+const AGENT_PLIST = path.join(os.homedir(), 'Library', 'LaunchAgents', 'sh.usetriage.triage.plist')
+/** Written by `triage uninstall` — mirrors OPT_OUT_FILE in server/cli.ts. */
+const agentOptOut = (): string =>
+  path.join(process.env.TRIAGE_HOME || path.join(os.homedir(), '.triage'), 'no-launch-agent')
+
+/**
+ * Should we write the LaunchAgent? Only for a packaged app — an unpackaged dev
+ * run would point launchd at a repo build that moves under it. A plist that
+ * names some other copy (an app that moved, or the npm install it replaced) is
+ * worse than none: it looks installed and restarts nothing, so it is rewritten.
+ */
+function agentNeedsWriting(): boolean {
+  if (process.platform !== 'darwin') return false
+  const { node, cli, bundled } = runtime()
+  if (!bundled) return false
+  // `triage uninstall` is a decision, not an accident — don't overrule it.
+  if (existsSync(agentOptOut())) return false
+  try {
+    const xml = readFileSync(AGENT_PLIST, 'utf8')
+    return !(xml.includes(`<string>${node}</string>`) && xml.includes(`<string>${cli}</string>`))
+  } catch {
+    return true // no plist at all
+  }
 }
 
 /**
@@ -185,7 +227,7 @@ export async function restartDaemon(): Promise<DaemonHealth> {
 type CliResult = { code: number | null; output: string }
 
 /** Run the CLI to completion. `start` returns once the detached server is up (or failed). */
-async function runCli(command: 'start' | 'restart'): Promise<CliResult> {
+async function runCli(command: 'start' | 'restart' | 'install', extra: string[] = []): Promise<CliResult> {
   const env = { ...(await loginShellEnv()), PORT: String(PORT) }
   const { node, cli, bundled } = runtime()
   if (!existsSync(cli)) {
@@ -194,7 +236,7 @@ async function runCli(command: 'start' | 'restart'): Promise<CliResult> {
   return new Promise((resolve, reject) => {
     // The server it launches is detached with its own stdio (the log file),
     // so these pipes close when the CLI itself exits.
-    const child = spawn(node, [cli, command], { env, stdio: ['ignore', 'pipe', 'pipe'] })
+    const child = spawn(node, [cli, command, ...extra], { env, stdio: ['ignore', 'pipe', 'pipe'] })
     let output = ''
     child.stdout.on('data', (d) => (output += d))
     child.stderr.on('data', (d) => (output += d))

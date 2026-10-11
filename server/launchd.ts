@@ -7,7 +7,7 @@
  * start/stop) and the server (System status shows whether it is installed).
  */
 import { execFile } from 'node:child_process'
-import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { promisify } from 'node:util'
@@ -85,13 +85,39 @@ ${envXml}
 `
 }
 
-/** Write the plist and load it. Replaces an existing agent. */
-export async function installLaunchAgent(spec: LaunchAgentSpec): Promise<void> {
+/**
+ * Write the plist and load it. Replaces an existing agent.
+ *
+ * `load: false` writes the plist and stops there — launchd reads the folder at
+ * login, so the agent takes effect from the next one. That is the only safe
+ * option while a server is already on the port: bootstrapping now would start a
+ * second one that can't bind and crash-loops against KeepAlive.
+ */
+export async function installLaunchAgent(spec: LaunchAgentSpec, opts: { load?: boolean } = {}): Promise<void> {
   const file = launchAgentPlist()
   mkdirSync(path.dirname(file), { recursive: true })
+  if (opts.load === false) {
+    writeFileSync(file, plistFor(spec), { mode: 0o644 })
+    return
+  }
   await execFileP('launchctl', ['bootout', service()]).catch(() => {})
   writeFileSync(file, plistFor(spec), { mode: 0o644 })
   await execFileP('launchctl', ['bootstrap', domain(), file])
+}
+
+/**
+ * Does the installed plist run exactly this node + script? An app that moved,
+ * or a plist left by an install that has since been removed, points somewhere
+ * that no longer exists — so it is worse than no agent at all: it looks healthy
+ * and restarts nothing.
+ */
+export function launchAgentPointsAt(node: string, script: string): boolean {
+  try {
+    const xml = readFileSync(launchAgentPlist(), 'utf8')
+    return xml.includes(`<string>${node}</string>`) && xml.includes(`<string>${script}</string>`)
+  } catch {
+    return false
+  }
 }
 
 /** Unload and delete the plist. */

@@ -49,6 +49,7 @@ import { DefaultProjectGate } from './components/DefaultProjectGate.js'
 import { WorkspaceModal, type WorkspaceModalMode } from './components/WorkspaceModal.js'
 import {
   itemHash,
+  useBuild,
   useConn,
   useEvents,
   useHashRoute,
@@ -279,6 +280,7 @@ export function App() {
   const [system, setSystem] = useState<{ open: boolean; tab: SystemTab }>({ open: false, tab: 'status' })
   const [composeSignal, setComposeSignal] = useState(0)
   const workspaces = useWorkspaces()
+  const build = useBuild()
   const workspaceId = useWorkspaceId()
   const onboarded = useOnboarded()
   const [wsModal, setWsModal] = useState<WorkspaceModalMode | null>(null)
@@ -1000,6 +1002,7 @@ export function App() {
         onOpenSystem={(tab) => setSystem({ open: true, tab })}
         onOpenSettings={() => openSettings()}
         onHelp={() => setHelpOpen(true)}
+        build={build}
         desktop={isDesktop ? { panelCollapsed: panelSize.collapsed, onTogglePanel: panelSize.toggleCollapsed } : undefined}
       />
 

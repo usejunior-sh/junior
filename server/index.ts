@@ -256,7 +256,7 @@ import {
   type WatchToolGrant,
 } from '../core/watch/tools.js'
 import { fenceDecision, fenceFor, type Fence } from '../core/watch/fence.js'
-import { clearState, pkgVersion, TRIAGE_DIR, writeState } from './state.js'
+import { buildInfo, clearState, pkgVersion, TRIAGE_DIR, writeState } from './state.js'
 import { initLogFile, log, logFilePath, logSubsystems, recentLogs } from './log.js'
 import {
   apiKeyHint,
@@ -330,6 +330,9 @@ function syncTunnel() {
   else tunnel.stop()
 }
 const VERSION = pkgVersion()
+// Which copy of triage this is (checkout / unreleased build / release) — fixed
+// for the life of the process, reported everywhere so every surface agrees.
+const BUILD = buildInfo()
 const SERVER_STARTED = Date.now()
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 /**
@@ -1934,6 +1937,7 @@ async function systemStatus(rt: WorkspaceRuntime): Promise<SystemStatus> {
   const enabled = watches.filter((w) => w.enabled)
   return {
     version: VERSION,
+    build: BUILD,
     startedAt: SERVER_STARTED,
     uptimeMs: now - SERVER_STARTED,
     port: PORT,
@@ -5905,6 +5909,7 @@ const server = http.createServer(async (req, res) => {
     json(200, {
       app: 'triage',
       version: VERSION,
+      build: BUILD,
       pid: process.pid,
       port: PORT,
       db: dbFileFor(registry.defaultId, registry.defaultId),
@@ -7633,6 +7638,7 @@ wss.on('connection', (ws, req) => {
     workspaces: wireWorkspaces(),
     onboarded: registry.onboarded,
     terminals: rt.terminals.list(),
+    build: BUILD,
   })
 
   ws.on('message', async (raw) => {

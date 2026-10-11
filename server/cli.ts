@@ -90,6 +90,7 @@ const HELP = `
 
   ${bold('Keep it running')} ${dim('(macOS — watches only run while triage runs)')}
     ${cyan('triage install')}     install a LaunchAgent: starts at login, restarts after a crash
+    ${dim('--defer')}            ${dim('write it without restarting a running server (takes effect at next login)')}
     ${cyan('triage uninstall')}   remove the LaunchAgent
     ${cyan('triage doctor')}      check node, claude, gh, the agent, and the server
 
@@ -125,6 +126,8 @@ function die(message: string): never {
 const args = process.argv.slice(2)
 let explicitPort: number | null = null
 let explicitColor: string | null = null
+/** `triage install --defer`: write the agent, never restart a running server. */
+let deferInstall = false
 const positional: string[] = []
 for (let i = 0; i < args.length; i++) {
   const a = args[i]
@@ -138,6 +141,8 @@ for (let i = 0; i < args.length; i++) {
     explicitPort = Number(args[++i])
   } else if (a.startsWith('--port=')) {
     explicitPort = Number(a.slice('--port='.length))
+  } else if (a === '--defer') {
+    deferInstall = true
   } else if (a === '--color') {
     explicitColor = args[++i] ?? null
   } else if (a.startsWith('--color=')) {
@@ -173,6 +178,14 @@ async function resolvePort(forStart: boolean): Promise<number> {
 
 // --- commands ---------------------------------------------------------------
 
+/** The build, coloured by how far it is from what everyone else has. */
+function buildLine(b: NonNullable<Health['build']>): string {
+  if (b.channel === 'dev') return yellow(`working tree ${dim(`(${b.home})`)}`)
+  if (b.channel === 'release') return green('released')
+  const from = [b.commit && `from ${b.commit}`, b.dirty && 'uncommitted changes'].filter(Boolean).join(', ')
+  return yellow(`unreleased${from ? ` ${dim(`(${from})`)}` : ''}`)
+}
+
 function printRunning(health: Health, verb: string, showDb = false) {
   const lines = [
     `${green('●')} ${bold(`triage ${verb}`)}`,
@@ -181,6 +194,9 @@ function printRunning(health: Health, verb: string, showDb = false) {
     `${dim('  also http://localhost:' + health.port)}`,
     '',
     row('version', health.version),
+    // Which copy answered. Several can be installed at once, so a bare version
+    // is not an answer — name the channel, and the path when it isn't a release.
+    ...(health.build ? [row('build', buildLine(health.build)), row('from', tilde(health.build.root))] : []),
     row('pid', String(health.pid)),
   ]
   if (health.liveSessions > 0) {
@@ -588,10 +604,30 @@ async function install(port: number) {
   }
   // A background server started by hand would fight the agent for the port.
   const health = await checkHealth(port)
-  if (health && health !== 'other' && !(await launchAgentLoaded())) await stop(port)
+  const running = !!health && health !== 'other'
+  // --defer leaves that server exactly where it is: the plist is written but
+  // not loaded, so launchd picks it up at the next login instead of stopping
+  // a daemon (and every live session in it) to take ownership now.
+  if (!deferInstall && running && !(await launchAgentLoaded())) await stop(port)
   await mkdir(TRIAGE_DIR, { recursive: true })
+  // An explicit install is consent — clear any earlier `triage uninstall`.
+  rmSync(OPT_OUT_FILE, { force: true })
   const env: Record<string, string> = { PATH: process.env.PATH ?? '/usr/bin:/bin', HOME: os.homedir() }
   for (const k of ['TRIAGE_HOME', 'TRIAGE_DB', 'CLAUDE_CONFIG_DIR', 'LANG']) if (process.env[k]) env[k] = process.env[k]!
+  if (deferInstall) {
+    await installLaunchAgent({ node: process.execPath, script, port, logFile: LOG_FILE, env }, { load: false })
+    box([
+      `${green('●')} ${bold('LaunchAgent written')}`,
+      '',
+      row('agent', tilde(launchAgentPlist())),
+      row('active', running ? yellow('at your next login') : green('now')),
+      '',
+      dim(running ? 'The server already running was left alone, sessions and all.' : ''),
+      `${dim('Remove it with')} ${cyan('triage uninstall')}`,
+    ].filter((l) => l !== ''))
+    if (!running) await loadLaunchAgent()
+    return
+  }
   await installLaunchAgent({ node: process.execPath, script, port, logFile: LOG_FILE, env })
   const deadline = Date.now() + 15_000
   let up: Health | null = null
@@ -612,10 +648,19 @@ async function install(port: number) {
   ])
 }
 
+/**
+ * Removing the agent is a decision, and Triage.app puts one back on every
+ * launch — so record it. Deleted again by the next explicit `triage install`.
+ */
+const OPT_OUT_FILE = path.join(TRIAGE_DIR, 'no-launch-agent')
+
 async function uninstall() {
   if (process.platform !== 'darwin') die(`${cyan('triage uninstall')} is macOS only`)
   const had = await uninstallLaunchAgent()
+  await mkdir(TRIAGE_DIR, { recursive: true }).catch(() => {})
+  writeFileSync(OPT_OUT_FILE, `removed by triage uninstall\n`)
   console.log(had ? `${green('✓')} LaunchAgent removed — triage is stopped; ${cyan('triage')} starts it by hand` : `${dim('○')} no LaunchAgent is installed`)
+  console.log(dim(`  Triage.app won't put it back. Undo with ${cyan('triage install')}.`))
 }
 
 async function doctor(port: number) {

@@ -18,6 +18,11 @@ export function useWorkspaceId() {
   return useSyncExternalStore(store.subscribeStructural, store.getWorkspaceId)
 }
 
+/** Which copy of triage this tab is talking to — see shared/protocol.ts `Build`. */
+export function useBuild() {
+  return useSyncExternalStore(store.subscribeStructural, store.getBuild)
+}
+
 export function useOnboarded() {
   return useSyncExternalStore(store.subscribeStructural, store.getOnboarded)
 }

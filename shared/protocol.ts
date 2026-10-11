@@ -508,8 +508,42 @@ export type ActivityResponse =
 // status surface: is the daemon up, is the scheduler ticking, are connectors
 // live, and its recent activity log.
 // ---------------------------------------------------------------------------
+/**
+ * Which copy of triage answered — computed from where the running code lives
+ * and how its version is labelled (server/state.ts `buildInfo`). Several copies
+ * coexist on one machine, so this is what lets the UI, the CLI and
+ * `curl /api/health` all name the same one.
+ *
+ * `channel` is the question actually worth asking — how far is this from what
+ * other people have?
+ *
+ *   dev     — a source checkout, uncommitted work included (`npm run dev`)
+ *   preview — a real install, but built from commits nobody has yet: the
+ *             version carries a prerelease label (1.0.4-dev.g23d0004)
+ *   release — a clean released version, the same bytes `curl | sh` hands out
+ *
+ * `surface` is where it is installed, which is a different axis: a preview and
+ * a release both normally live in Triage.app.
+ */
+export type Build = {
+  version: string
+  channel: 'dev' | 'preview' | 'release'
+  surface: 'app' | 'global' | 'checkout'
+  /** short commit a preview was built from, parsed off the version label */
+  commit: string | null
+  /** the preview was built with uncommitted changes in the tree */
+  dirty: boolean
+  /** the package root on disk — the unambiguous answer to "which copy?" */
+  root: string
+  /** the state root this daemon reads: ~/.triage, or ~/.triage-dev in dev */
+  home: string
+  /** `home` is prod's ~/.triage — false means this daemon is on dev's data */
+  prodData: boolean
+}
+
 export type SystemStatus = {
   version: string
+  build: Build
   startedAt: number
   uptimeMs: number
   port: number
@@ -1457,6 +1491,8 @@ export type ServerMessage =
       workspaces: Workspace[]
       onboarded: boolean
       terminals: TerminalSummary[]
+      /** which copy of triage this socket is talking to — the UI badges it */
+      build: Build
     }
   | { type: 'sessions'; sessions: SessionSummary[] }
   | { type: 'session_created'; session: SessionSummary }

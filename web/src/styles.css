@@ -398,6 +398,21 @@ kbd { font-family: var(--mono); font-size: 0.8462rem; color: var(--ash); border:
 .wsPill .wsDot { width: 6px; height: 6px; border-radius: var(--r-full); flex: none; }
 .wsPill .wsName { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .wsPill svg { color: var(--stone); flex: none; }
+/* Which build is running (TopBar.tsx BuildBadge). Loud enough to catch the eye
+   on every glance at the bar, quiet enough to live there all day — a released
+   build renders nothing at all, so seeing one of these is the whole signal. */
+.buildBadge {
+  display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 9px;
+  border-radius: var(--r-full); border: 1px solid currentColor; background: transparent;
+  font-family: var(--mono); font-size: 0.6923rem; letter-spacing: 0.06em; text-transform: uppercase;
+  white-space: nowrap; flex: none; opacity: 0.78; transition: opacity 0.1s ease, background 0.1s ease;
+}
+.buildBadge:hover { opacity: 1; background: color-mix(in srgb, currentColor 12%, transparent); }
+.buildBadge.dev { color: var(--yellow); }
+.buildBadge.preview { color: var(--blue); }
+/* Built with uncommitted changes — these bytes exist nowhere but this machine. */
+.buildBadge .buildDirty { width: 5px; height: 5px; border-radius: var(--r-full); background: currentColor; }
+
 .topIcon {
   position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
   height: 28px; min-width: 28px; padding: 0 6px; border-radius: var(--r); border: 1px solid transparent;

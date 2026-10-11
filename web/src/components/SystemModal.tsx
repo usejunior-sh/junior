@@ -8,6 +8,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type {
   ActivityResponse,
   ActivityRun,
+  Build,
   LogEntry,
   LogLevel,
   LogsResponse,
@@ -107,6 +108,14 @@ export function SystemModal({
   )
 }
 
+/** "released · v1.0.3" / "unreleased · v1.0.4-dev.g23d0004 (23d0004, uncommitted)" / "working tree". */
+function buildLine(b: Build): string {
+  if (b.channel === 'dev') return `working tree · ${b.surface}`
+  if (b.channel === 'release') return `released · v${b.version}`
+  const from = [b.commit && `from ${b.commit}`, b.dirty && 'uncommitted changes'].filter(Boolean).join(', ')
+  return `unreleased · v${b.version}${from ? ` (${from})` : ''}`
+}
+
 function Row({ label, value, tone }: { label: string; value: string; tone?: 'ok' | 'warn' | 'bad' | 'dim' }) {
   return (
     <div className="sysRow">
@@ -153,7 +162,11 @@ function StatusTab({ conn }: { conn: ConnState }) {
           v{status.version} · up {uptime(status.uptimeMs)}
         </span>
       </div>
+      <Row label="Build" value={buildLine(status.build)} tone={status.build.channel === 'release' ? 'ok' : 'warn'} />
+      {/* The one line that can't be mistaken: which copy on disk is answering. */}
+      <Row label="Running from" value={status.build.root} tone="dim" />
       <Row label="Port" value={String(status.port)} tone="dim" />
+      <Row label="State root" value={status.build.home} tone={status.build.prodData ? 'dim' : 'warn'} />
       <Row label="Database" value={status.db} tone="dim" />
       <Row label="Live sessions" value={String(status.liveSessions)} />
       <Row label="Slack connector" value={slack[0]} tone={slack[1] as 'ok' | 'bad' | 'dim'} />

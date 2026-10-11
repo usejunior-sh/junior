@@ -73,15 +73,88 @@ is_running() {
   [ "$(osascript -e "application id \"$1\" is running" 2>/dev/null || echo false)" = true ]
 }
 
+# The health body of a daemon on the port, or empty when nothing answers.
+daemon_health() {
+  curl -fsS -m 2 "http://localhost:${TRIAGE_APP_PORT:-5178}/api/health" 2>/dev/null || true
+}
+
+# A numeric or string field out of a health body: health_field "$h" version
+health_field() {
+  printf '%s' "$1" | sed -n "s/.*\"$2\":\"\{0,1\}\([^\",}]*\).*/\1/p" | head -n 1
+}
+
 # The version of a triage daemon running out of $1 (a bundle path), if any.
 # Quitting the app leaves its daemon up, still running the old bundle's code.
 daemon_inside() {
-  health=$(curl -fsS -m 2 "http://localhost:${TRIAGE_APP_PORT:-5178}/api/health" 2>/dev/null) || return 0
-  pid=$(printf '%s' "$health" | sed -n 's/.*"pid":\([0-9]*\).*/\1/p')
+  health=$(daemon_health)
+  [ -n "$health" ] || return 0
+  pid=$(health_field "$health" pid)
   [ -n "$pid" ] || return 0
   case "$(ps -o command= -p "$pid" 2>/dev/null)" in
-    *"$1/"*) printf '%s' "$health" | sed -n 's/.*"version":"\([^"]*\)".*/\1/p' ;;
+    *"$1/"*) health_field "$health" version ;;
   esac
+}
+
+# `triage` and `triage-mcp` on PATH, forwarding into the app's bundled copy.
+# Without these the app is the only way in: no `triage status`, no `triage logs`,
+# and no MCP server for an external Claude Code session.
+link_cli() {
+  bin="${TRIAGE_BIN_DIR:-$HOME/.local/bin}"
+  mkdir -p "$bin" 2>/dev/null || { step "couldn't create $bin — skipping the triage command"; return 0; }
+  for name in triage triage-mcp; do
+    target="$bin/$name"
+    # Never clobber a real binary someone else installed; our own shim and a
+    # symlink left dangling by `npm uninstall -g` are both fair game.
+    if [ -e "$target" ] && ! grep -q 'Triage.app installer' "$target" 2>/dev/null; then
+      step "left $target alone — it isn't ours"
+      continue
+    fi
+    case "$name" in
+      triage) script=cli.js ;;
+      *) script=mcp.js ;;
+    esac
+    rm -f "$target"
+    cat >"$target" <<SHIM
+#!/bin/sh
+# Written by the Triage.app installer — runs the copy inside the app bundle,
+# with the app's own Node (the server needs node:sqlite). Reinstall to repoint.
+APP="$1"
+[ -x "\$APP/Contents/Resources/node/bin/node" ] || {
+  echo "triage: $1 is missing — reinstall from https://usetriage.sh" >&2
+  exit 1
+}
+exec "\$APP/Contents/Resources/node/bin/node" "\$APP/Contents/Resources/triage/dist/server/$script" "\$@"
+SHIM
+    chmod 755 "$target"
+  done
+  ok "triage command → $bin"
+  case ":$PATH:" in
+    *":$bin:"*) ;;
+    *) printf '    %sadd it to your PATH:%s export PATH="%s:$PATH"\n' "$DIM" "$RESET" "$bin" ;;
+  esac
+}
+
+# Watches are a background promise: they only run while the daemon runs, and a
+# detached daemon dies on reboot. The LaunchAgent is what makes them durable,
+# so it goes in by default rather than waiting to be discovered.
+keep_running() {
+  node="$1/Contents/Resources/node/bin/node"
+  cli="$1/Contents/Resources/triage/dist/server/cli.js"
+  [ -x "$node" ] && [ -f "$cli" ] || return 0
+  # Installing stops whatever holds the port — fine when idle, not while a
+  # session is mid-turn. Busy means we write nothing and say so.
+  if [ "${live:-0}" -gt 0 ] 2>/dev/null; then
+    printf '  %s!%s %s live session(s) are running, so the restart was skipped —\n' "$BOLD" "$RESET" "$live"
+    printf '    run %striage install%s when they finish to keep watches alive across reboots\n' "$BOLD" "$RESET"
+    return 0
+  fi
+  step "keeping triage running after reboot"
+  if "$node" "$cli" install >/dev/null 2>&1; then
+    ok "LaunchAgent installed ${DIM}(undo: triage uninstall)${RESET}"
+  else
+    printf '  %s!%s couldn%st install the LaunchAgent — watches will stop at the next reboot.\n' "$BOLD" "$RESET" "'"
+    printf '    Try %striage install%s and read the error.\n' "$BOLD" "$RESET"
+  fi
 }
 
 quit_app() {
@@ -151,6 +224,10 @@ main() {
   dest="$dir/$APP"
 
   quit_app "$BUNDLE_ID"
+  # Read the running daemon once, before anything moves: whether it is busy
+  # decides if we may restart it into the new version below.
+  live=$(health_field "$(daemon_health)" liveSessions)
+  [ -n "$live" ] || live=0
   stale=""
   if [ -e "$dest" ]; then
     stale=$(daemon_inside "$dest")
@@ -176,11 +253,17 @@ main() {
     done
   fi
 
+  link_cli "$dest"
+  # Before opening the app: the agent brings the daemon up on the new version,
+  # and the app then attaches to it instead of starting the old one again.
+  keep_running "$dest"
+
   if [ "${TRIAGE_NO_OPEN:-}" != 1 ]; then
     open "$dest"
     ok "opened Triage"
   fi
-  if [ -n "$stale" ]; then
+  # Only still true if keep_running stood down for a busy daemon.
+  if [ -n "$stale" ] && [ "${live:-0}" -gt 0 ] 2>/dev/null; then
     printf '  %s!%s triage %s is still running from the old app — when no session is busy,\n' "$BOLD" "$RESET" "$stale"
     printf '    choose %sTriage › Restart triage server…%s to switch to the new one\n' "$BOLD" "$RESET"
   fi
@@ -191,7 +274,11 @@ main() {
 
   It opens a window on the triage daemon on this Mac — the one already
   running, or one it starts for you on port 5178. Quitting the app leaves
-  triage running, so live sessions and watches keep going.
+  triage running, so live sessions and watches keep going, and a LaunchAgent
+  brings it back after a reboot or a crash.
+
+  ${DIM}triage status${RESET}  what's running, and which build
+  ${DIM}triage uninstall${RESET}  stop it starting at login
 
   Needs Claude Code installed and logged in: ${DIM}https://claude.com/claude-code${RESET}
 
