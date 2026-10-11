@@ -91,6 +91,7 @@ export function NewSessionComposer({ draft, onChange, onCreate }: Props) {
       <div className="glow blue" aria-hidden="true" />
       <h2>{draft.label ? 'Dispatching.' : 'What are we working on?'}</h2>
       <PromptBox
+        draftKey={draft.id}
         head={
           <PromptHead
             projects={projects}

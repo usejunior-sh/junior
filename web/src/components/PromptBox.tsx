@@ -57,6 +57,8 @@ type Props = {
   onInterrupt?: () => void
   /** Mentions the box opens with (a dispatched draft): their tokens are already in `text`. */
   initialMentions?: Mention[]
+  /** Keys the image tray so it survives the box unmounting (session id or draft id). */
+  draftKey?: string
 }
 
 /**
@@ -97,11 +99,12 @@ export function PromptBox({
   running,
   onInterrupt,
   initialMentions,
+  draftKey,
 }: Props) {
   const box = useRef<HTMLTextAreaElement>(null)
   const filePicker = useRef<HTMLInputElement>(null)
   const [dragging, setDragging] = useState(false)
-  const attach = useAttachments()
+  const attach = useAttachments(draftKey)
   const mentions = useMentions(text, initialMentions)
 
   // --- the `@` picker ------------------------------------------------------

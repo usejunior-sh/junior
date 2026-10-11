@@ -73,6 +73,7 @@ export function Composer({
 
   return (
     <PromptBox
+      draftKey={sessionId}
       head={<PromptHead projects={projects} cwd={cwd} branch={branch} />}
       cwd={cwd}
       text={text}

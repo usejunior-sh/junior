@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useRef, useSyncExternalStore } from 'react'
 import {
   MAX_IMAGES_PER_MESSAGE,
   MAX_IMAGE_BYTES,
@@ -19,15 +19,44 @@ const readAsBase64 = (file: File) =>
     reader.readAsDataURL(file)
   })
 
+type Tray = { images: PendingImage[]; error: string | null }
+const EMPTY: Tray = { images: [], error: null }
+
+/**
+ * Trays live here, not in component state: the composer unmounts when you
+ * switch tabs, and a screenshot you pasted must still be there when you come
+ * back. In memory only (base64 is too big for localStorage), so a reload
+ * drops them; keyed by session id or draft id.
+ */
+const trays = new Map<string, Tray>()
+const listeners = new Set<() => void>()
+const subscribe = (fn: () => void) => {
+  listeners.add(fn)
+  return () => {
+    listeners.delete(fn)
+  }
+}
+function setTray(key: string, next: Tray) {
+  if (next.images.length === 0 && next.error === null) trays.delete(key)
+  else trays.set(key, next)
+  for (const fn of listeners) fn()
+}
+
 /**
  * The image tray behind a composer: paste, drop, or pick files and hold them
  * until the message is sent. Oversized files and non-images are refused with a
  * message rather than silently dropped — a screenshot that vanishes is worse
  * than one that explains itself.
  */
-export function useAttachments() {
-  const [images, setImages] = useState<PendingImage[]>([])
-  const [error, setError] = useState<string | null>(null)
+export function useAttachments(key?: string) {
+  const fallback = useRef(uuid())
+  const k = key ?? fallback.current
+  const { images, error } = useSyncExternalStore(subscribe, () => trays.get(k) ?? EMPTY)
+  const update = useCallback(
+    (fn: (t: Tray) => Tray) => setTray(k, fn(trays.get(k) ?? EMPTY)),
+    [k],
+  )
+  const setError = useCallback((error: string | null) => update((t) => ({ ...t, error })), [update])
 
   const add = useCallback(async (files: Iterable<File>) => {
     const picked = [...files].filter((f) => f.type.startsWith('image/'))
@@ -51,29 +80,27 @@ export function useAttachments() {
         url: URL.createObjectURL(file),
       })
     }
-    setImages((prev) => {
-      const room = MAX_IMAGES_PER_MESSAGE - prev.length
+    update((t) => {
+      const room = MAX_IMAGES_PER_MESSAGE - t.images.length
       if (accepted.length > room) rejected = `Up to ${MAX_IMAGES_PER_MESSAGE} images per message`
-      return [...prev, ...accepted.slice(0, Math.max(room, 0))]
+      return { images: [...t.images, ...accepted.slice(0, Math.max(room, 0))], error: rejected }
     })
-    setError(rejected)
-  }, [])
+  }, [update])
 
-  const remove = useCallback((id: string) => {
-    setImages((prev) => {
-      const gone = prev.find((i) => i.id === id)
-      if (gone) URL.revokeObjectURL(gone.url)
-      return prev.filter((i) => i.id !== id)
-    })
-  }, [])
+  const remove = useCallback(
+    (id: string) =>
+      update((t) => {
+        const gone = t.images.find((i) => i.id === id)
+        if (gone) URL.revokeObjectURL(gone.url)
+        return { ...t, images: t.images.filter((i) => i.id !== id) }
+      }),
+    [update],
+  )
 
   const clear = useCallback(() => {
-    setImages((prev) => {
-      for (const i of prev) URL.revokeObjectURL(i.url)
-      return []
-    })
-    setError(null)
-  }, [])
+    for (const i of trays.get(k)?.images ?? []) URL.revokeObjectURL(i.url)
+    setTray(k, EMPTY)
+  }, [k])
 
   /** The wire shape: previews and ids stay on the client. */
   const payload = useCallback(
