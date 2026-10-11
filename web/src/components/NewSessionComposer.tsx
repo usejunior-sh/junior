@@ -37,10 +37,6 @@ type Props = {
 }
 
 
-// The last pick here is the default for the next new session — a per-browser
-// preference (see sessionDefaults.ts), which the Sessions settings tab edits too.
-const defaults = readSessionDefaults()
-
 /** The first line names the session; `@` tokens read as their labels, not their ids. */
 function titleFrom(text: string, mentions: readonly Mention[] = []): string {
   let line = text.trim().split('\n')[0]
@@ -57,6 +53,11 @@ export function NewSessionComposer({ draft, onChange, onCreate }: Props) {
   // server picks it: an empty cwd on send means "the default project".
   const fallback = defaultProjectOf(projects)
   const cwd = draft.cwd ?? fallback?.path ?? '~'
+  // The last pick here is the default for the next new session — a per-browser
+  // preference (see sessionDefaults.ts), which the Sessions settings tab edits too.
+  // Read on mount, not at module load: the page lives for days in the Mac app,
+  // so a load-time read would pin every new draft to the first pick.
+  const [defaults] = useState(readSessionDefaults)
   const [model, setModel] = useState<string | undefined>(defaults.model)
   const [effort, setEffort] = useState<EffortLevel | undefined>(defaults.effort)
   const [fastMode, setFastMode] = useState(defaults.fastMode)

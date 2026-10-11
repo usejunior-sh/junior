@@ -4178,7 +4178,6 @@ function modelIdList(v: unknown, field: string): string[] {
   return [...new Set((v as string[]).map((x) => x.trim()))]
 }
 
-
 async function writeSettings(rt: WorkspaceRuntime, raw: unknown): Promise<WorkspaceSettings> {
   const r = (raw ?? {}) as Record<string, unknown>
   if (r.watchesEnabled !== undefined) {
