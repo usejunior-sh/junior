@@ -36,6 +36,7 @@
     "build": "rm -rf dist && vite build && tsc -p tsconfig.publish.json",
     "start": "tsx server/index.ts",
     "prod:snapshot": "node scripts/prod-snapshot.mjs",
+    "app:snapshot": "node scripts/app-snapshot.mjs",
     "prod:local": "npm run build && npm pack && npm i -g ./usetriage-$npm_package_version.tgz && rm -f ./usetriage-$npm_package_version.tgz",
     "app:build": "npm --prefix desktop run build --",
     "prepublishOnly": "npm run typecheck && npm run build",
