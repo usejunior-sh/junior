@@ -29,7 +29,7 @@ import { defaultCatchUp, humanSpan, lookbackMs } from '../../../core/watch/sched
 import { builtinGrant, hasBuiltin } from '../../../core/watch/tools.js'
 import { useEvents } from '../hooks.js'
 import { labelName, relTime } from '../itemUi.js'
-import { useModels } from '../models.js'
+import { usePickableModels } from '../models.js'
 import { store } from '../store.js'
 import { projectColor } from '../tabs.js'
 import { Select, SelectItem } from '../ui/Select.js'
@@ -131,7 +131,7 @@ export function WatchFormPage({ id, onNavigate }: { id: string | null; onNavigat
   const [form, setForm] = useState<Form>(EMPTY)
   const [loaded, setLoaded] = useState(id === null)
   const [projects, setProjects] = useState<Project[]>([])
-  const models = useModels()
+  const models = usePickableModels(form.model || undefined)
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
   const [step, setStep] = useState<Step>('details')

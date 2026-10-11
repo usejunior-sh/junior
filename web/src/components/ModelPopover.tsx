@@ -9,7 +9,7 @@ import { Check, ChevronDown, Search, Sparkles } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import type { EffortLevel, ModelOption } from '../../../shared/protocol.js'
 import { useWorkspaceId, useWorkspaces } from '../hooks.js'
-import { EFFORT_LABEL, findModel, useModels } from '../models.js'
+import { EFFORT_LABEL, findModel, reloadModels, useModelStore, useModels, usePickableModels } from '../models.js'
 import { isMobile } from '../useMobile.js'
 
 type Props = {
@@ -36,6 +36,8 @@ export function ModelPopover({
   disabled,
 }: Props) {
   const models = useModels()
+  const pickable = usePickableModels(model)
+  const { status } = useModelStore()
   const workspaces = useWorkspaces()
   const workspaceId = useWorkspaceId()
   const workspace = workspaces.find((w) => w.id === workspaceId)
@@ -47,8 +49,8 @@ export function ModelPopover({
 
   const shown = useMemo(() => {
     const needle = q.trim().toLowerCase()
-    return needle ? models.filter((m) => `${m.name} ${m.description}`.toLowerCase().includes(needle)) : models
-  }, [models, q])
+    return needle ? pickable.filter((m) => `${m.name} ${m.description}`.toLowerCase().includes(needle)) : pickable
+  }, [pickable, q])
 
   function pickModel(m: ModelOption) {
     // A model that cannot do the current effort level drops it rather than
@@ -64,7 +66,7 @@ export function ModelPopover({
     onModelChange(selected?.id ?? model, level)
   }
 
-  const label = selected?.name ?? (models.length ? 'Model' : 'Loading models…')
+  const label = selected?.name ?? (models.length ? 'Model' : status === 'error' ? 'Models unavailable' : 'Loading models…')
 
   return (
     <Popover.Root
@@ -72,13 +74,14 @@ export function ModelPopover({
       onOpenChange={(o) => {
         setOpen(o)
         if (!o) setQ('')
+        else if (status === 'error') void reloadModels(true)
       }}
     >
       <Popover.Trigger asChild>
         <button
           type="button"
           className="chip model"
-          disabled={disabled || models.length === 0}
+          disabled={disabled || (models.length === 0 && status !== 'error')}
           title="Model and effort for this session"
           aria-label={`Model: ${label}${effort ? `, ${EFFORT_LABEL[effort].toLowerCase()} effort` : ''}`}
         >
@@ -144,7 +147,22 @@ export function ModelPopover({
                 </button>
               )
             })}
-            {shown.length === 0 && <div className="mpEmpty">No model matches.</div>}
+            {shown.length === 0 && (
+              <div className="mpEmpty">
+                {models.length === 0 ? (
+                  <>
+                    Could not load models.{' '}
+                    <button type="button" className="btn ghost sm" onClick={() => void reloadModels(true)}>
+                      Retry
+                    </button>
+                  </>
+                ) : pickable.length === 0 ? (
+                  'Every model is hidden — pick some in Settings → Models.'
+                ) : (
+                  'No model matches.'
+                )}
+              </div>
+            )}
           </div>
 
           <div className="mpFoot" role="radiogroup" aria-label="Effort">

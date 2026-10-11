@@ -13,6 +13,7 @@ export type SettingsTab =
   | 'auth'
   | 'sources'
   | 'projects'
+  | 'models'
   | 'briefs'
   | 'teams'
   | 'connectors'
@@ -41,6 +42,7 @@ export const SETTINGS_TABS: ReadonlyArray<SettingsTabMeta> = [
   { id: 'auth', label: 'Claude auth', sub: 'How this workspace signs in to Claude — and proof that it works.', group: 'workspace' },
   { id: 'sources', label: 'Sources', sub: 'What feeds this inbox: GitHub repos, Slack, and the connectors a session can reach.', group: 'workspace' },
   { id: 'projects', label: 'Projects', sub: 'The local folders you work in. Sessions run in a project’s folder, and dispatch matches a work item’s repo to land there.', group: 'workspace' },
+  { id: 'models', label: 'Models', sub: 'Which models the model picker offers — hide the ones you never use, or add an id Claude Code does not list yet.', group: 'workspace' },
   { id: 'briefs', label: 'Briefs', sub: 'How briefs run: the daily cap, the model, and the playbook for each kind of work item.', group: 'workspace' },
   { id: 'teams', label: 'Teams', sub: 'The teams a run can use — recipe files in this workspace’s folder — and the agents they’re made of.', group: 'workspace' },
   { id: 'connectors', label: 'Connectors', sub: 'What a dispatched session can reach — claude.ai connectors and local MCP servers.', group: 'workspace', fill: true },

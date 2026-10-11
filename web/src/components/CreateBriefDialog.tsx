@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { BriefJobsResponse, PlaybooksResponse, ScoredItem, SettingsResponse } from '../../../shared/protocol.js'
 import { briefStore } from '../briefStore.js'
-import { findModel, useModels } from '../models.js'
+import { findModel, useModels, usePickableModels } from '../models.js'
 import { KIND_LABEL } from '../itemUi.js'
 import { Select, SelectItem } from '../ui/Select.js'
 
@@ -30,6 +30,7 @@ export function CreateBriefDialog({ open, items, onClose, onQueued }: Props) {
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const models = useModels()
+  const pickable = usePickableModels(model || defaultModel || undefined)
 
   const single = items.length === 1 ? items[0] : null
   const sameKind = items.every((i) => i.kind === items[0]?.kind)
@@ -148,7 +149,7 @@ export function CreateBriefDialog({ open, items, onClose, onQueued }: Props) {
           onValueChange={setModel}
         >
           <SelectItem value="">Model: {defaultModelName}</SelectItem>
-          {models.map((m) => (
+          {pickable.map((m) => (
             <SelectItem key={m.id} value={m.id}>
               {m.name}
             </SelectItem>

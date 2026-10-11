@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { AGENT_CANS, AGENT_COLORS, type AgentCan, type AgentEntry, type AgentSpec, type EffortLevel } from '../../../shared/protocol.js'
-import { EFFORT_LABEL, useModels } from '../models.js'
+import { EFFORT_LABEL, usePickableModels } from '../models.js'
 import { AGENT_HEX, CAN_META, slugify } from '../teams.js'
 import { Select, SelectItem } from '../ui/Select.js'
 
@@ -63,7 +63,7 @@ function ModelEffort({
   onModel: (m: string | null) => void
   onEffort: (e: EffortLevel | null) => void
 }) {
-  const models = useModels().filter((m) => m.id !== 'default')
+  const models = usePickableModels(model ?? undefined).filter((m) => m.id !== 'default')
   const known = !model || models.some((m) => m.id === model)
   return (
     <div>

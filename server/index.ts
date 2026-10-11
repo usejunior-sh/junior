@@ -4089,6 +4089,8 @@ async function openInEditor(abs: string): Promise<void> {
 const WATCHES_ENABLED_KEY = 'watches.enabled'
 const BRIEFS_CAP_KEY = 'briefs.dailyCap'
 const BRIEFS_MODEL_KEY = 'briefs.defaultModel'
+const HIDDEN_MODELS_KEY = 'models.hidden'
+const CUSTOM_MODELS_KEY = 'models.custom'
 const DEFAULT_BRIEF_CAP = 20
 const BRIEF_TIMEOUT_MS = 300_000
 
@@ -4108,8 +4110,24 @@ async function readSettings(rt: WorkspaceRuntime): Promise<WorkspaceSettings> {
     watchBudgetUsd: typeof budget === 'number' && budget > 0 ? budget : null,
     briefsDailyCap: typeof cap === 'number' && cap > 0 ? cap : DEFAULT_BRIEF_CAP,
     briefsDefaultModel: typeof model === 'string' && model ? model : null,
+    hiddenModels: await readIdList(rt, HIDDEN_MODELS_KEY),
+    customModels: await readIdList(rt, CUSTOM_MODELS_KEY),
   }
 }
+
+async function readIdList(rt: WorkspaceRuntime, key: string): Promise<string[]> {
+  const v = await rt.store.config.get<unknown>(key)
+  return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string' && x !== '') : []
+}
+
+/** A list of model ids from the wire: trimmed, unique, bounded. Anything else is an error, not a repair. */
+function modelIdList(v: unknown, field: string): string[] {
+  if (!Array.isArray(v) || v.length > 200 || v.some((x) => typeof x !== 'string' || x.trim() === '' || x.length > 120)) {
+    throw new Error(`${field} must be a list of model ids`)
+  }
+  return [...new Set((v as string[]).map((x) => x.trim()))]
+}
+
 
 async function writeSettings(rt: WorkspaceRuntime, raw: unknown): Promise<WorkspaceSettings> {
   const r = (raw ?? {}) as Record<string, unknown>
@@ -4138,6 +4156,8 @@ async function writeSettings(rt: WorkspaceRuntime, raw: unknown): Promise<Worksp
     if (r.briefsDefaultModel !== null && typeof r.briefsDefaultModel !== 'string') throw new Error('briefsDefaultModel must be a string or null')
     await rt.store.config.set(BRIEFS_MODEL_KEY, r.briefsDefaultModel || null)
   }
+  if (r.hiddenModels !== undefined) await rt.store.config.set(HIDDEN_MODELS_KEY, modelIdList(r.hiddenModels, 'hiddenModels'))
+  if (r.customModels !== undefined) await rt.store.config.set(CUSTOM_MODELS_KEY, modelIdList(r.customModels, 'customModels'))
   invalidateInbox(rt)
   return readSettings(rt)
 }

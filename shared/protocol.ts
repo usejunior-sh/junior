@@ -1172,6 +1172,10 @@ export type WorkspaceSettings = {
   briefsDailyCap: number
   /** the model briefs run on when the modal doesn't pick one; null = Claude Code's default */
   briefsDefaultModel: string | null
+  /** model ids the pickers hide; the catalog stays whole, so a new model shows up on its own */
+  hiddenModels: string[]
+  /** model ids typed by hand — for a model the probed catalog does not list (yet) */
+  customModels: string[]
 }
 export type SettingsResponse = { ok: true; settings: WorkspaceSettings } | { ok: false; error: string }
 
