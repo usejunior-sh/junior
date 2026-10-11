@@ -910,6 +910,7 @@ kbd { font-family: var(--mono); font-size: 0.8462rem; color: var(--ash); border:
 .costPop .split dt { color: var(--charcoal); }
 .costPop .split dd { margin: 0 0 0 auto; font-family: var(--mono); color: var(--body); font-variant-numeric: tabular-nums; }
 .costPop .split .note { color: var(--stone); margin-right: 8px; }
+.costPop .split + .split { margin-top: -2px; border-top: 0; padding-top: 2px; }
 .costPop .keys { display: flex; flex-wrap: wrap; gap: 3px 14px; font-size: 0.8846rem; color: var(--charcoal); }
 .costPop .keys .key { display: inline-flex; align-items: center; gap: 6px; }
 .costPop .keys .sw { width: 8px; height: 8px; border-radius: 2px; flex: none; }

@@ -6676,7 +6676,7 @@ const server = http.createServer(async (req, res) => {
     try {
       const bySession: Record<string, SessionSpend> = {}
       let models: UsageModelSlice[] = []
-      const totals = {
+      const totals: SessionSpend & { sessions: number } = {
         cost: 0,
         tokens: 0,
         messages: 0,
@@ -6714,6 +6714,11 @@ const server = http.createServer(async (req, res) => {
             totals.cacheWrite += row.cacheWrite
             totals.cacheRead += row.cacheRead
             if (!row.priced) totals.priced = false
+            if (row.subagents) {
+              const sub = (totals.subagents ??= { cost: 0, messages: 0 })
+              sub.cost += row.subagents.cost
+              sub.messages += row.subagents.messages
+            }
             totals.sessions++
           }
         }

@@ -169,6 +169,11 @@ export function summarizeBySession(entries: UsageEntry[]): Map<string, SessionSp
     row.cacheWrite += e.cacheWrite5m + e.cacheWrite1h
     row.cacheRead += e.cacheRead
     row.messages++
+    if (e.subagent) {
+      const sub = (row.subagents ??= { cost: 0, messages: 0 })
+      sub.cost += cost ?? 0
+      sub.messages++
+    }
     out.set(e.sessionId, row)
   }
   return out

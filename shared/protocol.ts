@@ -641,6 +641,8 @@ export type SessionSpend = {
   cacheRead: number
   /** False when some of the spend came from a model with no price row. */
   priced: boolean
+  /** The part of it the session's subagents spent (their own transcripts). Absent = none. */
+  subagents?: { cost: number; messages: number }
 }
 
 /** One model's share of a spend total, for the split meter under it. */

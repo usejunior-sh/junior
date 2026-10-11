@@ -14,11 +14,18 @@
  *  - Parsed files are cached by (size, mtime). A rescan re-reads only what
  *    changed — in practice the one session you are talking to right now.
  *  - The same message can appear in several files (a resumed session replays
- *    its parent's transcript), so entries are de-duplicated on the API's own
- *    `message.id` + `requestId` before anything is summed.
+ *    its parent's transcript) and on several lines of one (Claude Code writes
+ *    a line per content block, and the earlier ones can carry an output count
+ *    that isn't final yet), so entries are de-duplicated on the API's own
+ *    `message.id` + `requestId`, keeping the line that counts the most output.
+ *
+ * Subagents write their own transcripts, a level down —
+ * `<slug>/<session>/subagents/agent-<id>.jsonl` — with the parent's
+ * `sessionId` on every line, so they fold into the session that spawned them.
  */
 import { createReadStream } from 'node:fs'
 import { readdir, stat } from 'node:fs/promises'
+import type { Dirent } from 'node:fs'
 import { join } from 'node:path'
 import { createInterface } from 'node:readline'
 import { costOf, normalizeModel, type TokenCounts } from './pricing.js'
@@ -34,6 +41,8 @@ export type UsageEntry = TokenCounts & {
   cwd: string
   sessionId: string
   fast: boolean
+  /** Spent by a subagent of `sessionId`, not by the session's own agent. */
+  subagent: boolean
 }
 
 type FileCache = { size: number; mtimeMs: number; entries: UsageEntry[] }
@@ -77,6 +86,7 @@ function entryFrom(line: string): UsageEntry | null {
     cwd: typeof row.cwd === 'string' ? row.cwd : '',
     sessionId: typeof row.sessionId === 'string' ? row.sessionId : '',
     fast: usage.speed === 'fast',
+    subagent: row.isSidechain === true,
     input: num(usage.input_tokens),
     output: num(usage.output_tokens),
     cacheWrite5m: fiveMin,
@@ -103,7 +113,7 @@ async function readFileEntries(path: string): Promise<UsageEntry[]> {
   return entries
 }
 
-/** Every `*.jsonl` under a `projects/` root, one level deep per project slug. */
+/** Every `*.jsonl` under a `projects/` root: each project slug's sessions, and each session's subagents. */
 async function transcripts(root: string): Promise<string[]> {
   let slugs: string[]
   try {
@@ -112,17 +122,29 @@ async function transcripts(root: string): Promise<string[]> {
     return []
   }
   const out: string[] = []
+  const subagentDirs: string[] = []
   for (const slug of slugs) {
     const dir = join(root, slug)
-    let names: string[]
+    let names: Dirent[]
     try {
-      names = await readdir(dir)
+      names = await readdir(dir, { withFileTypes: true })
     } catch {
       continue
     }
-    for (const name of names) if (name.endsWith('.jsonl')) out.push(join(dir, name))
+    for (const d of names) {
+      if (d.isFile() && d.name.endsWith('.jsonl')) out.push(join(dir, d.name))
+      else if (d.isDirectory()) subagentDirs.push(join(dir, d.name, 'subagents'))
+    }
   }
-  return out
+  // Most session folders hold only tool results; a missing subagents/ is the common case.
+  const nested = await mapLimit(subagentDirs, 16, async (sub) => {
+    try {
+      return (await readdir(sub)).filter((n) => n.endsWith('.jsonl')).map((n) => join(sub, n))
+    } catch {
+      return []
+    }
+  })
+  return out.concat(nested.flat())
 }
 
 async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
@@ -171,7 +193,7 @@ export async function scanUsage(roots: string[], since: number): Promise<ScanRes
     return entries
   })
 
-  const seen = new Set<string>()
+  const seen = new Map<string, number>()
   const entries: UsageEntry[] = []
   for (const list of perFile) {
     for (const e of list) {
@@ -179,8 +201,12 @@ export async function scanUsage(roots: string[], since: number): Promise<ScanRes
       // An empty key means the line carried neither id — count it rather than
       // collapse every such line into one.
       if (e.key !== ':') {
-        if (seen.has(e.key)) continue
-        seen.add(e.key)
+        const at = seen.get(e.key)
+        if (at !== undefined) {
+          if (e.output > entries[at].output) entries[at] = e
+          continue
+        }
+        seen.set(e.key, entries.length)
       }
       entries.push(e)
     }

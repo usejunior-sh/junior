@@ -149,6 +149,25 @@ export function SessionCost({ sessionId, status }: { sessionId: string; status: 
             </dl>
           )}
 
+          {/* Who spent it: subagents bill from their own transcripts, folded in here. */}
+          {spend.subagents && spend.subagents.messages > 0 && (
+            <dl className="split who">
+              <div>
+                <dt>Main agent</dt>
+                <dd>{money(Math.max(0, spend.cost - spend.subagents.cost))}</dd>
+              </div>
+              <div>
+                <dt>Subagents</dt>
+                <dd>
+                  <span className="note">
+                    {spend.subagents.messages} {spend.subagents.messages === 1 ? 'call' : 'calls'}
+                  </span>
+                  {money(spend.subagents.cost)}
+                </dd>
+              </div>
+            </dl>
+          )}
+
           {models.length > 0 && (
             <div className="keys">
               {models.map((m, i) => (
