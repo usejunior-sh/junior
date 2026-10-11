@@ -12,7 +12,6 @@
  * One composed scan per due batch, not one session per watch: the fixed
  * built-in sections plus one section per due watch, in a single subprocess.
  */
-import { query } from '@anthropic-ai/claude-agent-sdk'
 import { canonicalizeRefs } from '../work/link.js'
 import type { WorkItem } from '../work/types.js'
 import type { WatchDraft } from '../watch/types.js'
@@ -253,8 +252,27 @@ export interface SlackScanOutcome {
   startedAt: string
 }
 
+/**
+ * The coding agent a scan runs through — the server's provider (server/providers),
+ * passed in so core never spawns one itself.
+ */
+export interface HeadlessAgent {
+  run(spec: {
+    prompt: string
+    /** load the user's own settings (connectors); false = none at all */
+    userConfig: boolean
+    allowedTools: string[]
+    abort: AbortController
+    env?: Record<string, string>
+  }): AsyncIterable<HeadlessEvent>
+}
+
+/** The slice of a provider event a scan reads: a `result` carries the reply and its tokens. */
+export type HeadlessEvent = { kind: string; text?: string; tokens?: number }
+
 /** Run one headless prompt to completion; returns the result text + tokens. */
 async function runHeadless(
+  agent: HeadlessAgent,
   prompt: string,
   timeoutMs: number,
   env?: Record<string, string>,
@@ -262,28 +280,20 @@ async function runHeadless(
   const abort = new AbortController()
   const timer = setTimeout(() => abort.abort(), timeoutMs)
   try {
-    const q = query({
+    const q = agent.run({
       prompt,
-      options: {
-        systemPrompt: { type: 'preset', preset: 'claude_code' },
-        settingSources: ['user'],
-        allowedTools: READ_ONLY_SLACK_TOOLS,
-        abortController: abort,
-        // Workspace auth: spawn with the caller's env (api key / config dir).
-        ...(env ? { env } : {}),
-      },
+      userConfig: true,
+      allowedTools: READ_ONLY_SLACK_TOOLS,
+      abort,
+      // Workspace auth: spawn with the caller's env (api key / config dir).
+      ...(env ? { env } : {}),
     })
     let text = ''
     let tokens = 0
-    for await (const msg of q) {
-      const m = msg as { type: string; result?: string; usage?: Record<string, unknown> }
-      if (m.type === 'result') {
-        text = typeof m.result === 'string' ? m.result : ''
-        const u = m.usage ?? {}
-        for (const k of ['input_tokens', 'output_tokens', 'cache_creation_input_tokens', 'cache_read_input_tokens']) {
-          const v = u[k]
-          if (typeof v === 'number') tokens += v
-        }
+    for await (const ev of q) {
+      if (ev.kind === 'result') {
+        text = ev.text ?? ''
+        tokens = ev.tokens ?? 0
         break
       }
     }
@@ -302,11 +312,13 @@ async function runHeadless(
  * that degrades (notice + retry on the next tick).
  */
 export async function runSlackScan(
+  agent: HeadlessAgent,
   opts: { builtins: boolean; watches: WatchScanSpec[]; timeoutMs?: number },
   now = Date.now(),
 ): Promise<SlackScanOutcome> {
   const startedAt = new Date(now).toISOString()
   const { text, tokens } = await runHeadless(
+    agent,
     composeScanPrompt(opts.builtins, opts.watches),
     opts.timeoutMs ?? 240_000,
   )
@@ -326,8 +338,8 @@ export async function runSlackScan(
 }
 
 /** Backwards-compatible built-ins-only scan. */
-export async function scanSlack(timeoutMs = 180_000): Promise<WorkItem[]> {
-  const outcome = await runSlackScan({ builtins: true, watches: [], timeoutMs })
+export async function scanSlack(agent: HeadlessAgent, timeoutMs = 180_000): Promise<WorkItem[]> {
+  const outcome = await runSlackScan(agent, { builtins: true, watches: [], timeoutMs })
   return outcome.builtinItems
 }
 
@@ -338,13 +350,14 @@ export async function scanSlack(timeoutMs = 180_000): Promise<WorkItem[]> {
 // ---------------------------------------------------------------------------
 
 export async function previewWatch(
+  agent: HeadlessAgent,
   scope: string,
   instruction: string,
   timeoutMs = 240_000,
   env?: Record<string, string>,
 ): Promise<{ rows: WatchPreviewRow[]; tokens: number }> {
   const spec: WatchScanSpec = { id: 'preview', scope, instruction, createsItems: true }
-  const { text, tokens } = await runHeadless(composeScanPrompt(false, [spec]), timeoutMs, env)
+  const { text, tokens } = await runHeadless(agent, composeScanPrompt(false, [spec]), timeoutMs, env)
   const rows = parseScanRows(text, new Set(['preview'])).watches.map((r) => ({
     title: r.title,
     permalink: r.permalink,
@@ -370,6 +383,7 @@ Output ONLY a JSON object, no prose, no code fence:
 {"title": "<short name, e.g. 'PX topics in #novus-px'>", "scope": "<#channel or @dm mentioned>", "instruction": "<the matching criteria as one clear sentence, including any exclusions>", "cadence": "hourly" | "daily" | "weekly" (default "daily" unless the request implies otherwise), "createsItems": true unless the request says FYI/digest-only}`
 
 export async function draftWatch(
+  agent: HeadlessAgent,
   text: string,
   timeoutMs = 60_000,
   env?: Record<string, string>,
@@ -377,21 +391,17 @@ export async function draftWatch(
   const abort = new AbortController()
   const timer = setTimeout(() => abort.abort(), timeoutMs)
   try {
-    const q = query({
+    const q = agent.run({
       prompt: DRAFT_PROMPT(text),
-      options: {
-        systemPrompt: { type: 'preset', preset: 'claude_code' },
-        settingSources: [],
-        allowedTools: [],
-        abortController: abort,
-        ...(env ? { env } : {}),
-      },
+      userConfig: false,
+      allowedTools: [],
+      abort,
+      ...(env ? { env } : {}),
     })
     let out = ''
-    for await (const msg of q) {
-      const m = msg as { type: string; result?: string }
-      if (m.type === 'result') {
-        out = typeof m.result === 'string' ? m.result : ''
+    for await (const ev of q) {
+      if (ev.kind === 'result') {
+        out = ev.text ?? ''
         break
       }
     }

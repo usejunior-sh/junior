@@ -1,0 +1,240 @@
+/**
+ * Claude Code through the Agent SDK — the one place triage calls `query()`.
+ * Every session is full Claude Code: its own system prompt and tools, plus the
+ * user's settings, plugins and MCP connectors from ~/.claude unless a spec
+ * says otherwise.
+ */
+import os from 'node:os'
+import { query, type HookCallback, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk'
+import type { PermissionMode, SdkMessage } from '../../shared/protocol.js'
+import { claudeEvents } from './claude-events.js'
+import {
+  CLAUDE_API_KEY_VAR,
+  claudeAgentTools,
+  claudeAuthEnv,
+  claudeConfiguredMcp,
+  claudeLoginCommand,
+  claudeTranscriptDir,
+} from './claude-config.js'
+import type { AgentSession, Provider, ToolVeto, UserTurn } from './types.js'
+
+// The permission modes the SDK understands and can be handed straight through.
+// 'gated' and 'default' are absent: 'default' is the SDK's own baseline (pinning
+// it would say nothing), and 'gated' is enforced by the caller's approval with
+// the SDK left at that baseline so every call reaches canUseTool.
+type SdkPermissionMode = Exclude<PermissionMode, 'default' | 'gated'>
+const SDK_MODES: SdkPermissionMode[] = ['acceptEdits', 'auto', 'bypassPermissions']
+const sdkMode = (m: PermissionMode | null | undefined): SdkPermissionMode | undefined =>
+  m && (SDK_MODES as PermissionMode[]).includes(m) ? (m as SdkPermissionMode) : undefined
+
+const PRESET = { type: 'preset', preset: 'claude_code' } as const
+
+const sleep = (ms: number) => new Promise((res) => setTimeout(res, ms))
+
+/** Our turns as the SDK's streaming-input messages. */
+async function* sdkTurns(input: AsyncIterable<UserTurn>): AsyncGenerator<SDKUserMessage> {
+  for await (const turn of input) {
+    yield { type: 'user', message: { role: 'user', content: turn.content }, parent_tool_use_id: null } as SDKUserMessage
+  }
+}
+
+/** A veto as a PreToolUse hook: a refusal never reaches the tool. */
+function vetoHook(veto: ToolVeto): HookCallback {
+  return async (input) => {
+    if (input.hook_event_name !== 'PreToolUse') return {}
+    const d = veto(input.tool_name, input.tool_input)
+    if (d.allow) return {}
+    return { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: d.reason } }
+  }
+}
+
+/**
+ * A subprocess with no turn, for asking it what it knows (models, commands,
+ * connectors). The input stays open until `done`, then the subprocess goes.
+ */
+async function withProbe<T>(options: Parameters<typeof query>[0]['options'], ask: (q: ReturnType<typeof query>) => Promise<T>): Promise<T> {
+  let close!: () => void
+  const closed = new Promise<void>((res) => (close = res))
+  async function* idle(): AsyncGenerator<SDKUserMessage> {
+    await closed
+  }
+  const q = query({ prompt: idle(), options })
+  try {
+    return await ask(q)
+  } finally {
+    close()
+    void q.return(undefined).catch(() => {}) // dispose the subprocess
+  }
+}
+
+export const claude: Provider = {
+  id: 'claude',
+  label: 'Claude Code',
+  capabilities: {
+    resume: true,
+    interrupt: true,
+    setModel: true,
+    toolApproval: true,
+    inProcessMcp: true,
+    hooks: true,
+    streamDeltas: true,
+  },
+  auth: { apiKeyVar: CLAUDE_API_KEY_VAR, env: claudeAuthEnv, loginCommand: claudeLoginCommand },
+  discovery: { configuredMcp: claudeConfiguredMcp, transcriptDir: claudeTranscriptDir },
+  agentTools: claudeAgentTools,
+
+  openSession(input, spec): AgentSession {
+    const q = query({
+      prompt: sdkTurns(input),
+      options: {
+        cwd: spec.cwd,
+        systemPrompt: { ...PRESET, ...(spec.systemAppend ? { append: spec.systemAppend } : {}) },
+        settingSources: ['user', 'project', 'local'],
+        includePartialMessages: true,
+        // Subagents: their prose and thinking too, not only their tool calls, so
+        // an agent's own view reads like a chat. Not agentProgressSummaries: its
+        // ~30s forks came to ~15% of a 4-agent run, and they are never written
+        // to a transcript, so the cost pill can't see them. The dock shows the
+        // CLI's own line for the agent's last tool call instead.
+        forwardSubagentText: true,
+        mcpServers: spec.mcpServers,
+        ...(spec.tools ? { tools: spec.tools } : {}),
+        ...(spec.strictMcp ? { strictMcpConfig: true } : {}),
+        ...(spec.disallowedTools?.length ? { disallowedTools: spec.disallowedTools } : {}),
+        ...(spec.env ? { env: spec.env } : {}),
+        ...(spec.model ? { model: spec.model } : {}),
+        ...(spec.effort ? { effort: spec.effort } : {}),
+        // Fast mode: the SDK only honours it from the inline (flag) settings
+        // layer and only when it is explicitly true — a user/project setting is
+        // ignored in the Agent SDK ('sdk_opt_in_required'), so it is set at
+        // spawn here and cleared, not set false, when turned off.
+        ...(spec.fastMode || spec.settings
+          ? { settings: { ...(spec.settings ?? {}), ...(spec.fastMode ? { fastMode: true } : {}) } }
+          : {}),
+        ...(spec.maxBudgetUsd ? { maxBudgetUsd: spec.maxBudgetUsd } : {}),
+        ...(sdkMode(spec.permissionMode) ? { permissionMode: sdkMode(spec.permissionMode) } : {}),
+        // The SDK refuses 'bypassPermissions' without this explicit opt-in.
+        ...(spec.permissionMode === 'bypassPermissions' ? { allowDangerouslySkipPermissions: true } : {}),
+        ...(spec.resume ? { resume: spec.resume } : {}),
+        canUseTool: (toolName, toolInput, opts) => spec.approve(toolName, toolInput, opts),
+      },
+    })
+    const events = claudeEvents(q)
+    return {
+      [Symbol.asyncIterator]: () => events,
+      setModel: (model) => q.setModel(model),
+      setEffort: async (effort) => {
+        await q.applyFlagSettings({ effortLevel: effort })
+      },
+      setFastMode: async (on) => {
+        await q.applyFlagSettings({ fastMode: on ? true : null })
+      },
+      setPermissionMode: (mode) => q.setPermissionMode(sdkMode(mode) ?? 'default'),
+      commands: () => q.supportedCommands(),
+      interrupt: async () => {
+        await q.interrupt()
+      },
+      stopTask: (taskId) => q.stopTask(taskId),
+      backgroundTask: async (toolUseId) => {
+        await q.backgroundTasks(toolUseId)
+      },
+    }
+  },
+
+  run(spec) {
+    const q = query({
+      prompt: spec.prompt,
+      options: {
+        ...(spec.cwd ? { cwd: spec.cwd } : {}),
+        systemPrompt: PRESET,
+        settingSources: spec.userConfig ? ['user'] : [],
+        ...(spec.tools ? { tools: spec.tools } : {}),
+        ...(spec.allowedTools ? { allowedTools: spec.allowedTools } : {}),
+        ...(spec.disallowedTools?.length ? { disallowedTools: spec.disallowedTools } : {}),
+        ...(spec.unattended ? { permissionMode: 'dontAsk' as const } : {}),
+        ...(spec.veto ? { hooks: { PreToolUse: [{ hooks: [vetoHook(spec.veto)] }] } } : {}),
+        ...(spec.model ? { model: spec.model } : {}),
+        ...(spec.maxBudgetUsd != null ? { maxBudgetUsd: spec.maxBudgetUsd } : {}),
+        ...(spec.streamDeltas ? { includePartialMessages: true } : {}),
+        ...(spec.mcpServers ? { mcpServers: spec.mcpServers } : {}),
+        ...(spec.abort ? { abortController: spec.abort } : {}),
+        ...(spec.env ? { env: spec.env } : {}),
+      },
+    })
+    return claudeEvents(q)
+  },
+
+  mcpStatus({ cwd, env, servers }) {
+    return withProbe(
+      servers
+        ? // Exactly what a watch run in `cwd` loads: the user's servers plus the
+          // folder's, passed explicitly (never by loading the project's settings/hooks).
+          { cwd, systemPrompt: PRESET, settingSources: ['user'], mcpServers: servers, ...(env ? { env } : {}) }
+        : { cwd, systemPrompt: PRESET, settingSources: ['user', 'project', 'local'], ...(env ? { env } : {}) },
+      async (q) => {
+        // Servers connect asynchronously; poll until none are pending (or the
+        // budget runs out and we report the stragglers as they are).
+        const deadline = Date.now() + 45_000
+        let statuses = await q.mcpServerStatus()
+        while (statuses.some((srv) => srv.status === 'pending') && Date.now() < deadline) {
+          await sleep(1_000)
+          statuses = await q.mcpServerStatus()
+        }
+        return statuses
+      },
+    )
+  },
+
+  models({ cwd, env }) {
+    return withProbe({ cwd, systemPrompt: PRESET, settingSources: ['user', 'project', 'local'], ...(env ? { env } : {}) }, async (q) =>
+      (await q.supportedModels()).map((m) => ({
+        id: m.value,
+        resolvedModel: m.resolvedModel,
+        name: m.displayName,
+        description: m.description,
+        efforts: m.supportsEffort ? (m.supportedEffortLevels ?? []) : [],
+        supportsFastMode: m.supportsFastMode,
+      })),
+    )
+  },
+
+  commands({ cwd, env }) {
+    // The same sources a real session gets, or the probe would miss exactly
+    // the project-local commands it is being asked about.
+    return withProbe({ cwd, systemPrompt: PRESET, settingSources: ['user', 'project', 'local'], ...(env ? { env } : {}) }, (q) =>
+      q.supportedCommands(),
+    )
+  },
+
+  // The model catalog is static and "succeeds" on a bogus key, so this runs
+  // one trivial turn to actually reach the API.
+  async checkAuth(env) {
+    const abort = new AbortController()
+    const timer = setTimeout(() => abort.abort(), 90_000)
+    try {
+      const q = query({
+        prompt: 'Reply with exactly: OK',
+        options: {
+          cwd: os.homedir(),
+          maxTurns: 1,
+          settingSources: [],
+          allowedTools: [],
+          abortController: abort,
+          ...(env ? { env } : {}),
+        },
+      })
+      for await (const msg of q) {
+        const m = msg as unknown as SdkMessage & { subtype?: string; result?: string }
+        if (m.type === 'result') {
+          if (m.subtype === 'success') return { ok: true }
+          return { ok: false, error: typeof m.result === 'string' && m.result ? m.result : `auth check failed (${m.subtype})` }
+        }
+      }
+      return { ok: false, error: 'auth check ended without a result' }
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+    } finally {
+      clearTimeout(timer)
+    }
+  },
+}

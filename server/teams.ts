@@ -29,38 +29,8 @@ import {
 import { parseFrontmatter, serializeFrontmatter, type FrontmatterValue } from './artifacts.js'
 import { isRecipeFile, parseRecipe, recipeAgents, serializeRecipe, type TeamRecipe } from '../core/teams/recipe.js'
 import { SHIPPED_RECIPES } from './team-recipes.js'
-
-// ---------------------------------------------------------------------------
-// Tool policy
-// ---------------------------------------------------------------------------
-
-/** What each "can" grants. Anything in this table an agent doesn't get is disallowed at spawn. */
-const CAN_TOOLS: Record<AgentCan, string[]> = {
-  read: ['Read', 'Grep', 'Glob'],
-  edit: ['Write', 'Edit', 'MultiEdit', 'NotebookEdit'],
-  run: ['Bash'],
-  web: ['WebSearch', 'WebFetch'],
-  // Not a built-in: the user's chrome-devtools MCP server, loaded only for agents
-  // allowed it (every other connector is left out — see strictMcpConfig at spawn).
-  browser: ['mcp__chrome-devtools'],
-}
-/** Built-in tools a "can" governs; browser is an MCP server, handled by loading it or not. */
-const GATED_TOOLS = (['read', 'edit', 'run', 'web'] as const).flatMap((c) => CAN_TOOLS[c])
-
-/**
- * The only built-in tools a team member's subprocess is given at all. Everything
- * else Claude Code ships (subagents, skills, notebooks, …) stays out of the tool
- * list — each schema is re-read on every call (.docs/teams-cost.md).
- */
-export function builtinToolsFor(can: AgentCan[], opts: { ask?: boolean } = {}): string[] {
-  return [...new Set(['TodoWrite', ...(opts.ask ? ['AskUserQuestion'] : []), ...GATED_TOOLS.filter((t) => toolsFor(can).includes(t))])]
-}
-
-export const toolsFor = (can: AgentCan[]): string[] => can.flatMap((c) => CAN_TOOLS[c])
-export const disallowedFor = (can: AgentCan[]): string[] => {
-  const allowed = new Set(toolsFor(can))
-  return GATED_TOOLS.filter((t) => !allowed.has(t))
-}
+// Agent files are Claude Code's own format, so their `tools` line is in its tool names.
+import { CAN_TOOLS, toolsFor } from './providers/claude-config.js'
 
 // ---------------------------------------------------------------------------
 // Defaults — seeded into every workspace (see seed())

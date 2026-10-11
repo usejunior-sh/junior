@@ -407,7 +407,7 @@ async function workspaceCmd(sub: string | undefined, name: string | undefined) {
       const reg = loadRegistry()
       let id = slugify(name)
       for (let n = 2; reg.workspaces.some((w) => w.id === id); n++) id = `${slugify(name)}-${n}`
-      reg.workspaces.push({ id, name, color: explicitColor ?? '#7aa2f7', authBackend: 'inherit', createdAt: Date.now() })
+      reg.workspaces.push({ id, name, color: explicitColor ?? '#7aa2f7', provider: 'claude', authBackend: 'inherit', createdAt: Date.now() })
       ensureWorkspaceDirs(id)
       saveRegistry(reg)
       console.log(`${green('✓')} created workspace ${bold(name)} ${dim(`(${id})`)} — picked up on the next server start`)

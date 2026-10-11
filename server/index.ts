@@ -32,19 +32,22 @@ import { promisify } from 'node:util'
 import { fileURLToPath } from 'node:url'
 import { randomUUID } from 'node:crypto'
 import { WebSocketServer, WebSocket } from 'ws'
-import {
-  query,
-  createSdkMcpServer,
-  tool,
-  type Query,
-  type SDKUserMessage,
-  type PermissionResult,
-  type PermissionUpdate,
-  type McpServerConfig,
-  type HookCallback,
-  type McpServerStatus,
-  type Options,
-} from '@anthropic-ai/claude-agent-sdk'
+import { createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk'
+import { claude } from './providers/claude.js'
+import { DEFAULT_PROVIDER, providerFor } from './providers/registry.js'
+import { requireVeto, vetoRefusal } from './providers/capabilities.js'
+import type {
+  AgentSession,
+  FastModeVerdict,
+  McpServers,
+  McpStatus,
+  PermissionResult,
+  PermissionUpdate,
+  Provider,
+  RunSpec as AgentRunSpec,
+  ToolCall,
+  UserTurn,
+} from './providers/types.js'
 import { z } from 'zod'
 import { currentBranch, filePatch, repoRoot, snapshotTree, treeDiff, treePatch, treeStat, worktreeChanges, worktreePatch, type TreeChange } from './git.js'
 import type {
@@ -121,7 +124,6 @@ import {
   isLinkKind,
   isLinkRole,
   isMentionKind,
-  isToolUseBlock,
   mentionToken,
 } from '../shared/protocol.js'
 import type {
@@ -173,7 +175,7 @@ import type {
   AgentCan,
 } from '../shared/protocol.js'
 import { frameAgentRelay } from '../core/agents/relay.js'
-import { TeamLibrary, agentFrom, builtinToolsFor, detectChecks, disallowedFor, frameTeamMessage, isCheckCommand, isLibraryName } from './teams.js'
+import { TeamLibrary, agentFrom, detectChecks, frameTeamMessage, isCheckCommand, isLibraryName } from './teams.js'
 import { LEAD, parseRecipe, recipeAgents, serializeRecipe, taskLoop, type RecipeStep, type TeamRecipe } from '../core/teams/recipe.js'
 import { planTitle, renderPlan } from '../core/teams/plan.js'
 import {
@@ -255,20 +257,21 @@ import {
   type LegacyConnector,
   type WatchToolGrant,
 } from '../core/watch/tools.js'
-import { fenceDecision, fenceFor, type Fence } from '../core/watch/fence.js'
+import { fenceDecision, fenceFor } from '../core/watch/fence.js'
 import { buildInfo, clearState, pkgVersion, TRIAGE_DIR, writeState } from './state.js'
 import { initLogFile, log, logFilePath, logSubsystems, recentLogs } from './log.js'
 import {
   apiKeyHint,
   dbFileFor,
   ensureWorkspaceDirs,
+  envOverridesFor,
   loadRegistry,
   loginCommandFor,
   saveRegistry,
   slugify,
   spawnEnvFor,
   toAuthBackend,
-  workspaceClaudeDir,
+  workspaceAuthDir,
   workspaceDir,
   writeApiKey,
   type WorkspaceMeta,
@@ -350,7 +353,7 @@ const pExecFile = promisify(execFile)
 const pExec = promisify(exec)
 
 // ---------------------------------------------------------------------------
-// Async queue: lets us push user messages into the SDK's streaming input.
+// Async queue: lets us push user messages into a live session's input.
 // ---------------------------------------------------------------------------
 class AsyncQueue<T> implements AsyncIterable<T> {
   private items: T[] = []
@@ -461,15 +464,6 @@ function classifyEffect(toolName: string): ToolEffect {
   return 'local-write'
 }
 
-// The permission modes the SDK understands and can be handed straight through.
-// 'gated' and 'default' are absent: 'default' is the SDK's own baseline (pinning
-// it would say nothing), and 'gated' is enforced by us with the SDK left at that
-// baseline so every call reaches canUseTool, where classifyEffect decides.
-type SdkPermissionMode = Exclude<PermissionMode, 'default' | 'gated'>
-const SDK_MODES: SdkPermissionMode[] = ['acceptEdits', 'auto', 'bypassPermissions']
-const sdkMode = (m: PermissionMode | null | undefined): SdkPermissionMode | undefined =>
-  m && (SDK_MODES as PermissionMode[]).includes(m) ? (m as SdkPermissionMode) : undefined
-
 // ---------------------------------------------------------------------------
 // Workspace runtimes — everything that used to be a module singleton, one per
 // workspace. Physical isolation: each runtime owns its own store (its own
@@ -532,6 +526,10 @@ class WorkspaceRuntime {
    * mcp__triage__* tools whenever another session in the workspace is live.
    */
   readonly triageMcp: () => ReturnType<typeof createSdkMcpServer>
+  /** the coding agent this workspace's sessions, runs and probes go through (its meta names it) */
+  get provider(): Provider {
+    return providerFor(this.meta.provider)
+  }
   /** PTY shells opened from the web UI — run with this workspace's spawn env */
   readonly terminals: TerminalManager
   /** per-folder file listings behind the composer's `@` picker */
@@ -654,7 +652,7 @@ class LiveSession {
   fastModeState?: FastModeState
   fastModeDisabledReason?: FastModeDisabledReason
   private seq: number
-  private readonly input = new AsyncQueue<SDKUserMessage>()
+  private readonly input = new AsyncQueue<UserTurn>()
   private readonly pendingPermissions = new Map<
     string,
     {
@@ -664,7 +662,7 @@ class LiveSession {
       resolve: (r: PermissionResult) => void
     }
   >()
-  private readonly q: Query
+  private readonly q: AgentSession
   /** The subprocess's cumulative cost at its last result — turn cost is the difference. */
   private costSeen = 0
   /** Whether this subprocess was spawned able to bypass permission checks. */
@@ -679,75 +677,46 @@ class LiveSession {
   ) {
     this.seq = lastSeq
     this.bypassArmed = row.permissionMode === 'bypassPermissions'
-    this.q = query({
-      prompt: this.input,
-      options: {
-        cwd: row.cwd,
-        // Full Claude Code behavior: its system prompt + tools, and the
-        // user's own settings/plugins/MCP connectors from ~/.claude.
-        systemPrompt: {
-          type: 'preset',
-          preset: 'claude_code',
-          // Brief sessions: the headless contract rides in the system prompt so
-          // it survives `resume` (.docs/next-version.md).
-          ...(extras.systemAppend ? { append: extras.systemAppend } : {}),
-        },
-        settingSources: ['user', 'project', 'local'],
-        includePartialMessages: true,
-        // Subagents: their prose and thinking too, not only their tool calls, so
-        // an agent's own view reads like a chat. Not agentProgressSummaries: its
-        // ~30s forks came to ~15% of a 4-agent run, and they are never written
-        // to a transcript, so the cost pill can't see them. The dock shows the
-        // CLI's own line for the agent's last tool call instead.
-        forwardSubagentText: true,
-        // The triage inbox as in-process tools, so a chat can list/create/edit
-        // work items directly — same tool surface as the stdio shim external
-        // Claude Code sessions get (server/mcp.ts). Scoped to this workspace.
-        // Brief sessions add their own `write_brief` server on top.
-        mcpServers: {
-          triage: rt.triageMcp(),
-          ...(extras.mcp ?? {}),
-          ...((extras.externalMcp ?? {}) as Record<string, McpServerConfig>),
-        },
-        ...(extras.tools ? { tools: extras.tools } : {}),
-        ...(extras.strictMcpConfig ? { strictMcpConfig: true } : {}),
-        ...(row.kind === 'brief' || extras.disallowedTools?.length
-          ? { disallowedTools: [...(row.kind === 'brief' ? BRIEF_DISALLOWED_TOOLS : []), ...(extras.disallowedTools ?? [])] }
-          : {}),
-        // Workspace auth backend: api-key / config-dir spawn with overrides;
-        // inherit passes nothing, exactly the pre-workspaces behavior.
-        ...(rt.env ? { env: rt.env } : {}),
-        // Omitted when the user never picked: Claude Code's own default is a
-        // real choice (an org can move it), not a model we should pin here.
-        ...(row.model ? { model: row.model } : {}),
-        ...(row.effort ? { effort: row.effort } : {}),
-        // Fast mode: the same model at up to ~2.5x output speed, priced higher.
-        // The SDK only honours it from the inline (flag) settings layer and
-        // only when it is explicitly true — a user/project setting is ignored
-        // in the Agent SDK ('sdk_opt_in_required'), so it is set at spawn here
-        // and cleared, not set false, when turned off (see setFastMode).
-        ...(row.fastMode || extras.settings
-          ? { settings: { ...(extras.settings ?? {}), ...(row.fastMode ? { fastMode: true } : {}) } }
-          : {}),
-        // A team member's backstop: the SDK stops the query mid-turn past it,
-        // where our own accounting (per result) would only notice afterwards.
-        ...(extras.maxBudgetUsd ? { maxBudgetUsd: extras.maxBudgetUsd } : {}),
-        // How much this session asks. Only the SDK's own modes are passed; for
-        // 'default' (its baseline) and 'gated' (ours, enforced in canUseTool)
-        // the SDK is left at that baseline so every call reaches the gate.
-        ...(sdkMode(row.permissionMode) ? { permissionMode: sdkMode(row.permissionMode) } : {}),
-        // The SDK refuses 'bypassPermissions' without this explicit opt-in.
-        ...(row.permissionMode === 'bypassPermissions'
-          ? { allowDangerouslySkipPermissions: true }
-          : {}),
-        // Revival: replay the agent's own transcript into the new subprocess.
-        ...(resumeSdkSessionId ? { resume: resumeSdkSessionId } : {}),
-        // Still set under every mode: the permissive modes short-circuit the
-        // calls they cover before this runs, and whatever still reaches here
-        // is a call that mode decided a human should see.
-        canUseTool: (toolName, toolInput, opts) =>
-          this.requestPermission(toolName, toolInput, opts),
+    this.q = rt.provider.openSession(this.input, {
+      cwd: row.cwd,
+      // Brief sessions: the headless contract rides in the system prompt so
+      // it survives `resume` (.docs/next-version.md).
+      ...(extras.systemAppend ? { systemAppend: extras.systemAppend } : {}),
+      // The triage inbox as in-process tools, so a chat can list/create/edit
+      // work items directly — same tool surface as the stdio shim external
+      // Claude Code sessions get (server/mcp.ts). Scoped to this workspace.
+      // Brief sessions add their own `write_brief` server on top.
+      mcpServers: {
+        triage: rt.triageMcp(),
+        ...(extras.mcp ?? {}),
+        ...((extras.externalMcp ?? {}) as McpServers),
       },
+      ...(extras.tools ? { tools: extras.tools } : {}),
+      ...(extras.strictMcpConfig ? { strictMcp: true } : {}),
+      disallowedTools: [...(row.kind === 'brief' ? BRIEF_DISALLOWED_TOOLS : []), ...(extras.disallowedTools ?? [])],
+      // Workspace auth backend: api-key / config-dir spawn with overrides;
+      // inherit passes nothing, exactly the pre-workspaces behavior.
+      ...(rt.env ? { env: rt.env } : {}),
+      // Omitted when the user never picked: Claude Code's own default is a
+      // real choice (an org can move it), not a model we should pin here.
+      ...(row.model ? { model: row.model } : {}),
+      ...(row.effort ? { effort: row.effort } : {}),
+      // Fast mode: the same model at up to ~2.5x output speed, priced higher.
+      // Set at spawn and cleared, not set false, when turned off (see setFastMode).
+      ...(row.fastMode ? { fastMode: true } : {}),
+      ...(extras.settings ? { settings: extras.settings } : {}),
+      // A team member's backstop: the agent stops mid-turn past it, where our
+      // own accounting (per result) would only notice afterwards.
+      ...(extras.maxBudgetUsd ? { maxBudgetUsd: extras.maxBudgetUsd } : {}),
+      // How much this session asks. 'gated' is ours, enforced in requestPermission;
+      // the adapter leaves the agent at its baseline so every call reaches it.
+      permissionMode: row.permissionMode,
+      // Revival: replay the agent's own transcript into the new subprocess.
+      ...(resumeSdkSessionId ? { resume: resumeSdkSessionId } : {}),
+      // Still set under every mode: the permissive modes short-circuit the
+      // calls they cover before this runs, and whatever still reaches here
+      // is a call that mode decided a human should see.
+      approve: (toolName, toolInput, opts) => this.requestPermission(toolName, toolInput, opts),
     })
     // A session with history getting a fresh subprocess: mark the boundary, since
     // nothing in the SDK's stream says "new process" (init comes every turn).
@@ -794,51 +763,50 @@ class LiveSession {
   }
 
   /** Remember which paths this turn's file-editing tools named. */
-  private noteToolPaths(m: SdkMessage) {
+  private noteToolPaths(calls: ToolCall[]) {
     const open = this.rt.openTurns.get(this.row.id)
-    if (!open || m.type !== 'assistant') return
-    for (const b of m.message?.content ?? []) {
-      if (!isToolUseBlock(b) || !EDIT_TOOLS.has(b.name)) continue
-      const fp = (b.input as { file_path?: unknown })?.file_path
+    if (!open) return
+    for (const c of calls) {
+      if (!EDIT_TOOLS.has(c.name)) continue
+      const fp = (c.input as { file_path?: unknown })?.file_path
       if (typeof fp === 'string' && fp) open.touched.add(path.resolve(open.root, fp))
     }
   }
 
   private async pump() {
     try {
-      for await (const msg of this.q) {
-        const m = msg as unknown as SdkMessage
+      for await (const ev of this.q) {
         // init and result messages carry what fast mode is really doing —
         // including why it is not serving, which is the only way the user
         // learns their toggle was overruled (wrong model, wrong plan, …).
-        if (m.fast_mode_state !== undefined) this.noteFastMode(m)
-        if (m.type === 'system' && m.subtype === 'init') {
-          this.model = m.model
+        if (ev.fastMode) this.noteFastMode(ev.fastMode)
+        if (ev.kind === 'started') {
+          this.model = ev.model
           // The key for `resume` — without it a stored session can't continue.
-          if (m.session_id && m.session_id !== this.row.sdkSessionId) {
-            this.row.sdkSessionId = m.session_id
-            void this.rt.store.sessions.setSdkSessionId(this.row.id, m.session_id)
+          if (ev.sessionId && ev.sessionId !== this.row.sdkSessionId) {
+            this.row.sdkSessionId = ev.sessionId
+            void this.rt.store.sessions.setSdkSessionId(this.row.id, ev.sessionId)
           }
           // What this CLI won't drive from a browser. Cwd-independent, so it
           // is kept on the workspace: the first session to start teaches the
           // draft tabs too. Set before the list is asked for, which reads it.
-          if (m.terminal_slash_commands) this.rt.terminalCommands = m.terminal_slash_commands
+          if (ev.terminalCommands) this.rt.terminalCommands = ev.terminalCommands
           // The subprocess already knows what `/` offers in this folder —
           // take it rather than make the composer pay for its own probe.
           void this.refreshCommands()
           this.setStatus('idle')
         }
         // Skills can be discovered mid-run (the agent walks into a subdirectory
-        // with its own). The SDK's contract is replace-don't-merge.
-        if (m.type === 'system' && m.subtype === 'commands_changed' && m.commands) {
-          noteCommands(this.rt, this.row.cwd, m.commands.map(toCommandInfo))
+        // with its own). The contract is replace-don't-merge.
+        if (ev.kind === 'commands') noteCommands(this.rt, this.row.cwd, ev.commands.map(toCommandInfo))
+        if (ev.kind === 'message') {
+          this.setStatus('running')
+          if (ev.role === 'assistant') this.noteToolPaths(ev.toolCalls)
         }
-        if (m.type === 'assistant' || m.type === 'user') this.setStatus('running')
-        this.noteToolPaths(m)
         // stream deltas are broadcast live but not persisted (recoverable
         // from the committed assistant message, and the only high-volume thing)
-        this.emit({ kind: 'sdk', message: m }, m.type !== 'stream_event')
-        if (m.type === 'result') {
+        this.emit({ kind: 'sdk', message: ev.record }, ev.kind !== 'stream')
+        if (ev.kind === 'result') {
           this.setStatus('idle')
           void this.endTurn()
           void this.rt.store.sessions.touch(this.row.id)
@@ -851,10 +819,10 @@ class LiveSession {
           // the turn's cost is the difference from the last result it sent —
           // tracked for every session, so a chat that becomes a lead mid-way
           // books only what it spends from then on.
-          const cost = typeof m.total_cost_usd === 'number' ? m.total_cost_usd : null
+          const cost = ev.costUsd ?? null
           const delta = cost === null ? 0 : Math.max(0, cost - this.costSeen)
           if (cost !== null) this.costSeen = cost
-          if (this.rt.sessionTeam.has(this.row.id)) void noteTeamSpend(this.rt, this.row.id, delta, m.subtype)
+          if (this.rt.sessionTeam.has(this.row.id)) void noteTeamSpend(this.rt, this.row.id, delta, ev.overBudget)
         }
       }
       this.setStatus('idle')
@@ -877,7 +845,7 @@ class LiveSession {
    */
   async setModel(model: string | null, effort: EffortLevel | null) {
     await this.q.setModel(model ?? undefined)
-    await this.q.applyFlagSettings({ effortLevel: effort })
+    await this.q.setEffort(effort)
   }
 
   /**
@@ -892,25 +860,23 @@ class LiveSession {
     // init or result message replaces it.
     this.fastModeState = undefined
     this.fastModeDisabledReason = undefined
-    await this.q.applyFlagSettings({ fastMode: on ? true : null })
+    await this.q.setFastMode(on)
   }
 
   /** Ask this session's subprocess what `/` offers in its folder. */
   private async refreshCommands() {
     try {
-      noteCommands(this.rt, this.row.cwd, (await this.q.supportedCommands()).map(toCommandInfo))
+      noteCommands(this.rt, this.row.cwd, (await this.q.commands()).map(toCommandInfo))
     } catch (err) {
       log('warn', 'commands', `supportedCommands failed: ${errText(err)}`, { session: this.row.id })
     }
   }
 
   /** Record the subprocess's own fast-mode verdict, broadcasting on a change. */
-  private noteFastMode(m: SdkMessage) {
-    const changed =
-      m.fast_mode_state !== this.fastModeState ||
-      m.fast_mode_disabled_reason !== this.fastModeDisabledReason
-    this.fastModeState = m.fast_mode_state
-    this.fastModeDisabledReason = m.fast_mode_disabled_reason
+  private noteFastMode(v: FastModeVerdict) {
+    const changed = v.state !== this.fastModeState || v.reason !== this.fastModeDisabledReason
+    this.fastModeState = v.state
+    this.fastModeDisabledReason = v.reason
     if (changed) broadcastSessionList(this.rt)
   }
 
@@ -940,12 +906,7 @@ class LiveSession {
       ...(modelText ? [{ type: 'text' as const, text: modelText }] : []),
       ...(attached?.blocks ?? []).map((t) => ({ type: 'text' as const, text: t })),
     ]
-    const msg: SDKUserMessage = {
-      type: 'user',
-      message: { role: 'user', content },
-      parent_tool_use_id: null,
-    } as SDKUserMessage
-    this.input.push(msg)
+    this.input.push({ content })
   }
 
   private requestPermission(
@@ -1065,7 +1026,7 @@ class LiveSession {
       // gate lives in requestPermission, which reads the live row's mode. The
       // row is already updated by the caller, so this switch takes effect at
       // once without a restart.
-      await this.q.setPermissionMode(sdkMode(mode) ?? 'default')
+      await this.q.setPermissionMode(mode)
       return true
     } catch {
       return false
@@ -1109,7 +1070,7 @@ class LiveSession {
   /** Hand a foreground subagent to the background: the main agent stops waiting on it. */
   async backgroundAgent(toolUseId: string) {
     try {
-      await this.q.backgroundTasks(toolUseId)
+      await this.q.backgroundTask(toolUseId)
     } catch (err) {
       this.emit({ kind: 'error', message: `backgrounding the agent failed: ${String(err)}` }, true)
     }
@@ -1126,11 +1087,7 @@ class LiveSession {
     this.emit({ kind: 'local_user', text, relay }, true)
     this.setStatus('running')
     void this.rt.store.sessions.touch(this.row.id)
-    this.input.push({
-      type: 'user',
-      message: { role: 'user', content: [{ type: 'text', text: frameAgentRelay(relay, text) }] },
-      parent_tool_use_id: null,
-    } as SDKUserMessage)
+    this.input.push({ content: [{ type: 'text', text: frameAgentRelay(relay, text) }] })
   }
 
   private setStatus(status: SessionStatus) {
@@ -1899,16 +1856,6 @@ async function listItemsByStatus(rt: WorkspaceRuntime, status: ItemStatus, now =
 // exists because a tool call created it — no JSON parsing, no cursor-advance-on-
 // garbled-output bug. Cursors advance only on a successful run.
 // ---------------------------------------------------------------------------
-function sumTokens(usage: Record<string, unknown> | undefined): number {
-  let tokens = 0
-  const u = usage ?? {}
-  for (const k of ['input_tokens', 'output_tokens', 'cache_creation_input_tokens', 'cache_read_input_tokens']) {
-    const v = u[k]
-    if (typeof v === 'number') tokens += v
-  }
-  return tokens
-}
-
 /** Which watches are overdue — no `ok` ledger row within grace (isOverdue). */
 async function overdueWatches(rt: WorkspaceRuntime, watches: Watch[], now: number): Promise<Set<string>> {
   const lastOk = await rt.store.watchRuns.lastOkAt().catch(() => new Map<string, number>())
@@ -1919,14 +1866,15 @@ async function overdueWatches(rt: WorkspaceRuntime, watches: Watch[], now: numbe
 /**
  * Where Claude Code keeps its transcripts. The user's own `~/.claude` (or
  * whatever `CLAUDE_CONFIG_DIR` points at), plus the private config dir of
- * every workspace on the `config-dir` auth backend — those sessions are the
- * user's spend too, and they log somewhere else.
+ * every Claude workspace on the `config-dir` auth backend — those sessions are
+ * the user's spend too, and they log somewhere else. Claude's only: the usage
+ * ledger reads Claude Code's transcript format.
  */
 function claudeProjectRoots(): string[] {
   const roots = new Set<string>()
-  roots.add(path.join(process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude'), 'projects'))
+  roots.add(claude.discovery.transcriptDir(undefined))
   for (const ws of loadRegistry().workspaces) {
-    if (ws.authBackend === 'config-dir') roots.add(path.join(workspaceClaudeDir(ws.id), 'projects'))
+    if (ws.provider === 'claude' && ws.authBackend === 'config-dir') roots.add(claude.discovery.transcriptDir(envOverridesFor(ws)))
   }
   return [...roots]
 }
@@ -2333,7 +2281,7 @@ type PreviewSpec = Omit<RunSpec, 'project'> & { projectId: string }
 // are shell commands that would run unattended.
 // ---------------------------------------------------------------------------
 
-type FolderMcp = { servers: Record<string, McpServerConfig>; scopes: Map<string, 'project' | 'local'> }
+type FolderMcp = { servers: McpServers; scopes: Map<string, 'project' | 'local'> }
 
 /** `${VAR}` / `${VAR:-default}` in .mcp.json strings, from the run's environment. */
 function expandEnv(v: unknown, env: Record<string, string | undefined>): unknown {
@@ -2343,15 +2291,6 @@ function expandEnv(v: unknown, env: Record<string, string | undefined>): unknown
   return v
 }
 
-async function readJsonFile(file: string): Promise<Record<string, unknown> | null> {
-  try {
-    const parsed = JSON.parse(await readFile(file, 'utf8')) as unknown
-    return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : null
-  } catch {
-    return null
-  }
-}
-
 async function folderMcpServers(rt: WorkspaceRuntime, cwd: string): Promise<FolderMcp> {
   const env = { ...process.env, ...(rt.env ?? {}) }
   const out: FolderMcp = { servers: {}, scopes: new Map() }
@@ -2359,16 +2298,13 @@ async function folderMcpServers(rt: WorkspaceRuntime, cwd: string): Promise<Fold
     if (!raw || typeof raw !== 'object') return
     for (const [name, cfg] of Object.entries(raw as Record<string, unknown>)) {
       if (!cfg || typeof cfg !== 'object') continue
-      out.servers[name] = expandEnv(cfg, env) as McpServerConfig
+      out.servers[name] = expandEnv(cfg, env) as McpServers[string]
       out.scopes.set(name, scope)
     }
   }
-  const project = await readJsonFile(path.join(cwd, '.mcp.json'))
-  add(project?.mcpServers, 'project')
-  const configDir = rt.env?.CLAUDE_CONFIG_DIR ?? process.env.CLAUDE_CONFIG_DIR
-  const claudeJson = await readJsonFile(configDir ? path.join(configDir, '.claude.json') : path.join(os.homedir(), '.claude.json'))
-  const perFolder = (claudeJson?.projects as Record<string, { mcpServers?: unknown }> | undefined)?.[cwd]
-  add(perFolder?.mcpServers, 'local') // private per-folder servers win over the shared file, as in Claude Code
+  const configured = await rt.provider.discovery.configuredMcp({ cwd, env: rt.env })
+  add(configured.project, 'project')
+  add(configured.local[cwd], 'local') // private per-folder servers win over the shared file, as in Claude Code
   delete out.servers.triage // our own in-process server owns that name
   return out
 }
@@ -2379,26 +2315,14 @@ async function folderMcpServers(rt: WorkspaceRuntime, cwd: string): Promise<Fold
  * here — but listing them tells the user which project to pick instead.
  */
 async function localServersElsewhere(rt: WorkspaceRuntime, cwd: string, here: Connector[]): Promise<Array<{ name: string; folder: string }>> {
-  const configDir = rt.env?.CLAUDE_CONFIG_DIR ?? process.env.CLAUDE_CONFIG_DIR
-  const claudeJson = await readJsonFile(configDir ? path.join(configDir, '.claude.json') : path.join(os.homedir(), '.claude.json'))
-  const projects = (claudeJson?.projects ?? {}) as Record<string, { mcpServers?: Record<string, unknown> }>
+  const { local } = await rt.provider.discovery.configuredMcp({ cwd, env: rt.env })
   const have = new Set(here.map((c) => c.server))
   const out: Array<{ name: string; folder: string }> = []
-  for (const [folder, p] of Object.entries(projects)) {
-    if (folder === cwd || !p?.mcpServers || typeof p.mcpServers !== 'object') continue
-    for (const name of Object.keys(p.mcpServers)) if (!have.has(name)) out.push({ name, folder })
+  for (const [folder, servers] of Object.entries(local)) {
+    if (folder === cwd) continue
+    for (const name of Object.keys(servers)) if (!have.has(name)) out.push({ name, folder })
   }
   return out.sort((a, b) => a.name.localeCompare(b.name) || a.folder.localeCompare(b.folder))
-}
-
-/** A PreToolUse hook: the fence, deciding every tool call the run makes. */
-function fenceHook(fence: Fence): HookCallback {
-  return async (input) => {
-    if (input.hook_event_name !== 'PreToolUse') return {}
-    const d = fenceDecision(fence, input.tool_name, input.tool_input)
-    if (d.allow) return {}
-    return { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: d.reason } }
-  }
 }
 
 /** The workspace's default run limits, under a watch's own. */
@@ -2409,19 +2333,21 @@ async function watchLimits(rt: WorkspaceRuntime, w: { timeoutMs?: number; maxBud
 }
 
 /**
- * The prompt and SDK options every watch run shares, real or dry. Same prompt,
- * same fence: built-in tools limited to what the grants need, the allowlist so
- * granted tools never prompt, `dontAsk` so nothing else ever does, and the
- * PreToolUse fence so nothing else ever runs — whatever the user's own global
- * allow rules say. Runs work in the project folder and nowhere else.
+ * The run spec every watch run shares, real or dry. Same prompt, same fence:
+ * built-in tools limited to what the grants need, the allowlist so granted
+ * tools never prompt, unattended so nothing else ever does, and the fence as a
+ * veto so nothing else ever runs — whatever the user's own global allow rules
+ * say. Runs work in the project folder and nowhere else.
  */
 async function watchQuery(
   rt: WorkspaceRuntime,
   spec: RunSpec,
-  triage: McpServerConfig,
+  triage: McpServers[string],
   abort: AbortController,
   extra: { maxBudgetUsd?: number; includePartialMessages?: boolean } = {},
-): Promise<{ prompt: string; options: Options }> {
+): Promise<AgentRunSpec> {
+  // The fence below is the whole safety story: no veto, no run.
+  requireVeto(rt.provider, 'watch')
   const folder = await folderMcpServers(rt, spec.project.path)
   const granted = new Set(mcpGrants(spec.tools).map((g) => g.source.server))
   const folderServers = Object.fromEntries(Object.entries(folder.servers).filter(([name]) => granted.has(name)))
@@ -2444,23 +2370,23 @@ async function watchQuery(
     ...(spec.scope ? { scope: spec.scope } : {}),
     ...(spec.lateness ? { lateness: spec.lateness } : {}),
   })
-  const options: Options = {
+  const fence = fenceFor(spec.tools, spec.output, spec.project.path)
+  return {
+    prompt,
     cwd: spec.project.path,
-    systemPrompt: { type: 'preset', preset: 'claude_code' },
-    settingSources: ['user'],
+    userConfig: true,
     tools: runBaseTools(spec.tools),
     allowedTools: runAllowedTools(spec.tools, spec.output),
     ...(disallowedTools.length ? { disallowedTools } : {}),
-    permissionMode: 'dontAsk',
-    hooks: { PreToolUse: [{ hooks: [fenceHook(fenceFor(spec.tools, spec.output, spec.project.path))] }] },
+    unattended: true,
+    veto: (toolName, input) => fenceDecision(fence, toolName, input),
     ...(spec.model ? { model: spec.model } : {}),
     ...(extra.maxBudgetUsd != null ? { maxBudgetUsd: extra.maxBudgetUsd } : {}),
-    ...(extra.includePartialMessages ? { includePartialMessages: true } : {}),
+    ...(extra.includePartialMessages ? { streamDeltas: true } : {}),
     mcpServers: { ...folderServers, triage },
-    abortController: abort,
+    abort,
     ...(rt.env ? { env: rt.env } : {}),
   }
-  return { prompt, options }
 }
 
 /** The project a watch runs in, checked: a removed project or a missing folder is an error, never a fallback. */
@@ -2539,16 +2465,14 @@ async function runWatchPreview(rt: WorkspaceRuntime, pv: WatchPreview, spec: Pre
     const project = await watchProject(rt, spec.projectId)
     const limits = await watchLimits(rt, {})
     timer = setTimeout(() => abort.abort(), limits.timeoutMs)
-    const { prompt, options } = await watchQuery(rt, { ...spec, project }, collector, abort, { ...limits, includePartialMessages: true })
-    const q = query({ prompt, options })
-    for await (const msg of q) {
-      const m = msg as unknown as SdkMessage & { result?: string; usage?: Record<string, unknown>; total_cost_usd?: unknown }
-      emit({ kind: 'sdk', message: m as SdkMessage }, m.type !== 'stream_event')
-      if (m.type === 'result') {
+    const q = rt.provider.run(await watchQuery(rt, { ...spec, project }, collector, abort, { ...limits, includePartialMessages: true }))
+    for await (const ev of q) {
+      emit({ kind: 'sdk', message: ev.record }, ev.kind !== 'stream')
+      if (ev.kind === 'result') {
         sawResult = true
-        resultText = typeof m.result === 'string' ? m.result : ''
-        tokens = sumTokens(m.usage)
-        if (typeof m.total_cost_usd === 'number') costUsd = m.total_cost_usd
+        resultText = ev.text
+        tokens = ev.tokens
+        if (ev.costUsd != null) costUsd = ev.costUsd
       }
     }
     if (resultText.includes('no-connector-tools')) throw new Error(noConnectorError(spec.tools))
@@ -2668,33 +2592,33 @@ async function runWatch(rt: WorkspaceRuntime, run: QueuedRun, startedMs: number,
       timedOut = true
       abort.abort()
     }, runLimits.timeoutMs)
-    const { prompt, options } = await watchQuery(
-      rt,
-      { instruction: watch.instruction, tools: watch.tools, project, model: watch.model, output: watch.output, schedule: scheduleOf(watch), scope: watch.scope, lateness },
-      scanMcp,
-      abort,
-      runLimits,
+    const q = rt.provider.run(
+      await watchQuery(
+        rt,
+        { instruction: watch.instruction, tools: watch.tools, project, model: watch.model, output: watch.output, schedule: scheduleOf(watch), scope: watch.scope, lateness },
+        scanMcp,
+        abort,
+        runLimits,
+      ),
     )
-    const q = query({ prompt, options })
     let sawResult = false
     let resultText = ''
-    let resultSubtype = ''
-    for await (const msg of q) {
-      const m = msg as unknown as SdkMessage & { result?: string; subtype?: string; usage?: Record<string, unknown>; total_cost_usd?: unknown }
-      if (m.type === 'system' && m.subtype === 'init' && m.session_id) {
-        session.sdkSessionId = m.session_id
-        rt.store.sessions.setSdkSessionId(session.id, m.session_id).catch(() => {})
+    let overBudget = false
+    for await (const ev of q) {
+      if (ev.kind === 'started' && ev.sessionId) {
+        session.sdkSessionId = ev.sessionId
+        rt.store.sessions.setSdkSessionId(session.id, ev.sessionId).catch(() => {})
       }
-      emit({ kind: 'sdk', message: m as SdkMessage }, m.type !== 'stream_event')
-      if (m.type === 'result') {
+      emit({ kind: 'sdk', message: ev.record }, ev.kind !== 'stream')
+      if (ev.kind === 'result') {
         sawResult = true
-        resultText = typeof m.result === 'string' ? m.result : ''
-        resultSubtype = typeof m.subtype === 'string' ? m.subtype : ''
-        tokens = sumTokens(m.usage)
-        if (typeof m.total_cost_usd === 'number') costUsd = m.total_cost_usd
+        resultText = ev.text
+        overBudget = ev.overBudget
+        tokens = ev.tokens
+        if (ev.costUsd != null) costUsd = ev.costUsd
       }
     }
-    if (resultSubtype === 'error_max_budget_usd') throw new Error(`budget cap reached ($${runLimits.maxBudgetUsd?.toFixed(2)})`)
+    if (overBudget) throw new Error(`budget cap reached ($${runLimits.maxBudgetUsd?.toFixed(2)})`)
     if (resultText.includes('no-connector-tools') || resultText.includes('no-slack-tools')) throw new Error(noConnectorError(watch.tools))
     if (!sawResult) throw new Error('scan ended without a result')
     status = 'ok'
@@ -2913,6 +2837,7 @@ async function syncWatchFilesNow(rt: WorkspaceRuntime, { force = false, deferFir
   const files = await rt.watchFiles.scan()
   const projects = await rt.store.projects.list()
   const sig = JSON.stringify([
+    rt.provider.id,
     files.map((f) => [f.name, f.mtimeMs]),
     projects.map((p) => [p.id, p.path]),
     rt.connectorCache?.probedAt ?? 0,
@@ -2991,6 +2916,8 @@ function checkWatchSpec(rt: WorkspaceRuntime, spec: WatchFileSpec, projects: Pro
   const project = projects.find((p) => p.id === spec.project) ?? null
   if (!spec.project) errors.push(NEEDS_PROJECT)
   else if (!project) errors.push(`unknown project "${spec.project}" — pick another project for this watch`)
+  const refusal = vetoRefusal(rt.provider, 'watch')
+  if (refusal) errors.push(refusal)
   const probes = [rt.connectorCache, project ? rt.folderProbes.get(project.path) : undefined].filter((p): p is ConnectorProbe => p != null)
   const checked = checkGrants(spec.tools, probes.length ? probes.flatMap((p) => p.connectors) : null)
   return { tools: checked.tools, errors: [...errors, ...checked.errors] }
@@ -3114,12 +3041,10 @@ setInterval(() => {
 // ---------------------------------------------------------------------------
 const CLAUDE_AI_PREFIX = 'claude.ai '
 
-const sleep = (ms: number) => new Promise((res) => setTimeout(res, ms))
-
 const SCOPES: ConnectorScope[] = ['claudeai', 'user', 'local', 'project', 'plugin', 'managed']
 
 /** One server as the SDK reports it → our Connector, tools and all (watch-spec.md, item 1). */
-function toConnector(srv: McpServerStatus, scopeOverride?: ConnectorScope): Connector {
+function toConnector(srv: McpStatus, scopeOverride?: ConnectorScope): Connector {
   const claudeAi = srv.name.startsWith(CLAUDE_AI_PREFIX)
   const scope: ConnectorScope =
     scopeOverride ?? (claudeAi ? 'claudeai' : SCOPES.includes(srv.scope as ConnectorScope) ? (srv.scope as ConnectorScope) : 'unknown')
@@ -3154,34 +3079,13 @@ function probeConnectors(rt: WorkspaceRuntime, cwd?: string): Promise<ConnectorP
   const inFlight = cwd ? rt.folderProbeInFlight.get(cwd) : rt.connectorInFlight
   if (inFlight) return inFlight
   const run = (async () => {
-    const input = new AsyncQueue<SDKUserMessage>()
     const folder = cwd ? await folderMcpServers(rt, cwd) : null
-    const q = query({
-      prompt: input,
-      options: cwd
-        ? {
-            cwd,
-            systemPrompt: { type: 'preset', preset: 'claude_code' },
-            settingSources: ['user'],
-            mcpServers: folder!.servers,
-            ...(rt.env ? { env: rt.env } : {}),
-          }
-        : {
-            cwd: os.homedir(), // user-level view; no project .mcp.json in the way
-            systemPrompt: { type: 'preset', preset: 'claude_code' },
-            settingSources: ['user', 'project', 'local'],
-            ...(rt.env ? { env: rt.env } : {}),
-          },
-    })
     try {
-      // Servers connect asynchronously; poll until none are pending (or the
-      // budget runs out and we report the stragglers as they are).
-      const deadline = Date.now() + 45_000
-      let statuses = await q.mcpServerStatus()
-      while (statuses.some((srv) => srv.status === 'pending') && Date.now() < deadline) {
-        await sleep(1_000)
-        statuses = await q.mcpServerStatus()
-      }
+      const statuses = await rt.provider.mcpStatus(
+        folder
+          ? { cwd: cwd!, env: rt.env, servers: folder.servers }
+          : { cwd: os.homedir(), env: rt.env }, // user-level view; no project .mcp.json in the way
+      )
       const connectors = statuses
         .map((srv) => toConnector(srv, folder?.scopes.get(srv.name)))
         .sort((a, b) => a.name.localeCompare(b.name))
@@ -3191,8 +3095,6 @@ function probeConnectors(rt: WorkspaceRuntime, cwd?: string): Promise<ConnectorP
       log('info', 'connectors', `probed${cwd ? ` ${cwd}` : ''}: ${connectors.length} server(s), ${connectors.filter((c) => c.status === 'connected').length} connected`, { workspace: rt.meta.id })
       return probe
     } finally {
-      input.close()
-      void q.return(undefined).catch(() => {}) // dispose the subprocess
       if (cwd) rt.folderProbeInFlight.delete(cwd)
       else rt.connectorInFlight = null
     }
@@ -3212,33 +3114,12 @@ function probeConnectors(rt: WorkspaceRuntime, cwd?: string): Promise<ConnectorP
 function probeModels(rt: WorkspaceRuntime): Promise<ModelProbe> {
   if (rt.modelInFlight) return rt.modelInFlight
   rt.modelInFlight = (async () => {
-    const input = new AsyncQueue<SDKUserMessage>()
-    const q = query({
-      prompt: input,
-      options: {
-        cwd: os.homedir(),
-        systemPrompt: { type: 'preset', preset: 'claude_code' },
-        settingSources: ['user', 'project', 'local'],
-        ...(rt.env ? { env: rt.env } : {}),
-      },
-    })
     try {
-      const models = (await q.supportedModels()).map(
-        (m): ModelOption => ({
-          id: m.value,
-          resolvedModel: m.resolvedModel,
-          name: m.displayName,
-          description: m.description,
-          efforts: m.supportsEffort ? (m.supportedEffortLevels ?? []) : [],
-          supportsFastMode: m.supportsFastMode,
-        }),
-      )
+      const models = await rt.provider.models({ cwd: os.homedir(), env: rt.env })
       rt.modelCache = { probedAt: Date.now(), models }
       log('info', 'models', `probed: ${models.length} model(s) available`, { workspace: rt.meta.id })
       return rt.modelCache
     } finally {
-      input.close()
-      void q.return(undefined).catch(() => {}) // dispose the subprocess
       rt.modelInFlight = null
     }
   })()
@@ -3325,25 +3206,11 @@ function probeCommands(rt: WorkspaceRuntime, cwd: string): Promise<CommandProbe>
   const running = rt.commandInFlight.get(cwd)  // callers pass the resolved folder
   if (running) return running
   const job = (async () => {
-    const input = new AsyncQueue<SDKUserMessage>()
-    const q = query({
-      prompt: input,
-      options: {
-        cwd,
-        systemPrompt: { type: 'preset', preset: 'claude_code' },
-        // The same sources a real session gets, or the probe would miss
-        // exactly the project-local commands it is being asked about.
-        settingSources: ['user', 'project', 'local'],
-        ...(rt.env ? { env: rt.env } : {}),
-      },
-    })
     try {
-      const probe = noteCommands(rt, cwd, (await q.supportedCommands()).map(toCommandInfo))
+      const probe = noteCommands(rt, cwd, (await rt.provider.commands({ cwd, env: rt.env })).map(toCommandInfo))
       log('info', 'commands', `probed ${probe.commands.length} command(s)`, { workspace: rt.meta.id })
       return probe
     } finally {
-      input.close()
-      void q.return(undefined).catch(() => {}) // dispose the subprocess
       rt.commandInFlight.delete(cwd)
     }
   })()
@@ -3357,34 +3224,8 @@ function probeCommands(rt: WorkspaceRuntime, cwd: string): Promise<CommandProbe>
  * the verify step must actually reach the API to prove a key or login works.
  * Costs one minimal turn; only run for api-key / config-dir on explicit verify.
  */
-async function probeAuth(rt: WorkspaceRuntime): Promise<{ ok: boolean; error?: string }> {
-  const abort = new AbortController()
-  const timer = setTimeout(() => abort.abort(), 90_000)
-  try {
-    const q = query({
-      prompt: 'Reply with exactly: OK',
-      options: {
-        cwd: os.homedir(),
-        maxTurns: 1,
-        settingSources: [],
-        allowedTools: [],
-        abortController: abort,
-        ...(rt.env ? { env: rt.env } : {}),
-      },
-    })
-    for await (const msg of q) {
-      const m = msg as unknown as SdkMessage & { subtype?: string; result?: string }
-      if (m.type === 'result') {
-        if (m.subtype === 'success') return { ok: true }
-        return { ok: false, error: typeof m.result === 'string' && m.result ? m.result : `auth check failed (${m.subtype})` }
-      }
-    }
-    return { ok: false, error: 'auth check ended without a result' }
-  } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : String(err) }
-  } finally {
-    clearTimeout(timer)
-  }
+function probeAuth(rt: WorkspaceRuntime): Promise<{ ok: boolean; error?: string }> {
+  return rt.provider.checkAuth(rt.env)
 }
 
 // ---------------------------------------------------------------------------
@@ -3401,9 +3242,9 @@ function wireWorkspace(meta: WorkspaceMeta): Workspace {
     authBackend: meta.authBackend,
     isDefault: meta.id === registry.defaultId,
     createdAt: meta.createdAt,
-    ...(meta.authBackend === 'api-key' ? { apiKeyHint: apiKeyHint(meta.id) } : {}),
+    ...(meta.authBackend === 'api-key' ? { apiKeyHint: apiKeyHint(meta) } : {}),
     ...(meta.authBackend === 'config-dir'
-      ? { configDir: workspaceClaudeDir(meta.id), loginCommand: loginCommandFor(meta.id) }
+      ? { configDir: workspaceAuthDir(meta), loginCommand: loginCommandFor(meta) }
       : {}),
   }
 }
@@ -4326,17 +4167,17 @@ function extrasFor(rt: WorkspaceRuntime, row: StoredSession): SessionExtras {
   if (run && worker) {
     // Rebuilt per spawn like the brief server: one instance, one transport.
     const { agent, writes, can } = workerSpec(run, worker)
-    const browser = can.includes('browser') ? userMcpServer('chrome-devtools') : null
+    const tools = rt.provider.agentTools(can as AgentCan[])
     return {
       systemAppend: `${identity}\n${workerAppend(run, worker, agent, writes)}`,
       mcp: { team: makeTeamMcp(rt, row.id) },
-      disallowedTools: disallowedFor(can as AgentCan[]),
+      disallowedTools: tools.disallowedTools,
       // A worker loads only what its step needs: a short built-in list and
       // triage's own servers (+ the browser if allowed) — not every connector
       // and plugin in ~/.claude, whose schemas ride every call.
-      tools: builtinToolsFor(can as AgentCan[]),
+      tools: tools.tools,
       strictMcpConfig: true,
-      ...(browser ? { externalMcp: { 'chrome-devtools': browser } } : {}),
+      ...(tools.mcpServers ? { externalMcp: tools.mcpServers } : {}),
       // Compact long before a 1M window would (it defaults to ~967K there): a
       // worker re-reads its whole history on every call, so history is cost.
       settings: { autoCompactWindow: TEAM_COMPACT_WINDOW },
@@ -4641,20 +4482,6 @@ function teamRunView(run: TeamRun): TeamRunView {
   return { ...view, spentUsd: runSpent(run) }
 }
 
-/**
- * One MCP server from the user's own Claude Code config (~/.claude.json), as a
- * plain config to pass through — how a browser-allowed agent gets chrome-devtools
- * while strictMcpConfig keeps every other connector out.
- */
-function userMcpServer(name: string): Record<string, unknown> | null {
-  try {
-    const cfg = JSON.parse(readFileSync(path.join(os.homedir(), '.claude.json'), 'utf8')) as { mcpServers?: Record<string, Record<string, unknown>> }
-    return cfg.mcpServers?.[name] ?? null
-  } catch {
-    return null
-  }
-}
-
 /** A worker's history is compacted past this many tokens (see extrasFor). */
 const TEAM_COMPACT_WINDOW = 200_000
 
@@ -4850,7 +4677,7 @@ async function finishTeamRun(rt: WorkspaceRuntime, run: TeamRun): Promise<void> 
  * A team session's turn ended: book its cost, pause the run past its budget (or
  * when the SDK already stopped the turn at its backstop), then let the engine act.
  */
-async function noteTeamSpend(rt: WorkspaceRuntime, sessionId: string, delta: number, subtype?: string): Promise<void> {
+async function noteTeamSpend(rt: WorkspaceRuntime, sessionId: string, delta: number, overBudget = false): Promise<void> {
   const run = teamRunOf(rt, sessionId)
   if (!run) return
   await withTeamRun(rt, run, async () => {
@@ -4858,7 +4685,7 @@ async function noteTeamSpend(rt: WorkspaceRuntime, sessionId: string, delta: num
     run.spend[sessionId] = (run.spend[sessionId] ?? 0) + delta
     run.rev += 1
     const spent = runSpent(run)
-    if (run.state === 'running' && (spent >= run.budgetUsd || subtype === 'error_max_budget_usd')) {
+    if (run.state === 'running' && (spent >= run.budgetUsd || overBudget)) {
       await pauseTeamRunNow(rt, run, `budget reached — ${usd(spent)} of ${usd(run.budgetUsd)}`)
       return
     }
@@ -4978,6 +4805,7 @@ async function proposeTeamOp(rt: WorkspaceRuntime, sessionId: string, raw: unkno
   const r = (raw ?? {}) as Record<string, unknown>
   const lead = rt.rows.get(sessionId)
   if (!lead) throw new Error('no such session')
+  requireVeto(rt.provider, 'team')
   const existing = teamRunOf(rt, sessionId)
   if (existing && existing.leadSessionId !== sessionId) throw new Error('this session is a worker on a team — only a lead proposes one')
   if (existing && existing.state !== 'proposed' && existing.state !== 'done' && existing.state !== 'stopped') {
@@ -5085,6 +4913,7 @@ async function settleRevisionOp(rt: WorkspaceRuntime, raw: unknown): Promise<voi
 async function approveTeamOp(rt: WorkspaceRuntime, raw: unknown): Promise<void> {
   const run = teamRunFrom(rt, raw)
   await withTeamRun(rt, run, async () => {
+    requireVeto(rt.provider, 'team')
     const card = (raw as { card?: unknown }).card ? cardFrom((raw as { card?: unknown }).card, run.recipe, run.card) : run.card
     log('info', 'teams', `team approved: ${run.recipe.label}`, { teamId: run.id, workspace: rt.meta.id })
     await applyTeamActions(rt, run, approve(run, card))
@@ -5105,6 +4934,7 @@ async function discardTeamOp(rt: WorkspaceRuntime, raw: unknown): Promise<void> 
 async function resumeTeamOp(rt: WorkspaceRuntime, raw: unknown): Promise<void> {
   const run = teamRunFrom(rt, raw)
   await withTeamRun(rt, run, async () => {
+    requireVeto(rt.provider, 'team')
     if (run.state === 'gate') return applyTeamActions(rt, run, continueGate(run))
     const spent = runSpent(run)
     const addUsd = Number((raw as { addUsd?: unknown }).addUsd)
@@ -5988,11 +5818,12 @@ const server = http.createServer(async (req, res) => {
         name: p.name,
         color: p.color ?? '#7aa2f7',
         ...(p.description ? { description: p.description } : {}),
+        provider: DEFAULT_PROVIDER,
         authBackend: p.authBackend ?? 'inherit',
         createdAt: Date.now(),
       }
       ensureWorkspaceDirs(id)
-      if (p.apiKey) writeApiKey(id, p.apiKey)
+      if (p.apiKey) writeApiKey(meta, p.apiKey)
       registry.workspaces.push(meta)
       saveRegistry(registry)
       const rt = new WorkspaceRuntime(meta)
@@ -6020,7 +5851,7 @@ const server = http.createServer(async (req, res) => {
       if (p.description !== undefined) rt.meta.description = p.description || undefined
       const authChanged = (p.authBackend && p.authBackend !== rt.meta.authBackend) || p.apiKey !== undefined
       if (p.authBackend) rt.meta.authBackend = p.authBackend
-      if (p.apiKey) writeApiKey(id, p.apiKey)
+      if (p.apiKey) writeApiKey(rt.meta, p.apiKey)
       saveRegistry(registry)
       if (authChanged) applyAuthChange(rt)
       body = { ok: true, workspace: wireWorkspace(rt.meta) }
@@ -6450,7 +6281,7 @@ const server = http.createServer(async (req, res) => {
       const parsed = (await readJsonBody(req)) as { text?: unknown } | null
       const text = typeof parsed?.text === 'string' ? parsed.text.trim() : ''
       if (!text) throw new Error('describe the watch in plain text first')
-      const draft = await draftWatch(text, undefined, rt.env)
+      const draft = await draftWatch(rt.provider, text, undefined, rt.env)
       if (!draft) throw new Error('could not parse that into a watch — fill the form manually')
       body = { ok: true, draft }
     } catch (err) {
