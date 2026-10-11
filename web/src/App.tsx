@@ -37,6 +37,8 @@ import { TopBar } from './components/TopBar.js'
 import { isDesktop } from './desktop.js'
 import { SessionCost } from './components/SessionCost.js'
 import { Transcript } from './components/Transcript.js'
+import { AgentBrief, AgentComposer, AgentDock, AgentHeader, AgentOutcome, AgentsMenu } from './components/Agents.js'
+import { agentLabel, buildAgents, spawnerOf, type AgentRun } from './agents.js'
 import { TeamDock, TeamSide, TeamStrip, useTeamRun } from './components/TeamRun.js'
 import { WatchesPage } from './components/WatchesPage.js'
 import { REFINE_WATCH_KEY, WatchFormPage } from './components/WatchFormPage.js'
@@ -327,6 +329,23 @@ export function App() {
   // A team run in this session: one fetch shared by the strip, the dock and the details drawer.
   const teamRun = useTeamRun(current?.teamRun)
   const [teamSide, setTeamSide] = useState(false)
+  // Subagents: folded from the same events as the transcript. Opening one swaps
+  // the transcript for its slice — remembered per session, so leaving and coming
+  // back finds main again rather than an agent picked long ago.
+  // With no subprocess behind the session, nothing it spawned can still be
+  // running — a daemon restart ends them without a word in the log.
+  const sessionLive = current?.live
+  const agents = useMemo(() => {
+    const runs = buildAgents(events, store.eventTime)
+    if (sessionLive !== false) return runs
+    return runs.map((r) => (r.state === 'running' ? { ...r, state: 'interrupted' as const, waiting: false } : r))
+  }, [events, sessionLive])
+  const [agentPick, setAgentPick] = useState<{ sessionId: string; toolUseId: string } | null>(null)
+  const openAgent = agentPick && agentPick.sessionId === currentId ? agents.find((a) => a.toolUseId === agentPick.toolUseId) ?? null : null
+  const showAgent = useCallback(
+    (toolUseId: string | null) => setAgentPick(toolUseId && currentId ? { sessionId: currentId, toolUseId } : null),
+    [currentId],
+  )
   const currentTerminal = terminals.find((t) => t.id === currentTerminalId) ?? null
   const currentDraft = drafts.find((d) => d.id === currentDraftId) ?? null
   // Drafts are per workspace; bind before anything reads them.
@@ -525,6 +544,33 @@ export function App() {
   const interrupt = useCallback(() => {
     if (currentId) store.send({ type: 'interrupt', sessionId: currentId })
   }, [currentId])
+
+  const stopAgent = useCallback(
+    (run: AgentRun) => {
+      if (currentId && run.agentId) store.send({ type: 'agent_stop', sessionId: currentId, agentId: run.agentId })
+    },
+    [currentId],
+  )
+
+  const backgroundAgent = useCallback(
+    (run: AgentRun) => {
+      if (currentId) store.send({ type: 'agent_background', sessionId: currentId, toolUseId: run.toolUseId })
+    },
+    [currentId],
+  )
+
+  const messageAgent = useCallback(
+    (run: AgentRun, text: string) => {
+      if (!currentId || !run.agentId) return
+      store.send({
+        type: 'agent_message',
+        sessionId: currentId,
+        relay: { toolUseId: run.toolUseId, agentId: run.agentId, label: agentLabel(run) },
+        text,
+      })
+    },
+    [currentId],
+  )
 
   const renameSession = useCallback((sessionId: string, title: string) => {
     store.send({ type: 'rename_session', sessionId, title })
@@ -1099,6 +1145,14 @@ export function App() {
                       </span>
                     </span>
                   </span>
+                  {agents.length > 0 && (
+                    <AgentsMenu agents={agents} current={openAgent?.toolUseId} onOpen={showAgent}>
+                      <button type="button" className="btn sm ghost agentsBtn" title="Every agent this session has spawned">
+                        Agents <span className="n">{agents.length}</span>
+                        {agents.some((a) => a.state === 'running') && <span className="dot live" aria-hidden="true" />}
+                      </button>
+                    </AgentsMenu>
+                  )}
                   <SessionCost sessionId={current.id} status={current.status} />
                   <span className={`state ${current.status}`}>
                     <span
@@ -1124,15 +1178,27 @@ export function App() {
                     onNavigate={navigate}
                   />
                 )}
+                {openAgent && (
+                  <AgentHeader run={openAgent} agents={agents} onOpen={showAgent} onStop={stopAgent} onBackground={backgroundAgent} />
+                )}
                 <Transcript
-                  key={current.id}
+                  key={openAgent ? `${current.id}:${openAgent.toolUseId}` : current.id}
                   sessionId={current.id}
                   events={events}
                   turns={sessionChanges?.turns}
                   onRespond={respond}
                   onNavigate={navigate}
+                  agents={agents}
+                  scope={openAgent?.toolUseId ?? null}
+                  onOpenAgent={showAgent}
+                  lead={openAgent && <AgentBrief run={openAgent} from={spawnerOf(agents, openAgent)} />}
+                  tail={openAgent && <AgentOutcome run={openAgent} to={spawnerOf(agents, openAgent)} />}
                 />
-                {teamRun && current.teamRun?.role === 'lead' && <TeamDock run={teamRun} onDetails={() => setTeamSide((o) => !o)} onNavigate={navigate} />}
+                {!openAgent && <AgentDock agents={agents} onOpen={showAgent} onStop={stopAgent} />}
+                {teamRun && current.teamRun?.role === 'lead' && !openAgent && <TeamDock run={teamRun} onDetails={() => setTeamSide((o) => !o)} onNavigate={navigate} />}
+                {openAgent ? (
+                  <AgentComposer key={`agent-composer-${openAgent.toolUseId}`} run={openAgent} onSend={(text) => messageAgent(openAgent, text)} />
+                ) : (
                 <Composer
                   key={`composer-${current.id}`}
                   sessionId={current.id}
@@ -1151,6 +1217,7 @@ export function App() {
                   onFastModeChange={setFastMode}
                   onPermissionModeChange={setPermissionMode}
                 />
+                )}
               </div>
               {teamRun && teamSide && (
                 <TeamSide run={teamRun} lead={current.teamRun?.role === 'lead'} models={models} onClose={() => setTeamSide(false)} onNavigate={navigate} />

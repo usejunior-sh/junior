@@ -374,15 +374,18 @@ export class Store {
   }
 
   #applyEvent(sessionId: string, ev: SessionEvent) {
+    // The live line is the main agent's: a subagent's tokens (and its committed
+    // messages) carry parent_tool_use_id and stay out of it.
+    const sub = ev.kind === 'sdk' && !!ev.message.parent_tool_use_id
     if (ev.kind === 'sdk' && ev.message.type === 'stream_event') {
       const e = ev.message.event
-      if (e?.type === 'content_block_delta' && e.delta?.type === 'text_delta' && e.delta.text) {
+      if (!sub && e?.type === 'content_block_delta' && e.delta?.type === 'text_delta' && e.delta.text) {
         this.#pushDelta(sessionId, e.delta.text)
       }
       return
     }
     // The committed assistant message supersedes whatever was streaming.
-    if (ev.kind === 'sdk' && ev.message.type === 'assistant') {
+    if (ev.kind === 'sdk' && ev.message.type === 'assistant' && !sub) {
       this.#clearLive(sessionId)
       this.#notifyLive()
     }

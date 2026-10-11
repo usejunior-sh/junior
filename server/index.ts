@@ -48,6 +48,7 @@ import {
 import { z } from 'zod'
 import { currentBranch, filePatch, repoRoot, snapshotTree, treeDiff, treePatch, treeStat, worktreeChanges, worktreePatch, type TreeChange } from './git.js'
 import type {
+  AgentRelay,
   ClientMessage,
   RemoteStatus,
   Connector,
@@ -171,6 +172,7 @@ import type {
   TeamRunView,
   AgentCan,
 } from '../shared/protocol.js'
+import { frameAgentRelay } from '../core/agents/relay.js'
 import { TeamLibrary, agentFrom, builtinToolsFor, detectChecks, disallowedFor, frameTeamMessage, isCheckCommand, isLibraryName } from './teams.js'
 import { LEAD, parseRecipe, recipeAgents, serializeRecipe, taskLoop, type RecipeStep, type TeamRecipe } from '../core/teams/recipe.js'
 import { planTitle, renderPlan } from '../core/teams/plan.js'
@@ -689,6 +691,12 @@ class LiveSession {
         },
         settingSources: ['user', 'project', 'local'],
         includePartialMessages: true,
+        // Subagents: their prose and thinking too, not only their tool calls, so
+        // an agent's own view reads like a chat. Not agentProgressSummaries: its
+        // ~30s forks came to ~15% of a 4-agent run, and they are never written
+        // to a transcript, so the cost pill can't see them. The dock shows the
+        // CLI's own line for the agent's last tool call instead.
+        forwardSubagentText: true,
         // The triage inbox as in-process tools, so a chat can list/create/edit
         // work items directly — same tool surface as the stdio shim external
         // Claude Code sessions get (server/mcp.ts). Scoped to this workspace.
@@ -738,6 +746,9 @@ class LiveSession {
           this.requestPermission(toolName, toolInput, opts),
       },
     })
+    // A session with history getting a fresh subprocess: mark the boundary, since
+    // nothing in the SDK's stream says "new process" (init comes every turn).
+    if (lastSeq > 0) this.emit({ kind: 'subprocess' }, true)
     void this.pump()
   }
 
@@ -937,7 +948,7 @@ class LiveSession {
   private requestPermission(
     toolName: string,
     toolInput: Record<string, unknown>,
-    opts: { title?: string; description?: string; suggestions?: PermissionUpdate[] },
+    opts: { title?: string; description?: string; suggestions?: PermissionUpdate[]; agentID?: string },
   ): Promise<PermissionResult> {
     const effect = classifyEffect(toolName)
     // Reading our own inbox is harmless in any mode — never prompt for it. Every
@@ -995,6 +1006,8 @@ class LiveSession {
           description: opts.description,
           canAlwaysAllow: suggestions.length > 0,
           effect,
+          // A subagent's call says whose it is, so the card (and its agent's dock row) can.
+          ...(opts.agentID ? { agentId: opts.agentID } : {}),
         },
         true,
       )
@@ -1081,6 +1094,42 @@ class LiveSession {
     }
   }
 
+  /** Stop one subagent; its task_notification ('stopped') settles it everywhere. */
+  async stopAgent(agentId: string) {
+    try {
+      await this.q.stopTask(agentId)
+    } catch (err) {
+      this.emit({ kind: 'error', message: `stopping the agent failed: ${String(err)}` }, true)
+    }
+  }
+
+  /** Hand a foreground subagent to the background: the main agent stops waiting on it. */
+  async backgroundAgent(toolUseId: string) {
+    try {
+      await this.q.backgroundTasks(toolUseId)
+    } catch (err) {
+      this.emit({ kind: 'error', message: `backgrounding the agent failed: ${String(err)}` }, true)
+    }
+  }
+
+  /**
+   * A message for one of this session's subagents. The SDK has no way to put it
+   * straight into a subagent, so the main agent gets a short framed turn asking
+   * it to pass the text on with SendMessage — which also resumes an agent that
+   * has finished. The transcript keeps the raw text and who it was for.
+   */
+  async sendAgentMessage(relay: AgentRelay, text: string) {
+    await this.beginTurn()
+    this.emit({ kind: 'local_user', text, relay }, true)
+    this.setStatus('running')
+    void this.rt.store.sessions.touch(this.row.id)
+    this.input.push({
+      type: 'user',
+      message: { role: 'user', content: [{ type: 'text', text: frameAgentRelay(relay, text) }] },
+      parent_tool_use_id: null,
+    } as SDKUserMessage)
+  }
+
   private setStatus(status: SessionStatus) {
     if (this.status === status) return
     this.status = status
@@ -1130,6 +1179,7 @@ function summarize(rt: WorkspaceRuntime, row: StoredSession): SessionSummary {
     ...(rt.sessionItem.has(row.id) ? { itemId: rt.sessionItem.get(row.id) } : {}),
     ...(teamRunLink(rt, row.id) ? { teamRun: teamRunLink(rt, row.id) } : {}),
     ...(l?.waiting ? { waiting: true } : {}),
+    live: !!l,
   }
 }
 
@@ -7523,6 +7573,23 @@ function parseClientMessage(raw: unknown): ClientMessage | null {
         : null
     case 'interrupt':
       return typeof m.sessionId === 'string' ? { type: 'interrupt', sessionId: m.sessionId } : null
+    case 'agent_stop':
+      return typeof m.sessionId === 'string' && typeof m.agentId === 'string' && m.agentId
+        ? { type: 'agent_stop', sessionId: m.sessionId, agentId: m.agentId }
+        : null
+    case 'agent_background':
+      return typeof m.sessionId === 'string' && typeof m.toolUseId === 'string' && m.toolUseId
+        ? { type: 'agent_background', sessionId: m.sessionId, toolUseId: m.toolUseId }
+        : null
+    case 'agent_message': {
+      const r = (typeof m.relay === 'object' && m.relay !== null ? m.relay : {}) as Record<string, unknown>
+      // The agent id is spliced into the prompt main reads: an id, nothing else.
+      const agentId = typeof r.agentId === 'string' && /^[\w-]{1,64}$/.test(r.agentId) ? r.agentId : ''
+      const relay = { toolUseId: str(r.toolUseId), agentId, label: str(r.label).replace(/\s+/g, ' ').replace(/"/g, "'").slice(0, 120) }
+      return typeof m.sessionId === 'string' && relay.toolUseId && relay.agentId && str(m.text).trim()
+        ? { type: 'agent_message', sessionId: m.sessionId, relay, text: str(m.text).trim() }
+        : null
+    }
     case 'terminal_create':
       return {
         type: 'terminal_create',
@@ -7702,6 +7769,21 @@ wss.on('connection', (ws, req) => {
         }
         case 'interrupt': {
           void rt.live.get(msg.sessionId)?.interrupt()
+          break
+        }
+        // A subagent only runs inside a live subprocess: with none, there is nothing to stop or background.
+        case 'agent_stop': {
+          void rt.live.get(msg.sessionId)?.stopAgent(msg.agentId)
+          break
+        }
+        case 'agent_background': {
+          void rt.live.get(msg.sessionId)?.backgroundAgent(msg.toolUseId)
+          break
+        }
+        case 'agent_message': {
+          // A finished agent can still be written to: main resumes it, so revive main if needed.
+          const session = await getOrRevive(rt, msg.sessionId)
+          void session?.sendAgentMessage(msg.relay, msg.text)
           break
         }
         case 'terminal_create': {

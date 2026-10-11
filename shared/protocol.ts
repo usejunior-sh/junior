@@ -261,6 +261,8 @@ export type SessionSummary = {
   itemId?: string
   /** A permission prompt is waiting on the user. Absent = none. */
   waiting?: boolean
+  /** A Claude subprocess is running for it now. False = anything it had running (a subagent) has ended. */
+  live?: boolean
   /** Last activity, epoch ms. The sidebar sorts and time-buckets on this. */
   updatedAt: number
   /** the team run this session leads or works on */
@@ -954,6 +956,32 @@ export type SdkMessage = {
   commands?: SlashCommandInfo[]
   /** `local_command_output` only: what a command like /usage printed. */
   content?: string
+  /**
+   * Set on assistant/user messages produced inside a subagent: the id of the
+   * Agent/Task tool_use that started it. Null (or absent) = the main agent.
+   */
+  parent_tool_use_id?: string | null
+  /** `task_*` system messages (a subagent, a background shell, …) */
+  task_id?: string
+  tool_use_id?: string
+  /** `task_started`: 'local_agent' is a subagent; 'local_bash' a background shell */
+  task_type?: string
+  description?: string
+  subagent_type?: string
+  prompt?: string
+  is_backgrounded?: boolean
+  spawn_depth?: number
+  /** `task_progress` / `task_notification`: what the task has used so far */
+  usage?: { total_tokens?: number; tool_uses?: number; duration_ms?: number }
+  last_tool_name?: string
+  /** `task_progress`: a one-line status; `task_notification`: how it ended */
+  summary?: string
+  /** `task_notification` */
+  status?: string
+  /** `task_notification`: the report a subagent handed back with SubagentHandback */
+  handback_report?: { text?: string }
+  /** `task_updated`: the fields that changed */
+  patch?: { status?: string; is_backgrounded?: boolean; error?: string }
 }
 
 // ---------------------------------------------------------------------------
@@ -1254,10 +1282,19 @@ export type SessionEvent =
       mentions?: ResolvedMention[]
       /** who sent it when it wasn't the user — a teammate agent's label, or 'triage'; absent = the user */
       from?: string
+      /** A message the user wrote to a subagent, relayed to it through the main agent. */
+      relay?: AgentRelay
     }
   | { kind: 'error'; message: string }
   /** a line triage writes into the transcript itself — a team paused, a stage began */
   | { kind: 'notice'; text: string }
+  /**
+   * A new Claude subprocess took over a session that already had history (a
+   * revival after the last one ended). Whatever the old one had running —
+   * subagents, background shells — ended with it. Written by triage, because
+   * the SDK's own `init` arrives at the start of every turn, not once per process.
+   */
+  | { kind: 'subprocess' }
   | {
       kind: 'permission_request'
       id: string
@@ -1272,6 +1309,8 @@ export type SessionEvent =
       canAlwaysAllow?: boolean
       /** The tool's blast radius, so the card can say why it is asking. */
       effect?: ToolEffect
+      /** Set when a subagent made the call: its agent id (a `task_*` message's task_id). */
+      agentId?: string
     }
   // 'expired' = the request outlived its subprocess (interrupt, crash, server
   // restart) and can no longer be answered.
@@ -1282,6 +1321,9 @@ export type SessionEvent =
       /** What the user picked, when the prompt was an AskUserQuestion. */
       answers?: QuestionAnswers
     }
+
+/** Who a relayed message is for: the subagent's Agent tool_use id, its agent id, and its label. */
+export type AgentRelay = { toolUseId: string; agentId: string; label: string }
 
 /**
  * The answers to an `AskUserQuestion` call: question text → the chosen option
@@ -1387,6 +1429,12 @@ export type ClientMessage =
       answers?: QuestionAnswers
     }
   | { type: 'interrupt'; sessionId: string }
+  /** Stop one running subagent (`stopTask`). */
+  | { type: 'agent_stop'; sessionId: string; agentId: string }
+  /** Let the main agent carry on while a foreground subagent keeps running. */
+  | { type: 'agent_background'; sessionId: string; toolUseId: string }
+  /** A message for a subagent — relayed by the main agent with SendMessage, since the SDK can't address one directly. */
+  | { type: 'agent_message'; sessionId: string; relay: AgentRelay; text: string }
   /** Open a shell in `cwd` (default: the project's folder); `command` is typed in first, if given. */
   | { type: 'terminal_create'; cwd?: string; projectId?: string; title?: string; command?: string }
   /** Keystrokes / pasted text — raw, exactly as the terminal emulator produced them. */

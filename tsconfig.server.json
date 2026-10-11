@@ -16,6 +16,8 @@
     "shared",
     "core",
     "test",
+    "web/src/agents.ts",
+    "web/src/transcript.ts",
     "vite.config.ts"
   ]
 }

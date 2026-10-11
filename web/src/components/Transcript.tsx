@@ -14,7 +14,9 @@ import { openSettings } from '../settings.js'
 import { store } from '../store.js'
 import { artifactStore, useArtifacts } from '../artifactStore.js'
 import { mentionHash, useRefIndex, type RefIndex } from '../refs.js'
+import { agentLabel, type AgentRun } from '../agents.js'
 import { buildTranscript, type TranscriptItem } from '../transcript.js'
+import { AgentCard } from './Agents.js'
 import { AskCard } from './AskCard.js'
 import { InitCard } from './InitCard.js'
 import { MentionChip, MentionIcon } from './MentionPicker.js'
@@ -31,7 +33,18 @@ type Props = {
   onRespond: (requestId: string, behavior: PermissionBehavior, answers?: QuestionAnswers) => void
   /** Open an entity a reference chip points at (an app route hash). */
   onNavigate: (hash: string) => void
+  /** The session's subagents (buildAgents); with them, each Agent call is drawn as its card. */
+  agents?: readonly AgentRun[]
+  /** Show only what this subagent did (its Agent tool_use id). Unset = the main agent. */
+  scope?: string | null
+  /** Open a subagent's view (null = back to main). */
+  onOpenAgent?: (toolUseId: string | null) => void
+  /** Drawn before the first item and after the last — an agent's brief and how it ended. */
+  lead?: ReactNode
+  tail?: ReactNode
 }
+
+const NO_AGENTS: readonly AgentRun[] = []
 
 /**
  * Who else was touching the repo during this turn, in the width a one-line
@@ -47,8 +60,22 @@ function overlapLabel(titles: readonly string[]): string {
   return t.length > MAX_OVERLAP_CHARS ? `${t.slice(0, MAX_OVERLAP_CHARS - 1).trimEnd()}…` : t
 }
 
-export function Transcript({ sessionId, events, turns, onRespond, onNavigate }: Props) {
-  const items = useMemo(() => buildTranscript(events, store.eventTime), [events])
+export function Transcript({
+  sessionId,
+  events,
+  turns,
+  onRespond,
+  onNavigate,
+  agents = NO_AGENTS,
+  scope = null,
+  onOpenAgent,
+  lead,
+  tail,
+}: Props) {
+  const items = useMemo(() => buildTranscript(events, store.eventTime, { scope, agents }), [events, scope, agents])
+  const byCall = useMemo(() => new Map(agents.map((a) => [a.toolUseId, a])), [agents])
+  const byAgentId = useMemo(() => new Map(agents.filter((a) => a.agentId).map((a) => [a.agentId!, a])), [agents])
+  const openAgent = useCallback((id: string | null) => onOpenAgent?.(id), [onOpenAgent])
   const { ref, scrollToBottom } = useStickToBottom()
   const refs = useRefIndex()
   // Reference chips resolve against the artifacts index, which isn't otherwise
@@ -65,17 +92,30 @@ export function Transcript({ sessionId, events, turns, onRespond, onNavigate }: 
   return (
     <div id="transcript" ref={ref}>
       <div className="inner">
+        {lead}
         {items.map((item) => (
           <Item
             key={item.key}
             item={item}
             turn={item.kind === 'meta' && item.turn ? turns?.find((t) => t.seq === item.turn) : undefined}
+            agent={
+              item.kind === 'agent'
+                ? byCall.get(item.toolUseId)
+                : item.kind === 'permission' && item.agentId
+                  ? byAgentId.get(item.agentId)
+                  : item.kind === 'relay'
+                    ? byCall.get(item.relay.toolUseId)
+                    : undefined
+            }
+            onOpenAgent={openAgent}
             onRespond={onRespond}
             refs={refs}
             onRef={onNavigate}
           />
         ))}
-        <LiveLine sessionId={sessionId} onGrow={scrollToBottom} />
+        {/* The streaming line is the main agent's; an agent's view shows its messages as they commit. */}
+        {!scope && <LiveLine sessionId={sessionId} onGrow={scrollToBottom} />}
+        {tail}
       </div>
     </div>
   )
@@ -156,18 +196,42 @@ function mentionOpener(m: ResolvedMention, onRef: (hash: string) => void): (() =
 const Item = memo(function Item({
   item,
   turn,
+  agent,
+  onOpenAgent,
   onRespond,
   refs,
   onRef,
 }: {
   item: TranscriptItem
   turn?: SessionTurnSummary
+  /** The subagent this item is about: an Agent call's run, a prompt's asker, a relay's recipient. */
+  agent?: AgentRun
+  onOpenAgent: (toolUseId: string | null) => void
   onRespond: Props['onRespond']
   refs: RefIndex
   onRef: (hash: string) => void
 }) {
   switch (item.kind) {
+    case 'agent':
+      return <AgentCard run={agent} onOpen={onOpenAgent} />
+    case 'relay':
+      return (
+        <button type="button" className="relayRow" onClick={() => onOpenAgent(item.relay.toolUseId)} title="Open this agent">
+          <span className="rrWho">you → {agent ? agentLabel(agent) : item.relay.label}</span>
+          <span className="rrText">{item.text}</span>
+          <span className="rrState">{relayNote(item.delivery)}</span>
+        </button>
+      )
     case 'user':
+      if (item.relayed)
+        return (
+          <div className="msg user">
+            {item.text}
+            <div className="msgVia" title={item.relayed.delivery === 'reworded' ? `Main sent: ${item.relayed.sent}` : undefined}>
+              <span className="mgrGlyph" aria-hidden="true" /> via main · {relayNote(item.relayed.delivery)}
+            </div>
+          </div>
+        )
       // A teammate agent's message: its own card, so it never reads as something the user typed.
       if (item.from)
         return (
@@ -256,14 +320,29 @@ const Item = memo(function Item({
       // AskUserQuestion arrives as a permission prompt, but it is a question
       // for the reader — render it as choices, not as JSON to approve.
       const questions = item.toolName === 'AskUserQuestion' ? parseQuestions(item.input) : null
-      return questions ? (
+      const card = questions ? (
         <AskCard item={item} questions={questions} onRespond={onRespond} />
       ) : (
         <PermissionCard item={item} onRespond={onRespond} />
       )
+      // A subagent's prompt says who is asking — answering it here or in its view is the same answer.
+      if (!item.agentId) return card
+      return (
+        <div className="agentAsks">
+          <button type="button" className="aaFrom" onClick={() => agent && onOpenAgent(agent.toolUseId)} disabled={!agent}>
+            {agent ? `${agent.type} · ${agentLabel(agent)}` : 'a subagent'} asks
+          </button>
+          {card}
+        </div>
+      )
     }
   }
 })
+
+/** Where a relayed message stands, as far as the transcript can tell. */
+function relayNote(d: 'verbatim' | 'reworded' | undefined): string {
+  return d === 'verbatim' ? 'delivered' : d === 'reworded' ? 'main reworded it' : 'sent to main'
+}
 
 /**
  * The partially-streamed assistant message. Isolated in its own component so a

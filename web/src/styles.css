@@ -1014,6 +1014,132 @@ kbd { font-family: var(--mono); font-size: 0.8462rem; color: var(--ash); border:
 .tdTick { color: var(--green); font-size: 0.7692rem; }
 .tdLoop { font-family: var(--mono); font-size: 0.7308rem; color: var(--ash); }
 .tdCap { font-size: 0.7692rem; color: var(--ash); white-space: nowrap; }
+
+/* Subagents in a chat (Agents.tsx, .docs/subagents-ux.html): a card per Agent
+   call in the transcript, a dock above the composer while any run, a menu of
+   all of them, and an agent's own view (header, brief, hand-back, composer). */
+.agentCard {
+  display: flex; flex-direction: column; gap: 4px; width: 100%; padding: 9px 12px 10px; text-align: left;
+  background: var(--card); border: 1px solid var(--hair-strong); border-radius: var(--r);
+  color: inherit; font: inherit; cursor: pointer; transition: border-color 0.12s;
+}
+.agentCard:hover { border-color: var(--hair-bright); }
+.agentCard.running { border-color: var(--edge-blue); }
+.agentCard.failed { border-color: var(--edge-red); }
+.agentCard.ask { border-color: var(--edge-yellow); }
+.agentCard:focus-visible { outline: 1px solid var(--ink); outline-offset: 1px; }
+.acRow { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.acType { flex: none; color: var(--ink); font-weight: 500; font-size: 0.9615rem; }
+.acDesc { min-width: 0; color: var(--charcoal); font-size: 0.9615rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.acEnd { margin-left: auto; display: inline-flex; align-items: center; gap: 10px; flex: none; padding-left: 8px; }
+.acNums { font-family: var(--mono); font-size: 0.8077rem; color: var(--ash); font-variant-numeric: tabular-nums; }
+.acLine { padding-left: 16px; font-size: 0.8846rem; color: var(--ash); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.agentState { display: inline-flex; align-items: center; gap: 5px; font-size: 0.8462rem; color: var(--charcoal); white-space: nowrap; }
+.agentState.ask { color: var(--yellow); }
+.agentState.done { color: var(--green); }
+.agentState.failed { color: var(--red); }
+.agentState.stopped, .agentState.interrupted { color: var(--ash); }
+
+.agentDock {
+  width: calc(100% - 80px); max-width: var(--measure); margin: 8px auto 0; flex: none;
+  border: 1px solid var(--hair-strong); border-radius: var(--r-lg); background: var(--card);
+  padding: 4px; display: flex; flex-direction: column;
+}
+.agentDock.ask { border-color: var(--edge-yellow); }
+.adHead { display: flex; align-items: center; gap: 8px; padding: 2px 4px 2px 8px; font-family: var(--mono); font-size: 0.8077rem; color: var(--ash); }
+.adHead .sp { flex: 1; }
+.adRow { display: flex; align-items: center; gap: 2px; border-radius: var(--r-sm); }
+.adRow:hover { background: var(--wash-2); }
+.adOpen {
+  flex: 1; min-width: 0; display: grid; grid-template-columns: 8px auto minmax(0, 1fr) auto; align-items: center; gap: 8px;
+  padding: 6px 8px; background: none; border: 0; border-radius: var(--r-sm); color: inherit; font: inherit; text-align: left; cursor: pointer;
+}
+.adName { color: var(--ink); font-size: 0.9231rem; white-space: nowrap; max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
+.adNow { color: var(--ash); font-size: 0.8846rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.adRow.ask .adNow { color: var(--yellow); }
+.adTime { font-family: var(--mono); font-size: 0.8077rem; color: var(--ash); font-variant-numeric: tabular-nums; }
+.adStop {
+  flex: none; width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center;
+  background: none; border: 0; border-radius: var(--r-sm); color: var(--ash); cursor: pointer;
+}
+.adStop:hover:not(:disabled) { color: var(--ink); background: var(--wash-3); }
+.adStop:disabled { opacity: 0.4; cursor: default; }
+.adMore { align-self: flex-start; margin: 2px 4px 2px; padding: 3px 6px; background: none; border: 0; border-radius: var(--r-sm); color: var(--ash); font-size: 0.8462rem; cursor: pointer; }
+.adMore:hover { color: var(--ink); background: var(--wash-2); }
+
+.uiMenu.agentsMenu { width: 360px; max-height: min(420px, var(--radix-dropdown-menu-content-available-height)); overflow-y: auto; }
+.agentsMenu .amHead { display: flex; align-items: center; padding: 6px 9px 4px; font-family: var(--mono); font-size: 0.8077rem; color: var(--stone); }
+.agentsMenu .amHead span { margin-left: auto; }
+.agentsMenu .amGroup { padding: 8px 9px 3px; font-family: var(--mono); font-size: 0.7692rem; color: var(--stone); text-transform: lowercase; }
+.agentsMenuItem.on { background: var(--card); box-shadow: inset 0 0 0 1px var(--hair-strong); color: var(--ink); }
+.agentsMenuItem .val { display: inline-flex; align-items: center; gap: 6px; flex: none; font-family: var(--mono); font-size: 0.8077rem; font-variant-numeric: tabular-nums; }
+.amGlyph.done { color: var(--green); }
+.amGlyph.failed { color: var(--red); }
+.amGlyph.stopped, .amGlyph.interrupted { color: var(--ash); }
+
+#chatHeader .agentsBtn { margin-left: auto; flex: none; gap: 6px; }
+#chatHeader .agentsBtn .n { font-family: var(--mono); font-size: 0.8077rem; color: var(--ash); }
+#chatHeader .agentsBtn + .costPill, #chatHeader .agentsBtn + .costSkel { margin-left: 0; }
+
+.agentHead { flex: none; border-bottom: 1px solid var(--hair); padding: 8px 40px 0; }
+.ahRow { max-width: var(--measure); margin: 0 auto; display: flex; align-items: center; gap: 10px; min-height: 32px; }
+.ahRow .sp { flex: 1; }
+.ahCrumbs { display: flex; align-items: center; gap: 4px; min-width: 0; font-size: 0.9615rem; }
+.ahCrumb { flex: none; max-width: 200px; padding: 2px 4px; background: none; border: 0; border-radius: var(--r-sm); color: var(--ash); font: inherit; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+.ahCrumb:hover { color: var(--ink); background: var(--wash-2); }
+.ahCrumb:first-child { margin-left: -4px; }
+.ahSep { flex: none; color: var(--stone); }
+.ahCurrent {
+  display: inline-flex; align-items: center; gap: 7px; min-width: 0; padding: 3px 7px; margin-left: -2px;
+  background: none; border: 1px solid transparent; border-radius: var(--r-sm); color: var(--ink); font: inherit; cursor: pointer;
+}
+.ahCurrent:hover, .ahCurrent[data-state="open"] { border-color: var(--hair-strong); background: var(--wash-2); }
+.ahCurrent svg { flex: none; color: var(--ash); }
+.ahName { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ahMeta {
+  max-width: var(--measure); margin: 0 auto; display: flex; flex-wrap: wrap; gap: 4px 14px; padding: 4px 0 8px;
+  font-family: var(--mono); font-size: 0.8077rem; color: var(--ash);
+}
+.ahMeta .t { color: var(--charcoal); }
+
+.agentBrief { border: 1px solid var(--hair-strong); border-radius: var(--r); background: var(--card); }
+.abTrigger {
+  display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 12px; background: none; border: 0;
+  color: var(--charcoal); font: inherit; font-size: 0.9231rem; text-align: left; cursor: pointer;
+}
+.abTrigger .chev { color: var(--stone); transition: transform 0.15s; }
+.abTrigger[data-state="open"] .chev { transform: rotate(90deg); }
+.abBody { padding: 0 14px 10px 32px; font-size: 0.9615rem; color: var(--body); }
+.agentHandback {
+  border: 1px solid color-mix(in srgb, var(--green) 25%, transparent); background: var(--tint-green);
+  border-radius: var(--r); padding: 10px 14px; font-size: 0.9615rem; color: var(--body);
+}
+.agentHandback.partial { border-color: var(--hair-strong); background: var(--card); }
+.ahbHead { margin-bottom: 4px; font-family: var(--mono); font-size: 0.8077rem; color: var(--green); }
+.agentHandback.partial .ahbHead { color: var(--ash); }
+
+.relayRow {
+  display: flex; align-items: center; gap: 10px; min-width: 0; padding: 2px 0; background: none; border: 0;
+  color: var(--ash); font: inherit; font-size: 0.8846rem; text-align: left; cursor: pointer;
+}
+.relayRow:hover .rrText { color: var(--ink); }
+.rrWho { flex: none; font-family: var(--mono); font-size: 0.8077rem; color: var(--charcoal); }
+.rrText { min-width: 0; color: var(--body); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rrState { flex: none; font-family: var(--mono); font-size: 0.7692rem; color: var(--stone); }
+.msgVia { display: flex; align-items: center; gap: 7px; margin-top: 6px; font-family: var(--mono); font-size: 0.7692rem; color: var(--ash); white-space: normal; }
+.agentAsks { display: flex; flex-direction: column; gap: 6px; }
+.aaFrom { align-self: flex-start; padding: 0; background: none; border: 0; font-family: var(--mono); font-size: 0.8077rem; color: var(--yellow); cursor: pointer; }
+.aaFrom:hover:not(:disabled) { text-decoration: underline; }
+.aaFrom:disabled { cursor: default; }
+
+.agentComposer .acBox {
+  width: 100%; resize: none; background: transparent; border: 0; padding: 0; outline: none;
+  color: var(--ink); font: inherit; font-size: 1.1538rem; line-height: 1.5; min-height: 46px; max-height: 240px;
+}
+.agentComposer .acBox::placeholder { color: var(--stone); }
+.agentComposer .acFoot { display: flex; align-items: center; gap: 8px; font-size: 0.8462rem; color: var(--ash); }
+.agentComposer .acFoot b { color: var(--charcoal); font-weight: 500; }
+.agentComposer .acFoot .sp { flex: 1; }
 .tdErr { font-size: 0.8462rem; color: var(--red); }
 .tdEach { font-family: var(--mono); font-size: 0.7308rem; color: var(--ash); border-left: 1px solid var(--hair-strong); padding-left: 6px; margin-left: 2px; white-space: nowrap; }
 
@@ -3487,6 +3613,16 @@ html.kbOpen .shell.mobile .panel { bottom: 0; }
   .teamSide { position: fixed; inset: 0; z-index: 60; width: auto; max-width: none; border-left: 0; background: var(--canvas); padding-bottom: env(safe-area-inset-bottom); }
   .teamDock { width: calc(100% - 20px); }
   .tdLine { display: none; }
+  /* Subagents on a phone: the dock and the agent header go edge to edge; the card drops its numbers to its second line's width. */
+  .agentDock { width: calc(100% - 16px); }
+  .adName { max-width: 140px; }
+  .adNow { display: none; }
+  .agentHead { padding: 6px 12px 0; }
+  .ahCrumb { max-width: 90px; }
+  .ahRow { flex-wrap: wrap; row-gap: 2px; }
+  .ahCrumbs { flex: 1 1 100%; }
+  .acNums, .acEnd .pill { display: none; }
+  #chatHeader .agentsBtn { margin-left: 0; padding: 0 6px; }
 }
 @media (max-width: 767px), (pointer: coarse) and (max-height: 500px) {
   /* Tool calls: the verb takes only its own width, so what was run gets the rest of the line. */

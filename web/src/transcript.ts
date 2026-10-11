@@ -5,13 +5,20 @@
  * once per committed event, not once per token. Tool results arrive in a later
  * `user` message than the `tool_use` that produced them, so they are stitched
  * back onto their card here rather than in a component.
+ *
+ * Subagents share the log: whatever one does carries the id of the Agent call
+ * that started it (`parent_tool_use_id`). The main transcript leaves those out
+ * and draws each Agent call as one card; an agent's own view is this same fold
+ * with `scope` set to that call, so it only keeps what the agent did.
  */
+import { AGENT_TOOLS, HANDBACK_TOOL, type AgentRun } from './agents.js'
 import {
   isTextBlock,
   isThinkingBlock,
   isToolResultBlock,
   isToolUseBlock,
   type ImageAttachment,
+  type AgentRelay,
   type ResolvedMention,
   type McpServerInfo,
   type PermissionBehavior,
@@ -36,8 +43,24 @@ export type ToolItem = {
 
 export type ThinkingItem = { key: string; kind: 'thinking'; text: string }
 
+/** Did main pass a relayed message on, and as written? Unknown until its SendMessage call shows up. */
+export type RelayDelivery = 'verbatim' | 'reworded'
+
 export type TranscriptItem =
-  | { key: string; kind: 'user'; text: string; images?: ImageAttachment[]; mentions?: ResolvedMention[]; from?: string }
+  | {
+      key: string
+      kind: 'user'
+      text: string
+      images?: ImageAttachment[]
+      mentions?: ResolvedMention[]
+      from?: string
+      /** In an agent's view: this was written to the agent and relayed through main. */
+      relayed?: { delivery?: RelayDelivery; sent?: string }
+    }
+  /** In the main transcript: a message the user wrote to a subagent — one quiet line, not a bubble. */
+  | { key: string; kind: 'relay'; text: string; relay: AgentRelay; delivery?: RelayDelivery }
+  /** An Agent/Task call: the subagent it started, drawn as one card. */
+  | { key: string; kind: 'agent'; toolUseId: string }
   | { key: string; kind: 'assistant'; text: string }
   | ThinkingItem
   | { key: string; kind: 'error'; text: string }
@@ -60,16 +83,28 @@ export type TranscriptItem =
       resolved?: PermissionBehavior | 'expired'
       /** AskUserQuestion only: what the user picked, for the replayed card. */
       answers?: QuestionAnswers
+      /** A subagent's call: that agent's id. */
+      agentId?: string
     }
+
+export type TranscriptScope = {
+  /** Fold only what this subagent did (its Agent tool_use id). Unset = the main agent. */
+  scope?: string | null
+  /** The session's agents (buildAgents) — which calls started one, and whose prompt is whose. */
+  agents?: readonly AgentRun[]
+}
 
 export function buildTranscript(
   events: readonly SessionEvent[],
   timeOf: (ev: SessionEvent) => number | undefined = () => undefined,
+  { scope = null, agents = [] }: TranscriptScope = {},
 ): TranscriptItem[] {
   const items: TranscriptItem[] = []
-  // A second init in one log means the subprocess was restarted (`resume`) —
-  // render those as a one-line marker instead of repeating the full card.
+  // The SDK sends init at the start of every turn, so only the first one is
+  // drawn. A revival is marked by triage's own `subprocess` event instead, and
+  // the init that follows it names the model the new process runs.
   let initSeen = false
+  let resumed = false
   // Turns are counted the way the server counts them: one per `result`, so a
   // marker can be matched to the snapshot pair that bracketed it.
   let turnSeq = 0
@@ -77,19 +112,44 @@ export function buildTranscript(
   // verdicts are patched onto the item objects created earlier in this pass.
   const toolsById = new Map<string, ToolItem>()
   const permsById = new Map<string, Extract<TranscriptItem, { kind: 'permission' }>>()
+  const agentCalls = new Set(agents.map((a) => a.toolUseId))
+  const scopedAgentId = scope ? agents.find((a) => a.toolUseId === scope)?.agentId : undefined
+  // Relayed messages waiting for main's SendMessage, oldest first — matched by
+  // recipient, whatever view is being built (the call itself is main's).
+  const relays: Array<{ agentId: string; text: string; mark: (d: RelayDelivery, sent: string) => void }> = []
 
   events.forEach((ev, i) => {
     switch (ev.kind) {
-      case 'local_user':
-        items.push({ key: `u${i}`, kind: 'user', text: ev.text, images: ev.images, mentions: ev.mentions, from: ev.from })
+      case 'local_user': {
+        if (ev.relay) {
+          let mark: (d: RelayDelivery, sent: string) => void = () => {}
+          if (!scope) {
+            const item = { key: `u${i}`, kind: 'relay' as const, text: ev.text, relay: ev.relay } as Extract<TranscriptItem, { kind: 'relay' }>
+            items.push(item)
+            mark = (d) => (item.delivery = d)
+          } else if (scope === ev.relay.toolUseId) {
+            const relayed: { delivery?: RelayDelivery; sent?: string } = {}
+            items.push({ key: `u${i}`, kind: 'user', text: ev.text, relayed })
+            mark = (d, sent) => Object.assign(relayed, { delivery: d, sent })
+          }
+          relays.push({ agentId: ev.relay.agentId, text: ev.text, mark })
+          break
+        }
+        if (!scope) items.push({ key: `u${i}`, kind: 'user', text: ev.text, images: ev.images, mentions: ev.mentions, from: ev.from })
         break
+      }
       case 'error':
-        items.push({ key: `e${i}`, kind: 'error', text: ev.message })
+        if (!scope) items.push({ key: `e${i}`, kind: 'error', text: ev.message })
         break
       case 'notice':
-        items.push({ key: `n${i}`, kind: 'meta', text: `— ${ev.text} —` })
+        if (!scope) items.push({ key: `n${i}`, kind: 'meta', text: `— ${ev.text} —` })
+        break
+      case 'subprocess':
+        resumed = true
         break
       case 'permission_request': {
+        // Main shows every prompt (that's where the reader usually is); an agent's view, only its own.
+        if (scope && (!scopedAgentId || ev.agentId !== scopedAgentId)) break
         const item = {
           key: `p${i}`,
           kind: 'permission' as const,
@@ -99,6 +159,7 @@ export function buildTranscript(
           title: ev.title,
           canAlwaysAllow: ev.canAlwaysAllow,
           effect: ev.effect,
+          agentId: ev.agentId,
         }
         permsById.set(ev.id, item)
         items.push(item)
@@ -114,9 +175,24 @@ export function buildTranscript(
       }
       case 'sdk': {
         const m = ev.message
+        // Main's relay call, wherever this view is: did the message go through as written?
+        if (m.type === 'assistant' && relays.length) {
+          for (const b of m.message?.content ?? []) {
+            if (!isToolUseBlock(b) || b.name !== 'SendMessage') continue
+            const at = relays.findIndex((r) => r.agentId === b.input.to)
+            if (at === -1) continue
+            const [r] = relays.splice(at, 1)
+            const sent = typeof b.input.message === 'string' ? b.input.message : ''
+            r.mark(sent.trim() === r.text.trim() ? 'verbatim' : 'reworded', sent)
+          }
+        }
+        // A subagent's messages belong to its own view; main's, to main's.
+        if ((m.type === 'assistant' || m.type === 'user') && (m.parent_tool_use_id ?? null) !== scope) break
+        if (scope && m.type !== 'assistant' && m.type !== 'user') break
         if (m.type === 'system' && m.subtype === 'init') {
           if (initSeen) {
-            items.push({ key: `i${i}`, kind: 'meta', text: `— session resumed · ${m.model ?? '?'} —` })
+            if (resumed) items.push({ key: `i${i}`, kind: 'meta', text: `— session resumed · ${m.model ?? '?'} —` })
+            resumed = false
           } else {
             initSeen = true
             items.push({
@@ -144,6 +220,10 @@ export function buildTranscript(
               items.push({ key: `a${i}.${j}`, kind: 'assistant', text: b.text })
             } else if (isThinkingBlock(b) && b.thinking) {
               items.push({ key: `t${i}.${j}`, kind: 'thinking', text: truncate(b.thinking, 400) })
+            } else if (isToolUseBlock(b) && (agentCalls.has(b.id) || AGENT_TOOLS.has(b.name))) {
+              items.push({ key: `c${i}.${j}`, kind: 'agent', toolUseId: b.id })
+            } else if (isToolUseBlock(b) && b.name === HANDBACK_TOOL) {
+              // The agent's report — its view shows it as the hand-back card, not as a step.
             } else if (isToolUseBlock(b)) {
               const item = {
                 key: `c${i}.${j}`,
@@ -291,7 +371,7 @@ export function toolsDuration(tools: readonly ToolItem[]): string {
   return formatDuration(Math.max(...(ends as number[])) - Math.min(...(starts as number[])))
 }
 
-function formatDuration(ms: number): string {
+export function formatDuration(ms: number): string {
   const s = Math.max(0, ms) / 1000
   if (s < 10) return `${s.toFixed(1)}s`
   if (s < 60) return `${Math.round(s)}s`
