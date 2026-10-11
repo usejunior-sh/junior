@@ -35,7 +35,13 @@ export type WorkspaceMeta = {
   description?: string
   /** the coding agent its sessions, runs and probes go through */
   provider: ProviderId
+  /** the primary provider's auth */
   authBackend: WorkspaceAuthBackend
+  /**
+   * Other agents connected here, each with its own auth — chats may run on
+   * them. Absent = only the primary.
+   */
+  connections?: Partial<Record<ProviderId, { authBackend: WorkspaceAuthBackend }>>
   createdAt: number
 }
 
@@ -65,8 +71,16 @@ export function dbFileFor(id: string, defaultId: string): string {
   return workspaceDbFile(id)
 }
 export const workspaceEnvFile = (id: string) => path.join(workspaceDir(id), '.env')
-/** The private config dir of a config-dir workspace — `claude/` for Claude, as it always was. */
-export const workspaceAuthDir = (meta: Pick<WorkspaceMeta, 'id' | 'provider'>) => path.join(workspaceDir(meta.id), meta.provider)
+/** The private config dir of a config-dir provider — `claude/` for Claude, as it always was, `codex/` for Codex. */
+export const workspaceAuthDir = (meta: Pick<WorkspaceMeta, 'id' | 'provider'>, provider: ProviderId = meta.provider) =>
+  path.join(workspaceDir(meta.id), provider)
+
+/** How `provider` signs in here; undefined = not connected. The primary always is. */
+export function providerAuthBackend(meta: WorkspaceMeta, provider: ProviderId): WorkspaceAuthBackend | undefined {
+  return provider === meta.provider ? meta.authBackend : meta.connections?.[provider]?.authBackend
+}
+
+export const isConnected = (meta: WorkspaceMeta, provider: ProviderId): boolean => providerAuthBackend(meta, provider) !== undefined
 
 const AUTH_BACKENDS: WorkspaceAuthBackend[] = ['inherit', 'api-key', 'config-dir']
 
@@ -133,14 +147,27 @@ export function loadRegistry(): WorkspaceRegistry {
  *
  * Only Claude can be a workspace's provider for now: watches, briefs, probes
  * and team workers all run on it, and Codex is picked per chat session
- * instead. A file naming another agent is put back on Claude.
+ * instead. A file naming another agent is put back on Claude. Other agents
+ * are `connections`; a malformed one is dropped.
  */
 export function migrateProviders(reg: WorkspaceRegistry): boolean {
   let changed = false
   for (const ws of reg.workspaces) {
-    if (toProviderId(ws.provider) === DEFAULT_PROVIDER) continue
-    ws.provider = DEFAULT_PROVIDER
-    changed = true
+    if (toProviderId(ws.provider) !== DEFAULT_PROVIDER) {
+      ws.provider = DEFAULT_PROVIDER
+      changed = true
+    }
+    // A connection to an agent this build doesn't know, to the primary, or
+    // with a backend it can't read is dropped rather than half-honoured.
+    if (ws.connections === undefined) continue
+    const kept: NonNullable<WorkspaceMeta['connections']> = {}
+    for (const [id, conn] of Object.entries(ws.connections as Record<string, unknown>)) {
+      const provider = toProviderId(id)
+      const backend = toAuthBackend((conn as { authBackend?: unknown } | null)?.authBackend)
+      if (provider && provider !== ws.provider && backend) kept[provider] = { authBackend: backend }
+      else changed = true
+    }
+    ws.connections = kept
   }
   return changed
 }
@@ -168,11 +195,16 @@ function migrateLegacyDb(defaultId: string): void {
   console.log(`[workspaces] migrated ${LEGACY_DB} → ${target}`)
 }
 
-/** Write the workspace's API key to its own .env, owner-read-only, under its provider's name. */
-export function writeApiKey(meta: Pick<WorkspaceMeta, 'id' | 'provider'>, key: string): void {
+/**
+ * Write a provider's API key to the workspace's own .env, owner-read-only,
+ * under that provider's name. Other providers' keys in the file are kept.
+ */
+export function writeApiKey(meta: Pick<WorkspaceMeta, 'id' | 'provider'>, key: string, provider: ProviderId = meta.provider): void {
   ensureWorkspaceDirs(meta.id)
   const file = workspaceEnvFile(meta.id)
-  writeFileSync(file, `${providerFor(meta.provider).auth.apiKeyVar}=${key}\n`, { mode: 0o600 })
+  const vars = { ...readEnvFile(meta.id), [providerFor(provider).auth.apiKeyVar]: key }
+  const body = Object.entries(vars).map(([k, v]) => `${k}=${v}\n`).join('')
+  writeFileSync(file, body, { mode: 0o600 })
   chmodSync(file, 0o600) // writeFileSync mode is ignored when the file exists
 }
 
@@ -189,20 +221,31 @@ function readEnvFile(id: string): Record<string, string> {
   return out
 }
 
-const storedApiKey = (meta: Pick<WorkspaceMeta, 'id' | 'provider'>): string | undefined =>
-  readEnvFile(meta.id)[providerFor(meta.provider).auth.apiKeyVar]
+const storedApiKey = (meta: Pick<WorkspaceMeta, 'id' | 'provider'>, provider: ProviderId = meta.provider): string | undefined =>
+  readEnvFile(meta.id)[providerFor(provider).auth.apiKeyVar]
 
 /** "key set (…abcd)" material for the UI; the key itself never leaves disk. */
-export function apiKeyHint(meta: Pick<WorkspaceMeta, 'id' | 'provider'>): string | null {
-  const key = storedApiKey(meta)
+export function apiKeyHint(meta: Pick<WorkspaceMeta, 'id' | 'provider'>, provider: ProviderId = meta.provider): string | null {
+  const key = storedApiKey(meta, provider)
   return key ? `…${key.slice(-4)}` : null
 }
 
-/** What triage keeps for a workspace's auth backend, as its adapter reads it. */
-export function authOf(meta: WorkspaceMeta): ProviderAuth {
-  if (meta.authBackend === 'api-key') return { backend: 'api-key', apiKey: storedApiKey(meta) }
-  if (meta.authBackend === 'config-dir') {
-    const dir = workspaceAuthDir(meta)
+/**
+ * What triage keeps for a provider's auth backend here, as its adapter reads
+ * it. A provider that isn't connected reads as `inherit` — a session already
+ * on it still runs, on the machine's own login.
+ */
+export function authOf(meta: WorkspaceMeta, provider: ProviderId = meta.provider): ProviderAuth {
+  const backend = providerAuthBackend(meta, provider) ?? 'inherit'
+  if (backend === 'api-key') {
+    // Only an agent that keeps its key in a login file needs a home for it.
+    if (!providerFor(provider).auth.storeKey) return { backend: 'api-key', apiKey: storedApiKey(meta, provider) }
+    const dir = path.join(workspaceDir(meta.id), `${provider}-api-key`)
+    mkdirSync(dir, { recursive: true, mode: 0o700 })
+    return { backend: 'api-key', apiKey: storedApiKey(meta, provider), dir }
+  }
+  if (backend === 'config-dir') {
+    const dir = workspaceAuthDir(meta, provider)
     mkdirSync(dir, { recursive: true })
     return { backend: 'config-dir', dir }
   }
@@ -210,24 +253,24 @@ export function authOf(meta: WorkspaceMeta): ProviderAuth {
 }
 
 /**
- * The env overrides a workspace's subprocesses spawn with, as its provider
- * resolves them. `undefined` for `inherit` — the agent finds its own login.
- * The overrides are merged over process.env at the spawn site.
+ * The env overrides a provider's subprocesses spawn with in this workspace, as
+ * its adapter resolves them. `undefined` for `inherit` — the agent finds its
+ * own login. The overrides are merged over process.env at the spawn site.
  */
-export function envOverridesFor(meta: WorkspaceMeta): Record<string, string> | undefined {
-  return providerFor(meta.provider).auth.env(authOf(meta))
+export function envOverridesFor(meta: WorkspaceMeta, provider: ProviderId = meta.provider): Record<string, string> | undefined {
+  return providerFor(provider).auth.env(authOf(meta, provider))
 }
 
-/** Full spawn env for a workspace: process.env with the overrides on top. */
-export function spawnEnvFor(meta: WorkspaceMeta): Record<string, string> | undefined {
-  const overrides = envOverridesFor(meta)
+/** Full spawn env for a provider in a workspace: process.env with the overrides on top. */
+export function spawnEnvFor(meta: WorkspaceMeta, provider: ProviderId = meta.provider): Record<string, string> | undefined {
+  const overrides = envOverridesFor(meta, provider)
   if (!overrides) return undefined
   const env: Record<string, string> = {}
   for (const [k, v] of Object.entries(process.env)) if (v !== undefined) env[k] = v
   return { ...env, ...overrides }
 }
 
-/** The one-time interactive login for a config-dir workspace, shown in the UI. */
-export function loginCommandFor(meta: Pick<WorkspaceMeta, 'id' | 'provider'>): string {
-  return providerFor(meta.provider).auth.loginCommand(workspaceAuthDir(meta))
+/** The one-time interactive login for a config-dir provider, shown in the UI. */
+export function loginCommandFor(meta: Pick<WorkspaceMeta, 'id' | 'provider'>, provider: ProviderId = meta.provider): string {
+  return providerFor(provider).auth.loginCommand(workspaceAuthDir(meta, provider))
 }

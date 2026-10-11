@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
-import { DEFAULT_SETTINGS_TAB, isSettingsTab, type SettingsTab } from './settings.js'
+import { DEFAULT_SETTINGS_TAB, isSettingsTab, LEGACY_SETTINGS_TABS, type SettingsTab } from './settings.js'
 import { store } from './store.js'
 
 export function useConn() {
@@ -109,7 +109,7 @@ function parseRoute(hash: string): Route {
   }
   if (hash === '/settings' || hash.startsWith('/settings/')) {
     const tab = hash.slice('/settings/'.length)
-    return { page: 'settings', tab: isSettingsTab(tab) ? tab : DEFAULT_SETTINGS_TAB }
+    return { page: 'settings', tab: isSettingsTab(tab) ? tab : (LEGACY_SETTINGS_TABS[tab] ?? DEFAULT_SETTINGS_TAB) }
   }
   return { page: 'session', id: hash }
 }

@@ -1,12 +1,12 @@
 /**
  * The workspace's identity and Claude-auth controls, shared by the create /
  * onboarding flow (WorkspaceModal) and the settings modal's Workspace and
- * Claude auth tabs — one set of cards, one verify panel, so the two doors
+ * Providers tabs — one set of cards, one verify panel, so the two doors
  * never drift apart.
  */
 import { Check, KeyRound, Laptop, RefreshCw, UserRound } from 'lucide-react'
 import type { ReactNode } from 'react'
-import type { Workspace, WorkspaceAuthBackend, WorkspaceVerifyResponse } from '../../../shared/protocol.js'
+import type { ProviderId, Workspace, WorkspaceAuthBackend, WorkspaceVerifyResponse } from '../../../shared/protocol.js'
 
 export const WORKSPACE_COLORS = ['#7aa2f7', '#9ece6a', '#bb9af7', '#e0af68', '#f7768e', '#2ac3de', '#ff9e64', '#c0caf5']
 
@@ -31,12 +31,14 @@ export function ColorPicker({ value, onChange }: { value: string; onChange: (c: 
   )
 }
 
-export const AUTH_CARDS: Array<{
+type AuthCard = {
   backend: WorkspaceAuthBackend
   icon: typeof Laptop
   title: string
   body: string
-}> = [
+}
+
+export const AUTH_CARDS: AuthCard[] = [
   {
     backend: 'inherit',
     icon: Laptop,
@@ -57,8 +59,34 @@ export const AUTH_CARDS: Array<{
   },
 ]
 
-export const authTitle = (backend: WorkspaceAuthBackend): string =>
-  AUTH_CARDS.find((c) => c.backend === backend)?.title ?? backend
+/** The same three backends, as Codex reads them. */
+const CODEX_AUTH_CARDS: AuthCard[] = [
+  {
+    backend: 'inherit',
+    icon: Laptop,
+    title: 'Use my existing Codex login',
+    body: 'Whatever `codex login` set up on this machine (~/.codex) — your ChatGPT plan or key, and its MCP servers.',
+  },
+  {
+    backend: 'api-key',
+    icon: KeyRound,
+    title: 'OpenAI API key',
+    body: 'Billed to this key, per token. Signed into a Codex home of this workspace’s own — no plan limits apply.',
+  },
+  {
+    backend: 'config-dir',
+    icon: UserRound,
+    title: 'Separate ChatGPT login',
+    body: 'Its own Codex home and its own plan (e.g. a personal account). Needs a one-time login in your terminal.',
+  },
+]
+
+export const PROVIDER_AUTH_CARDS: Record<ProviderId, AuthCard[]> = { claude: AUTH_CARDS, codex: CODEX_AUTH_CARDS }
+
+const KEY_PLACEHOLDER: Record<ProviderId, string> = { claude: 'sk-ant-…', codex: 'sk-…' }
+
+export const authTitle = (backend: WorkspaceAuthBackend, provider: ProviderId = 'claude'): string =>
+  PROVIDER_AUTH_CARDS[provider].find((c) => c.backend === backend)?.title ?? backend
 
 /** The three auth cards as a radio group; the API-key card holds its own key field. */
 export function AuthCards({
@@ -67,7 +95,9 @@ export function AuthCards({
   apiKey,
   onApiKeyChange,
   apiKeyHint,
+  provider = 'claude',
 }: {
+  provider?: ProviderId
   value: WorkspaceAuthBackend
   onChange: (b: WorkspaceAuthBackend) => void
   apiKey: string
@@ -76,8 +106,8 @@ export function AuthCards({
   apiKeyHint?: string | null
 }) {
   return (
-    <div className="wsAuthCards" role="radiogroup" aria-label="Claude auth method">
-      {AUTH_CARDS.map((card) => {
+    <div className="wsAuthCards" role="radiogroup" aria-label="Auth method">
+      {PROVIDER_AUTH_CARDS[provider].map((card) => {
         const Icon = card.icon
         const active = value === card.backend
         return (
@@ -100,7 +130,7 @@ export function AuthCards({
                 <input
                   type="password"
                   value={apiKey}
-                  placeholder={apiKeyHint ? `key set (${apiKeyHint}) — paste to replace` : 'sk-ant-…'}
+                  placeholder={apiKeyHint ? `key set (${apiKeyHint}) — paste to replace` : KEY_PLACEHOLDER[provider]}
                   onChange={(e) => onApiKeyChange(e.target.value)}
                 />
                 <small>

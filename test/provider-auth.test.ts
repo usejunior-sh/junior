@@ -109,3 +109,58 @@ test('agent tools: a "can" as Claude Code tool names', () => {
   })
   assert.deepEqual(claude.agentTools(['read', 'edit', 'run', 'web']).disallowedTools, [])
 })
+
+test('connections: unknown agents, the primary itself and bad backends are dropped', () => {
+  const reg = {
+    ...legacy,
+    workspaces: [
+      {
+        ...legacy.workspaces[0],
+        provider: 'claude',
+        connections: { codex: { authBackend: 'config-dir' }, claude: { authBackend: 'api-key' }, nope: { authBackend: 'inherit' } },
+      },
+      { ...legacy.workspaces[1], provider: 'claude', connections: { codex: { authBackend: 'sideways' } } },
+    ],
+  } as unknown as WorkspaceRegistry
+  assert.equal(ws.migrateProviders(reg), true)
+  assert.deepEqual(reg.workspaces[0].connections, { codex: { authBackend: 'config-dir' } })
+  assert.deepEqual(reg.workspaces[1].connections, {})
+  assert.equal(ws.migrateProviders(reg), false)
+})
+
+test('a connected agent resolves its own auth; one not connected reads as inherit', () => {
+  const meta = { ...legacy.workspaces[2], id: 'conn', authBackend: 'config-dir' as const, provider: 'claude' as const }
+  assert.equal(ws.isConnected(meta, 'claude'), true)
+  assert.equal(ws.isConnected(meta, 'codex'), false)
+  assert.equal(ws.envOverridesFor(meta, 'codex'), undefined)
+  const linked = { ...meta, connections: { codex: { authBackend: 'config-dir' as const } } }
+  assert.equal(ws.providerAuthBackend(linked, 'codex'), 'config-dir')
+  assert.deepEqual(ws.envOverridesFor(linked, 'codex'), { CODEX_HOME: path.join(home, 'workspaces', 'conn', 'codex') })
+  // The primary's env is untouched by the connection.
+  assert.deepEqual(ws.envOverridesFor(linked), { CLAUDE_CONFIG_DIR: path.join(home, 'workspaces', 'conn', 'claude') })
+})
+
+test('a codex api key gets a private Codex home, not an env var it would ignore', () => {
+  const meta = {
+    ...legacy.workspaces[0],
+    id: 'keys',
+    authBackend: 'api-key' as const,
+    provider: 'claude' as const,
+    connections: { codex: { authBackend: 'api-key' as const } },
+  }
+  const dir = path.join(home, 'workspaces', 'keys', 'codex-api-key')
+  assert.deepEqual(ws.envOverridesFor(meta, 'codex'), { CODEX_HOME: dir })
+  assert.equal(statSync(dir).mode & 0o777, 0o700)
+})
+
+test('each provider key lands in the one .env, beside the others', () => {
+  const meta = { ...legacy.workspaces[0], id: 'both', authBackend: 'api-key' as const, provider: 'claude' as const }
+  ws.writeApiKey(meta, 'sk-ant-claude-1234')
+  ws.writeApiKey(meta, 'sk-openai-5678', 'codex')
+  ws.writeApiKey(meta, 'sk-ant-claude-9999')
+  const file = path.join(home, 'workspaces', 'both', '.env')
+  assert.equal(readFileSync(file, 'utf8'), 'ANTHROPIC_API_KEY=sk-ant-claude-9999\nOPENAI_API_KEY=sk-openai-5678\n')
+  assert.equal(statSync(file).mode & 0o777, 0o600)
+  assert.equal(ws.apiKeyHint(meta), '…9999')
+  assert.equal(ws.apiKeyHint(meta, 'codex'), '…5678')
+})

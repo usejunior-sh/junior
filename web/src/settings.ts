@@ -2,7 +2,7 @@
  * The settings modal, as an external store.
  *
  * Any component can open it on a specific tab — a "Fix" link on an auth
- * error opens Claude auth, the workspace menu opens Workspace — without
+ * error opens Providers, the workspace menu opens Workspace — without
  * threading callbacks through the tree. The URL form `#/settings/<tab>` maps
  * onto the same call (see App), so a tab is also linkable from outside.
  */
@@ -10,7 +10,7 @@ import { useSyncExternalStore } from 'react'
 
 export type SettingsTab =
   | 'workspace'
-  | 'auth'
+  | 'providers'
   | 'sources'
   | 'projects'
   | 'models'
@@ -39,7 +39,7 @@ export type SettingsTabMeta = {
 
 export const SETTINGS_TABS: ReadonlyArray<SettingsTabMeta> = [
   { id: 'workspace', label: 'Workspace', sub: 'Name, colour, and which workspace opens by default.', group: 'workspace' },
-  { id: 'auth', label: 'Claude auth', sub: 'How this workspace signs in to Claude — and proof that it works.', group: 'workspace' },
+  { id: 'providers', label: 'Providers', sub: 'The agents this workspace runs on — how each signs in, and how much of its plan is left.', group: 'workspace' },
   { id: 'sources', label: 'Sources', sub: 'What feeds this inbox: GitHub repos, Slack, and the connectors a session can reach.', group: 'workspace' },
   { id: 'projects', label: 'Projects', sub: 'The local folders you work in. Sessions run in a project’s folder, and dispatch matches a work item’s repo to land there.', group: 'workspace' },
   { id: 'models', label: 'Models', sub: 'Which models the model picker offers — hide the ones you never use, or add an id Claude Code does not list yet.', group: 'workspace' },
@@ -63,7 +63,10 @@ export const DEFAULT_SETTINGS_TAB: SettingsTab = 'workspace'
 export const isSettingsTab = (v: unknown): v is SettingsTab =>
   typeof v === 'string' && SETTINGS_TABS.some((t) => t.id === v)
 
-/** The hash that opens the modal on a tab: `/#/settings/auth`. */
+/** A tab's id from before it was renamed, for links that still name it. */
+export const LEGACY_SETTINGS_TABS: Readonly<Record<string, SettingsTab>> = { auth: 'providers' }
+
+/** The hash that opens the modal on a tab: `/#/settings/providers`. */
 export const settingsHash = (tab: SettingsTab) => `/settings/${tab}`
 
 type SettingsState = { open: boolean; tab: SettingsTab }

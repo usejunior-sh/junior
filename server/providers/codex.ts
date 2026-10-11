@@ -13,9 +13,9 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import os from 'node:os'
 import path from 'node:path'
-import type { EffortLevel, PermissionMode } from '../../shared/protocol.js'
+import type { EffortLevel, PermissionMode, ProviderLimit } from '../../shared/protocol.js'
 import { codexModels, createCodexMapper, toolCallsOf, unwrapShell, type CodexMapper } from './codex-events.js'
-import type { AgentSession, PermissionResult, PermissionUpdate, Provider, ProviderEvent, SpawnEnv, ToolApprovalContext, UserTurn } from './types.js'
+import type { AccountStatus, AgentSession, PermissionResult, PermissionUpdate, Provider, ProviderEvent, SpawnEnv, ToolApprovalContext, UserTurn } from './types.js'
 
 const CODEX_API_KEY_VAR = 'OPENAI_API_KEY'
 const CLIENT_INFO = { name: 'triage', title: 'triage', version: '1' }
@@ -125,6 +125,9 @@ class CodexClient {
   }
 }
 
+const stringEnv = (): Record<string, string> =>
+  Object.fromEntries(Object.entries(process.env).filter((e): e is [string, string] => e[1] !== undefined))
+
 /** A short-lived app-server for one question (models, auth). */
 async function withClient<T>(cwd: string, env: SpawnEnv, ask: (c: CodexClient) => Promise<T>): Promise<T> {
   const client = new CodexClient(cwd, env)
@@ -134,6 +137,49 @@ async function withClient<T>(cwd: string, env: SpawnEnv, ask: (c: CodexClient) =
   } finally {
     client.close()
   }
+}
+
+type RateWindow = { usedPercent: number; windowDurationMins: number | null; resetsAt: number | null } | null
+type RateSnapshot = {
+  limitId: string | null
+  limitName: string | null
+  primary: RateWindow
+  secondary: RateWindow
+  credits: { hasCredits: boolean; unlimited: boolean; balance: string | null } | null
+  individualLimit: { remainingPercent: number; resetsAt: number | null } | null
+  planType: string | null
+}
+type Account =
+  | { type: 'apiKey' }
+  | { type: 'chatgpt'; email: string | null; planType: string }
+  | { type: 'amazonBedrock' }
+
+/** "300 minutes" → "5-hour", "10080" → "Weekly": how the window reads in Codex's own UI. */
+function windowLabel(mins: number | null, fallback: string): string {
+  if (!mins) return fallback
+  if (mins === 10_080) return 'Weekly'
+  if (mins % 1_440 === 0) return `${mins / 1_440}-day`
+  if (mins % 60 === 0) return `${mins / 60}-hour`
+  return `${mins}-minute`
+}
+
+/** Codex's seconds-since-epoch as ms. */
+const ms = (sec: number | null | undefined) => (sec ? { resetsAt: sec * 1000 } : {})
+
+/** One metered bucket's windows and spend cap as limits, named for the bucket when there are several. */
+function snapshotLimits(snap: RateSnapshot, prefix: string): ProviderLimit[] {
+  const out: ProviderLimit[] = []
+  const name = (l: string) => (prefix ? `${prefix} · ${l}` : l)
+  if (snap.primary) out.push({ label: name(windowLabel(snap.primary.windowDurationMins, 'Primary')), usedPercent: snap.primary.usedPercent, ...ms(snap.primary.resetsAt) })
+  if (snap.secondary) out.push({ label: name(windowLabel(snap.secondary.windowDurationMins, 'Secondary')), usedPercent: snap.secondary.usedPercent, ...ms(snap.secondary.resetsAt) })
+  if (snap.individualLimit) out.push({ label: name('Spend cap'), usedPercent: 100 - snap.individualLimit.remainingPercent, ...ms(snap.individualLimit.resetsAt) })
+  return out
+}
+
+/** Tokens over the last `days` days from Codex's daily buckets (`YYYY-MM-DD`, UTC). */
+function recentTokens(buckets: Array<{ startDate: string; tokens: number }> | null | undefined, days: number, now = Date.now()): number {
+  const since = new Date(now - (days - 1) * 86_400_000).toISOString().slice(0, 10)
+  return (buckets ?? []).reduce((sum, b) => (b.startDate >= since ? sum + Number(b.tokens) : sum), 0)
 }
 
 /** Events out, pushed as the subprocess talks; fails the reader when it dies. */
@@ -222,12 +268,18 @@ export const codex: Provider = {
   },
   auth: {
     apiKeyVar: CODEX_API_KEY_VAR,
+    // Codex reads a key from its login file, never from OPENAI_API_KEY in the
+    // env: an api-key workspace gets a Codex home of its own, signed in with
+    // the key by `storeKey`.
     env: (auth): Record<string, string> | undefined => {
-      if (auth.backend === 'api-key') return auth.apiKey ? { [CODEX_API_KEY_VAR]: auth.apiKey } : undefined
+      if (auth.backend === 'api-key') return auth.dir ? { CODEX_HOME: auth.dir } : undefined
       if (auth.backend === 'config-dir') return { CODEX_HOME: auth.dir }
       return undefined
     },
     loginCommand: (dir) => `CODEX_HOME=${dir} codex login`,
+    async storeKey(dir, key) {
+      await withClient(os.homedir(), { ...stringEnv(), CODEX_HOME: dir }, (c) => c.request('account/login/start', { type: 'apiKey', apiKey: key }))
+    },
   },
   discovery: {
     // Codex's servers live in config.toml and connect inside its own process;
@@ -404,6 +456,39 @@ export const codex: Provider = {
 
   async commands() {
     return []
+  },
+
+  async account(env) {
+    try {
+      return await withClient(os.homedir(), env, async (c): Promise<AccountStatus> => {
+        const { account, requiresOpenaiAuth } = await c.request<{ account: Account | null; requiresOpenaiAuth: boolean }>('account/read', {})
+        if (!account && requiresOpenaiAuth) return { ok: false, error: 'Codex is not logged in (run `codex login`)', limits: [] }
+        // Plan windows and token history are a ChatGPT login's; an API key
+        // has neither, so their failure is not the account's.
+        const [rates, usage] = await Promise.all([
+          c.request<{ rateLimits: RateSnapshot; rateLimitsByLimitId: Record<string, RateSnapshot> | null }>('account/rateLimits/read', {}).catch(() => null),
+          c.request<{ dailyUsageBuckets: Array<{ startDate: string; tokens: number }> | null }>('account/usage/read', {}).catch(() => null),
+        ])
+        const buckets = Object.values(rates?.rateLimitsByLimitId ?? {}).filter((b): b is RateSnapshot => !!b)
+        const snapshots = buckets.length ? buckets : rates ? [rates.rateLimits] : []
+        const limits = snapshots.flatMap((snap) => snapshotLimits(snap, snapshots.length > 1 ? (snap.limitName ?? snap.limitId ?? '') : ''))
+        const credits = rates?.rateLimits.credits
+        const plan = account?.type === 'chatgpt' ? account.planType : (rates?.rateLimits.planType ?? undefined)
+        return {
+          ok: true,
+          account: {
+            ...(account ? { kind: account.type } : {}),
+            ...(account?.type === 'chatgpt' && account.email ? { email: account.email } : {}),
+            ...(plan ? { plan } : {}),
+          },
+          limits,
+          ...(credits ? { credits: { hasCredits: credits.hasCredits, unlimited: credits.unlimited, ...(credits.balance ? { balance: credits.balance } : {}) } } : {}),
+          ...(usage ? { recent: { days: 30, tokens: recentTokens(usage.dailyUsageBuckets, 30) } } : {}),
+        }
+      })
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err), limits: [] }
+    }
   },
 
   async checkAuth(env) {

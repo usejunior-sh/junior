@@ -399,7 +399,7 @@ function ErrorCard({ text }: { text: string }) {
       {authy && (
         <div className="fixRow">
           <span>This looks like a Claude auth problem in this workspace.</span>
-          <button type="button" className="btn xs" onClick={() => openSettings('auth')}>
+          <button type="button" className="btn xs" onClick={() => openSettings('providers')}>
             <KeyRound size={11} aria-hidden="true" /> Fix in Settings
           </button>
         </div>

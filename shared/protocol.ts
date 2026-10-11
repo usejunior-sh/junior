@@ -51,8 +51,68 @@ export type Workspace = {
   /** config-dir backend: where that login lives, and the one-time login command */
   configDir?: string
   loginCommand?: string
+  /** Every agent triage knows, connected or not — the primary (Claude) first. */
+  providers: WorkspaceProvider[]
   createdAt: number
 }
+
+/**
+ * One agent as a workspace has it set up. The primary runs everything —
+ * watches, briefs, team workers — and is always connected; its auth is the
+ * workspace's own `authBackend`. Any other is connected per workspace, with an
+ * auth of its own, and only chats run on it.
+ */
+export type WorkspaceProvider = {
+  id: ProviderId
+  primary: boolean
+  connected: boolean
+  /** present when connected */
+  authBackend?: WorkspaceAuthBackend
+  /** api-key backend: masked tail of the stored key; null = none yet */
+  apiKeyHint?: string | null
+  /** config-dir backend: where that login lives, and the one-time login command */
+  configDir?: string
+  loginCommand?: string
+}
+
+/** One plan window — "5-hour", "Weekly", a spend cap — as a share used. */
+export type ProviderLimit = {
+  label: string
+  /** 0–100 */
+  usedPercent: number
+  /** epoch ms */
+  resetsAt?: number
+}
+
+/**
+ * What an agent's own account says right now: who is signed in, on what plan,
+ * how much of each window is gone, and what it has used lately. Read from the
+ * agent itself (Claude's `accountInfo`, Codex's `account/*`), not estimated.
+ */
+export type ProviderStatus = {
+  id: ProviderId
+  /** false = the agent couldn't be reached or isn't signed in */
+  ok: boolean
+  error?: string
+  account?: {
+    /** "chatgpt", "apiKey", "claude.ai", … — how it is signed in */
+    kind?: string
+    email?: string
+    plan?: string
+    org?: string
+  }
+  limits: ProviderLimit[]
+  credits?: { hasCredits: boolean; unlimited: boolean; balance?: string }
+  /** the last 30 days on this machine (Claude) or this account (Codex) */
+  recent?: { days: number; tokens?: number; costUsd?: number }
+  checkedAt: number
+}
+
+/** GET /api/providers — the workspace's connected agents, live. */
+export type ProvidersStatusResponse = { ok: true; providers: ProviderStatus[] } | { ok: false; error: string }
+
+/** POST /api/providers/verify — one real round-trip with a provider's auth. */
+export type ProviderVerifyResponse = { ok: true; authOk: boolean; authError?: string } | { ok: false; error: string }
 
 export type WorkspacesResponse =
   | { ok: true; workspaces: Workspace[]; defaultId: string; onboarded: boolean }

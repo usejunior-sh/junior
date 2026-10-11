@@ -7,7 +7,15 @@
 import * as Popover from '@radix-ui/react-popover'
 import { Check, ChevronDown, Search, Sparkles } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import { EFFORT_LEVELS, PROVIDER_IDS, type EffortLevel, type ModelOption, type ProviderId } from '../../../shared/protocol.js'
+import {
+  EFFORT_LEVELS,
+  PROVIDER_IDS,
+  type EffortLevel,
+  type ModelOption,
+  type ProviderId,
+  type WorkspaceAuthBackend,
+} from '../../../shared/protocol.js'
+import { openSettings } from '../settings.js'
 import { useWorkspaceId, useWorkspaces } from '../hooks.js'
 import { EFFORT_LABEL, findModel, reloadProviderModels, useProviderModels } from '../models.js'
 import { isMobile } from '../useMobile.js'
@@ -29,11 +37,10 @@ type Props = {
   disabled?: boolean
 }
 
-const AUTH_LABEL = {
-  inherit: 'your Claude login',
-  'api-key': 'an API key',
-  'config-dir': "this workspace's own Claude login",
-} as const
+const AUTH_LABEL: Record<ProviderId, Record<WorkspaceAuthBackend, string>> = {
+  claude: { inherit: 'your Claude login', 'api-key': 'an API key', 'config-dir': "this workspace's own Claude login" },
+  codex: { inherit: 'your Codex login', 'api-key': 'an OpenAI API key', 'config-dir': "this workspace's own Codex login" },
+}
 
 export function ModelPopover({
   model,
@@ -76,8 +83,18 @@ export function ModelPopover({
     onModelChange(selected?.id ?? model, level)
   }
 
+  // An agent this workspace isn't connected to is shown, but picking it goes
+  // to Settings → Providers instead. Unknown (no workspace yet) counts as connected.
+  const connected = (p: ProviderId) => workspace?.providers?.find((w) => w.id === p)?.connected ?? true
+  const agentAuth = workspace?.providers?.find((w) => w.id === agent)
+
   function pickProvider(p: ProviderId) {
     if (p === agent || !onProviderChange) return
+    if (!connected(p)) {
+      setOpen(false)
+      openSettings('providers')
+      return
+    }
     setQ('')
     onProviderChange(p)
   }
@@ -132,6 +149,7 @@ export function ModelPopover({
               {PROVIDER_IDS.map((p) => {
                 const on = p === agent
                 const locked = !onProviderChange && !on
+                const off = !on && !connected(p)
                 return (
                   <button
                     key={p}
@@ -139,12 +157,19 @@ export function ModelPopover({
                     role="radio"
                     aria-checked={on}
                     disabled={locked}
-                    className={`mpAgent${on ? ' on' : ''}`}
-                    title={locked ? `A session keeps its agent — start a new session to use ${PROVIDER_LABEL[p]}` : PROVIDER_LABEL[p]}
+                    className={`mpAgent${on ? ' on' : ''}${off ? ' off' : ''}`}
+                    title={
+                      locked
+                        ? `A session keeps its agent — start a new session to use ${PROVIDER_LABEL[p]}`
+                        : off
+                          ? `${PROVIDER_LABEL[p]} isn’t connected — connect it in Settings → Providers`
+                          : PROVIDER_LABEL[p]
+                    }
                     onClick={() => pickProvider(p)}
                   >
                     <ProviderIcon provider={p} size={18} />
                     <span>{PROVIDER_LABEL[p]}</span>
+                    {off && !locked && <em>Connect</em>}
                   </button>
                 )
               })}
@@ -161,17 +186,16 @@ export function ModelPopover({
               />
             </label>
 
-            {agent !== 'claude' ? (
+            {workspace && (
               <div className="mpAuth">
-                <ProviderIcon provider={agent} size={12} />
-                <span>Runs on your {PROVIDER_LABEL[agent]} login</span>
-              </div>
-            ) : workspace && (
-              <div className="mpAuth">
-                <span className="dot sm" style={{ background: workspace.color }} aria-hidden="true" />
+                {agent === 'claude' ? (
+                  <span className="dot sm" style={{ background: workspace.color }} aria-hidden="true" />
+                ) : (
+                  <ProviderIcon provider={agent} size={12} />
+                )}
                 <span>
-                  Runs on {AUTH_LABEL[workspace.authBackend]}
-                  {workspace.authBackend === 'api-key' && workspace.apiKeyHint ? ` (${workspace.apiKeyHint})` : ''}
+                  Runs on {AUTH_LABEL[agent][agentAuth?.authBackend ?? 'inherit']}
+                  {agentAuth?.authBackend === 'api-key' && agentAuth.apiKeyHint ? ` (${agentAuth.apiKeyHint})` : ''}
                 </span>
                 <span className="pill mute">{workspace.name}</span>
               </div>

@@ -10,6 +10,7 @@ import type { ConnState } from '../store.js'
 import { Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from '../ui/Menu.js'
 import { basePath } from '../workspaceUrl.js'
 import { TriageLogo } from './Logo.js'
+import { ProvidersButton } from './ProvidersButton.js'
 
 type Props = {
   /** Phone layout: a back button and the page title take the logo's place. */
@@ -76,6 +77,7 @@ export function TopBar({
   build,
   desktop,
 }: Props) {
+  const current = workspaces.find((w) => w.id === workspaceId)
   if (desktop && !mobile) {
     return (
       <DesktopBar
@@ -91,7 +93,7 @@ export function TopBar({
           />
         }
         badge={<BuildBadge build={build} onOpenSystem={onOpenSystem} />}
-        system={<SystemIcons conn={conn} onOpenSystem={onOpenSystem} onOpenSettings={onOpenSettings} onHelp={onHelp} />}
+        system={<SystemIcons workspace={current} conn={conn} onOpenSystem={onOpenSystem} onOpenSettings={onOpenSettings} onHelp={onHelp} />}
       />
     )
   }
@@ -137,20 +139,23 @@ export function TopBar({
       />
       <BuildBadge build={build} onOpenSystem={onOpenSystem} />
       <span className="spacer" />
-      <SystemIcons conn={conn} onOpenSystem={onOpenSystem} onOpenSettings={onOpenSettings} onHelp={onHelp} />
+      <SystemIcons workspace={current} conn={conn} onOpenSystem={onOpenSystem} onOpenSettings={onOpenSettings} onHelp={onHelp} />
     </header>
   )
 }
 
-/** System status, activity, settings, help — the right end of the bar. */
+/** Providers, system status, activity, settings, help — the right end of the bar. */
 function SystemIcons({
+  workspace,
   conn,
   onOpenSystem,
   onOpenSettings,
   onHelp,
-}: Pick<Props, 'conn' | 'onOpenSystem' | 'onOpenSettings' | 'onHelp'>) {
+}: Pick<Props, 'conn' | 'onOpenSystem' | 'onOpenSettings' | 'onHelp'> & { workspace: Workspace | undefined }) {
   return (
     <>
+      {/* a daemon from before providers sends none — it shows once that daemon restarts */}
+      {workspace?.providers && <ProvidersButton workspace={workspace} />}
       <button type="button" className="topIcon" title={CONN_TITLE[conn]} onClick={() => onOpenSystem('status')}>
         <Gauge size={15} aria-hidden="true" />
         <span className={`connDot ${conn === 'connected' ? '' : conn === 'connecting' ? 'connecting' : 'down'}`} aria-hidden="true" />

@@ -25,6 +25,7 @@ import type {
   ModelOption,
   PermissionMode,
   ProviderId,
+  ProviderStatus,
   SdkMessage,
   WorkspaceAuthBackend,
 } from '../../shared/protocol.js'
@@ -201,7 +202,8 @@ export type RunSpec = {
  */
 export type ProviderAuth =
   | { backend: Extract<WorkspaceAuthBackend, 'inherit'> }
-  | { backend: Extract<WorkspaceAuthBackend, 'api-key'>; apiKey?: string }
+  /** `dir`: a private home for an agent that keeps its key in a login file, not the env */
+  | { backend: Extract<WorkspaceAuthBackend, 'api-key'>; apiKey?: string; dir?: string }
   | { backend: Extract<WorkspaceAuthBackend, 'config-dir'>; dir: string }
 
 /** MCP servers the agent's own config files declare, raw (env refs unexpanded). */
@@ -230,6 +232,11 @@ export interface Provider {
     env(auth: ProviderAuth): Record<string, string> | undefined
     /** the one-time interactive login into a workspace's private config `dir` */
     loginCommand(dir: string): string
+    /**
+     * For an agent that reads its key from its own login file rather than the
+     * env: sign `dir` in with `key`, once, when the key is saved.
+     */
+    storeKey?(dir: string, key: string): Promise<void>
   }
   /** what the agent's own config on disk says, read without spawning it */
   readonly discovery: {
@@ -253,4 +260,9 @@ export interface Provider {
   commands(spec: ProbeSpec): Promise<CommandEntry[]>
   /** a real round-trip, proving the auth in `env` works */
   checkAuth(env: SpawnEnv): Promise<{ ok: boolean; error?: string }>
+  /** who is signed in with `env`, on what plan, and how much of it is used — no turn spent */
+  account(env: SpawnEnv): Promise<AccountStatus>
 }
+
+/** A provider's account as its adapter reads it; the server stamps id and time. */
+export type AccountStatus = Omit<ProviderStatus, 'id' | 'checkedAt'>

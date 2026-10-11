@@ -932,6 +932,77 @@ kbd { font-family: var(--mono); font-size: 0.8462rem; color: var(--ash); border:
 .costPop .keys .v { font-family: var(--mono); color: var(--mute); }
 .costPop .foot { font-size: 0.8462rem; color: var(--stone); }
 
+/* providers — the top-bar stack, its popover, and Settings → Providers */
+.topIcon.provStack { gap: 0; padding: 0 5px; }
+.topIcon.provStack.on { color: var(--ink); background: var(--elev); }
+.provMark { display: inline-flex; align-items: center; justify-content: center; width: 19px; height: 19px; border-radius: var(--r-full); background: var(--canvas); border: 1px solid var(--hair-strong); }
+.provMark + .provMark { margin-left: -5px; }
+.provPop {
+  z-index: 60; width: 340px; max-width: calc(100vw - 24px); display: flex; flex-direction: column;
+  padding: 11px 0 6px; background: var(--elev); border: 1px solid var(--hair-strong); border-radius: var(--r-lg);
+  box-shadow: 0 0 0 1px var(--ring); color: var(--body); outline: none;
+  transform-origin: var(--radix-popover-content-transform-origin);
+}
+.provPop[data-state="open"] { animation: menuIn 0.12s ease; }
+.provPop .head { display: flex; align-items: center; gap: 8px; padding: 0 10px 8px 15px; }
+.provPop .head .lab { font-size: 0.8462rem; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ash); }
+.provPop .head .win { margin-left: auto; font-size: 0.8462rem; color: var(--stone); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.provPop .head .spin { animation: spin 0.9s linear infinite; }
+.provPopRow { display: flex; flex-direction: column; gap: 8px; padding: 10px 15px; border-top: 1px solid var(--hair); }
+.provPopHead { display: flex; align-items: center; gap: 7px; color: var(--ink); font-size: 0.9615rem; min-width: 0; }
+.provPopHead b { font-weight: 500; }
+.provPopHead .who { margin-left: auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.8462rem; color: var(--ash); }
+.provPopOff { display: flex; flex-direction: column; gap: 4px; padding: 9px 15px; border-top: 1px solid var(--hair); font-size: 0.8462rem; color: var(--stone); }
+.provPopOff span { display: inline-flex; align-items: center; gap: 6px; }
+.provPop .foot { display: flex; justify-content: flex-end; padding: 6px 10px 0; border-top: 1px solid var(--hair); }
+.provTag { font-size: 0.7692rem; padding: 1px 6px; border-radius: var(--r-full); border: 1px solid var(--hair-strong); color: var(--ash); font-weight: 400; letter-spacing: 0.02em; }
+
+.provUsage { display: flex; flex-direction: column; gap: 7px; }
+.provMeters { display: flex; flex-direction: column; gap: 5px; }
+.provMeter { display: grid; grid-template-columns: minmax(84px, auto) 1fr 36px 72px; align-items: center; gap: 10px; font-size: 0.8462rem; color: var(--charcoal); }
+.provMeter .bar { height: 4px; border-radius: var(--r-full); background: var(--hair-strong); overflow: hidden; }
+.provMeter .bar i { display: block; height: 100%; border-radius: inherit; background: var(--ink); }
+.provMeter.warm .bar i { background: var(--yellow); }
+.provMeter.hot .bar i { background: var(--red); }
+.provMeter .pct { font-family: var(--mono); text-align: right; color: var(--body); font-variant-numeric: tabular-nums; }
+.provMeter .reset { font-size: 0.7692rem; color: var(--stone); white-space: nowrap; }
+.provFacts { display: flex; flex-wrap: wrap; gap: 2px 14px; font-size: 0.8462rem; color: var(--ash); }
+.provNone { font-size: 0.8462rem; color: var(--stone); }
+.provErr { font-size: 0.8462rem; color: var(--red); overflow-wrap: anywhere; }
+
+.provList { background: var(--card); border: 1px solid var(--hair-strong); border-radius: var(--r-lg); overflow: hidden; margin-bottom: 14px; }
+.provRow + .provRow { border-top: 1px solid var(--hair); }
+.provHead { display: flex; align-items: center; gap: 12px; min-height: 46px; padding: 0 10px 0 14px; font-size: 1rem; }
+.provIcon { display: inline-flex; color: var(--ink); }
+.provRow.off .provIcon, .provRow.off .provName { color: var(--ash); }
+.provName { display: inline-flex; align-items: center; gap: 8px; min-width: 130px; color: var(--ink); }
+.provState { display: inline-flex; align-items: center; gap: 6px; min-width: 120px; font-size: 0.8462rem; color: var(--ash); }
+.provState i { width: 6px; height: 6px; border-radius: var(--r-full); background: var(--stone); }
+.provState.ok i { background: var(--green); }
+.provState.bad { color: var(--yellow); }
+.provState.bad i { background: var(--yellow); }
+.provState.unknown i { background: var(--hair-bright); animation: pulse 1.4s ease-in-out infinite; }
+.provWho { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.8462rem; color: var(--ash); }
+.provActions { margin-left: auto; display: inline-flex; gap: 6px; flex: none; }
+.provBody { display: flex; flex-direction: column; gap: 10px; padding: 0 14px 14px 42px; }
+.provBody .provMeter { max-width: 560px; }
+.provLogin { display: flex; flex-direction: column; gap: 6px; font-size: 0.8462rem; color: var(--ash); }
+.provVerify { font-size: 0.8462rem; color: var(--ash); }
+.provVerify.ok { color: var(--green); }
+.provVerify.bad { color: var(--red); overflow-wrap: anywhere; }
+.provEdit { display: flex; flex-direction: column; gap: 10px; padding: 4px 14px 14px 42px; }
+.provEdit .setActions { margin-top: 0; }
+.provChecked { font-size: 0.8462rem; color: var(--stone); }
+@media (prefers-reduced-motion: reduce) { .provState.unknown i, .provPop .head .spin { animation: none; } }
+@media (max-width: 767px) {
+  .provHead { flex-wrap: wrap; row-gap: 2px; padding: 10px 10px 10px 14px; }
+  .provName, .provState { min-width: 0; }
+  .provWho { order: 5; flex-basis: 100%; padding-left: 28px; }
+  .provBody, .provEdit { padding-left: 14px; }
+  .provMeter { grid-template-columns: 76px 1fr 34px; }
+  .provMeter .reset { display: none; }
+}
+
 #transcript { flex: 1; min-height: 0; overflow-y: auto; padding: 20px 40px 0; }
 #transcript .inner { max-width: var(--measure); margin: 0 auto; display: flex; flex-direction: column; gap: 16px; padding-bottom: 8px; }
 
@@ -2281,8 +2352,9 @@ dialog.itemComposer { width: 800px; max-width: calc(100vw - 48px); padding: 0; o
 .mpSearch input::placeholder { color: var(--stone); }
 .mpAuth { display: flex; align-items: center; gap: 8px; padding: 8px 12px 4px; font-size: 0.8462rem; color: var(--ash); }
 .mpAuth .pill { margin-left: auto; font-size: 0.7692rem; }
-.mpList { display: flex; flex-direction: column; gap: 1px; padding: 4px 6px 6px; max-height: 260px; overflow-y: auto; }
-.mpOpt { display: flex; align-items: center; gap: 10px; width: 100%; height: 34px; padding: 0 8px; border: 0; border-radius: var(--r-sm); background: transparent; color: var(--body); text-align: left; font-size: 1rem; }
+/* Always four rows tall, whatever the agent lists, so switching agents never resizes the popover: fewer leave room, more scroll. */
+.mpList { flex: none; display: flex; flex-direction: column; gap: 1px; padding: 4px 6px 6px; height: calc(4 * 34px + 3 * 1px + 10px); overflow-y: auto; }
+.mpOpt { flex: none; display: flex; align-items: center; gap: 10px; width: 100%; height: 34px; padding: 0 8px; border: 0; border-radius: var(--r-sm); background: transparent; color: var(--body); text-align: left; font-size: 1rem; }
 .mpOpt:hover, .mpOpt:focus-visible { background: var(--wash-2); color: var(--ink); outline: none; }
 .mpOpt.sel { background: var(--wash-3); color: var(--ink); }
 .mpOpt .n { white-space: nowrap; }
@@ -2306,6 +2378,9 @@ dialog.itemComposer { width: 800px; max-width: calc(100vw - 48px); padding: 0; o
 .mpAgent:hover:not(:disabled), .mpAgent:focus-visible { background: var(--wash-2); color: var(--ink); outline: none; }
 .mpAgent.on { background: var(--card); border-color: var(--hair-strong); color: var(--ink); }
 .mpAgent:disabled { color: var(--stone); opacity: 0.5; cursor: not-allowed; }
+.mpAgent.off { color: var(--stone); }
+.mpAgent.off em { font-style: normal; font-size: 0.6923rem; color: var(--ash); }
+.mpAgent.off:hover em { color: var(--ink); }
 .mpMain { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .keysHint { color: var(--stone); font-size: 0.8462rem; display: flex; gap: 6px; align-items: center; margin-top: -6px; }
 .keysHint kbd { color: var(--ash); }
@@ -3623,7 +3698,7 @@ html.kbOpen .shell.mobile .panel { bottom: 0; }
   .mpOpt { min-height: 44px; }
   .mpFoot { flex-wrap: wrap; row-gap: 6px; }
   .mpFoot .eff { white-space: nowrap; min-height: 34px; }
-  .mpList { max-height: 40vh; }
+  .mpList { height: calc(4 * 44px + 3 * 1px + 10px); max-height: 40vh; }
 }
 /* The mode in force reads as chosen at a glance, not only by its check. */
 .uiMenu.perm .uiMenuItem.on { background: var(--wash-2); }

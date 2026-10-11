@@ -6,7 +6,7 @@
  */
 import os from 'node:os'
 import { query, type HookCallback, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk'
-import type { PermissionMode, SdkMessage } from '../../shared/protocol.js'
+import type { PermissionMode, ProviderLimit, SdkMessage } from '../../shared/protocol.js'
 import { claudeEvents } from './claude-events.js'
 import {
   CLAUDE_API_KEY_VAR,
@@ -16,7 +16,7 @@ import {
   claudeLoginCommand,
   claudeTranscriptDir,
 } from './claude-config.js'
-import type { AgentSession, Provider, ToolVeto, UserTurn } from './types.js'
+import type { AccountStatus, AgentSession, Provider, ToolVeto, UserTurn } from './types.js'
 
 // The permission modes the SDK understands and can be handed straight through.
 // 'gated' and 'default' are absent: 'default' is the SDK's own baseline (pinning
@@ -46,6 +46,15 @@ function vetoHook(veto: ToolVeto): HookCallback {
     if (d.allow) return {}
     return { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: d.reason } }
   }
+}
+
+type Window = { utilization: number | null; resets_at?: string | null } | null | undefined
+
+/** One claude.ai plan window as a limit; a window it doesn't report is skipped. */
+function limit(label: string, w: Window): ProviderLimit[] {
+  if (!w || w.utilization == null) return []
+  const resetsAt = w.resets_at ? Date.parse(w.resets_at) : NaN
+  return [{ label, usedPercent: w.utilization, ...(Number.isFinite(resetsAt) ? { resetsAt } : {}) }]
 }
 
 /**
@@ -204,6 +213,48 @@ export const claude: Provider = {
     return withProbe({ cwd, systemPrompt: PRESET, settingSources: ['user', 'project', 'local'], ...(env ? { env } : {}) }, (q) =>
       q.supportedCommands(),
     )
+  },
+
+  // `accountInfo` says who is signed in; the plan windows come from the
+  // SDK's `/usage` call, marked experimental — so it is asked separately and
+  // a failure there costs the limits, never the account.
+  account(env) {
+    return withProbe(
+      { cwd: os.homedir(), systemPrompt: PRESET, settingSources: [], ...(env ? { env } : {}) },
+      async (q): Promise<AccountStatus> => {
+        const info = await q.accountInfo()
+        let limits: ProviderLimit[] = []
+        let plan = info.subscriptionType
+        try {
+          const usage = await q.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET({ skipBehaviors: true })
+          plan = usage.subscription_type ?? plan
+          const r = usage.rate_limits
+          if (r) {
+            limits = [
+              ...limit('5-hour', r.five_hour),
+              ...limit('Weekly', r.seven_day),
+              ...limit('Weekly · Opus', r.seven_day_opus),
+              ...limit('Weekly · Sonnet', r.seven_day_sonnet),
+              ...(r.model_scoped ?? []).flatMap((m) => limit(`Weekly · ${m.display_name}`, m)),
+              ...(r.extra_usage?.is_enabled ? limit('Extra usage · monthly', r.extra_usage) : []),
+            ]
+          }
+        } catch {
+          // no plan windows on this CLI, or none for this login (API key, Bedrock)
+        }
+        const kind = info.apiKeySource ? 'apiKey' : info.apiProvider && info.apiProvider !== 'firstParty' ? info.apiProvider : 'claude.ai'
+        return {
+          ok: true,
+          account: {
+            kind,
+            ...(info.email ? { email: info.email } : {}),
+            ...(plan ? { plan } : {}),
+            ...(info.organization ? { org: info.organization } : {}),
+          },
+          limits,
+        }
+      },
+    ).catch((err: unknown) => ({ ok: false, error: err instanceof Error ? err.message : String(err), limits: [] }))
   },
 
   // The model catalog is static and "succeeds" on a bogus key, so this runs
