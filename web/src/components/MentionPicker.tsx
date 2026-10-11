@@ -140,6 +140,7 @@ export function MentionChip({
   title,
   muted,
   onRemove,
+  onOpen,
 }: {
   m: Mention
   dir?: boolean
@@ -147,7 +148,16 @@ export function MentionChip({
   /** a mention that resolved to nothing more than its name */
   muted?: boolean
   onRemove?: () => void
+  /** makes the chip a button that opens what it names */
+  onOpen?: () => void
 }) {
+  if (onOpen && !onRemove)
+    return (
+      <button type="button" className={'mchip open' + (muted ? ' muted' : '')} title={title ?? m.label} onClick={onOpen}>
+        <MentionIcon kind={m.kind} dir={dir ?? m.ref.endsWith('/')} size={11} />
+        <span className="n">{m.label}</span>
+      </button>
+    )
   return (
     <span className={'mchip' + (muted ? ' muted' : '')} title={title ?? (m.kind === 'file' ? m.ref : m.label)}>
       <MentionIcon kind={m.kind} dir={dir ?? m.ref.endsWith('/')} size={11} />

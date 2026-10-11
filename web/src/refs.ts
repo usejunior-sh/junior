@@ -11,7 +11,7 @@
  * link.
  */
 import { useMemo } from 'react'
-import type { LinkKind } from '../../shared/protocol.js'
+import type { LinkKind, Mention } from '../../shared/protocol.js'
 import { useArtifacts } from './artifactStore.js'
 import { itemHash, useSessions } from './hooks.js'
 import { useInbox } from './inboxStore.js'
@@ -26,7 +26,15 @@ export type RefIndex = {
 
 const EMPTY: RefIndex = { pattern: () => null, lookup: () => null }
 
-const escapeRe = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+/** The route an `@` mention opens, or null for a file (nothing in-app to open). */
+export function mentionHash(m: Mention): string | null {
+  if (m.kind === 'artifact') return `/artifact/${m.ref}`
+  if (m.kind === 'session') return m.ref
+  if (m.kind === 'item') return itemHash(m.ref)
+  return null
+}
+
+const escapeRe =(s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
 /**
  * The lookup index over everything the client currently knows how to open. Work

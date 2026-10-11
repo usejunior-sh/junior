@@ -2312,6 +2312,17 @@ dialog.itemComposer { width: 800px; max-width: calc(100vw - 48px); padding: 0; o
 .mchip .x { border: 0; background: transparent; color: var(--stone); font-size: 1rem; line-height: 1; padding: 0 0 0 2px; cursor: pointer; }
 .mchip .x:hover { color: var(--ink); }
 .msg.user .mtok { color: var(--ink); font-family: var(--mono); font-size: 0.9615rem; background: var(--wash-2); border-radius: var(--r-xs); padding: 1px 5px; }
+/* A mention that names something the app can open: the token in the text and
+   its chip below both open it. */
+.msg.user .mtok.open {
+  display: inline-block; max-width: 320px; vertical-align: bottom; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  border: 0; text-align: left; cursor: pointer; line-height: inherit;
+}
+.msg.user .mtok.open:hover { background: var(--wash-1); text-decoration: underline; text-decoration-color: var(--hair-strong); text-underline-offset: 3px; }
+.mchip.open { cursor: pointer; }
+.mchip.open:hover { color: var(--ink); border-color: var(--ash); }
+.mchip.open:hover svg { color: var(--ink); }
+button.refLink { font: inherit; line-height: inherit; }
 
 /* An entity reference the agent dropped into prose, resolved to its name and
    made clickable — reads as the same object as the @ chip that attaches it. */

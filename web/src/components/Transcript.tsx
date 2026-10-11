@@ -13,11 +13,11 @@ import { useLiveText } from '../hooks.js'
 import { openSettings } from '../settings.js'
 import { store } from '../store.js'
 import { artifactStore, useArtifacts } from '../artifactStore.js'
-import { useRefIndex, type RefIndex } from '../refs.js'
+import { mentionHash, useRefIndex, type RefIndex } from '../refs.js'
 import { buildTranscript, type TranscriptItem } from '../transcript.js'
 import { AskCard } from './AskCard.js'
 import { InitCard } from './InitCard.js'
-import { MentionChip } from './MentionPicker.js'
+import { MentionChip, MentionIcon } from './MentionPicker.js'
 import { Markdown } from './Markdown.js'
 import { PermissionCard } from './PermissionCard.js'
 import { ToolCard } from './ToolCard.js'
@@ -83,34 +83,74 @@ export function Transcript({ sessionId, events, turns, onRespond, onNavigate }: 
 
 /**
  * The user's text with each `@` token shown as its label — `@smoke test`
- * rather than `@session:72dce3d1-…`. The stored text keeps the token; only the
- * rendering changes, so a reload shows the same thing.
+ * rather than `@session:72dce3d1-…` — and clickable when it names something
+ * the app can open. Bare ids typed into the text get the same name chips as an
+ * agent reply. The stored text keeps the token; only the rendering changes, so
+ * a reload shows the same thing.
  */
-function withMentionLabels(text: string, mentions?: readonly ResolvedMention[]): ReactNode {
-  if (!mentions?.length) return text
-  const tokens = mentions.map((m) => ({ token: mentionToken(m), label: m.label }))
+function withMentionLabels(
+  text: string,
+  mentions: readonly ResolvedMention[] | undefined,
+  refs: RefIndex,
+  onRef: (hash: string) => void,
+): ReactNode {
+  const tokens = (mentions ?? []).map((m) => ({ token: mentionToken(m), label: m.label, hash: mentionHash(m) }))
   const out: ReactNode[] = []
   let rest = text
   let k = 0
   while (rest) {
-    let first: { i: number; token: string; label: string } | null = null
+    let first: { i: number; token: string; label: string; hash: string | null } | null = null
     for (const t of tokens) {
       const i = rest.indexOf(t.token)
       if (i >= 0 && (first === null || i < first.i)) first = { i, ...t }
     }
     if (!first) {
-      out.push(rest)
+      out.push(...linkifyText(rest, refs, onRef, () => k++))
       break
     }
-    if (first.i > 0) out.push(rest.slice(0, first.i))
+    if (first.i > 0) out.push(...linkifyText(rest.slice(0, first.i), refs, onRef, () => k++))
+    const hash = first.hash
     out.push(
-      <span className="mtok" key={k++} title={first.token}>
-        @{first.label}
-      </span>,
+      hash !== null ? (
+        <button type="button" className="mtok open" key={k++} title={`Open ${first.label}`} onClick={() => onRef(hash)}>
+          @{first.label}
+        </button>
+      ) : (
+        <span className="mtok" key={k++} title={first.token}>
+          @{first.label}
+        </span>
+      ),
     )
     rest = rest.slice(first.i + first.token.length)
   }
   return out
+}
+
+/** Plain text with every id the index knows swapped for a name chip; unknown ids stay as typed. */
+function linkifyText(text: string, refs: RefIndex, onRef: (hash: string) => void, key: () => number): ReactNode[] {
+  const pattern = refs.pattern()
+  if (!pattern) return [text]
+  const out: ReactNode[] = []
+  let last = 0
+  for (let m = pattern.exec(text); m; m = pattern.exec(text)) {
+    const hit = refs.lookup(m[0])
+    if (!hit) continue
+    if (m.index > last) out.push(text.slice(last, m.index))
+    out.push(
+      <button type="button" className={`refLink ${hit.kind}`} key={key()} title={`Open ${hit.label}`} onClick={() => onRef(hit.hash)}>
+        <MentionIcon kind={hit.kind} size={12} />
+        <span className="n">{hit.label}</span>
+      </button>,
+    )
+    last = m.index + m[0].length
+  }
+  if (last < text.length) out.push(text.slice(last))
+  return out
+}
+
+function mentionOpener(m: ResolvedMention, onRef: (hash: string) => void): (() => void) | undefined {
+  const hash = mentionHash(m)
+  return hash === null ? undefined : () => onRef(hash)
 }
 
 const Item = memo(function Item({
@@ -150,7 +190,7 @@ const Item = memo(function Item({
               ))}
             </div>
           )}
-          {withMentionLabels(item.text, item.mentions)}
+          {withMentionLabels(item.text, item.mentions, refs, onRef)}
           {item.mentions && item.mentions.length > 0 && (
             <div className="msgMentions">
               {item.mentions.map((m) => (
@@ -158,6 +198,7 @@ const Item = memo(function Item({
                   key={`${m.kind}:${m.ref}`}
                   m={m}
                   muted={!m.inlined}
+                  onOpen={mentionOpener(m, onRef)}
                   title={
                     m.error
                       ? `${m.kind === 'file' ? m.ref : m.label} — ${m.error}`
