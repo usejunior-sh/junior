@@ -50,7 +50,10 @@ import type {
   UserTurn,
 } from './providers/types.js'
 import { z } from 'zod'
-import { currentBranch, filePatch, repoRoot, snapshotTree, treeDiff, treePatch, treeStat, worktreeChanges, worktreePatch, type TreeChange } from './git.js'
+import { detectEditors, openFolderIn } from './editors.js'
+import { checkRemoval, createWorktree, prepareWorktree, recreateWorktree, removeWorktree, syncProjectCheckouts } from './worktrees.js'
+import { branchFromTitle } from '../shared/branch.js'
+import { aheadOf, filePatch, repoRoot, snapshotTree, treeDiff, treePatch, treeStat, worktreeChanges, worktreePatch, type TreeChange } from './git.js'
 import type {
   AgentRelay,
   ClientMessage,
@@ -106,6 +109,13 @@ import type {
   SessionChangesResponse,
   SessionDiffResponse,
   SessionTurnSummary,
+  Checkout,
+  CheckoutChanges,
+  CreateStep,
+  EditorsResponse,
+  OpenCheckoutResponse,
+  RemovalCheckResponse,
+  RemoveCheckoutResponse,
   ProjectChanges,
   ProjectFileResponse,
   SaveProjectFileResponse,
@@ -495,7 +505,11 @@ class WorkspaceRuntime {
   // session registry: every session lives in the store; a subset is live
   readonly rows = new Map<string, StoredSession>()
   readonly live = new Map<string, LiveSession>()
-  readonly branches = new Map<string, string>() // session id → git branch (derived)
+  /** a project's folders, main and worktrees, by id — the rows, kept in step by syncCheckouts */
+  readonly checkouts = new Map<string, Checkout>()
+  /** checkout discovery runs one at a time; a call while one runs queues exactly one more */
+  checkoutSyncRunning: Promise<void> | null = null
+  checkoutSyncQueued: Promise<void> | null = null
   /** WS clients bound to THIS workspace — broadcasts never cross the boundary */
   readonly clients = new Set<WebSocket>()
 
@@ -839,7 +853,7 @@ class LiveSession {
           this.setStatus('idle')
           void this.endTurn()
           void this.rt.store.sessions.touch(this.row.id)
-          void refreshBranch(this.rt, this.row)
+          void syncCheckouts(this.rt)
           // The turn may have created files — the next `@` search relists.
           this.rt.files.invalidate(this.row.cwd)
           // A brief run is one turn: its result is the run's end.
@@ -1166,7 +1180,7 @@ function summarize(rt: WorkspaceRuntime, row: StoredSession): SessionSummary {
     permissionMode: row.permissionMode ?? undefined,
     ...(row.provider !== DEFAULT_PROVIDER ? { provider: row.provider } : {}),
     pinned: row.pinned || undefined,
-    branch: rt.branches.get(row.id),
+    ...(row.checkoutId ? { checkoutId: row.checkoutId } : {}),
     ...(row.kind !== 'chat' ? { kind: row.kind } : {}),
     ...(row.watchId ? { watchId: row.watchId } : {}),
     ...(rt.sessionItem.has(row.id) ? { itemId: rt.sessionItem.get(row.id) } : {}),
@@ -1197,7 +1211,6 @@ async function deleteSession(rt: WorkspaceRuntime, sessionId: string): Promise<v
   rt.live.get(sessionId)?.stop()
   rt.live.delete(sessionId)
   rt.rows.delete(sessionId)
-  rt.branches.delete(sessionId)
   const run = teamRunOf(rt, sessionId)
   if (run) {
     rt.sessionTeam.delete(sessionId)
@@ -1213,18 +1226,104 @@ async function deleteSession(rt: WorkspaceRuntime, sessionId: string): Promise<v
   broadcastSessionList(rt)
 }
 
-async function refreshBranch(rt: WorkspaceRuntime, row: StoredSession) {
-  try {
-    const { stdout } = await pExecFile('git', ['-C', row.cwd, 'rev-parse', '--abbrev-ref', 'HEAD'])
-    const branch = stdout.trim()
-    if (branch && rt.branches.get(row.id) !== branch) {
-      rt.branches.set(row.id, branch)
-      broadcastSessionList(rt)
+// ---------------------------------------------------------------------------
+// Checkouts (server/worktrees.ts): a project's main folder and its worktrees
+// ---------------------------------------------------------------------------
+
+const checkoutList = (rt: WorkspaceRuntime): Checkout[] => [...rt.checkouts.values()]
+
+/**
+ * Re-read every project's checkouts from git and tell the clients when
+ * anything moved (a worktree appeared or went, a branch switched). Runs on
+ * the Changes poll, at the end of every turn and when projects change.
+ */
+function syncCheckouts(rt: WorkspaceRuntime): Promise<void> {
+  if (rt.checkoutSyncQueued) return rt.checkoutSyncQueued
+  const run = async () => {
+    rt.checkoutSyncQueued = null
+    rt.checkoutSyncRunning = next
+    try {
+      const { checkouts, changed } = await syncProjectCheckouts(rt.store.checkouts, await rt.store.projects.list())
+      if (!changed && rt.checkouts.size === checkouts.length) return
+      rt.checkouts.clear()
+      for (const c of checkouts) rt.checkouts.set(c.id, c)
+      broadcast(rt, { type: 'checkouts', checkouts })
+    } catch (err) {
+      log('warn', 'checkouts', `could not read worktrees: ${errText(err)}`, { workspace: rt.meta.id })
+    } finally {
+      if (rt.checkoutSyncRunning === next) rt.checkoutSyncRunning = null
     }
-  } catch {
-    // not a git repo — no chip
   }
+  const next: Promise<void> = (rt.checkoutSyncRunning ?? Promise.resolve()).then(run)
+  rt.checkoutSyncQueued = next
+  return next
 }
+
+/** A project's main checkout — the folder the user added. */
+const mainCheckout = (rt: WorkspaceRuntime, projectId: string | null | undefined): Checkout | undefined =>
+  projectId ? checkoutList(rt).find((c) => c.projectId === projectId && c.kind === 'main') : undefined
+
+/**
+ * A checkout by id; a project id means its main checkout, so a link made
+ * before checkouts (`/change/<projectId>/…`) still resolves.
+ */
+const checkoutById = (rt: WorkspaceRuntime, id: string | null | undefined): Checkout | undefined =>
+  id ? (rt.checkouts.get(id) ?? mainCheckout(rt, id)) : undefined
+
+/**
+ * Boot: rows for every project's folders, then every session saved before
+ * checkouts gets its project's main one. Stored once, never re-derived from
+ * `cwd` — a worktree's folder isn't the project's.
+ */
+async function loadCheckouts(rt: WorkspaceRuntime): Promise<void> {
+  for (const c of await rt.store.checkouts.list()) rt.checkouts.set(c.id, c)
+  await syncCheckouts(rt)
+  const n = await rt.store.sessions.backfillCheckouts((projectId) => mainCheckout(rt, projectId)?.id ?? null)
+  if (n) log('info', 'checkouts', `stored a checkout on ${n} sessions`, { workspace: rt.meta.id })
+}
+
+/** New worktrees live in the workspace folder (`~/.triage-dev` in dev), never inside the repo. */
+const worktreesRoot = (rt: WorkspaceRuntime) => path.join(workspaceDir(rt.meta.id), 'worktrees')
+
+/**
+ * Make a worktree of `project` on `branch` and get it ready: `git worktree
+ * add`, then node_modules and `.env*` from the main folder. Discovery records
+ * the row (one writer, so no duplicate), and then what only triage knows —
+ * the base it was cut from and the item it was made for — goes on it.
+ */
+async function makeWorktree(
+  rt: WorkspaceRuntime,
+  project: Project,
+  branch: string,
+  itemId?: string,
+  onStep?: (step: CreateStep) => void,
+): Promise<Checkout> {
+  onStep?.('worktree')
+  const made = await createWorktree(project, branch, worktreesRoot(rt))
+  onStep?.('files')
+  const notes = await prepareWorktree(project.path, made.path)
+  await syncCheckouts(rt)
+  const row = checkoutList(rt).find((c) => c.projectId === project.id && path.resolve(c.path) === path.resolve(made.path))
+  if (!row) throw new Error(`made ${made.path} but git doesn't list it as a worktree`)
+  const patch = { base: made.base, itemId: itemId ?? null }
+  await rt.store.checkouts.update(row.id, patch)
+  const checkout = { ...row, ...patch }
+  rt.checkouts.set(row.id, checkout)
+  broadcast(rt, { type: 'checkouts', checkouts: checkoutList(rt) })
+  log('info', 'checkouts', `made worktree ${made.branch} of ${project.name}${made.base ? ` from ${made.base}` : ''}`, {
+    workspace: rt.meta.id,
+    path: made.path,
+    ...(notes.length ? { notes: notes.join('; ') } : {}),
+  })
+  return checkout
+}
+
+/** Sessions in a checkout that are mid-turn right now. */
+const runningIn = (rt: WorkspaceRuntime, checkoutId: string): number =>
+  [...rt.rows.values()].filter((r) => {
+    const st = rt.live.get(r.id)?.status
+    return r.checkoutId === checkoutId && (st === 'running' || st === 'starting')
+  }).length
 
 // ---------------------------------------------------------------------------
 // Session changes — reconstructing what one session did to a shared worktree
@@ -1287,23 +1386,35 @@ const overlaps = (a: StoredTurn, b: StoredTurn): boolean =>
  * not in it. Within a window we can still be fooled by a *concurrent* session,
  * which is what `confidence` reports rather than hides.
  */
-/** One project's uncommitted work, for the Changes rail. Never throws: a broken repo is a row, not a 500. */
-async function projectChanges(project: Project): Promise<ProjectChanges> {
-  const empty: ProjectChanges = { project, isRepo: false, branch: null, files: [], insertions: 0, deletions: 0 }
-  if (!(await repoRoot(project.path))) return empty
-  try {
-    const [files, branch] = await Promise.all([worktreeChanges(project.path), currentBranch(project.path)])
-    return {
-      ...empty,
-      isRepo: true,
-      branch,
-      files,
-      insertions: files.reduce((n, f) => n + f.insertions, 0),
-      deletions: files.reduce((n, f) => n + f.deletions, 0),
+/**
+ * One project's uncommitted work for the Changes rail, per checkout: the main
+ * folder and every live worktree, each against its own HEAD. Never throws: a
+ * broken repo is a row, not a 500.
+ */
+async function projectChanges(rt: WorkspaceRuntime, project: Project): Promise<ProjectChanges> {
+  const checkouts = checkoutList(rt).filter((c) => c.projectId === project.id && c.state === 'active')
+  const main = checkouts.find((c) => c.kind === 'main')
+  const isRepo = !!(await repoRoot(project.path))
+  const one = async (checkout: Checkout): Promise<CheckoutChanges> => {
+    const empty: CheckoutChanges = { checkout, files: [], insertions: 0, deletions: 0 }
+    if (!isRepo) return empty
+    try {
+      const [files, ahead] = await Promise.all([
+        worktreeChanges(checkout.path),
+        checkout.kind === 'worktree' && main?.branch ? aheadOf(checkout.path, main.branch) : null,
+      ])
+      return {
+        ...empty,
+        files,
+        insertions: files.reduce((n, f) => n + f.insertions, 0),
+        deletions: files.reduce((n, f) => n + f.deletions, 0),
+        ...(ahead !== null ? { ahead } : {}),
+      }
+    } catch (err) {
+      return { ...empty, error: errText(err) }
     }
-  } catch (err) {
-    return { ...empty, isRepo: true, error: errText(err) }
   }
+  return { project, isRepo, checkouts: await Promise.all(checkouts.map(one)) }
 }
 
 async function computeSessionChanges(rt: WorkspaceRuntime, row: StoredSession): Promise<SessionChanges> {
@@ -1435,6 +1546,7 @@ async function addProject(rt: WorkspaceRuntime, folder: string, name?: string, r
     await rt.store.projects.setDefault(project.id)
     project.isDefault = true
   }
+  await syncCheckouts(rt)
   return project
 }
 
@@ -1458,13 +1570,18 @@ async function createSession(
   effort: EffortLevel | null,
   fastMode: boolean,
   permissionMode: PermissionMode | null,
-  opts: { kind?: SessionKind; spawn?: boolean; projectId?: string | null; provider?: ProviderId } = {},
+  opts: { kind?: SessionKind; spawn?: boolean; projectId?: string | null; checkoutId?: string | null; provider?: ProviderId } = {},
 ): Promise<StoredSession> {
+  const projectId = opts.projectId ?? (await defaultProject(rt))?.id ?? null
+  // Every session names its checkout at birth: the one asked for, else its project's main folder.
+  if (projectId && !mainCheckout(rt, projectId)) await syncCheckouts(rt)
+  const checkoutId = opts.checkoutId ?? mainCheckout(rt, projectId)?.id ?? null
   const row = await rt.store.sessions.create({
     id: randomUUID(),
     title,
     cwd,
-    projectId: opts.projectId ?? (await defaultProject(rt))?.id ?? null,
+    projectId,
+    checkoutId,
     model,
     effort,
     fastMode,
@@ -1475,7 +1592,6 @@ async function createSession(
   rt.rows.set(row.id, row)
   // spawn: false = a row only; the first message starts it (getOrRevive).
   if (opts.spawn !== false) rt.live.set(row.id, new LiveSession(rt, row, 0, null, extrasFor(rt, row)))
-  void refreshBranch(rt, row)
   return row
 }
 
@@ -1608,7 +1724,8 @@ async function resolveMentions(
         `title: ${row.title}`,
         `folder: ${row.cwd}`,
         `status: ${sum.status}`,
-        sum.branch && `branch: ${sum.branch}`,
+        checkoutById(rt, row.checkoutId)?.branch && `branch: ${checkoutById(rt, row.checkoutId)?.branch}`,
+        checkoutById(rt, row.checkoutId)?.kind === 'worktree' && 'checkout: a git worktree of its project',
         `last activity: ${new Date(row.updatedAt).toISOString()}`,
         row.sdkSessionId &&
           `claude session id: ${row.sdkSessionId} — its full transcript is under ~/.claude/projects, or \`claude --resume ${row.sdkSessionId}\` from that folder`,
@@ -1663,6 +1780,20 @@ async function getOrRevive(rt: WorkspaceRuntime, sessionId: string): Promise<Liv
   if (existing && !fresh) return existing
   const row = rt.rows.get(sessionId)
   if (!row) return null
+  // A worktree removed under a session leaves it no folder to start in. Say so in its
+  // transcript rather than let the agent fail to launch with an error about something else.
+  if (!existing && !(await stat(row.cwd).then((st) => st.isDirectory(), () => false))) {
+    const co = checkoutById(rt, row.checkoutId)
+    const message =
+      co?.kind === 'worktree'
+        ? `This session's worktree (${co.branch ?? row.cwd}) was removed, so it has no folder to run in. Recreate the worktree to continue here, or continue in the main folder.`
+        : `This session's folder is gone: ${row.cwd}. Start a new session somewhere that exists.`
+    const seq = (await rt.store.events.lastSeq(row.id)) + 1
+    await rt.store.events.append(row.id, seq, { kind: 'error', message })
+    broadcast(rt, { type: 'session_event', sessionId: row.id, event: { kind: 'error', message }, at: Date.now() })
+    void syncCheckouts(rt)
+    return null
+  }
   if (existing) existing.stop()
   const lastSeq = await rt.store.events.lastSeq(row.id)
   const revived = new LiveSession(rt, row, lastSeq, fresh ? null : row.sdkSessionId, extrasFor(rt, row))
@@ -1679,7 +1810,6 @@ async function getOrRevive(rt: WorkspaceRuntime, sessionId: string): Promise<Liv
 async function loadSessions(rt: WorkspaceRuntime) {
   for (const row of await rt.store.sessions.list()) {
     rt.rows.set(row.id, row)
-    void refreshBranch(rt, row)
 
     const events = await rt.store.events.read(row.id)
     const unresolved = new Map<string, true>()
@@ -3416,6 +3546,7 @@ function workspaceInfo(rt: WorkspaceRuntime) {
 /** Bring a runtime up: sessions, seeds, cached snapshot, background probes. */
 async function initRuntime(rt: WorkspaceRuntime): Promise<void> {
   await migrateDefaultProject(rt)
+  await loadCheckouts(rt)
   await loadSessions(rt)
   await markInterruptedRuns(rt)
   await migrateWatchProjects(rt)
@@ -5382,7 +5513,17 @@ async function dispatchPreviewOp(rt: WorkspaceRuntime, itemId: string): Promise<
   const note = shots ? `\n\n${shots} screenshot${shots === 1 ? '' : 's'} from this item ${shots === 1 ? 'is' : 'are'} attached to this message.` : ''
   // The mention tokens must appear in the text — the composer attaches only what the text names.
   const text = `${body}${note}\n\n${mentions.map(mentionToken).join(' ')}`
-  return { title: item.title.slice(0, 80), cwd: project?.path ?? null, text, mentions }
+  // What the draft offers, never picks: a branch for a new worktree, and the item's own worktree if it has one.
+  const main = mainCheckout(rt, project?.id)
+  const existing = checkoutList(rt).find((c) => c.itemId === item.id && c.kind === 'worktree' && c.state === 'active')
+  return {
+    title: item.title.slice(0, 80),
+    cwd: project?.path ?? null,
+    text,
+    mentions,
+    branch: main?.branch ? branchFromTitle(item.title) || null : null,
+    checkoutId: existing?.id ?? null,
+  }
 }
 
 const okResult = (text: string) => ({ content: [{ type: 'text' as const, text }] })
@@ -6216,8 +6357,10 @@ const server = http.createServer(async (req, res) => {
   if (url.pathname === '/api/changes' && req.method === 'GET') {
     let body: WorkingChangesResponse
     try {
+      // The poll is also when worktrees made elsewhere, or deleted, are noticed.
+      await syncCheckouts(rt)
       const projects = await rt.store.projects.list()
-      body = { ok: true, projects: await Promise.all(projects.map(projectChanges)) }
+      body = { ok: true, projects: await Promise.all(projects.map((p) => projectChanges(rt, p))) }
     } catch (err) {
       body = { ok: false, error: errText(err) }
     }
@@ -6225,16 +6368,18 @@ const server = http.createServer(async (req, res) => {
     return
   }
   if (url.pathname === '/api/changes/diff' || url.pathname === '/api/changes/file') {
-    const project = (await rt.store.projects.list()).find((p) => p.id === url.searchParams.get('projectId'))
+    // `projectId=` is the pre-checkout form: that project's main folder.
+    const checkout = checkoutById(rt, url.searchParams.get('checkoutId') ?? url.searchParams.get('projectId'))
+    const project = checkout && (await rt.store.projects.list()).find((p) => p.id === checkout.projectId)
     const file = url.searchParams.get('path') ?? ''
-    if (!project || !file) {
-      json(400, { ok: false, error: project ? 'need a path' : 'unknown project' })
+    if (!checkout || !project || !file) {
+      json(400, { ok: false, error: checkout && project ? 'need a path' : 'unknown checkout' })
       return
     }
     if (url.pathname === '/api/changes/diff' && req.method === 'GET') {
       let body: WorkingDiffResponse
       try {
-        const got = await worktreePatch(project.path, file)
+        const got = await worktreePatch(checkout.path, file)
         body = { ok: true, path: file, patch: got.patch, isBinary: got.patch.includes('Binary files'), truncated: got.truncated }
       } catch (err) {
         body = { ok: false, error: errText(err) }
@@ -6245,7 +6390,7 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/changes/file' && req.method === 'GET') {
       let body: ProjectFileResponse
       try {
-        body = await readProjectFile(project.path, file)
+        body = await readProjectFile(checkout.path, file)
       } catch (err) {
         body = { ok: false, error: errText(err) }
       }
@@ -6265,14 +6410,135 @@ const server = http.createServer(async (req, res) => {
         if (typeof parsed?.content !== 'string' || typeof parsed.version !== 'string') {
           throw new Error('need content and the version it was edited from')
         }
-        body = await writeProjectFile(project.path, file, parsed.content, parsed.version)
-        if (body.ok) log('info', 'changes', `saved ${file}`, { project: project.name, workspace: rt.meta.id })
+        body = await writeProjectFile(checkout.path, file, parsed.content, parsed.version)
+        if (body.ok) log('info', 'changes', `saved ${file}`, { project: project.name, checkout: checkout.branch ?? checkout.path, workspace: rt.meta.id })
       } catch (err) {
         body = { ok: false, error: errText(err) }
       }
       json(body.ok ? 200 : body.conflict ? 409 : 400, body)
       return
     }
+  }
+
+  // "Open in…": the editors on this Mac, and opening a checkout's folder in one.
+  if (url.pathname === '/api/editors' && req.method === 'GET') {
+    let body: EditorsResponse
+    try {
+      body = { ok: true, editors: access === 'local' ? await detectEditors() : [] }
+    } catch (err) {
+      body = { ok: false, error: errText(err) }
+    }
+    json(body.ok ? 200 : 500, body)
+    return
+  }
+  // Bringing a removed worktree back, at the same folder, so its sessions resume.
+  const recreateMatch = /^\/api\/checkouts\/([^/]+)\/recreate$/.exec(url.pathname)
+  if (recreateMatch && req.method === 'POST') {
+    if (!sameOrigin(req, access)) {
+      json(403, { ok: false, error: 'cross-origin requests are not accepted' })
+      return
+    }
+    let body: OpenCheckoutResponse
+    try {
+      const checkout = checkoutById(rt, decodeURIComponent(recreateMatch[1]))
+      if (!checkout || checkout.kind !== 'worktree') throw new Error('no such worktree')
+      if (checkout.state !== 'removed') throw new Error('that worktree is still there')
+      const project = (await rt.store.projects.list()).find((p) => p.id === checkout.projectId)
+      if (!project) throw new Error('its project is gone')
+      await recreateWorktree(checkout, project)
+      const notes = await prepareWorktree(project.path, checkout.path)
+      await syncCheckouts(rt)
+      log('info', 'checkouts', `recreated worktree ${checkout.branch ?? checkout.path}`, {
+        workspace: rt.meta.id,
+        ...(notes.length ? { notes: notes.join('; ') } : {}),
+      })
+      body = { ok: true }
+    } catch (err) {
+      body = { ok: false, error: errText(err) }
+    }
+    json(body.ok ? 200 : 400, body)
+    return
+  }
+
+  // Removing a worktree: what it would lose (asked first), then the removal itself.
+  const removalMatch = /^\/api\/checkouts\/([^/]+)\/(removal|remove)$/.exec(url.pathname)
+  if (removalMatch) {
+    const checkout = checkoutById(rt, decodeURIComponent(removalMatch[1]))
+    const main = mainCheckout(rt, checkout?.projectId)
+    if (!checkout || checkout.kind !== 'worktree' || checkout.state !== 'active' || !main) {
+      json(404, { ok: false, error: checkout?.kind === 'main' ? "the main folder is yours — triage doesn't remove it" : 'no such worktree' })
+      return
+    }
+    if (removalMatch[2] === 'removal' && req.method === 'GET') {
+      let body: RemovalCheckResponse
+      try {
+        body = { ok: true, check: await checkRemoval(checkout, main.path, runningIn(rt, checkout.id)) }
+      } catch (err) {
+        body = { ok: false, error: errText(err) }
+      }
+      json(body.ok ? 200 : 500, body)
+      return
+    }
+    if (removalMatch[2] === 'remove' && req.method === 'POST') {
+      if (!sameOrigin(req, access)) {
+        json(403, { ok: false, error: 'cross-origin requests are not accepted' })
+        return
+      }
+      let body: RemoveCheckoutResponse
+      try {
+        const parsed = (await readJsonBody(req)) as { force?: unknown; deleteBranch?: unknown } | null
+        const force = parsed?.force === true
+        const check = await checkRemoval(checkout, main.path, runningIn(rt, checkout.id))
+        if (!check.safe && !force) {
+          body = { ok: false, error: 'this worktree has work that would be lost', check }
+        } else {
+          // Its sessions keep their transcripts; their subprocesses can't outlive the folder.
+          for (const r of rt.rows.values()) {
+            if (r.checkoutId !== checkout.id || !rt.live.has(r.id)) continue
+            rt.live.get(r.id)?.stop()
+            rt.live.delete(r.id)
+          }
+          const notes = await removeWorktree(checkout, { force, deleteBranch: parsed?.deleteBranch !== false, merged: check.unmerged === 0 })
+          await syncCheckouts(rt)
+          broadcastSessionList(rt)
+          log('info', 'checkouts', `removed worktree ${checkout.branch ?? checkout.path}${force ? ' (forced)' : ''}`, {
+            workspace: rt.meta.id,
+            ...(notes.length ? { notes: notes.join('; ') } : {}),
+          })
+          body = { ok: true }
+        }
+      } catch (err) {
+        body = { ok: false, error: errText(err) }
+      }
+      json(body.ok ? 200 : 400, body)
+      return
+    }
+  }
+
+  const openMatch = /^\/api\/checkouts\/([^/]+)\/open$/.exec(url.pathname)
+  if (openMatch && req.method === 'POST') {
+    let body: OpenCheckoutResponse
+    if (access !== 'local') {
+      // The editor would open on the Mac's screen, not the phone asking for it.
+      body = { ok: false, error: 'editors open on the Mac — use it there' }
+    } else if (!sameOrigin(req, access)) {
+      json(403, { ok: false, error: 'cross-origin requests are not accepted' })
+      return
+    } else {
+      try {
+        const checkout = checkoutById(rt, decodeURIComponent(openMatch[1]))
+        if (!checkout || checkout.state !== 'active') throw new Error('that checkout is gone')
+        const parsed = (await readJsonBody(req)) as { editor?: unknown } | null
+        const editor = typeof parsed?.editor === 'string' ? parsed.editor : ''
+        if (!editor) throw new Error('need an editor')
+        await openFolderIn(checkout.path, editor)
+        body = { ok: true }
+      } catch (err) {
+        body = { ok: false, error: errText(err) }
+      }
+    }
+    json(body.ok ? 200 : 400, body)
+    return
   }
 
   // The composer's `@` picker: fuzzy file matches under one folder.
@@ -6350,6 +6616,9 @@ const server = http.createServer(async (req, res) => {
         const id = url.searchParams.get('id')
         if (id) {
           await rt.store.projects.remove(id)
+          await rt.store.checkouts.removeForProject(id)
+          for (const c of checkoutList(rt)) if (c.projectId === id) rt.checkouts.delete(c.id)
+          broadcast(rt, { type: 'checkouts', checkouts: checkoutList(rt) })
           // Its watches pause with a visible reason — never run somewhere else (watch-spec.md, item 2).
           for (const w of await rt.store.watches.list()) {
             if (w.projectId !== id) continue
@@ -7568,6 +7837,11 @@ function parseClientMessage(raw: unknown): ClientMessage | null {
         title: str(m.title),
         cwd: str(m.cwd),
         projectId: typeof m.projectId === 'string' && m.projectId ? m.projectId : undefined,
+        checkoutId: typeof m.checkoutId === 'string' && m.checkoutId ? m.checkoutId : undefined,
+        worktree:
+          typeof m.worktree === 'object' && m.worktree !== null && typeof (m.worktree as { branch?: unknown }).branch === 'string'
+            ? { branch: str((m.worktree as { branch: string }).branch).trim().slice(0, 200) }
+            : undefined,
         firstMessage: typeof m.firstMessage === 'string' ? m.firstMessage : undefined,
         images: imageAttachments(m.images),
         mentions: mentionList(m.mentions),
@@ -7654,6 +7928,7 @@ function parseClientMessage(raw: unknown): ClientMessage | null {
         type: 'terminal_create',
         cwd: typeof m.cwd === 'string' && m.cwd ? m.cwd : undefined,
         projectId: typeof m.projectId === 'string' && m.projectId ? m.projectId : undefined,
+        checkoutId: typeof m.checkoutId === 'string' && m.checkoutId ? m.checkoutId : undefined,
         title: typeof m.title === 'string' && m.title ? m.title : undefined,
         command: typeof m.command === 'string' && m.command ? m.command : undefined,
       }
@@ -7693,6 +7968,7 @@ wss.on('connection', (ws, req) => {
     workspaces: wireWorkspaces(),
     onboarded: registry.onboarded,
     terminals: rt.terminals.list(),
+    checkouts: checkoutList(rt),
     build: BUILD,
   })
 
@@ -7711,19 +7987,31 @@ wss.on('connection', (ws, req) => {
         case 'create_session': {
           if (msg.provider && !isConnected(rt.meta, msg.provider))
             throw new Error(`${providerFor(msg.provider).label} isn't connected in this workspace — connect it in Settings → Providers`)
-          const fallback = msg.cwd ? null : await defaultProject(rt)
-          const cwd = expandHome(msg.cwd || fallback?.path || '~')
-          const project = await projectForSession(rt, cwd, msg.projectId ?? fallback?.id)
+          // A checkout names both the folder and the project; it must still be there.
+          let checkout = msg.checkoutId ? rt.checkouts.get(msg.checkoutId) : undefined
+          if (msg.checkoutId && checkout?.state !== 'active') throw new Error('that checkout is gone — pick another folder')
+          // A new worktree is made before the session exists, so the session's folder is the worktree.
+          if (!checkout && msg.worktree?.branch) {
+            const target = msg.projectId
+              ? (await rt.store.projects.list()).find((p) => p.id === msg.projectId)
+              : await projectForSession(rt, expandHome(msg.cwd || (await defaultProject(rt))?.path || '~'))
+            if (!target) throw new Error('unknown project')
+            checkout = await makeWorktree(rt, target, msg.worktree.branch, msg.itemId, (step) => send(ws, { type: 'create_progress', step }))
+            send(ws, { type: 'create_progress', step: 'session' })
+          }
+          const fallback = msg.cwd || checkout ? null : await defaultProject(rt)
+          const cwd = checkout?.path ?? expandHome(msg.cwd || fallback?.path || '~')
+          const project = await projectForSession(rt, cwd, checkout?.projectId ?? msg.projectId ?? fallback?.id)
           const title = msg.title.trim() || `Session ${rt.rows.size + 1}`
           const row = await createSession(
             rt,
             title,
-            msg.cwd ? cwd : project.path,
+            msg.cwd || checkout ? cwd : project.path,
             msg.model ?? null,
             msg.effort ?? null,
             msg.fastMode === true,
             msg.permissionMode ?? null,
-            { projectId: project.id, provider: msg.provider },
+            { projectId: project.id, checkoutId: checkout?.id, provider: msg.provider },
           )
           // Dispatched from an item: the link is what the item page shows as "sessions".
           if (msg.itemId) await linkSessionToItem(rt, row.id, msg.itemId, 'dispatch').catch(() => {})
@@ -7858,15 +8146,18 @@ wss.on('connection', (ws, req) => {
           break
         }
         case 'terminal_create': {
-          const cwd = msg.cwd ? path.resolve(expandHome(msg.cwd)) : undefined
+          const checkout = msg.checkoutId ? rt.checkouts.get(msg.checkoutId) : undefined
+          const cwd = checkout?.path ?? (msg.cwd ? path.resolve(expandHome(msg.cwd)) : undefined)
           const projects = await rt.store.projects.list()
           const project =
+            (checkout ? projects.find((p) => p.id === checkout.projectId) : undefined) ??
             (msg.projectId ? projects.find((p) => p.id === msg.projectId) : undefined) ??
             (cwd ? projects.find((p) => path.resolve(p.path) === cwd) : undefined) ??
             projects.find((p) => p.isDefault)
           const terminal = rt.terminals.create({
             cwd: cwd ?? project?.path,
             projectId: project?.id ?? null,
+            checkoutId: checkout?.id ?? mainCheckout(rt, project?.id)?.id ?? null,
             title: msg.title,
             command: msg.command,
             env: rt.env,
@@ -7900,7 +8191,9 @@ wss.on('connection', (ws, req) => {
         }
       }
     } catch (err) {
-      send(ws, { type: 'error', message: String(err) })
+      // A draft waiting on its session must hear why it didn't come, not just the console.
+      if (msg.type === 'create_session') send(ws, { type: 'create_failed', message: errText(err) })
+      else send(ws, { type: 'error', message: String(err) })
     }
   })
 

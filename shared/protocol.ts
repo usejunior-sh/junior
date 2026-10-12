@@ -323,8 +323,8 @@ export type SessionSummary = {
   provider?: ProviderId
   /** Pinned to the top of the sidebar. Absent = not pinned. */
   pinned?: boolean
-  /** Current git branch of `cwd`, when it is a repo. Derived, not stored. */
-  branch?: string
+  /** The checkout (folder of the project) the session runs in — stored, never derived from `cwd`. Look it up in `checkouts`. */
+  checkoutId?: string
   /** chat (default, absent), watch-run, or brief (a headless run that writes an item's brief). */
   kind?: SessionKind
   /** the watch a watch-run session belongs to. */
@@ -809,6 +809,75 @@ export type Project = {
   isDefault?: boolean
 }
 
+// ---------------------------------------------------------------------------
+// Checkouts (decision 549a251e): a folder of a project. `main` is the folder
+// the user added — its branch is whatever is checked out right now; a
+// `worktree` is a `git worktree` of the same repo, found with `git worktree
+// list`. Sessions and terminals belong to one; the inbox stays workspace-wide.
+// ---------------------------------------------------------------------------
+
+export type CheckoutKind = 'main' | 'worktree'
+/** `removed` = the folder is gone; the row stays so its sessions keep their history. */
+export type CheckoutState = 'active' | 'removed'
+
+export type Checkout = {
+  id: string
+  projectId: string
+  kind: CheckoutKind
+  /** absolute folder */
+  path: string
+  /** the checked-out branch as last read from git; null = detached HEAD or not a repo */
+  branch: string | null
+  /** the branch a worktree was cut from; null for main, and for worktrees made outside triage */
+  base: string | null
+  /** the work item a worktree was made for, when triage made it for one */
+  itemId: string | null
+  state: CheckoutState
+  createdAt: number
+}
+
+/** An editor triage found on this machine, for "Open in…" (GET /api/editors). */
+export type Editor = { id: string; name: string }
+
+export type EditorsResponse = { ok: true; editors: Editor[] } | { ok: false; error: string }
+
+/**
+ * POST /api/checkouts/:id/open with `{ editor }` — an editor id from
+ * /api/editors, or 'finder' to reveal the folder.
+ */
+export type OpenCheckoutResponse = { ok: true } | { ok: false; error: string }
+// POST /api/checkouts/:id/recreate — a removed worktree back at its same folder
+// (so its sessions resume), node_modules and .env copied in again. Answers as OpenCheckoutResponse.
+
+/**
+ * GET /api/checkouts/:id/removal — what removing a worktree would lose, read
+ * before asking. `safe` = nothing: merged, clean, nothing running in it.
+ */
+export type RemovalCheck = {
+  branch: string | null
+  /** the branch its commits are compared with (the repo's default branch) */
+  base: string | null
+  /** commits on the worktree's branch that `base` doesn't have; null when it can't be told */
+  unmerged: number | null
+  /** uncommitted files in the folder */
+  uncommitted: number
+  /** sessions working there right now — removing stops them */
+  running: number
+  safe: boolean
+}
+
+/** Where a session being made in a new worktree has got to: the git worktree, its node_modules and .env, the session itself. */
+export type CreateStep = 'worktree' | 'files' | 'session'
+
+export type RemovalCheckResponse = { ok: true; check: RemovalCheck } | { ok: false; error: string }
+
+/**
+ * POST /api/checkouts/:id/remove with `{ force?, deleteBranch? }` —
+ * `git worktree remove`, then the local branch. Without `force` an unsafe
+ * worktree is refused and the check comes back to say why.
+ */
+export type RemoveCheckoutResponse = { ok: true } | { ok: false; error: string; check?: RemovalCheck }
+
 export type ProjectsResponse =
   | { ok: true; projects: Project[] }
   | { ok: false; error: string }
@@ -898,16 +967,24 @@ export type WorkingFile = {
   isBinary: boolean
 }
 
+/** One checkout's uncommitted work against its own HEAD. */
+export type CheckoutChanges = {
+  checkout: Checkout
+  files: WorkingFile[]
+  insertions: number
+  deletions: number
+  /** worktrees only: commits on its branch that the main checkout's branch doesn't have */
+  ahead?: number
+  /** git failed for this checkout; the others still load */
+  error?: string
+}
+
 export type ProjectChanges = {
   project: Project
   /** false when the project folder is not inside a git repo */
   isRepo: boolean
-  branch: string | null
-  files: WorkingFile[]
-  insertions: number
-  deletions: number
-  /** git failed for this project; the others still load */
-  error?: string
+  /** main first, then worktrees by branch; removed ones are left out */
+  checkouts: CheckoutChanges[]
 }
 
 /** GET /api/changes */
@@ -915,11 +992,15 @@ export type WorkingChangesResponse =
   | { ok: true; projects: ProjectChanges[] }
   | { ok: false; error: string }
 
-/** GET /api/changes/diff?projectId=…&path=… — the same shape as a session's file diff. */
+/**
+ * GET /api/changes/diff?checkoutId=…&path=… — the same shape as a session's
+ * file diff. A project id in `checkoutId` (or the older `projectId=`) means
+ * that project's main checkout, so links made before checkouts still open.
+ */
 export type WorkingDiffResponse = SessionDiffResponse
 
 /**
- * GET /api/changes/file?projectId=…&path=… — a changed file, for editing.
+ * GET /api/changes/file?checkoutId=…&path=… — a changed file, for editing.
  * `version` is a hash of the bytes read; a save sends it back so an edit made
  * on disk in the meantime (an agent, your editor) is refused, not clobbered.
  */
@@ -928,7 +1009,7 @@ export type ProjectFileResponse =
   | { ok: true; path: string; kind: 'binary' | 'large' | 'missing'; bytes: number }
   | { ok: false; error: string }
 
-/** PUT /api/changes/file?projectId=…&path=… with body `{ content, version }`. */
+/** PUT /api/changes/file?checkoutId=…&path=… with body `{ content, version }`. */
 export type SaveProjectFileResponse =
   | { ok: true; version: string }
   | { ok: false; error: string; conflict?: boolean }
@@ -1317,7 +1398,16 @@ export type SettingsResponse = { ok: true; settings: WorkspaceSettings } | { ok:
 
 // Dispatch preview (GET /api/dispatch/preview?itemId=) — what a dispatched
 // session starts with, composed server-side so the brief rides as a mention.
-export type DispatchPreview = { title: string; cwd: string | null; text: string; mentions: Mention[] }
+export type DispatchPreview = {
+  title: string
+  cwd: string | null
+  text: string
+  mentions: Mention[]
+  /** a branch for a new worktree, named from the item; null when the project isn't a git repo */
+  branch: string | null
+  /** a live worktree already made for this item — dispatch continues there */
+  checkoutId: string | null
+}
 export type DispatchPreviewResponse = { ok: true; preview: DispatchPreview } | { ok: false; error: string }
 
 // ---------------------------------------------------------------------------
@@ -1485,6 +1575,8 @@ export type TerminalSummary = {
   cwd: string
   /** the project the shell was opened in */
   projectId?: string
+  /** the checkout the shell was opened in */
+  checkoutId?: string
   /** the shell binary's basename, e.g. "zsh" */
   shell: string
   pid: number
@@ -1500,6 +1592,14 @@ export type ClientMessage =
       cwd: string
       /** The project to run in. Omitted = the project at `cwd`, added as one if it isn't yet. */
       projectId?: string
+      /** The checkout to run in; its folder becomes the session's `cwd`. Omitted = the project's main checkout. */
+      checkoutId?: string
+      /**
+       * Make a new worktree of the project and run there: `git worktree add -b
+       * <branch>` from the repo's default branch (an existing branch is checked
+       * out instead), node_modules cloned and `.env*` copied from the main folder.
+       */
+      worktree?: { branch: string }
       firstMessage?: string
       /** Images attached to that first message. */
       images?: ImageAttachment[]
@@ -1544,7 +1644,7 @@ export type ClientMessage =
   /** A message for a subagent — relayed by the main agent with SendMessage, since the SDK can't address one directly. */
   | { type: 'agent_message'; sessionId: string; relay: AgentRelay; text: string }
   /** Open a shell in `cwd` (default: the project's folder); `command` is typed in first, if given. */
-  | { type: 'terminal_create'; cwd?: string; projectId?: string; title?: string; command?: string }
+  | { type: 'terminal_create'; cwd?: string; projectId?: string; checkoutId?: string; title?: string; command?: string }
   /** Keystrokes / pasted text — raw, exactly as the terminal emulator produced them. */
   | { type: 'terminal_input'; terminalId: string; data: string }
   | { type: 'terminal_resize'; terminalId: string; cols: number; rows: number }
@@ -1565,6 +1665,7 @@ export type ServerMessage =
       workspaces: Workspace[]
       onboarded: boolean
       terminals: TerminalSummary[]
+      checkouts: Checkout[]
       /** which copy of triage this socket is talking to — the UI badges it */
       build: Build
     }
@@ -1579,6 +1680,12 @@ export type ServerMessage =
   /** `at` is when the server saw the event (ms epoch). */
   | { type: 'session_event'; sessionId: string; event: SessionEvent; at?: number }
   | { type: 'terminals'; terminals: TerminalSummary[] }
+  /** A create_session from this socket that makes a worktree, step by step — the draft shows where it's got to. */
+  | { type: 'create_progress'; step: CreateStep }
+  /** A create_session from this socket failed (e.g. the worktree couldn't be made) — the draft stays open to say so. */
+  | { type: 'create_failed'; message: string }
+  /** The workspace's checkouts changed — a worktree appeared or went, a branch moved. The whole list. */
+  | { type: 'checkouts'; checkouts: Checkout[] }
   | { type: 'terminal_created'; terminal: TerminalSummary }
   /** The scrollback so far — sent once per subscribe, before live output resumes. */
   | { type: 'terminal_history'; terminalId: string; data: string }
