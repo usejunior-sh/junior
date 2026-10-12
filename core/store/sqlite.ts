@@ -10,7 +10,7 @@ import { DatabaseSync } from 'node:sqlite'
 import { mkdirSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import path from 'node:path'
-import type { Artifact, BriefJob, BriefStatus, InboxSnapshot, ItemImage, Link, LinkKind, LinkRole, Project, SessionEvent } from '../../shared/protocol.js'
+import type { Artifact, BriefJob, BriefStatus, Checkout, CheckoutState, InboxSnapshot, ItemImage, Link, LinkKind, LinkRole, Project, SessionEvent } from '../../shared/protocol.js'
 import { isArtifactAuthor, isLinkKind, isLinkRole } from '../../shared/protocol.js'
 import type { Provenance, WorkItem } from '../work/types.js'
 import type { ItemEvent, ItemEventKind, ItemStatus, StatusChange } from '../work/state.js'
@@ -24,6 +24,8 @@ import { grantsFrom, grantsFromLegacy, type WatchToolGrant } from '../watch/tool
 import type {
   ArtifactStore,
   BriefJobStore,
+  CheckoutPatch,
+  CheckoutStore,
   ConfigStore,
   LinkStore,
   NewBriefJob,
@@ -323,6 +325,24 @@ const MIGRATIONS: string[] = [
   // 27: the agent a session runs on, fixed for its life. Every session before
   // this ran on Claude, so the default backfills them.
   `ALTER TABLE sessions ADD COLUMN provider TEXT NOT NULL DEFAULT 'claude';`,
+  // 28: checkouts — a project's folders, its main one and its git worktrees
+  // (worktrees phase 1). Sessions record theirs in `sessions.checkout_id`,
+  // which ensureDurableSchema adds: SQLite has no ADD COLUMN IF NOT EXISTS,
+  // and this step must survive a version counter that got here another way.
+  // A session's checkout is backfilled at boot (its project's main one), not
+  // here: main rows are created from the projects, in app code.
+  `CREATE TABLE IF NOT EXISTS checkouts (
+     id         TEXT PRIMARY KEY,
+     project_id TEXT NOT NULL,
+     kind       TEXT NOT NULL,
+     path       TEXT NOT NULL,
+     branch     TEXT,
+     base       TEXT,
+     item_id    TEXT,
+     state      TEXT NOT NULL DEFAULT 'active',
+     created_at INTEGER NOT NULL
+   );
+   CREATE INDEX IF NOT EXISTS idx_checkouts_project ON checkouts(project_id);`,
 ]
 
 export function openSqliteStore(file: string): Store {
@@ -340,6 +360,7 @@ export function openSqliteStore(file: string): Store {
     inbox: new SqliteInbox(db),
     config: new SqliteConfig(db),
     projects: new SqliteProjects(db),
+    checkouts: new SqliteCheckouts(db),
     watches: new SqliteWatches(db),
     watchRuns: new SqliteWatchRuns(db),
     items: new SqliteWorkItems(db),
@@ -469,6 +490,12 @@ function ensureDurableSchema(db: DatabaseSync) {
 
   ensure('sessions', 'project_id', 'project_id TEXT', s)
   ensure('sessions', 'provider', "provider TEXT NOT NULL DEFAULT 'claude'", s)
+  ensure('sessions', 'checkout_id', 'checkout_id TEXT', s)
+  db.exec(`CREATE TABLE IF NOT EXISTS checkouts (
+     id TEXT PRIMARY KEY, project_id TEXT NOT NULL, kind TEXT NOT NULL, path TEXT NOT NULL,
+     branch TEXT, base TEXT, item_id TEXT, state TEXT NOT NULL DEFAULT 'active', created_at INTEGER NOT NULL
+   );
+   CREATE INDEX IF NOT EXISTS idx_checkouts_project ON checkouts(project_id);`)
 
   const wi = cols('work_items')
   ensure('work_items', 'due_at', 'due_at INTEGER', wi)
@@ -496,6 +523,7 @@ type SessionRow = {
   title: string
   cwd: string
   project_id: string | null
+  checkout_id: string | null
   sdk_session_id: string | null
   model: string | null
   effort: string | null
@@ -539,6 +567,7 @@ const toSession = (r: SessionRow): StoredSession => ({
   title: r.title,
   cwd: r.cwd,
   projectId: r.project_id,
+  checkoutId: r.checkout_id ?? null,
   sdkSessionId: r.sdk_session_id,
   model: r.model,
   effort: toEffort(r.effort),
@@ -571,17 +600,19 @@ class SqliteSessions implements SessionStore {
     const provider: ProviderId = s.provider ?? 'claude'
     const kind: SessionKind = s.kind ?? 'chat'
     const watchId = s.watchId ?? null
+    const checkoutId = s.checkoutId ?? null
     this.db
       .prepare(
-        `INSERT INTO sessions (id, title, cwd, project_id, sdk_session_id, model, effort, fast_mode, permission_mode, provider, kind, watch_id, run_trigger, created_at, updated_at)
-         VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO sessions (id, title, cwd, project_id, checkout_id, sdk_session_id, model, effort, fast_mode, permission_mode, provider, kind, watch_id, run_trigger, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
-      .run(s.id, s.title, s.cwd, s.projectId, model, effort, fastMode ? 1 : 0, permissionMode, provider, kind, watchId, s.runTrigger ?? null, now, now)
+      .run(s.id, s.title, s.cwd, s.projectId, checkoutId, model, effort, fastMode ? 1 : 0, permissionMode, provider, kind, watchId, s.runTrigger ?? null, now, now)
     return {
       id: s.id,
       title: s.title,
       cwd: s.cwd,
       projectId: s.projectId,
+      checkoutId,
       model,
       effort,
       fastMode,
@@ -619,6 +650,26 @@ class SqliteSessions implements SessionStore {
         const projectId = assign(r.cwd)
         if (!projectId) continue
         set.run(projectId, r.id)
+        n++
+      }
+      this.db.exec('COMMIT')
+    } catch (err) {
+      this.db.exec('ROLLBACK')
+      throw err
+    }
+    return n
+  }
+
+  async backfillCheckouts(assign: (projectId: string | null) => string | null): Promise<number> {
+    const rows = this.db.prepare('SELECT id, project_id FROM sessions WHERE checkout_id IS NULL').all() as { id: string; project_id: string | null }[]
+    const set = this.db.prepare('UPDATE sessions SET checkout_id = ? WHERE id = ?')
+    let n = 0
+    this.db.exec('BEGIN')
+    try {
+      for (const r of rows) {
+        const checkoutId = assign(r.project_id)
+        if (!checkoutId) continue
+        set.run(checkoutId, r.id)
         n++
       }
       this.db.exec('COMMIT')
@@ -1546,6 +1597,58 @@ class SqliteProjects implements ProjectStore {
     const r = this.db.prepare('SELECT is_default FROM projects WHERE id = ?').get(id) as { is_default: number } | undefined
     if (r?.is_default) throw new Error('the default project can only be replaced — make another project the default first')
     this.db.prepare('DELETE FROM projects WHERE id = ?').run(id)
+  }
+}
+
+type CheckoutRow = {
+  id: string
+  project_id: string
+  kind: string
+  path: string
+  branch: string | null
+  base: string | null
+  item_id: string | null
+  state: string
+  created_at: number
+}
+
+const toCheckout = (r: CheckoutRow): Checkout => ({
+  id: r.id,
+  projectId: r.project_id,
+  kind: r.kind === 'worktree' ? 'worktree' : 'main',
+  path: r.path,
+  branch: r.branch,
+  base: r.base,
+  itemId: r.item_id,
+  state: r.state === 'removed' ? 'removed' : 'active',
+  createdAt: r.created_at,
+})
+
+class SqliteCheckouts implements CheckoutStore {
+  constructor(private db: DatabaseSync) {}
+
+  async list(): Promise<Checkout[]> {
+    const rows = this.db
+      .prepare("SELECT * FROM checkouts ORDER BY project_id, kind = 'worktree', branch COLLATE NOCASE, created_at")
+      .all() as CheckoutRow[]
+    return rows.map(toCheckout)
+  }
+
+  async create(c: Checkout): Promise<void> {
+    this.db
+      .prepare('INSERT INTO checkouts (id, project_id, kind, path, branch, base, item_id, state, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(c.id, c.projectId, c.kind, c.path, c.branch, c.base, c.itemId, c.state, c.createdAt)
+  }
+
+  async update(id: string, patch: CheckoutPatch): Promise<void> {
+    if (patch.branch !== undefined) this.db.prepare('UPDATE checkouts SET branch = ? WHERE id = ?').run(patch.branch, id)
+    if (patch.state !== undefined) this.db.prepare('UPDATE checkouts SET state = ? WHERE id = ?').run(patch.state, id)
+    if (patch.base !== undefined) this.db.prepare('UPDATE checkouts SET base = ? WHERE id = ?').run(patch.base, id)
+    if (patch.itemId !== undefined) this.db.prepare('UPDATE checkouts SET item_id = ? WHERE id = ?').run(patch.itemId, id)
+  }
+
+  async removeForProject(projectId: string): Promise<void> {
+    this.db.prepare('DELETE FROM checkouts WHERE project_id = ?').run(projectId)
   }
 }
 

@@ -17,6 +17,8 @@ import type {
   Artifact,
   BriefJob,
   BriefStatus,
+  Checkout,
+  CheckoutState,
   EffortLevel,
   InboxSnapshot,
   ItemImage,
@@ -41,6 +43,8 @@ export type StoredSession = {
   cwd: string
   /** The project the session runs in — stored, never derived from `cwd` (a worktree's folder isn't the project's). */
   projectId: string | null
+  /** The checkout the session runs in — stored at creation, never derived from `cwd`. null only before backfill. */
+  checkoutId: string | null
   /** Claude Code's own session id — the key for `resume` and the link to its transcript. */
   sdkSessionId: string | null
   /** The model the user picked; null = whatever Claude Code defaults to. */
@@ -90,6 +94,7 @@ export type NewSession = {
   cwd: string
   /** null only for rows that predate projects; every new session names one */
   projectId: string | null
+  checkoutId?: string | null
   model?: string | null
   effort?: EffortLevel | null
   fastMode?: boolean
@@ -114,6 +119,8 @@ export interface SessionStore {
   list(): Promise<StoredSession[]>
   /** Give every session without a project the one `assign` picks for its cwd; returns how many were set. */
   backfillProjects(assign: (cwd: string) => string | null): Promise<number>
+  /** Give every session without a checkout the one `assign` picks for its project; returns how many were set. */
+  backfillCheckouts(assign: (projectId: string | null) => string | null): Promise<number>
   setSdkSessionId(id: string, sdkSessionId: string): Promise<void>
   /** Persist a model/effort switch, so a revived session keeps the choice. */
   setModel(id: string, model: string | null, effort: EffortLevel | null): Promise<void>
@@ -206,6 +213,19 @@ export interface ProjectStore {
   remove(id: string): Promise<void>
   /** Delete the retired built-in scratch projects (a dev-build leftover); returns what was removed. */
   retireBuiltin(): Promise<Project[]>
+}
+
+export type CheckoutPatch = { branch?: string | null; state?: CheckoutState; base?: string | null; itemId?: string | null }
+
+/** A project's folders: its main checkout and its worktrees. */
+export interface CheckoutStore {
+  /** Every checkout, removed ones included — main first within a project. */
+  list(): Promise<Checkout[]>
+  create(c: Checkout): Promise<void>
+  /** What discovery moves (branch, state), plus what triage knows of a worktree it made itself (base, item). */
+  update(id: string, patch: CheckoutPatch): Promise<void>
+  /** Drop a project's checkouts with the project. */
+  removeForProject(projectId: string): Promise<void>
 }
 
 /** Scheduler-owned state on a watch — never part of the user's edit. */
@@ -406,6 +426,7 @@ export interface Store {
   inbox: InboxStore
   config: ConfigStore
   projects: ProjectStore
+  checkouts: CheckoutStore
   watches: WatchStore
   watchRuns: WatchRunLedger
   items: WorkItemStore
