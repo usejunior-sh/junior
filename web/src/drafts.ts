@@ -19,6 +19,14 @@ export type Draft = {
   mentions?: Mention[]
   /** the work item this draft dispatches; recorded as a link when the session starts */
   itemId?: string
+  /** run in this existing checkout (a worktree) instead of the project's main folder */
+  checkoutId?: string
+  /** run in a new worktree on this branch — set = "New worktree" is picked; wins over checkoutId */
+  newBranch?: string
+  /** a dispatched item's branch name, offered if you pick "New worktree" — never picked for you */
+  branchHint?: string
+  /** a live worktree already made for the dispatched item, offered as "Continue in …" */
+  continueIn?: string
   createdAt: number
 }
 

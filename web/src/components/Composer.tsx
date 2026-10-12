@@ -20,6 +20,7 @@ type Props = {
   sessionId: string
   status: SessionStatus
   cwd: string
+  projectId?: string
   branch?: string
   model?: string
   effort?: EffortLevel
@@ -44,6 +45,7 @@ export function Composer({
   sessionId,
   status,
   cwd,
+  projectId,
   branch,
   model,
   effort,
@@ -78,7 +80,7 @@ export function Composer({
   return (
     <PromptBox
       draftKey={sessionId}
-      head={<PromptHead projects={projects} cwd={cwd} branch={branch} />}
+      head={<PromptHead projects={projects} cwd={cwd} projectId={projectId} branch={branch} />}
       cwd={cwd}
       text={text}
       onTextChange={setText}

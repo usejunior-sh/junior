@@ -1,6 +1,7 @@
 import { FileDiff, FileText, Eye, Terminal as TerminalIcon } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from 'react'
-import type { DispatchPreviewResponse,
+import type { CreateStep,
+  DispatchPreviewResponse,
   EffortLevel,
   ImageAttachment,
   Mention,
@@ -11,14 +12,20 @@ import type { DispatchPreviewResponse,
   QuestionAnswers,
   ScoredItem,
   SessionStatus,
+  SessionSummary,
   TerminalSummary,
   WatchesResponse,
 } from '../../shared/protocol.js'
+import { mentionToken } from '../../shared/protocol.js'
 import { CommandPalette } from './components/CommandPalette.js'
 import { useSessionChanges } from './useSessionChanges.js'
 import { ChangePage } from './components/ChangePage.js'
 import { ChangesPanel } from './components/ChangesPanel.js'
 import { changeId, changesStore, useChanges } from './changesStore.js'
+import { branchSlug, checkoutOf } from './checkouts.js'
+import { CheckoutChip } from './components/CheckoutChip.js'
+import { CheckoutMenu } from './components/CheckoutMenu.js'
+import { GoneCheckoutBar } from './components/GoneCheckoutBar.js'
 import { Composer } from './components/Composer.js'
 import { ArtifactsPanel, NewTerminalMenu, PanelCollapseContext, QueuePanel, SessionsPanel, TerminalsPanel } from './components/ContextPanel.js'
 import { HelpOverlay } from './components/HelpOverlay.js'
@@ -50,6 +57,7 @@ import { WorkspaceModal, type WorkspaceModalMode } from './components/WorkspaceM
 import {
   itemHash,
   useBuild,
+  useCheckouts,
   useConn,
   useEvents,
   useHashRoute,
@@ -158,7 +166,7 @@ function tabKeyOf(route: Route): string | null {
     case 'watch-form':
       return `watch-form:${route.id ?? 'new'}`
     case 'change':
-      return `change:${changeId(route.projectId, route.path)}`
+      return `change:${changeId(route.checkoutId, route.path)}`
     case 'changes':
     case 'artifacts':
     case 'watches':
@@ -263,6 +271,7 @@ export function App() {
   const conn = useConn()
   const sessions = useSessions()
   const terminals = useTerminals()
+  const checkouts = useCheckouts()
   const drafts = useDrafts()
   const models = useModels()
   const inbox = useInbox()
@@ -324,6 +333,7 @@ export function App() {
   const goPrefix = useRef<number | undefined>(undefined)
 
   const current = sessions.find((s) => s.id === currentId) ?? null
+  const currentCheckout = checkoutOf(checkouts, current?.checkoutId)
   const chatHeaderRef = useRef<HTMLDivElement>(null)
   const folderTextRef = useRef<HTMLSpanElement>(null)
   const folderMeasureRef = useRef<HTMLSpanElement>(null)
@@ -475,11 +485,34 @@ export function App() {
   // A session created from this tab becomes the selected one — and when it
   // came from a draft tab, it takes that tab's slot.
   const pendingDraft = useRef<string | null>(null)
+  // A send that failed (a worktree git wouldn't make): the draft stays, and says why.
+  const [createError, setCreateError] = useState<{ draftId: string; message: string } | null>(null)
+  // …and while one is being made in a new worktree, which step it's on.
+  const [createStep, setCreateStep] = useState<{ draftId: string; step: CreateStep } | null>(null)
+  useEffect(
+    () =>
+      store.onCreateFailed((message) => {
+        const d = pendingDraft.current
+        pendingDraft.current = null
+        setCreateStep(null)
+        if (d) setCreateError({ draftId: d, message })
+      }),
+    [],
+  )
+  useEffect(
+    () =>
+      store.onCreateProgress((step) => {
+        const d = pendingDraft.current
+        if (d) setCreateStep({ draftId: d, step })
+      }),
+    [],
+  )
   useEffect(
     () =>
       store.onSessionCreated((s) => {
         const d = pendingDraft.current
         pendingDraft.current = null
+        setCreateStep(null)
         if (d) {
           replaceTab(draftKey(d), s.id)
           draftStore.remove(d)
@@ -626,6 +659,9 @@ export function App() {
   // Terminals: open in a folder (the server falls back to home), rename, kill.
   const newTerminal = useCallback((cwd?: string) => {
     store.send({ type: 'terminal_create', cwd })
+  }, [])
+  const newTerminalIn = useCallback((checkoutId: string) => {
+    store.send({ type: 'terminal_create', checkoutId })
   }, [])
   const renameTerminal = useCallback((terminalId: string, title: string) => {
     store.send({ type: 'terminal_rename', terminalId, title })
@@ -784,6 +820,7 @@ export function App() {
 
   const create = useCallback((draftId: string, s: NewSession) => {
     pendingDraft.current = draftId
+    setCreateError(null)
     store.send({
       type: 'create_session',
       title: s.title,
@@ -797,6 +834,8 @@ export function App() {
       images: s.images,
       mentions: s.mentions,
       itemId: s.itemId,
+      checkoutId: s.checkoutId,
+      worktree: s.worktree,
     })
   }, [])
 
@@ -819,7 +858,7 @@ export function App() {
   // as the fallback when the preview cannot be fetched.
   const dispatch = useCallback(
     (item: ScoredItem) => {
-      const openWith = (init: { cwd?: string; text: string; mentions?: Mention[] }) => {
+      const openWith = (init: { cwd?: string; text: string; mentions?: Mention[]; branchHint?: string; continueIn?: string }) => {
         const d = draftStore.create({ label: dispatchTitle(item), itemId: item.id, ...init })
         navigate(draftRoute(d.id))
       }
@@ -827,7 +866,15 @@ export function App() {
         .then((r) => r.json() as Promise<DispatchPreviewResponse>)
         .then((b) => {
           if (!b.ok) throw new Error(b.error)
-          openWith({ cwd: b.preview.cwd ?? undefined, text: b.preview.text, mentions: b.preview.mentions })
+          openWith({
+            cwd: b.preview.cwd ?? undefined,
+            text: b.preview.text,
+            mentions: b.preview.mentions,
+            // Where it runs is asked in the draft, never assumed: it starts in the current folder,
+            // with a new worktree (named from the item) or the item's own worktree on offer.
+            ...(b.preview.branch ? { branchHint: b.preview.branch } : {}),
+            ...(b.preview.checkoutId ? { continueIn: b.preview.checkoutId } : {}),
+          })
         })
         .catch(() =>
           fetch('/api/projects')
@@ -845,11 +892,37 @@ export function App() {
     [navigate],
   )
 
+  // A session whose worktree is gone continues as a new session in the project's
+  // main folder, with the old one attached as an `@session:` mention for context.
+  const continueInMain = useCallback(
+    (s: SessionSummary) => {
+      const main = checkouts.find((c) => c.projectId === s.projectId && c.kind === 'main')
+      const mention: Mention = { kind: 'session', ref: s.id, label: s.title }
+      const d = draftStore.create({
+        cwd: main?.path,
+        text: `Continuing from ${mentionToken(mention)} — its worktree was removed.\n\n`,
+        mentions: [mention],
+      })
+      navigate(draftRoute(d.id))
+    },
+    [checkouts, navigate],
+  )
+
   // --- derived shell state -------------------------------------------------
 
   const railActive: RailSection | null = sectionOf(route)
   // Which list the panel shows: the route's section, or on a phone the open sheet (none when shut).
   const panelSection: RailSection | null = mobile ? sheet : railActive
+
+  // Tabs in a worktree carry its branch, so two sessions on different branches never look the same.
+  const worktreeTag = useCallback(
+    (checkoutId: string | undefined): Pick<OpenTab, 'branch' | 'branchGone'> => {
+      const co = checkoutOf(checkouts, checkoutId)
+      if (co?.kind !== 'worktree') return {}
+      return { branch: co.branch ? branchSlug(co.branch) : 'detached', ...(co.state === 'removed' ? { branchGone: true } : {}) }
+    },
+    [checkouts],
+  )
 
   const openTabs = useMemo<OpenTab[]>(
     () =>
@@ -860,7 +933,9 @@ export function App() {
         }
         if (key.startsWith('term:')) {
           const t: TerminalSummary | undefined = terminals.find((x) => x.id === key.slice(5))
-          return t ? [{ key, kind: 'terminal', title: t.title, color: projectColor(t.cwd), running: t.status === 'running' }] : []
+          return t
+            ? [{ key, kind: 'terminal', title: t.title, color: projectColor(t.projectId ?? t.cwd), running: t.status === 'running', ...worktreeTag(t.checkoutId) }]
+            : []
         }
         if (isDocKey(key)) {
           const t = docTab(key)
@@ -868,10 +943,19 @@ export function App() {
         }
         const s = sessions.find((x) => x.id === key)
         return s
-          ? [{ key, kind: 'session', title: s.title, color: projectColor(s.cwd), running: s.status === 'running' || s.status === 'starting' }]
+          ? [
+              {
+                key,
+                kind: 'session',
+                title: s.title,
+                color: projectColor(s.projectId ?? s.cwd),
+                running: s.status === 'running' || s.status === 'starting',
+                ...worktreeTag(s.checkoutId),
+              },
+            ]
           : []
       }),
-    [tabs, sessions, terminals, drafts, docTab],
+    [tabs, sessions, terminals, drafts, docTab, worktreeTag],
   )
 
   // Only the rail *indexes* get a transient page tab now: an artifact, watch
@@ -951,9 +1035,10 @@ export function App() {
         projects={changes.projects}
         loaded={changes.loaded}
         loading={changes.loading}
-        current={route.page === 'change' ? { projectId: route.projectId, path: route.path } : null}
-        onOpen={(projectId, path) => navigate(`/change/${changeId(projectId, path)}`)}
-        onPin={(projectId, path) => pin(`change:${changeId(projectId, path)}`)}
+        current={route.page === 'change' ? { checkoutId: route.checkoutId, path: route.path } : null}
+        onOpen={(checkoutId, path) => navigate(`/change/${changeId(checkoutId, path)}`)}
+        onPin={(checkoutId, path) => pin(`change:${changeId(checkoutId, path)}`)}
+        onNewTerminal={newTerminalIn}
         onSearch={() => setPaletteOpen(true)}
       />
     ) : panelSection === 'inbox' ? (
@@ -1016,7 +1101,7 @@ export function App() {
           inboxCount={inbox.items.length}
           runningCount={runningCount}
           terminalCount={terminals.filter((t) => t.status === 'running').length}
-          changedCount={changes.projects.reduce((n, p) => n + p.files.length, 0)}
+          changedCount={changes.projects.reduce((n, p) => n + p.checkouts.reduce((m, c) => m + c.files.length, 0), 0)}
           onGo={onRailGo}
         />
 
@@ -1101,8 +1186,8 @@ export function App() {
               </div>
             ) : route.page === 'change' ? (
               <ChangePage
-                key={`${route.projectId}/${route.path}`}
-                projectId={route.projectId}
+                key={`${route.checkoutId}/${route.path}`}
+                checkoutId={route.checkoutId}
                 path={route.path}
                 onDirty={pinCurrent}
               />
@@ -1119,6 +1204,8 @@ export function App() {
                   draft={currentDraft}
                   onChange={(patch) => draftStore.update(currentDraft.id, patch)}
                   onCreate={(s) => create(currentDraft.id, s)}
+                  error={createError?.draftId === currentDraft.id ? createError : null}
+                  step={createStep?.draftId === currentDraft.id ? createStep.step : null}
                 />
               ) : (
                 <div id="empty">This draft was discarded.</div>
@@ -1137,17 +1224,33 @@ export function App() {
                         {current.effort ? ` · ${EFFORT_LABEL[current.effort].toLowerCase()}` : ''}
                       </span>
                     )}
-                    <span className="pill mono" title={current.cwd}>
-                      <span className="t" ref={folderTextRef}>
-                        {folderShort ? folderName(current.cwd) : homely(current.cwd)}
+                    {currentCheckout ? (
+                      <CheckoutMenu checkout={currentCheckout} onNewTerminal={() => newTerminalIn(currentCheckout.id)}>
+                        <CheckoutChip
+                          checkout={currentCheckout}
+                          projectName={
+                            changes.projects.find((p) => p.project.id === currentCheckout.projectId)?.project.name ??
+                            folderName(currentCheckout.path)
+                          }
+                          color={projectColor(currentCheckout.projectId)}
+                          menu
+                          size="sm"
+                        />
+                      </CheckoutMenu>
+                    ) : (
+                      <span className="pill mono" title={current.cwd}>
+                        <span className="t" ref={folderTextRef}>
+                          {folderShort ? folderName(current.cwd) : homely(current.cwd)}
+                        </span>
                       </span>
-                      {current.branch ? ` · ${current.branch}` : ''}
-                    </span>
-                    <span className="pill mono measure" aria-hidden="true">
-                      <span className="t" ref={folderMeasureRef}>
-                        {homely(current.cwd)}
+                    )}
+                    {!currentCheckout && (
+                      <span className="pill mono measure" aria-hidden="true">
+                        <span className="t" ref={folderMeasureRef}>
+                          {homely(current.cwd)}
+                        </span>
                       </span>
-                    </span>
+                    )}
                   </span>
                   {agents.length > 0 && (
                     <AgentsMenu agents={agents} current={openAgent?.toolUseId} onOpen={showAgent}>
@@ -1202,13 +1305,16 @@ export function App() {
                 {teamRun && current.teamRun?.role === 'lead' && !openAgent && <TeamDock run={teamRun} onDetails={() => setTeamSide((o) => !o)} onNavigate={navigate} />}
                 {openAgent ? (
                   <AgentComposer key={`agent-composer-${openAgent.toolUseId}`} run={openAgent} onSend={(text) => messageAgent(openAgent, text)} />
+                ) : currentCheckout?.state === 'removed' ? (
+                  <GoneCheckoutBar checkout={currentCheckout} onContinueInMain={() => continueInMain(current)} />
                 ) : (
                 <Composer
                   key={`composer-${current.id}`}
                   sessionId={current.id}
                   status={current.status}
                   cwd={current.cwd}
-                  branch={current.branch}
+                  projectId={current.projectId}
+                  branch={currentCheckout?.branch ?? undefined}
                   model={current.model}
                   effort={current.effort}
                   fastMode={current.fastMode}

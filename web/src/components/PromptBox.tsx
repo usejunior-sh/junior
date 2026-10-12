@@ -1,4 +1,4 @@
-import { ArrowUp, ImagePlus, Square } from 'lucide-react'
+import { ArrowUp, ImagePlus, LoaderCircle, Square } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
   mentionToken,
@@ -64,6 +64,8 @@ type Props = {
   initialMentions?: Mention[]
   /** Keys the image tray so it survives the box unmounting (session id or draft id). */
   draftKey?: string
+  /** A send is already on its way (a worktree being made): send is locked and spins until it lands or fails. */
+  busy?: boolean
 }
 
 /**
@@ -107,6 +109,7 @@ export function PromptBox({
   onInterrupt,
   initialMentions,
   draftKey,
+  busy,
 }: Props) {
   const box = useRef<HTMLTextAreaElement>(null)
   const filePicker = useRef<HTMLInputElement>(null)
@@ -245,6 +248,7 @@ export function PromptBox({
   }, [focusKey])
 
   function submit() {
+    if (busy) return
     const trimmed = text.trim()
     const images = attach.payload()
     const picked = mentions.payload()
@@ -439,10 +443,12 @@ export function PromptBox({
           <button
             id="sendBtn"
             onClick={submit}
-            disabled={!text.trim() && attach.images.length === 0}
-            title={sendTitle}
+            disabled={busy || (!text.trim() && attach.images.length === 0)}
+            title={busy ? 'Starting…' : sendTitle}
+            aria-busy={busy || undefined}
+            className={busy ? 'busy' : undefined}
           >
-            <ArrowUp size={15} aria-hidden="true" />
+            {busy ? <LoaderCircle size={15} className="spin" aria-hidden="true" /> : <ArrowUp size={15} aria-hidden="true" />}
           </button>
         </div>
       </div>
