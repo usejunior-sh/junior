@@ -7,7 +7,7 @@
  * version the text was opened at, so a file an agent rewrote in the meantime
  * comes back as a conflict to resolve instead of being silently reverted.
  */
-import { Columns2, FileDiff, PenLine, RotateCcw, TriangleAlert } from 'lucide-react'
+import { Columns2, FileDiff, GitBranch, PenLine, RotateCcw, TriangleAlert } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import type { ProjectFileResponse, SaveProjectFileResponse, WorkingDiffResponse } from '../../../shared/protocol.js'
 import { changesStore, useChanges } from '../changesStore.js'
@@ -17,7 +17,8 @@ import { STATUS_LETTER } from './ChangesPanel.js'
 import { DiffView } from './DiffView.js'
 
 type Props = {
-  projectId: string
+  /** a checkout id; a project id means that project's main checkout (links from before checkouts) */
+  checkoutId: string
   path: string
   /** the first keystroke pins the tab — edits should not live in a peek */
   onDirty: () => void
@@ -38,14 +39,21 @@ const parked = new Map<string, { text: string; version: string }>()
 
 const baseName = (p: string) => p.slice(p.lastIndexOf('/') + 1)
 const dirName = (p: string) => (p.includes('/') ? p.slice(0, p.lastIndexOf('/') + 1) : '')
-const query = (projectId: string, path: string) =>
-  `projectId=${encodeURIComponent(projectId)}&path=${encodeURIComponent(path)}`
+const query = (checkoutId: string, path: string) =>
+  `checkoutId=${encodeURIComponent(checkoutId)}&path=${encodeURIComponent(path)}`
 
-export function ChangePage({ projectId, path, onDirty }: Props) {
+export function ChangePage({ checkoutId, path, onDirty }: Props) {
   const { projects, loaded: storeLoaded } = useChanges()
-  const project = projects.find((p) => p.project.id === projectId) ?? null
-  const entry = project?.files.find((f) => f.path === path) ?? null
-  const key = `${projectId}/${path}`
+  const project =
+    projects.find((p) => p.checkouts.some((c) => c.checkout.id === checkoutId)) ??
+    projects.find((p) => p.project.id === checkoutId) ??
+    null
+  const checkout =
+    project?.checkouts.find((c) => c.checkout.id === checkoutId) ??
+    project?.checkouts.find((c) => c.checkout.kind === 'main') ??
+    null
+  const entry = checkout?.files.find((f) => f.path === path) ?? null
+  const key = `${checkoutId}/${path}`
 
   const [mode, setMode] = useState<'diff' | 'edit'>(() => (parked.has(key) ? 'edit' : 'diff'))
   const [view, setView] = useState<'split' | 'unified'>(() =>
@@ -79,7 +87,7 @@ export function ChangePage({ projectId, path, onDirty }: Props) {
   const fingerprint = entry ? `${entry.status}:${entry.insertions}:${entry.deletions}` : 'clean'
   const loadDiff = useCallback(() => {
     let cancelled = false
-    void fetch(`/api/changes/diff?${query(projectId, path)}`)
+    void fetch(`/api/changes/diff?${query(checkoutId, path)}`)
       .then((r) => r.json() as Promise<WorkingDiffResponse>)
       .then((b) => {
         if (cancelled) return
@@ -93,12 +101,12 @@ export function ChangePage({ projectId, path, onDirty }: Props) {
     return () => {
       cancelled = true
     }
-  }, [projectId, path])
+  }, [checkoutId, path])
   useEffect(() => loadDiff(), [loadDiff, fingerprint])
 
   const loadFile = useCallback(
     (opts: { keepText?: boolean } = {}) =>
-      fetch(`/api/changes/file?${query(projectId, path)}`)
+      fetch(`/api/changes/file?${query(checkoutId, path)}`)
         .then((r) => r.json() as Promise<ProjectFileResponse>)
         .then((b) => {
           setFile(b)
@@ -123,7 +131,7 @@ export function ChangePage({ projectId, path, onDirty }: Props) {
           setFile({ ok: false, error: String(err) })
           return null
         }),
-    [projectId, path, key],
+    [checkoutId, path, key],
   )
 
   useEffect(() => {
@@ -162,7 +170,7 @@ export function ChangePage({ projectId, path, onDirty }: Props) {
       setSaveError(null)
       const content = b.eol === '\n' ? textRef.current : textRef.current.replaceAll('\n', b.eol)
       try {
-        const res = await fetch(`/api/changes/file?${query(projectId, path)}`, {
+        const res = await fetch(`/api/changes/file?${query(checkoutId, path)}`, {
           method: 'PUT',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ content, version: version ?? b.version }),
@@ -183,7 +191,7 @@ export function ChangePage({ projectId, path, onDirty }: Props) {
         setSaving(false)
       }
     },
-    [projectId, path, key, saving, loadDiff],
+    [checkoutId, path, key, saving, loadDiff],
   )
 
   /** Conflict, their side: throw the edits away and take the disk. */
@@ -223,8 +231,8 @@ export function ChangePage({ projectId, path, onDirty }: Props) {
     localStorage.setItem(modeKey, v)
   }
 
-  if (storeLoaded && !project) {
-    return <div id="empty">That project is no longer in this workspace.</div>
+  if (storeLoaded && !checkout) {
+    return <div id="empty">{project ? 'That worktree is gone.' : 'That project is no longer in this workspace.'}</div>
   }
 
   const editable = file?.ok && file.kind === 'text'
@@ -243,8 +251,14 @@ export function ChangePage({ projectId, path, onDirty }: Props) {
     <div className="page chgPage">
       <div className="chgBar">
         {entry && <span className={`st ${entry.status}`}>{STATUS_LETTER[entry.status]}</span>}
-        <span className="crumb" title={`${project?.project.path ?? ''}/${path}`}>
+        <span className="crumb" title={`${checkout?.checkout.path ?? ''}/${path}`}>
           {project && <span className="proj">{project.project.name}</span>}
+          {checkout?.checkout.kind === 'worktree' && (
+            <span className="wt">
+              <GitBranch size={10} aria-hidden="true" />
+              {checkout.checkout.branch ?? 'detached'}
+            </span>
+          )}
           <span className="dir">{dirName(path)}</span>
           <span className="nm">{baseName(path)}</span>
         </span>

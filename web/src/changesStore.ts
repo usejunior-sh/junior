@@ -1,5 +1,5 @@
 /**
- * Every project's uncommitted files as a tiny external store, shared by the
+ * Every project's uncommitted files, per checkout, as a tiny external store, shared by the
  * Changes panel, the file page and the rail badge. It is a view of the disk,
  * which anything can change — an agent, a terminal, your editor — so it
  * refreshes when a turn ends, when the window regains focus, and on a slow
@@ -67,5 +67,5 @@ export function useChanges(): ChangesSnapshot {
   return useSyncExternalStore(changesStore.subscribe, changesStore.get)
 }
 
-/** The route (and tab id) of one changed file: `/change/<projectId>/<path>`. */
-export const changeId = (projectId: string, path: string) => `${projectId}/${encodeURIComponent(path)}`
+/** The route (and tab id) of one changed file: `/change/<checkoutId>/<path>`. */
+export const changeId = (checkoutId: string, path: string) => `${checkoutId}/${encodeURIComponent(path)}`
