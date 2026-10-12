@@ -246,6 +246,50 @@ export async function currentBranch(dir: string): Promise<string | null> {
   }
 }
 
+/** One entry of `git worktree list --porcelain`. */
+export type ListedWorktree = {
+  path: string
+  /** null = detached HEAD */
+  branch: string | null
+  /** the repo's own folder — the first entry git lists */
+  primary: boolean
+  /** git's word for a worktree whose folder is gone; it reads as removed */
+  prunable: boolean
+}
+
+/** Parse `git worktree list --porcelain`: blank-line-separated records of `key value` lines. */
+export function parseWorktreeList(out: string): ListedWorktree[] {
+  const list: ListedWorktree[] = []
+  for (const rec of out.split(/\n\s*\n/)) {
+    const lines = rec.split('\n').filter(Boolean)
+    const head = lines.find((l) => l.startsWith('worktree '))
+    if (!head || lines.includes('bare')) continue
+    const ref = lines.find((l) => l.startsWith('branch '))?.slice('branch '.length) ?? null
+    list.push({
+      path: head.slice('worktree '.length),
+      branch: ref ? ref.replace(/^refs\/heads\//, '') : null,
+      primary: list.length === 0,
+      prunable: lines.some((l) => l === 'prunable' || l.startsWith('prunable ')),
+    })
+  }
+  return list
+}
+
+/** Every worktree of the repo `dir` sits in, the repo's own folder first. Read-only: never prunes. */
+export async function listWorktrees(dir: string): Promise<ListedWorktree[]> {
+  return parseWorktreeList(await git(dir, ['worktree', 'list', '--porcelain'], NO_LOCKS))
+}
+
+/** Commits on `dir`'s HEAD that `base` doesn't have; null when either side can't be resolved. */
+export async function aheadOf(dir: string, base: string): Promise<number | null> {
+  try {
+    const n = Number((await git(dir, ['rev-list', '--count', `${base}..HEAD`], NO_LOCKS)).trim())
+    return Number.isFinite(n) ? n : null
+  } catch {
+    return null
+  }
+}
+
 /**
  * The whole patch between two trees, capped: what a checker reads to review a
  * team run's work (the run's own change, whatever else sits uncommitted).
