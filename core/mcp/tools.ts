@@ -101,7 +101,7 @@ export const TOOLS = [
   {
     name: 'create_work_item',
     description:
-      'Add a manual to-do to the inbox (a user-authored item). Title is required; note, url, urls, priority (1–4), and projectId are optional.',
+      'Add a manual to-do to the inbox (a user-authored item). Title is required; note, url, urls, priority (1–4), due (ISO day), and projectId are optional.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -111,6 +111,7 @@ export const TOOLS = [
         urls: { type: 'array', items: { type: 'string' }, description: 'more http(s) links — the Slack thread, the PR, a doc' },
         priority: { type: 'number', description: '1 urgent … 4 low' },
         projectId: { type: 'string', description: 'an existing project id' },
+        due: { type: 'string', description: 'due day, ISO 8601 (e.g. 2026-10-21)' },
       },
       required: ['title'],
     },
@@ -118,7 +119,7 @@ export const TOOLS = [
   {
     name: 'edit_work_item',
     description:
-      'Edit a manual to-do by id (id must start with "manual:"). Only the fields you pass change; priority 0/null clears it.',
+      'Edit a manual to-do by id (id must start with "manual:"). Only the fields you pass change; priority 0/null and due null clear them.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -129,6 +130,7 @@ export const TOOLS = [
         urls: { type: 'array', items: { type: 'string' }, description: 'the complete list of extra links; [] clears them' },
         priority: { type: 'number', description: '1–4, or 0/null to clear' },
         projectId: { type: 'string' },
+        due: { type: ['string', 'null'], description: 'due day, ISO 8601 (e.g. 2026-10-21), or null to clear' },
       },
       required: ['id'],
     },

@@ -218,7 +218,7 @@ import type { Store, StoredSession, UpsertOutcome, UpsertResult } from '../core/
 import { buildInbox } from '../core/work/inbox.js'
 import { BASE, rank } from '../core/work/score.js'
 import { LABEL_ORDER, isLabel, type Label } from '../core/work/labels.js'
-import { dueFor, parseDue, SECTION_ORDER, type Section } from '../core/work/due.js'
+import { dueInput, parseDue } from '../core/work/due.js'
 import { ARCHIVE_AFTER_DAYS, shouldArchive } from '../core/work/fade.js'
 import { canonicalizeRef, canonicalizeRefs, linkByRefs } from '../core/work/link.js'
 import type { ItemStatus } from '../core/work/state.js'
@@ -3960,8 +3960,10 @@ async function resolveItemOp(rt: WorkspaceRuntime, rawId: unknown): Promise<void
 
 async function createManualOp(rt: WorkspaceRuntime, raw: unknown): Promise<string> {
   const { images, ...input } = await manualItemFrom(rt, raw)
+  const due = dueInput((raw as Record<string, unknown>).due, Date.now())
   const id = `manual:${randomUUID()}`
   await rt.store.items.createManual({ id, ...input, projectId: input.projectId ?? (await defaultProject(rt))?.id })
+  if (due) await rt.store.items.setDue(id, due)
   // The item has to exist before its images can hang off it — the folder is
   // named after the id the line above minted.
   if (images?.length) await setItemImagesOp(rt, id, images)
@@ -3977,7 +3979,9 @@ async function editManualOp(rt: WorkspaceRuntime, id: string, raw: unknown): Pro
   if (!id || !id.startsWith('manual:'))
     throw new Error('edit_work_item only edits manual items (id must start with "manual:")')
   const { images, ...patch } = await manualItemFrom(rt, raw, { partial: true })
+  const due = dueInput((raw as Record<string, unknown>).due, Date.now())
   await rt.store.items.updateManual(id, patch)
+  if (due !== undefined) await rt.store.items.setDue(id, due)
   if (images) await setItemImagesOp(rt, id, images)
   invalidateInbox(rt)
 }
@@ -5460,7 +5464,7 @@ function makeTriageMcp(rt: WorkspaceRuntime) {
       ),
       tool(
         'create_work_item',
-        'Add a manual to-do to the inbox (a user-authored item). Title is required; description, url, urls, priority (1–4), and projectId are optional.',
+        'Add a manual to-do to the inbox (a user-authored item). Title is required; description, url, urls, priority (1–4), due (ISO day), and projectId are optional.',
         {
           title: z.string().describe('what the to-do is'),
           description: z.string().optional().describe("the user's intent in a few sentences"),
@@ -5469,6 +5473,7 @@ function makeTriageMcp(rt: WorkspaceRuntime) {
           urls: z.array(z.string()).optional().describe('more http(s) links — the Slack thread, the PR, a doc'),
           priority: z.number().int().min(1).max(4).optional(),
           projectId: z.string().optional().describe('an existing project id'),
+          due: z.string().optional().describe('due day, ISO 8601 (e.g. 2026-10-21)'),
         },
         async (args) => {
           try {
@@ -5481,7 +5486,7 @@ function makeTriageMcp(rt: WorkspaceRuntime) {
       ),
       tool(
         'edit_work_item',
-        'Edit a manual to-do by id (id must start with "manual:"). Only the fields you pass change; priority 0/null clears it.',
+        'Edit a manual to-do by id (id must start with "manual:"). Only the fields you pass change; priority 0/null and due null clear them.',
         {
           id: z.string().describe('the manual item id, e.g. "manual:<uuid>"'),
           title: z.string().optional(),
@@ -5491,6 +5496,7 @@ function makeTriageMcp(rt: WorkspaceRuntime) {
           urls: z.array(z.string()).optional().describe('the complete list of extra links; [] clears them'),
           priority: z.number().int().min(0).max(4).nullable().optional(),
           projectId: z.string().optional(),
+          due: z.string().nullable().optional().describe('due day, ISO 8601 (e.g. 2026-10-21), or null to clear'),
         },
         async (args) => {
           try {
@@ -6928,19 +6934,17 @@ const server = http.createServer(async (req, res) => {
     json(body.ok ? 200 : 400, body)
     return
   }
-  // A due set from the inbox (t / m / w / l): a bucket, resolved to a day here.
-  // `due: null` goes back to the label's default.
+  // A due set from the inbox (t / m / w / l or the date picker): a bucket or an
+  // exact day, resolved to a day here. `due: null` goes back to the label's default.
   if (url.pathname === '/api/items/due' && req.method === 'POST') {
     let body: ItemStateResponse
     try {
       const parsed = (await readJsonBody(req)) as { id?: unknown; due?: unknown } | null
       const id = typeof parsed?.id === 'string' ? parsed.id : ''
       if (!id) throw new Error('need an item id')
-      const raw = parsed?.due
-      if (raw === null) await rt.store.items.setDue(id, null)
-      else if (typeof raw === 'string' && (SECTION_ORDER as string[]).includes(raw))
-        await rt.store.items.setDue(id, { at: dueFor(raw as Section, Date.now()) })
-      else throw new Error(`due must be one of ${SECTION_ORDER.join(', ')}, or null`)
+      const due = dueInput(parsed?.due, Date.now())
+      if (due === undefined) throw new Error('need due: a YYYY-MM-DD day, a section name, or null')
+      await rt.store.items.setDue(id, due)
       invalidateInbox(rt)
       body = { ok: true }
     } catch (err) {

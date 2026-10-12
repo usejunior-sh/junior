@@ -4,7 +4,7 @@
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { dueFor, dueOf, parseDue, sectionFor, sectionTitle, startOfDay } from '../core/work/due.js'
+import { dueFor, dueInput, dueOf, parseDue, sectionFor, sectionTitle, startOfDay } from '../core/work/due.js'
 
 const day = (y: number, m: number, d: number, h = 10) => new Date(y, m - 1, d, h).getTime()
 // 2026-10-07 is a Wednesday; 10-09 a Friday.
@@ -95,4 +95,16 @@ test('store: a due you set outlives a rescan; a stated one fills in otherwise', 
   assert.equal(reset?.dueSource, undefined)
   assert.equal(reset?.dueAt, undefined)
   await store.close()
+})
+
+test('dueInput: a day, a section, null clears, absent leaves alone', () => {
+  assert.deepEqual(dueInput('2026-10-21', WED), { at: day(2026, 10, 21, 0) })
+  assert.deepEqual(dueInput('next-workday', WED), { at: day(2026, 10, 8, 0) })
+  assert.deepEqual(dueInput('later', WED), { at: null })
+  assert.equal(dueInput(null, WED), null)
+  assert.equal(dueInput(undefined, WED), undefined)
+})
+
+test('dueInput refuses what it cannot read', () => {
+  for (const bad of ['tomorrow', '10/21/2026', '2026-13-45', '2026-02-31', 5, {}]) assert.throws(() => dueInput(bad, WED), /due must be/)
 })

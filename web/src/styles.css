@@ -766,6 +766,7 @@ kbd { font-family: var(--mono); font-size: 0.8462rem; color: var(--ash); border:
 .prioBar:hover, .prioBar[data-state="open"] { border-color: var(--hair-bright); }
 .prioBar .lab { color: var(--mute); }
 .prioBar .val { margin-left: auto; color: var(--ash); }
+.prioBar.late .val { color: var(--red); }
 .prioBar .caret { color: var(--ash); flex: none; }
 .prioBar .dot { background: var(--stone); }
 .prioBar.prio1 .dot { background: var(--orange); } .prioBar.prio1 .val { color: var(--orange); }
@@ -2054,6 +2055,48 @@ dialog.itemComposer { width: 800px; max-width: calc(100vw - 48px); padding: 0; o
 .pillRow .pill.add:hover { color: var(--body); }
 .pillRow .pill.add.set { color: var(--ink); border-style: solid; }
 .pillRow .pill:hover { border-color: var(--hair-bright); }
+/* Calendar (react-day-picker): its --rdp-* variables mapped onto our tokens —
+   hairlines, no shadows, the selected day is the one off-white fill. */
+.calendar {
+  --rdp-accent-color: var(--ink);
+  --rdp-accent-background-color: var(--hair);
+  --rdp-day-height: 34px;
+  --rdp-day-width: 34px;
+  --rdp-day_button-height: 32px;
+  --rdp-day_button-width: 32px;
+  --rdp-day_button-border-radius: var(--r-sm);
+  --rdp-selected-border: 1px solid var(--ink);
+  --rdp-today-color: var(--yellow);
+  --rdp-nav_button-height: 28px;
+  --rdp-nav_button-width: 28px;
+  --rdp-nav-height: 32px;
+  --rdp-outside-opacity: 0.35;
+  --rdp-weekday-opacity: 1;
+  margin: 0;
+  color: var(--body);
+  font-size: 0.9231rem;
+}
+.calendar .rdp-month_caption { font-family: var(--sans); font-weight: 500; color: var(--ink); font-size: 0.9231rem; }
+.calendar .rdp-weekday { color: var(--ash); font-size: 0.8462rem; font-weight: 400; }
+.calendar .rdp-chevron { fill: var(--ash); }
+.calendar .rdp-button_previous:hover .rdp-chevron, .calendar .rdp-button_next:hover .rdp-chevron { fill: var(--ink); }
+.calendar .rdp-day_button { color: inherit; font: inherit; background: transparent; cursor: pointer; }
+.calendar .rdp-day_button:hover { background: var(--hair); }
+.calendar .rdp-selected .rdp-day_button { background: var(--ink); color: var(--canvas); border-color: var(--ink); }
+.calendar .rdp-day_button:focus-visible { outline: 1px solid var(--hair-bright); outline-offset: 1px; }
+.uiMenu.calendarPop { padding: 10px; width: max-content; }
+.calendarClear { display: flex; align-items: center; gap: 6px; width: 100%; margin-top: 6px; padding: 6px 4px 0; border: none; border-top: 1px solid var(--hair); background: transparent; color: var(--ash); font-size: 0.8462rem; cursor: pointer; }
+.calendarClear:hover { color: var(--ink); }
+/* The default selected day is bold and larger, and the month sits in a
+   fit-content box; both read as a different component. Fill the width instead. */
+.calendar .rdp-selected { font-weight: inherit; font-size: inherit; }
+.calendar .rdp-months { max-width: none; width: 100%; }
+.calendar .rdp-month_grid { width: 100%; table-layout: fixed; }
+.calendar .rdp-day { width: auto; }
+.calendar .rdp-day_button { margin: 0 auto; }
+.calendar .rdp-chevron { width: 14px; height: 14px; }
+.projModal .calendar { margin: 8px 0 4px; width: 100%; }
+.uiMenu.calendarPop .calendar { width: 266px; }
 /* Pills whose trigger *is* a Select — the inbox compose bar's setters and the
    Create-brief dialog's knobs. Not scoped to .pillRow: both rows want the same
    thing, and one rule beats two that must be kept in step.

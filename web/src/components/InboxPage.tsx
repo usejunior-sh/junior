@@ -44,6 +44,9 @@ import { inboxStore, useInbox } from '../inboxStore.js'
 import { projectColor, rowOpen } from '../tabs.js'
 import { briefPill, briefStore, useBriefs } from '../briefStore.js'
 import { CreateBriefDialog } from './CreateBriefDialog.js'
+import { DueDialog } from './DueDialog.js'
+import { DatePopover } from './Calendar.js'
+import { dayInput } from '../dueDay.js'
 import {
   LABELS,
   LABEL_ORDER,
@@ -67,6 +70,7 @@ import {
   dueChip,
   dueFor,
   dueOf,
+  parseDue,
   sectionTitle,
   type Section,
 } from '../../../core/work/due.js'
@@ -111,6 +115,7 @@ export function InboxPage({ onDispatch, onRefineWatch, onOpenItem, onPinItem, co
     open: false,
     editing: null,
   })
+  const [pickingDue, setPickingDue] = useState<ScoredItem | null>(null)
   const [scanning, setScanning] = useState(false)
   const [sel, setSel] = useState(0)
   // Multi-select (.docs/next-version.md, phase 2): checked rows brief together.
@@ -217,8 +222,8 @@ export function InboxPage({ onDispatch, onRefineWatch, onOpenItem, onPinItem, co
 
   // A due set here is yours and outlives rescans. The row moves section now;
   // the server resolves the bucket to the same day.
-  const setDue = useCallback((targets: ScoredItem[], due: Section) => {
-    const at = dueFor(due, Date.now())
+  const setDue = useCallback((targets: ScoredItem[], due: Section | string) => {
+    const at = (SECTION_ORDER as string[]).includes(due) ? dueFor(due as Section, Date.now()) : parseDue(due)
     const ids = new Set(targets.map((t) => t.id))
     inboxStore.patch((items) =>
       items.map((i) => (ids.has(i.id) ? { ...i, dueSource: 'you' as const, dueAt: at ?? undefined } : i)),
@@ -431,6 +436,7 @@ export function InboxPage({ onDispatch, onRefineWatch, onOpenItem, onPinItem, co
     onRefineWatch,
     onSetPriority: setPriority,
     onSetDue: (i, due) => setDue([i], due),
+    onPickDue: setPickingDue,
     onEdit: (i) => setComposer({ open: true, editing: i }),
     onDelete: deleteManual,
     checked,
@@ -585,6 +591,15 @@ export function InboxPage({ onDispatch, onRefineWatch, onOpenItem, onPinItem, co
         onSavedMore={() => reload(false)} // "Add more" — refresh, stay open
       />
 
+      <DueDialog
+        item={pickingDue}
+        onClose={() => setPickingDue(null)}
+        onPick={(item, day) => {
+          setDue([item], day ?? 'later')
+          setPickingDue(null)
+        }}
+      />
+
       <CreateBriefDialog
         open={briefing !== null}
         items={briefing ?? []}
@@ -687,6 +702,7 @@ type RowActions = {
   onRefineWatch: (item: ScoredItem) => void
   onSetPriority: (item: ScoredItem, priority: number) => void
   onSetDue: (item: ScoredItem, due: Section) => void
+  onPickDue: (item: ScoredItem) => void
   onEdit: (item: ScoredItem) => void
   onDelete: (item: ScoredItem) => void
   checked: Set<string>
@@ -770,6 +786,7 @@ function WorkRow({
   onRefineWatch,
   onSetPriority,
   onSetDue,
+  onPickDue,
   onEdit,
   onDelete,
   checked,
@@ -794,7 +811,9 @@ function WorkRow({
   const signals = signalsText(item)
   // Only a stated deadline gets a date chip; a late one you set says how late.
   const due = isOpen ? dueOf(item, Date.now()) : null
-  const dueText = !due ? null : due.late > 0 ? `${due.late}d late` : due.source === 'explicit' && due.at != null ? dueChip(due.at, Date.now()) : null
+  // A date you picked shows too when its section can't say it (This week, Later).
+  const showsDate = due?.source === 'explicit' || (due?.source === 'you' && (due.section === 'later' || due.section === 'this-week'))
+  const dueText = !due ? null : due.late > 0 ? `${due.late}d late` : showsDate && due.at != null ? dueChip(due.at, Date.now()) : null
   const source = projectName(item.projectId) ?? item.repo
   // The scored reason ("2 people waiting · opened 3d ago") is the fallback when
   // the item carries no human note.
@@ -949,6 +968,10 @@ function WorkRow({
                     <span className="k">{DUE_KEY_OF[s]}</span>
                   </MenuItem>
                 ))}
+                <MenuItem onSelect={() => onPickDue(item)}>
+                  <CalendarDays size={13} aria-hidden="true" /> Pick a date…
+                  {due?.source === 'you' && due.at != null && <span className="k">{dueChip(due.at, Date.now())}</span>}
+                </MenuItem>
                 <MenuSeparator />
                 <div className="uiMenuCap">Priority</div>
                 {PRIORITY_VALUES.map((v) => (
@@ -1024,6 +1047,7 @@ function ItemComposer({
   const [title, setTitle] = useState('')
   const [projectId, setProjectId] = useState('')
   const [priority, setPriority] = useState(0)
+  const [due, setDue] = useState('')
   const [description, setDescription] = useState('')
   const [url, setUrl] = useState('')
   const [linkOpen, setLinkOpen] = useState(false)
@@ -1043,6 +1067,7 @@ function ItemComposer({
       setTitle(editing?.title ?? '')
       setProjectId(editing?.projectId ?? '')
       setPriority(editing?.priority ?? 0)
+      setDue(dayInput(editing))
       setDescription(editing?.description ?? editing?.note ?? '')
       setUrl(editing?.url ?? '')
       setLinkOpen(!!editing?.url)
@@ -1079,6 +1104,8 @@ function ItemComposer({
         priority,
         description: description.trim() || undefined,
         url: url.trim() || undefined,
+        // An edit sends the day only when it changed: null clears it.
+        ...(editing ? (due !== dayInput(editing) ? { due: due || null } : {}) : due ? { due } : {}),
         images,
       }
       const path = editing ? `/api/items/manual?id=${encodeURIComponent(editing.id)}` : '/api/items/manual'
@@ -1098,6 +1125,7 @@ function ItemComposer({
         setUrl('')
         setLinkOpen(false)
         setPriority(0)
+        setDue('')
         attach.clear()
         setError(null)
         titleInput.current?.focus()
@@ -1221,6 +1249,7 @@ function ItemComposer({
               </SelectItem>
             ))}
           </Select>
+          <DatePopover className="pill" value={due} onChange={setDue} />
           {choosesProject(projects) && (
           <ProjectIdPicker
             projects={projects}

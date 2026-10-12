@@ -152,3 +152,22 @@ export function parseDue(raw: unknown): number | null {
   const ms = Date.parse(s)
   return Number.isFinite(ms) ? startOfDay(ms) : null
 }
+
+/**
+ * A due from a save (the date picker, the MCP tools, the inbox keys): a local
+ * day ("2026-10-21") or a section name. `null` clears it back to the label's
+ * default; `undefined` (absent) leaves it alone. Anything else throws — a date
+ * that silently doesn't stick is worse than an error.
+ */
+export function dueInput(raw: unknown, now: number): { at: number | null } | null | undefined {
+  if (raw === undefined) return undefined
+  if (raw === null) return null
+  const hint = `due must be a YYYY-MM-DD day, one of ${SECTION_ORDER.join(', ')}, or null`
+  if (typeof raw !== 'string') throw new Error(hint)
+  if ((SECTION_ORDER as string[]).includes(raw)) return { at: dueFor(raw as Section, now) }
+  const at = /^\d{4}-\d{2}-\d{2}$/.test(raw.trim()) ? parseDue(raw) : null
+  // new Date(2026, 12, 45) rolls over instead of failing; a typo'd day shouldn't land on another one.
+  const m = raw.trim().split('-').map(Number)
+  if (at == null || new Date(at).getMonth() !== m[1]! - 1) throw new Error(hint)
+  return { at }
+}

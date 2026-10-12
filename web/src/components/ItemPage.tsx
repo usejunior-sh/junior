@@ -4,7 +4,7 @@
  * why it ranked, what has happened to it, and the sessions working on it.
  * The actions live in the right column so the left reads as a page, not a form.
  */
-import { AlarmClock, Archive, Check, ChevronDown, ChevronRight, ExternalLink, FileText, Folder, Hash, ImagePlus, Play, Sparkles, X } from 'lucide-react'
+import { AlarmClock, Archive, CalendarDays, Check, ChevronDown, ChevronRight, ExternalLink, FileText, Folder, Hash, ImagePlus, Play, Sparkles, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type {
   BriefJobsResponse,
@@ -41,7 +41,9 @@ import { KIND_LABEL, PRIORITY_LABEL, PRIORITY_VALUES, ago, kindIcon, relTime } f
 import { CreateBriefDialog } from './CreateBriefDialog.js'
 import { Markdown } from './Markdown.js'
 import { TeamPicker } from './TeamPicker.js'
-import { Menu, MenuContent, MenuItem, MenuTrigger } from '../ui/Menu.js'
+import { Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from '../ui/Menu.js'
+import { DueDialog } from './DueDialog.js'
+import { SECTION_ORDER, dueChip, dueFor, dueOf, parseDue, sectionTitle, type Section } from '../../../core/work/due.js'
 import { choosesProject, defaultProjectOf, ProjectIdPicker } from './ProjectPicker.js'
 import { ItemLinks } from './ItemLinks.js'
 
@@ -92,6 +94,7 @@ export function ItemPage({ id, onDispatch, onNavigate, onDirty }: Props) {
   const [events, setEvents] = useState<ItemEvent[] | null>(null)
   const [watchTitles, setWatchTitles] = useState<Map<string, string>>(new Map())
   const [projects, setProjects] = useState<Project[]>([])
+  const [pickingDue, setPickingDue] = useState(false)
   const [links, setLinks] = useState<Link[]>([])
   // A digest item's report: the artifact a watch run wrote, linked with role `report`.
   const [report, setReport] = useState<{ id: string; title: string; body: string; updated: number } | null>(null)
@@ -288,6 +291,20 @@ export function ItemPage({ id, onDispatch, onNavigate, onDirty }: Props) {
     }).catch(() => {})
   }
 
+  // A due set here is yours and outlives rescans (same route as the inbox keys).
+  function setDue(due: Section | string) {
+    if (!item) return
+    const at = (SECTION_ORDER as string[]).includes(due) ? dueFor(due as Section, Date.now()) : parseDue(due)
+    inboxStore.patch((items) =>
+      items.map((i) => (i.id === item.id ? { ...i, dueSource: 'you' as const, dueAt: at ?? undefined } : i)),
+    )
+    void fetch('/api/items/due', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ id: item.id, due }),
+    }).catch(() => {})
+  }
+
   function setProject(projectId: string) {
     if (!item) return
     inboxStore.patch((items) => items.map((i) => (i.id === item.id ? { ...i, projectId: projectId || undefined } : i)))
@@ -407,6 +424,13 @@ export function ItemPage({ id, onDispatch, onNavigate, onDirty }: Props) {
   const status = item.status ?? 'open'
   const isOpen = status === 'open'
   const pri = item.priority ?? 0
+  const due = dueOf(item, Date.now())
+  const dueLabel =
+    due.source === 'default'
+      ? 'None'
+      : due.at != null
+        ? dueChip(due.at, Date.now())
+        : sectionTitle(due.section, Date.now())
   const watchId = item.watchId ?? item.foundBy?.[item.foundBy.length - 1]?.watchId
   const project = item.projectId ? projects.find((p) => p.id === item.projectId) : undefined
   const settled = !job || job.status === 'ready' || job.status === 'failed'
@@ -766,6 +790,33 @@ export function ItemPage({ id, onDispatch, onNavigate, onDirty }: Props) {
               </MenuContent>
             </Menu>
           )}
+          {isOpen && (
+            <Menu>
+              <MenuTrigger asChild>
+                <button type="button" className={`prioBar${due.late > 0 ? ' late' : ''}`} title="Set due date">
+                  <CalendarDays size={12} className="caret" aria-hidden="true" />
+                  <span className="lab">Due</span>
+                  <span className="val">{due.late > 0 ? `${due.late}d late` : dueLabel}</span>
+                  <ChevronDown className="caret" size={13} aria-hidden="true" />
+                </button>
+              </MenuTrigger>
+              <MenuContent align="end">
+                <div className="uiMenuCap">Due</div>
+                {SECTION_ORDER.map((s) => (
+                  <MenuItem key={s} onSelect={() => setDue(s)}>
+                    {sectionTitle(s, Date.now())}
+                    {due.source !== 'default' && due.section === s && (
+                      <Check className="check" size={13} aria-hidden="true" />
+                    )}
+                  </MenuItem>
+                ))}
+                <MenuSeparator />
+                <MenuItem onSelect={() => setPickingDue(true)}>
+                  <CalendarDays size={13} aria-hidden="true" /> Pick a date…
+                </MenuItem>
+              </MenuContent>
+            </Menu>
+          )}
           {isOpen && item.source === 'manual' && choosesProject(projects) && (
             <ProjectIdPicker
               projects={projects}
@@ -965,6 +1016,14 @@ export function ItemPage({ id, onDispatch, onNavigate, onDirty }: Props) {
         )}
       </div>
 
+      <DueDialog
+        item={pickingDue ? item : null}
+        onClose={() => setPickingDue(false)}
+        onPick={(_, day) => {
+          setDue(day ?? 'later')
+          setPickingDue(false)
+        }}
+      />
       <CreateBriefDialog open={briefOpen} items={[item]} onClose={() => setBriefOpen(false)} onQueued={() => {}} />
     </div>
   )
