@@ -33,7 +33,8 @@ import { projectColor } from '../tabs.js'
 import { MAX_SERIES, OTHER, OTHER_KEY, SERIES, modelLabel, money, tokens } from '../usageFormat.js'
 import { useAttachments } from '../attachments.js'
 import { AttachmentStrip } from './AttachmentStrip.js'
-import { useSessions } from '../hooks.js'
+import { useCheckouts, useSessions } from '../hooks.js'
+import { checkoutOf } from '../checkouts.js'
 import { inboxStore, useInbox } from '../inboxStore.js'
 import { briefPill, useBriefs } from '../briefStore.js'
 import { store } from '../store.js'
@@ -87,6 +88,7 @@ const TEAM_STATE: Record<RunState, string> = {
 export function ItemPage({ id, onDispatch, onNavigate, onDirty }: Props) {
   const snap = useInbox()
   const sessions = useSessions()
+  const checkouts = useCheckouts()
   const briefs = useBriefs()
   const open = snap.items.find((i) => i.id === id)
   // Not in the open inbox → it may be snoozed, done or archived.
@@ -827,7 +829,7 @@ export function ItemPage({ id, onDispatch, onNavigate, onDirty }: Props) {
               {(current) => (
                 <button type="button" className="prioBar" title="Set project">
                   {current ? (
-                    <span className="dot" style={{ background: projectColor(current.path) }} aria-hidden="true" />
+                    <span className="dot" style={{ background: projectColor(current.id) }} aria-hidden="true" />
                   ) : (
                     <Folder size={12} className="caret" aria-hidden="true" />
                   )}
@@ -898,7 +900,7 @@ export function ItemPage({ id, onDispatch, onNavigate, onDirty }: Props) {
                 </div>
                 <div className="me">
                   {s.cwd.split('/').pop()}
-                  {s.branch ? ` · ${s.branch}` : ''}
+                  {checkoutOf(checkouts, s.checkoutId)?.branch ? ` · ${checkoutOf(checkouts, s.checkoutId)?.branch}` : ''}
                   {s.model ? ` · ${s.model}` : ''}
                 </div>
                 <span className="act">

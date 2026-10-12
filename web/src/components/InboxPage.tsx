@@ -1260,7 +1260,7 @@ function ItemComposer({
             {(current) => (
               <button type="button" className={`pill${current ? ' set' : ''}`} title="Project" aria-label="Project">
                 {current ? (
-                  <span className="pdot" style={{ background: projectColor(current.path) }} aria-hidden="true" />
+                  <span className="pdot" style={{ background: projectColor(current.id) }} aria-hidden="true" />
                 ) : (
                   <Folder size={12} aria-hidden="true" />
                 )}

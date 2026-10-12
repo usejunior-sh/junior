@@ -18,6 +18,8 @@ import type { BriefJob,
   SessionSummary,
   SlashCommandInfo,
   TerminalSummary,
+  Checkout,
+  CreateStep,
   Workspace,
   WorkspacesResponse,
 } from '../../shared/protocol.js'
@@ -55,10 +57,16 @@ export class Store {
 
   /** Set by the app so a locally-created session can be selected on arrival. */
   #onSessionCreated?: (s: SessionSummary) => void
+  /** Set by the app so a draft waiting on its session hears why it didn't come. */
+  #onCreateFailed?: (message: string) => void
+  /** …and where a session being made in a new worktree has got to. */
+  #onCreateProgress?: (step: CreateStep) => void
 
   // Terminals: the list is structural state; output bypasses React entirely and
   // goes straight to the xterm instance that asked for it.
   #terminals: readonly TerminalSummary[] = []
+  /** Every project's folders — main and worktrees — that sessions and terminals name by id. */
+  #checkouts: readonly Checkout[] = []
   #terminalListeners = new Map<string, Set<(data: string, replay: boolean) => void>>()
   #subscribedTerminals = new Set<string>()
   #onTerminalCreated?: (t: TerminalSummary) => void
@@ -79,6 +87,7 @@ export class Store {
   getOnboarded = (): boolean => this.#onboarded
   getBuild = (): Build | null => this.#build
   getTerminals = (): readonly TerminalSummary[] => this.#terminals
+  getCheckouts = (): readonly Checkout[] => this.#checkouts
 
   subscribeStructural = (fn: () => void) => {
     this.#structuralListeners.add(fn)
@@ -249,6 +258,7 @@ export class Store {
         this.#workspaces = msg.workspaces
         this.#onboarded = msg.onboarded
         this.#terminals = msg.terminals
+        this.#checkouts = msg.checkouts
         this.#build = msg.build
         this.#notify()
         break
@@ -286,6 +296,16 @@ export class Store {
       case 'terminals':
         this.#terminals = msg.terminals
         this.#notify()
+        break
+      case 'checkouts':
+        this.#checkouts = msg.checkouts
+        this.#notify()
+        break
+      case 'create_failed':
+        this.#onCreateFailed?.(msg.message)
+        break
+      case 'create_progress':
+        this.#onCreateProgress?.(msg.step)
         break
       case 'terminal_created':
         if (!this.#terminals.some((t) => t.id === msg.terminal.id)) {
@@ -336,6 +356,14 @@ export class Store {
 
   onSessionCreated(fn: (s: SessionSummary) => void) {
     this.#onSessionCreated = fn
+  }
+
+  onCreateFailed(fn: (message: string) => void) {
+    this.#onCreateFailed = fn
+  }
+
+  onCreateProgress(fn: (step: CreateStep) => void) {
+    this.#onCreateProgress = fn
   }
 
   /** Fires on every `brief_status` frame with the job that moved; returns the unsubscribe. */

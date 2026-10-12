@@ -47,7 +47,7 @@ function ProjectMenuBody({ projects, caption, leading, isOn, onPick }: MenuBodyP
         const on = isOn(p)
         return (
           <MenuItem key={p.id} className={`projRowItem${on ? ' on' : ''}`} onSelect={() => onPick(p)}>
-            <span className="pdot" style={{ background: projectColor(p.path) }} aria-hidden="true" />
+            <span className="pdot" style={{ background: projectColor(p.id) }} aria-hidden="true" />
             <span className="text">
               <span className="name">
                 {p.name}
@@ -98,7 +98,7 @@ export function ProjectPicker({ projects, cwd, onPick, disabled }: Props) {
     <Menu>
       <MenuTrigger asChild>
         <button type="button" className="chip ink pick" title={`Project folder: ${cwd}`} disabled={disabled}>
-          <span className="pdot" style={{ background: projectColor(cwd) }} aria-hidden="true" />
+          <span className="pdot" style={{ background: projectColor(current?.id ?? cwd) }} aria-hidden="true" />
           <span className="name">{label}</span>
           <ChevronDown size={11} aria-hidden="true" />
         </button>

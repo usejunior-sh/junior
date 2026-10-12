@@ -358,7 +358,7 @@ export function WatchFormPage({ id, onNavigate }: { id: string | null; onNavigat
                 {(current) => (
                   <button type="button" id="wf-project" className="wformSelect" aria-label="Project">
                     {current && (
-                      <span className="pdot" style={{ background: projectColor(current.path) }} aria-hidden="true" />
+                      <span className="pdot" style={{ background: projectColor(current.id) }} aria-hidden="true" />
                     )}
                     <span className="val">{current?.name ?? 'Pick a project'}</span>
                     <ChevronDown className="caret" size={14} aria-hidden="true" />

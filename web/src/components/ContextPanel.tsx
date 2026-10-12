@@ -9,6 +9,7 @@ import {
   ExternalLink,
   FileText,
   Folder,
+  GitBranch,
   Home,
   MoreHorizontal,
   PanelLeftClose,
@@ -25,7 +26,9 @@ import {
 } from 'lucide-react'
 import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import type { ArtifactWithLinks, Project, ProjectsResponse, ScoredItem, SessionSummary, TerminalSummary } from '../../../shared/protocol.js'
+import { checkoutOf } from '../checkouts.js'
 import { draftTitle, type Draft } from '../drafts.js'
+import { useCheckouts } from '../hooks.js'
 import { GROUP_ORDER, GROUP_SHORT, itemTone, kindIcon } from '../itemUi.js'
 import { MOD_LABEL } from '../keys.js'
 import { rowOpen } from '../tabs.js'
@@ -423,6 +426,9 @@ type RowProps = {
 
 function SessionRow({ session: s, active, renaming, onSelect, onStartRename, onEndRename, onSetPinned, onDelete }: RowProps) {
   const input = useRef<HTMLInputElement>(null)
+  // Only a worktree row grows a second line; the main folder needs no saying.
+  const co = checkoutOf(useCheckouts(), s.checkoutId)
+  const wt = co?.kind === 'worktree' ? co : null
 
   useEffect(() => {
     if (renaming) input.current?.select()
@@ -451,10 +457,10 @@ function SessionRow({ session: s, active, renaming, onSelect, onStartRename, onE
 
   return (
     <div
-      className={`prow${active ? ' sel' : ''}`}
+      className={`prow${active ? ' sel' : ''}${wt ? ' wt' : ''}`}
       role="button"
       tabIndex={0}
-      title={s.title}
+      title={wt ? `${s.title}\n${wt.path}` : s.title}
       onClick={onSelect}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
@@ -464,7 +470,18 @@ function SessionRow({ session: s, active, renaming, onSelect, onStartRename, onE
       }}
     >
       <span className={`dot sm ${STATUS_DOT[s.status]}`} aria-hidden="true" />
-      <span className="t">{s.title}</span>
+      {wt ? (
+        <span className="t">
+          <span className="nm">{s.title}</span>
+          <span className={`sub${wt.state === 'removed' ? ' gone' : ''}`}>
+            <GitBranch size={10} aria-hidden="true" />
+            <span className="b">{wt.branch ?? 'detached'}</span>
+            {wt.state === 'removed' && ' · removed'}
+          </span>
+        </span>
+      ) : (
+        <span className="t">{s.title}</span>
+      )}
       {s.pinned && <Pin className="pinMark" size={11} aria-label="Pinned" />}
       <Menu>
         <MenuTrigger asChild>

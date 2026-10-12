@@ -31,6 +31,11 @@ export function useTerminals() {
   return useSyncExternalStore(store.subscribeStructural, store.getTerminals)
 }
 
+/** Every project's folders (main + worktrees), removed ones included so old sessions still say where they ran. */
+export function useCheckouts() {
+  return useSyncExternalStore(store.subscribeStructural, store.getCheckouts)
+}
+
 export function useEvents(sessionId: string | null) {
   const get = useCallback(() => (sessionId ? store.getEvents(sessionId) : EMPTY), [sessionId])
   return useSyncExternalStore(store.subscribeStructural, get)
@@ -61,8 +66,8 @@ export type Route =
   | { page: 'artifacts' }
   | { page: 'artifact'; id: string }
   | { page: 'changes' }
-  /** `#/change/<projectId>/<encoded path>` — one changed file: its diff, and an editor */
-  | { page: 'change'; projectId: string; path: string }
+  /** `#/change/<checkoutId>/<encoded path>` — one changed file: its diff, and an editor (a project id = its main checkout) */
+  | { page: 'change'; checkoutId: string; path: string }
   /** `#/settings/<tab>` — opens the settings modal on that tab, then yields to the page underneath */
   | { page: 'settings'; tab: SettingsTab }
 
@@ -101,7 +106,7 @@ function parseRoute(hash: string): Route {
     const m = /^\/change\/([^/]+)\/(.+)$/.exec(hash)
     if (m) {
       try {
-        return { page: 'change', projectId: m[1], path: decodeURIComponent(m[2]) }
+        return { page: 'change', checkoutId: m[1], path: decodeURIComponent(m[2]) }
       } catch {
         return { page: 'changes' }
       }

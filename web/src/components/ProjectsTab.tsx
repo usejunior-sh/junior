@@ -79,7 +79,7 @@ export function ProjectsTab() {
               {state.projects.map((p) => (
                 <div key={p.id} className="projRow">
                   <span className="projName">
-                    <span className="pdot" style={{ background: projectColor(p.path) }} aria-hidden="true" />
+                    <span className="pdot" style={{ background: projectColor(p.id) }} aria-hidden="true" />
                     {p.name}
                     {p.isDefault && <span className="projDefault">default</span>}
                   </span>

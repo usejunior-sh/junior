@@ -7,6 +7,7 @@ import {
   FileDiff,
   FileText,
   Folder,
+  GitBranch,
   Home,
   Inbox,
   MessageSquare,
@@ -76,6 +77,10 @@ export type OpenTab = {
   color: string
   /** live: a working session, or a running shell */
   running: boolean
+  /** the worktree it runs in, as a short branch slug; absent in a project's main folder */
+  branch?: string
+  /** that worktree has since been removed */
+  branchGone?: boolean
   /** the peek slot — styled as provisional, and replaced by the next document */
   preview?: boolean
 }
@@ -390,6 +395,12 @@ function Tab({
             )}
             {tab.title}
           </span>
+          {tab.branch && (
+            <span className={`br${tab.branchGone ? ' gone' : ''}`} title={tab.branchGone ? 'worktree removed' : 'worktree'}>
+              <GitBranch size={9} aria-hidden="true" />
+              {tab.branch}
+            </span>
+          )}
           <span className="cl" role="button" aria-label={`Close ${tab.title}`} tabIndex={-1} onClick={close}>
             <X size={11} aria-hidden="true" />
           </span>
