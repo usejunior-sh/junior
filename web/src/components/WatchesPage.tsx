@@ -247,6 +247,11 @@ export function WatchesPage({
                           >
                             {w.title}
                           </button>
+                          {w.draft && !w.enabled && (
+                            <span className="draftTag" title="Drafted from a chat — open it to review and enable">
+                              draft
+                            </span>
+                          )}
                         </td>
                         <td>
                           <span className="uses">

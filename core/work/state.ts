@@ -28,6 +28,10 @@ export type ItemEventKind =
   | 'archived'
   | 'snoozed'
   | 'woken'
+  // stage/turn (flow.ts): `moved` when the derived flow changes, `flow-set`
+  // when the user overrides it (or clears the override)
+  | 'moved'
+  | 'flow-set'
 
 /**
  * Who caused a transition. `user` = a click in the web UI; `agent:<sessionId>`

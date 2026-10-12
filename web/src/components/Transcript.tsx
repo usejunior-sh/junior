@@ -188,6 +188,32 @@ function linkifyText(text: string, refs: RefIndex, onRef: (hash: string) => void
   return out
 }
 
+/**
+ * A watch a chat drafted (draft_watch) is off until the user turns it on —
+ * so the call's result carries a way there, right under it.
+ */
+function DraftWatchLinks({ tools, onRef }: { tools: readonly TranscriptItem[]; onRef: (hash: string) => void }) {
+  const ids = tools.flatMap((t) => {
+    if (t.kind !== 'tool' || !t.name.endsWith('__draft_watch') || !t.result || t.result.isError) return []
+    const m = /#(\/watches\/[\w-]+)/.exec(t.result.text)
+    return m ? [{ key: t.key, hash: m[1]!, title: typeof t.input.title === 'string' ? t.input.title : 'the watch' }] : []
+  })
+  if (!ids.length) return null
+  return (
+    <>
+      {ids.map((d) => (
+        <div key={d.key} className="draftLink">
+          <span className="draftTag">draft</span>
+          <span>“{d.title}” is saved off until you enable it.</span>
+          <button type="button" className="btn sm primary" onClick={() => onRef(d.hash)}>
+            Review and enable
+          </button>
+        </div>
+      ))}
+    </>
+  )
+}
+
 function mentionOpener(m: ResolvedMention, onRef: (hash: string) => void): (() => void) | undefined {
   const hash = mentionHash(m)
   return hash === null ? undefined : () => onRef(hash)
@@ -313,9 +339,19 @@ const Item = memo(function Item({
     case 'init':
       return <InitCard item={item} />
     case 'tool':
-      return <ToolCard item={item} />
+      return (
+        <>
+          <ToolCard item={item} />
+          <DraftWatchLinks tools={[item]} onRef={onRef} />
+        </>
+      )
     case 'toolGroup':
-      return <ToolGroup item={item} />
+      return (
+        <>
+          <ToolGroup item={item} />
+          <DraftWatchLinks tools={item.members} onRef={onRef} />
+        </>
+      )
     case 'permission': {
       // AskUserQuestion arrives as a permission prompt, but it is a question
       // for the reader — render it as choices, not as JSON to approve.

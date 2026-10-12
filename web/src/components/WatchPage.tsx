@@ -250,6 +250,14 @@ export function WatchPage({ id, onNavigate }: { id: string; onNavigate: (hash: s
                   <span className="mono">{watch.model}</span>
                 </>
               )}
+              {watch.brief && (
+                <>
+                  <span className="sep">·</span>
+                  <span title={`Each item it files is briefed${watch.brief.template ? ` with the ${watch.brief.template} playbook` : ''}${watch.brief.model ? ` by ${watch.brief.model}` : ''}`}>
+                    briefs items
+                  </span>
+                </>
+              )}
               <span className="sep">·</span>
               <span className="mono">last {runStatusText(watch.lastRunStatus, watch.lastRunTrigger, watch.consecutiveFailures)}</span>
               {nextDue != null && (
@@ -293,6 +301,26 @@ export function WatchPage({ id, onNavigate }: { id: string; onNavigate: (hash: s
         </div>
 
         {error && <div className="msg error">{error}</div>}
+        {watch.draft && !watch.enabled && (
+          <div className="draftBanner" role="status">
+            <span className="tag">Draft</span>
+            <span className="txt">
+              Drafted from a chat. Review the schedule, tools and instructions — it won’t run until you enable it.
+            </span>
+            <button type="button" className="btn sm outline" onClick={edit}>
+              <Pencil size={13} aria-hidden="true" /> Review
+            </button>
+            <button
+              type="button"
+              className="btn sm primary"
+              disabled={!!watch.configError}
+              title={watch.configError ? 'Fix the problem below first' : 'Turn it on — runs start at the next slot'}
+              onClick={() => void toggle(true)}
+            >
+              Enable
+            </button>
+          </div>
+        )}
         {watch.configError && (
           <div className="msg error">
             This watch can’t run: {watch.configError}.{' '}

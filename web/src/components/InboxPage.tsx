@@ -1,5 +1,6 @@
 import {
   AlarmClock,
+  AlertTriangle,
   Archive,
   CalendarDays,
   Check,
@@ -13,6 +14,7 @@ import {
   Sparkles,
   Square,
   Flag,
+  UserRound,
   Folder,
   Pencil,
   RefreshCw,
@@ -25,6 +27,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { RepoScopeEditor } from './RepoScope.js'
 import type {
   BriefJob,
+  InboxAlert,
   ItemImage,
   ItemImageEdit,
   ItemListResponse,
@@ -75,16 +78,31 @@ import {
   type Section,
 } from '../../../core/work/due.js'
 import { FOLD_AFTER_DAYS, isOldFyi } from '../../../core/work/fade.js'
+import { STAGE_LABEL, TURN_LABEL, type ItemFlow, type Turn } from '../../../core/work/flow.js'
+import { TODAY_TITLE, inTurnTab, todaySections, waitedFor, type TodayEntry, type TodaySection, type TurnTab } from '../../../core/work/today.js'
 
-/** The status tabs (.docs/watches-v2.md): items are durable and never deleted,
- *  so done/snoozed/archived are viewable, not just write-only. */
+/**
+ * Today first, then the turn tabs (core/work/today.ts): whose move it is. The
+ * status tabs stay (.docs/watches-v2.md) — items are durable and never deleted,
+ * so done/snoozed/archived are viewable; the last two sit behind More.
+ */
 const TABS = [
-  { id: 'open', label: 'Open' },
-  { id: 'snoozed', label: 'Snoozed' },
+  { id: 'today', label: 'Today' },
+  { id: 'mine', label: 'My turn' },
+  { id: 'ai', label: 'AI working' },
+  { id: 'others', label: 'Waiting on others' },
+  { id: 'all', label: 'All' },
   { id: 'done', label: 'Done' },
+] as const
+const MORE_TABS = [
+  { id: 'snoozed', label: 'Snoozed' },
   { id: 'archived', label: 'Archived' },
 ] as const
-type Tab = (typeof TABS)[number]['id']
+type Tab = (typeof TABS)[number]['id'] | (typeof MORE_TABS)[number]['id']
+type StatusTab = 'done' | 'snoozed' | 'archived'
+/** Tabs over the open inbox snapshot; the rest are loaded by status. */
+const LIVE_TABS: ReadonlySet<Tab> = new Set<Tab>(['today', 'mine', 'ai', 'others', 'all'])
+const tabLabelOf = (t: Tab) => [...TABS, ...MORE_TABS].find((x) => x.id === t)?.label ?? ''
 
 type OtherState =
   | { phase: 'loading' }
@@ -99,10 +117,12 @@ type Props = {
   onPinItem: (id: string, title: string) => void
   /** Bumped by the shell (Queue panel "+") to open the new-item composer. */
   composeSignal?: number
+  /** Go to a route — a watch or a session an alert points at. */
+  onNavigate: (path: string) => void
 }
 
-export function InboxPage({ onDispatch, onRefineWatch, onOpenItem, onPinItem, composeSignal = 0 }: Props) {
-  const [tab, setTab] = useState<Tab>('open')
+export function InboxPage({ onDispatch, onRefineWatch, onOpenItem, onPinItem, composeSignal = 0, onNavigate }: Props) {
+  const [tab, setTab] = useState<Tab>('today')
   // The open tab reads the shared snapshot (the Queue panel shows the same
   // list); the other tabs are loaded here on demand.
   const snap = useInbox()
@@ -134,9 +154,9 @@ export function InboxPage({ onDispatch, onRefineWatch, onOpenItem, onPinItem, co
     })
   }, [])
 
-  const isOpen = tab === 'open'
+  const isOpen = LIVE_TABS.has(tab)
 
-  const loadOther = useCallback(async (which: Exclude<Tab, 'open'>) => {
+  const loadOther = useCallback(async (which: StatusTab) => {
     setOther({ phase: 'loading' })
     try {
       const res = await fetch(`/api/items?status=${which}`)
@@ -149,8 +169,8 @@ export function InboxPage({ onDispatch, onRefineWatch, onOpenItem, onPinItem, co
 
   const reload = useCallback(
     (refresh: boolean) => {
-      if (tab === 'open') void inboxStore.refresh(refresh)
-      else void loadOther(tab)
+      if (LIVE_TABS.has(tab)) void inboxStore.refresh(refresh)
+      else void loadOther(tab as StatusTab)
     },
     [tab, loadOther],
   )
@@ -220,6 +240,16 @@ export function InboxPage({ onDispatch, onRefineWatch, onOpenItem, onPinItem, co
 
   const snooze1d = useCallback((item: ScoredItem) => void setItemState(item, 'snoozed', tomorrow9()), [setItemState])
 
+  // Whose turn, when the rules can't see it. The row moves tab on the refetch
+  // the server's inbox_changed brings.
+  const setTurn = useCallback((item: ScoredItem, turn: Turn | null) => {
+    void fetch('/api/items/flow', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(turn ? { id: item.id, turn } : { id: item.id, clear: true }),
+    }).catch(() => {})
+  }, [])
+
   // A due set here is yours and outlives rescans. The row moves section now;
   // the server resolves the bucket to the same day.
   const setDue = useCallback((targets: ScoredItem[], due: Section | string) => {
@@ -241,7 +271,7 @@ export function InboxPage({ onDispatch, onRefineWatch, onOpenItem, onPinItem, co
     (next: Tab) => {
       setTab(next)
       setSel(0)
-      if (next !== 'open') void loadOther(next)
+      if (!LIVE_TABS.has(next)) void loadOther(next as StatusTab)
     },
     [loadOther],
   )
@@ -259,19 +289,26 @@ export function InboxPage({ onDispatch, onRefineWatch, onOpenItem, onPinItem, co
     return by
   }, [snap.items])
 
-  // Items in on-screen order. The Open tab renders by section; the other
-  // tabs are a flat, source-time-ordered list.
+  // Today's sections (core/work/today.ts): each item once, in its highest.
+  const today = useMemo(() => todaySections(snap.items, Date.now()), [snap.items])
+
+  // Items in on-screen order. Today and All render by section; the turn tabs
+  // are the ranked list filtered by turn; the status tabs a flat list.
   const ordered = useMemo<readonly ScoredItem[]>(
     () =>
-      isOpen
-        ? SECTION_ORDER.flatMap((s) => {
-            const sec = sections.get(s)
-            return sec ? [...sec.rows, ...(fyiOpen ? sec.old : [])] : []
-          })
-        : other.phase === 'ready'
-          ? other.items
-          : [],
-    [isOpen, sections, fyiOpen, other],
+      tab === 'today'
+        ? [...today.values()].flatMap((entries) => entries.map((e) => e.item))
+        : tab === 'all'
+          ? SECTION_ORDER.flatMap((s) => {
+              const sec = sections.get(s)
+              return sec ? [...sec.rows, ...(fyiOpen ? sec.old : [])] : []
+            })
+          : isOpen
+            ? snap.items.filter((i) => inTurnTab(i, tab as TurnTab))
+            : other.phase === 'ready'
+              ? other.items
+              : [],
+    [tab, isOpen, today, sections, fyiOpen, snap.items, other],
   )
 
   // The live selection: checked ids that are still on screen. Ids of rows that
@@ -410,17 +447,29 @@ export function InboxPage({ onDispatch, onRefineWatch, onOpenItem, onPinItem, co
   const error = isOpen ? (!snap.loaded ? snap.error : undefined) : other.phase === 'error' ? other.message : undefined
   const items = ordered
   // The headline counts what is asked of you, by label; Read is not an ask.
-  const asks = isOpen
-    ? LABEL_ORDER.filter((l) => l !== 'read')
-        .map((l) => ({ label: l, n: snap.items.filter((i) => i.label === l).length }))
-        .filter((c) => c.n > 0)
-    : []
-  const tabLabel = TABS.find((t) => t.id === tab)?.label ?? ''
-  const emptyText = isOpen
-    ? snap.notices.length > 0
-      ? 'No open items to show — but a source is degraded, so this may be incomplete.'
-      : 'Inbox zero — nothing is waiting on you.'
-    : `Nothing in ${tabLabel.toLowerCase()}.`
+  const asks =
+    tab === 'all'
+      ? LABEL_ORDER.filter((l) => l !== 'read')
+          .map((l) => ({ label: l, n: snap.items.filter((i) => i.label === l).length }))
+          .filter((c) => c.n > 0)
+      : []
+  const alerts = snap.alerts
+  const todayCount = items.length + alerts.length
+  const tabLabel = tabLabelOf(tab)
+  const emptyText =
+    tab === 'today'
+      ? 'Nothing needs you.'
+      : isOpen && snap.notices.length > 0
+        ? 'No open items to show — but a source is degraded, so this may be incomplete.'
+        : tab === 'all'
+          ? 'Inbox zero — nothing is waiting on you.'
+          : tab === 'mine'
+            ? 'Nothing is on your turn.'
+            : tab === 'ai'
+              ? 'The AI isn’t working on anything.'
+              : tab === 'others'
+                ? 'Nobody is holding anything of yours.'
+                : `Nothing in ${tabLabel.toLowerCase()}.`
 
   const rowProps: RowActions = {
     tab,
@@ -443,6 +492,7 @@ export function InboxPage({ onDispatch, onRefineWatch, onOpenItem, onPinItem, co
     onToggle: toggleChecked,
     onBrief: (i) => setBriefing([i]),
     briefOf: (id) => briefs.byItem.get(id),
+    onSetTurn: setTurn,
   }
 
   return (
@@ -451,9 +501,13 @@ export function InboxPage({ onDispatch, onRefineWatch, onOpenItem, onPinItem, co
       <div className="inner">
         <div className="pageHead">
           <h1 className="display">
-            {isOpen ? weekday() : tabLabel}.{' '}
+            {tab === 'today' || tab === 'all' ? weekday() : tabLabel}.{' '}
             {loading && items.length === 0 ? (
               <span className="muted">syncing…</span>
+            ) : tab === 'today' ? (
+              <span className="muted">
+                {todayCount === 0 ? 'Nothing needs you.' : `${todayCount} need${todayCount === 1 ? 's' : ''} you.`}
+              </span>
             ) : (
               <span className="muted">
                 {asks.length > 0
@@ -488,8 +542,31 @@ export function InboxPage({ onDispatch, onRefineWatch, onOpenItem, onPinItem, co
                 onClick={() => selectTab(t.id)}
               >
                 {t.label}
+                {t.id !== 'today' && t.id !== 'all' && t.id !== 'done' && snap.loaded && (
+                  <span className="segN">{snap.items.filter((i) => inTurnTab(i, t.id as TurnTab)).length}</span>
+                )}
               </button>
             ))}
+            <Menu>
+              <MenuTrigger asChild>
+                <button
+                  type="button"
+                  className={`segBtn${MORE_TABS.some((t) => t.id === tab) ? ' active' : ''}`}
+                  title="Snoozed and archived items"
+                >
+                  {MORE_TABS.find((t) => t.id === tab)?.label ?? 'More'}
+                  <MoreHorizontal size={13} aria-hidden="true" />
+                </button>
+              </MenuTrigger>
+              <MenuContent align="start">
+                {MORE_TABS.map((t) => (
+                  <MenuItem key={t.id} onSelect={() => selectTab(t.id)}>
+                    {t.label}
+                    {tab === t.id && <Check className="check" size={13} aria-hidden="true" />}
+                  </MenuItem>
+                ))}
+              </MenuContent>
+            </Menu>
           </div>
           <div className="right">
             <button type="button" className="btn sm ghost" onClick={() => setComposer({ open: true, editing: null })}>
@@ -523,16 +600,26 @@ export function InboxPage({ onDispatch, onRefineWatch, onOpenItem, onPinItem, co
                   {n}
                 </div>
               ))}
-            {items.length === 0 ? (
+            {tab === 'today' ? (
+              <TodayView
+                sections={today}
+                alerts={alerts}
+                landedToday={snap.landedToday}
+                selectedId={ordered[sel]?.id ?? null}
+                onAlert={(a) => onNavigate(a.watchId ? `/watches/${encodeURIComponent(a.watchId)}` : a.sessionId ?? '/inbox')}
+                onAdd={() => setComposer({ open: true, editing: null })}
+                {...rowProps}
+              />
+            ) : items.length === 0 ? (
               <div className="inboxEmpty">
                 {emptyText}
-                {isOpen && (
+                {tab === 'all' && (
                   <button type="button" className="btn" onClick={() => setComposer({ open: true, editing: null })}>
                     Add a work item
                   </button>
                 )}
               </div>
-            ) : isOpen ? (
+            ) : tab === 'all' ? (
               <div className="homeList">
                 {SECTION_ORDER.map((s) => (
                   <DaySection
@@ -709,6 +796,108 @@ type RowActions = {
   onToggle: (id: string) => void
   onBrief: (item: ScoredItem) => void
   briefOf: (id: string) => BriefJob | undefined
+  /** override whose turn it is; null goes back to what the rules say */
+  onSetTurn: (item: ScoredItem, turn: Turn | null) => void
+}
+
+/**
+ * Today (core/work/today.ts): five sections, most urgent first, each item
+ * once. Broken things that aren't items (a failed watch, a paused team run)
+ * sit in Something broke beside the items that broke. The footer counts what
+ * landed since midnight — the day's progress, kept visible.
+ */
+function TodayView({
+  sections,
+  alerts,
+  landedToday,
+  selectedId,
+  onAlert,
+  onAdd,
+  ...actions
+}: {
+  sections: Map<TodaySection, TodayEntry<ScoredItem>[]>
+  alerts: readonly InboxAlert[]
+  landedToday: number
+  selectedId: string | null
+  onAlert: (a: InboxAlert) => void
+  onAdd: () => void
+} & RowActions) {
+  const order: TodaySection[] = ['due', 'waiting', 'approval', 'broke', 'fresh']
+  const shown = order.filter((s) => (sections.get(s)?.length ?? 0) > 0 || (s === 'broke' && alerts.length > 0))
+  return (
+    <div className="homeList">
+      {shown.length === 0 && (
+        <div className="inboxEmpty">
+          Nothing needs you.
+          <button type="button" className="btn" onClick={onAdd}>
+            Add a work item
+          </button>
+        </div>
+      )}
+      {shown.map((sec) => {
+        const entries = sections.get(sec) ?? []
+        const n = entries.length + (sec === 'broke' ? alerts.length : 0)
+        return (
+          <div key={sec} className="todaySec">
+            <div className={`secLabel today-${sec}`}>
+              <span className="tier">{TODAY_TITLE[sec]}</span>
+              <span className="qual">
+                <span className="n">{n}</span>
+              </span>
+            </div>
+            {sec === 'broke' && alerts.map((a) => <AlertRow key={a.id} alert={a} onOpen={() => onAlert(a)} />)}
+            {entries.map((e) => (
+              <WorkRow key={e.item.id} item={e.item} entry={e} section={sec} selected={e.item.id === selectedId} {...actions} />
+            ))}
+          </div>
+        )
+      })}
+      <div className="landed" title="Items marked done since midnight">
+        <Check size={13} aria-hidden="true" /> Landed today: <span className="n">{landedToday}</span>
+      </div>
+    </div>
+  )
+}
+
+/** Something broke that isn't an item — opens where it can be fixed. */
+function AlertRow({ alert, onOpen }: { alert: InboxAlert; onOpen: () => void }) {
+  return (
+    <div className="wrow alert alertRow">
+      <span className="check" aria-hidden="true" />
+      <span className="bar" />
+      <span className="glyph">
+        <AlertTriangle size={14} aria-hidden="true" />
+      </span>
+      <button type="button" className="t" title={alert.detail ?? alert.title} onClick={onOpen}>
+        <span className="name">{alert.title}</span>
+        {alert.detail && <span className="why">{alert.detail}</span>}
+      </button>
+      <span className="meta">
+        <span className="c state flow-broken">{alert.kind === 'watch' ? 'Open watch' : 'Open run'}</span>
+        <span className="c when">{alert.at ? shortAge(alert.at) : ''}</span>
+      </span>
+    </div>
+  )
+}
+
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
+
+/**
+ * The state cell: what is asked of you on your turn, else who has it. A
+ * broken item says what broke; that outranks everything.
+ */
+function rowState(item: ScoredItem, brief: { label: string; tone: string } | null): { text: string; tone: string } {
+  const f = item.flow
+  if (!f) return { text: brief?.label ?? (LABELS[item.label] ?? LABELS.read).name, tone: brief ? brief.tone : `label-${item.label}` }
+  if (f.broken) return { text: cap(f.broken), tone: 'flow-broken' }
+  if (f.turn === 'me') return f.ask ? { text: cap(f.ask), tone: 'flow-ask' } : { text: (LABELS[item.label] ?? LABELS.read).name, tone: `label-${item.label}` }
+  if (f.turn === 'ai') return { text: f.stage === 'briefing' ? (brief?.label === 'brief queued' ? 'Brief queued' : 'Briefing…') : 'AI working', tone: 'flow-ai' }
+  if (f.turn === 'others') return { text: f.note ? f.note : 'Waiting', tone: 'flow-others' }
+  return { text: STAGE_LABEL[f.stage], tone: 'flow-none' }
+}
+
+function flowTitle(f: ItemFlow): string {
+  return `${STAGE_LABEL[f.stage]} · ${TURN_LABEL[f.turn]}${f.overridden ? ' — set by you' : ''}${f.note ? ` — ${f.note}` : ''}`
 }
 
 /** One day section of the Open tab. Today says so when it holds more than a day can. */
@@ -793,10 +982,13 @@ function WorkRow({
   onToggle,
   onBrief,
   briefOf,
-}: { item: ScoredItem; selected: boolean } & RowActions) {
+  onSetTurn,
+  entry,
+  section,
+}: { item: ScoredItem; selected: boolean; entry?: TodayEntry<ScoredItem>; section?: TodaySection } & RowActions) {
   const [menuOpen, setMenuOpen] = useState(false)
   const isManual = item.source === 'manual'
-  const isOpen = tab === 'open'
+  const isOpen = LIVE_TABS.has(tab)
   const isChecked = checked.has(item.id)
   const brief = briefPill(briefOf(item.id))
   const pri = item.priority ?? 0
@@ -805,10 +997,14 @@ function WorkRow({
   const Icon = kindIcon(item)
   const alert = itemTone(item) === 'red'
 
-  // The state cell is the item's label — what it asks of you; a brief's
-  // progress outranks it.
-  const state = brief?.label ?? (LABELS[item.label] ?? LABELS.read).name
+  // The state cell: the ask on your turn, else who has it (rowState).
+  const state = rowState(item, brief)
+  const flow = item.flow
   const signals = signalsText(item)
+  // Today's extras: how long a person has waited, a stuck wait to nudge.
+  const now = Date.now()
+  const waited = section === 'waiting' ? waitedFor(Date.parse(item.createdAt) || now, now) : null
+  const stuck = entry?.stuck && flow ? waitedFor(flow.since, now) : null
   // Only a stated deadline gets a date chip; a late one you set says how late.
   const due = isOpen ? dueOf(item, Date.now()) : null
   // A date you picked shows too when its section can't say it (This week, Later).
@@ -868,11 +1064,20 @@ function WorkRow({
             {dueText}
           </span>
         )}
+        {entry?.badge && <span className={`fresh ${entry.badge}`}>{entry.badge === 'new' ? 'New' : 'Updated'}</span>}
+        {waited && <span className="waited">waiting {waited}</span>}
+        {stuck && <span className="waited stuck">stuck {stuck}</span>}
         {trailing && <span className="why">{trailing}</span>}
       </button>
 
       <span className="meta" aria-hidden={selected || undefined}>
-        <span className={`c state ${brief ? brief.tone : `label-${item.label}`}`}>{state}</span>
+        {flow && (
+          <span className={`c stage turn-${flow.turn}${flow.overridden ? ' set' : ''}`} title={flowTitle(flow)}>
+            <span className="dot" aria-hidden="true" />
+            {STAGE_LABEL[flow.stage]}
+          </span>
+        )}
+        <span className={`c state ${state.tone}`}>{state.text}</span>
         <span className="c src">{source}</span>
         <span className="c when" title={item.updatedAt ? new Date(item.updatedAt).toLocaleString() : undefined}>
           {shortAge(item.updatedAt)}
@@ -901,7 +1106,16 @@ function WorkRow({
       )}
 
       <span className="acts">
-        {isOpen ? (
+        {stuck ? (
+          <button
+            type="button"
+            className="btn sm primary"
+            title={`Waiting ${stuck} — nudge them${item.url ? ' at the source' : ''}`}
+            onClick={() => (item.url ? window.open(item.url, '_blank', 'noopener') : onOpen(item.id))}
+          >
+            Nudge?
+          </button>
+        ) : isOpen ? (
           <button type="button" className="btn sm primary" title="Start a Claude Code session on this item (d)" onClick={() => onDispatch(item)}>
             Dispatch
           </button>
@@ -972,6 +1186,19 @@ function WorkRow({
                   <CalendarDays size={13} aria-hidden="true" /> Pick a date…
                   {due?.source === 'you' && due.at != null && <span className="k">{dueChip(due.at, Date.now())}</span>}
                 </MenuItem>
+                <MenuSeparator />
+                <div className="uiMenuCap">Whose turn</div>
+                {(['me', 'ai', 'others'] as const).map((t) => (
+                  <MenuItem key={t} onSelect={() => onSetTurn(item, t)}>
+                    <UserRound size={13} aria-hidden="true" /> {TURN_LABEL[t]}
+                    {flow?.turn === t && <Check className="check" size={13} aria-hidden="true" />}
+                  </MenuItem>
+                ))}
+                {flow?.overridden && (
+                  <MenuItem onSelect={() => onSetTurn(item, null)}>
+                    <Undo2 size={13} aria-hidden="true" /> Back to automatic
+                  </MenuItem>
+                )}
                 <MenuSeparator />
                 <div className="uiMenuCap">Priority</div>
                 {PRIORITY_VALUES.map((v) => (

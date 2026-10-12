@@ -6,13 +6,17 @@
  * optimistic edits, so the panel never lags the list beside it.
  */
 import { useSyncExternalStore } from 'react'
-import type { InboxResponse, ScoredItem } from '../../shared/protocol.js'
+import type { InboxAlert, InboxResponse, ScoredItem } from '../../shared/protocol.js'
 import { store } from './store.js'
 
 export type InboxSnapshot = {
   items: readonly ScoredItem[]
   syncedAt: number
   notices: readonly string[]
+  /** Today's "Something broke" entries that aren't items */
+  alerts: readonly InboxAlert[]
+  /** Today's footer: items done since midnight */
+  landedToday: number
   /** false until the first successful load */
   loaded: boolean
   /** the last refresh's failure, cleared by the next success */
@@ -21,7 +25,7 @@ export type InboxSnapshot = {
   loading: boolean
 }
 
-let snap: InboxSnapshot = { items: [], syncedAt: 0, notices: [], loaded: false, loading: false }
+let snap: InboxSnapshot = { items: [], syncedAt: 0, notices: [], alerts: [], landedToday: 0, loaded: false, loading: false }
 const listeners = new Set<() => void>()
 let inflight: Promise<void> | null = null
 
@@ -39,8 +43,13 @@ export const inboxStore = {
     }
   },
 
-  set(items: readonly ScoredItem[], syncedAt: number, notices: readonly string[]) {
-    snap = { items, syncedAt, notices, loaded: true, loading: false }
+  set(
+    items: readonly ScoredItem[],
+    syncedAt: number,
+    notices: readonly string[],
+    extras: { alerts?: readonly InboxAlert[]; landedToday?: number } = {},
+  ) {
+    snap = { items, syncedAt, notices, alerts: extras.alerts ?? [], landedToday: extras.landedToday ?? 0, loaded: true, loading: false }
     notify()
   },
 
@@ -57,7 +66,7 @@ export const inboxStore = {
     inflight = fetch(`/api/inbox${force ? '?refresh=1' : ''}`)
       .then((r) => r.json() as Promise<InboxResponse>)
       .then((b) => {
-        if (b.ok) inboxStore.set(b.items, b.syncedAt, b.notices)
+        if (b.ok) inboxStore.set(b.items, b.syncedAt, b.notices, { alerts: b.alerts, landedToday: b.landedToday })
         else {
           snap = { ...snap, loading: false, error: b.error }
           notify()

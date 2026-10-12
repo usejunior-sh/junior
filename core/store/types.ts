@@ -35,6 +35,7 @@ import type {
 export type { SessionKind }
 import type { Provenance, WorkItem } from '../work/types.js'
 import type { ItemEvent, ItemStatus, StatusChange } from '../work/state.js'
+import type { FlowOverride } from '../work/flow.js'
 import type { NewWatch, NewWatchSlotRun, Watch, WatchRunResult, WatchRunStart, WatchRunStatus, WatchRunTrigger, WatchSlotFinish, WatchSlotRun } from '../watch/types.js'
 
 export type StoredSession = {
@@ -309,6 +310,13 @@ export type NewManualItem = {
  * — correctness in the contract, not the prompt. Every transition is appended
  * to the item's own event log.
  */
+/** What the store keeps about an item's flow: the last derived stage/turn and any override. */
+export interface StoredFlow {
+  stage: string | null
+  turn: string | null
+  override: FlowOverride | null
+}
+
 export interface WorkItemStore {
   /**
    * Insert or refresh one scanned/source item. Id exists → update payload only
@@ -338,6 +346,17 @@ export interface WorkItemStore {
   setDue(id: string, due: { at: number | null } | null): Promise<void>
   /** Snoozes whose wake time has elapsed → open (+ a 'woken' event). Returns woken ids. */
   wakeSnoozed(now: number): Promise<string[]>
+  /**
+   * Stage/turn as last recorded, and the user's override, per item
+   * (core/work/flow.ts). Items never recorded are absent.
+   */
+  flowState(): Promise<Map<string, StoredFlow>>
+  /** The derived flow moved: set the columns and append a 'moved' event. */
+  recordFlow(id: string, flow: { stage: string; turn: string }, detail?: Record<string, unknown>): Promise<void>
+  /** Set (or clear, with null) the user's stage/turn override; appends a 'flow-set' event. */
+  setFlowOverride(id: string, override: FlowOverride | null, actor: string): Promise<void>
+  /** Items that went done at or after `since` and are still done ("Landed today"). */
+  countDoneSince(since: number): Promise<number>
   /** The append-only transition log for one item, in order. */
   events(id: string): Promise<ItemEvent[]>
   /** Set (or clear, with null) the human's description on any item. Never touched by ingestion. */
@@ -359,6 +378,8 @@ export type NewBriefJob = {
   playbook: string
   model?: string | null
   note?: string | null
+  /** born running in this session (never queued) — a reply to a brief session that already knows the item */
+  running?: { sessionId: string; startedAt: number }
 }
 
 /**

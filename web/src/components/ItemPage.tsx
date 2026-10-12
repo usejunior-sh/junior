@@ -47,6 +47,8 @@ import { DueDialog } from './DueDialog.js'
 import { SECTION_ORDER, dueChip, dueFor, dueOf, parseDue, sectionTitle, type Section } from '../../../core/work/due.js'
 import { choosesProject, defaultProjectOf, ProjectIdPicker } from './ProjectPicker.js'
 import { ItemLinks } from './ItemLinks.js'
+import { FlowPopover } from './FlowPopover.js'
+import { STAGE_LABEL, TURN_LABEL, isStage, isTurn } from '../../../core/work/flow.js'
 
 type Props = {
   id: string
@@ -64,6 +66,26 @@ const EVENT_LABEL: Record<string, string> = {
   archived: 'archived',
   snoozed: 'snoozed',
   woken: 'snooze ended',
+  moved: 'moved',
+  'flow-set': 'turn set',
+}
+
+/** A stage/turn event's one line: "Ready · My turn", "Waiting on others — Niraj", "back to automatic". */
+function flowLine(ev: ItemEvent): string | undefined {
+  const d = ev.detail ?? {}
+  if (ev.event === 'moved') {
+    const to = d.to as { stage?: string; turn?: string } | undefined
+    if (!to) return undefined
+    const stage = isStage(to.stage) ? STAGE_LABEL[to.stage] : to.stage
+    const turn = isTurn(to.turn) ? TURN_LABEL[to.turn] : to.turn
+    return `${stage} · ${turn}${typeof d.ask === 'string' ? ` — ${d.ask}` : ''}`
+  }
+  if (ev.event === 'flow-set') {
+    if (d.cleared) return 'back to automatic'
+    const parts = [isStage(d.stage) ? STAGE_LABEL[d.stage] : null, isTurn(d.turn) ? TURN_LABEL[d.turn] : null].filter(Boolean)
+    return `${parts.join(' · ')}${typeof d.note === 'string' ? ` — ${d.note}` : ''}`
+  }
+  return undefined
 }
 
 function actorLabel(actor: string): string {
@@ -94,6 +116,7 @@ export function ItemPage({ id, onDispatch, onNavigate, onDirty }: Props) {
   // Not in the open inbox → it may be snoozed, done or archived.
   const [other, setOther] = useState<{ id: string; item: ScoredItem | null } | null>(null)
   const [events, setEvents] = useState<ItemEvent[] | null>(null)
+  const [eventsRev, setEventsRev] = useState(0)
   const [watchTitles, setWatchTitles] = useState<Map<string, string>>(new Map())
   const [projects, setProjects] = useState<Project[]>([])
   const [pickingDue, setPickingDue] = useState(false)
@@ -150,7 +173,7 @@ export function ItemPage({ id, onDispatch, onNavigate, onDirty }: Props) {
       .then((r) => r.json() as Promise<ItemEventsResponse>)
       .then((b) => setEvents(b.ok ? b.events : []))
       .catch(() => setEvents([]))
-  }, [id])
+  }, [id, eventsRev])
 
   useEffect(() => {
     void fetch('/api/watches')
@@ -458,6 +481,8 @@ export function ItemPage({ id, onDispatch, onNavigate, onDirty }: Props) {
         <h1 className="display md">{item.title}</h1>
 
         <div className="chipRow">
+          {item.flow && <FlowPopover key={`${item.flow.stage}:${item.flow.turn}`} itemId={item.id} flow={item.flow} onSaved={() => setEventsRev((n) => n + 1)} />}
+          {item.flow?.broken && <span className="pill red">{item.flow.broken}</span>}
           <span className="pill mono">↑ {Math.round(item.score)}</span>
           {item.ciFailing && <span className="pill red">CI red</span>}
           {item.kind === 'own-pr-conflicting' && <span className="pill red">conflicts</span>}
@@ -663,7 +688,7 @@ export function ItemPage({ id, onDispatch, onNavigate, onDirty }: Props) {
           {brief?.body && settled && (
             <div className="briefIterate">
               <textarea
-                placeholder="You missed X… — the same session rewrites the brief"
+                placeholder="You missed X… — goes to the brief session as your message; it rewrites the brief"
                 value={feedback}
                 onChange={(e) => setFeedback(e.target.value)}
                 onKeyDown={(e) => {
@@ -1003,7 +1028,7 @@ export function ItemPage({ id, onDispatch, onNavigate, onDirty }: Props) {
           <div className="tl">
             {[...events].reverse().map((ev) => {
               const why = typeof ev.detail?.why === 'string' ? ev.detail.why : undefined
-              const reason = typeof ev.detail?.reason === 'string' ? ev.detail.reason : undefined
+              const reason = typeof ev.detail?.reason === 'string' ? ev.detail.reason : flowLine(ev)
               return (
                 <div key={ev.seq} className="tlRow" title={new Date(ev.at).toLocaleString()}>
                   <span className="when">{relTime(ev.at)}</span>

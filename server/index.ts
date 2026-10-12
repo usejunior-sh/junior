@@ -145,6 +145,7 @@ import type {
   FileSearchResponse,
   Mention,
   ResolvedMention,
+  InboxAlert,
   InboxResponse,
   InboxSnapshot,
   ItemDetail,
@@ -228,7 +229,8 @@ import type { Store, StoredSession, UpsertOutcome, UpsertResult } from '../core/
 import { buildInbox } from '../core/work/inbox.js'
 import { BASE, rank } from '../core/work/score.js'
 import { LABEL_ORDER, isLabel, type Label } from '../core/work/labels.js'
-import { dueInput, parseDue } from '../core/work/due.js'
+import { dueInput, parseDue, startOfDay } from '../core/work/due.js'
+import { flowOf, isStage, isTurn, type FlowOverride, type FlowSignals, type ItemFlow, type SessionSignal } from '../core/work/flow.js'
 import { ARCHIVE_AFTER_DAYS, shouldArchive } from '../core/work/fade.js'
 import { canonicalizeRef, canonicalizeRefs, linkByRefs } from '../core/work/link.js'
 import type { ItemStatus } from '../core/work/state.js'
@@ -250,6 +252,7 @@ import {
   WATCH_OUTPUTS,
   type NewWatch,
   type Watch,
+  type WatchBrief,
   type WatchCadence,
   type WatchConnector,
   type WatchNotify,
@@ -260,7 +263,7 @@ import {
   type WatchRunTrigger,
 } from '../core/watch/types.js'
 import { composeRunPrompt, MAX_ROWS_PER_RUN } from '../core/watch/connectors.js'
-import { WatchFiles, checkGrants, parseWatchFile, serializeWatchFile, starterWatchFile, withKey, type WatchFileSpec } from './watch-files.js'
+import { WatchFiles, checkGrants, grantsFromLines, parseWatchFile, serializeWatchFile, starterWatchFile, withKey, type WatchFileSpec } from './watch-files.js'
 import {
   grantLabel,
   grantsFrom,
@@ -515,6 +518,8 @@ class WorkspaceRuntime {
 
   // inbox
   inboxCache: InboxSnapshot | null = null
+  /** dispatched sessions' status, last seen (noteDispatchedSessions); null until the first look */
+  dispatchFingerprint: string | null = null
   inboxInFlight: Promise<InboxSnapshot> | null = null
   /** last GitHub source error, surfaced as an inbox notice until the next clean sync */
   githubNotice: string | null = null
@@ -671,8 +676,18 @@ type SessionExtras = {
   externalMcp?: Record<string, Record<string, unknown>>
 }
 
-/** Tools a headless brief session never gets, whatever it asks (belt to the gate's braces). */
-const BRIEF_DISALLOWED_TOOLS = ['Write', 'Edit', 'MultiEdit', 'NotebookEdit', 'AskUserQuestion']
+/**
+ * Tools a headless brief session never gets, whatever it asks (belt to the
+ * gate's braces). triage's own writes are hidden too, not just denied: a brief
+ * that can see update_artifact reaches for it to revise itself, and the brief's
+ * one write is write_brief.
+ */
+const BRIEF_DISALLOWED_TOOLS = [
+  'Write', 'Edit', 'MultiEdit', 'NotebookEdit', 'AskUserQuestion',
+  ...['create_work_item', 'edit_work_item', 'upsert_work_item', 'resolve_work_item', 'draft_watch',
+    'write_artifact', 'update_artifact', 'link_artifact',
+    'propose_team', 'split_step', 'revise_plan', 'submit_step'].map((t) => `mcp__triage__${t}`),
+]
 /** The only shell a brief may run: `gh`/`git` read verbs, no chaining or redirection. */
 const BRIEF_BASH_RE = /^\s*(gh\s+(pr|issue|api|search|run|repo)\s+(view|diff|checks|list|status|comments)\b|git\s+(log|show|diff|blame|status|branch|ls-files)\b)/
 const SHELL_META_RE = /[;&|<>`$\\]|\$\(/
@@ -991,7 +1006,7 @@ class LiveSession {
           : {
               behavior: 'deny',
               message:
-                'This is a headless brief session: only reads, read-only gh/git commands, and write_brief are allowed. Finish the brief with write_brief.',
+                'This is a brief session: only reads, read-only gh/git commands, and write_brief are allowed. To change the brief, call write_brief with the whole revised brief.',
             },
       )
     }
@@ -1964,7 +1979,9 @@ function syncInbox(rt: WorkspaceRuntime): Promise<InboxSnapshot> {
         }
       }
       const { items: ranked } = buildInbox({ items, notices, now })
-      rt.inboxCache = { syncedAt: now, items: ranked, notices }
+      await withFlows(rt, ranked, true)
+      const [landedToday, alerts] = await Promise.all([rt.store.items.countDoneSince(startOfDay(now)), inboxAlerts(rt)])
+      rt.inboxCache = { syncedAt: now, items: ranked, notices, landedToday, alerts }
       void rt.store.inbox.save(rt.inboxCache)
       return rt.inboxCache
     } finally {
@@ -2007,7 +2024,146 @@ function scopeGitHub<T extends { source: string; repo: string }>(items: T[], sco
 async function listItemsByStatus(rt: WorkspaceRuntime, status: ItemStatus, now = Date.now()): Promise<InboxSnapshot['items']> {
   const scoped = new Set(await connectedRepos(rt))
   const items = scopeGitHub(await rt.store.items.list(status), scoped)
-  return linkByRefs(rank(items, now))
+  return withFlows(rt, linkByRefs(rank(items, now)), false)
+}
+
+// ---------------------------------------------------------------------------
+// Stage and turn (core/work/flow.ts): read the signals around every item — its
+// newest brief, its newest dispatched session, its team run, the user's
+// override — and derive where it is and whose move it is.
+// ---------------------------------------------------------------------------
+
+async function flowSignals(rt: WorkspaceRuntime): Promise<Map<string, FlowSignals>> {
+  const [jobs, links, stored] = await Promise.all([rt.store.briefs.list(), rt.store.links.list(), rt.store.items.flowState()])
+  const out = new Map<string, FlowSignals>()
+  const of = (id: string): FlowSignals => {
+    let s = out.get(id)
+    if (!s) out.set(id, (s = {}))
+    return s
+  }
+  // newest job per item (list is oldest first, so the last one wins)
+  for (const j of [...jobs].sort((a, b) => a.createdAt - b.createdAt)) {
+    of(j.itemId).brief = { status: j.status, at: j.finishedAt ?? j.startedAt ?? j.createdAt }
+  }
+  for (const l of links) {
+    if (l.fromKind !== 'session' || l.toKind !== 'item' || l.role !== 'dispatch') continue
+    const row = rt.rows.get(l.fromId)
+    if (!row || row.kind !== 'chat') continue
+    const live = rt.live.get(row.id)
+    const sig: SessionSignal = {
+      running: live?.status === 'running' || live?.status === 'starting',
+      waiting: !!live?.waiting,
+      error: live?.status === 'error',
+      at: row.updatedAt,
+    }
+    const s = of(l.toId)
+    if (!s.session || sig.at > s.session.at) s.session = sig
+  }
+  for (const run of rt.teamRuns.values()) {
+    const lead = rt.rows.get(run.leadSessionId)
+    const at = Math.max(run.createdAt, lead?.updatedAt ?? 0)
+    const s = of(run.itemId)
+    if (!s.team || at > s.team.at) s.team = { state: run.state, at }
+  }
+  for (const [id, f] of stored) if (f.override) of(id).override = f.override
+  return out
+}
+
+/**
+ * Put each item's flow on it. For the open inbox (`persist`), a flow that
+ * moved since it was last recorded is written back and logged on the item,
+ * so its history reads "briefing → ready → working".
+ */
+async function withFlows<T extends CoreWorkItem & { flow?: ItemFlow }>(rt: WorkspaceRuntime, items: T[], persist: boolean): Promise<T[]> {
+  const signals = await flowSignals(rt)
+  const stored = persist ? await rt.store.items.flowState() : null
+  for (const item of items) {
+    item.flow = flowOf(item, signals.get(item.id))
+    if (!stored) continue
+    const was = stored.get(item.id)
+    if (was?.stage === item.flow.stage && was?.turn === item.flow.turn) continue
+    await rt.store.items
+      .recordFlow(item.id, { stage: item.flow.stage, turn: item.flow.turn }, item.flow.ask ? { ask: item.flow.ask } : {})
+      .catch((err) => log('error', 'inbox', `could not record the flow of ${item.id}: ${err}`, { workspace: rt.meta.id }))
+  }
+  return items
+}
+
+/** The flow of one item, at any status — what the item page shows. */
+async function flowFor(rt: WorkspaceRuntime, item: CoreWorkItem): Promise<ItemFlow> {
+  return flowOf(item, (await flowSignals(rt)).get(item.id))
+}
+
+/** Set or clear the stage/turn override on an item. Every change lands in its event log. */
+async function setFlowOverrideOp(rt: WorkspaceRuntime, raw: unknown, actor: string): Promise<void> {
+  const r = (raw ?? {}) as Record<string, unknown>
+  const id = typeof r.id === 'string' ? r.id.trim() : ''
+  if (!ANY_ITEM_ID_RE.test(id)) throw new Error('need a work-item id')
+  if (!(await rt.store.items.get(id))) throw new Error('no such work item')
+  if (r.clear === true) {
+    await rt.store.items.setFlowOverride(id, null, actor)
+  } else {
+    if (r.stage !== undefined && !isStage(r.stage)) throw new Error('stage must be one of new, briefing, ready, working, review, done')
+    if (r.turn !== undefined && !isTurn(r.turn)) throw new Error('turn must be one of me, ai, others, none')
+    const note = typeof r.note === 'string' ? r.note.trim().slice(0, 200) : ''
+    if (r.stage === undefined && r.turn === undefined && !note) throw new Error('set a stage, a turn or a note — or clear')
+    const o: FlowOverride = { at: Date.now() }
+    if (isStage(r.stage)) o.stage = r.stage
+    if (isTurn(r.turn)) o.turn = r.turn
+    if (note) o.note = note
+    await rt.store.items.setFlowOverride(id, o, actor)
+  }
+  invalidateInbox(rt)
+}
+
+/** Broken things that aren't items: a watch whose last run failed, a team run that paused. */
+async function inboxAlerts(rt: WorkspaceRuntime): Promise<InboxAlert[]> {
+  const alerts: InboxAlert[] = []
+  if (await watchesEnabled(rt)) {
+    for (const w of await rt.store.watches.list()) {
+      if (!w.enabled || (w.lastRunStatus !== 'failed' && w.lastRunStatus !== 'timeout')) continue
+      alerts.push({
+        id: `watch:${w.id}`,
+        kind: 'watch',
+        title: `Watch “${w.title}” ${w.lastRunStatus === 'timeout' ? 'timed out' : 'failed'}`,
+        ...(w.lastRunError ? { detail: w.lastRunError } : {}),
+        watchId: w.id,
+        at: w.lastRunAt ?? 0,
+      })
+    }
+  }
+  for (const run of rt.teamRuns.values()) {
+    if (run.state !== 'paused') continue
+    alerts.push({
+      id: `team:${run.id}`,
+      kind: 'team',
+      title: `Team run paused: ${run.title}`,
+      ...(run.reason ? { detail: run.reason } : {}),
+      sessionId: run.leadSessionId,
+      at: rt.rows.get(run.leadSessionId)?.updatedAt ?? run.createdAt,
+    })
+  }
+  return alerts.sort((a, b) => b.at - a.at)
+}
+
+/**
+ * A session dispatched for an item started, stopped or began waiting on you,
+ * or a team run changed state: its item's turn moved, so the inbox is stale. Fingerprinted, so the many
+ * session-list broadcasts that change nothing here cost nothing.
+ */
+function noteDispatchedSessions(rt: WorkspaceRuntime): void {
+  const fp = [...rt.sessionItem.keys()]
+    .filter((sid) => rt.rows.get(sid)?.kind === 'chat')
+    .map((sid) => {
+      const l = rt.live.get(sid)
+      return `${sid}:${l?.status ?? '-'}:${l?.waiting ? 1 : 0}`
+    })
+    .concat([...rt.teamRuns.values()].map((r) => `team:${r.id}:${r.state}`))
+    .join('|')
+  if (fp === rt.dispatchFingerprint) return
+  const first = rt.dispatchFingerprint === null
+  rt.dispatchFingerprint = fp
+  if (!first) invalidateInbox(rt)
 }
 
 // ---------------------------------------------------------------------------
@@ -2324,6 +2480,8 @@ function makeScanMcp(rt: WorkspaceRuntime, watch: Watch, runId: string, onUpsert
             const { outcome, reopened } = await upsertItem(rt, item, prov)
             onUpsert(outcome)
             invalidateInbox(rt)
+            // The watch briefs what it files: the item arrives ready, your turn.
+            if (watch.brief && (outcome === 'inserted' || reopened)) briefFiledItem(rt, watch, item.id, runId)
             log('info', 'watch', `filed (${outcome}): ${item.title}`, {
               id: item.id,
               watchId: watch.id,
@@ -2945,6 +3103,8 @@ function watchConfigFrom(spec: WatchFileSpec, file: string) {
     dailyBudgetUsd: spec.dailyBudgetUsd ?? null,
     notify: spec.notify,
     enabled: spec.enabled,
+    brief: spec.brief ?? null,
+    draft: !!spec.draft,
     file,
   }
 }
@@ -2965,20 +3125,26 @@ function watchSpecFrom(w: Watch): WatchFileSpec {
     ...(w.dailyBudgetUsd != null ? { dailyBudgetUsd: w.dailyBudgetUsd } : {}),
     notify: w.notify,
     enabled: w.enabled,
+    ...(w.brief ? { brief: w.brief } : {}),
+    // enabling a draft is its review
+    ...(w.draft && !w.enabled ? { draft: true } : {}),
     instruction: w.instruction,
   }
 }
 
 type WatchConfig = ReturnType<typeof watchConfigFrom>
-const configKey = (w: Pick<Watch, Exclude<keyof WatchConfig, 'catchUpWindow' | 'timeoutMs' | 'maxBudgetUsd' | 'dailyBudgetUsd'>> & {
+const configKey = (w: Pick<Watch, Exclude<keyof WatchConfig, 'catchUpWindow' | 'timeoutMs' | 'maxBudgetUsd' | 'dailyBudgetUsd' | 'brief' | 'draft'>> & {
   catchUpWindow?: string | null
   timeoutMs?: number | null
   maxBudgetUsd?: number | null
   dailyBudgetUsd?: number | null
+  brief?: WatchBrief | null
+  draft?: boolean
 }) =>
   JSON.stringify([
     w.title, w.instruction, w.schedule, w.tools, w.projectId || '', w.model ?? null, w.output, w.catchUpWindow ?? null,
     w.timeoutMs ?? null, w.maxBudgetUsd ?? null, w.dailyBudgetUsd ?? null, w.notify, w.enabled, w.file ?? null,
+    w.brief ? [w.brief.model ?? null, w.brief.template ?? null] : null, !!w.draft,
   ])
 
 /**
@@ -3041,6 +3207,7 @@ async function syncWatchFilesNow(rt: WorkspaceRuntime, { force = false, deferFir
         cadence: 'daily',
         createsItems: true,
         consecutiveFailures: 0,
+        brief: cfg.brief ?? undefined,
         ...(configError ? { configError } : {}),
         // never run → due at once ("run once now"), unless the creator said wait
         ...(deferFirstRun === spec.id ? { lastRunStartedAt: now } : {}),
@@ -3134,6 +3301,75 @@ async function saveWatchText(rt: WorkspaceRuntime, id: string | null, raw: strin
   await syncWatchFiles(rt, { force: true })
   log('info', 'watch', `${existing ? 'updated' : 'created'}: ${parsed.spec.title} (watches/${name}.md)`, { watchId, workspace: rt.meta.id })
   return { id: watchId }
+}
+
+/**
+ * A chat drafts a watch (MCP draft_watch): the file is written exactly as a
+ * form or a hand edit would write it, but saved off and marked a draft. Only
+ * the user's click on the watch page turns it on — a model never schedules
+ * runs by itself. Checked like any watch file; anything wrong is refused with
+ * the reasons, so the chat can fix them and try again.
+ */
+async function draftWatchOp(rt: WorkspaceRuntime, raw: unknown): Promise<{ id: string; title: string; file: string; warnings: string[] }> {
+  const r = (raw ?? {}) as Record<string, unknown>
+  const text = (k: string) => (typeof r[k] === 'string' ? (r[k] as string).trim() : '')
+  const title = text('title')
+  const instruction = text('instruction')
+  const schedule = text('schedule')
+  if (!title) throw new Error('title is required')
+  if (!instruction) throw new Error('instruction is required — where to look and what counts as a match')
+  if (!schedule || !isValidCron(schedule)) throw new Error('schedule must be a 5-field cron line, local time — e.g. "0 * * * *" for hourly, "0 9 * * 1-5" for weekdays at 9')
+
+  const projects = await rt.store.projects.list()
+  const want = text('project')
+  const project = want
+    ? projects.find((p) => p.id === want) ?? projects.find((p) => p.name.toLowerCase() === want.toLowerCase())
+    : await defaultProject(rt)
+  if (!project) throw new Error(want ? `no project "${want}" — pass a project id or name: ${projects.map((p) => p.name).join(', ')}` : 'this workspace has no project yet')
+
+  const errors: string[] = []
+  const lines = Array.isArray(r.tools) ? r.tools.filter((t): t is string => typeof t === 'string') : []
+  const tools = grantsFromLines(lines.length ? lines : ['web'], errors)
+  const output = text('output') || 'items'
+  if (!WATCH_OUTPUTS.includes(output as WatchOutput)) errors.push(`output must be one of: ${WATCH_OUTPUTS.join(', ')}`)
+  const brief = r.brief === true ? { ...(text('brief_model') ? { model: text('brief_model') } : {}), ...(text('brief_template') ? { template: text('brief_template') } : {}) } : undefined
+  const spec: WatchFileSpec = {
+    id: randomUUID(),
+    title,
+    schedule,
+    project: project.id,
+    tools,
+    ...(text('model') ? { model: text('model') } : {}),
+    output: output as WatchOutput,
+    notify: 'on_failure',
+    enabled: false,
+    ...(brief ? { brief } : {}),
+    draft: true,
+    instruction,
+  }
+  // The file's own schema is the check: what it would refuse, this refuses.
+  errors.push(...parseWatchFile('draft', serializeWatchFile(spec)).errors)
+  errors.push(...checkWatchSpec(rt, spec, projects).errors)
+  if (errors.length) throw new Error(errors.join('; '))
+  const warnings: string[] = []
+  if (brief?.template && !(await listPlaybooks(rt.playbookDir)).some((p) => p.kind === brief.template)) {
+    warnings.push(`no playbook named "${brief.template}" yet — briefs will use the generic one until playbooks/${brief.template}.md exists`)
+  }
+  const name = rt.watchFiles.freeName(title)
+  await rt.watchFiles.write(name, spec)
+  await syncWatchFiles(rt, { force: true })
+  log('info', 'watch', `drafted: ${title} (watches/${name}.md) — off until reviewed`, { watchId: spec.id, workspace: rt.meta.id })
+  return { id: spec.id, title, file: `watches/${name}.md`, warnings }
+}
+
+/** What draft_watch hands back: where the draft is and how to turn it on. */
+function draftWatchText(d: { id: string; title: string; file: string; warnings: string[] }): string {
+  return [
+    `ok: drafted the watch “${d.title}” (${d.file}). It is saved OFF and will not run until the user reviews and enables it.`,
+    `Review and enable: #/watches/${d.id}`,
+    ...d.warnings.map((w) => `note: ${w}`),
+    'Tell the user it is drafted and waiting for their review — do not claim it is running.',
+  ].join('\n')
 }
 
 /**
@@ -3795,7 +4031,26 @@ function watchPatchFrom(raw: unknown): { patch: WatchPatch } | { error: string }
     if (typeof r.enabled !== 'boolean') return { error: 'enabled must be a boolean' }
     patch.enabled = r.enabled
   }
+  if (r.brief !== undefined) {
+    const b = watchBriefFrom(r.brief)
+    if (typeof b === 'string') return { error: b }
+    patch.brief = b
+  }
   return { patch }
+}
+
+/** The brief option off the wire: null = off, {} = on with the defaults. A string is the error. */
+function watchBriefFrom(raw: unknown): WatchBrief | null | string {
+  if (raw === null || raw === false) return null
+  if (raw === true) return {}
+  if (typeof raw !== 'object') return 'brief must be null, true, or { model?, template? }'
+  const o = raw as Record<string, unknown>
+  if (o.model !== undefined && o.model !== null && (typeof o.model !== 'string' || o.model.length > 120)) return 'brief.model must be a string'
+  if (o.template !== undefined && o.template !== null && !isPlaybookName(o.template)) return 'brief.template must be a playbook name'
+  return {
+    ...(typeof o.model === 'string' && o.model.trim() ? { model: o.model.trim() } : {}),
+    ...(typeof o.template === 'string' && o.template ? { template: o.template } : {}),
+  }
 }
 
 /** A full ingested WorkItem, validated field by field. Rejects, never repairs. */
@@ -4020,6 +4275,7 @@ async function itemDetailOp(rt: WorkspaceRuntime, rawId: unknown): Promise<ItemD
     linked,
     artifacts,
     sessions,
+    flow: await flowFor(rt, item),
   }
 }
 
@@ -4426,7 +4682,11 @@ async function briefViewFor(rt: WorkspaceRuntime, itemId: string): Promise<Brief
   return { job, stale, artifact: cur?.artifact ?? null, body: cur?.body ?? null, queuePosition: pos >= 0 ? pos : null }
 }
 
-const broadcastBrief = (rt: WorkspaceRuntime, job: BriefJob) => broadcast(rt, { type: 'brief_status', job })
+const broadcastBrief = (rt: WorkspaceRuntime, job: BriefJob) => {
+  broadcast(rt, { type: 'brief_status', job })
+  // A brief moving moves the item's stage (briefing → ready).
+  invalidateInbox(rt)
+}
 
 /**
  * Spawn-time extras by session kind. Every session gets the same thing first —
@@ -4500,8 +4760,12 @@ function makeBriefMcp(rt: WorkspaceRuntime, sessionId: string) {
         },
         async (args) => {
           try {
+            // A run writes under its running job. After it, the user may open
+            // this session and ask for changes — the rewrite lands on the
+            // brief the last job made, so talking to the brief works too.
             const job = await rt.store.briefs.forSession(sessionId)
-            if (!job || job.status !== 'running') return errResult('no brief run is active in this session')
+            if (!job) return errResult('no brief job belongs to this session')
+            if (job.status === 'queued') return errResult('a re-brief of this item is queued — it will rewrite the brief; try again after it runs')
             const item = await rt.store.items.get(job.itemId)
             if (!item) return errResult('the work item no longer exists')
             const refs = [...(item.refs ?? []), ...(args.refs ?? [])]
@@ -4513,7 +4777,13 @@ function makeBriefMcp(rt: WorkspaceRuntime, sessionId: string) {
             })
             await rt.store.links.add({ fromKind: 'artifact', fromId: artifact.id, toKind: 'item', toId: item.id, role: 'brief' })
             await rt.store.briefs.update(job.id, { artifactId: artifact.id })
-            rt.briefWrote.add(job.id)
+            if (job.status === 'running') rt.briefWrote.add(job.id)
+            else if (job.status === 'failed') {
+              // a run that failed, rescued by the user in the session: the brief exists now
+              const finishedAt = Date.now()
+              await rt.store.briefs.update(job.id, { status: 'ready', error: null, finishedAt })
+              broadcastBrief(rt, { ...job, status: 'ready', error: null, finishedAt, artifactId: artifact.id })
+            }
             log('info', 'briefs', `brief written: ${item.title}`, { jobId: job.id, itemId: item.id, artifactId: artifact.id, workspace: rt.meta.id })
             return okResult(`ok: brief saved to ${artifact.path}`)
           } catch (err) {
@@ -4557,7 +4827,30 @@ async function enqueueBriefsOp(rt: WorkspaceRuntime, raw: unknown): Promise<Brie
   return jobs
 }
 
-/** "You missed X": a new job in the same session, carrying the feedback as its note. */
+/**
+ * Queue the brief a watch asks for on an item it just filed. Never fails the
+ * scan: a brief that can't be queued (the daily cap) shows on the item as a
+ * failed brief, which Today raises under Something broke.
+ */
+function briefFiledItem(rt: WorkspaceRuntime, watch: Watch, itemId: string, runId: string): void {
+  const b = watch.brief ?? {}
+  enqueueBriefsOp(rt, {
+    itemIds: [itemId],
+    ...(b.model ? { model: b.model } : {}),
+    ...(b.template ? { playbook: b.template } : {}),
+  })
+    .then(() => log('info', 'watch', `brief queued for ${itemId}`, { watchId: watch.id, runId, itemId, workspace: rt.meta.id }))
+    .catch((err) => log('error', 'watch', `could not queue a brief for ${itemId}: ${errText(err)}`, { watchId: watch.id, runId, itemId, workspace: rt.meta.id }))
+}
+
+/**
+ * "You missed X": the item page's feedback goes straight into the session that
+ * wrote the brief, as the user's own message — the same as typing it there —
+ * and that session rewrites the brief with write_brief. Tracked as a job, so
+ * the item shows briefing → ready. Not queued: it is a reply to a session that
+ * already knows the item. With that session gone, it queues a fresh run
+ * carrying the feedback as its note.
+ */
 async function iterateBriefOp(rt: WorkspaceRuntime, raw: unknown): Promise<BriefJob> {
   const r = (raw ?? {}) as Record<string, unknown>
   const itemId = typeof r.itemId === 'string' ? r.itemId : ''
@@ -4566,14 +4859,52 @@ async function iterateBriefOp(rt: WorkspaceRuntime, raw: unknown): Promise<Brief
   if (!text) throw new Error('say what to change')
   const latest = await rt.store.briefs.latestForItem(itemId)
   if (!latest || (latest.status !== 'ready' && latest.status !== 'failed')) throw new Error('no finished brief to iterate on yet')
-  const job = await rt.store.briefs.create({ id: randomUUID(), itemId, playbook: latest.playbook, model: latest.model, note: text })
-  if (latest.sessionId && rt.rows.has(latest.sessionId)) {
-    await rt.store.briefs.update(job.id, { sessionId: latest.sessionId })
-    job.sessionId = latest.sessionId
+  const row = latest.sessionId ? rt.rows.get(latest.sessionId) : undefined
+  const base = { id: randomUUID(), itemId, playbook: latest.playbook, model: latest.model, note: text }
+  if (!row) {
+    const job = await rt.store.briefs.create(base)
+    broadcastBrief(rt, job)
+    pumpBriefQueue(rt)
+    return job
   }
+  await assertBriefCap(rt)
+  // Born running, so the queue never sees it and sends a second prompt.
+  const job = await rt.store.briefs.create({ ...base, running: { sessionId: row.id, startedAt: Date.now() } })
   broadcastBrief(rt, job)
-  pumpBriefQueue(rt)
+  try {
+    const live = await getOrRevive(rt, row.id)
+    if (!live) throw new Error('could not reopen the brief session')
+    armBriefTimer(rt, job.id, live)
+    await live.sendUserMessage(text)
+  } catch (err) {
+    await finishBrief(rt, job.id, 'failed', errText(err))
+    throw err
+  }
+  log('info', 'briefs', `feedback sent to the brief session: ${itemId}`, { jobId: job.id, itemId, sessionId: row.id, workspace: rt.meta.id })
   return job
+}
+
+/** The daily cap on brief runs (Settings → Briefs). */
+async function assertBriefCap(rt: WorkspaceRuntime): Promise<void> {
+  const settings = await readSettings(rt)
+  const dayStart = new Date()
+  dayStart.setHours(0, 0, 0, 0)
+  if ((await rt.store.briefs.countStartedSince(dayStart.getTime())) >= settings.briefsDailyCap) {
+    throw new Error(`the daily cap of ${settings.briefsDailyCap} brief runs is reached — raise it in Settings → Briefs, or try tomorrow`)
+  }
+}
+
+/** A brief turn that runs past the limit fails, and its subprocess is stopped. */
+function armBriefTimer(rt: WorkspaceRuntime, jobId: string, live: LiveSession): void {
+  rt.briefTimers.set(
+    jobId,
+    setTimeout(() => {
+      void finishBrief(rt, jobId, 'failed', 'timed out after 5 minutes').then(() => {
+        void live.interrupt()
+        live.stop()
+      })
+    }, BRIEF_TIMEOUT_MS),
+  )
 }
 
 function pumpBriefQueue(rt: WorkspaceRuntime): void {
@@ -4596,12 +4927,8 @@ function pumpBriefQueue(rt: WorkspaceRuntime): void {
 }
 
 async function startBriefRun(rt: WorkspaceRuntime, job: BriefJob): Promise<void> {
+  await assertBriefCap(rt)
   const settings = await readSettings(rt)
-  const dayStart = new Date()
-  dayStart.setHours(0, 0, 0, 0)
-  if ((await rt.store.briefs.countStartedSince(dayStart.getTime())) >= settings.briefsDailyCap) {
-    throw new Error(`the daily cap of ${settings.briefsDailyCap} brief runs is reached — raise it in Settings → Briefs, or try tomorrow`)
-  }
   const item = await rt.store.items.get(job.itemId)
   if (!item) throw new Error('the work item no longer exists')
   const playbook = await readPlaybook(rt.playbookDir, job.playbook)
@@ -4629,15 +4956,7 @@ async function startBriefRun(rt: WorkspaceRuntime, job: BriefJob): Promise<void>
   broadcastBrief(rt, { ...job, status: 'running', sessionId: row.id, startedAt, error: null })
   const live = await getOrRevive(rt, row.id)
   if (!live) throw new Error('could not start the brief session')
-  rt.briefTimers.set(
-    job.id,
-    setTimeout(() => {
-      void finishBrief(rt, job.id, 'failed', 'timed out after 5 minutes').then(() => {
-        void live.interrupt()
-        live.stop()
-      })
-    }, BRIEF_TIMEOUT_MS),
-  )
+  armBriefTimer(rt, job.id, live)
   const scored = rt.inboxCache?.items.find((i) => i.id === item.id)
   const iteration = !!reuse && !!job.note && !!existing
   // Screenshots the human put on the item ride the first message as real
@@ -5600,6 +5919,32 @@ function makeTriageMcp(rt: WorkspaceRuntime) {
             return okResult(JSON.stringify(workspaceInfo(rt), null, 2))
           } catch (err) {
             return errResult(errText(err))
+          }
+        },
+      ),
+      tool(
+        'draft_watch',
+        'Draft a watch — a scheduled headless run that files matches as work items (or writes a digest). It is saved OFF as a draft: only the user can enable it, from the watch page this returns a link to. Use when the user asks to watch, monitor or keep an eye on something on a schedule.',
+        {
+          title: z.string().describe('a short name, e.g. "Anirudha’s PRs"'),
+          schedule: z.string().describe('a 5-field cron line in local time: "0 * * * *" hourly, "0 9 * * 1-5" weekdays at 9'),
+          instruction: z.string().describe('where to look, what counts as a match, what to file — written for the run, which sees only this'),
+          project: z.string().optional().describe('the project folder runs work in: an id or a name; default = the default project'),
+          tools: z
+            .array(z.string())
+            .optional()
+            .describe('what runs may use, one per entry: built-ins web, github, files-write, or "<server>/<tool>" for an MCP tool; default [web]'),
+          output: z.enum(['items', 'digest']).optional().describe('items (one work item per match, default) or digest (one rolling report)'),
+          model: z.string().optional().describe('model for the runs; default = Claude Code’s'),
+          brief: z.boolean().optional().describe('brief every item it files (items output only)'),
+          brief_model: z.string().optional().describe('model for the briefs; default = the workspace’s brief default'),
+          brief_template: z.string().optional().describe('playbook to brief with, e.g. "review-requested"; default = the item’s kind'),
+        },
+        async (args) => {
+          try {
+            return okResult(draftWatchText(await draftWatchOp(rt, args)))
+          } catch (err) {
+            return errResult(`not drafted: ${errText(err)}`)
           }
         },
       ),
@@ -6682,6 +7027,7 @@ const server = http.createServer(async (req, res) => {
           ...(p.dailyBudgetUsd != null ? { dailyBudgetUsd: p.dailyBudgetUsd } : {}),
           notify: p.notify ?? 'on_failure',
           enabled: p.enabled ?? true,
+          ...(p.brief ? { brief: p.brief } : {}),
           instruction: p.instruction,
         }
         const name = rt.watchFiles.freeName(p.title)
@@ -6762,6 +7108,18 @@ const server = http.createServer(async (req, res) => {
       ? { ok: true, status: pv.status, ...(pv.result ? { result: pv.result } : {}), ...(pv.error ? { error: pv.error } : {}) }
       : { ok: false, error: 'unknown or expired preview' }
     json(body.ok ? 200 : 404, body)
+    return
+  }
+  // MCP draft_watch over HTTP (the stdio shim and POST /mcp): saved off, a draft.
+  if (url.pathname === '/api/watches/drafted' && req.method === 'POST') {
+    let body: { ok: true; text: string; id: string } | { ok: false; error: string }
+    try {
+      const d = await draftWatchOp(rt, await readJsonBody(req))
+      body = { ok: true, text: draftWatchText(d), id: d.id }
+    } catch (err) {
+      body = { ok: false, error: errText(err) }
+    }
+    json(body.ok ? 200 : 400, body)
     return
   }
   if (url.pathname === '/api/watches/draft' && req.method === 'POST') {
@@ -7180,6 +7538,18 @@ const server = http.createServer(async (req, res) => {
       body = { ok: false, error: err instanceof Error ? err.message : String(err) }
     }
     json(body.ok ? 200 : status, body)
+    return
+  }
+  // The user's stage/turn override (core/work/flow.ts), for what the rules can't see.
+  if (url.pathname === '/api/items/flow' && req.method === 'POST') {
+    let body: ItemStateResponse
+    try {
+      await setFlowOverrideOp(rt, await readJsonBody(req), 'user')
+      body = { ok: true }
+    } catch (err) {
+      body = { ok: false, error: errText(err) }
+    }
+    json(body.ok ? 200 : 400, body)
     return
   }
   // A user priority override for any item (source or manual). null clears it.
@@ -7690,6 +8060,7 @@ function invalidateInbox(rt: WorkspaceRuntime) {
 
 function broadcastSessionList(rt: WorkspaceRuntime) {
   broadcast(rt, { type: 'sessions', sessions: summaries(rt) })
+  noteDispatchedSessions(rt)
 }
 
 function expandHome(p: string): string {

@@ -1144,6 +1144,7 @@ export function App() {
                 onOpenItem={openItem}
                 onPinItem={(id, title) => pin(`item:${id}`, title)}
                 composeSignal={composeSignal}
+                onNavigate={navigate}
               />
             ) : route.page === 'item' ? (
               <ItemPage key={route.id} id={route.id} onDispatch={dispatch} onNavigate={navigate} onDirty={pinCurrent} />

@@ -248,7 +248,9 @@ session and nobody can answer a question, so never ask one — decide, and recor
 NO changes anywhere: do not edit or create files, do not push, comment, post, send, or resolve anything.
 When you are done, call the \`write_brief\` tool exactly once with the complete brief — a short title and
 the full markdown body. That tool call is the only output that is kept; text you reply with is not
-saved. If a brief already exists for this item, rewrite it whole; do not append to it.`
+saved. If a brief already exists for this item, rewrite it whole; do not append to it. If the user later
+writes to you in this session and asks for changes, call \`write_brief\` again with the whole revised brief —
+it is the only way to change the brief; you have no other write tool.`
 
 export type BriefPromptInput = {
   item: WorkItem

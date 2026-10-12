@@ -14,10 +14,11 @@ import type { Artifact, BriefJob, BriefStatus, Checkout, CheckoutState, InboxSna
 import { isArtifactAuthor, isLinkKind, isLinkRole } from '../../shared/protocol.js'
 import type { Provenance, WorkItem } from '../work/types.js'
 import type { ItemEvent, ItemEventKind, ItemStatus, StatusChange } from '../work/state.js'
+import { isStage, isTurn, type FlowOverride } from '../work/flow.js'
 import { eventForStatus, shouldReopen } from '../work/state.js'
 import type { EffortLevel, PermissionMode, ProviderId } from '../../shared/protocol.js'
 import { isProviderId } from '../../shared/protocol.js'
-import type { NewWatch, Watch, WatchCadence, WatchConnector, WatchNotify, WatchRunResult, WatchRunStart, WatchRunStatus, WatchRunTrigger, WatchSlotFinish, WatchSlotRun, WatchSlotStatus, NewWatchSlotRun } from '../watch/types.js'
+import type { NewWatch, Watch, WatchBrief, WatchCadence, WatchConnector, WatchNotify, WatchRunResult, WatchRunStart, WatchRunStatus, WatchRunTrigger, WatchSlotFinish, WatchSlotRun, WatchSlotStatus, NewWatchSlotRun } from '../watch/types.js'
 import { WATCH_NOTIFY, WATCH_RUN_STATUSES } from '../watch/types.js'
 import { cronFromCadence } from '../watch/cron.js'
 import { grantsFrom, grantsFromLegacy, type WatchToolGrant } from '../watch/tools.js'
@@ -39,6 +40,7 @@ import type {
   SessionStore,
   Store,
   StoredEvent,
+  StoredFlow,
   StoredSession,
   StoredTurn,
   WatchStatePatch,
@@ -484,6 +486,7 @@ function ensureDurableSchema(db: DatabaseSync) {
     ['timeout_ms', 'timeout_ms INTEGER'], ['max_budget_usd', 'max_budget_usd REAL'], ['daily_budget_usd', 'daily_budget_usd REAL'], ['file', 'file TEXT'], ['notify', 'notify TEXT'],
     ['consecutive_failures', 'consecutive_failures INTEGER NOT NULL DEFAULT 0'],
     ['last_run_started_at', 'last_run_started_at INTEGER'], ['last_run_new', 'last_run_new INTEGER'], ['last_run_trigger', 'last_run_trigger TEXT'],
+    ['brief', 'brief TEXT'], ['draft', 'draft INTEGER NOT NULL DEFAULT 0'],
   ]) ensure('watches', col, decl, w)
   ensure('sessions', 'run_trigger', 'run_trigger TEXT', s)
   ensure('sessions', 'run_new', 'run_new INTEGER', s)
@@ -500,6 +503,11 @@ function ensureDurableSchema(db: DatabaseSync) {
   const wi = cols('work_items')
   ensure('work_items', 'due_at', 'due_at INTEGER', wi)
   ensure('work_items', 'due_source', 'due_source TEXT', wi)
+  // Stage and turn (core/work/flow.ts): the last derived values, kept so a
+  // change can be logged, and the user's override as JSON.
+  ensure('work_items', 'stage', 'stage TEXT', wi)
+  ensure('work_items', 'turn', 'turn TEXT', wi)
+  ensure('work_items', 'flow_override', 'flow_override TEXT', wi)
 }
 
 function migrate(db: DatabaseSync) {
@@ -908,6 +916,8 @@ type WatchRow = {
   last_run_started_at: number | null
   last_run_new: number | null
   last_run_trigger: string | null
+  brief?: string | null
+  draft?: number | null
   created_at: number
   updated_at: number
 }
@@ -943,6 +953,20 @@ function toGrants(raw: string | null, legacy: string | null): WatchToolGrant[] {
     }
   }
   return grantsFromLegacy(toConnectors(legacy))
+}
+
+/** The stored brief option: JSON, or NULL = off. */
+function toWatchBrief(raw: string | null | undefined): WatchBrief | null {
+  if (!raw) return null
+  try {
+    const o = JSON.parse(raw) as Record<string, unknown>
+    return {
+      ...(typeof o.model === 'string' && o.model ? { model: o.model } : {}),
+      ...(typeof o.template === 'string' && o.template ? { template: o.template } : {}),
+    }
+  } catch {
+    return null
+  }
 }
 
 const toWatch = (r: WatchRow): Watch => ({
@@ -982,6 +1006,8 @@ const toWatch = (r: WatchRow): Watch => ({
   lastRunSessionId: r.last_run_session_id ?? undefined,
   lastRunError: r.last_run_error ?? undefined,
   templateId: r.template_id ?? undefined,
+  ...(toWatchBrief(r.brief) ? { brief: toWatchBrief(r.brief)! } : {}),
+  ...(r.draft ? { draft: true } : {}),
   createdAt: r.created_at,
   updatedAt: r.updated_at,
 })
@@ -1005,8 +1031,8 @@ class SqliteWatches implements WatchStore {
         `INSERT INTO watches (id, source, title, scope, instruction, cadence, window_start, window_day,
            schedule, enabled, creates_items, cursor, last_run_at, last_run_tokens, last_run_matches, template_id,
            tools, project_id, model, output, catch_up_window, timeout_ms, max_budget_usd, daily_budget_usd, file, notify,
-           config_error, last_run_started_at, consecutive_failures, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
+           config_error, last_run_started_at, consecutive_failures, brief, draft, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)`,
       )
       .run(
         w.id, w.source, w.title, w.scope, w.instruction, w.cadence,
@@ -1017,6 +1043,7 @@ class SqliteWatches implements WatchStore {
         JSON.stringify(w.tools), w.projectId || null, w.model ?? null, w.output,
         w.catchUpWindow ?? null, w.timeoutMs ?? null, w.maxBudgetUsd ?? null, w.dailyBudgetUsd ?? null, w.file ?? null, w.notify,
         w.configError ?? null, w.lastRunStartedAt ?? null,
+        w.brief ? JSON.stringify(w.brief) : null, w.draft ? 1 : 0,
         w.createdAt, w.updatedAt,
       )
   }
@@ -1031,7 +1058,8 @@ class SqliteWatches implements WatchStore {
       .prepare(
         `UPDATE watches SET title = ?, scope = ?, instruction = ?, cadence = ?, window_start = ?,
            window_day = ?, schedule = ?, enabled = ?, creates_items = ?, tools = ?, project_id = ?, model = ?, output = ?,
-           catch_up_window = ?, timeout_ms = ?, max_budget_usd = ?, daily_budget_usd = ?, file = ?, notify = ?, updated_at = ? WHERE id = ?`,
+           catch_up_window = ?, timeout_ms = ?, max_budget_usd = ?, daily_budget_usd = ?, file = ?, notify = ?,
+           brief = ?, draft = ?, updated_at = ? WHERE id = ?`,
       )
       .run(
         next.title, next.scope ?? '', next.instruction, next.cadence,
@@ -1040,6 +1068,7 @@ class SqliteWatches implements WatchStore {
         next.enabled ? 1 : 0, next.createsItems ? 1 : 0,
         JSON.stringify(next.tools), next.projectId || null, next.model ?? null, next.output ?? 'items',
         opt(next.catchUpWindow), opt(next.timeoutMs), opt(next.maxBudgetUsd), opt(next.dailyBudgetUsd), next.file ?? null, next.notify ?? 'on_failure',
+        next.brief ? JSON.stringify(next.brief) : null, next.draft ? 1 : 0,
         Date.now(), id,
       )
   }
@@ -1207,6 +1236,25 @@ type WorkItemRow = {
   updated_at: number
   due_at: number | null
   due_source: string | null
+  stage?: string | null
+  turn?: string | null
+  flow_override?: string | null
+}
+
+/** A stored override, dropping anything that no longer reads as one. */
+function parseOverride(raw: string | null | undefined): FlowOverride | null {
+  if (!raw) return null
+  try {
+    const o = JSON.parse(raw) as Record<string, unknown>
+    if (typeof o.at !== 'number') return null
+    const out: FlowOverride = { at: o.at }
+    if (isStage(o.stage)) out.stage = o.stage
+    if (isTurn(o.turn)) out.turn = o.turn
+    if (typeof o.note === 'string' && o.note) out.note = o.note
+    return out.stage || out.turn || out.note ? out : null
+  } catch {
+    return null
+  }
 }
 
 const VALID_STATUSES: ItemStatus[] = ['open', 'snoozed', 'done', 'archived']
@@ -1505,6 +1553,45 @@ class SqliteWorkItems implements WorkItemStore {
       this.appendEvent(id, now, 'system', 'woken', {})
     }
     return rows.map((r) => r.id)
+  }
+
+  async flowState(): Promise<Map<string, StoredFlow>> {
+    const rows = this.db.prepare('SELECT id, stage, turn, flow_override FROM work_items').all() as {
+      id: string
+      stage: string | null
+      turn: string | null
+      flow_override: string | null
+    }[]
+    const out = new Map<string, StoredFlow>()
+    for (const r of rows) {
+      if (r.stage == null && r.turn == null && r.flow_override == null) continue
+      out.set(r.id, { stage: r.stage, turn: r.turn, override: parseOverride(r.flow_override) })
+    }
+    return out
+  }
+
+  async recordFlow(id: string, flow: { stage: string; turn: string }, detail: Record<string, unknown> = {}): Promise<void> {
+    const r = this.row(id)
+    if (!r || (r.stage === flow.stage && r.turn === flow.turn)) return
+    this.db.prepare('UPDATE work_items SET stage = ?, turn = ? WHERE id = ?').run(flow.stage, flow.turn, id)
+    // The first recording is a baseline, not a move.
+    if (r.stage == null && r.turn == null) return
+    this.appendEvent(id, Date.now(), 'system', 'moved', {
+      from: { stage: r.stage, turn: r.turn },
+      to: { stage: flow.stage, turn: flow.turn },
+      ...detail,
+    })
+  }
+
+  async setFlowOverride(id: string, override: FlowOverride | null, actor: string): Promise<void> {
+    if (!this.row(id)) throw new Error('no such work item')
+    this.db.prepare('UPDATE work_items SET flow_override = ? WHERE id = ?').run(override ? JSON.stringify(override) : null, id)
+    this.appendEvent(id, override?.at ?? Date.now(), actor, 'flow-set', override ? { ...override } : { cleared: true })
+  }
+
+  async countDoneSince(since: number): Promise<number> {
+    const r = this.db.prepare("SELECT COUNT(*) AS n FROM work_items WHERE status = 'done' AND status_at >= ?").get(since) as { n: number }
+    return r.n
   }
 
   async events(id: string): Promise<ItemEvent[]> {
@@ -1835,9 +1922,12 @@ class SqliteBriefJobs implements BriefJobStore {
   async create(j: NewBriefJob): Promise<BriefJob> {
     this.db
       .prepare(
-        `INSERT INTO brief_jobs (id, item_id, status, playbook, model, note, created_at) VALUES (?, ?, 'queued', ?, ?, ?, ?)`,
+        `INSERT INTO brief_jobs (id, item_id, status, playbook, model, note, session_id, started_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
-      .run(j.id, j.itemId, j.playbook, j.model ?? null, j.note ?? null, Date.now())
+      .run(
+        j.id, j.itemId, j.running ? 'running' : 'queued', j.playbook, j.model ?? null, j.note ?? null,
+        j.running?.sessionId ?? null, j.running?.startedAt ?? null, Date.now(),
+      )
     return toBriefJob(this.row(j.id)!)
   }
 

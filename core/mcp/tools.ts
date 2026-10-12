@@ -117,6 +117,31 @@ export const TOOLS = [
     },
   },
   {
+    name: 'draft_watch',
+    description:
+      'Draft a watch — a scheduled headless run that files matches as work items (or writes a digest). It is saved OFF as a draft: only the user can enable it, from the watch page this returns a link to. Use when the user asks to watch, monitor or keep an eye on something on a schedule.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        title: { type: 'string', description: 'a short name, e.g. "Anirudha’s PRs"' },
+        schedule: { type: 'string', description: 'a 5-field cron line in local time: "0 * * * *" hourly, "0 9 * * 1-5" weekdays at 9' },
+        instruction: { type: 'string', description: 'where to look, what counts as a match, what to file — written for the run, which sees only this' },
+        project: { type: 'string', description: 'the project folder runs work in: an id or a name; default = the default project' },
+        tools: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'what runs may use, one per entry: built-ins web, github, files-write, or "<server>/<tool>" for an MCP tool; default [web]',
+        },
+        output: { type: 'string', enum: ['items', 'digest'], description: 'items (one work item per match, default) or digest' },
+        model: { type: 'string', description: 'model for the runs; default = Claude Code’s' },
+        brief: { type: 'boolean', description: 'brief every item it files (items output only)' },
+        brief_model: { type: 'string', description: 'model for the briefs' },
+        brief_template: { type: 'string', description: 'playbook to brief with, e.g. "review-requested"; default = the item’s kind' },
+      },
+      required: ['title', 'schedule', 'instruction'],
+    },
+  },
+  {
     name: 'edit_work_item',
     description:
       'Edit a manual to-do by id (id must start with "manual:"). Only the fields you pass change; priority 0/null and due null clear them.',
@@ -296,6 +321,10 @@ export async function callTool(
   if (name === 'create_work_item') {
     const body = (await api('/api/items/manual', args)) as { ok: boolean; error?: string }
     return body.ok ? { text: 'ok: created', isError: false } : { text: `rejected: ${body.error}`, isError: true }
+  }
+  if (name === 'draft_watch') {
+    const body = (await api('/api/watches/drafted', args)) as { ok: boolean; text?: string; error?: string }
+    return body.ok ? { text: body.text ?? 'ok: drafted', isError: false } : { text: `not drafted: ${body.error}`, isError: true }
   }
   if (name === 'edit_work_item') {
     const { id, ...patch } = args

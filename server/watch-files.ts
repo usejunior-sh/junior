@@ -34,7 +34,7 @@ import {
   type ConnectorScope,
   type WatchToolGrant,
 } from '../core/watch/tools.js'
-import { WATCH_NOTIFY, type WatchNotify, type WatchOutput } from '../core/watch/types.js'
+import { WATCH_NOTIFY, type WatchBrief, type WatchNotify, type WatchOutput } from '../core/watch/types.js'
 import { parseFrontmatter, serializeFrontmatter, type FrontmatterValue } from './artifacts.js'
 import { slugify } from './teams.js'
 
@@ -54,13 +54,21 @@ export type WatchFileSpec = {
   dailyBudgetUsd?: number
   notify: WatchNotify
   enabled: boolean
+  /** brief every item this watch files (`brief: true`, `brief_model`, `brief_template`) */
+  brief?: WatchBrief
+  /** drafted by a chat, not yet reviewed — stays off until you enable it */
+  draft?: boolean
   instruction: string
 }
 
 export const WATCH_FILE_KEYS = [
   'id', 'title', 'schedule', 'project', 'tools', 'model', 'output', 'catch_up',
   'timeout', 'budget_usd', 'daily_budget_usd', 'notify', 'enabled',
+  'brief', 'brief_model', 'brief_template', 'draft',
 ] as const
+
+/** A playbook name, as briefs read them (server/briefs.ts isPlaybookName). */
+const PLAYBOOK_RE = /^[a-z][a-z0-9-]{0,40}$/
 
 const KEYS = new Set<string>(WATCH_FILE_KEYS)
 const BUILTINS = Object.keys(BUILTIN_TOOLS) as BuiltinToolId[]
@@ -165,6 +173,21 @@ export function parseWatchFile(name: string, text: string): ParsedWatchFile {
   const instruction = fm.body.trim()
   if (!instruction) errors.push('the instruction (the body under the frontmatter) is empty')
 
+  const briefRaw = str(d.brief) || 'false'
+  if (briefRaw !== 'true' && briefRaw !== 'false') errors.push('brief must be true or false')
+  const briefModel = str(d.brief_model)
+  const briefTemplate = str(d.brief_template)
+  if (briefRaw !== 'true' && (briefModel || briefTemplate)) errors.push('brief_model and brief_template need brief: true')
+  if (briefTemplate && !PLAYBOOK_RE.test(briefTemplate)) errors.push(`brief_template "${briefTemplate}" is not a playbook name (a file in playbooks/, without .md)`)
+  if (briefRaw === 'true' && output === 'digest') errors.push('brief works with output: items — a digest files no items to brief')
+  const brief: WatchBrief | undefined =
+    briefRaw === 'true'
+      ? { ...(briefModel ? { model: briefModel } : {}), ...(briefTemplate && PLAYBOOK_RE.test(briefTemplate) ? { template: briefTemplate } : {}) }
+      : undefined
+
+  const draftRaw = str(d.draft) || 'false'
+  if (draftRaw !== 'true' && draftRaw !== 'false') errors.push('draft must be true or false')
+
   const spec: WatchFileSpec = {
     id: id || randomUUID(),
     title: str(d.title) || titleCase(name),
@@ -179,6 +202,8 @@ export function parseWatchFile(name: string, text: string): ParsedWatchFile {
     ...(dailyBudgetUsd != null ? { dailyBudgetUsd } : {}),
     notify: WATCH_NOTIFY.includes(notify) ? notify : 'on_failure',
     enabled: enabledRaw !== 'false',
+    ...(brief ? { brief } : {}),
+    ...(draftRaw === 'true' ? { draft: true } : {}),
     instruction,
   }
   return { spec, errors, hadId: Boolean(id) }
@@ -203,6 +228,12 @@ export function serializeWatchFile(s: WatchFileSpec): string {
   if (s.dailyBudgetUsd != null) data.daily_budget_usd = String(s.dailyBudgetUsd)
   data.notify = s.notify
   data.enabled = String(s.enabled)
+  if (s.brief) {
+    data.brief = 'true'
+    if (s.brief.model) data.brief_model = s.brief.model
+    if (s.brief.template) data.brief_template = s.brief.template
+  }
+  if (s.draft) data.draft = 'true'
   return serializeFrontmatter(data, `\n${s.instruction.trim()}\n`)
 }
 
@@ -253,6 +284,18 @@ export function withKey(text: string, key: string, value: string, where: 'first'
   return lines.join(nl)
 }
 
+/** Drop one frontmatter key's line, touching no other. Pure. */
+export function withoutKey(text: string, key: string): string {
+  const lines = text.split(/\r?\n/)
+  if (lines[0]?.trim() !== '---') return text
+  const end = lines.findIndex((l, i) => i > 0 && l.trim() === '---')
+  const re = new RegExp(`^${key}\\s*:`)
+  const at = lines.findIndex((l, i) => i > 0 && (end === -1 || i < end) && re.test(l))
+  if (at === -1) return text
+  lines.splice(at, 1)
+  return lines.join(text.includes('\r\n') ? '\r\n' : '\n')
+}
+
 /**
  * The text a new watch starts from in the editor: every key, the optional
  * ones commented out, with the user's own projects to pick from. Pure.
@@ -279,6 +322,9 @@ export function starterWatchFile(projects: { id: string; name: string }[]): stri
     '# timeout: 4m',
     '# budget_usd: 2           (per run)',
     '# daily_budget_usd: 5     (across a day of runs)',
+    '# brief: true             (brief every item it files — output: items only)',
+    '# brief_model: sonnet     (the brief runs\' model; default = Settings → Briefs)',
+    '# brief_template: watch-hit   (a playbook in playbooks/; default = the item\'s kind)',
     '---',
     '',
     'What to look for, where, and what counts as a match.',
@@ -340,10 +386,15 @@ export class WatchFiles {
     await atomicWrite(file, withKey(await readFile(file, 'utf8'), 'id', id, 'first'))
   }
 
-  /** Turn a watch on or off by its `enabled:` line alone — comments and layout stay. */
+  /**
+   * Turn a watch on or off by its `enabled:` line alone — comments and layout
+   * stay. Turning a drafted watch on is the review: its `draft:` line goes.
+   */
   async setEnabled(name: string, on: boolean): Promise<void> {
     const file = this.pathOf(name)
-    await atomicWrite(file, withKey(await readFile(file, 'utf8'), 'enabled', String(on), 'last'))
+    let text = withKey(await readFile(file, 'utf8'), 'enabled', String(on), 'last')
+    if (on) text = withoutKey(text, 'draft')
+    await atomicWrite(file, text)
   }
 
   /** Write a file exactly as given (the editor's text, already validated). */

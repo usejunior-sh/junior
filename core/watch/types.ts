@@ -69,6 +69,17 @@ export const WATCH_NOTIFY: WatchNotify[] = ['never', 'on_failure', 'always']
 export const DEFAULT_WATCH_TIMEOUT_MS = 240_000
 export const MAX_WATCH_TIMEOUT_MS = 60 * 60_000
 
+/**
+ * A brief for every item a watch files (.docs/work-item-model.md): the item
+ * arrives briefed — briefing → ready, your turn. Absent = no briefs.
+ */
+export interface WatchBrief {
+  /** model for the brief runs; absent = the workspace's brief default */
+  model?: string
+  /** the playbook to brief with (a playbooks/<name>.md); absent = the item's kind */
+  template?: string
+}
+
 export interface Watch {
   id: string
   /** v0.2: slack only (connector-neutral machinery; Slack lives in the prompt) */
@@ -138,6 +149,10 @@ export interface Watch {
   lastRunError?: string
   /** the template this watch was seeded from (pre-installed as a copy), if any */
   templateId?: string
+  /** brief every item this watch files; absent = off */
+  brief?: WatchBrief
+  /** drafted by a chat (draft_watch) and not yet reviewed: saved off until you enable it */
+  draft?: boolean
   createdAt: number
   updatedAt: number
 }
@@ -153,6 +168,9 @@ export type NewWatch = Pick<Watch, 'title' | 'instruction' | 'schedule' | 'creat
   dailyBudgetUsd?: number | null
   file?: string
   notify?: WatchNotify
+  /** null turns briefs off */
+  brief?: WatchBrief | null
+  draft?: boolean
   /** legacy; defaults to a coarse bucket when omitted */
   cadence?: WatchCadence
   windowStart?: string

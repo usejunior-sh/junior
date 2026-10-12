@@ -719,13 +719,50 @@ kbd { font-family: var(--mono); font-size: 0.8462rem; color: var(--ash); border:
 .wrow .meta .state.brief-failed { color: var(--red); }
 .wrow .meta .src { width: 120px; font-family: var(--mono); font-size: 0.8462rem; color: var(--stone); }
 .wrow .meta .when { width: 40px; font-family: var(--mono); font-size: 0.8462rem; color: var(--stone); }
+/* Stage and turn (core/work/flow.ts): the stage in words, the turn as a dot —
+   bright on your turn, blue while the AI has it, amber while someone else
+   does. A dot with a ring is a turn you set by hand. */
+.wrow .meta .stage { width: 84px; display: inline-flex; align-items: center; justify-content: flex-end; gap: 6px; color: var(--ash); }
+.wrow .meta .stage .dot { width: 6px; height: 6px; border-radius: 50%; flex: none; background: var(--stone); }
+.wrow .meta .stage.turn-me .dot { background: var(--ink); }
+.wrow .meta .stage.turn-ai .dot { background: var(--blue); }
+.wrow .meta .stage.turn-others .dot { background: var(--amber); }
+.wrow .meta .stage.set .dot { box-shadow: 0 0 0 2px var(--canvas), 0 0 0 3px var(--hair-bright); }
+.wrow .meta .state.flow-ask { color: var(--ink); }
+.wrow .meta .state.flow-ai { color: var(--blue); }
+.wrow .meta .state.flow-others { color: var(--mute); }
+.wrow .meta .state.flow-none { color: var(--stone); }
+.wrow .meta .state.flow-broken { color: var(--red); }
+/* Today's row extras: New / Updated, how long a person has waited, a stuck wait. */
+.wrow .t .fresh { flex: none; font-family: var(--mono); font-size: 0.8077rem; }
+.wrow .t .fresh.new { color: var(--green); }
+.wrow .t .fresh.updated { color: var(--blue); }
+.wrow .t .waited { flex: none; font-family: var(--mono); font-size: 0.8462rem; color: var(--ash); }
+.wrow .t .waited.stuck { color: var(--amber); }
+
+/* Today (core/work/today.ts): five sections, the same ledger rows. Urgency
+   steps down the tiers; Something broke is the one red heading. */
+.todaySec { display: contents; }
+.homeList > .todaySec:first-child > .secLabel { margin-top: 0; }
+.secLabel.today-due .tier, .secLabel.today-waiting .tier { color: var(--ink); }
+.secLabel.today-approval .tier { color: var(--body); }
+.secLabel.today-broke .tier { color: var(--red-ink); }
+.secLabel.today-fresh .tier { color: var(--mute); }
+.landed {
+  display: flex; align-items: center; gap: 6px; margin-top: 26px; padding: 0 2px;
+  color: var(--ash); font-size: 0.9231rem;
+}
+.landed svg { color: var(--green); }
+.landed .n { font-family: var(--mono); color: var(--ink); }
+.segBtn .segN { font-family: var(--mono); font-size: 0.8462rem; color: var(--stone); margin-left: 6px; }
+.toolRow .seg .segBtn svg { margin-left: 4px; color: var(--stone); }
 
 /* Cramped: the columns give way one at a time, and the trailing clause goes
    first — a `why` squeezed to a single letter reads as a glitch. */
 @container ledger (max-width: 800px) {
   .wrow .t .why { display: none; }
 }
-@container ledger (max-width: 620px) {
+@container ledger (max-width: 700px) {
   .wrow .meta .src { display: none; }
 }
 @container ledger (max-width: 470px) {
@@ -2087,6 +2124,25 @@ dialog.itemComposer { width: 800px; max-width: calc(100vw - 48px); padding: 0; o
 .calendar .rdp-selected .rdp-day_button { background: var(--ink); color: var(--canvas); border-color: var(--ink); }
 .calendar .rdp-day_button:focus-visible { outline: 1px solid var(--hair-bright); outline-offset: 1px; }
 .uiMenu.calendarPop { padding: 10px; width: max-content; }
+/* The item page's stage · turn chip and its override (FlowPopover). */
+.pill.flowPill { cursor: pointer; gap: 6px; }
+.pill.flowPill .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--stone); flex: none; }
+.pill.flowPill.turn-me .dot { background: var(--ink); }
+.pill.flowPill.turn-ai .dot { background: var(--blue); }
+.pill.flowPill.turn-others .dot { background: var(--amber); }
+.pill.flowPill.set { border-style: dashed; }
+.pill.flowPill .ask { color: var(--ash); }
+.uiMenu.flowPop { padding: 6px 10px 10px; width: 340px; display: flex; flex-direction: column; gap: 6px; }
+.uiMenu.flowPop .uiMenuCap { padding: 6px 0 0; }
+.seg.wrap { flex-wrap: wrap; }
+.flowNote {
+  width: 100%; margin-top: 6px; background: var(--canvas); border: 1px solid var(--hair-strong); color: var(--ink);
+  border-radius: var(--r); padding: 7px 10px; font-size: 0.9615rem; outline: none; transition: border-color 0.12s;
+}
+.flowNote:focus { border-color: var(--ink); }
+.flowNote::placeholder { color: var(--stone); }
+.flowPopActs { display: flex; justify-content: flex-end; gap: 6px; margin-top: 4px; }
+.flowPopHint { color: var(--stone); font-size: 0.8462rem; }
 .calendarClear { display: flex; align-items: center; gap: 6px; width: 100%; margin-top: 6px; padding: 6px 4px 0; border: none; border-top: 1px solid var(--hair); background: transparent; color: var(--ash); font-size: 0.8462rem; cursor: pointer; }
 .calendarClear:hover { color: var(--ink); }
 /* The default selected day is bold and larger, and the month sits in a
@@ -2976,6 +3032,10 @@ dialog.briefDialog .knobs { display: flex; gap: 8px; align-items: center; flex-w
 .limitsBody .ctl { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .limitsBody input.num { width: 96px; padding: 4px 8px; font-family: var(--mono); font-size: 0.9231rem; }
 .checkLine { display: inline-flex; align-items: center; gap: 8px; color: var(--body); font-size: 0.9615rem; cursor: pointer; }
+.checkLine .hint { color: var(--stone); }
+/* The watch form's brief option: model and template, under the checkbox. */
+.wform .briefOpts { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 4px; padding-left: 22px; }
+@media (max-width: 767px) { .wform .briefOpts { grid-template-columns: 1fr; padding-left: 0; } }
 
 /* ---------- watch page: health strip, tabs, runs table, items ---------- */
 .watchPageHead { display: flex; align-items: flex-start; gap: 16px; margin-bottom: 18px; }
@@ -3537,6 +3597,7 @@ html.kbOpen .shell.mobile .panel { bottom: 0; }
   .wrow .t .why { display: none; }
   .wrow .meta .c { padding-left: 0; }
   .wrow .meta .state, .wrow .meta .src { display: none; }
+  .wrow .meta .stage { width: auto; margin-right: 10px; font-size: 0.8462rem; }
   .wrow .meta, .wrow.sel .meta, .wrow:hover .meta, .wrow:focus-within .meta, .wrow.menu .meta { opacity: 1; }
   .wrow .acts { position: static; opacity: 1; pointer-events: auto; }
   .wrow .acts > :not(.more) { display: none; }
@@ -3905,3 +3966,17 @@ html.kbOpen .shell.mobile .panel { bottom: 0; }
   .toolGroup .tgBody { margin-left: 6px; padding-left: 10px; }
   .tool { padding: 10px 12px; }
 }
+
+/* A watch a chat drafted (MCP draft_watch): off until you review and enable it. */
+.draftBanner {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0 0 14px; padding: 10px 12px;
+  border: 1px dashed var(--hair-bright); border-radius: var(--r); background: var(--card);
+}
+.draftBanner .tag, .draftTag {
+  font-family: var(--mono); font-size: 0.7692rem; letter-spacing: 0.4px; text-transform: uppercase;
+  color: var(--amber); border: 1px solid var(--hair-strong); border-radius: var(--r-full); padding: 1px 7px;
+}
+.draftBanner .txt { flex: 1 1 260px; color: var(--body); font-size: 0.9615rem; }
+.draftTag { margin-left: 8px; vertical-align: 1px; }
+/* draft_watch's result in a chat: one click to the watch page. */
+.draftLink { display: flex; align-items: center; gap: 10px; margin: 4px 0 10px; color: var(--body); font-size: 0.9615rem; }

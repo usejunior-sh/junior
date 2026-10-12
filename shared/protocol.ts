@@ -493,7 +493,36 @@ export type InboxSnapshot = {
   syncedAt: number
   items: import('../core/work/types.js').ScoredItem[]
   notices: string[]
+  /** Today's footer: items that went done since local midnight and are still done */
+  landedToday?: number
+  /** broken things that are not items — a failed watch, a paused team run — for Today's "Something broke" */
+  alerts?: InboxAlert[]
 }
+
+/** Something broke that isn't a work item; links to where it can be fixed. */
+export type InboxAlert = {
+  id: string
+  kind: 'watch' | 'team'
+  title: string
+  detail?: string
+  /** the watch to open */
+  watchId?: string
+  /** the session to open (a team run's lead) */
+  sessionId?: string
+  at: number
+}
+
+export type {
+  FlowOverride,
+  ItemFlow,
+  Stage,
+  Turn,
+} from '../core/work/flow.js'
+
+/** POST /api/items/flow — set the user's stage/turn override, or clear it. */
+export type FlowOverrideRequest =
+  | { id: string; stage?: string; turn?: string; note?: string }
+  | { id: string; clear: true }
 
 export type InboxResponse = ({ ok: true } & InboxSnapshot) | { ok: false; error: string }
 
@@ -521,6 +550,8 @@ export type ItemDetail = {
   artifacts: { id: string; title: string; role: LinkRole; author: ArtifactAuthor; path: string }[]
   /** sessions that were dispatched for it or briefed it */
   sessions: { id: string; title: string; role: LinkRole; kind: SessionKind; updatedAt: number }[]
+  /** stage and turn — where it is and whose move it is */
+  flow: import('../core/work/flow.js').ItemFlow
 }
 
 export type ItemDetailResponse = { ok: true; detail: ItemDetail } | { ok: false; error: string }

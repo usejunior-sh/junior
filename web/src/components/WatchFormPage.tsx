@@ -12,6 +12,7 @@ import * as Checkbox from '@radix-ui/react-checkbox'
 import { Check, ChevronDown, ChevronRight, Clock } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import type {
+  PlaybooksResponse,
   Project,
   ProjectsResponse,
   SettingsResponse,
@@ -65,6 +66,12 @@ type Form = {
   notify: WatchNotify
   /** create only: run once as soon as it's saved */
   runOnceNow: boolean
+  /** brief every item it files (items output only) */
+  brief: boolean
+  /** '' = the workspace's brief default (Settings → Briefs) */
+  briefModel: string
+  /** a playbook name; '' = the item's kind */
+  briefTemplate: string
 }
 
 const EMPTY: Form = {
@@ -83,6 +90,9 @@ const EMPTY: Form = {
   dailyBudget: '',
   notify: 'on_failure',
   runOnceNow: true,
+  brief: false,
+  briefModel: '',
+  briefTemplate: '',
 }
 
 const CATCH_UPS: Array<{ id: string; label: string }> = [
@@ -116,6 +126,9 @@ function formFrom(w: Watch): Form {
     dailyBudget: w.dailyBudgetUsd != null ? String(w.dailyBudgetUsd) : '',
     notify: w.notify,
     runOnceNow: false,
+    brief: !!w.brief,
+    briefModel: w.brief?.model ?? '',
+    briefTemplate: w.brief?.template ?? '',
   }
 }
 
@@ -134,6 +147,7 @@ export function WatchFormPage({ id, onNavigate }: { id: string | null; onNavigat
   const models = usePickableModels(form.model || undefined)
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
+  const [playbooks, setPlaybooks] = useState<string[]>([])
   const [step, setStep] = useState<Step>('details')
   const [preview, setPreview] = useState<Preview>({ phase: 'idle' })
   const [configError, setConfigError] = useState('')
@@ -145,6 +159,10 @@ export function WatchFormPage({ id, onNavigate }: { id: string | null; onNavigat
       .then((r) => r.json() as Promise<ProjectsResponse>)
       .then((b) => setProjects(b.ok ? b.projects : []))
       .catch(() => setProjects([]))
+    void fetch('/api/playbooks')
+      .then((r) => r.json() as Promise<PlaybooksResponse>)
+      .then((b) => setPlaybooks(b.ok ? b.playbooks.map((p) => p.kind) : []))
+      .catch(() => setPlaybooks([]))
     void fetch('/api/settings')
       .then((r) => r.json() as Promise<SettingsResponse>)
       .then((b) => b.ok && setDefaults({ timeoutMs: b.settings.watchTimeoutMs, budget: b.settings.watchBudgetUsd }))
@@ -230,6 +248,10 @@ export function WatchFormPage({ id, onNavigate }: { id: string | null; onNavigat
         maxBudgetUsd: budget,
         dailyBudgetUsd: dailyBudget,
         notify: form.notify,
+        brief:
+          form.brief && form.output === 'items'
+            ? { ...(form.briefModel ? { model: form.briefModel } : {}), ...(form.briefTemplate ? { template: form.briefTemplate } : {}) }
+            : null,
         ...(id ? {} : { runOnceNow: form.runOnceNow }),
       }
       const res = await fetch(id ? `/api/watches?id=${encodeURIComponent(id)}` : '/api/watches', {
@@ -434,6 +456,66 @@ export function WatchFormPage({ id, onNavigate }: { id: string | null; onNavigat
                 )}
               </Select>
             </div>
+
+            {form.output === 'items' && (
+              <div className="field">
+                <label className="checkLine">
+                  <Checkbox.Root className="cbox" checked={form.brief} onCheckedChange={(v) => set('brief', v === true)}>
+                    <Checkbox.Indicator>
+                      <Check size={10} aria-hidden="true" />
+                    </Checkbox.Indicator>
+                  </Checkbox.Root>
+                  Create a brief for each item
+                  <span className="hint">· each item arrives briefed and waits for you</span>
+                </label>
+                {form.brief && (
+                  <div className="briefOpts">
+                    <div className="field">
+                      <label htmlFor="wf-brief-model">Brief model</label>
+                      <Select
+                        id="wf-brief-model"
+                        className="wformSelect"
+                        aria-label="Brief model"
+                        value={form.briefModel}
+                        onValueChange={(v) => set('briefModel', v)}
+                      >
+                        <SelectItem value="">Default (Settings → Briefs)</SelectItem>
+                        {models
+                          .filter((m) => m.id !== 'default')
+                          .map((m) => (
+                            <SelectItem key={m.id} value={m.id} description={m.description}>
+                              {m.name}
+                            </SelectItem>
+                          ))}
+                        {form.briefModel && !models.some((m) => m.id === form.briefModel) && (
+                          <SelectItem value={form.briefModel}>{form.briefModel}</SelectItem>
+                        )}
+                      </Select>
+                    </div>
+                    <div className="field">
+                      <label htmlFor="wf-brief-template">Template</label>
+                      <Select
+                        id="wf-brief-template"
+                        className="wformSelect"
+                        aria-label="Brief template"
+                        value={form.briefTemplate}
+                        onValueChange={(v) => set('briefTemplate', v)}
+                      >
+                        <SelectItem value="">Default (the item’s kind — watch-hit)</SelectItem>
+                        {playbooks.map((p) => (
+                          <SelectItem key={p} value={p}>
+                            {p}
+                          </SelectItem>
+                        ))}
+                        {form.briefTemplate && !playbooks.includes(form.briefTemplate) && (
+                          <SelectItem value={form.briefTemplate}>{form.briefTemplate}</SelectItem>
+                        )}
+                      </Select>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="field">
               <label>Schedule</label>

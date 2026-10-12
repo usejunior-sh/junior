@@ -8,7 +8,7 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { WatchFiles, checkGrants, parseWatchFile, serializeWatchFile, starterWatchFile, withKey, type WatchFileSpec } from '../server/watch-files.js'
+import { WatchFiles, checkGrants, parseWatchFile, serializeWatchFile, starterWatchFile, withKey, withoutKey, type WatchFileSpec } from '../server/watch-files.js'
 import { builtinGrant, mcpToolName } from '../core/watch/tools.js'
 
 const SLACK = 'claude.ai Slack'
@@ -147,4 +147,53 @@ test('withKey sets one line and leaves comments and layout alone', () => {
   assert.equal(withKey(text, 'id', 'x', 'first'), '---\nid: x\n# mine\ntitle: T\nenabled: true\n# end\n---\n\nbody\n')
   assert.equal(withKey('---\ntitle: T\n---\nb', 'enabled', 'false', 'last'), '---\ntitle: T\nenabled: false\n---\nb')
   assert.equal(withKey('no frontmatter', 'id', 'x', 'first'), '---\nid: x\n---\nno frontmatter')
+})
+
+test('brief and draft survive the round trip', () => {
+  const s: WatchFileSpec = { ...spec, enabled: false, brief: { model: 'haiku', template: 'review-requested' }, draft: true }
+  const text = serializeWatchFile(s)
+  assert.match(text, /^brief: true$/m)
+  assert.match(text, /^brief_model: haiku$/m)
+  assert.match(text, /^brief_template: review-requested$/m)
+  assert.match(text, /^draft: true$/m)
+  const back = parseWatchFile('mentions', text)
+  assert.deepEqual(back.errors, [])
+  assert.deepEqual(back.spec, s)
+  // brief on with the defaults: just the flag
+  const bare = parseWatchFile('m', serializeWatchFile({ ...spec, brief: {} }))
+  assert.deepEqual(bare.errors, [])
+  assert.deepEqual(bare.spec.brief, {})
+  // off: no keys at all
+  assert.doesNotMatch(serializeWatchFile(spec), /brief|draft/)
+})
+
+test('brief options are checked like every other key', () => {
+  const base = serializeWatchFile(spec)
+  const errs = (extra: string) => parseWatchFile('m', base.replace('enabled: true', `enabled: true\n${extra}`)).errors
+  assert.match(errs('brief_model: haiku').join(), /need brief: true/)
+  assert.match(errs('brief: true\nbrief_template: Not A Name').join(), /not a playbook name/)
+  assert.match(errs('brief: maybe').join(), /brief must be true or false/)
+  assert.match(
+    parseWatchFile('m', serializeWatchFile({ ...spec, output: 'digest' }).replace('enabled: true', 'enabled: true\nbrief: true')).errors.join(),
+    /brief works with output: items/,
+  )
+})
+
+test('enabling a drafted watch drops its draft line, and nothing else', async () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'triage-watch-draft-'))
+  try {
+    const files = new WatchFiles(dir)
+    await files.write('drafted', { ...spec, enabled: false, draft: true })
+    const before = readFileSync(files.pathOf('drafted'), 'utf8')
+    await files.setEnabled('drafted', true)
+    const after = readFileSync(files.pathOf('drafted'), 'utf8')
+    assert.doesNotMatch(after, /^draft:/m)
+    assert.match(after, /^enabled: true$/m)
+    assert.equal(after, withoutKey(before, 'draft').replace('enabled: false', 'enabled: true'))
+    // turning it off again doesn't make it a draft
+    await files.setEnabled('drafted', false)
+    assert.doesNotMatch(readFileSync(files.pathOf('drafted'), 'utf8'), /^draft:/m)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
 })
