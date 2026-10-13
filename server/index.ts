@@ -121,6 +121,9 @@ import type {
   SaveProjectFileResponse,
   WorkingChangesResponse,
   WorkingDiffResponse,
+  BrowserPickResponse,
+  BrowserShotsResponse,
+  RawBlock,
 } from '../shared/protocol.js'
 import {
   MAX_IMAGES_PER_ITEM,
@@ -322,6 +325,9 @@ import {
 } from './remote.js'
 import { launchAgentInstalled } from './launchd.js'
 import { applyImageEdits, itemImageAttachments, readItemImage } from './itemImages.js'
+import { BrowserHub, describePicked, makeBrowserMcp, renderVerification, ShotStore } from './browser.js'
+import { browserCallAllowed } from '../core/browser/policy.js'
+import { BROWSER_HOST_PATH } from '../core/browser/wire.js'
 import { FileIndexes, readProjectFile, resolveFileMention, writeProjectFile } from './files.js'
 import { ArtifactIndex, slug } from './artifacts.js'
 import { TRIAGE_MCP_INSTRUCTIONS, triageSessionAppend } from '../shared/triageContext.js'
@@ -567,6 +573,8 @@ class WorkspaceRuntime {
   readonly files = new FileIndexes()
   /** the workspace's markdown artifacts, indexed from its artifacts folder (.docs/next-version.md) */
   readonly artifacts: ArtifactIndex
+  /** what sessions saw in the browser pane: screenshots, checkpoints, diffs (.docs/browser.md) */
+  readonly shots: ShotStore
   /** playbooks and dispatch templates — the two prose-customisable stages, as files */
   readonly playbookDir: string
   readonly dispatchDir: string
@@ -617,6 +625,7 @@ class WorkspaceRuntime {
     )
     void this.artifacts.ensure()
     this.playbookDir = path.join(workspaceDir(meta.id), 'playbooks')
+    this.shots = new ShotStore(path.join(workspaceDir(meta.id), 'browser'))
     this.dispatchDir = path.join(workspaceDir(meta.id), 'dispatch')
     this.attachmentsDir = path.join(workspaceDir(meta.id), 'attachments')
     this.teamLibrary = new TeamLibrary(workspaceDir(meta.id))
@@ -648,6 +657,15 @@ class WorkspaceRuntime {
 }
 
 const runtimes = new Map<string, WorkspaceRuntime>()
+
+/**
+ * The browser pane's host link (.docs/browser.md): Triage.app's main process,
+ * when it is open. Daemon-wide — the app is one per machine — while each
+ * session's tools and evidence stay in its own workspace.
+ */
+const browserHub = new BrowserHub()
+const browserMcpFor = (rt: WorkspaceRuntime, row: StoredSession) =>
+  makeBrowserMcp({ hub: browserHub, shots: rt.shots, sessionId: row.id, projectRoot: row.cwd })
 
 const defaultRuntime = (): WorkspaceRuntime => runtimes.get(registry.defaultId)!
 
@@ -863,9 +881,11 @@ class LiveSession {
         }
         // stream deltas are broadcast live but not persisted (recoverable
         // from the committed assistant message, and the only high-volume thing)
-        this.emit({ kind: 'sdk', message: ev.record }, ev.kind !== 'stream')
+        this.emit({ kind: 'sdk', message: slimToolImages(ev.record) }, ev.kind !== 'stream')
         if (ev.kind === 'result') {
           this.setStatus('idle')
+          const turnStart = this.rt.openTurns.get(this.row.id)?.startedAt
+          if (turnStart != null) void noteBrowserTurn(this.rt, this.row, turnStart, ev.record)
           void this.endTurn()
           void this.rt.store.sessions.touch(this.row.id)
           void syncCheckouts(this.rt)
@@ -985,6 +1005,9 @@ class LiveSession {
     // the approval. A worker that can't edit runs read-only git/gh unattended,
     // and any worker runs the project's own checks without a click.
     if (TEAM_TOOLS.has(toolName)) return Promise.resolve({ behavior: 'allow', updatedInput: toolInput })
+    // The browser pane: reading and using the page never asks. Leaving this
+    // machine and browser_eval fall through to the session's mode below.
+    if (browserCallAllowed(toolName, toolInput, this.row.cwd)) return Promise.resolve({ behavior: 'allow', updatedInput: toolInput })
     const run = teamRunOf(this.rt, this.row.id)
     if (run && run.leadSessionId !== this.row.id && toolName === 'Bash') {
       const ws = run.workers.filter((w) => w.sessionId === this.row.id)
@@ -1222,8 +1245,56 @@ function summaries(rt: WorkspaceRuntime): SessionSummary[] {
  * whole log. The subprocess is stopped first so nothing is still writing to a
  * row that is about to go.
  */
+/**
+ * Image blocks inside tool results (a browser screenshot, a Read of a PNG) are
+ * for the model, which already has them. The log and every open page get the
+ * block without its bytes — the transcript shows saved shots from disk.
+ */
+function slimToolImages<T>(record: T): T {
+  const m = record as { type?: string; message?: { content?: unknown } }
+  if (m?.type !== 'user' || !Array.isArray(m.message?.content)) return record
+  let changed = false
+  const content = (m.message.content as RawBlock[]).map((b) => {
+    if (b?.type !== 'tool_result' || !Array.isArray(b.content)) return b
+    const inner = b.content as RawBlock[]
+    if (!inner.some((c) => c?.type === 'image')) return b
+    changed = true
+    return { ...b, content: inner.map((c) => (c?.type === 'image' ? { type: 'image', omitted: true } : c)) }
+  })
+  return changed ? ({ ...m, message: { ...m.message, content } } as T) : record
+}
+
+/**
+ * A turn ended: if it used the browser, add it to the session's Verification
+ * note (server/browser.ts renderVerification), linked to the session and its
+ * item — the evidence "done" points at.
+ */
+async function noteBrowserTurn(rt: WorkspaceRuntime, row: StoredSession, startedAt: number, record: unknown): Promise<void> {
+  try {
+    const taken = rt.shots.list(row.id).filter((s) => s.at >= startedAt && s.kind !== 'pick')
+    if (!taken.length) return
+    const r = record as { result?: unknown }
+    const turns = await rt.shots.addTurn(row.id, {
+      startedAt,
+      endedAt: Date.now(),
+      summary: typeof r?.result === 'string' ? r.result : '',
+      shots: taken.map((s) => s.n),
+    })
+    const title = `Verification · ${row.title || 'session'}`.slice(0, 120)
+    const body = renderVerification({ title, workspaceId: rt.meta.id, sessionId: row.id, turns, shots: rt.shots.list(row.id) })
+    const artifact = await rt.artifacts.writeAt(`verification/${row.id}.md`, { title, body, author: 'model' })
+    await rt.store.links.add({ fromKind: 'artifact', fromId: artifact.id, toKind: 'session', toId: row.id, role: 'context' })
+    const itemId = rt.sessionItem.get(row.id)
+    if (itemId) await rt.store.links.add({ fromKind: 'artifact', fromId: artifact.id, toKind: 'item', toId: itemId, role: 'context' })
+  } catch (err) {
+    log('warn', 'browser', `could not write the verification note: ${errText(err)}`, { session: row.id, workspace: rt.meta.id })
+  }
+}
+
 async function deleteSession(rt: WorkspaceRuntime, sessionId: string): Promise<void> {
   rt.live.get(sessionId)?.stop()
+  // Its tab closes; its evidence stays on disk — the Verification note points at it.
+  browserHub.forget(sessionId)
   rt.live.delete(sessionId)
   rt.rows.delete(sessionId)
   const run = teamRunOf(rt, sessionId)
@@ -4709,16 +4780,21 @@ function extrasFor(rt: WorkspaceRuntime, row: StoredSession): SessionExtras {
     // Rebuilt per spawn like the brief server: one instance, one transport.
     const { agent, writes, can } = workerSpec(run, worker)
     const tools = rt.provider.agentTools(can as AgentCan[])
+    // An agent allowed the browser gets the pane's own tools while Triage.app
+    // hosts them; without the app it falls back to the user's chrome-devtools.
+    const pane = (can as AgentCan[]).includes('browser') && browserHub.status.compatible
+    if (pane) delete tools.mcpServers?.['chrome-devtools']
+    const external = tools.mcpServers && Object.keys(tools.mcpServers).length ? tools.mcpServers : undefined
     return {
       systemAppend: `${identity}\n${workerAppend(run, worker, agent, writes)}`,
-      mcp: { team: makeTeamMcp(rt, row.id) },
+      mcp: { team: makeTeamMcp(rt, row.id), ...(pane ? { browser: browserMcpFor(rt, row) } : {}) },
       disallowedTools: tools.disallowedTools,
       // A worker loads only what its step needs: a short built-in list and
       // triage's own servers (+ the browser if allowed) — not every connector
       // and plugin in ~/.claude, whose schemas ride every call.
       tools: tools.tools,
       strictMcpConfig: true,
-      ...(tools.mcpServers ? { externalMcp: tools.mcpServers } : {}),
+      ...(external ? { externalMcp: external } : {}),
       // Compact long before a 1M window would (it defaults to ~967K there): a
       // worker re-reads its whole history on every call, so history is cost.
       settings: { autoCompactWindow: TEAM_COMPACT_WINDOW },
@@ -4726,6 +4802,9 @@ function extrasFor(rt: WorkspaceRuntime, row: StoredSession): SessionExtras {
       maxBudgetUsd: Math.max(0.25, run.budgetUsd - runSpent(run)),
     }
   }
+  // A chat gets the browser pane's tools: with Triage.app closed they answer
+  // "open Triage.app" rather than vanish, so a session never has to respawn.
+  if (row.kind === 'chat') return { systemAppend: identity, mcp: { browser: browserMcpFor(rt, row) } }
   if (row.kind !== 'brief') return { systemAppend: identity }
   let e = rt.briefExtras.get(row.id)
   if (!e) {
@@ -6588,6 +6667,45 @@ const server = http.createServer(async (req, res) => {
     return
   }
 
+  // --- the browser pane (.docs/browser.md): host status, evidence, the picker ---
+  if (url.pathname === '/api/browser/status' && req.method === 'GET') {
+    json(200, { ok: true, ...browserHub.status })
+    return
+  }
+  const shotRoute = /^\/api\/browser\/shots\/([\w-]+)(?:\/(\d+))?$/.exec(url.pathname)
+  if (shotRoute && req.method === 'GET') {
+    const [, sessionId, n] = shotRoute
+    if (!n) {
+      const body: BrowserShotsResponse = { ok: true, shots: rt.shots.list(sessionId) }
+      json(200, body)
+      return
+    }
+    const f = rt.shots.file(sessionId, Number(n))
+    try {
+      if (!f) throw new Error('no such shot')
+      const bytes = await readFile(f.path)
+      // Shots are numbered and never rewritten: cache hard.
+      res.writeHead(200, { 'content-type': f.mime, 'content-length': String(bytes.length), 'cache-control': 'private, max-age=31536000, immutable' })
+      res.end(bytes)
+    } catch {
+      json(404, { ok: false, error: 'no such shot' })
+    }
+    return
+  }
+  if (url.pathname === '/api/browser/pick' && req.method === 'POST') {
+    let body: BrowserPickResponse
+    try {
+      const b = (await readJsonBody(req, 10_000)) as { sessionId?: unknown; uid?: unknown } | null
+      const row = typeof b?.sessionId === 'string' ? rt.rows.get(b.sessionId) : undefined
+      if (!row || typeof b?.uid !== 'number') throw new Error('need a session of this workspace and a uid')
+      body = { ok: true, ...(await describePicked({ hub: browserHub, shots: rt.shots, sessionId: row.id, projectRoot: row.cwd }, b.uid)) }
+    } catch (err) {
+      body = { ok: false, error: errText(err) }
+    }
+    json(body.ok ? 200 : 400, body)
+    return
+  }
+
   // --- providers: the agents this workspace is connected to ------------------
   if (url.pathname === '/api/providers' && req.method === 'GET') {
     let body: ProvidersStatusResponse
@@ -8030,8 +8148,10 @@ server.on('connection', (sock) => {
   sock.on('close', () => remoteSockets.delete(sock))
 })
 
+// Upgrades are routed by path: the UI's socket, and the browser pane's host.
+// Two servers can't share `server` — each aborts the other's paths with a 400.
 const wss = new WebSocketServer({
-  server,
+  noServer: true,
   path: '/ws',
   // Browsers let any page open a WebSocket to localhost; only our own page,
   // from this machine or a paired device, gets one.
@@ -8041,6 +8161,24 @@ const wss = new WebSocketServer({
     else if (!sameOrigin(req, access)) done(false, 403, 'cross-origin')
     else done(true)
   },
+})
+
+/** Triage.app's main process, hosting the browser pane's tabs (server/browser.ts). */
+const hostWss = new WebSocketServer({ noServer: true })
+
+server.on('upgrade', (req, socket, head) => {
+  const pathname = new URL(req.url ?? '/', 'http://localhost').pathname
+  if (pathname === BROWSER_HOST_PATH) {
+    // This machine only, and no Origin: every browser sends one, so no web
+    // page — not even one the agent is looking at — can pose as the host.
+    if (accessOf(req, remote) !== 'local' || req.headers.origin) {
+      socket.end('HTTP/1.1 403 Forbidden\r\nconnection: close\r\n\r\n')
+      return
+    }
+    hostWss.handleUpgrade(req, socket, head, (ws) => browserHub.attach(ws))
+    return
+  }
+  wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws, req))
 })
 
 function send(ws: WebSocket, msg: ServerMessage) {
