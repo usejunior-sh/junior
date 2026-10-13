@@ -1,6 +1,7 @@
 // The renderer's door to the main process. CommonJS because sandboxed
 // preloads can't be ES modules. The splash (file:) gets retry/log/status; the
-// web UI gets only what its desktop chrome needs: ← → and their state.
+// web UI gets only what its desktop chrome needs: ← → and their state, and
+// the browser pane's controls.
 const { contextBridge, ipcRenderer } = require('electron')
 
 if (location.protocol === 'file:') {
@@ -27,6 +28,29 @@ else {
       const fn = (_e, s) => cb(s)
       ipcRenderer.on('nav:state', fn)
       return () => ipcRenderer.removeListener('nav:state', fn)
+    },
+    // The browser pane (.docs/browser.md): the page itself is a native view
+    // laid over the pane's rect; this is only its remote control.
+    browser: {
+      setPane: (sessionId, rect) => ipcRenderer.send('browser:pane', { sessionId, rect }),
+      navigate: (sessionId, url) => ipcRenderer.invoke('browser:navigate', { sessionId, url }),
+      nav: (sessionId, action) => ipcRenderer.send('browser:nav', { sessionId, action }),
+      setViewport: (sessionId, preset, colorScheme) => ipcRenderer.invoke('browser:viewport', { sessionId, preset, colorScheme }),
+      state: (sessionId) => ipcRenderer.invoke('browser:state', { sessionId }),
+      pick: (sessionId) => ipcRenderer.invoke('browser:pick', { sessionId }),
+      cancelPick: (sessionId) => ipcRenderer.send('browser:pick-cancel', { sessionId }),
+      devtools: (sessionId) => ipcRenderer.send('browser:devtools', { sessionId }),
+      // returns an unsubscribe
+      onState: (cb) => {
+        const fn = (_e, s) => cb(s)
+        ipcRenderer.on('browser:state', fn)
+        return () => ipcRenderer.removeListener('browser:state', fn)
+      },
+      onActivity: (cb) => {
+        const fn = (_e, s) => cb(s)
+        ipcRenderer.on('browser:activity', fn)
+        return () => ipcRenderer.removeListener('browser:activity', fn)
+      },
     },
   })
 }

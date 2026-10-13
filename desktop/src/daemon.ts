@@ -20,8 +20,15 @@ export type DaemonHealth = { app: 'triage'; version: string; pid: number; port: 
 /** TRIAGE_APP_PORT lets the app be tested against an isolated daemon; else DEFAULT_PORT. */
 export const PORT: number = Number(process.env.TRIAGE_APP_PORT) || 5178
 
+/**
+ * TRIAGE_APP_URL loads the UI from somewhere else — the Vite dev server, for
+ * HMR — while health checks and the browser host still talk to PORT.
+ */
+const UI_URL = process.env.TRIAGE_APP_URL?.trim() || ''
+export const UI_PORT: number = UI_URL ? Number(new URL(UI_URL).port || 80) : PORT
+
 export function daemonUrl(): string {
-  return `http://localhost:${PORT}/`
+  return UI_URL ? UI_URL.replace(/\/?$/, '/') : `http://localhost:${PORT}/`
 }
 
 /** Mirrors LOG_FILE in server/state.ts. */

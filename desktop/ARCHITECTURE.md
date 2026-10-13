@@ -48,7 +48,8 @@ server is Node: nothing in `server/` or `core/` is ported.
 |---|---|
 | `src/daemon.ts` | find / start / restart the daemon, login-shell PATH, bundled runtime paths |
 | `src/main.ts` | app lifecycle, single instance, window, menu, tray, external links, window state |
-| `src/preload.cjs` | tiny preload (CommonJS): exposes `window.triageDesktop` |
+| `src/browser.ts` | the browser pane's host (`../.docs/browser.md`): a tab per session, parking window, CDP, the `/browser-host` link to the daemon |
+| `src/preload.cjs` | tiny preload (CommonJS): exposes `window.triageDesktop` (window chrome + the browser pane's controls) |
 | `src/splash.html` | the "starting triage…" / error page shown before the daemon answers |
 | `scripts/build.mjs` | root build → stage server → fetch Node → electron-builder → ad-hoc sign → zip/dmg |
 | `scripts/icon.mjs` | `build/icon.icns` from `web/public/icon-1024.png` |

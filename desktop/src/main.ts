@@ -24,7 +24,8 @@ import {
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { PORT, daemonUrl, ensureDaemon, logFile, probe, restartDaemon, type DaemonHealth } from './daemon.js'
+import { BrowserHost } from './browser.js'
+import { PORT, UI_PORT, daemonUrl, ensureDaemon, logFile, probe, restartDaemon, type DaemonHealth } from './daemon.js'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const SPLASH = path.join(here, 'splash.html')
@@ -45,6 +46,17 @@ let quitting = false
 let connecting = false
 let lastAutoConnect = 0
 let splash: SplashStatus = { state: 'starting', text: 'Looking for triage…' }
+// The browser pane's tabs, and the link the daemon drives them through (.docs/browser.md).
+let browser: BrowserHost | null = null
+
+// An unpackaged app (`npm start` in desktop/) is the dev app: its own data
+// folder, so it never shares the installed app's single-instance lock — which
+// would quit it on launch and bring the installed window forward instead —
+// nor its window state or the browser pane's cookies.
+if (!app.isPackaged) {
+  app.setName('Triage Dev')
+  app.setPath('userData', path.join(app.getPath('appData'), 'Triage Dev'))
+}
 
 if (!app.requestSingleInstanceLock()) {
   app.quit()
@@ -64,6 +76,8 @@ function start() {
   ipcMain.on('nav:back', (e) => goBack(windowOf(e.sender)))
   ipcMain.on('nav:forward', (e) => goForward(windowOf(e.sender)))
   ipcMain.handle('nav:state', (e) => navState(windowOf(e.sender)))
+  browser = new BrowserHost(app.getVersion())
+  browser.start()
   win = createWindow(daemonUrl())
   void connect()
   setInterval(watchdog, 5000)
@@ -99,6 +113,7 @@ function createWindow(url: string, bounds?: Partial<Rectangle>): BrowserWindow {
     },
   })
   target.set(w, url)
+  browser?.watchWindow(w)
   if (state.maximized) w.maximize()
   w.once('ready-to-show', () => w.show())
 
@@ -463,7 +478,8 @@ function isDaemonUrl(raw: string): boolean {
     const u = new URL(raw)
     const host = u.hostname
     const loopback = host === 'localhost' || host === '127.0.0.1' || host === '[::1]' || host.endsWith('.localhost')
-    return (u.protocol === 'http:' || u.protocol === 'ws:') && loopback && Number(u.port || 80) === PORT
+    const port = Number(u.port || 80)
+    return (u.protocol === 'http:' || u.protocol === 'ws:') && loopback && (port === PORT || port === UI_PORT)
   } catch {
     return false
   }
