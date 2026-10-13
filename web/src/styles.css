@@ -1111,6 +1111,60 @@ kbd { font-family: var(--mono); font-size: 0.8462rem; color: var(--ash); border:
    composer, and every detail in a drawer on the right. */
 .sessRow { flex: 1; min-height: 0; display: flex; }
 .sessCol { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+
+/* The browser pane (.docs/browser.md): the page is a native view Triage.app lays
+   over .bpStage, so the stage is only a placeholder with an empty state. */
+.sessRow.withBrowser .sessCol { flex: 1 1 46%; min-width: 360px; }
+.browserPane {
+  flex: 1 1 54%; min-width: 360px; max-width: 62%; min-height: 0; display: flex; flex-direction: column;
+  border-left: 1px solid var(--hair); background: var(--canvas);
+}
+.bpBar { display: flex; align-items: center; gap: 4px; height: var(--bar-h); padding: 0 10px; flex: none; border-bottom: 1px solid var(--hair); min-width: 0; }
+.bpBar .sp { flex: 1; }
+.bpBar .btn.ghost.on { color: var(--ink); background: var(--elev); }
+.bpBar .btn.spin svg { animation: spin 0.9s linear infinite; }
+@media (prefers-reduced-motion: reduce) { .bpBar .btn.spin svg { animation: none; } }
+.bpTitle { color: var(--ink); font-size: 0.9615rem; padding-left: 4px; }
+.bpUrl { flex: 1; min-width: 0; margin: 0 4px; }
+.bpUrl input {
+  width: 100%; height: 26px; padding: 0 10px; border-radius: var(--r-full);
+  border: 1px solid var(--hair-strong); background: var(--card); color: var(--body); font-size: 0.8462rem;
+  outline: none;
+}
+.bpUrl input:focus { border-color: var(--hair-bright); color: var(--ink); }
+.bpAgent { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 20px; height: 24px; }
+.bpVpMenu { min-width: 200px; }
+.bpVpMenu .uiMenuItem { gap: 10px; }
+.bpVpLabel { flex: 1; }
+.bpVpHint { color: var(--ash); font-size: 0.7692rem; }
+.bpVpCheck { display: inline-flex; width: 13px; color: var(--ink); }
+.bpNote { flex: none; padding: 6px 14px; border-bottom: 1px solid var(--hair); background: var(--tint-red); color: var(--body); font-size: 0.8462rem; }
+.bpStage { flex: 1; min-height: 0; position: relative; background: var(--deep); }
+.bpEmpty { max-width: 340px; margin: 72px auto 0; padding: 0 20px; color: var(--mute); font-size: 0.9231rem; line-height: 1.55; }
+.bpEmpty p { margin: 0 0 8px; }
+.bpEmpty .bpLead { font-family: var(--display); font-size: 1.5rem; color: var(--ink); line-height: 1.2; }
+#chatHeader .browserBtn { margin-left: auto; flex: none; gap: 6px; }
+#chatHeader .browserBtn.on { color: var(--ink); background: var(--elev); }
+#chatHeader .agentsBtn + .browserBtn { margin-left: 0; }
+#chatHeader .browserBtn + .costPill, #chatHeader .browserBtn + .costSkel { margin-left: 0; }
+
+/* Screenshots a browser tool saved, under the call; click for full size. */
+.shotStrip { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0 4px; }
+.shotThumb {
+  display: flex; flex-direction: column; gap: 4px; max-width: 220px; padding: 4px; border-radius: var(--r);
+  border: 1px solid var(--hair-strong); background: var(--card); cursor: zoom-in; text-align: left;
+}
+.shotThumb:hover { border-color: var(--hair-bright); }
+.shotThumb img { display: block; max-width: 210px; max-height: 150px; object-fit: contain; border-radius: var(--r-xs); background: var(--deep); }
+.shotCap { font-size: 0.7308rem; color: var(--ash); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 210px; }
+.shotOverlay { position: fixed; inset: 0; z-index: 80; background: rgba(0, 0, 0, 0.78); animation: fadeIn 0.12s ease; }
+.shotLightbox {
+  position: fixed; z-index: 81; inset: 32px; display: flex; flex-direction: column; align-items: center; gap: 10px;
+  outline: none; animation: fadeIn 0.12s ease;
+}
+.shotLightbox img { max-width: 100%; min-height: 0; flex: 1; object-fit: contain; border-radius: var(--r); border: 1px solid var(--hair-strong); }
+.shotLbTitle { margin: 0; font-size: 0.8462rem; font-weight: 400; color: var(--mute); }
+.shotLbClose { position: absolute; top: 0; right: 0; }
 .teamSideBtn.on { color: var(--ink); background: var(--elev); }
 .swatch.sys { background: none; border: 1px dashed var(--ash); }
 

@@ -23,6 +23,7 @@ import { MentionChip, MentionIcon } from './MentionPicker.js'
 import { Markdown } from './Markdown.js'
 import { PermissionCard } from './PermissionCard.js'
 import { ToolCard } from './ToolCard.js'
+import { BrowserShots } from './BrowserShots.js'
 import { ToolGroup } from './ToolGroup.js'
 
 type Props = {
@@ -111,6 +112,7 @@ export function Transcript({
             onRespond={onRespond}
             refs={refs}
             onRef={onNavigate}
+            sessionId={sessionId}
           />
         ))}
         {/* The streaming line is the main agent's; an agent's view shows its messages as they commit. */}
@@ -227,6 +229,7 @@ const Item = memo(function Item({
   onRespond,
   refs,
   onRef,
+  sessionId,
 }: {
   item: TranscriptItem
   turn?: SessionTurnSummary
@@ -236,6 +239,7 @@ const Item = memo(function Item({
   onRespond: Props['onRespond']
   refs: RefIndex
   onRef: (hash: string) => void
+  sessionId: string
 }) {
   switch (item.kind) {
     case 'agent':
@@ -343,6 +347,7 @@ const Item = memo(function Item({
         <>
           <ToolCard item={item} />
           <DraftWatchLinks tools={[item]} onRef={onRef} />
+          <BrowserShots sessionId={sessionId} tools={[item]} />
         </>
       )
     case 'toolGroup':
@@ -350,6 +355,7 @@ const Item = memo(function Item({
         <>
           <ToolGroup item={item} />
           <DraftWatchLinks tools={item.members} onRef={onRef} />
+          <BrowserShots sessionId={sessionId} tools={item.members} />
         </>
       )
     case 'permission': {

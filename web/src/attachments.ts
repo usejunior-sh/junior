@@ -127,3 +127,18 @@ export function useAttachments(key?: string) {
 
   return { images, error, add, remove, clear, payload, onPaste, dismissError: () => setError(null) }
 }
+
+/**
+ * Put an image in a composer's tray from code — the browser pane's picker
+ * hands over a crop of the element you picked. Same caps as a paste.
+ */
+export function attachImage(key: string, img: ImageAttachment) {
+  const t = trays.get(key) ?? EMPTY
+  if (t.images.length >= MAX_IMAGES_PER_MESSAGE) {
+    setTray(key, { ...t, error: `Up to ${MAX_IMAGES_PER_MESSAGE} images per message` })
+    return
+  }
+  const bytes = Uint8Array.from(atob(img.data), (c) => c.charCodeAt(0))
+  const url = URL.createObjectURL(new Blob([bytes], { type: img.mediaType }))
+  setTray(key, { images: [...t.images, { ...img, id: uuid(), url }], error: null })
+}

@@ -1,4 +1,4 @@
-import { FileDiff, FileText, Eye, Terminal as TerminalIcon } from 'lucide-react'
+import { FileDiff, FileText, Eye, Globe, Terminal as TerminalIcon } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from 'react'
 import type { CreateStep,
   DispatchPreviewResponse,
@@ -27,6 +27,8 @@ import { CheckoutChip } from './components/CheckoutChip.js'
 import { CheckoutMenu } from './components/CheckoutMenu.js'
 import { GoneCheckoutBar } from './components/GoneCheckoutBar.js'
 import { Composer } from './components/Composer.js'
+import { BrowserPane } from './components/BrowserPane.js'
+import { browserPane, hasBrowser, useBrowserOpen } from './browser.js'
 import { ArtifactsPanel, NewTerminalMenu, PanelCollapseContext, QueuePanel, SessionsPanel, TerminalsPanel } from './components/ContextPanel.js'
 import { HelpOverlay } from './components/HelpOverlay.js'
 import { InboxPage } from './components/InboxPage.js'
@@ -333,6 +335,8 @@ export function App() {
   const goPrefix = useRef<number | undefined>(undefined)
 
   const current = sessions.find((s) => s.id === currentId) ?? null
+  // The browser pane beside this session (.docs/browser.md) — Triage.app only, never on a phone.
+  const browserOpen = useBrowserOpen(currentId) && hasBrowser && !mobile
   const currentCheckout = checkoutOf(checkouts, current?.checkoutId)
   const chatHeaderRef = useRef<HTMLDivElement>(null)
   const folderTextRef = useRef<HTMLSpanElement>(null)
@@ -1212,7 +1216,7 @@ export function App() {
                 <div id="empty">This draft was discarded.</div>
               )
             ) : route.page === 'home' || route.page === 'settings' ? null : current ? (
-              <div className={`sessRow${teamRun && teamSide ? ' withSide' : ''}`}>
+              <div className={`sessRow${teamRun && teamSide ? ' withSide' : ''}${browserOpen ? ' withBrowser' : ''}`}>
               <div className="sessCol">
                 <div id="chatHeader" ref={chatHeaderRef}>
                   <span id="chatTitle" title={current.title}>
@@ -1260,6 +1264,18 @@ export function App() {
                         {agents.some((a) => a.state === 'running') && <span className="dot live" aria-hidden="true" />}
                       </button>
                     </AgentsMenu>
+                  )}
+                  {hasBrowser && !mobile && (
+                    <button
+                      type="button"
+                      className={`btn sm ghost browserBtn${browserOpen ? ' on' : ''}`}
+                      title={browserOpen ? 'Hide the browser pane' : 'Show this session’s browser — the page the agent checks its work in'}
+                      aria-pressed={browserOpen}
+                      onClick={() => browserPane.set(current.id, !browserOpen)}
+                    >
+                      <Globe size={14} aria-hidden="true" />
+                      Browser
+                    </button>
                   )}
                   <SessionCost sessionId={current.id} status={current.status} />
                   <span className={`state ${current.status}`}>
@@ -1331,6 +1347,7 @@ export function App() {
                 />
                 )}
               </div>
+              {browserOpen && <BrowserPane key={current.id} sessionId={current.id} />}
               {teamRun && teamSide && (
                 <TeamSide run={teamRun} lead={current.teamRun?.role === 'lead'} models={models} onClose={() => setTeamSide(false)} onNavigate={navigate} />
               )}
