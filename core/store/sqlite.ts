@@ -22,7 +22,11 @@ import type { NewWatch, Watch, WatchBrief, WatchCadence, WatchConnector, WatchNo
 import { WATCH_NOTIFY, WATCH_RUN_STATUSES } from '../watch/types.js'
 import { cronFromCadence } from '../watch/cron.js'
 import { grantsFrom, grantsFromLegacy, type WatchToolGrant } from '../watch/tools.js'
+import type { ActionActor, ActionHistoryEntry, ActionRecord, ActionStatus } from '../actions/types.js'
+import { isActionAllowedBy, isActionKind, isActionStatus, isActionWhy } from '../actions/types.js'
 import type {
+  ActionQuery,
+  ActionStore,
   ArtifactStore,
   BriefJobStore,
   CheckoutPatch,
@@ -345,6 +349,62 @@ const MIGRATIONS: string[] = [
      created_at INTEGER NOT NULL
    );
    CREATE INDEX IF NOT EXISTS idx_checkouts_project ON checkouts(project_id);`,
+  // 29: outbound actions (core/actions) — every effect a session had that left
+  // this machine, one row each; `action_calls` maps each tool_use folded into
+  // a row back to it (a collapsed git push holds several). Also converged by
+  // ensureDurableSchema, as 28 is.
+  `CREATE TABLE IF NOT EXISTS actions (
+     id             TEXT PRIMARY KEY,
+     session_id     TEXT NOT NULL,
+     session_kind   TEXT NOT NULL,
+     tool           TEXT NOT NULL,
+     kind           TEXT NOT NULL,
+     summary        TEXT NOT NULL,
+     args           TEXT NOT NULL,
+     status         TEXT NOT NULL,
+     link           TEXT,
+     error          TEXT,
+     why            TEXT NOT NULL,
+     why_detail     TEXT,
+     allowed_by     TEXT,
+     allowed_detail TEXT,
+     watch_id       TEXT,
+     team_run_id    TEXT,
+     item_id        TEXT,
+     group_key      TEXT,
+     count          INTEGER NOT NULL DEFAULT 1,
+     attempted_at   INTEGER NOT NULL,
+     settled_at     INTEGER,
+     updated_at     INTEGER NOT NULL
+   );
+   CREATE INDEX IF NOT EXISTS idx_actions_attempted ON actions(attempted_at DESC);
+   CREATE INDEX IF NOT EXISTS idx_actions_session ON actions(session_id);
+   CREATE INDEX IF NOT EXISTS idx_actions_item ON actions(item_id);
+   CREATE UNIQUE INDEX IF NOT EXISTS idx_actions_group ON actions(group_key) WHERE group_key IS NOT NULL;
+   CREATE TABLE IF NOT EXISTS action_calls (
+     session_id  TEXT NOT NULL,
+     tool_use_id TEXT NOT NULL,
+     action_id   TEXT NOT NULL,
+     PRIMARY KEY (session_id, tool_use_id)
+   );
+   CREATE INDEX IF NOT EXISTS idx_action_calls_action ON action_calls(action_id);`,
+  // 30: queued actions (core/actions/queue.ts) — every step of a held call's
+  // life, append-only. The queue's own columns on `actions` (full args,
+  // expiry, send time, notes…) are added by ensureDurableSchema, which only
+  // adds a column that is missing: an ALTER here would break a DB that
+  // converged them first.
+  `CREATE TABLE IF NOT EXISTS action_history (
+     id         INTEGER PRIMARY KEY AUTOINCREMENT,
+     action_id  TEXT NOT NULL,
+     at         INTEGER NOT NULL,
+     actor      TEXT NOT NULL,
+     event      TEXT NOT NULL,
+     from_status TEXT,
+     to_status  TEXT NOT NULL,
+     note       TEXT,
+     args       TEXT
+   );
+   CREATE INDEX IF NOT EXISTS idx_action_history_action ON action_history(action_id, id);`,
 ]
 
 export function openSqliteStore(file: string): Store {
@@ -369,6 +429,7 @@ export function openSqliteStore(file: string): Store {
     artifacts: new SqliteArtifacts(db),
     links: new SqliteLinks(db),
     briefs: new SqliteBriefJobs(db),
+    actions: new SqliteActions(db),
     close: async () => db.close(),
   }
 }
@@ -499,6 +560,66 @@ function ensureDurableSchema(db: DatabaseSync) {
      branch TEXT, base TEXT, item_id TEXT, state TEXT NOT NULL DEFAULT 'active', created_at INTEGER NOT NULL
    );
    CREATE INDEX IF NOT EXISTS idx_checkouts_project ON checkouts(project_id);`)
+  db.exec(`CREATE TABLE IF NOT EXISTS actions (
+     id             TEXT PRIMARY KEY,
+     session_id     TEXT NOT NULL,
+     session_kind   TEXT NOT NULL,
+     tool           TEXT NOT NULL,
+     kind           TEXT NOT NULL,
+     summary        TEXT NOT NULL,
+     args           TEXT NOT NULL,
+     status         TEXT NOT NULL,
+     link           TEXT,
+     error          TEXT,
+     why            TEXT NOT NULL,
+     why_detail     TEXT,
+     allowed_by     TEXT,
+     allowed_detail TEXT,
+     watch_id       TEXT,
+     team_run_id    TEXT,
+     item_id        TEXT,
+     group_key      TEXT,
+     count          INTEGER NOT NULL DEFAULT 1,
+     attempted_at   INTEGER NOT NULL,
+     settled_at     INTEGER,
+     updated_at     INTEGER NOT NULL
+   );
+   CREATE INDEX IF NOT EXISTS idx_actions_attempted ON actions(attempted_at DESC);
+   CREATE INDEX IF NOT EXISTS idx_actions_session ON actions(session_id);
+   CREATE INDEX IF NOT EXISTS idx_actions_item ON actions(item_id);
+   CREATE UNIQUE INDEX IF NOT EXISTS idx_actions_group ON actions(group_key) WHERE group_key IS NOT NULL;
+   CREATE TABLE IF NOT EXISTS action_calls (
+     session_id  TEXT NOT NULL,
+     tool_use_id TEXT NOT NULL,
+     action_id   TEXT NOT NULL,
+     PRIMARY KEY (session_id, tool_use_id)
+   );
+   CREATE INDEX IF NOT EXISTS idx_action_calls_action ON action_calls(action_id);
+   CREATE TABLE IF NOT EXISTS action_history (
+     id         INTEGER PRIMARY KEY AUTOINCREMENT,
+     action_id  TEXT NOT NULL,
+     at         INTEGER NOT NULL,
+     actor      TEXT NOT NULL,
+     event      TEXT NOT NULL,
+     from_status TEXT,
+     to_status  TEXT NOT NULL,
+     note       TEXT,
+     args       TEXT
+   );
+   CREATE INDEX IF NOT EXISTS idx_action_history_action ON action_history(action_id, id);`)
+
+  // Queued actions (core/actions/queue.ts): a held call's approval state.
+  // NULL queue_args = recorded as it ran, no queue.
+  const ac = cols('actions')
+  ensure('actions', 'queue_args', 'queue_args TEXT', ac)
+  ensure('actions', 'queued_at', 'queued_at INTEGER', ac)
+  ensure('actions', 'expires_at', 'expires_at INTEGER', ac)
+  ensure('actions', 'send_at', 'send_at INTEGER', ac)
+  ensure('actions', 'queue_note', 'queue_note TEXT', ac)
+  ensure('actions', 'edits', 'edits INTEGER NOT NULL DEFAULT 0', ac)
+  ensure('actions', 'delivery', 'delivery TEXT', ac)
+  ensure('actions', 'cost_usd', 'cost_usd REAL', ac)
+  db.exec('CREATE INDEX IF NOT EXISTS idx_actions_status ON actions(status)')
 
   const wi = cols('work_items')
   ensure('work_items', 'due_at', 'due_at INTEGER', wi)
@@ -938,7 +1059,7 @@ function toConnectors(raw: string | null): WatchConnector[] {
 const toRunStatus = (v: string | null): WatchRunStatus | undefined =>
   WATCH_RUN_STATUSES.includes(v as WatchRunStatus) ? (v as WatchRunStatus) : undefined
 
-const TRIGGERS: WatchRunTrigger[] = ['scheduled', 'catch_up', 'manual']
+const TRIGGERS: WatchRunTrigger[] = ['scheduled', 'catch_up', 'manual', 'redraft']
 const toTrigger = (v: string | null): WatchRunTrigger | undefined =>
   TRIGGERS.includes(v as WatchRunTrigger) ? (v as WatchRunTrigger) : undefined
 
@@ -2012,5 +2133,275 @@ class SqliteBriefJobs implements BriefJobStore {
 
   async remove(id: string): Promise<void> {
     this.db.prepare('DELETE FROM brief_jobs WHERE id = ?').run(id)
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Outbound actions (core/actions)
+// ---------------------------------------------------------------------------
+
+type ActionRow = {
+  id: string
+  session_id: string
+  session_kind: string
+  tool: string
+  kind: string
+  summary: string
+  args: string
+  status: string
+  link: string | null
+  error: string | null
+  why: string
+  why_detail: string | null
+  allowed_by: string | null
+  allowed_detail: string | null
+  watch_id: string | null
+  team_run_id: string | null
+  item_id: string | null
+  group_key: string | null
+  count: number
+  attempted_at: number
+  settled_at: number | null
+  updated_at: number
+  queue_args: string | null
+  queued_at: number | null
+  expires_at: number | null
+  send_at: number | null
+  queue_note: string | null
+  edits: number | null
+  delivery: string | null
+  cost_usd: number | null
+}
+
+function parseArgs(json: string): Record<string, unknown> {
+  try {
+    const v = JSON.parse(json) as unknown
+    return v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {}
+  } catch {
+    return {}
+  }
+}
+
+/** Storage is text; a value this build doesn't know reads back as the safest neighbour. */
+function toAction(r: ActionRow, calls: string[]): ActionRecord {
+  return {
+    id: r.id,
+    sessionId: r.session_id,
+    sessionKind: r.session_kind,
+    tool: r.tool,
+    kind: isActionKind(r.kind) ? r.kind : 'other',
+    summary: r.summary,
+    args: parseArgs(r.args),
+    status: isActionStatus(r.status) ? r.status : 'attempted',
+    link: r.link,
+    error: r.error,
+    why: isActionWhy(r.why) ? r.why : 'unknown',
+    whyDetail: r.why_detail,
+    allowedBy: isActionAllowedBy(r.allowed_by) ? r.allowed_by : null,
+    allowedDetail: r.allowed_detail,
+    watchId: r.watch_id,
+    teamRunId: r.team_run_id,
+    itemId: r.item_id,
+    groupKey: r.group_key,
+    count: r.count,
+    calls,
+    attemptedAt: r.attempted_at,
+    settledAt: r.settled_at,
+    updatedAt: r.updated_at,
+    queue:
+      r.queue_args !== null && r.queue_args !== undefined
+        ? {
+            args: parseArgs(r.queue_args),
+            queuedAt: r.queued_at ?? r.attempted_at,
+            expiresAt: r.expires_at ?? r.attempted_at,
+            sendAt: r.send_at,
+            note: r.queue_note,
+            edits: r.edits ?? 0,
+            delivery: r.delivery,
+            costUsd: r.cost_usd,
+          }
+        : null,
+  }
+}
+
+type ActionHistoryRow = {
+  action_id: string
+  at: number
+  actor: string
+  event: string
+  from_status: string | null
+  to_status: string
+  note: string | null
+  args: string | null
+}
+
+const isActor = (v: string): v is ActionActor => v === 'agent' || v === 'you' || v === 'triage'
+
+class SqliteActions implements ActionStore {
+  constructor(private db: DatabaseSync) {}
+
+  /** Rows → records, each with its calls in the order they were folded in — one calls query per 500 rows. */
+  private hydrate(rows: ActionRow[]): ActionRecord[] {
+    if (!rows.length) return []
+    const calls = new Map<string, string[]>()
+    for (let i = 0; i < rows.length; i += 500) {
+      const ids = rows.slice(i, i + 500).map((r) => r.id)
+      const found = this.db
+        .prepare(`SELECT action_id, tool_use_id FROM action_calls WHERE action_id IN (${ids.map(() => '?').join(', ')}) ORDER BY rowid`)
+        .all(...ids) as { action_id: string; tool_use_id: string }[]
+      for (const c of found) {
+        const list = calls.get(c.action_id)
+        if (list) list.push(c.tool_use_id)
+        else calls.set(c.action_id, [c.tool_use_id])
+      }
+    }
+    return rows.map((r) => toAction(r, calls.get(r.id) ?? []))
+  }
+
+  private one(sql: string, ...params: string[]): ActionRecord | null {
+    const r = this.db.prepare(sql).get(...params) as ActionRow | undefined
+    return r ? this.hydrate([r])[0] : null
+  }
+
+  async get(id: string): Promise<ActionRecord | null> {
+    return this.one('SELECT * FROM actions WHERE id = ?', id)
+  }
+
+  async byCall(sessionId: string, toolUseId: string): Promise<ActionRecord | null> {
+    return this.one(
+      'SELECT a.* FROM action_calls c JOIN actions a ON a.id = c.action_id WHERE c.session_id = ? AND c.tool_use_id = ?',
+      sessionId,
+      toolUseId,
+    )
+  }
+
+  async byGroup(groupKey: string): Promise<ActionRecord | null> {
+    return this.one('SELECT * FROM actions WHERE group_key = ?', groupKey)
+  }
+
+  async put(a: ActionRecord): Promise<void> {
+    const q = a.queue ?? null
+    this.db.exec('BEGIN')
+    try {
+      this.db
+        .prepare(
+          `INSERT INTO actions (id, session_id, session_kind, tool, kind, summary, args, status, link, error, why, why_detail,
+             allowed_by, allowed_detail, watch_id, team_run_id, item_id, group_key, count, attempted_at, settled_at, updated_at,
+             queue_args, queued_at, expires_at, send_at, queue_note, edits, delivery, cost_usd)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT (id) DO UPDATE SET
+             session_kind = excluded.session_kind, tool = excluded.tool, kind = excluded.kind, summary = excluded.summary,
+             args = excluded.args, status = excluded.status, link = excluded.link, error = excluded.error, why = excluded.why,
+             why_detail = excluded.why_detail, allowed_by = excluded.allowed_by, allowed_detail = excluded.allowed_detail,
+             watch_id = excluded.watch_id, team_run_id = excluded.team_run_id, item_id = excluded.item_id,
+             group_key = excluded.group_key, count = excluded.count, attempted_at = excluded.attempted_at,
+             settled_at = excluded.settled_at, updated_at = excluded.updated_at,
+             queue_args = excluded.queue_args, queued_at = excluded.queued_at, expires_at = excluded.expires_at,
+             send_at = excluded.send_at, queue_note = excluded.queue_note, edits = excluded.edits,
+             delivery = excluded.delivery, cost_usd = excluded.cost_usd`,
+        )
+        .run(
+          a.id, a.sessionId, a.sessionKind, a.tool, a.kind, a.summary, JSON.stringify(a.args), a.status, a.link, a.error, a.why,
+          a.whyDetail, a.allowedBy, a.allowedDetail, a.watchId, a.teamRunId, a.itemId, a.groupKey, a.count, a.attemptedAt,
+          a.settledAt, a.updatedAt,
+          q ? JSON.stringify(q.args) : null, q?.queuedAt ?? null, q?.expiresAt ?? null, q?.sendAt ?? null, q?.note ?? null,
+          q?.edits ?? 0, q?.delivery ?? null, q?.costUsd ?? null,
+        )
+      const call = this.db.prepare(
+        `INSERT INTO action_calls (session_id, tool_use_id, action_id) VALUES (?, ?, ?)
+         ON CONFLICT (session_id, tool_use_id) DO UPDATE SET action_id = excluded.action_id`,
+      )
+      for (const c of a.calls) call.run(a.sessionId, c, a.id)
+      this.db.exec('COMMIT')
+    } catch (err) {
+      this.db.exec('ROLLBACK')
+      throw err
+    }
+  }
+
+  async remove(id: string): Promise<void> {
+    this.db.prepare('DELETE FROM action_calls WHERE action_id = ?').run(id)
+    this.db.prepare('DELETE FROM actions WHERE id = ?').run(id)
+  }
+
+  async list(q: ActionQuery = {}): Promise<ActionRecord[]> {
+    const where: string[] = []
+    const params: Array<string | number> = []
+    if (q.kind) {
+      where.push('kind = ?')
+      params.push(q.kind)
+    }
+    if (q.sessionId) {
+      where.push('session_id = ?')
+      params.push(q.sessionId)
+    }
+    if (q.since !== undefined) {
+      where.push('attempted_at >= ?')
+      params.push(q.since)
+    }
+    if (q.status?.length) {
+      where.push(`status IN (${q.status.map(() => '?').join(', ')})`)
+      params.push(...q.status)
+    }
+    if (q.itemId !== undefined || q.sessionIds?.length) {
+      const any: string[] = []
+      if (q.itemId !== undefined) {
+        any.push('item_id = ?')
+        params.push(q.itemId)
+      }
+      if (q.sessionIds?.length) {
+        any.push(`session_id IN (${q.sessionIds.map(() => '?').join(', ')})`)
+        params.push(...q.sessionIds)
+      }
+      where.push(`(${any.join(' OR ')})`)
+    }
+    const limit = Math.max(1, Math.min(q.limit ?? 500, 5000))
+    const rows = this.db
+      .prepare(`SELECT * FROM actions${where.length ? ` WHERE ${where.join(' AND ')}` : ''} ORDER BY attempted_at DESC, id LIMIT ${limit}`)
+      .all(...params) as ActionRow[]
+    return this.hydrate(rows)
+  }
+
+  async claim(id: string, from: ActionStatus, to: ActionStatus, at: number, opts: { dueBy?: number } = {}): Promise<boolean> {
+    // One statement: whoever runs it first moves the row; anyone after sees 0 changes.
+    const r = this.db
+      .prepare(
+        `UPDATE actions SET status = ?, updated_at = MAX(updated_at, ?) WHERE id = ? AND status = ?${opts.dueBy !== undefined ? ' AND send_at IS NOT NULL AND send_at <= ?' : ''}`,
+      )
+      .run(...[to, at, id, from, ...(opts.dueBy !== undefined ? [opts.dueBy] : [])])
+    return Number(r.changes) === 1
+  }
+
+  async addHistory(e: ActionHistoryEntry): Promise<void> {
+    this.db
+      .prepare('INSERT INTO action_history (action_id, at, actor, event, from_status, to_status, note, args) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(e.actionId, e.at, e.actor, e.event, e.from, e.to, e.note, e.args ? JSON.stringify(e.args) : null)
+  }
+
+  async history(ids: string[]): Promise<Map<string, ActionHistoryEntry[]>> {
+    const out = new Map<string, ActionHistoryEntry[]>()
+    for (let i = 0; i < ids.length; i += 500) {
+      const batch = ids.slice(i, i + 500)
+      if (!batch.length) continue
+      const rows = this.db
+        .prepare(`SELECT action_id, at, actor, event, from_status, to_status, note, args FROM action_history WHERE action_id IN (${batch.map(() => '?').join(', ')}) ORDER BY id`)
+        .all(...batch) as ActionHistoryRow[]
+      for (const r of rows) {
+        const e: ActionHistoryEntry = {
+          actionId: r.action_id,
+          at: r.at,
+          actor: isActor(r.actor) ? r.actor : 'triage',
+          event: r.event,
+          from: r.from_status && isActionStatus(r.from_status) ? r.from_status : null,
+          to: isActionStatus(r.to_status) ? r.to_status : 'attempted',
+          note: r.note,
+          args: r.args ? parseArgs(r.args) : null,
+        }
+        const list = out.get(r.action_id)
+        if (list) list.push(e)
+        else out.set(r.action_id, [e])
+      }
+    }
+    return out
   }
 }

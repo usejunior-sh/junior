@@ -25,6 +25,9 @@ import { PermissionCard } from './PermissionCard.js'
 import { ToolCard } from './ToolCard.js'
 import { BrowserShots } from './BrowserShots.js'
 import { ToolGroup } from './ToolGroup.js'
+import { ActionNotes } from './ActionCard.js'
+import { useActions } from '../actions.js'
+import type { ActionView } from '../../../shared/protocol.js'
 
 type Props = {
   sessionId: string
@@ -77,6 +80,14 @@ export function Transcript({
   const byCall = useMemo(() => new Map(agents.map((a) => [a.toolUseId, a])), [agents])
   const byAgentId = useMemo(() => new Map(agents.filter((a) => a.agentId).map((a) => [a.agentId!, a])), [agents])
   const openAgent = useCallback((id: string | null) => onOpenAgent?.(id), [onOpenAgent])
+  // Outbound actions this session took, by the tool call that made each one —
+  // drawn as a line under that call (a collapsed push names several calls).
+  const { actions } = useActions({ session: sessionId })
+  const actionByCall = useMemo(() => {
+    const m = new Map<string, ActionView>()
+    for (const a of actions) for (const c of a.calls) m.set(c, a)
+    return m
+  }, [actions])
   const { ref, scrollToBottom } = useStickToBottom()
   const refs = useRefIndex()
   // Reference chips resolve against the artifacts index, which isn't otherwise
@@ -113,6 +124,7 @@ export function Transcript({
             refs={refs}
             onRef={onNavigate}
             sessionId={sessionId}
+            actionByCall={actionByCall}
           />
         ))}
         {/* The streaming line is the main agent's; an agent's view shows its messages as they commit. */}
@@ -230,6 +242,7 @@ const Item = memo(function Item({
   refs,
   onRef,
   sessionId,
+  actionByCall,
 }: {
   item: TranscriptItem
   turn?: SessionTurnSummary
@@ -240,6 +253,8 @@ const Item = memo(function Item({
   refs: RefIndex
   onRef: (hash: string) => void
   sessionId: string
+  /** this session's outbound actions, by tool_use id */
+  actionByCall: ReadonlyMap<string, ActionView>
 }) {
   switch (item.kind) {
     case 'agent':
@@ -346,6 +361,7 @@ const Item = memo(function Item({
       return (
         <>
           <ToolCard item={item} />
+          <ActionNotes tools={[item]} byCall={actionByCall} onNavigate={onRef} />
           <DraftWatchLinks tools={[item]} onRef={onRef} />
           <BrowserShots sessionId={sessionId} tools={[item]} />
         </>
@@ -354,6 +370,7 @@ const Item = memo(function Item({
       return (
         <>
           <ToolGroup item={item} />
+          <ActionNotes tools={item.members} byCall={actionByCall} onNavigate={onRef} />
           <DraftWatchLinks tools={item.members} onRef={onRef} />
           <BrowserShots sessionId={sessionId} tools={item.members} />
         </>

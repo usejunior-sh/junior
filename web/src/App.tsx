@@ -1,4 +1,4 @@
-import { FileDiff, FileText, Eye, Globe, Terminal as TerminalIcon } from 'lucide-react'
+import { FileDiff, FileText, Eye, Globe, Send, Terminal as TerminalIcon } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from 'react'
 import type { CreateStep,
   DispatchPreviewResponse,
@@ -53,6 +53,8 @@ import { WatchesPage } from './components/WatchesPage.js'
 import { REFINE_WATCH_KEY, WatchFormPage } from './components/WatchFormPage.js'
 import { WatchPage } from './components/WatchPage.js'
 import { ArtifactsPage } from './components/ArtifactsPage.js'
+import { ActionsPage } from './components/ActionsPage.js'
+import { usePendingActions } from './actions.js'
 import { ArtifactPage } from './components/ArtifactPage.js'
 import { DefaultProjectGate } from './components/DefaultProjectGate.js'
 import { WorkspaceModal, type WorkspaceModalMode } from './components/WorkspaceModal.js'
@@ -122,11 +124,12 @@ const STATUS_LABEL: Record<SessionStatus, string> = {
   error: 'error',
 }
 
-const PAGE_TABS: Record<'watches' | 'terminals' | 'artifacts' | 'changes', PageTab> = {
+const PAGE_TABS: Record<'watches' | 'terminals' | 'artifacts' | 'changes' | 'actions', PageTab> = {
   terminals: { key: 'page:terminals', label: 'Terminals', icon: TerminalIcon },
   artifacts: { key: 'page:artifacts', label: 'Artifacts', icon: FileText },
   changes: { key: 'page:changes', label: 'Changes', icon: FileDiff },
   watches: { key: 'page:watches', label: 'Watches', icon: Eye },
+  actions: { key: 'page:actions', label: 'Actions', icon: Send },
 }
 
 /** The sections whose list is the panel: on a phone, their bottom-bar tab opens it as a sheet. */
@@ -138,6 +141,7 @@ const SHEET_LABEL: Record<RailSection, string> = {
   changes: 'Changes',
   terminals: 'Terminals',
   watches: 'Watches',
+  actions: 'Actions',
 }
 
 const termKey = (id: string) => `term:${id}`
@@ -173,6 +177,7 @@ function tabKeyOf(route: Route): string | null {
     case 'artifacts':
     case 'watches':
     case 'terminals':
+    case 'actions':
       return PAGE_TABS[route.page].key
     case 'home':
     case 'settings':
@@ -264,6 +269,8 @@ function sectionOf(route: Route): RailSection | null {
     case 'watch-form':
     case 'watches':
       return 'watches'
+    case 'actions':
+      return 'actions'
     case 'settings':
       return null
   }
@@ -320,6 +327,8 @@ export function App() {
   // for the sections whose list *is* the panel (see onRailGo); it closes on
   // any navigation, which is how picking a row in it lands you on the row.
   const mobile = useIsMobile()
+  // Queued actions waiting on you — the Actions rail badge.
+  const pendingActions = usePendingActions()
   const [sheet, setSheet] = useState<RailSection | null>(null)
   useEffect(() => setSheet(null), [route, mobile])
 
@@ -794,6 +803,7 @@ export function App() {
         if (e.key === 'c') return openSettings('connectors')
         if (e.key === 'p') return openSettings('projects')
         if (e.key === 'w') return goTo('watches')
+        if (e.key === 'a') return goTo('actions')
         return // unknown sequence — swallow
       }
       if (e.key === 'g') {
@@ -960,7 +970,7 @@ export function App() {
   // Only the rail *indexes* get a transient page tab now: an artifact, watch
   // or item in front is a document, and gets a real tab of its own.
   const pageTab =
-    route.page === 'watches' || route.page === 'terminals' || route.page === 'artifacts' || route.page === 'changes'
+    route.page === 'watches' || route.page === 'terminals' || route.page === 'artifacts' || route.page === 'changes' || route.page === 'actions'
       ? PAGE_TABS[route.page]
       : null
 
@@ -1011,7 +1021,8 @@ export function App() {
   const runningCount = chatSessions.filter((s) => s.status === 'running' || s.status === 'starting').length
   const modelName = current ? findModel(models, current.model)?.name ?? current.model : undefined
 
-  const panel = !panelSection ? null : panelSection === 'terminals' ? (
+  // The Actions page is a list and a detail side by side: it needs the room, so no panel beside it.
+  const panel = !panelSection || panelSection === 'actions' ? null : panelSection === 'terminals' ? (
       <TerminalsPanel
         terminals={terminals}
         currentId={currentTerminalId}
@@ -1106,6 +1117,7 @@ export function App() {
           runningCount={runningCount}
           terminalCount={terminals.filter((t) => t.status === 'running').length}
           changedCount={changes.projects.reduce((n, p) => n + p.checkouts.reduce((m, c) => m + c.files.length, 0), 0)}
+          actionsCount={pendingActions}
           onGo={onRailGo}
         />
 
@@ -1115,7 +1127,7 @@ export function App() {
         <>
         {/* Triage.app's title bar carries the panel toggle, so the panel and tab band drop theirs. */}
         <PanelCollapseContext.Provider value={mobile || isDesktop ? null : collapsePanel}>{panel}</PanelCollapseContext.Provider>
-        {!panelSize.collapsed && !mobile && (
+        {!panelSize.collapsed && !mobile && panel && (
           <div
             className="panelResize"
             role="separator"
@@ -1202,6 +1214,8 @@ export function App() {
               />
             ) : route.page === 'watches' ? (
               <WatchesPage onNavigate={navigate} onPin={(id, title) => pin(`watch:${id}`, title)} />
+            ) : route.page === 'actions' ? (
+              <ActionsPage onNavigate={navigate} />
             ) : route.page === 'watch' ? (
               <WatchPage key={route.id} id={route.id} onNavigate={navigate} />
             ) : route.page === 'watch-form' ? (

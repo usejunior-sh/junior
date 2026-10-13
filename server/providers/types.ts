@@ -119,6 +119,8 @@ export type ToolApprovalContext = {
   suggestions?: PermissionUpdate[]
   /** the subagent making the call, when it isn't the main agent */
   agentID?: string
+  /** the tool_use this call is — what an action record matches the prompt to */
+  toolUseID?: string
 }
 
 /** Asked before a tool runs that the session's mode doesn't already decide. */
@@ -128,8 +130,8 @@ export type ToolApproval = (
   ctx: ToolApprovalContext,
 ) => Promise<PermissionResult>
 
-/** A veto on every tool call, run before the call and before any allow rule. */
-export type ToolVeto = (toolName: string, input: unknown) => { allow: true } | { allow: false; reason: string }
+/** A veto on every tool call, run before the call and before any allow rule. `toolUseId` = the call's id, when the agent says. */
+export type ToolVeto = (toolName: string, input: unknown, ctx?: { toolUseId?: string }) => { allow: true } | { allow: false; reason: string }
 
 /** An interactive session: fed turn by turn, steered while it runs. */
 export type SessionSpec = {
@@ -157,6 +159,8 @@ export type SessionSpec = {
   resume?: string
   /** local plugin folders to load (the workspace's skills and agents); adapters without plugins ignore it */
   plugins?: string[]
+  /** a veto on every call, before any mode or allow rule (a held action, in a watch run or a team worker) */
+  veto?: ToolVeto
   approve: ToolApproval
 }
 
@@ -196,6 +200,10 @@ export type RunSpec = {
   veto?: ToolVeto
   mcpServers?: McpServers
   maxBudgetUsd?: number
+  /** stop after this many agent turns */
+  maxTurns?: number
+  /** the agent's own session id to continue (a watch run sent a redraft) */
+  resume?: string
   /** token deltas as well as whole messages */
   streamDeltas?: boolean
 }

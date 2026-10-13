@@ -68,6 +68,8 @@ export type Route =
   | { page: 'changes' }
   /** `#/change/<checkoutId>/<encoded path>` — one changed file: its diff, and an editor (a project id = its main checkout) */
   | { page: 'change'; checkoutId: string; path: string }
+  /** `#/actions` — everything sessions did that left this machine */
+  | { page: 'actions' }
   /** `#/settings/<tab>` — the settings page, on that tab */
   | { page: 'settings'; tab: SettingsTab }
 
@@ -99,6 +101,7 @@ function parseRoute(hash: string): Route {
     const d = /^\/watches\/([^/]+)$/.exec(hash)
     if (d) return { page: 'watch', id: decodeURIComponent(d[1]) }
   }
+  if (hash === '/actions') return { page: 'actions' }
   if (hash === '/artifacts') return { page: 'artifacts' }
   if (hash.startsWith('/artifact/')) return { page: 'artifact', id: hash.slice('/artifact/'.length) }
   if (hash === '/changes') return { page: 'changes' }

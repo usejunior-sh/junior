@@ -51,6 +51,8 @@ function outcomeText(r: RunRow): string {
     case undefined:
       return 'running…'
     case 'ok': {
+      // A redraft shares its run's session, so that run's finds aren't this row's to claim.
+      if (r.trigger === 'redraft') return `ok${why}`
       const found =
         run?.newCount != null
           ? run.matches

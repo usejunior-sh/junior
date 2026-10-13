@@ -247,6 +247,8 @@ export class Store {
   /** Who follows brief jobs (the brief store) — one frame per transition. */
   readonly #briefListeners = new Set<(job: BriefJob) => void>()
   readonly #commandsListeners = new Set<(cwd: string, commands: SlashCommandInfo[]) => void>()
+  /** Who follows outbound actions (the Actions page, an item, a transcript's action lines). */
+  readonly #actionsListeners = new Set<(sessionId: string | undefined) => void>()
 
   #handle(msg: ServerMessage) {
     switch (msg.type) {
@@ -351,6 +353,9 @@ export class Store {
       case 'commands_changed':
         for (const fn of this.#commandsListeners) fn(msg.cwd, msg.commands)
         break
+      case 'actions_changed':
+        for (const fn of this.#actionsListeners) fn(msg.sessionId)
+        break
       case 'error':
         // Server-level failure, not scoped to a session.
         console.error('[triage] server error:', msg.message)
@@ -407,6 +412,14 @@ export class Store {
     this.#commandsListeners.add(fn)
     return () => {
       this.#commandsListeners.delete(fn)
+    }
+  }
+
+  /** Fires when an action was recorded or settled (`sessionId` = whose), or the actions file changed (none). */
+  onActionsChanged(fn: (sessionId: string | undefined) => void): () => void {
+    this.#actionsListeners.add(fn)
+    return () => {
+      this.#actionsListeners.delete(fn)
     }
   }
 

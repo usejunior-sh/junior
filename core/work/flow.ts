@@ -78,10 +78,19 @@ export interface TeamSignal {
   at: number
 }
 
+/** Queued actions (core/actions/queue.ts) on the item waiting on your approval. */
+export interface ActionsSignal {
+  /** how many wait on you */
+  pending: number
+  /** epoch ms the newest was queued */
+  at: number
+}
+
 export interface FlowSignals {
   brief?: BriefSignal
   session?: SessionSignal
   team?: TeamSignal
+  actions?: ActionsSignal
   override?: FlowOverride
 }
 
@@ -112,8 +121,8 @@ export function flowOf(item: FlowItem, signals: FlowSignals = {}): ItemFlow {
   const derived = deriveFlow(item, signals)
   const o = signals.override
   if (!o || derived.stage === 'done') return derived
-  // Something that happened after the override (a brief, a session) wins.
-  const newest = Math.max(signals.brief?.at ?? 0, signals.session?.at ?? 0, signals.team?.at ?? 0)
+  // Something that happened after the override (a brief, a session, a queued action) wins.
+  const newest = Math.max(signals.brief?.at ?? 0, signals.session?.at ?? 0, signals.team?.at ?? 0, signals.actions?.at ?? 0)
   if (newest > o.at) return derived
   const stage = o.stage ?? derived.stage
   const turn = o.turn ?? derived.turn
@@ -146,6 +155,9 @@ function deriveFlow(item: FlowItem, s: FlowSignals): ItemFlow {
   const updated = ms(item.updatedAt)
   const created = item.ingestedAt ?? ms(item.createdAt)
   if (item.status === 'done' || item.status === 'archived') return { stage: 'done', turn: 'none', since: updated }
+  // An agent's action held for approval blocks whatever step the item is on:
+  // nothing it drafted goes out until you answer it.
+  if (s.actions && s.actions.pending > 0) return { stage: 'review', turn: 'me', ask: 'approve action', since: s.actions.at }
 
   const brief = s.brief
   const session = s.session

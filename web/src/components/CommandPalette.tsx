@@ -110,6 +110,7 @@ export function CommandPalette({
       { id: 'sessions', section: 'Pages', label: 'Sessions', hint: 'g s', run: () => onNavigate('') },
       { id: 'terminals', section: 'Pages', label: 'Terminals', hint: 'g t', run: () => onNavigate('/terminals') },
       { id: 'watches', section: 'Pages', label: 'Watches', hint: 'g w', run: () => onNavigate('/watches') },
+      { id: 'actions', section: 'Pages', label: 'Actions', hint: 'g a', run: () => onNavigate('/actions') },
       ...watches.map((w): Command => ({
         id: `wa:${w.id}`,
         section: 'Watches',

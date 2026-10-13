@@ -23,7 +23,7 @@
  * The wire format lives in shared/protocol.ts and is shared with the frontend.
  */
 import http from 'node:http'
-import { mkdir, readFile, rmdir, stat, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rmdir, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import os from 'node:os'
 import { readFileSync } from 'node:fs'
@@ -55,6 +55,14 @@ import { checkRemoval, createWorktree, prepareWorktree, recreateWorktree, remove
 import { branchFromTitle } from '../shared/branch.js'
 import { aheadOf, filePatch, repoRoot, snapshotTree, treeDiff, treePatch, treeStat, worktreeChanges, worktreePatch, type TreeChange } from './git.js'
 import type {
+  ActionMoveRequest,
+  ActionMoveResponse,
+  ActionOverrideRequest,
+  ActionOverrideResponse,
+  ActionsPendingResponse,
+  ActionsResponse,
+  ActionVerb,
+  ActionView,
   AgentRelay,
   ClientMessage,
   RemoteStatus,
@@ -230,6 +238,35 @@ import {
 } from '../core/teams/engine.js'
 import type { StoredTurn } from '../core/store/types.js'
 import { openSqliteStore } from '../core/store/sqlite.js'
+import { ActionTracker, applyActionOps, joinHeldCall, recordFor, type ActionOp, type TrackContext } from '../core/actions/track.js'
+import { READ_VERBS, WRITE_VERBS, overrideEntries, overriddenOff, serverOf, sortCall, withRowOverride, wordsOf, type ToolHints } from '../core/actions/sort.js'
+import { countLine, countSince } from '../core/actions/count.js'
+import { isActionKind, type ActionRecord } from '../core/actions/types.js'
+import {
+  DispatchFence,
+  TOOL_SEARCH,
+  canonJson,
+  connectorState,
+  dispatchDisallowed,
+  dispatchOutcome,
+  dispatchPrompt,
+  dryRunDecision,
+  dueToExpire,
+  dueToSend,
+  heldEntry,
+  heldRecord,
+  isArgsObject,
+  move,
+  queuedMessage,
+  sendBackMessage,
+  sendDelay,
+  type ActionMove,
+  type DispatchTrace,
+} from '../core/actions/queue.js'
+import { actionTitle, countedText } from '../core/actions/describe.js'
+import { resultText } from '../core/actions/link.js'
+import { shortActionId } from '../core/actions/view.js'
+import { ActionsFile } from './actions-file.js'
 import type { Store, StoredSession, UpsertOutcome, UpsertResult } from '../core/store/types.js'
 import { buildInbox } from '../core/work/inbox.js'
 import { BASE, rank } from '../core/work/score.js'
@@ -458,20 +495,9 @@ const TRIAGE_READ_TOOLS = new Set([
   'mcp__triage__read_artifact',
 ])
 
-// Verb tokens that mark a connector call's intent. Written as word sets and
-// matched against the tokens of a tool's leaf name, so both `slack_read_channel`
-// (snake) and `getJiraIssue` (camel) classify the same way.
-const READ_VERBS = new Set([
-  'read', 'search', 'list', 'get', 'fetch', 'lookup', 'view', 'query', 'describe', 'find', 'count', 'show', 'history', 'info',
-])
-const WRITE_VERBS = new Set([
-  'send', 'post', 'create', 'update', 'edit', 'delete', 'remove', 'add', 'schedule', 'transition', 'resolve',
-  'comment', 'upsert', 'write', 'set', 'assign', 'merge', 'close', 'reopen', 'archive', 'move', 'upload',
-  'publish', 'reply', 'draft', 'star', 'pin', 'react', 'approve', 'complete', 'cancel',
-])
-
-/** Lowercased word tokens of a tool's leaf name (splits camelCase and snake_case). */
-const wordsOf = (leaf: string): string[] => (leaf.match(/[A-Za-z][a-z]*/g) ?? []).map((w) => w.toLowerCase())
+// Verb tokens that mark a connector call's intent: READ_VERBS / WRITE_VERBS
+// and wordsOf live in core/actions/sort.ts, which sorts outbound actions by
+// the same words, so the prompt's effect and the Actions page never disagree.
 
 function classifyEffect(toolName: string): ToolEffect {
   // Our own inbox: reading it is harmless; every other triage tool writes local
@@ -612,6 +638,21 @@ class WorkspaceRuntime {
   /** sessions whose next spawn starts a fresh Claude session (a checker's clean context) */
   readonly freshNext = new Set<string>()
 
+  // Outbound actions (core/actions): the file that says what counts, and one
+  // tracker per session folding its events into records as they persist.
+  readonly actionsFile: ActionsFile
+  readonly actionTrackers = new Map<string, ActionTracker>()
+  /** action writes run one at a time, in event order — a settle never beats its attempt */
+  actionChain: Promise<void> = Promise.resolve()
+  /** a broadcast of `actions_changed` is pending (coalesced per tick) */
+  actionsDirty: Set<string> | null = null
+  /** approved actions' send timers, by action id (the minute tick catches any a restart lost) */
+  readonly actionTimers = new Map<string, NodeJS.Timeout>()
+  /** held calls still waiting, by session + tool + args — an agent retrying the same call hears the same id */
+  readonly heldCalls = new Map<string, string>()
+  /** actions whose dispatch run is out now */
+  readonly dispatching = new Set<string>()
+
   // Session changes (.docs/session-diff-variations.md): sessions in one folder
   // share a working tree, so "what did *this* session change" is reconstructed
   // from the git trees either side of each of its turns.
@@ -637,6 +678,7 @@ class WorkspaceRuntime {
     this.libraryDir = path.join(workspaceDir(meta.id), 'library')
     void ensureWorkspacePlugin(this.libraryDir).catch((err) => log('warn', 'library', `could not set up ${this.libraryDir}: ${errText(err)}`))
     this.watchFiles = new WatchFiles(workspaceDir(meta.id))
+    this.actionsFile = new ActionsFile(workspaceDir(meta.id))
     this.triageMcp = () => makeTriageMcp(this)
     this.terminals = new TerminalManager(
       (msg) => broadcast(this, msg),
@@ -801,6 +843,12 @@ class LiveSession {
       // The workspace's own skills and agents, for a chat. Not for briefs, watch
       // runs or team workers — each runs a lean, fixed toolset on purpose.
       ...(row.kind === 'chat' && !extras.tools ? { plugins: [rt.libraryDir] } : {}),
+      // A watch run or a team worker holds its outbound connector calls for
+      // you (core/actions/queue.ts) — a hook, so no mode or allow rule skips it.
+      // Chats keep asking now, through `approve` below.
+      ...(this.provider.capabilities.hooks && holdsActions(rt, row)
+        ? { veto: (toolName: string, input: unknown, ctx?: { toolUseId?: string }) => holdIfAction(rt, row, toolName, input, ctx) }
+        : {}),
       // Still set under every mode: the permissive modes short-circuit the
       // calls they cover before this runs, and whatever still reaches here
       // is a call that mode decided a human should see.
@@ -1020,7 +1068,7 @@ class LiveSession {
   private requestPermission(
     toolName: string,
     toolInput: Record<string, unknown>,
-    opts: { title?: string; description?: string; suggestions?: PermissionUpdate[]; agentID?: string },
+    opts: { title?: string; description?: string; suggestions?: PermissionUpdate[]; agentID?: string; toolUseID?: string },
   ): Promise<PermissionResult> {
     const effect = classifyEffect(toolName)
     // Reading our own inbox is harmless in any mode — never prompt for it. Every
@@ -1083,6 +1131,8 @@ class LiveSession {
           effect,
           // A subagent's call says whose it is, so the card (and its agent's dock row) can.
           ...(opts.agentID ? { agentId: opts.agentID } : {}),
+          // Which call this is — the action record's "who allowed it" keys on it.
+          ...(opts.toolUseID ? { toolUseId: opts.toolUseID } : {}),
         },
         true,
       )
@@ -1218,6 +1268,8 @@ class LiveSession {
       this.rt.store.events.append(this.row.id, this.seq, event).catch((err) => {
         log('error', 'session', `failed to persist event for ${this.row.id}: ${err}`)
       })
+      // What the log keeps, the actions record reads: one fold, live or backfilled.
+      noteActionEvent(this.rt, this.row, event)
     }
     broadcast(this.rt, { type: 'session_event', sessionId: this.row.id, event, at: Date.now() })
   }
@@ -1318,8 +1370,708 @@ async function noteBrowserTurn(rt: WorkspaceRuntime, row: StoredSession, started
   }
 }
 
+// ---------------------------------------------------------------------------
+// Outbound actions (core/actions; spec 7ce2f076, phase 1 — record only).
+// Every persisted event of a Claude session — chat, brief, team worker, watch
+// run — passes through its tracker; what leaves this machine becomes a record
+// with a card. Permissions are untouched: this only watches.
+// ---------------------------------------------------------------------------
+
+/** What a connector's server said about one of its tools, from the latest probes. */
+function toolHints(rt: WorkspaceRuntime, toolName: string): ToolHints | undefined {
+  for (const probe of [rt.connectorCache, ...rt.folderProbes.values()]) {
+    for (const c of probe?.connectors ?? []) {
+      const t = c.tools.find((x) => x.fullName === toolName)
+      if (t) return { readOnly: t.readOnly, destructive: t.destructive, openWorld: t.openWorld }
+    }
+  }
+  return undefined
+}
+
+/** Sort one call against the workspace's actions file and the connector's hints. */
+const sortForWorkspace = (rt: WorkspaceRuntime) => (toolName: string, input: Record<string, unknown>) =>
+  sortCall(toolName, input, { rules: rt.actionsFile.current().rules, hints: toolHints(rt, toolName) })
+
+function actionContext(rt: WorkspaceRuntime, row: StoredSession): TrackContext {
+  return {
+    sessionId: row.id,
+    sessionKind: row.kind,
+    permissionMode: row.permissionMode,
+    watchId: row.watchId,
+    teamRunId: teamRunOf(rt, row.id)?.id ?? null,
+    itemId: rt.sessionItem.get(row.id) ?? null,
+  }
+}
+
+/**
+ * Fold one persisted event of a session into its action records. Claude
+ * sessions only (Codex approves differently — later). Never throws into the
+ * caller: a recording failure must not break a session.
+ */
+function noteActionEvent(rt: WorkspaceRuntime, row: StoredSession, ev: SessionEvent, at = Date.now()): void {
+  if (row.provider !== 'claude') return
+  let t = rt.actionTrackers.get(row.id)
+  if (!t) {
+    t = new ActionTracker(actionContext(rt, row), sortForWorkspace(rt))
+    rt.actionTrackers.set(row.id, t)
+  } else {
+    // A session's mode, item and team can change mid-life; a record reads them as they are now.
+    Object.assign(t.ctx, actionContext(rt, row))
+  }
+  let ops: ActionOp[]
+  try {
+    ops = t.feed(ev, at)
+  } catch (err) {
+    log('warn', 'actions', `could not sort an event: ${errText(err)}`, { session: row.id, workspace: rt.meta.id })
+    return
+  }
+  if (ops.length) void queueActionOps(rt, ops)
+}
+
+/** Apply ops on the workspace's action chain, in order; resolves when they're stored. */
+function queueActionOps(rt: WorkspaceRuntime, ops: ActionOp[]): Promise<void> {
+  rt.actionChain = rt.actionChain
+    .then(() => applyActionOps(rt.store.actions, ops))
+    .then((touched) => actionsChanged(rt, touched))
+    .catch((err) => log('warn', 'actions', `could not record an action: ${errText(err)}`, { workspace: rt.meta.id }))
+  return rt.actionChain
+}
+
+/** Tell open pages, coalesced: a burst of calls is one refetch per session. */
+function actionsChanged(rt: WorkspaceRuntime, sessions: Set<string>): void {
+  if (!sessions.size) return
+  if (!rt.actionsDirty) {
+    rt.actionsDirty = new Set()
+    setTimeout(() => {
+      const dirty = rt.actionsDirty ?? new Set<string>()
+      rt.actionsDirty = null
+      for (const sessionId of dirty) broadcast(rt, { type: 'actions_changed', sessionId })
+    }, 250).unref()
+  }
+  for (const id of sessions) rt.actionsDirty.add(id)
+}
+
+const ACTIONS_BACKFILL_KEY = 'actions_backfill'
+
+/**
+ * Weeks of history on day one: replay every Claude session's stored log
+ * through the same fold the live path uses. Runs once per workspace (the
+ * config key); running it again changes nothing — a call already recorded is
+ * skipped, and its outcome re-applies as the same outcome.
+ */
+async function backfillActions(rt: WorkspaceRuntime, opts: { force?: boolean } = {}): Promise<{ sessions: number }> {
+  if (!opts.force && (await rt.store.config.get<{ at: number }>(ACTIONS_BACKFILL_KEY))) return { sessions: 0 }
+  let sessions = 0
+  for (const row of [...rt.rows.values()]) {
+    if (row.provider !== 'claude') continue
+    const events = await rt.store.events.read(row.id)
+    if (!events.length) continue
+    const t = new ActionTracker(actionContext(rt, row), sortForWorkspace(rt))
+    const ops = events.flatMap((e) => t.feed(e.event, e.createdAt))
+    if (ops.length) await queueActionOps(rt, ops)
+    sessions++
+    // The store is synchronous: yield between sessions so boot isn't one long stall.
+    await new Promise((res) => setImmediate(res))
+  }
+  await rt.store.config.set(ACTIONS_BACKFILL_KEY, { at: Date.now() })
+  log('info', 'actions', `backfilled actions from ${sessions} session(s)`, { workspace: rt.meta.id })
+  return { sessions }
+}
+
+/**
+ * Records with names for their ids, as the Actions page and the item page show
+ * them — their titles and "why it counted" in words, and a queued one's
+ * history. Batched: one watch list, one history query, one item read per
+ * distinct item, however many rows.
+ */
+async function actionViews(rt: WorkspaceRuntime, records: ActionRecord[]): Promise<ActionView[]> {
+  if (!records.length) return []
+  const watchTitles = new Map((await rt.store.watches.list()).map((w) => [w.id, w.title]))
+  const queued = records.filter((a) => a.queue).map((a) => a.id)
+  const history = queued.length ? await rt.store.actions.history(queued) : new Map()
+  const itemOf = (a: ActionRecord) => a.itemId ?? rt.sessionItem.get(a.sessionId) ?? null
+  const itemIds = [...new Set(records.map(itemOf).filter((x): x is string => !!x))]
+  const itemTitles = new Map<string, string>()
+  for (const id of itemIds) {
+    const item = rt.inboxCache?.items.find((i) => i.id === id) ?? (await rt.store.items.get(id).catch(() => null))
+    if (item) itemTitles.set(id, item.title)
+  }
+  const rules = rt.actionsFile.current().rules
+  return records.map((a) => {
+    const run = a.teamRunId ? rt.teamRuns.get(a.teamRunId) : undefined
+    const itemId = itemOf(a)
+    const row = rt.rows.get(a.sessionId)
+    return {
+      ...a,
+      itemId,
+      title: actionTitle(a),
+      counted: countedText(a),
+      short: shortActionId(a.id),
+      ...(history.has(a.id) ? { history: history.get(a.id) } : {}),
+      ...(row ? { sessionTitle: row.title } : {}),
+      ...(a.watchId && watchTitles.has(a.watchId) ? { watchTitle: watchTitles.get(a.watchId) } : {}),
+      ...(run ? { teamLabel: run.recipe.label } : {}),
+      ...(itemId && itemTitles.has(itemId) ? { itemTitle: itemTitles.get(itemId) } : {}),
+      ...(overriddenOff(a, rules) ? { hidden: true } : {}),
+    }
+  })
+}
+
+/** Queued actions waiting on you, workspace-wide — the rail's badge. */
+async function needsYouCount(rt: WorkspaceRuntime): Promise<number> {
+  return (await rt.store.actions.list({ status: ['needs_you'], limit: 5000 })).length
+}
+
+/** A row's "Not an action" / "This is an action", written to the actions file as one edit (core/actions/sort.ts withRowOverride). */
+async function setActionOverride(rt: WorkspaceRuntime, a: ActionRecord, verdict: 'action' | 'not_action'): Promise<string[]> {
+  const entries = overrideEntries(a)
+  if (!entries.length) throw new Error('this action has no tool or pattern to override')
+  const hints = toolHints(rt, a.tool)
+  await rt.actionsFile.edit((text) => withRowOverride(text, a, verdict, hints))
+  return entries
+}
+
+// ---------------------------------------------------------------------------
+// Queued actions (core/actions/queue.ts; spec 7ce2f076, phase 2). In a watch
+// run or a team worker, a connector call that sorts as an action is held, not
+// run: the agent is told "queued as #a1b2c3", and the call waits on the
+// Actions page for approve / edit / send back / reject. An approved one goes
+// out 15s later through a headless one-tool run fenced to the approved args —
+// the daemon never calls an MCP server itself. Chats keep asking now.
+// ---------------------------------------------------------------------------
+
+/** The model that sends approved actions: cheap, and it only copies JSON into one call. */
+const DISPATCH_MODEL = 'haiku'
+/** A dispatch run that hasn't finished by now is stopped (and, if the call was let through, marked unknown). */
+const DISPATCH_TIMEOUT_MS = 3 * 60_000
+
+const isTeamWorker = (rt: WorkspaceRuntime, sessionId: string): boolean => {
+  const run = teamRunOf(rt, sessionId)
+  return !!run && run.leadSessionId !== sessionId
+}
+
+/** Does this session hold its outbound calls for approval? Watch runs and team workers do; chats ask now. */
+const holdsActions = (rt: WorkspaceRuntime, row: StoredSession): boolean =>
+  row.provider === 'claude' && (row.kind === 'watch-run' || isTeamWorker(rt, row.id))
+
+/**
+ * The veto a holding session gets: an MCP call that sorts as an action is
+ * refused with "queued as #…" and filed for approval; everything else passes.
+ * Bash is never held in this phase (sending a command needs its folder).
+ */
+function holdIfAction(
+  rt: WorkspaceRuntime,
+  row: StoredSession,
+  toolName: string,
+  input: unknown,
+  ctx?: { toolUseId?: string },
+): { allow: true } | { allow: false; reason: string } {
+  if (!toolName.startsWith('mcp__') || !holdsActions(rt, row)) return { allow: true }
+  const args = isArgsObject(input) ? input : {}
+  let sorted
+  try {
+    sorted = sortForWorkspace(rt)(toolName, args)
+  } catch (err) {
+    log('warn', 'actions', `could not sort a call to hold it: ${errText(err)}`, { session: row.id, workspace: rt.meta.id })
+    return { allow: true }
+  }
+  if (!sorted) return { allow: true }
+  // The same call with the same args, still waiting: name the action already filed.
+  const key = `${row.id}\u0000${toolName}\u0000${canonJson(args)}`
+  const dup = rt.heldCalls.get(key)
+  if (dup) {
+    // The repeat is the same action: its call joins the record already waiting, so no second row appears.
+    const again = ctx?.toolUseId
+    if (again) {
+      void onActionChain(rt, () => joinHeldCall(rt.store.actions, row.id, again, dup))
+        .then(() => actionsChanged(rt, new Set([row.id])))
+        .catch((err) => log('warn', 'actions', `could not join a repeated held call: ${errText(err)}`, { session: row.id, workspace: rt.meta.id }))
+    }
+    return { allow: false, reason: queuedMessage(dup) }
+  }
+  const toolUseId = ctx?.toolUseId || `held-${randomUUID()}`
+  const id = `${row.id}:${toolUseId}`
+  rt.heldCalls.set(key, id)
+  const now = Date.now()
+  const base = recordFor(actionContext(rt, row), toolUseId, toolName, args, sorted, now)
+  void onActionChain(rt, async () => {
+    // The call's message may have been recorded as an attempt already: hold that record.
+    const existing = await rt.store.actions.byCall(row.id, toolUseId)
+    const rec = heldRecord(existing ?? base, args, now)
+    await rt.store.actions.put(rec)
+    await rt.store.actions.addHistory(heldEntry(rec, args, now))
+    log('info', 'actions', `held for approval: ${rec.summary} (#${shortActionId(rec.id)})`, { session: row.id, action: rec.id, tool: toolName, workspace: rt.meta.id })
+  })
+    .then(() => {
+      actionsChanged(rt, new Set([row.id]))
+      invalidateInbox(rt)
+    })
+    .catch((err) => log('warn', 'actions', `could not hold an action: ${errText(err)}`, { session: row.id, workspace: rt.meta.id }))
+  return { allow: false, reason: queuedMessage(id) }
+}
+
+/** Run `fn` on the workspace's action chain — after every write queued before it, before any after. */
+function onActionChain<T>(rt: WorkspaceRuntime, fn: () => Promise<T>): Promise<T> {
+  const run = rt.actionChain.then(fn)
+  rt.actionChain = run.then(
+    () => undefined,
+    () => undefined,
+  )
+  return run
+}
+
+/** A held call that left the queue: an agent repeating it is a new action from now on. */
+function forgetHeld(rt: WorkspaceRuntime, actionId: string): void {
+  for (const [k, id] of rt.heldCalls) if (id === actionId) rt.heldCalls.delete(k)
+}
+
+/**
+ * One move on a queued action (core/actions/queue.ts `move`), stored with its
+ * history line. The effects that follow a move — a send timer, notes to the
+ * drafting session, the inbox's "my turn" — are the caller's.
+ */
+async function moveAction(rt: WorkspaceRuntime, id: string, m: ActionMove, now = Date.now()): Promise<ActionRecord> {
+  const next = await onActionChain(rt, async () => {
+    const rec = await rt.store.actions.get(id)
+    if (!rec) throw new Error('no such action')
+    const r = move(rec, m, now)
+    if (!r.ok) throw new Error(r.error)
+    await rt.store.actions.put(r.next)
+    await rt.store.actions.addHistory(r.entry)
+    return r.next
+  })
+  if (next.status !== 'needs_you') forgetHeld(rt, id)
+  actionsChanged(rt, new Set([next.sessionId]))
+  return next
+}
+
+/** Arm (or re-arm) the timer that sends an approved action at its time. */
+function armDispatch(rt: WorkspaceRuntime, rec: ActionRecord): void {
+  disarmDispatch(rt, rec.id)
+  if (rec.status !== 'scheduled') return
+  const t = setTimeout(() => {
+    rt.actionTimers.delete(rec.id)
+    void dispatchAction(rt, rec.id)
+  }, sendDelay(rec, Date.now()) + 50)
+  t.unref()
+  rt.actionTimers.set(rec.id, t)
+}
+
+function disarmDispatch(rt: WorkspaceRuntime, id: string): void {
+  const t = rt.actionTimers.get(id)
+  if (t) clearTimeout(t)
+  rt.actionTimers.delete(id)
+}
+
+/** A user's verb on a queued action, with what follows it. */
+async function actionVerbOp(rt: WorkspaceRuntime, verb: ActionVerb, raw: unknown): Promise<ActionRecord> {
+  const r = (raw ?? {}) as Record<string, unknown>
+  const id = typeof r.id === 'string' ? r.id.trim() : ''
+  if (!id || id.length > 400) throw new Error('need the action id')
+  let m: ActionMove
+  switch (verb) {
+    case 'approve': {
+      if (r.args !== undefined && !isArgsObject(r.args)) throw new Error('args must be a JSON object')
+      // Kept exactly as sent: the edited args are what goes out, word for word.
+      m = r.args !== undefined ? { type: 'approve', args: r.args as Record<string, unknown> } : { type: 'approve' }
+      break
+    }
+    case 'undo':
+      m = { type: 'undo' }
+      break
+    case 'send-back': {
+      if (typeof r.notes !== 'string' || !r.notes.trim()) throw new Error('send back needs notes: say what to change')
+      m = { type: 'send_back', notes: r.notes }
+      break
+    }
+    case 'reject': {
+      if (r.reason !== undefined && typeof r.reason !== 'string') throw new Error('reason must be text')
+      m = { type: 'reject', reason: typeof r.reason === 'string' ? r.reason : '' }
+      break
+    }
+    case 'retry':
+      m = { type: 'retry' }
+      break
+  }
+  const next = await moveAction(rt, id, m)
+  if (next.status === 'scheduled') armDispatch(rt, next)
+  else disarmDispatch(rt, id)
+  if (verb === 'send-back') void deliverSendBack(rt, next)
+  if (verb !== 'retry') invalidateInbox(rt)
+  log('info', 'actions', `${verb}: ${next.summary} (#${shortActionId(next.id)}) → ${next.status}`, { action: id, workspace: rt.meta.id })
+  return next
+}
+
+/**
+ * Send-back notes to the session that drafted the action — under exactly the
+ * constraints it drafted under, never more:
+ * - a watch run: a headless continuation of its own Claude session (resume),
+ *   built by watchQuery like the run itself — the same grants, the same
+ *   fence, the hold wrap — so the redraft is held for approval again and can
+ *   do nothing the watch couldn't. One still running gets them when it ends.
+ * - a team worker: revived as a worker (its tools, its permission mode, the
+ *   hold veto), only while its run is still known; otherwise not at all.
+ * Whatever happens is kept on the record, so the card can say whether they arrived.
+ */
+async function deliverSendBack(rt: WorkspaceRuntime, rec: ActionRecord): Promise<void> {
+  const row = rt.rows.get(rec.sessionId)
+  const text = sendBackMessage(rec.id, rec.tool, rec.queue?.note ?? '')
+  let delivery: string | null
+  if (!row) delivery = 'not delivered: the session that drafted it was deleted'
+  else if (row.provider !== 'claude') delivery = 'not delivered: that session runs on another agent'
+  else if (row.kind === 'watch-run') {
+    if (!row.runStatus) delivery = null // still running: on its way at the end
+    else if (!row.sdkSessionId) delivery = 'not delivered: the run never started an agent to resume'
+    else {
+      try {
+        await continueWatchRun(rt, row, text, () => void recordDelivery(rt, rec, 'delivered'))
+        return
+      } catch (err) {
+        delivery = `not delivered: ${errText(err)}`
+      }
+    }
+  } else if (rec.teamRunId && !isTeamWorker(rt, row.id)) {
+    delivery = 'not delivered: its team run is over, so its worker can no longer be resumed under the run’s constraints'
+  } else if (!row.sdkSessionId && !rt.live.has(row.id)) delivery = 'not delivered: the session never started, so there is nothing to resume'
+  else {
+    try {
+      const live = await getOrRevive(rt, row.id)
+      if (!live) delivery = 'not delivered: the session could not be resumed (its folder is gone)'
+      else {
+        await live.sendUserMessage(text, undefined, undefined, { from: 'triage' })
+        delivery = 'delivered'
+      }
+    } catch (err) {
+      delivery = `not delivered: ${errText(err)}`
+    }
+  }
+  if (delivery !== null) await recordDelivery(rt, rec, delivery)
+}
+
+/** Keep on a sent-back record whether its notes reached the session (once — a later word doesn't overwrite "delivered"). */
+async function recordDelivery(rt: WorkspaceRuntime, rec: ActionRecord, delivery: string): Promise<void> {
+  await onActionChain(rt, async () => {
+    const cur = await rt.store.actions.get(rec.id)
+    if (!cur?.queue || cur.status !== 'sent_back' || cur.queue.delivery === 'delivered') return
+    await rt.store.actions.put({ ...cur, queue: { ...cur.queue, delivery }, updatedAt: Math.max(cur.updatedAt, Date.now()) })
+    await rt.store.actions.addHistory({
+      actionId: cur.id,
+      at: Date.now(),
+      actor: 'triage',
+      event: delivery === 'delivered' ? 'notes delivered' : 'notes not delivered',
+      from: 'sent_back',
+      to: 'sent_back',
+      note: delivery === 'delivered' ? null : delivery,
+      args: null,
+    })
+  }).catch((err) => log('warn', 'actions', `could not record a send-back delivery: ${errText(err)}`, { action: rec.id, workspace: rt.meta.id }))
+  actionsChanged(rt, new Set([rec.sessionId]))
+  log(delivery === 'delivered' ? 'info' : 'warn', 'actions', `send back #${shortActionId(rec.id)}: ${delivery}`, { action: rec.id, session: rec.sessionId, workspace: rt.meta.id })
+}
+
+/** Watch-run continuations in flight, by session: a second send-back waits for the first. */
+const watchContinuations = new Map<string, Promise<void>>()
+
+/**
+ * Continue a finished watch run's own Claude session with one message from
+ * triage, headless, under the watch's own run spec (watchQuery: grants,
+ * allowlist, unattended, the fence) plus the hold — the same box the run had.
+ * The transcript continues on its session row. `onStarted` fires once the
+ * agent is up with the message.
+ */
+function continueWatchRun(rt: WorkspaceRuntime, row: StoredSession, text: string, onStarted: () => void): Promise<void> {
+  const key = `${rt.meta.id}:${row.id}`
+  const prev = watchContinuations.get(key) ?? Promise.resolve()
+  const run = prev.catch(() => {}).then(async () => {
+    const watch = row.watchId ? await rt.store.watches.get(row.watchId) : null
+    if (!watch) throw new Error('the watch that drafted it was deleted')
+    const project = await watchProject(rt, watch.projectId)
+    const limits = await watchLimits(rt, watch)
+    // A redraft is a watch run like any other: it counts against the watch's
+    // daily budget and gets its own row in the run ledger (trigger `redraft`).
+    const startedAt = Date.now()
+    const slot = startedAt
+    const spent = watch.dailyBudgetUsd != null ? await rt.store.watchRuns.spentSince(watch.id, localMidnight(startedAt)) : 0
+    const budget = budgetFor(limits.maxBudgetUsd, watch.dailyBudgetUsd, spent)
+    if (budget.skip) {
+      await ledger(rt, rt.store.watchRuns.insert({ watchId: watch.id, slot, trigger: 'redraft', status: 'skipped_budget', reason: budget.reason, sessionId: row.id, startedAt, endedAt: startedAt }))
+      throw new Error(`the watch is over its daily budget (${budget.reason}) — the notes stay here`)
+    }
+    await ledger(rt, rt.store.watchRuns.insert({ watchId: watch.id, slot, trigger: 'redraft', status: 'running', sessionId: row.id, startedAt }))
+    let status: WatchRunStatus = 'failed'
+    let reason: string | undefined
+    let costUsd: number | undefined
+    const abort = new AbortController()
+    const timer = setTimeout(() => abort.abort(), limits.timeoutMs)
+    const scanMcp = makeScanMcp(rt, watch, row.id, () => {})
+    try {
+      const spec = await watchQuery(
+        rt,
+        { instruction: watch.instruction, tools: watch.tools, project, model: watch.model, output: watch.output, schedule: scheduleOf(watch), scope: watch.scope },
+        scanMcp,
+        abort,
+        budget.maxBudgetUsd != null ? { maxBudgetUsd: budget.maxBudgetUsd } : {},
+      )
+      const fence = spec.veto
+      if (!fence) throw new Error('no fence for this watch run')
+      spec.veto = (toolName, input, ctx) => {
+        const d = fence(toolName, input, ctx)
+        return d.allow ? holdIfAction(rt, row, toolName, input, ctx) : d
+      }
+      spec.prompt = frameTeamMessage('triage', text)
+      spec.resume = row.sdkSessionId ?? undefined
+      let seq = await rt.store.events.lastSeq(row.id)
+      const emit = (event: SessionEvent, persist = true) => {
+        if (persist) {
+          seq += 1
+          rt.store.events.append(row.id, seq, event).catch(() => {})
+          noteActionEvent(rt, row, event)
+        }
+        broadcast(rt, { type: 'session_event', sessionId: row.id, event, at: Date.now() })
+      }
+      emit({ kind: 'local_user', text, from: 'triage' })
+      let started = false
+      try {
+        for await (const ev of rt.provider.run(spec)) {
+          if (ev.kind === 'started') {
+            if (!started) onStarted()
+            started = true
+            if (ev.sessionId && ev.sessionId !== row.sdkSessionId) {
+              row.sdkSessionId = ev.sessionId
+              rt.store.sessions.setSdkSessionId(row.id, ev.sessionId).catch(() => {})
+            }
+          }
+          emit({ kind: 'sdk', message: ev.record }, ev.kind !== 'stream')
+          if (ev.kind === 'result' && ev.costUsd != null) costUsd = ev.costUsd
+        }
+        if (!started) throw new Error('the run ended before it started')
+        status = 'ok'
+      } catch (err) {
+        status = abort.signal.aborted ? 'timeout' : 'failed'
+        reason = abort.signal.aborted ? `the redraft timed out after ${humanSpan(limits.timeoutMs)}` : errText(err)
+        emit({ kind: 'error', message: reason })
+        throw err
+      }
+      row.updatedAt = Date.now()
+      void rt.store.sessions.touch(row.id)
+      broadcastSessionList(rt)
+    } finally {
+      clearTimeout(timer)
+      rt.actionTrackers.delete(row.id)
+      await ledger(rt, rt.store.watchRuns.finish(watch.id, slot, { status, ...(reason ? { reason } : {}), sessionId: row.id, endedAt: Date.now(), ...(costUsd != null ? { costUsd } : {}) }))
+      log(status === 'ok' ? 'info' : 'warn', 'watch', `redraft ${status}: ${watch.title}${costUsd != null ? ` — $${costUsd.toFixed(2)}` : ''}${reason ? ` — ${reason}` : ''}`, {
+        watchId: watch.id,
+        runId: row.id,
+        trigger: 'redraft',
+        workspace: rt.meta.id,
+      })
+    }
+  })
+  watchContinuations.set(key, run)
+  void run.finally(() => {
+    if (watchContinuations.get(key) === run) watchContinuations.delete(key)
+  }).catch(() => {})
+  return run
+}
+
+/** A watch run just ended: notes sent back while it ran go to it now. */
+async function deliverPendingSendBacks(rt: WorkspaceRuntime, sessionId: string): Promise<void> {
+  const waiting = (await rt.store.actions.list({ sessionId, status: ['sent_back'], limit: 100 })).filter((a) => a.queue && a.queue.delivery === null)
+  for (const a of waiting) await deliverSendBack(rt, a)
+}
+
+/**
+ * Where a dispatch run gets its connector: the drafting session's folder, its
+ * folder's own MCP server of that name (as a watch run loads them — passed
+ * explicitly, the project's settings and hooks never loaded), a team worker's
+ * agent-declared server, and the user's own config (user-scope servers and
+ * claude.ai connectors).
+ */
+async function dispatchOrigin(rt: WorkspaceRuntime, rec: ActionRecord): Promise<{ cwd: string; mcpServers: McpServers }> {
+  const server = serverOf(rec.tool)
+  const row = rt.rows.get(rec.sessionId)
+  let cwd = row?.cwd ?? null
+  if (rec.watchId) {
+    const w = await rt.store.watches.get(rec.watchId).catch(() => null)
+    const project = w ? (await rt.store.projects.list()).find((p) => p.id === w.projectId) : undefined
+    if (project) cwd = project.path
+  }
+  if (!cwd || !(await stat(cwd).then((st) => st.isDirectory(), () => false))) cwd = await mkdtemp(path.join(os.tmpdir(), 'triage-dispatch-'))
+  const servers: McpServers = {}
+  const folder = await folderMcpServers(rt, cwd).catch(() => null)
+  if (folder?.servers[server]) servers[server] = folder.servers[server]
+  // A team worker's agent file may declare the server itself (extrasFor loads it the same way).
+  const run = row ? teamRunOf(rt, row.id) : undefined
+  const worker = run && row && run.leadSessionId !== row.id ? [...run.workers].reverse().find((w) => w.sessionId === row.id) : undefined
+  if (run && worker) {
+    const ext = rt.provider.agentTools(workerSpec(run, worker).can as AgentCan[]).mcpServers as McpServers | undefined
+    if (ext?.[server]) servers[server] = ext[server]
+  }
+  return { cwd, mcpServers: servers }
+}
+
+/**
+ * The one-tool run that sends an approved action. Headless, in the
+ * workspace's auth; no built-in tools, the one connector tool allowed and
+ * nothing else; the fence lets that call through only with the approved args,
+ * once. Never throws: whatever happened is in the trace.
+ */
+async function runDispatch(rt: WorkspaceRuntime, rec: ActionRecord): Promise<{ trace: DispatchTrace; costUsd: number | null }> {
+  const q = rec.queue!
+  const fence = new DispatchFence(rec.tool, q.args)
+  const trace: DispatchTrace = { allowed: false, connector: null }
+  let costUsd: number | null = null
+  const abort = new AbortController()
+  const timer = setTimeout(() => abort.abort(), DISPATCH_TIMEOUT_MS)
+  try {
+    const origin = await dispatchOrigin(rt, rec)
+    // Every other connector the user has: out of the run's context entirely (the fence would deny them anyway).
+    const known = [...(rt.folderProbes.get(origin.cwd)?.connectors ?? []), ...(rt.connectorCache?.connectors ?? [])].map((c) => c.server)
+    const disallowedTools = dispatchDisallowed([...known, ...Object.keys(origin.mcpServers)], rec.tool)
+    const run = rt.provider.run({
+      prompt: dispatchPrompt(rec.tool, q.args),
+      cwd: origin.cwd,
+      // The user's own MCP servers and claude.ai connectors; never the project's settings, skills or hooks.
+      userConfig: true,
+      // ToolSearch only: connector tools are deferred (claude.ai ones start pending), so the run loads the one it needs.
+      tools: [TOOL_SEARCH],
+      allowedTools: [TOOL_SEARCH, rec.tool],
+      ...(disallowedTools.length ? { disallowedTools } : {}),
+      unattended: true,
+      veto: (toolName, input, ctx) => fence.decide(toolName, input, ctx?.toolUseId),
+      model: DISPATCH_MODEL,
+      // ToolSearch, the call, the one-word reply.
+      maxTurns: 3,
+      maxBudgetUsd: 0.5,
+      mcpServers: origin.mcpServers,
+      abort,
+      ...(rt.env ? { env: rt.env } : {}),
+    })
+    for await (const ev of run) {
+      if (ev.kind === 'started') trace.connector = connectorState(ev.record, rec.tool)
+      if (ev.kind === 'message' && ev.role === 'user' && fence.allowed && !trace.result) {
+        const blocks = Array.isArray(ev.record.message?.content) ? ev.record.message.content : []
+        for (const b of blocks) {
+          if (b?.type !== 'tool_result' || typeof b.tool_use_id !== 'string') continue
+          if (fence.allowedCall && b.tool_use_id !== fence.allowedCall) continue
+          trace.result = { isError: b.is_error === true, text: resultText(b.content) }
+          break
+        }
+      }
+      if (ev.kind === 'result') {
+        if (ev.costUsd != null) costUsd = ev.costUsd
+        // The run's own word that it had no such tool, even after ToolSearch (the prompt asks it to say so).
+        if (!fence.allowed && /\bno-tool\b/.test(ev.text)) trace.noTool = true
+      }
+    }
+  } catch (err) {
+    trace.runError = abort.signal.aborted ? `timed out after ${humanSpan(DISPATCH_TIMEOUT_MS)}` : errText(err)
+  } finally {
+    clearTimeout(timer)
+  }
+  trace.allowed = fence.allowed
+  trace.denials = fence.denials
+  return { trace, costUsd }
+}
+
+/**
+ * Send one approved action whose time has come. Claimed first — one atomic
+ * scheduled → sending update — so a timer and the minute tick racing for it
+ * send it once; whoever loses does nothing.
+ */
+async function dispatchAction(rt: WorkspaceRuntime, id: string): Promise<void> {
+  disarmDispatch(rt, id)
+  if (rt.dispatching.has(id)) return
+  const now = Date.now()
+  const claimed = await onActionChain(rt, async () => {
+    const rec = await rt.store.actions.get(id)
+    if (!rec || !dueToSend(rec, now)) return null
+    const r = move(rec, { type: 'claim' }, now)
+    if (!r.ok) return null
+    if (!(await rt.store.actions.claim(id, 'scheduled', 'sending', now, { dueBy: now }))) return null
+    await rt.store.actions.addHistory(r.entry)
+    return r.next
+  }).catch((err) => {
+    log('warn', 'actions', `could not claim an action to send: ${errText(err)}`, { action: id, workspace: rt.meta.id })
+    return null
+  })
+  if (!claimed) return
+  rt.dispatching.add(id)
+  actionsChanged(rt, new Set([claimed.sessionId]))
+  log('info', 'actions', `sending: ${claimed.summary} (#${shortActionId(id)})`, { action: id, tool: claimed.tool, workspace: rt.meta.id })
+  try {
+    const { trace, costUsd } = await runDispatch(rt, claimed)
+    const out = dispatchOutcome(trace, serverOf(claimed.tool))
+    const done = await moveAction(rt, id, { type: 'settle', status: out.status, link: out.link, error: out.error, costUsd })
+    log(out.status === 'succeeded' ? 'info' : 'warn', 'actions', `${out.status}: ${done.summary} (#${shortActionId(id)})${out.error ? ` — ${out.error}` : ''}`, {
+      action: id,
+      tool: claimed.tool,
+      ...(costUsd != null ? { costUsd } : {}),
+      workspace: rt.meta.id,
+    })
+  } catch (err) {
+    // The run's own failures are in its trace; this is the record failing to settle. It may have gone out.
+    log('error', 'actions', `dispatch of #${shortActionId(id)} ended badly: ${errText(err)}`, { action: id, workspace: rt.meta.id })
+    await moveAction(rt, id, { type: 'settle', status: 'unknown', error: `triage lost track of the send: ${errText(err)} — check before retrying` }).catch(() => {})
+  } finally {
+    rt.dispatching.delete(id)
+  }
+}
+
+/**
+ * The minute tick's share: expire what waited too long, send what is due
+ * (a timer lost to a restart), and re-arm timers for what is still ahead.
+ */
+async function tickActions(rt: WorkspaceRuntime, now = Date.now()): Promise<void> {
+  const open = await rt.store.actions.list({ status: ['needs_you', 'scheduled'], limit: 5000 })
+  let expired = 0
+  for (const a of open) {
+    if (dueToExpire(a, now)) {
+      await moveAction(rt, a.id, { type: 'expire' }, now).then(
+        () => (expired += 1),
+        () => {},
+      )
+    } else if (dueToSend(a, now)) void dispatchAction(rt, a.id)
+    else if (a.status === 'scheduled' && !rt.actionTimers.has(a.id)) armDispatch(rt, a)
+  }
+  if (expired) {
+    invalidateInbox(rt)
+    log('info', 'actions', `expired ${expired} action(s) nobody answered`, { workspace: rt.meta.id })
+  }
+}
+
+/**
+ * Boot: an action left `sending` died with the previous process mid-send — it
+ * may have gone out, so it is unknown, never retried by itself. Scheduled
+ * ones get their timers back (or go now, if their time passed).
+ */
+async function recoverActions(rt: WorkspaceRuntime): Promise<void> {
+  const now = Date.now()
+  for (const a of await rt.store.actions.list({ status: ['sending'], limit: 5000 })) {
+    await onActionChain(rt, async () => {
+      if (!(await rt.store.actions.claim(a.id, 'sending', 'unknown', now))) return
+      const cur = await rt.store.actions.get(a.id)
+      if (!cur) return
+      const error = 'triage stopped while this was being sent — it may have gone out; check before retrying'
+      await rt.store.actions.put({ ...cur, error, settledAt: now })
+      await rt.store.actions.addHistory({ actionId: a.id, at: now, actor: 'triage', event: 'unknown', from: 'sending', to: 'unknown', note: error, args: null })
+    }).catch((err) => log('warn', 'actions', `could not recover ${a.id}: ${errText(err)}`, { workspace: rt.meta.id }))
+  }
+  // Notes sent back to a watch run that died before it ended never reached it: try now.
+  for (const a of await rt.store.actions.list({ status: ['sent_back'], limit: 500 })) {
+    if (a.queue && a.queue.delivery === null) void deliverSendBack(rt, a)
+  }
+  // The held-call map is memory: rebuild it, so an agent revived after a restart still hears the same id.
+  for (const a of await rt.store.actions.list({ status: ['needs_you'], limit: 5000 })) {
+    if (a.queue) rt.heldCalls.set(`${a.sessionId}\u0000${a.tool}\u0000${canonJson(a.queue.args)}`, a.id)
+  }
+  await tickActions(rt, now)
+}
+
 async function deleteSession(rt: WorkspaceRuntime, sessionId: string): Promise<void> {
   rt.live.get(sessionId)?.stop()
+  // Its actions stay on record — they happened; only the tracker goes.
+  rt.actionTrackers.delete(sessionId)
   // Its tab closes; its evidence stays on disk — the Verification note points at it.
   browserHub.forget(sessionId)
   rt.live.delete(sessionId)
@@ -2203,6 +2955,14 @@ async function flowSignals(rt: WorkspaceRuntime): Promise<Map<string, FlowSignal
     if (!s.team || at > s.team.at) s.team = { state: run.state, at }
   }
   for (const [id, f] of stored) if (f.override) of(id).override = f.override
+  // Queued actions waiting on you: the item is on your turn until they're answered.
+  for (const a of await rt.store.actions.list({ status: ['needs_you'], limit: 5000 })) {
+    const itemId = a.itemId ?? rt.sessionItem.get(a.sessionId)
+    if (!itemId) continue
+    const s = of(itemId)
+    const at = a.queue?.queuedAt ?? a.updatedAt
+    s.actions = { pending: (s.actions?.pending ?? 0) + 1, at: Math.max(s.actions?.at ?? 0, at) }
+  }
   return out
 }
 
@@ -2880,6 +3640,7 @@ async function runWatchPreview(rt: WorkspaceRuntime, pv: WatchPreview, spec: Pre
     broadcast(rt, { type: 'session_event', sessionId: pv.id, event, at: Date.now() })
   }
   const rows: WatchPreviewRow[] = []
+  const wouldQueue: Array<{ tool: string; summary: string }> = []
   let digest: { title: string; body: string } | undefined
   const collector = createSdkMcpServer({
     name: 'triage',
@@ -2924,7 +3685,28 @@ async function runWatchPreview(rt: WorkspaceRuntime, pv: WatchPreview, spec: Pre
     const project = await watchProject(rt, spec.projectId)
     const limits = await watchLimits(rt, {})
     timer = setTimeout(() => abort.abort(), limits.timeoutMs)
-    const q = rt.provider.run(await watchQuery(rt, { ...spec, project }, collector, abort, { ...limits, includePartialMessages: true }))
+    const previewSpec = await watchQuery(rt, { ...spec, project }, collector, abort, { ...limits, includePartialMessages: true })
+    // A dry run never sends: past the fence, anything that counts as an action
+    // (a connector write, an outbound command) is refused and listed instead.
+    const fence = previewSpec.veto
+    if (fence) {
+      previewSpec.veto = (toolName, input, ctx) => {
+        const d = fence(toolName, input, ctx)
+        if (!d.allow) return d
+        const args = isArgsObject(input) ? input : {}
+        let sorted = null
+        try {
+          sorted = sortForWorkspace(rt)(toolName, args)
+        } catch {
+          // can't tell: refuse, a dry run loses nothing by it
+          sorted = { summary: toolName }
+        }
+        const out = dryRunDecision(sorted)
+        if (!out.allow && sorted && wouldQueue.length < 50) wouldQueue.push({ tool: toolName, summary: sorted.summary })
+        return out
+      }
+    }
+    const q = rt.provider.run(previewSpec)
     for await (const ev of q) {
       emit({ kind: 'sdk', message: ev.record }, ev.kind !== 'stream')
       if (ev.kind === 'result') {
@@ -2936,7 +3718,7 @@ async function runWatchPreview(rt: WorkspaceRuntime, pv: WatchPreview, spec: Pre
     }
     if (resultText.includes('no-connector-tools')) throw new Error(noConnectorError(spec.tools))
     if (!sawResult) throw new Error(abort.signal.aborted ? 'the preview timed out' : 'the preview ended without a result')
-    pv.result = { output: spec.output, rows, ...(digest ? { digest } : {}), tokens, ...(costUsd != null ? { costUsd } : {}), durationMs: Date.now() - pv.startedAt }
+    pv.result = { output: spec.output, rows, ...(digest ? { digest } : {}), ...(wouldQueue.length ? { wouldQueue } : {}), tokens, ...(costUsd != null ? { costUsd } : {}), durationMs: Date.now() - pv.startedAt }
     pv.status = 'ready'
     log('info', 'watch', `preview: ${rows.length} row(s)${digest ? ', digest' : ''}, ${Math.round(tokens / 1000)}k tok`, { previewId: pv.id, workspace: rt.meta.id })
   } catch (err) {
@@ -3027,6 +3809,7 @@ async function runWatch(rt: WorkspaceRuntime, run: QueuedRun, startedMs: number,
     if (persist) {
       seq += 1
       rt.store.events.append(session.id, seq, event).catch(() => {})
+      noteActionEvent(rt, session, event)
     }
     broadcast(rt, { type: 'session_event', sessionId: session.id, event })
   }
@@ -3051,15 +3834,23 @@ async function runWatch(rt: WorkspaceRuntime, run: QueuedRun, startedMs: number,
       timedOut = true
       abort.abort()
     }, runLimits.timeoutMs)
-    const q = rt.provider.run(
-      await watchQuery(
-        rt,
-        { instruction: watch.instruction, tools: watch.tools, project, model: watch.model, output: watch.output, schedule: scheduleOf(watch), scope: watch.scope, lateness },
-        scanMcp,
-        abort,
-        runLimits,
-      ),
+    const runSpec = await watchQuery(
+      rt,
+      { instruction: watch.instruction, tools: watch.tools, project, model: watch.model, output: watch.output, schedule: scheduleOf(watch), scope: watch.scope, lateness },
+      scanMcp,
+      abort,
+      runLimits,
     )
+    // Past the fence, an outbound connector call is held for you, not run
+    // (core/actions/queue.ts). Dry runs (previews) never hold: they record nothing.
+    const fence = runSpec.veto
+    if (fence) {
+      runSpec.veto = (toolName, input, ctx) => {
+        const d = fence(toolName, input, ctx)
+        return d.allow ? holdIfAction(rt, session, toolName, input, ctx) : d
+      }
+    }
+    const q = rt.provider.run(runSpec)
     let sawResult = false
     let resultText = ''
     let overBudget = false
@@ -3117,6 +3908,9 @@ async function runWatch(rt: WorkspaceRuntime, run: QueuedRun, startedMs: number,
       `run ${status}: ${watch.title}${status === 'ok' ? ` — ${newCount} new, ${matches - newCount} already filed, ${Math.round(tokens / 1000)}k tok${costUsd != null ? `, $${costUsd.toFixed(2)}` : ''}` : ''}${error ? ` — ${error}` : ''}`,
       { watchId: watch.id, runId: session.id, status, trigger: run.trigger, matches, newCount, tokens, durationMs: Date.now() - startedMs, workspace: rt.meta.id, ...(error ? { error } : {}) },
     )
+    rt.actionTrackers.delete(session.id)
+    // Notes on an action sent back while the run was still going reach it now.
+    void deliverPendingSendBacks(rt, session.id)
     notifyRun(rt, watch, status, status === 'ok' ? `${newCount} new` : error)
     if (status === 'ok') {
       invalidateInbox(rt)
@@ -3534,6 +4328,8 @@ setInterval(() => {
   lastSchedulerTickAt = Date.now()
   for (const rt of runtimes.values()) {
     runDueWatches(rt).catch((err) => log('error', 'scheduler', `tick failed: ${err}`, { workspace: rt.meta.id }))
+    // Queued actions: expire the stale, send what a lost timer left due.
+    tickActions(rt).catch((err) => log('error', 'actions', `tick failed: ${errText(err)}`, { workspace: rt.meta.id }))
     rt.store.items
       .wakeSnoozed(Date.now())
       .then((woken) => {
@@ -3600,6 +4396,7 @@ function toConnector(srv: McpStatus, scopeOverride?: ConnectorScope): Connector 
         ...(t.description ? { description: t.description.slice(0, 400) } : {}),
         ...(t.annotations?.readOnly !== undefined ? { readOnly: t.annotations.readOnly } : {}),
         ...(t.annotations?.destructive !== undefined ? { destructive: t.annotations.destructive } : {}),
+        ...(t.annotations?.openWorld !== undefined ? { openWorld: t.annotations.openWorld } : {}),
       }
     }),
   }
@@ -3936,6 +4733,14 @@ async function initRuntime(rt: WorkspaceRuntime): Promise<void> {
   rt.inboxCache = saved && saved.landedToday !== undefined && saved.items.every((i) => i.flow) ? saved : null
   probeConnectors(rt).catch((err) => log('error', 'connectors', `probe failed: ${err}`, { workspace: rt.meta.id }))
   probeModels(rt).catch((err) => log('error', 'models', `probe failed: ${err}`, { workspace: rt.meta.id }))
+  await rt.actionsFile.seed().catch((err) => log('warn', 'actions', `could not seed the actions file: ${errText(err)}`, { workspace: rt.meta.id }))
+  // Queued actions: a send the last process died in is unknown; scheduled ones get their timers back.
+  await recoverActions(rt).catch((err) => log('warn', 'actions', `could not recover queued actions: ${errText(err)}`, { workspace: rt.meta.id }))
+  // After the connector probe, so past connector calls sort by their servers' own annotations too.
+  void (rt.connectorInFlight ?? Promise.resolve(null))
+    .catch(() => null)
+    .then(() => backfillActions(rt))
+    .catch((err) => log('warn', 'actions', `backfill failed: ${errText(err)}`, { workspace: rt.meta.id }))
 }
 
 /** After an auth change: new env, fresh probes, and no subprocess on the old auth. */
@@ -8215,6 +9020,87 @@ const server = http.createServer(async (req, res) => {
       body = { ok: false, error: errText(err) }
     }
     json(body.ok ? 200 : 400, body)
+    return
+  }
+  // Outbound actions (core/actions): every effect a session had that left
+  // this machine, newest first. `item` = filed against it or made by a session
+  // linked to it; records the actions file now sets aside come back `hidden`.
+  if (url.pathname === '/api/actions' && req.method === 'GET') {
+    let body: ActionsResponse
+    try {
+      const kind = url.searchParams.get('kind')
+      const sessionId = url.searchParams.get('session') ?? undefined
+      const itemId = url.searchParams.get('item') ?? undefined
+      const limit = Number(url.searchParams.get('limit')) || 500
+      const sessionIds = itemId ? [...rt.sessionItem].filter(([, i]) => i === itemId).map(([s]) => s) : undefined
+      const records = await rt.store.actions.list({ ...(isActionKind(kind) ? { kind } : {}), ...(sessionId ? { sessionId } : {}), ...(itemId ? { itemId, sessionIds } : {}), limit })
+      const actions = await actionViews(rt, records)
+      // The count line is the workspace's day, whatever the list is narrowed to.
+      const since = localMidnight(Date.now())
+      const { rules, errors } = rt.actionsFile.current()
+      const today = (await rt.store.actions.list({ since, status: ['succeeded', 'failed'], limit: 5000 })).filter((a) => !overriddenOff(a, rules))
+      const counts = countSince(today, since)
+      const failedToday = today.filter((a) => a.status === 'failed').length
+      body = { ok: true, actions, today: { line: countLine(counts, failedToday), counts }, file: { path: rt.actionsFile.path, errors }, needsYou: await needsYouCount(rt) }
+    } catch (err) {
+      body = { ok: false, error: errText(err) }
+    }
+    json(body.ok ? 200 : 502, body)
+    return
+  }
+  // A row's one-click override, written to the actions file.
+  if (url.pathname === '/api/actions/override' && req.method === 'POST') {
+    let body: ActionOverrideResponse
+    try {
+      const raw = (await readJsonBody(req, 10_000)) as Partial<Record<keyof ActionOverrideRequest, unknown>> | null
+      const actionId = typeof raw?.actionId === 'string' ? raw.actionId : ''
+      const verdict = raw?.verdict === 'action' || raw?.verdict === 'not_action' ? raw.verdict : null
+      if (!actionId || !verdict) throw new Error("need actionId and verdict ('action' | 'not_action')")
+      const a = await rt.store.actions.get(actionId)
+      if (!a) throw new Error('no such action')
+      body = { ok: true, entries: await setActionOverride(rt, a, verdict) }
+      broadcast(rt, { type: 'actions_changed' })
+    } catch (err) {
+      body = { ok: false, error: errText(err) }
+    }
+    json(body.ok ? 200 : 400, body)
+    return
+  }
+  // The rail's badge: queued actions waiting on you.
+  if (url.pathname === '/api/actions/pending' && req.method === 'GET') {
+    let body: ActionsPendingResponse
+    try {
+      body = { ok: true, needsYou: await needsYouCount(rt) }
+    } catch (err) {
+      body = { ok: false, error: errText(err) }
+    }
+    json(body.ok ? 200 : 502, body)
+    return
+  }
+  // A queued action's verbs (core/actions/queue.ts): approve (optionally with
+  // edited args), undo inside the window, send back with notes, reject, retry.
+  const verbMatch = /^\/api\/actions\/(approve|undo|send-back|reject|retry)$/.exec(url.pathname)
+  if (verbMatch && req.method === 'POST') {
+    let body: ActionMoveResponse
+    try {
+      const raw = (await readJsonBody(req, 2_000_000)) as Partial<Record<keyof ActionMoveRequest, unknown>> | null
+      if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('need a JSON object body')
+      const next = await actionVerbOp(rt, verbMatch[1] as ActionVerb, raw)
+      body = { ok: true, action: (await actionViews(rt, [next]))[0] }
+    } catch (err) {
+      body = { ok: false, error: errText(err) }
+    }
+    json(body.ok ? 200 : 400, body)
+    return
+  }
+  // Re-read every session's log into the record. Idempotent; the boot runs it once.
+  if (url.pathname === '/api/actions/backfill' && req.method === 'POST') {
+    try {
+      const done = await backfillActions(rt, { force: true })
+      json(200, { ok: true, ...done })
+    } catch (err) {
+      json(500, { ok: false, error: errText(err) })
+    }
     return
   }
   if (url.pathname === '/api/links') {

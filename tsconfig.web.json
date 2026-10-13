@@ -38,6 +38,9 @@
     "core/watch/cron.ts",
     "core/watch/tools.ts",
     "core/watch/schedule.ts",
-    "core/watch/run-rows.ts"
+    "core/watch/run-rows.ts",
+    "core/actions/types.ts",
+    "core/actions/count.ts",
+    "core/actions/view.ts"
   ]
 }

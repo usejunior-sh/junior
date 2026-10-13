@@ -46,7 +46,7 @@ export function fmtUntil(at: number, now = Date.now()): string {
   return `${d.toLocaleDateString(undefined, { weekday: 'short' })} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
-export const TRIGGER_LABEL: Record<WatchRunTrigger, string> = { scheduled: 'scheduled', catch_up: 'caught up', manual: 'manual' }
+export const TRIGGER_LABEL: Record<WatchRunTrigger, string> = { scheduled: 'scheduled', catch_up: 'caught up', manual: 'manual', redraft: 'redraft after a send-back' }
 
 /** The schedule presets — a preset plus a local time renders to one cron line. */
 export type SchedulePreset = 'hourly' | 'daily' | 'weekdays' | 'weekly' | 'custom'

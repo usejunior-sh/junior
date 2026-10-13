@@ -25,7 +25,8 @@ export type WatchRunStatus = 'ok' | 'failed' | 'timeout' | 'skipped' | 'interrup
 export const WATCH_RUN_STATUSES: WatchRunStatus[] = ['ok', 'failed', 'timeout', 'skipped', 'interrupted']
 
 /** Why a run happened. */
-export type WatchRunTrigger = 'scheduled' | 'catch_up' | 'manual'
+/** redraft = a finished run's own session continued with your send-back notes (core/actions/queue.ts) */
+export type WatchRunTrigger = 'scheduled' | 'catch_up' | 'manual' | 'redraft'
 
 /**
  * The slot ledger's status: a run's outcome plus the states only a ledger row
@@ -229,6 +230,8 @@ export interface WatchPreviewResult {
   output: WatchOutput
   rows: WatchPreviewRow[]
   digest?: { title: string; body: string }
+  /** outbound calls the dry run refused — the real run would queue these for your approval */
+  wouldQueue?: Array<{ tool: string; summary: string }>
   tokens: number
   costUsd?: number
   durationMs: number

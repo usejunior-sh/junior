@@ -70,6 +70,8 @@ export function todaySectionOf(item: TodayItem, now: number): TodaySection | nul
   if (!flow) return null
   const mine = flow.turn === 'me'
   if (mine && isDue(item, now)) return 'due'
+  // An action an agent queued is an approval, whoever asked for the item.
+  if (mine && flow.ask === 'approve action') return 'approval'
   if (mine && isHumanAsk(item) && !flow.broken) return 'waiting'
   if (mine && !flow.broken && (flow.stage === 'ready' || flow.stage === 'review')) return 'approval'
   if (flow.broken || isStuck(flow, now)) return 'broke'

@@ -33,6 +33,8 @@ export type ToolResult = { text: string; isError: boolean }
 export type ToolItem = {
   key: string
   kind: 'tool'
+  /** the tool_use id — what an action record names its call by */
+  id?: string
   name: string
   input: Record<string, unknown>
   result?: ToolResult
@@ -232,6 +234,7 @@ export function buildTranscript(
               const item = {
                 key: `c${i}.${j}`,
                 kind: 'tool' as const,
+                id: b.id,
                 name: b.name,
                 input: b.input,
                 startedAt: timeOf(ev),

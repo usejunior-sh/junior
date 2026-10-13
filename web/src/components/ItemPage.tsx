@@ -38,6 +38,8 @@ import { checkoutOf } from '../checkouts.js'
 import { inboxStore, useInbox } from '../inboxStore.js'
 import { briefPill, useBriefs } from '../briefStore.js'
 import { store } from '../store.js'
+import { useActions } from '../actions.js'
+import { ItemActions } from './ActionCard.js'
 import { KIND_LABEL, PRIORITY_LABEL, PRIORITY_VALUES, ago, kindIcon, relTime } from '../itemUi.js'
 import { CreateBriefDialog } from './CreateBriefDialog.js'
 import { Markdown } from './Markdown.js'
@@ -112,6 +114,8 @@ export function ItemPage({ id, onDispatch, onNavigate, onDirty }: Props) {
   const sessions = useSessions()
   const checkouts = useCheckouts()
   const briefs = useBriefs()
+  // What sessions working this item sent out: PRs, comments, pushes (core/actions).
+  const itemActions = useActions({ item: id })
   const open = snap.items.find((i) => i.id === id)
   // Not in the open inbox → it may be snoozed, done or archived.
   const [other, setOther] = useState<{ id: string; item: ScoredItem | null } | null>(null)
@@ -939,6 +943,20 @@ export function ItemPage({ id, onDispatch, onNavigate, onDirty }: Props) {
               </a>
             )
           })
+        )}
+
+        {/* Outbound actions: what those sessions did that left this machine. */}
+        {itemActions.actions.some((a) => !a.hidden) && (
+          <>
+            <div className="secLabel mute">
+              Actions <span className="n">{itemActions.actions.filter((a) => !a.hidden).length}</span>
+            </div>
+            {/* What waits on you first; then newest first. */}
+            <ItemActions
+              actions={itemActions.actions.filter((a) => !a.hidden).sort((x, y) => Number(y.status === 'needs_you') - Number(x.status === 'needs_you'))}
+              onNavigate={onNavigate}
+            />
+          </>
         )}
 
         {/* What the item cost: the ledger, folded over this item's sessions.

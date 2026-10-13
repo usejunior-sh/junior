@@ -809,7 +809,20 @@ function PreviewCard({ result }: { result: WatchPreviewResult }) {
           </div>
         ))
       )}
-      <div className="foot">These were not created. The real run files them once the watch exists.</div>
+      {result.wouldQueue && result.wouldQueue.length > 0 && (
+        <div className="previewQueued">
+          <div className="t">
+            Would queue {result.wouldQueue.length} action{result.wouldQueue.length === 1 ? '' : 's'} for your approval
+          </div>
+          {result.wouldQueue.map((q, i) => (
+            <div key={i} className="previewRow">
+              <span className="t">{q.summary}</span>
+              <span className="why mono">{q.tool}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="foot">These were not created{result.wouldQueue?.length ? ', and nothing was sent' : ''}. The real run files them once the watch exists.</div>
     </div>
   )
 }

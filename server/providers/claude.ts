@@ -40,9 +40,9 @@ async function* sdkTurns(input: AsyncIterable<UserTurn>): AsyncGenerator<SDKUser
 
 /** A veto as a PreToolUse hook: a refusal never reaches the tool. */
 function vetoHook(veto: ToolVeto): HookCallback {
-  return async (input) => {
+  return async (input, toolUseID) => {
     if (input.hook_event_name !== 'PreToolUse') return {}
-    const d = veto(input.tool_name, input.tool_input)
+    const d = veto(input.tool_name, input.tool_input, { toolUseId: input.tool_use_id ?? toolUseID })
     if (d.allow) return {}
     return { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: d.reason } }
   }
@@ -126,6 +126,7 @@ export const claude: Provider = {
         ...(spec.permissionMode === 'bypassPermissions' ? { allowDangerouslySkipPermissions: true } : {}),
         ...(spec.resume ? { resume: spec.resume } : {}),
         ...(spec.plugins?.length ? { plugins: spec.plugins.map((p) => ({ type: 'local' as const, path: p })) } : {}),
+        ...(spec.veto ? { hooks: { PreToolUse: [{ hooks: [vetoHook(spec.veto)] }] } } : {}),
         canUseTool: (toolName, toolInput, opts) => spec.approve(toolName, toolInput, opts),
       },
     })
@@ -167,6 +168,8 @@ export const claude: Provider = {
         ...(spec.veto ? { hooks: { PreToolUse: [{ hooks: [vetoHook(spec.veto)] }] } } : {}),
         ...(spec.model ? { model: spec.model } : {}),
         ...(spec.maxBudgetUsd != null ? { maxBudgetUsd: spec.maxBudgetUsd } : {}),
+        ...(spec.maxTurns != null ? { maxTurns: spec.maxTurns } : {}),
+        ...(spec.resume ? { resume: spec.resume } : {}),
         ...(spec.streamDeltas ? { includePartialMessages: true } : {}),
         ...(spec.mcpServers ? { mcpServers: spec.mcpServers } : {}),
         ...(spec.abort ? { abortController: spec.abort } : {}),

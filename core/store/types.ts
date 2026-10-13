@@ -36,6 +36,7 @@ export type { SessionKind }
 import type { Provenance, WorkItem } from '../work/types.js'
 import type { ItemEvent, ItemStatus, StatusChange } from '../work/state.js'
 import type { FlowOverride } from '../work/flow.js'
+import type { ActionHistoryEntry, ActionKind, ActionRecord, ActionStatus } from '../actions/types.js'
 import type { NewWatch, NewWatchSlotRun, Watch, WatchRunResult, WatchRunStart, WatchRunStatus, WatchRunTrigger, WatchSlotFinish, WatchSlotRun } from '../watch/types.js'
 
 export type StoredSession = {
@@ -440,6 +441,49 @@ export interface LinkStore {
   list(): Promise<Link[]>
 }
 
+/** Which actions to list: all of them, or narrowed. Newest first. */
+export type ActionQuery = {
+  kind?: ActionKind
+  sessionId?: string
+  /** records filed against the item, or made by any of `sessionIds` */
+  itemId?: string
+  sessionIds?: string[]
+  /** started at or after this (ms epoch) */
+  since?: number
+  /** only records in one of these statuses */
+  status?: ActionStatus[]
+  limit?: number
+}
+
+/**
+ * Outbound actions (core/actions): one row per action, and one call row per
+ * tool_use folded into it — the map from a transcript's tool call to its
+ * record, and what makes recording a call twice a no-op.
+ */
+export interface ActionStore {
+  get(id: string): Promise<ActionRecord | null>
+  /** The record a tool call was folded into. */
+  byCall(sessionId: string, toolUseId: string): Promise<ActionRecord | null>
+  /** The record a collapsing call joins (one per git push branch per session). */
+  byGroup(groupKey: string): Promise<ActionRecord | null>
+  /** Insert or replace a record, and point each of its calls at it. */
+  put(rec: ActionRecord): Promise<void>
+  /** Drop a record (merged into another); its calls go with it unless re-put. */
+  remove(id: string): Promise<void>
+  list(q?: ActionQuery): Promise<ActionRecord[]>
+  /**
+   * Move a record `from` → `to` in one atomic update, only if it is still in
+   * `from` (and, with `dueBy`, its send time has come). True = this caller
+   * moved it; false = someone else did first, or it wasn't there. What makes
+   * the dispatcher send an approved action at most once.
+   */
+  claim(id: string, from: ActionStatus, to: ActionStatus, at: number, opts?: { dueBy?: number }): Promise<boolean>
+  /** Append one step of a queued action's life. */
+  addHistory(e: ActionHistoryEntry): Promise<void>
+  /** The history of each record, oldest step first. */
+  history(ids: string[]): Promise<Map<string, ActionHistoryEntry[]>>
+}
+
 export interface Store {
   sessions: SessionStore
   events: EventStore
@@ -454,5 +498,6 @@ export interface Store {
   artifacts: ArtifactStore
   links: LinkStore
   briefs: BriefJobStore
+  actions: ActionStore
   close(): Promise<void>
 }
