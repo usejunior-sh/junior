@@ -1,6 +1,6 @@
 /**
  * The workspace's identity and Claude-auth controls, shared by the create /
- * onboarding flow (WorkspaceModal) and the settings modal's Workspace and
+ * onboarding flow (WorkspaceModal) and the settings page's Workspace and
  * Providers tabs — one set of cards, one verify panel, so the two doors
  * never drift apart.
  */

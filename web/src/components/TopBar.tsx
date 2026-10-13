@@ -26,6 +26,8 @@ type Props = {
   onWorkspaceSettings: () => void
   onOpenSystem: (tab: 'status' | 'activity') => void
   onOpenSettings: () => void
+  /** The settings page is in front — the gear shows it, and closes it. */
+  settingsOpen?: boolean
   onHelp: () => void
   /** Which copy of triage is answering; null until `hello` lands. */
   build: Build | null
@@ -73,6 +75,7 @@ export function TopBar({
   onWorkspaceSettings,
   onOpenSystem,
   onOpenSettings,
+  settingsOpen,
   onHelp,
   build,
   desktop,
@@ -93,7 +96,7 @@ export function TopBar({
           />
         }
         badge={<BuildBadge build={build} onOpenSystem={onOpenSystem} />}
-        system={<SystemIcons workspace={current} conn={conn} onOpenSystem={onOpenSystem} onOpenSettings={onOpenSettings} onHelp={onHelp} />}
+        system={<SystemIcons workspace={current} conn={conn} onOpenSystem={onOpenSystem} onOpenSettings={onOpenSettings} settingsOpen={settingsOpen} onHelp={onHelp} />}
       />
     )
   }
@@ -121,7 +124,7 @@ export function TopBar({
           <Gauge size={17} aria-hidden="true" />
           <span className={`connDot ${conn === 'connected' ? '' : conn === 'connecting' ? 'connecting' : 'down'}`} aria-hidden="true" />
         </button>
-        <button type="button" className="topIcon" aria-label="Settings" onClick={onOpenSettings}>
+        <button type="button" className={`topIcon${settingsOpen ? ' on' : ''}`} aria-label="Settings" aria-pressed={!!settingsOpen} onClick={onOpenSettings}>
           <Settings size={17} aria-hidden="true" />
         </button>
       </header>
@@ -139,7 +142,7 @@ export function TopBar({
       />
       <BuildBadge build={build} onOpenSystem={onOpenSystem} />
       <span className="spacer" />
-      <SystemIcons workspace={current} conn={conn} onOpenSystem={onOpenSystem} onOpenSettings={onOpenSettings} onHelp={onHelp} />
+      <SystemIcons workspace={current} conn={conn} onOpenSystem={onOpenSystem} onOpenSettings={onOpenSettings} settingsOpen={settingsOpen} onHelp={onHelp} />
     </header>
   )
 }
@@ -150,8 +153,9 @@ function SystemIcons({
   conn,
   onOpenSystem,
   onOpenSettings,
+  settingsOpen,
   onHelp,
-}: Pick<Props, 'conn' | 'onOpenSystem' | 'onOpenSettings' | 'onHelp'> & { workspace: Workspace | undefined }) {
+}: Pick<Props, 'conn' | 'onOpenSystem' | 'onOpenSettings' | 'settingsOpen' | 'onHelp'> & { workspace: Workspace | undefined }) {
   return (
     <>
       {/* a daemon from before providers sends none — it shows once that daemon restarts */}
@@ -163,7 +167,13 @@ function SystemIcons({
       <button type="button" className="topIcon" title="Watch runs and activity" onClick={() => onOpenSystem('activity')}>
         <Activity size={15} aria-hidden="true" />
       </button>
-      <button type="button" className="topIcon" title={`Settings (${MOD_LABEL},)`} onClick={onOpenSettings}>
+      <button
+        type="button"
+        className={`topIcon${settingsOpen ? ' on' : ''}`}
+        title={settingsOpen ? 'Close settings (Esc)' : `Settings (${MOD_LABEL},)`}
+        aria-pressed={!!settingsOpen}
+        onClick={onOpenSettings}
+      >
         <Settings size={15} aria-hidden="true" />
       </button>
       <button type="button" className="topIcon" title="Keyboard shortcuts (?)" onClick={onHelp}>

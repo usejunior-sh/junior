@@ -419,6 +419,7 @@ kbd { font-family: var(--mono); font-size: 0.8462rem; color: var(--ash); border:
   background: transparent; color: var(--mute); transition: color 0.1s ease, background 0.1s ease;
 }
 .topIcon:hover { color: var(--ink); background: var(--elev); }
+.topIcon.on { color: var(--ink); background: var(--elev); }
 .topIcon .connDot { position: absolute; right: 4px; top: 4px; width: 6px; height: 6px; border-radius: var(--r-full); background: var(--green); }
 .topIcon .connDot.down { background: var(--red); animation: pulse 1.2s infinite; }
 .topIcon .connDot.connecting { background: var(--yellow); }
@@ -1659,11 +1660,15 @@ button.edText:focus-visible { outline: none; border-color: var(--hair-bright); }
 .lbErr.quiet { color: var(--ash); }
 .lbDirty { font-size: 0.8462rem; color: var(--yellow); }
 .lbSaved { display: inline-flex; align-items: center; gap: 4px; font-size: 0.8462rem; color: var(--green); }
+.lbBack { display: none; }
 @media (max-width: 767px) {
-  /* a phone: list above editor */
-  .lb { grid-template-columns: 1fr; grid-template-rows: minmax(180px, 40%) minmax(0, 1fr); }
-  .lbSide { border-right: 0; border-bottom: 1px solid var(--hair-strong); }
+  /* a phone: the list and the editor take turns, like a master–detail app */
+  .lb { grid-template-columns: 1fr; }
+  .lb.picked .lbSide, .lb:not(.picked) .lbMain { display: none; }
+  .lbSide { border-right: 0; }
+  .lbBack { display: inline-flex; flex: none; }
   .lbField { grid-template-columns: 1fr; gap: 4px; }
+  .lbHeadActs .btn { display: none; }
 }
 
 .msg.assistant { align-self: stretch; font-size: 1.1538rem; line-height: 1.7; color: var(--body); }
@@ -2176,9 +2181,9 @@ dialog.sheet[open] { display: grid; }
 /* badge-pill: the one default project, named wherever projects are listed. */
 .projDefault { display: inline-flex; align-items: center; height: 18px; padding: 0 8px; margin-left: 6px; border-radius: var(--r-full); background: var(--elev); color: var(--body); font-size: 0.7692rem; letter-spacing: 0.01em; }
 .projModal { width: 460px; }
-/* Add-a-project is Radix-driven (it opens inside the settings dialog), so it
+/* Add-a-project is Radix-driven (it opens from the settings page), so it
    centres itself rather than riding the browser's top layer, and sits above
-   the settings dialog's z-index 81. */
+   the scrim's z-index 80. */
 .projOverlay { position: fixed; inset: 0; z-index: 90; background: var(--scrim); animation: fadeIn 0.14s ease; }
 .projAddDialog { position: fixed; z-index: 91; inset: 50% auto auto 50%; margin: 0; transform: translate(-50%, -50%); }
 .projPickRow { display: flex; align-items: center; gap: 10px; }
@@ -2372,19 +2377,14 @@ dialog.itemComposer { width: 800px; max-width: calc(100vw - 48px); padding: 0; o
 .wsModal .row .danger { margin-right: auto; }
 
 
-/* ---------- settings modal (Radix dialog, ~85% of the viewport) ----------
-   A tab list down the left on the deep surface, one pane on the right on the
-   card surface. The only bright thing in it is the Save button. */
-.settingsOverlay { position: fixed; inset: 0; z-index: 80; background: var(--scrim); animation: fadeIn 0.14s ease; }
-.settings {
-  position: fixed; z-index: 81; top: 50%; left: 50%; transform: translate(-50%, -50%);
-  width: min(85vw, 1180px); height: min(85vh, 840px);
-  background: var(--card); border: 1px solid var(--hair-strong); border-radius: var(--r-lg);
-  box-shadow: 0 0 0 1px var(--ring), 0 40px 120px var(--drop);
-  overflow: hidden; outline: none;
-  animation: settingsIn 0.16s ease;
-}
+/* ---------- settings page (#/settings/<tab>) ----------
+   Takes the place of the panel and the main area, beside the rail. A tab list
+   down the left on the deep surface, one pane on the right on the card
+   surface. The only bright thing in it is the Save button. */
+.settings { flex: 1; min-width: 0; min-height: 0; background: var(--card); overflow: hidden; }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+/* The scrim and pop-in the settings modal had — still used by other centred dialogs (mermaid, …). */
+.settingsOverlay { position: fixed; inset: 0; z-index: 80; background: var(--scrim); animation: fadeIn 0.14s ease; }
 @keyframes settingsIn { from { opacity: 0; transform: translate(-50%, -50%) scale(0.985); } to { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
 .settingsTabs { display: grid; grid-template-columns: 228px minmax(0, 1fr); height: 100%; }
 
@@ -2500,7 +2500,7 @@ dialog.itemComposer { width: 800px; max-width: calc(100vw - 48px); padding: 0; o
 @media (prefers-reduced-motion: reduce) {
   .dot.live, .tool .glyph.busy, .toolGroup .glyph.busy, .probing .pip, .msg.assistant.live .md > :last-child::after, .topIcon .connDot.down { animation: none; }
   .uiMenu[data-state="open"] { animation: none; }
-  .settings, .settingsOverlay, .mermaidModal, .setActions .saved { animation: none; }
+  .settingsOverlay, .mermaidModal, .setActions .saved { animation: none; }
   .selBar { animation: none; }
   .tabband .strip { scroll-behavior: auto; }
 }
@@ -3818,11 +3818,6 @@ html.kbOpen .shell.mobile .panel { bottom: 0; }
 }
 /* ---------- phone: settings fill the screen; the tab list becomes a strip ---------- */
 @media (max-width: 767px), (pointer: coarse) and (max-height: 500px) {
-  .settings {
-    inset: 0; transform: none; width: auto; height: auto;
-    border: 0; border-radius: 0; box-shadow: none; padding-top: env(safe-area-inset-top);
-    animation: sheetIn 0.16s ease-out;
-  }
   .settingsTabs { display: flex; flex-direction: column; }
   .settingsNav { flex: none; padding: 0; border-right: 0; border-bottom: 1px solid var(--hair); order: 2; }
   .settingsPane { flex: 1; order: 1; display: contents; }

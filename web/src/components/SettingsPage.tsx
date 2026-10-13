@@ -1,13 +1,13 @@
 /**
- * The settings modal — one Radix dialog over ~85% of the viewport, a tab list
- * down the left, one pane on the right. Every tab is a destination in its own
- * right: `openSettings('auth')` (or `#/settings/auth`) lands on Claude auth
- * with nothing to click through, which is what a "Fix" link needs.
+ * The settings page (`#/settings/<tab>`) — it takes the place of the panel and
+ * the tabbed main area: a tab list down the left, one pane on the right. Every
+ * tab is a destination in its own right: `openSettings('providers')` (or the
+ * hash) lands on it with nothing to click through, which is what a "Fix" link
+ * needs. Close and Esc go back to the page settings was opened from.
  *
  * Workspace-scoped tabs (Workspace · Claude auth · Sources · Projects) write to the
  * server; browser-scoped ones (Sessions · Shortcuts) write to localStorage.
  */
-import * as Dialog from '@radix-ui/react-dialog'
 import * as RadioGroup from '@radix-ui/react-radio-group'
 import * as Slider from '@radix-ui/react-slider'
 import * as Switch from '@radix-ui/react-switch'
@@ -72,7 +72,8 @@ import {
   type ThemeMode,
 } from '../appearance.js'
 import { findTheme, THEMES, type Theme, type ThemeScheme } from '../themes.js'
-import { closeSettings, SETTINGS_TABS, setSettingsTab, useSettings, type SettingsTab } from '../settings.js'
+import { closeSettings, SETTINGS_TABS, setSettingsTab, type SettingsTab } from '../settings.js'
+import { anyDialogOpen, isTypingTarget } from '../keys.js'
 import { store } from '../store.js'
 import { ModelPopover } from './ModelPopover.js'
 import { PermissionModePicker } from './PermissionModePicker.js'
@@ -115,12 +116,13 @@ const ICONS: Record<SettingsTab, ComponentType<LucideProps>> = {
 
 type Props = {
   workspace: Workspace | null
-  /** Open the system sheet (status · activity · logs) — closes the modal first. */
+  /** The tab in front — the route's. */
+  tab: SettingsTab
+  /** Open the system sheet (status · activity · logs) — leaves settings first. */
   onOpenSystem: (tab: SystemTab) => void
 }
 
-export function SettingsModal({ workspace, onOpenSystem }: Props) {
-  const { open, tab } = useSettings()
+export function SettingsPage({ workspace, tab, onOpenSystem }: Props) {
   const meta = SETTINGS_TABS.find((t) => t.id === tab) ?? SETTINGS_TABS[0]
   // A read-out tab fills the pane and gets a Refresh button; the nonce it
   // drives resets per tab, so arriving somewhere never counts as a refresh.
@@ -129,11 +131,20 @@ export function SettingsModal({ workspace, onOpenSystem }: Props) {
   useEffect(() => setNonce(0), [tab])
   // On a phone the tab list is a sideways strip: keep the open tab in view.
   useEffect(() => {
-    if (!open) return
     requestAnimationFrame(() =>
       document.querySelector('.settingsTab[data-state="active"]')?.scrollIntoView({ inline: 'center', block: 'nearest' }),
     )
-  }, [open, tab])
+  }, [tab])
+  // Esc leaves settings — but not from a field (it would throw away an edit)
+  // or while a menu, select or dialog inside it is the thing Esc should close.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented || isTypingTarget(e) || anyDialogOpen()) return
+      closeSettings()
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [])
 
   const openSystem = useCallback(
     (t: SystemTab) => {
@@ -144,10 +155,7 @@ export function SettingsModal({ workspace, onOpenSystem }: Props) {
   )
 
   return (
-    <Dialog.Root open={open} onOpenChange={(o) => !o && closeSettings()}>
-      <Dialog.Portal>
-        <Dialog.Overlay className="settingsOverlay" />
-        <Dialog.Content className="settings" aria-describedby={undefined}>
+        <div className="settings">
           <Tabs.Root
             value={tab}
             onValueChange={(v) => setSettingsTab(v as SettingsTab)}
@@ -156,7 +164,7 @@ export function SettingsModal({ workspace, onOpenSystem }: Props) {
           >
             <nav className="settingsNav">
               <div className="settingsNavHead">
-                <Dialog.Title className="title">Settings</Dialog.Title>
+                <h1 className="title">Settings</h1>
                 {workspace && (
                   <div className="settingsNavWs" title={`Workspace: ${workspace.name}`}>
                     <span className="wsDot" style={{ background: workspace.color }} aria-hidden="true" />
@@ -179,7 +187,7 @@ export function SettingsModal({ workspace, onOpenSystem }: Props) {
                 ))}
               </Tabs.List>
               <div className="settingsNavFoot">
-                <kbd>Esc</kbd> closes
+                <kbd>Esc</kbd> goes back
               </div>
             </nav>
 
@@ -195,11 +203,9 @@ export function SettingsModal({ workspace, onOpenSystem }: Props) {
                       <RefreshCw size={13} aria-hidden="true" />
                     </button>
                   )}
-                <Dialog.Close asChild>
-                  <button type="button" className="iconBtn settingsClose" title="Close (Esc)" aria-label="Close settings">
+                  <button type="button" className="iconBtn settingsClose" title="Close (Esc)" aria-label="Close settings" onClick={closeSettings}>
                     <X size={15} aria-hidden="true" />
                   </button>
-                </Dialog.Close>
                 </span>
               </header>
               <div className={`settingsBody${fill ? ' fill' : ''}`}>
@@ -274,9 +280,7 @@ export function SettingsModal({ workspace, onOpenSystem }: Props) {
               </div>
             </div>
           </Tabs.Root>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
+        </div>
   )
 }
 

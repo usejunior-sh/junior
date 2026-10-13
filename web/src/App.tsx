@@ -35,7 +35,7 @@ import { InboxPage } from './components/InboxPage.js'
 import { ItemPage } from './components/ItemPage.js'
 import { NewSessionComposer, type NewSession } from './components/NewSessionComposer.js'
 import { Rail, type RailSection } from './components/Rail.js'
-import { SettingsModal } from './components/SettingsModal.js'
+import { SettingsPage } from './components/SettingsPage.js'
 import { SystemModal, type SystemTab } from './components/SystemModal.js'
 import { TabBand, type OpenTab, type PageTab, type TabKind } from './components/TabBand.js'
 import { dispatchPrompt, dispatchTitle } from './dispatch.js'
@@ -74,7 +74,7 @@ import { inboxStore, useInbox } from './inboxStore.js'
 import { artifactStore, useArtifacts } from './artifactStore.js'
 import { anyDialogOpen, isTypingTarget } from './keys.js'
 import { EFFORT_LABEL, findModel, useModels } from './models.js'
-import { openSettings } from './settings.js'
+import { closeSettings, noteReturnHash, noteSettingsTab, openSettings } from './settings.js'
 import { store } from './store.js'
 import { usePanelWidth } from './panelWidth.js'
 import { useIsMobile } from './useMobile.js'
@@ -146,7 +146,7 @@ const draftRoute = (id: string) => `/new/${id}`
 
 /**
  * The tab-band key for a route, or null when the route is not a tab at all
- * (`home` redirects, `settings` is a modal). Sessions keep the bare id they
+ * (`home` redirects, `settings` is a page of its own, outside the band). Sessions keep the bare id they
  * have always had; everything else is `<kind>:<id>`.
  */
 function tabKeyOf(route: Route): string | null {
@@ -376,17 +376,12 @@ export function App() {
     if (route.page === 'home') navigate('/inbox', { replace: true })
   }, [route.page, navigate])
 
-  // `#/settings/<tab>` is a door, not a page: open the modal on that tab and
-  // put the URL back on whatever was underneath (the inbox on a cold load).
-  const lastPageHash = useRef('/inbox')
+  // Settings is a page: remember its tab for the gear, and every other page
+  // as where Close and Esc go back to (the inbox on a cold load).
   useEffect(() => {
-    if (route.page === 'settings') {
-      openSettings(route.tab)
-      navigate(lastPageHash.current)
-    } else if (route.page !== 'home') {
-      lastPageHash.current = location.hash.slice(1) || '/inbox'
-    }
-  }, [route, navigate])
+    if (route.page === 'settings') noteSettingsTab(route.tab)
+    else if (route.page !== 'home') noteReturnHash(location.hash.slice(1) || '/inbox')
+  }, [route])
 
   // Watches have no client store; the band needs their titles, so fetch the
   // (small) list once the first watch is in play and keep it.
@@ -467,7 +462,7 @@ export function App() {
   // coming back lands on what you were reading rather than the section root.
   useEffect(() => {
     const section = sectionOf(route)
-    // `home` redirects to the inbox above; `settings` is a modal, not a place.
+    // `home` redirects to the inbox above; `settings` sits outside the rail's sections.
     if (!section || route.page === 'home') return
     recordRoute(section, location.hash.slice(1) || '/inbox')
   }, [route, recordRoute])
@@ -981,6 +976,8 @@ export function App() {
     ? SHEET_LABEL[sheet]
     : route.page === 'inbox'
       ? 'Inbox'
+      : route.page === 'settings'
+        ? 'Settings'
       : [...openTabs, ...(previewTab ? [previewTab] : [])].find((t) => t.key === activeTabKey)?.title ?? pageTab?.label ?? null
   const mobileUp = useMemo((): (() => void) | null => {
     // An open sheet sits over the page: back closes it.
@@ -1001,6 +998,8 @@ export function App() {
         return () => setSheet('terminals')
       case 'change':
         return () => setSheet('changes')
+      case 'settings':
+        return closeSettings
       default:
         return null
     }
@@ -1090,7 +1089,8 @@ export function App() {
         onNewWorkspace={() => setWsModal({ kind: 'create' })}
         onWorkspaceSettings={() => openSettings('workspace')}
         onOpenSystem={(tab) => setSystem({ open: true, tab })}
-        onOpenSettings={() => openSettings()}
+        onOpenSettings={() => (route.page === 'settings' ? closeSettings() : openSettings())}
+        settingsOpen={route.page === 'settings'}
         onHelp={() => setHelpOpen(true)}
         build={build}
         desktop={isDesktop ? { panelCollapsed: panelSize.collapsed, onTogglePanel: panelSize.toggleCollapsed } : undefined}
@@ -1109,6 +1109,10 @@ export function App() {
           onGo={onRailGo}
         />
 
+        {route.page === 'settings' && !sheet ? (
+          <SettingsPage workspace={activeWorkspace} tab={route.tab} onOpenSystem={(tab) => setSystem({ open: true, tab })} />
+        ) : (
+        <>
         {/* Triage.app's title bar carries the panel toggle, so the panel and tab band drop theirs. */}
         <PanelCollapseContext.Provider value={mobile || isDesktop ? null : collapsePanel}>{panel}</PanelCollapseContext.Provider>
         {!panelSize.collapsed && !mobile && (
@@ -1357,6 +1361,8 @@ export function App() {
             )}
           </div>
         </div>
+        </>
+        )}
       </div>
 
       <CommandPalette
@@ -1383,7 +1389,6 @@ export function App() {
       />
       <WorkspaceModal mode={wsModal} onClose={() => setWsModal(null)} />
       <DefaultProjectGate workspaceId={workspaceId} suspended={wsModal !== null || !onboarded} />
-      <SettingsModal workspace={activeWorkspace} onOpenSystem={(tab) => setSystem({ open: true, tab })} />
     </div>
   )
 }

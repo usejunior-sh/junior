@@ -157,7 +157,7 @@ export function LibraryTab({ kind, refreshNonce }: { kind: LibraryKind; refreshN
   const noun = kind === 'skill' ? 'skill' : 'agent'
 
   return (
-    <div className="lb">
+    <div className={`lb${selected ? ' picked' : ''}`}>
       <aside className="lbSide">
         <div className="lbSearch">
           <Search size={13} aria-hidden="true" />
@@ -231,6 +231,7 @@ export function LibraryTab({ kind, refreshNonce }: { kind: LibraryKind; refreshN
           <EntryEditor
             key={current.key}
             entry={current.entry}
+            onBack={() => select(null)}
             onDirty={(d) => (dirtyRef.current = d)}
             onDeleted={() => {
               dirtyRef.current = false
@@ -242,6 +243,7 @@ export function LibraryTab({ kind, refreshNonce }: { kind: LibraryKind; refreshN
           <TeamAgentEditor
             key="new-team"
             entry={null}
+            onBack={() => select(null)}
             taken={teams.agents}
             onDirty={(d) => (dirtyRef.current = d)}
             onSaved={(l, name) => {
@@ -254,6 +256,7 @@ export function LibraryTab({ kind, refreshNonce }: { kind: LibraryKind; refreshN
           <TeamAgentEditor
             key={current.key}
             entry={current.team}
+            onBack={() => select(null)}
             taken={teams.agents}
             onDirty={(d) => (dirtyRef.current = d)}
             onSaved={(l) => {
@@ -417,6 +420,15 @@ function NewForm({
   )
 }
 
+/** The phone's way back from an editor to the list (hidden where both show at once). */
+function BackToList({ onBack }: { onBack: () => void }) {
+  return (
+    <button type="button" className="iconBtn lbBack" aria-label="Back to the list" title="Back" onClick={onBack}>
+      <ArrowLeft size={14} aria-hidden="true" />
+    </button>
+  )
+}
+
 function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
   return (
     <label className="lbField">
@@ -435,7 +447,18 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
 
 const MODEL_ALIASES = ['inherit', 'fable', 'opus', 'sonnet', 'haiku']
 
-function EntryEditor({ entry, onDirty, onDeleted }: { entry: LibraryEntry; onDirty: (dirty: boolean) => void; onDeleted: () => void }) {
+function EntryEditor({
+  entry,
+  onBack,
+  onDirty,
+  onDeleted,
+}: {
+  entry: LibraryEntry
+  /** back to the list — only shown on a phone, where the list and the editor take turns */
+  onBack: () => void
+  onDirty: (dirty: boolean) => void
+  onDeleted: () => void
+}) {
   const [file, setFile] = useState<LibraryFile | null>(null)
   const [path, setPath] = useState(entry.path)
   const [text, setText] = useState('')
@@ -519,6 +542,7 @@ function EntryEditor({ entry, onDirty, onDeleted }: { entry: LibraryEntry; onDir
   return (
     <div className="lbEditor" onKeyDown={onKeyDown}>
       <header className="lbHead">
+        <BackToList onBack={onBack} />
         <div className="lbHeadT">
           <div className="lbHeadName">
             <span className="mono">{entry.kind === 'skill' ? `/${entry.name}` : entry.name}</span>
@@ -737,11 +761,13 @@ function AgentFields({ fields, readOnly, onSet }: { fields: Record<string, strin
 function TeamAgentEditor({
   entry,
   taken,
+  onBack,
   onDirty,
   onSaved,
 }: {
   /** null: a new one */
   entry: AgentEntry | null
+  onBack: () => void
   taken: AgentEntry[]
   onDirty: (d: boolean) => void
   onSaved: (l: TeamLibrary, name: string) => void
@@ -775,6 +801,7 @@ function TeamAgentEditor({
   return (
     <div className="lbEditor">
       <header className="lbHead">
+        <BackToList onBack={onBack} />
         <div className="lbHeadT">
           <div className="lbHeadName">
             <span className="lbSwatch" style={{ background: AGENT_HEX[agent.color] }} aria-hidden="true" />

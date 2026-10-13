@@ -6,7 +6,6 @@
  */
 import { useCallback, useEffect, useState } from 'react'
 import type { LibraryEntry, LibraryFileResponse, LibraryKind, LibraryListResponse, LibraryTarget } from '../../shared/protocol.js'
-import { closeSettings } from './settings.js'
 import { draftStore } from './drafts.js'
 import { store } from './store.js'
 
@@ -54,7 +53,7 @@ export const targetCwd = (t: LibraryTarget | undefined): string | undefined =>
 /** Hand the job to Claude: a new session tab, prompt written, waiting for you to send it. */
 export function askClaude(label: string, text: string, cwd?: string) {
   const d = draftStore.create({ label, text, ...(cwd ? { cwd } : {}) })
-  closeSettings()
+  // Leaving the settings page for the draft is just navigation.
   location.hash = `/new/${d.id}`
 }
 

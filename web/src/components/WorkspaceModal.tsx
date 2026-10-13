@@ -5,7 +5,7 @@
  *   onboarding  — first run: the same flow, introducing the concept and
  *                 configuring the default workspace
  *
- * Editing an existing workspace lives in the settings modal (Workspace and
+ * Editing an existing workspace lives on the settings page (Workspace and
  * Claude auth tabs), which shares these cards and the verify panel.
  *
  * Three steps: identity (name, colour, default project folder — every

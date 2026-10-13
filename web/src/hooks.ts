@@ -68,7 +68,7 @@ export type Route =
   | { page: 'changes' }
   /** `#/change/<checkoutId>/<encoded path>` — one changed file: its diff, and an editor (a project id = its main checkout) */
   | { page: 'change'; checkoutId: string; path: string }
-  /** `#/settings/<tab>` — opens the settings modal on that tab, then yields to the page underneath */
+  /** `#/settings/<tab>` — the settings page, on that tab */
   | { page: 'settings'; tab: SettingsTab }
 
 /** The hash for a work item — ids carry `:` `/` `#`, so they travel encoded. */

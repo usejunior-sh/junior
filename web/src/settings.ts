@@ -1,13 +1,11 @@
 /**
- * The settings modal, as an external store.
+ * Settings is a page: `#/settings/<tab>`, with the route as its only state.
  *
- * Any component can open it on a specific tab — a "Fix" link on an auth
- * error opens Providers, the workspace menu opens Workspace — without
- * threading callbacks through the tree. The URL form `#/settings/<tab>` maps
- * onto the same call (see App), so a tab is also linkable from outside.
+ * Any component can still open it on a specific tab — a "Fix" link on an auth
+ * error opens Providers, the workspace menu opens Workspace — by calling
+ * `openSettings(tab)`, which is just navigation. Closing goes back to whatever
+ * was in front before settings opened (App tells us via `noteReturnHash`).
  */
-import { useSyncExternalStore } from 'react'
-
 export type SettingsTab =
   | 'workspace'
   | 'providers'
@@ -70,39 +68,36 @@ export const isSettingsTab = (v: unknown): v is SettingsTab =>
 /** A tab's id from before it was renamed, for links that still name it. */
 export const LEGACY_SETTINGS_TABS: Readonly<Record<string, SettingsTab>> = { auth: 'providers' }
 
-/** The hash that opens the modal on a tab: `/#/settings/providers`. */
+/** The settings page on a tab: `/#/settings/providers`. */
 export const settingsHash = (tab: SettingsTab) => `/settings/${tab}`
 
-type SettingsState = { open: boolean; tab: SettingsTab }
+/** The last tab shown, so the gear reopens where you were. */
+let lastTab: SettingsTab = DEFAULT_SETTINGS_TAB
+/** The page settings was opened from — where Close and Esc go. */
+let returnHash = '/inbox'
 
-let state: SettingsState = { open: false, tab: DEFAULT_SETTINGS_TAB }
-const listeners = new Set<() => void>()
-
-function set(next: SettingsState) {
-  state = next
-  for (const fn of listeners) fn()
+/** App calls this for every non-settings route, so Close knows where to land. */
+export function noteReturnHash(hash: string) {
+  returnHash = hash || '/inbox'
 }
 
-export function openSettings(tab: SettingsTab = state.tab) {
-  set({ open: true, tab })
+/** App calls this when the settings route shows a tab. */
+export function noteSettingsTab(tab: SettingsTab) {
+  lastTab = tab
+}
+
+const onSettings = () => location.hash.slice(1).startsWith('/settings')
+
+export function openSettings(tab: SettingsTab = lastTab) {
+  const hash = settingsHash(tab)
+  if (location.hash.slice(1) === hash) return
+  // Hopping between tabs replaces; arriving from a page is a history entry, so Back leaves.
+  if (onSettings()) location.replace(`#${hash}`)
+  else location.hash = hash
 }
 
 export function closeSettings() {
-  if (state.open) set({ ...state, open: false })
+  if (onSettings()) location.hash = returnHash
 }
 
-export function setSettingsTab(tab: SettingsTab) {
-  set({ ...state, tab })
-}
-
-export function useSettings(): SettingsState {
-  return useSyncExternalStore(
-    (fn) => {
-      listeners.add(fn)
-      return () => {
-        listeners.delete(fn)
-      }
-    },
-    () => state,
-  )
-}
+export const setSettingsTab = (tab: SettingsTab) => openSettings(tab)
