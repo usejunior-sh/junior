@@ -242,6 +242,7 @@ export class Store {
   readonly #artifactsListeners = new Set<() => void>()
   /** Who wants to know when a work item moved (the inbox store, the non-open inbox tabs). */
   readonly #inboxListeners = new Set<() => void>()
+  readonly #libraryListeners = new Set<() => void>()
   readonly #changesListeners = new Set<(sessionId: string) => void>()
   /** Who follows brief jobs (the brief store) — one frame per transition. */
   readonly #briefListeners = new Set<(job: BriefJob) => void>()
@@ -338,6 +339,9 @@ export class Store {
       case 'inbox_changed':
         for (const fn of this.#inboxListeners) fn()
         break
+      case 'library_changed':
+        for (const fn of this.#libraryListeners) fn()
+        break
       case 'session_changed':
         for (const fn of this.#changesListeners) fn(msg.sessionId)
         break
@@ -379,6 +383,14 @@ export class Store {
     this.#artifactsListeners.add(fn)
     return () => {
       this.#artifactsListeners.delete(fn)
+    }
+  }
+
+  /** Fires when a skill or agent file changed (an edit here, or a session wrote one); returns the unsubscribe. */
+  onLibraryChanged(fn: () => void): () => void {
+    this.#libraryListeners.add(fn)
+    return () => {
+      this.#libraryListeners.delete(fn)
     }
   }
 

@@ -125,6 +125,7 @@ export const claude: Provider = {
         // The SDK refuses 'bypassPermissions' without this explicit opt-in.
         ...(spec.permissionMode === 'bypassPermissions' ? { allowDangerouslySkipPermissions: true } : {}),
         ...(spec.resume ? { resume: spec.resume } : {}),
+        ...(spec.plugins?.length ? { plugins: spec.plugins.map((p) => ({ type: 'local' as const, path: p })) } : {}),
         canUseTool: (toolName, toolInput, opts) => spec.approve(toolName, toolInput, opts),
       },
     })
@@ -147,6 +148,8 @@ export const claude: Provider = {
       backgroundTask: async (toolUseId) => {
         await q.backgroundTasks(toolUseId)
       },
+      // Plugins, skills and agents in one go — project and personal ones too, not only plugins'.
+      reloadLibrary: async () => (await q.reloadPlugins()).commands,
     }
   },
 

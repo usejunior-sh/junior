@@ -205,6 +205,49 @@ export type TeamLibraryResponse =
   | { ok: true; teams: RecipeEntry[]; agents: AgentEntry[]; dir: string }
   | { ok: false; error: string }
 
+// ---------------------------------------------------------------------------
+// Skills and agents (server/library.ts): every Claude Code skill and subagent a
+// session can see — the workspace's own (a local plugin, `triage:<name>`), the
+// user's (~/.claude), each project's (.claude/), and installed plugins' (read-only).
+// ---------------------------------------------------------------------------
+
+export type LibraryKind = 'skill' | 'agent'
+export type LibrarySource = 'workspace' | 'personal' | 'project' | 'plugin'
+
+export type LibraryEntry = {
+  kind: LibraryKind
+  /** what Claude calls it — `/name` or the subagent type; `triage:name` / `plugin:name` when namespaced */
+  name: string
+  /** the folder (skill) or file stem (agent) */
+  slug: string
+  description: string
+  source: LibrarySource
+  /** where it comes from, said plainly: Personal, a project's name, a plugin's name, the workspace */
+  scope: string
+  /** SKILL.md, or the agent's .md */
+  path: string
+  /** false for plugins — the plugin manager rewrites their files */
+  editable: boolean
+  /** agents: frontmatter extras */
+  model?: string
+  color?: string
+  tools?: string
+  /** skills: how many files sit beside SKILL.md */
+  files?: number
+}
+
+/** A place a new skill or agent can be made: 'workspace', 'personal', or 'project:<folder>'. */
+export type LibraryTarget = { id: string; label: string; dir: string }
+
+export type LibraryListResponse =
+  | { ok: true; entries: LibraryEntry[]; targets: LibraryTarget[] }
+  | { ok: false; error: string }
+
+/** One file of a skill or agent. `files` lists a skill folder's files relative to it. */
+export type LibraryFileResponse =
+  | { ok: true; path: string; text: string; editable: boolean; binary: boolean; files: string[]; dir: string }
+  | { ok: false; error: string }
+
 export type { CardStep, Finding, Handoff, PlanNote, PlanTask, RunState, Slice, TaskState, TeamCard, TeamRun, Worker } from '../core/teams/engine.js'
 
 /** A session's place on a team run: the lead (the chat that proposed it) or one of its workers. */
@@ -1725,6 +1768,8 @@ export type ServerMessage =
   | { type: 'terminal_closed'; terminalId: string }
   /** The artifacts index changed (a write, a delete, or a re-index found edits) — refetch. */
   | { type: 'artifacts_changed' }
+  /** A skill or agent file changed (the settings editor, or a session wrote one) — refetch. */
+  | { type: 'library_changed' }
   /** A work item was created, edited or moved (by a chat, a watch, another tab) — refetch the inbox. */
   | { type: 'inbox_changed' }
   /**

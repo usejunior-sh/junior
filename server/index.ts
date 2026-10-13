@@ -191,6 +191,8 @@ import type {
   ProviderVerifyResponse,
   SessionTeamRun,
   TeamLibraryResponse,
+  LibraryFileResponse,
+  LibraryListResponse,
   TeamPickerResponse,
   TeamRunResponse,
   TeamRunView,
@@ -330,6 +332,7 @@ import { browserCallAllowed } from '../core/browser/policy.js'
 import { BROWSER_HOST_PATH } from '../core/browser/wire.js'
 import { FileIndexes, readProjectFile, resolveFileMention, writeProjectFile } from './files.js'
 import { ArtifactIndex, slug } from './artifacts.js'
+import { createLibraryEntry, ensureWorkspacePlugin, libraryRoots, locate as locateLibrary, libraryTargets, listLibrary, readLibraryFile, removeLibraryItem, writeLibraryFile, type LibraryRoot } from './library.js'
 import { TRIAGE_MCP_INSTRUCTIONS, triageSessionAppend } from '../shared/triageContext.js'
 import { callTool as callMcpTool, PROTOCOL_VERSION as MCP_PROTOCOL_VERSION, TOOLS as MCP_TOOLS } from '../core/mcp/tools.js'
 import {
@@ -593,6 +596,8 @@ class WorkspaceRuntime {
 
   // Teams (server/teams.ts): agents and recipes are files; runs persist under `team_runs`.
   readonly teamLibrary: TeamLibrary
+  /** the workspace's own skills and agents — a local plugin every chat session loads (server/library.ts) */
+  readonly libraryDir: string
   // Watches are files (server/watch-files.ts); rows hold their state.
   readonly watchFiles: WatchFiles
   /** what the last file sync saw — files, projects, probes; unchanged = nothing to do */
@@ -629,6 +634,8 @@ class WorkspaceRuntime {
     this.dispatchDir = path.join(workspaceDir(meta.id), 'dispatch')
     this.attachmentsDir = path.join(workspaceDir(meta.id), 'attachments')
     this.teamLibrary = new TeamLibrary(workspaceDir(meta.id))
+    this.libraryDir = path.join(workspaceDir(meta.id), 'library')
+    void ensureWorkspacePlugin(this.libraryDir).catch((err) => log('warn', 'library', `could not set up ${this.libraryDir}: ${errText(err)}`))
     this.watchFiles = new WatchFiles(workspaceDir(meta.id))
     this.triageMcp = () => makeTriageMcp(this)
     this.terminals = new TerminalManager(
@@ -737,6 +744,8 @@ class LiveSession {
   private readonly q: AgentSession
   /** The subprocess's cumulative cost at its last result — turn cost is the difference. */
   private costSeen = 0
+  /** This turn wrote a skill or agent file — reload them everywhere when it ends. */
+  private libraryTouched = false
   /** Whether this subprocess was spawned able to bypass permission checks. */
   private readonly bypassArmed: boolean
   /** The agent this session runs on — its own, not the workspace's. */
@@ -789,6 +798,9 @@ class LiveSession {
       permissionMode: row.permissionMode,
       // Revival: replay the agent's own transcript into the new subprocess.
       ...(resumeSdkSessionId ? { resume: resumeSdkSessionId } : {}),
+      // The workspace's own skills and agents, for a chat. Not for briefs, watch
+      // runs or team workers — each runs a lean, fixed toolset on purpose.
+      ...(row.kind === 'chat' && !extras.tools ? { plugins: [rt.libraryDir] } : {}),
       // Still set under every mode: the permissive modes short-circuit the
       // calls they cover before this runs, and whatever still reaches here
       // is a call that mode decided a human should see.
@@ -838,6 +850,13 @@ class LiveSession {
     }
   }
 
+  /** Re-read skills and agents from disk, and tell the composer what `/` offers now. */
+  async reloadLibrary(): Promise<void> {
+    if (!this.q.reloadLibrary || this.status === 'starting' || this.status === 'error') return
+    const commands = await this.q.reloadLibrary()
+    noteCommands(this.rt, this.row.cwd, commands.map(toCommandInfo))
+  }
+
   /** Remember which paths this turn's file-editing tools named. */
   private noteToolPaths(calls: ToolCall[]) {
     const open = this.rt.openTurns.get(this.row.id)
@@ -877,7 +896,10 @@ class LiveSession {
         if (ev.kind === 'commands') noteCommands(this.rt, this.row.cwd, ev.commands.map(toCommandInfo))
         if (ev.kind === 'message') {
           this.setStatus('running')
-          if (ev.role === 'assistant') this.noteToolPaths(ev.toolCalls)
+          if (ev.role === 'assistant') {
+            this.noteToolPaths(ev.toolCalls)
+            if (ev.toolCalls.some(writesLibrary)) this.libraryTouched = true
+          }
         }
         // stream deltas are broadcast live but not persisted (recoverable
         // from the committed assistant message, and the only high-volume thing)
@@ -893,6 +915,11 @@ class LiveSession {
           this.rt.files.invalidate(this.row.cwd)
           // A brief run is one turn: its result is the run's end.
           if (this.row.kind === 'brief') void onBriefTurnDone(this.rt, this.row.id)
+          // A skill or agent this turn wrote is usable now — here and in every other session.
+          if (this.libraryTouched) {
+            this.libraryTouched = false
+            reloadLibraryEverywhere(this.rt)
+          }
           // Team spend: total_cost_usd is cumulative for this subprocess, so
           // the turn's cost is the difference from the last result it sent —
           // tracked for every session, so a chat that becomes a lead mid-way
@@ -1419,6 +1446,45 @@ type OpenTurn = { seq: number; root: string; startedAt: number; touched: Set<str
 
 /** Tools whose `file_path` counts as this session naming a file itself. */
 const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit'])
+
+// ---------------------------------------------------------------------------
+// Skills and agents (server/library.ts): the settings tabs read and write the
+// files; anything that changes them reloads every live session, so a new skill
+// is in `/` and a new agent is spawnable without starting over.
+// ---------------------------------------------------------------------------
+
+/** The roots this workspace's sessions see: its library, ~/.claude, its projects' .claude, plugins. */
+async function libraryRootsFor(rt: WorkspaceRuntime): Promise<LibraryRoot[]> {
+  return libraryRoots({
+    workspaceLibrary: rt.libraryDir,
+    env: rt.envFor('claude'),
+    projects: (await rt.store.projects.list()).map((p) => ({ name: p.name, path: p.path })),
+  })
+}
+
+/**
+ * A tool call that may have written a skill or agent. Generous on purpose — a
+ * false hit costs one reload; a miss means the new skill waits for a new session.
+ */
+const LIBRARY_PATH_RE = /(^|[\/])(skills|agents)[\/]/
+function writesLibrary(call: ToolCall): boolean {
+  const input = (call.input ?? {}) as { file_path?: unknown; command?: unknown }
+  if (EDIT_TOOLS.has(call.name)) return typeof input.file_path === 'string' && LIBRARY_PATH_RE.test(input.file_path)
+  if (call.name === 'Bash') return typeof input.command === 'string' && /\.claude[\/](skills|agents)|library[\/](skills|agents)/.test(input.command)
+  return false
+}
+
+/** Reload skills and agents in every live session, and tell the settings tabs to refetch. */
+function reloadLibraryEverywhere(rt: WorkspaceRuntime): void {
+  for (const live of rt.live.values()) {
+    void live.reloadLibrary().catch((err) => log('warn', 'library', `reload failed: ${errText(err)}`, { session: live.row.id }))
+  }
+  // Draft tabs probed their folder's `/` list before the change; the next `/` asks again.
+  for (const key of [...rt.commandCache.keys()]) {
+    if (![...rt.live.values()].some((l) => expandHome(l.row.cwd) === key)) rt.commandCache.delete(key)
+  }
+  broadcast(rt, { type: 'library_changed' })
+}
 
 /** A session's repo root, resolved once per session and cached. */
 async function sessionRepoRoot(rt: WorkspaceRuntime, row: StoredSession): Promise<string | null> {
@@ -4773,6 +4839,7 @@ function extrasFor(rt: WorkspaceRuntime, row: StoredSession): SessionExtras {
     workspaceId: rt.meta.id,
     workspaceName: rt.meta.name,
     artifactsRoot: rt.artifacts.root,
+    libraryRoot: rt.libraryDir,
   })
   const run = teamRunOf(rt, row.id)
   const worker = run && run.leadSessionId !== row.id ? [...run.workers].reverse().find((w) => w.sessionId === row.id) : undefined
@@ -7813,6 +7880,46 @@ const server = http.createServer(async (req, res) => {
         await writeDispatchTemplate(rt.dispatchDir, kind, parsed.body)
       }
       json(200, { ok: true, kind, body: await readDispatchTemplate(rt.dispatchDir, kind) })
+    } catch (err) {
+      json(400, { ok: false, error: errText(err) })
+    }
+    return
+  }
+  // Skills and agents (server/library.ts): list, read, write, create, delete — then reload everywhere.
+  if (url.pathname.startsWith('/api/library')) {
+    const route = `${req.method} ${url.pathname}`
+    try {
+      const roots = await libraryRootsFor(rt)
+      if (route === 'GET /api/library') {
+        const kind = url.searchParams.get('kind')
+        if (kind !== 'skill' && kind !== 'agent') throw new Error('need ?kind=skill or ?kind=agent')
+        const body: LibraryListResponse = { ok: true, entries: await listLibrary(kind, roots), targets: libraryTargets(roots) }
+        json(200, body)
+      } else if (route === 'GET /api/library/file') {
+        const body: LibraryFileResponse = { ok: true, ...(await readLibraryFile(url.searchParams.get('path'), roots)) }
+        json(200, body)
+      } else if (route === 'PUT /api/library/file') {
+        const b = ((await readJsonBody(req, 1_000_000)) ?? {}) as { path?: unknown; text?: unknown }
+        const loc = await writeLibraryFile(b.path, b.text, roots)
+        reloadLibraryEverywhere(rt)
+        const body: LibraryFileResponse = { ok: true, ...(await readLibraryFile(loc.file, roots)) }
+        json(200, body)
+      } else if (route === 'POST /api/library') {
+        const made = await createLibraryEntry(await readJsonBody(req), roots)
+        reloadLibraryEverywhere(rt)
+        json(200, { ok: true, path: made.path })
+      } else if (route === 'DELETE /api/library') {
+        await removeLibraryItem(url.searchParams.get('path'), roots, path.join(TRIAGE_DIR, 'trash'), {
+          fileOnly: url.searchParams.get('file') === '1',
+        })
+        reloadLibraryEverywhere(rt)
+        json(200, { ok: true })
+      } else if (route === 'POST /api/library/open') {
+        const b = ((await readJsonBody(req)) ?? {}) as { path?: unknown }
+        const loc = locateLibrary(b.path, roots)
+        await openInEditor(loc.kind === 'skill' ? loc.item : path.dirname(loc.item))
+        json(200, { ok: true })
+      } else json(404, { ok: false, error: 'not found' })
     } catch (err) {
       json(400, { ok: false, error: errText(err) })
     }

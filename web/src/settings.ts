@@ -15,6 +15,8 @@ export type SettingsTab =
   | 'projects'
   | 'models'
   | 'briefs'
+  | 'skills'
+  | 'agents'
   | 'teams'
   | 'connectors'
   | 'mcp'
@@ -44,7 +46,9 @@ export const SETTINGS_TABS: ReadonlyArray<SettingsTabMeta> = [
   { id: 'projects', label: 'Projects', sub: 'The local folders you work in. Sessions run in a project’s folder, and dispatch matches a work item’s repo to land there.', group: 'workspace' },
   { id: 'models', label: 'Models', sub: 'Which models the model picker offers — hide the ones you never use, or add an id Claude Code does not list yet.', group: 'workspace' },
   { id: 'briefs', label: 'Briefs', sub: 'How briefs run: the daily cap, the model, and the playbook for each kind of work item.', group: 'workspace' },
-  { id: 'teams', label: 'Teams', sub: 'The teams a run can use — recipe files in this workspace’s folder — and the agents they’re made of.', group: 'workspace' },
+  { id: 'skills', label: 'Skills', sub: 'Every skill a session here can use — this workspace’s, yours, each project’s, and your plugins’. Edits are live in open sessions.', group: 'workspace', fill: true },
+  { id: 'agents', label: 'Agents', sub: 'Every subagent a session here can hand work to, plus the agents your teams are made of. Edits are live in open sessions.', group: 'workspace', fill: true },
+  { id: 'teams', label: 'Teams', sub: 'The teams a run can use — recipe files in this workspace’s folder. Their agents live under Agents.', group: 'workspace' },
   { id: 'connectors', label: 'Connectors', sub: 'What a dispatched session can reach — claude.ai connectors and local MCP servers.', group: 'workspace', fill: true },
   { id: 'mcp', label: 'MCP', sub: 'How another agent — Claude Code, Codex, Cursor — connects to this inbox from outside triage.', group: 'workspace' },
   { id: 'activity', label: 'Activity', sub: 'Recent watch runs in this workspace — what ran, when, and what it filed.', group: 'diagnostics', fill: true },

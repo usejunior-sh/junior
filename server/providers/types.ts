@@ -155,6 +155,8 @@ export type SessionSpec = {
   permissionMode?: PermissionMode | null
   /** the agent's own session id to continue */
   resume?: string
+  /** local plugin folders to load (the workspace's skills and agents); adapters without plugins ignore it */
+  plugins?: string[]
   approve: ToolApproval
 }
 
@@ -171,6 +173,8 @@ export interface AgentSession extends AsyncIterable<ProviderEvent> {
   stopTask(taskId: string): Promise<void>
   /** hand a foreground subagent to the background */
   backgroundTask(toolUseId: string): Promise<void>
+  /** re-read skills and agents from disk; the refreshed `/` list. Absent where the agent can't. */
+  reloadLibrary?(): Promise<CommandEntry[]>
 }
 
 /** One headless prompt run to completion (watches, scans, drafts). */

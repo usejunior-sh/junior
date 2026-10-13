@@ -39,6 +39,8 @@ export type TriageSessionIdentity = {
   workspaceName: string
   /** absolute path of the workspace's artifacts folder */
   artifactsRoot: string
+  /** the workspace's own skills and agents — a plugin its chat sessions load as `triage:` */
+  libraryRoot?: string
 }
 
 /**
@@ -62,5 +64,19 @@ was opened for and which artifacts are attached to it; get_work_item follows any
   return `${head}
 When the user says to write something down, note it, or attach it here, that means write_artifact — with
 \`links\` naming this session ({ kind: "session", id: "${id.sessionId}", role: "context" }) and the work item
-too when there is one, so the note comes back with the work rather than getting lost in the transcript.`
+too when there is one, so the note comes back with the work rather than getting lost in the transcript.${id.libraryRoot ? librarySection(id.libraryRoot) : ''}`
 }
+
+/**
+ * Where a skill or agent the user asks for should go. Triage reloads skills
+ * and agents in every live session when a turn writes one, so it is usable
+ * straight away — say so rather than telling the user to restart.
+ */
+const librarySection = (root: string) => `
+
+When the user asks you to create or change a skill or a subagent, write Claude Code's own file format:
+a skill is <dir>/skills/<name>/SKILL.md (frontmatter: name, description; then the instructions), an agent
+is <dir>/agents/<name>.md (frontmatter: name, description, optional tools and model; then its system prompt).
+Put it where the user says. With no preference: this workspace's library, ${root} (its skills load as
+/triage:<name> in this workspace's sessions); ~/.claude for "personal" or "everywhere"; <project>/.claude for
+one repo. Triage reloads skills and agents in every open session once your turn ends, so it is usable at once.`

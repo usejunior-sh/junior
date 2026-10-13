@@ -15,6 +15,7 @@ import * as Tabs from '@radix-ui/react-tabs'
 import {
   Activity,
   Bot,
+  BotMessageSquare,
   Cable,
   Check,
   Folder,
@@ -32,6 +33,7 @@ import {
   SwatchBook,
   Users,
   Wallet,
+  WandSparkles,
   X,
   type LucideProps,
 } from 'lucide-react'
@@ -79,6 +81,7 @@ import { McpTab } from './McpTab.js'
 import { PhoneTab } from './PhoneTab.js'
 import { ProjectsTab } from './ProjectsTab.js'
 import { TeamsTab } from './TeamsTab.js'
+import { LibraryTab } from './LibraryTab.js'
 import { RepoScopeEditor } from './RepoScope.js'
 import { UsageTab } from './UsageTab.js'
 import { ActivityTab, LogsTab, type SystemTab } from './SystemModal.js'
@@ -94,6 +97,8 @@ const ICONS: Record<SettingsTab, ComponentType<LucideProps>> = {
   projects: Folder,
   models: Gauge,
   briefs: Sparkles,
+  skills: WandSparkles,
+  agents: BotMessageSquare,
   teams: Users,
   connectors: Plug,
   mcp: Cable,
@@ -222,6 +227,12 @@ export function SettingsModal({ workspace, onOpenSystem }: Props) {
                   </Tabs.Content>
                   <Tabs.Content value="briefs">
                     <BriefsTab />
+                  </Tabs.Content>
+                  <Tabs.Content value="skills" className="settingsFill">
+                    <LibraryTab kind="skill" refreshNonce={nonce} />
+                  </Tabs.Content>
+                  <Tabs.Content value="agents" className="settingsFill">
+                    <LibraryTab kind="agent" refreshNonce={nonce} />
                   </Tabs.Content>
                   <Tabs.Content value="teams">
                     <TeamsTab />
