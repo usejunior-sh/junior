@@ -97,9 +97,10 @@ export const CAN_TOOLS: Record<AgentCan, string[]> = {
   edit: ['Write', 'Edit', 'MultiEdit', 'NotebookEdit'],
   run: ['Bash'],
   web: ['WebSearch', 'WebFetch'],
-  // Not a built-in: the user's chrome-devtools MCP server, loaded only for agents
-  // allowed it (every other connector is left out — see strictMcpConfig at spawn).
-  browser: ['mcp__chrome-devtools'],
+  // Not a built-in: the browser pane's own tools while Triage.app hosts them,
+  // else the user's chrome-devtools MCP server — loaded only for agents allowed
+  // it (every other connector is left out — see strictMcpConfig at spawn).
+  browser: ['mcp__browser', 'mcp__chrome-devtools'],
 }
 /** Built-in tools a "can" governs; browser is an MCP server, handled by loading it or not. */
 const GATED_TOOLS = (['read', 'edit', 'run', 'web'] as const).flatMap((c) => CAN_TOOLS[c])
