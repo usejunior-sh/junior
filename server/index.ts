@@ -3929,7 +3929,11 @@ async function initRuntime(rt: WorkspaceRuntime): Promise<void> {
   await bootBriefs(rt)
   await rt.teamLibrary.seed().catch((err) => log('error', 'teams', `could not seed agents and teams: ${err}`, { workspace: rt.meta.id }))
   await loadTeamRuns(rt)
-  rt.inboxCache = await rt.store.inbox.load()
+  // The last snapshot makes the first page load instant — but only while it
+  // is still fresh, and only in today's shape: one saved before stage/turn
+  // carries no flows, and serving it leaves Today empty until the next sync.
+  const saved = await rt.store.inbox.load()
+  rt.inboxCache = saved && saved.landedToday !== undefined && saved.items.every((i) => i.flow) ? saved : null
   probeConnectors(rt).catch((err) => log('error', 'connectors', `probe failed: ${err}`, { workspace: rt.meta.id }))
   probeModels(rt).catch((err) => log('error', 'models', `probe failed: ${err}`, { workspace: rt.meta.id }))
 }
