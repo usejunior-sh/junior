@@ -1,0 +1,12 @@
+#!/bin/sh
+# Stand-in for the GitHub CLI on the demo server's PATH, so its GitHub source
+# never reads (or files) your real PRs. Answers the calls core/sources/github.ts
+# makes with an empty account that can see the demo repos.
+case "$*" in
+  *"api user/repos"*) printf 'acme/api\nacme/web\n' ;;
+  *"api user"*) echo alexr ;;
+  *closedQ=*) echo '{"data":{"closed":{"nodes":[]}}}' ;;
+  *graphql*) echo '{"data":{"review":{"nodes":[]},"authored":{"nodes":[]},"mentions":{"nodes":[]}}}' ;;
+  --version) echo 'gh version 2.80.0 (demo)' ;;
+  *) echo "gh (demo): '$*' is not available in the demo" >&2; exit 1 ;;
+esac
