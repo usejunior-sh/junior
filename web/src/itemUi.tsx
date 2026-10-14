@@ -44,6 +44,15 @@ export const KIND_LABEL: Record<string, string> = {
   fyi: 'fyi',
 }
 
+/** Brief types (server/briefs.ts BRIEF_TYPES) — playbooks picked by what the brief is, for any kind. */
+export const BRIEF_TYPE_LABEL: Record<string, string> = {
+  plan: 'Plan',
+  overview: 'Overview',
+  'pr-summary': 'PR summary',
+}
+
+export const playbookLabel = (name: string): string => BRIEF_TYPE_LABEL[name] ?? KIND_LABEL[name] ?? name
+
 export const PRIORITY_LABEL: Record<number, string> = { 0: 'none', 1: 'Urgent', 2: 'High', 3: 'Normal', 4: 'Low' }
 export const PRIORITY_VALUES = [0, 1, 2, 3, 4]
 

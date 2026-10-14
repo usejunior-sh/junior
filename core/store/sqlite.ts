@@ -632,6 +632,9 @@ function ensureDurableSchema(db: DatabaseSync) {
   ensure('work_items', 'stage', 'stage TEXT', wi)
   ensure('work_items', 'turn', 'turn TEXT', wi)
   ensure('work_items', 'flow_override', 'flow_override TEXT', wi)
+
+  // The template text the user edited in the brief composer, when it differs from the file.
+  ensure('brief_jobs', 'playbook_body', 'playbook_body TEXT', cols('brief_jobs'))
 }
 
 /*
@@ -2090,6 +2093,7 @@ type BriefJobRow = {
   item_id: string
   status: string
   playbook: string
+  playbook_body: string | null
   model: string | null
   note: string | null
   session_id: string | null
@@ -2107,6 +2111,7 @@ const toBriefJob = (r: BriefJobRow): BriefJob => ({
   itemId: r.item_id,
   status: BRIEF_STATUS_SET.has(r.status) ? (r.status as BriefStatus) : 'failed',
   playbook: r.playbook,
+  playbookBody: r.playbook_body ?? null,
   model: r.model,
   note: r.note,
   sessionId: r.session_id,
@@ -2127,10 +2132,10 @@ class SqliteBriefJobs implements BriefJobStore {
   async create(j: NewBriefJob): Promise<BriefJob> {
     this.db
       .prepare(
-        `INSERT INTO brief_jobs (id, item_id, status, playbook, model, note, session_id, started_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO brief_jobs (id, item_id, status, playbook, playbook_body, model, note, session_id, started_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
-        j.id, j.itemId, j.running ? 'running' : 'queued', j.playbook, j.model ?? null, j.note ?? null,
+        j.id, j.itemId, j.running ? 'running' : 'queued', j.playbook, j.playbookBody ?? null, j.model ?? null, j.note ?? null,
         j.running?.sessionId ?? null, j.running?.startedAt ?? null, Date.now(),
       )
     return toBriefJob(this.row(j.id)!)
@@ -2183,7 +2188,7 @@ class SqliteBriefJobs implements BriefJobStore {
     return r.n
   }
 
-  async update(id: string, patch: Partial<Omit<BriefJob, 'id' | 'itemId' | 'playbook'>>): Promise<void> {
+  async update(id: string, patch: Partial<Omit<BriefJob, 'id' | 'itemId' | 'playbook' | 'playbookBody'>>): Promise<void> {
     const sets: string[] = []
     const vals: (string | number | null)[] = []
     const col: Record<string, string> = {

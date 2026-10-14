@@ -21,6 +21,14 @@ import { BASE } from '../core/work/score.js'
 
 export const PLAYBOOK_KINDS = Object.keys(BASE) as ItemKind[]
 
+/**
+ * Brief types — playbooks picked by what the brief should be, not by what the
+ * item is. Any item can be briefed with one; the kind's playbook stays the
+ * default. Seeded and listed beside the kinds, but never a dispatch template.
+ */
+export const BRIEF_TYPES = ['plan', 'overview', 'pr-summary'] as const
+const PLAYBOOK_NAMES: readonly string[] = [...PLAYBOOK_KINDS, ...BRIEF_TYPES]
+
 const KIND_RE = /^[a-z][a-z0-9-]{0,40}$/
 export const isPlaybookName = (v: unknown): v is string => typeof v === 'string' && KIND_RE.test(v)
 
@@ -171,6 +179,46 @@ Suggested sections:
 - **Effort** — one line.
 ${COMMON_TAIL}`,
 
+  plan: `# Plan
+
+Work out how this would be built, in this codebase. Do NOT change anything.
+
+Use these sections, in this order:
+- **Problem** — what is wrong or missing today, and for whom, in two or three sentences.
+- **Solution** — the shape of the fix in one paragraph: the idea, not the steps.
+- **Changes** — the files and functions to touch, each with one line on what changes, in the order you'd make them.
+- **Won't do** — what this deliberately leaves out. Never empty: name at least one tempting thing it skips.
+- **Outputs** — what exists when it's done: behaviour a user can see, commands that pass, files or docs that ship.
+- **Questions** — what only the user can decide. Each one carries a **Suggested answer:** line with your pick and why.
+- **Estimate** — one line, in hours or days, and what would make it bigger.
+${COMMON_TAIL}`,
+
+  overview: `# Overview
+
+Explain this item and the code or thread around it to someone new to it. Do NOT change or post anything.
+
+Suggested sections:
+- **What it is** — in two sentences.
+- **Where it lives** — the files, threads, docs and people involved, one line each.
+- **How it works today** — the flow as it runs now, step by step.
+- **What's in flight** — open PRs, branches, tickets or threads touching it.
+- **Open questions**
+${COMMON_TAIL}`,
+
+  'pr-summary': `# PR summary
+
+Read the pull request (\`gh pr view\`, \`gh pr diff\`, and the comments). Do NOT post a review or a comment.
+If the item is not itself a PR, brief the PR it links to or names. This is a summary, not a review:
+explain what the PR does so a reader can repeat it, without judging it.
+
+Suggested sections:
+- **In one line** — what the PR does.
+- **What changed and why** — the change and the reason for it, in a short paragraph.
+- **Files that matter** — the few files where the real change is, one line each; skip the mechanical ones.
+- **Behaviour change** — what users or callers notice, or "none".
+- **Not in this PR** — follow-ups it mentions or clearly leaves for later.
+${COMMON_TAIL}`,
+
   fyi: `# For your information
 
 Read it and say whether it needs anything. Do NOT post.
@@ -198,7 +246,7 @@ export const defaultPlaybook = (kind: string): string => PLAYBOOK_DEFAULTS[kind]
 /** Write any missing default; never touch a file that exists. */
 export async function seedPlaybooks(dir: string): Promise<void> {
   await mkdir(dir, { recursive: true })
-  for (const kind of PLAYBOOK_KINDS) {
+  for (const kind of PLAYBOOK_NAMES) {
     const file = path.join(dir, `${kind}.md`)
     if (!existsSync(file)) await writeFile(file, defaultPlaybook(kind), 'utf8')
   }
@@ -222,7 +270,7 @@ export async function writePlaybook(dir: string, kind: string, body: string): Pr
 }
 
 export async function listPlaybooks(dir: string): Promise<{ kind: string; custom: boolean; path: string }[]> {
-  const kinds = new Set<string>(PLAYBOOK_KINDS)
+  const kinds = new Set<string>(PLAYBOOK_NAMES)
   try {
     for (const f of await readdir(dir)) if (f.endsWith('.md')) kinds.add(f.slice(0, -3))
   } catch {

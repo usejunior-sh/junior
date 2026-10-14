@@ -36,12 +36,12 @@ import { AttachmentStrip } from './AttachmentStrip.js'
 import { useCheckouts, useSessions } from '../hooks.js'
 import { checkoutOf } from '../checkouts.js'
 import { inboxStore, useInbox } from '../inboxStore.js'
-import { briefPill, useBriefs } from '../briefStore.js'
+import { briefPill, briefStore, useBriefs } from '../briefStore.js'
 import { store } from '../store.js'
 import { useActions } from '../actions.js'
 import { ItemActions } from './ActionCard.js'
 import { KIND_LABEL, PRIORITY_LABEL, PRIORITY_VALUES, ago, kindIcon, relTime } from '../itemUi.js'
-import { CreateBriefDialog } from './CreateBriefDialog.js'
+import { BriefComposerDialog } from './BriefComposer.js'
 import { Markdown } from './Markdown.js'
 import { TeamPicker } from './TeamPicker.js'
 import { Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from '../ui/Menu.js'
@@ -196,6 +196,11 @@ export function ItemPage({ id, onDispatch, onNavigate, onDirty }: Props) {
 
   // The brief and the links follow the item's newest job: every transition
   // (queued → running → ready) arrives as a frame and refetches both.
+  // Opened straight from a link, the inbox never loaded the jobs — and the Re-brief
+  // composer starts from the newest one.
+  useEffect(() => {
+    if (!briefs.loaded) void briefStore.refresh()
+  }, [briefs.loaded])
   const job = briefs.byItem.get(id)
   const jobKey = job ? `${job.id}:${job.status}` : ''
   const loadBrief = useCallback(() => {
@@ -673,19 +678,15 @@ export function ItemPage({ id, onDispatch, onNavigate, onDirty }: Props) {
             <div className="briefBody">
               <Markdown text={brief.body} />
             </div>
+          ) : job?.status === 'running' ? (
+            <div className="briefEmpty">The playbook is reading the item now. The brief lands here when it calls <b>write_brief</b>.</div>
+          ) : job?.status === 'queued' ? (
+            <div className="briefEmpty">Queued. Briefs run one at a time, in order.</div>
           ) : (
             <div className="briefEmpty">
-              {job?.status === 'running' ? (
-                <>The playbook is reading the item now. The brief lands here when it calls <b>write_brief</b>.</>
-              ) : job?.status === 'queued' ? (
-                <>Queued. Briefs run one at a time, in order.</>
-              ) : (
-                <>
-                  No brief yet. <b>Create brief</b> runs the <b>{KIND_LABEL[item.kind] ?? item.kind}</b> playbook against this item
-                  — it reads, never writes — and the result lands here as a document you can iterate on. Or skip it and{' '}
-                  <b>Dispatch</b> if you already know what to do.
-                </>
-              )}
+              No brief yet. <b>Create brief</b> opens the template it runs on — the <b>{KIND_LABEL[item.kind] ?? item.kind}</b> one,
+              or a type like Plan or PR summary — for you to edit before it runs. It reads, never writes, and the result lands here as a
+              document you can iterate on. Or skip it and <b>Dispatch</b> if you already know what to do.
             </div>
           )}
 
@@ -1069,7 +1070,7 @@ export function ItemPage({ id, onDispatch, onNavigate, onDirty }: Props) {
           setPickingDue(false)
         }}
       />
-      <CreateBriefDialog open={briefOpen} items={[item]} onClose={() => setBriefOpen(false)} onQueued={() => {}} />
+      <BriefComposerDialog item={briefOpen ? item : null} latest={job ?? null} onClose={() => setBriefOpen(false)} />
     </div>
   )
 }

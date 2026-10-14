@@ -57,7 +57,7 @@ import type {
 import { FAST_MODE_BLURB, modelSupportsFastMode } from '../fastMode.js'
 import { SHORTCUTS } from '../keys.js'
 import { findModel, reloadModels, saveModelPrefs, useModelStore, useModels, usePickableModels } from '../models.js'
-import { KIND_LABEL } from '../itemUi.js'
+import { playbookLabel } from '../itemUi.js'
 import { Select, SelectItem } from '../ui/Select.js'
 import { readSessionDefaults, writeSessionDefaults, type SessionDefaults } from '../sessionDefaults.js'
 import {
@@ -1110,7 +1110,7 @@ function ProseFileSection({
           <Select className="setSelect" value={kind} onValueChange={setKind} aria-label="Kind">
             {(kinds.length ? kinds : [{ kind: 'manual', custom: false }]).map((k) => (
               <SelectItem key={k.kind} value={k.kind}>
-                {KIND_LABEL[k.kind as keyof typeof KIND_LABEL] ?? k.kind}
+                {playbookLabel(k.kind)}
                 {k.custom ? ' · edited' : ''}
               </SelectItem>
             ))}

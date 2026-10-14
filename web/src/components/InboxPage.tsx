@@ -29,6 +29,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { RepoScopeEditor } from './RepoScope.js'
 import type {
   BriefJob,
+  BriefJobsResponse,
   InboxAlert,
   ItemImage,
   ItemImageEdit,
@@ -49,7 +50,7 @@ import { AttachmentStrip } from './AttachmentStrip.js'
 import { inboxStore, useInbox } from '../inboxStore.js'
 import { projectColor, rowOpen } from '../tabs.js'
 import { briefPill, briefStore, useBriefs } from '../briefStore.js'
-import { CreateBriefDialog } from './CreateBriefDialog.js'
+import { BriefComposerDialog } from './BriefComposer.js'
 import { DueDialog } from './DueDialog.js'
 import { DatePopover } from './Calendar.js'
 import { dayInput } from '../dueDay.js'
@@ -121,7 +122,9 @@ export function InboxPage({ tab, tabs, onDispatch, onRefineJob, onOpenItem, onPi
   const [sel, setSel] = useState(0)
   // Multi-select (.docs/next-version.md, phase 2): checked rows brief together.
   const [checked, setChecked] = useState<Set<string>>(new Set())
-  const [briefing, setBriefing] = useState<ScoredItem[] | null>(null)
+  const [briefError, setBriefError] = useState<string | null>(null)
+  /** one row's brief, composed in place */
+  const [briefing, setBriefing] = useState<ScoredItem | null>(null)
   const briefs = useBriefs()
   useEffect(() => {
     if (!briefs.loaded) void briefStore.refresh()
@@ -300,6 +303,29 @@ export function InboxPage({ tab, tabs, onDispatch, onRefineJob, onOpenItem, onPi
     [checkedItems, clearChecked, removeLocally, reload],
   )
 
+  // One item: the composer, with its template to edit.
+  const briefOne = useCallback((item: ScoredItem) => setBriefing(item), [])
+
+  // Checked items: queued at once, each with its own kind's template — editing is per item.
+  const briefChecked = useCallback(async () => {
+    const targets = checkedItems
+    if (!targets.length) return
+    setBriefError(null)
+    try {
+      const res = await fetch('/api/briefs', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ itemIds: targets.map((t) => t.id) }),
+      })
+      const b = (await res.json()) as BriefJobsResponse
+      if (!b.ok) return setBriefError(b.error)
+      for (const j of b.jobs) briefStore.apply(j)
+      clearChecked()
+    } catch (err) {
+      setBriefError(String(err))
+    }
+  }, [checkedItems, clearChecked])
+
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (isTypingTarget(e) || anyDialogOpen() || isGoSequence(e) || e.metaKey || e.ctrlKey || e.altKey) return
@@ -330,8 +356,8 @@ export function InboxPage({ tab, tabs, onDispatch, onRefineJob, onOpenItem, onPi
         onDispatch(cur)
       } else if (e.key === 'b' && isOpen) {
         e.preventDefault()
-        const picked = checkedItems.length ? checkedItems : cur ? [cur] : []
-        if (picked.length) setBriefing(picked)
+        if (checkedItems.length) void briefChecked()
+        else if (cur) briefOne(cur)
       } else if (e.key === ' ' && cur && isOpen) {
         e.preventDefault()
         toggleChecked(cur.id)
@@ -363,7 +389,7 @@ export function InboxPage({ tab, tabs, onDispatch, onRefineJob, onOpenItem, onPi
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [ordered, sel, isOpen, onDispatch, onOpenItem, reload, setItemState, snooze1d, setDue, checkedItems, toggleChecked, bulkState, clearChecked])
+  }, [ordered, sel, isOpen, onDispatch, onOpenItem, reload, setItemState, snooze1d, setDue, checkedItems, toggleChecked, bulkState, clearChecked, briefChecked, briefOne])
 
   const loadProjects = useCallback(() => {
     void fetch('/api/projects')
@@ -434,7 +460,7 @@ export function InboxPage({ tab, tabs, onDispatch, onRefineJob, onOpenItem, onPi
     onDelete: deleteManual,
     checked,
     onToggle: toggleChecked,
-    onBrief: (i) => setBriefing([i]),
+    onBrief: briefOne,
     briefOf: (id) => briefs.byItem.get(id),
     onSetTurn: setTurn,
   }
@@ -518,6 +544,7 @@ export function InboxPage({ tab, tabs, onDispatch, onRefineJob, onOpenItem, onPi
         )}
 
         {error && <div className="msg error">Sync failed: {error}</div>}
+        {briefError && <div className="msg error">Could not queue the briefs: {briefError}</div>}
 
         {!loading && !error && (
           <>
@@ -567,7 +594,7 @@ export function InboxPage({ tab, tabs, onDispatch, onRefineJob, onOpenItem, onPi
       {checkedItems.length > 0 && (
         <SelectionBar
           count={checkedItems.length}
-          onBrief={() => setBriefing(checkedItems)}
+          onBrief={() => void briefChecked()}
           onDone={() => void bulkState('done')}
           onSnooze={() => void bulkState('snoozed', tomorrow9())}
           onArchive={() => void bulkState('archived')}
@@ -597,6 +624,8 @@ export function InboxPage({ tab, tabs, onDispatch, onRefineJob, onOpenItem, onPi
         onSavedMore={() => reload(false)} // "Add more" — refresh, stay open
       />
 
+      <BriefComposerDialog item={briefing} latest={briefing ? briefs.byItem.get(briefing.id) ?? null : null} onClose={() => setBriefing(null)} />
+
       <DueDialog
         item={pickingDue}
         onClose={() => setPickingDue(null)}
@@ -606,12 +635,6 @@ export function InboxPage({ tab, tabs, onDispatch, onRefineJob, onOpenItem, onPi
         }}
       />
 
-      <CreateBriefDialog
-        open={briefing !== null}
-        items={briefing ?? []}
-        onClose={() => setBriefing(null)}
-        onQueued={clearChecked}
-      />
     </div>
   )
 }
@@ -669,8 +692,8 @@ function SelectionBar({
           <span className="n">{count}</span> checked
         </span>
         <span className="sep" aria-hidden="true" />
-        <button type="button" className="btn sm primary" title="Brief the checked items together (b)" onClick={onBrief}>
-          <Sparkles size={13} aria-hidden="true" /> Brief
+        <button type="button" className="btn sm primary" title="Queue a brief for each checked item, with its kind's default template (b)" onClick={onBrief}>
+          <Sparkles size={13} aria-hidden="true" /> Brief with defaults
         </button>
         <button type="button" className="btn sm ghost" title="Mark the checked items done (e)" onClick={onDone}>
           <Check size={14} aria-hidden="true" /> Done

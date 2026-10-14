@@ -379,6 +379,8 @@ export type NewBriefJob = {
   id: string
   itemId: string
   playbook: string
+  /** the template text edited for this brief only; null = read the playbook file */
+  playbookBody?: string | null
   model?: string | null
   note?: string | null
   /** born running in this session (never queued) — a reply to a brief session that already knows the item */
@@ -403,7 +405,7 @@ export interface BriefJobStore {
   list(status?: BriefStatus): Promise<BriefJob[]>
   /** How many jobs started at or after `sinceMs` — the daily cap's counter. */
   countStartedSince(sinceMs: number): Promise<number>
-  update(id: string, patch: Partial<Omit<BriefJob, 'id' | 'itemId' | 'playbook'>>): Promise<void>
+  update(id: string, patch: Partial<Omit<BriefJob, 'id' | 'itemId' | 'playbook' | 'playbookBody'>>): Promise<void>
   /** Boot: every 'running' job's subprocess died with the old daemon. Returns the ids. */
   failAllRunning(error: string): Promise<string[]>
   /** Drop a job (cancelling a queued one). */

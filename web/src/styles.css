@@ -2981,7 +2981,11 @@ dialog.artDialog textarea { min-height: 240px; font-family: var(--mono); font-si
 .briefComposer .bcLabel { color: var(--mute); font-size: 0.9231rem; }
 .briefComposer .bcHint { margin-left: auto; color: var(--stone); font-size: 0.8462rem; white-space: nowrap; }
 .briefComposer .bcHint kbd { color: var(--ash); }
-.briefComposer textarea { width: 100%; box-sizing: border-box; background: transparent; border: 0; outline: none; color: var(--ink); resize: vertical; }
+/* No resize grips: the box sizes itself and scrolls, and a grip in each corner reads as clutter. */
+.briefComposer textarea {
+  width: 100%; box-sizing: border-box; background: transparent; border: 0; outline: none; color: var(--ink); resize: none;
+  scrollbar-width: thin; scrollbar-color: var(--hair-strong) transparent;
+}
 .briefComposer .bcTemplate { min-height: 220px; max-height: 60vh; padding: 14px 16px; font-family: var(--mono); font-size: 0.9615rem; line-height: 1.6; }
 .briefComposer .bcNote { border-top: 1px dashed var(--hair-strong); padding: 10px 16px 4px; }
 .briefComposer .bcNote label { display: block; margin: 0 0 4px; color: var(--ash); font-family: var(--mono); font-size: 0.8077rem; letter-spacing: 0.6px; text-transform: uppercase; }
