@@ -53,9 +53,12 @@ const fmtTokens = (n: number) => (n === 0 ? '0' : n < 1000 ? String(n) : n < 1_0
 
 export function JobsPage({
   onNavigate,
+  onAddJob,
   onPin,
 }: {
   onNavigate: (hash: string) => void
+  /** "Add job": a chat with Junior, not a form. */
+  onAddJob: () => void
   /** Keep a job in the band without leaving the list (⌘-click, middle-click). */
   onPin: (id: string, title: string) => void
 }) {
@@ -174,7 +177,7 @@ export function JobsPage({
             ))}
           </div>
           <input className="filter" value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Filter jobs…" aria-label="Filter jobs" />
-          <button type="button" className="btn primary" onClick={() => onNavigate('/jobs/new')}>
+          <button type="button" className="btn primary" onClick={onAddJob}>
             <Plus size={13} aria-hidden="true" /> Add job
           </button>
         </div>
@@ -199,8 +202,8 @@ export function JobsPage({
               <div className="wtblEmpty">
                 {all.length === 0 ? (
                   <>
-                    <span>No jobs yet. A job is one paragraph of instructions, the integrations it may use, and a schedule.</span>
-                    <button type="button" className="btn" onClick={() => onNavigate('/jobs/new')}>
+                    <span>No jobs yet. Tell Junior what to keep doing for you — it asks what it needs and drafts the job.</span>
+                    <button type="button" className="btn" onClick={onAddJob}>
                       <Plus size={13} aria-hidden="true" /> Add your first job
                     </button>
                   </>

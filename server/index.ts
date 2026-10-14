@@ -756,7 +756,7 @@ type SessionExtras = {
  */
 const BRIEF_DISALLOWED_TOOLS = [
   'Write', 'Edit', 'MultiEdit', 'NotebookEdit', 'AskUserQuestion',
-  ...['create_work_item', 'edit_work_item', 'upsert_work_item', 'resolve_work_item', 'draft_job',
+  ...['create_work_item', 'edit_work_item', 'upsert_work_item', 'resolve_work_item', 'draft_job', 'try_job',
     'write_artifact', 'update_artifact', 'link_artifact',
     'propose_team', 'split_step', 'revise_plan', 'submit_step'].map((t) => `mcp__triage__${t}`),
 ]
@@ -4299,12 +4299,56 @@ async function draftJobOp(rt: WorkspaceRuntime, raw: unknown): Promise<{ id: str
 }
 
 /** What draft_job hands back: where the draft is and how to turn it on. */
-function draftJobText(d: { id: string; title: string; file: string; warnings: string[] }): string {
+function draftJobText(d: { id: string; title: string; file: string; warnings: string[] }, canTry = false): string {
   return [
-    `ok: drafted the job “${d.title}” (${d.file}). It is saved OFF and will not run until the user reviews and enables it.`,
+    `ok: drafted the job “${d.title}” (${d.file}, id ${d.id}). It is saved OFF and will not run until the user reviews and enables it.`,
     `Review and enable: #/jobs/${d.id}`,
     ...d.warnings.map((w) => `note: ${w}`),
-    'Tell the user it is drafted and waiting for their review — do not claim it is running.',
+    canTry
+      ? 'Tell the user it is drafted and off, and offer a trial run (try_job) so they see what it would file before turning it on — do not claim it is running.'
+      : 'Tell the user it is drafted and waiting for their review — do not claim it is running.',
+  ].join('\n')
+}
+
+/**
+ * A chat's trial run of a job (MCP try_job): the dry run the job page offers,
+ * on the job's file as it stands — the same prompt, tools and fences as a
+ * real run, with nothing filed and nothing sent. It waits for the run, so the
+ * chat can show the user what the job would have done before they turn it on.
+ */
+async function tryJobOp(rt: WorkspaceRuntime, raw: unknown): Promise<string> {
+  const r = (raw ?? {}) as Record<string, unknown>
+  const id = typeof r.id === 'string' ? r.id.trim() : ''
+  const job = id ? await rt.store.jobs.get(id) : null
+  if (!job) throw new Error(`no job "${id}" — pass the id draft_job returned`)
+  if (job.configError) throw new Error(`the job is held: ${job.configError} — fix its file first`)
+  if (!job.projectId) throw new Error('the job has no project — pick one first')
+  const pv: JobPreview = { id: randomUUID(), status: 'running', events: [], startedAt: Date.now() }
+  rt.previews.set(pv.id, pv)
+  await runJobPreview(rt, pv, {
+    instruction: job.instruction,
+    tools: job.tools,
+    projectId: job.projectId,
+    model: job.model,
+    output: job.output,
+    schedule: scheduleOf(job),
+  })
+  if (pv.status !== 'ready' || !pv.result) throw new Error(pv.error ?? 'the trial run ended without a result')
+  const res = pv.result
+  const cost = [`${Math.round(res.tokens / 1000)}k tokens`, ...(res.costUsd != null ? [`$${res.costUsd.toFixed(2)}`] : [])].join(', ')
+  const found =
+    res.output === 'digest'
+      ? res.digest
+        ? [`It would write the digest “${res.digest.title}”:`, '', res.digest.body.slice(0, 4000)]
+        : ['It wrote no digest.']
+      : res.rows.length
+        ? [`It would file ${res.rows.length} item(s):`, ...res.rows.map((x) => `- ${x.title} — ${x.url} (${x.ask}) — ${x.why}`)]
+        : ['It found nothing to file.']
+  return [
+    `ok: trial run of “${job.title}” finished (${cost}). Nothing was filed or sent.`,
+    ...found,
+    ...(res.wouldQueue?.length ? ['A real run would hold these for the user’s approval first:', ...res.wouldQueue.map((q) => `- ${q.tool}: ${q.summary}`)] : []),
+    `The job is ${job.enabled ? 'on' : 'still OFF'}. Show the user what it found; if it looks right they turn it on at #/jobs/${job.id}, else change the job with them and draft it again.`,
   ].join('\n')
 }
 
@@ -6902,9 +6946,21 @@ function makeTriageMcp(rt: WorkspaceRuntime) {
         },
         async (args) => {
           try {
-            return okResult(draftJobText(await draftJobOp(rt, args)))
+            return okResult(draftJobText(await draftJobOp(rt, args), true))
           } catch (err) {
             return errResult(`not drafted: ${errText(err)}`)
+          }
+        },
+      ),
+      tool(
+        'try_job',
+        'Trial-run a job once, as a dry run: the same prompt, tools and fences as a real run, but nothing is filed or sent. Waits for the run (a few minutes at most) and returns what it would have filed. Use after draft_job, when the user agrees to a trial run.',
+        { id: z.string().describe('the job id draft_job returned') },
+        async (args) => {
+          try {
+            return okResult(await tryJobOp(rt, args))
+          } catch (err) {
+            return errResult(`trial run failed: ${errText(err)}`)
           }
         },
       ),

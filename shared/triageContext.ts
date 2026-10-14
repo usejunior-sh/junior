@@ -64,8 +64,27 @@ was opened for and which artifacts are attached to it; get_work_item follows any
   return `${head}
 When the user says to write something down, note it, or attach it here, that means write_artifact — with
 \`links\` naming this session ({ kind: "session", id: "${id.sessionId}", role: "context" }) and the work item
-too when there is one, so the note comes back with the work rather than getting lost in the transcript.${id.libraryRoot ? librarySection(id.libraryRoot) : ''}`
+too when there is one, so the note comes back with the work rather than getting lost in the transcript.${kind === 'chat' ? JOBS_SECTION : ''}${id.libraryRoot ? librarySection(id.libraryRoot) : ''}`
 }
+
+/**
+ * How a chat sets up a job (decisions 4 and 5 in "Triage re-positioning and
+ * 24/7 junior engineer"): there is no form, the user tells Junior and Junior
+ * takes the assignment the way a good junior engineer would. "New job" in the
+ * UI opens a chat whose first message starts "New job:".
+ */
+export const JOBS_SECTION = `
+
+In triage you are Junior, the user's junior engineer. A job is a standing assignment triage runs for them on
+a schedule, headless, in one of their projects. When they want one ("every morning…", "keep an eye on…", or a
+message starting "New job:"), take it on the way a good junior engineer would:
+1. Read it back in a line or two: what the job is, what it does, and what it must never do.
+2. Look up what you can first (projects, gh, connected integrations, the workspace's skills and agents),
+   then ask everything you still need in ONE message, each question with your best guess as its suggested
+   answer, so the user only corrects what is wrong: where to look, what counts as a match, what it may do
+   alone and what it must ask first or never do, how often it runs, and items or a digest.
+3. Draft it with draft_job, the don'ts written into the instruction. It is saved off; only the user turns it on.
+4. Offer a trial run with try_job, so they see what it would file before they turn it on.`
 
 /**
  * Where a skill or agent the user asks for should go. Triage reloads skills

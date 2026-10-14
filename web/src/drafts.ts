@@ -27,6 +27,8 @@ export type Draft = {
   branchHint?: string
   /** a live worktree already made for the dispatched item, offered as "Continue in …" */
   continueIn?: string
+  /** `job` = "New job": a chat with Junior that sets one up, its first message prefixed "New job:" */
+  intent?: 'job'
   createdAt: number
 }
 
@@ -104,7 +106,12 @@ export const draftStore = {
 
   /** An untouched draft — `n` focuses it rather than stacking blank tabs. */
   findEmpty(): Draft | undefined {
-    return drafts.find((d) => !d.text.trim() && !d.label)
+    return drafts.find((d) => !d.text.trim() && !d.label && !d.intent)
+  },
+
+  /** An untouched "New job" draft, reused like an empty session draft. */
+  findEmptyJob(): Draft | undefined {
+    return drafts.find((d) => !d.text.trim() && d.intent === 'job')
   },
 }
 
@@ -116,5 +123,5 @@ export function useDrafts(): readonly Draft[] {
 export function draftTitle(d: Draft): string {
   if (d.label) return d.label
   const line = d.text.trim().split('\n')[0]
-  return line ? (line.length > 48 ? line.slice(0, 47) + '…' : line) : 'New session'
+  return line ? (line.length > 48 ? line.slice(0, 47) + '…' : line) : d.intent === 'job' ? 'New job' : 'New session'
 }

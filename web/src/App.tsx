@@ -848,7 +848,11 @@ export function App() {
     })
   }, [])
 
-  const addJob = useCallback(() => navigate('/jobs/new'), [navigate])
+  // New job = a chat with Junior, not a form (decisions 4 and 5): an untouched one is reused.
+  const addJob = useCallback(() => {
+    const d = draftStore.findEmptyJob() ?? draftStore.create({ intent: 'job' })
+    navigate(draftRoute(d.id))
+  }, [navigate])
 
   // Thumbs-down on a matched item: the correction lands as appended text on
   // the job's instruction — the rule stays human-readable.
@@ -1213,7 +1217,7 @@ export function App() {
                 onDirty={pinCurrent}
               />
             ) : route.page === 'jobs' ? (
-              <JobsPage onNavigate={navigate} onPin={(id, title) => pin(`job:${id}`, title)} />
+              <JobsPage onNavigate={navigate} onAddJob={addJob} onPin={(id, title) => pin(`job:${id}`, title)} />
             ) : route.page === 'actions' ? (
               <ActionsPage onNavigate={navigate} />
             ) : route.page === 'job' ? (
