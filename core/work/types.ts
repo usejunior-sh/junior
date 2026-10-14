@@ -90,6 +90,8 @@ export interface WorkItem {
   ingestedAt?: number
   /** current lifecycle state; set by the store on projection */
   status?: import('./state.js').ItemStatus
+  /** archived by a Delete, not an Archive — set only on the archived list */
+  deleted?: boolean
   /**
    * the human's short intent, in their words — on any item, not just manual
    * ones; never overwritten by ingestion or by a brief (.docs/next-version.md)

@@ -358,6 +358,8 @@ export interface WorkItemStore {
   setFlowOverride(id: string, override: FlowOverride | null, actor: string): Promise<void>
   /** Items that went done at or after `since` and are still done ("Landed today"). */
   countDoneSince(since: number): Promise<number>
+  /** Archived items whose latest archive was a Delete (`reason: 'deleted by user'`) — Archived's Deleted filter. */
+  deletedIds(): Promise<Set<string>>
   /** The append-only transition log for one item, in order. */
   events(id: string): Promise<ItemEvent[]>
   /** Set (or clear, with null) the human's description on any item. Never touched by ingestion. */

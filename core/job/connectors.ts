@@ -52,6 +52,10 @@ export function composeRunPrompt(w: {
   scope?: string
   /** a catch-up run's lateness line (describeLateness) */
   lateness?: string
+  /** skills the job names — the only ones the Skill tool will load */
+  skills?: string[]
+  /** subagents the job names — the only ones the Agent tool will start */
+  agents?: string[]
 }): string {
   const deferred = runDeferredTools(w.tools)
   const span = humanSpan(w.lookbackMs)
@@ -65,6 +69,10 @@ export function composeRunPrompt(w: {
     `Integrations you may use: ${w.tools.map(grantLabel).join(', ')}.`,
     ...w.tools.map(howTo),
     `Project: the folder ${w.project.path} (${w.project.name}) is your working directory and the only folder you may read. Read code with Read/Grep/Glob and git log/show/diff when the instructions need it.`,
+    w.skills?.length ? `Skills you may load with the Skill tool, when the instructions call for them: ${w.skills.join(', ')}. No others.` : '',
+    w.agents?.length
+      ? `Subagents you may hand a piece of the work to with the Agent tool (subagent_type exactly as written): ${w.agents.join(', ')}. No others; they run under the same limits as you.`
+      : '',
     w.scope ? `Look in ${w.scope} only.` : '',
     `Instructions:\n${w.instruction}`,
     `Judge each candidate on its title and first ~200 characters; open the full thread, issue, page or diff only when that is not enough to decide.`,

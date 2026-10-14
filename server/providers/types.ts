@@ -202,6 +202,10 @@ export type RunSpec = {
   maxBudgetUsd?: number
   /** stop after this many agent turns */
   maxTurns?: number
+  /** the only skills the run may load, by the name the agent calls each; omitted = the agent's defaults */
+  skills?: string[]
+  /** local plugin folders to load (the workspace library, for a job that names its skills or agents) */
+  plugins?: string[]
   /** the agent's own session id to continue (a job run sent a redraft) */
   resume?: string
   /** token deltas as well as whole messages */

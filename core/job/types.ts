@@ -154,6 +154,10 @@ export interface Job {
   brief?: JobBrief
   /** drafted by a chat (draft_job) and not yet reviewed: saved off until you enable it */
   draft?: boolean
+  /** skills a run may load, as Claude calls them (`triage:<name>`, `<name>`, `<plugin>:<name>`); omitted = none */
+  skills?: string[]
+  /** subagents a run may hand work to, named the same way; omitted = none */
+  agents?: string[]
   createdAt: number
   updatedAt: number
 }
@@ -172,6 +176,9 @@ export type NewJob = Pick<Job, 'title' | 'instruction' | 'schedule' | 'createsIt
   /** null turns briefs off */
   brief?: JobBrief | null
   draft?: boolean
+  /** null or [] = none */
+  skills?: string[] | null
+  agents?: string[] | null
   /** legacy; defaults to a coarse bucket when omitted */
   cadence?: JobCadence
   windowStart?: string

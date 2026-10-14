@@ -550,6 +550,7 @@ function ensureDurableSchema(db: DatabaseSync) {
     ['consecutive_failures', 'consecutive_failures INTEGER NOT NULL DEFAULT 0'],
     ['last_run_started_at', 'last_run_started_at INTEGER'], ['last_run_new', 'last_run_new INTEGER'], ['last_run_trigger', 'last_run_trigger TEXT'],
     ['brief', 'brief TEXT'], ['draft', 'draft INTEGER NOT NULL DEFAULT 0'],
+    ['skills', 'skills TEXT'], ['agents', 'agents TEXT'],
   ]) ensure('jobs', col, decl, w)
   ensure('sessions', 'run_trigger', 'run_trigger TEXT', s)
   ensure('sessions', 'run_new', 'run_new INTEGER', s)
@@ -1093,6 +1094,8 @@ type JobRow = {
   last_run_trigger: string | null
   brief?: string | null
   draft?: number | null
+  skills?: string | null
+  agents?: string | null
   created_at: number
   updated_at: number
 }
@@ -1144,6 +1147,18 @@ function toJobBrief(raw: string | null | undefined): JobBrief | null {
   }
 }
 
+/** A stored name list (skills, agents): JSON strings; anything else reads as none. */
+function toNames(raw: string | null | undefined): string[] {
+  if (!raw) return []
+  try {
+    const v = JSON.parse(raw) as unknown
+    return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string' && x !== '') : []
+  } catch {
+    return []
+  }
+}
+const fromNames = (names: string[] | null | undefined): string | null => (names?.length ? JSON.stringify(names) : null)
+
 const toJob = (r: JobRow): Job => ({
   id: r.id,
   source: 'slack',
@@ -1183,6 +1198,8 @@ const toJob = (r: JobRow): Job => ({
   templateId: r.template_id ?? undefined,
   ...(toJobBrief(r.brief) ? { brief: toJobBrief(r.brief)! } : {}),
   ...(r.draft ? { draft: true } : {}),
+  ...(toNames(r.skills).length ? { skills: toNames(r.skills) } : {}),
+  ...(toNames(r.agents).length ? { agents: toNames(r.agents) } : {}),
   createdAt: r.created_at,
   updatedAt: r.updated_at,
 })
@@ -1206,8 +1223,8 @@ class SqliteJobs implements JobStore {
         `INSERT INTO jobs (id, source, title, scope, instruction, cadence, window_start, window_day,
            schedule, enabled, creates_items, cursor, last_run_at, last_run_tokens, last_run_matches, template_id,
            tools, project_id, model, output, catch_up_window, timeout_ms, max_budget_usd, daily_budget_usd, file, notify,
-           config_error, last_run_started_at, consecutive_failures, brief, draft, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)`,
+           config_error, last_run_started_at, consecutive_failures, brief, draft, skills, agents, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         w.id, w.source, w.title, w.scope, w.instruction, w.cadence,
@@ -1219,6 +1236,7 @@ class SqliteJobs implements JobStore {
         w.catchUpWindow ?? null, w.timeoutMs ?? null, w.maxBudgetUsd ?? null, w.dailyBudgetUsd ?? null, w.file ?? null, w.notify,
         w.configError ?? null, w.lastRunStartedAt ?? null,
         w.brief ? JSON.stringify(w.brief) : null, w.draft ? 1 : 0,
+        fromNames(w.skills), fromNames(w.agents),
         w.createdAt, w.updatedAt,
       )
   }
@@ -1234,7 +1252,7 @@ class SqliteJobs implements JobStore {
         `UPDATE jobs SET title = ?, scope = ?, instruction = ?, cadence = ?, window_start = ?,
            window_day = ?, schedule = ?, enabled = ?, creates_items = ?, tools = ?, project_id = ?, model = ?, output = ?,
            catch_up_window = ?, timeout_ms = ?, max_budget_usd = ?, daily_budget_usd = ?, file = ?, notify = ?,
-           brief = ?, draft = ?, updated_at = ? WHERE id = ?`,
+           brief = ?, draft = ?, skills = ?, agents = ?, updated_at = ? WHERE id = ?`,
       )
       .run(
         next.title, next.scope ?? '', next.instruction, next.cadence,
@@ -1244,6 +1262,7 @@ class SqliteJobs implements JobStore {
         JSON.stringify(next.tools), next.projectId || null, next.model ?? null, next.output ?? 'items',
         opt(next.catchUpWindow), opt(next.timeoutMs), opt(next.maxBudgetUsd), opt(next.dailyBudgetUsd), next.file ?? null, next.notify ?? 'on_failure',
         next.brief ? JSON.stringify(next.brief) : null, next.draft ? 1 : 0,
+        fromNames(next.skills), fromNames(next.agents),
         Date.now(), id,
       )
   }
@@ -1767,6 +1786,17 @@ class SqliteWorkItems implements WorkItemStore {
   async countDoneSince(since: number): Promise<number> {
     const r = this.db.prepare("SELECT COUNT(*) AS n FROM work_items WHERE status = 'done' AND status_at >= ?").get(since) as { n: number }
     return r.n
+  }
+
+  async deletedIds(): Promise<Set<string>> {
+    const rows = this.db
+      .prepare(
+        `SELECT w.id FROM work_items w WHERE w.status = 'archived' AND (
+           SELECT e.detail FROM item_events e WHERE e.item_id = w.id AND e.event = 'archived' ORDER BY e.seq DESC LIMIT 1
+         ) LIKE '%"reason":"deleted by user"%'`,
+      )
+      .all() as { id: string }[]
+    return new Set(rows.map((r) => r.id))
   }
 
   async events(id: string): Promise<ItemEvent[]> {

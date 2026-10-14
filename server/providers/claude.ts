@@ -169,6 +169,8 @@ export const claude: Provider = {
         ...(spec.model ? { model: spec.model } : {}),
         ...(spec.maxBudgetUsd != null ? { maxBudgetUsd: spec.maxBudgetUsd } : {}),
         ...(spec.maxTurns != null ? { maxTurns: spec.maxTurns } : {}),
+        ...(spec.skills ? { skills: spec.skills } : {}),
+        ...(spec.plugins?.length ? { plugins: spec.plugins.map((p) => ({ type: 'local' as const, path: p })) } : {}),
         ...(spec.resume ? { resume: spec.resume } : {}),
         ...(spec.streamDeltas ? { includePartialMessages: true } : {}),
         ...(spec.mcpServers ? { mcpServers: spec.mcpServers } : {}),

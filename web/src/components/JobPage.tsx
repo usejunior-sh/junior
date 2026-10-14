@@ -432,6 +432,18 @@ export function JobPage({ id, onNavigate }: { id: string; onNavigate: (hash: str
               <span className="v">
                 {job.tools.map((g) => `${grantLabel(g)} (${g.tools.length} tool${g.tools.length === 1 ? '' : 's'})`).join(', ')}
               </span>
+              {job.skills?.length ? (
+                <>
+                  <span className="k">Skills</span>
+                  <span className="v mono">{job.skills.join(', ')}</span>
+                </>
+              ) : null}
+              {job.agents?.length ? (
+                <>
+                  <span className="k">Agents</span>
+                  <span className="v mono">{job.agents.join(', ')}</span>
+                </>
+              ) : null}
               <span className="k">Project</span>
               <span className="v mono">{project ? `${project.name} · ${project.path}` : 'removed'}</span>
               <span className="k">Output</span>

@@ -378,6 +378,8 @@ export type SessionSummary = {
   itemId?: string
   /** A permission prompt is waiting on the user. Absent = none. */
   waiting?: boolean
+  /** The tool the oldest waiting prompt is about (`AskUserQuestion` = a question). Set only with `waiting`. */
+  waitingOn?: string
   /** A Claude subprocess is running for it now. False = anything it had running (a subagent) has ended. */
   live?: boolean
   /** Last activity, epoch ms. The sidebar sorts and time-buckets on this. */
@@ -542,8 +544,10 @@ export type InboxSnapshot = {
   notices: string[]
   /** Today's footer: items that went done since local midnight and are still done */
   landedToday?: number
-  /** broken things that are not items — a failed job, a paused team run — for Today's "Something broke" */
+  /** broken things that are not items — a failed job, a paused team run — for Needs you now */
   alerts?: InboxAlert[]
+  /** rows in the status tabs, so the sidebar can count them before they're opened */
+  counts?: { snoozed: number; archived: number }
 }
 
 /** Something broke that isn't a work item; links to where it can be fixed. */
@@ -1119,6 +1123,9 @@ export type JobFileReference = {
   builtins: string[]
   /** each connected MCP server and its tool lines, as a file spells them (`<server>/<tool>`) */
   servers: { server: string; tools: string[] }[]
+  /** skills and agents a job may name (`skills:`, `agents:`) — not a project's, which runs don't load */
+  skills: string[]
+  agents: string[]
 }
 
 /**

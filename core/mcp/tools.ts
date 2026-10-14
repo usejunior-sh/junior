@@ -22,6 +22,11 @@ export type Connection = { serverUrl: string; requestedWorkspace: string | null 
 
 export type ToolResult = { text: string; isError: boolean }
 
+/** draft_job's skills/agents arguments, said once for every transport. */
+export const SKILLS_ARG =
+  'skills the runs may load, as Claude calls them: triage:<name> for the workspace library, <name> for personal ones, <plugin>:<name>. Only these load; omit for none'
+export const AGENTS_ARG = 'subagents the runs may hand work to, named the same way. Only these start; omit for none'
+
 /** The MCP revision both transports speak. */
 export const PROTOCOL_VERSION = '2024-11-05'
 
@@ -137,6 +142,8 @@ export const TOOLS = [
         brief: { type: 'boolean', description: 'brief every item it files (items output only)' },
         brief_model: { type: 'string', description: 'model for the briefs' },
         brief_template: { type: 'string', description: 'playbook to brief with, e.g. "review-requested"; default = the item’s kind' },
+        skills: { type: 'array', items: { type: 'string' }, description: SKILLS_ARG },
+        agents: { type: 'array', items: { type: 'string' }, description: AGENTS_ARG },
       },
       required: ['title', 'schedule', 'instruction'],
     },

@@ -169,6 +169,14 @@ function ReferencePanel({ reference }: { reference: JobFileReference }) {
           </Collapsible.Content>
         </Collapsible.Root>
       ))}
+      {reference.skills.length > 0 && <div className="secLabel">Skills</div>}
+      {reference.skills.map((s) => (
+        <CopyRow key={s} value={s} />
+      ))}
+      {reference.agents.length > 0 && <div className="secLabel">Agents</div>}
+      {reference.agents.map((a) => (
+        <CopyRow key={a} value={a} />
+      ))}
     </aside>
   )
 }

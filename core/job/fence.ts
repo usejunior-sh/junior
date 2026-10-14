@@ -17,9 +17,18 @@ export type Fence = {
   root: string
   /** Write/Edit allowed (inside root) */
   write: boolean
+  /** the skills the job names — the only ones the Skill tool may load */
+  skills: Set<string>
+  /** the subagents the job names — the only ones the Agent tool may start */
+  agents: Set<string>
 }
 
-export function fenceFor(grants: JobToolGrant[], output: RunOutput, root: string): Fence {
+export function fenceFor(
+  grants: JobToolGrant[],
+  output: RunOutput,
+  root: string,
+  library: { skills?: string[]; agents?: string[] } = {},
+): Fence {
   const exact = new Set<string>(['TodoWrite'])
   const bash: string[] = []
   for (const t of runAllowedTools(grants, output)) {
@@ -27,7 +36,14 @@ export function fenceFor(grants: JobToolGrant[], output: RunOutput, root: string
     if (m) bash.push(m[1])
     else exact.add(t)
   }
-  return { exact, bash, root: path.resolve(root), write: hasBuiltin(grants, 'files-write') }
+  return {
+    exact,
+    bash,
+    root: path.resolve(root),
+    write: hasBuiltin(grants, 'files-write'),
+    skills: new Set(library.skills ?? []),
+    agents: new Set(library.agents ?? []),
+  }
 }
 
 export type FenceDecision = { allow: true } | { allow: false; reason: string }
@@ -74,6 +90,18 @@ export function fenceDecision(f: Fence, toolName: string, input: unknown): Fence
       }
     }
     return { allow: true }
+  }
+
+  // Exact names only: allowing `triage:x` must not let a bare `x` through — that can be another skill.
+  if (toolName === 'Skill') {
+    const name = (str('skill') ?? str('command') ?? '').trim().replace(/^\//, '')
+    if (f.skills.has(name)) return { allow: true }
+    return { allow: false, reason: f.skills.size ? `this job may only use the skills: ${[...f.skills].join(', ')}` : 'this job names no skills' }
+  }
+  if (toolName === 'Agent' || toolName === 'Task') {
+    const type = (str('subagent_type') ?? '').trim()
+    if (f.agents.has(type)) return { allow: true }
+    return { allow: false, reason: f.agents.size ? `this job may only hand work to: ${[...f.agents].join(', ')}` : 'this job names no agents' }
   }
 
   if (f.exact.has(toolName)) return { allow: true }

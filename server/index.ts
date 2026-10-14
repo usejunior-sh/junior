@@ -200,7 +200,9 @@ import type {
   SessionTeamRun,
   TeamLibraryResponse,
   LibraryFileResponse,
+  LibraryEntry,
   LibraryListResponse,
+  LibrarySource,
   TeamPickerResponse,
   TeamRunResponse,
   TeamRunView,
@@ -305,7 +307,7 @@ import {
   type JobRunTrigger,
 } from '../core/job/types.js'
 import { composeRunPrompt, MAX_ROWS_PER_RUN } from '../core/job/connectors.js'
-import { JobFiles, checkGrants, renameLegacyFolders, grantsFromLines, parseJobFile, serializeJobFile, starterJobFile, withKey, type JobFileSpec } from './job-files.js'
+import { JobFiles, checkGrants, checkLibrary, renameLegacyFolders, type JobLibrary, grantsFromLines, parseJobFile, serializeJobFile, starterJobFile, withKey, type JobFileSpec } from './job-files.js'
 import {
   grantLabel,
   grantsFrom,
@@ -369,9 +371,9 @@ import { browserCallAllowed } from '../core/browser/policy.js'
 import { BROWSER_HOST_PATH } from '../core/browser/wire.js'
 import { FileIndexes, readProjectFile, resolveFileMention, writeProjectFile } from './files.js'
 import { ArtifactIndex, slug } from './artifacts.js'
-import { createLibraryEntry, ensureWorkspacePlugin, libraryRoots, locate as locateLibrary, libraryTargets, listLibrary, readLibraryFile, removeLibraryItem, writeLibraryFile, type LibraryRoot } from './library.js'
+import { WORKSPACE_PLUGIN, createLibraryEntry, ensureWorkspacePlugin, libraryRoots, locate as locateLibrary, libraryTargets, listLibrary, readLibraryFile, removeLibraryItem, writeLibraryFile, type LibraryRoot } from './library.js'
 import { TRIAGE_MCP_INSTRUCTIONS, triageSessionAppend } from '../shared/triageContext.js'
-import { callTool as callMcpTool, PROTOCOL_VERSION as MCP_PROTOCOL_VERSION, TOOLS as MCP_TOOLS } from '../core/mcp/tools.js'
+import { AGENTS_ARG, SKILLS_ARG, callTool as callMcpTool, PROTOCOL_VERSION as MCP_PROTOCOL_VERSION, TOOLS as MCP_TOOLS } from '../core/mcp/tools.js'
 import {
   BRIEF_SYSTEM_APPEND,
   briefRelPath,
@@ -783,6 +785,8 @@ class LiveSession {
     string,
     {
       input: Record<string, unknown>
+      /** the tool asking — the inbox says "Permission: Bash" or "Question" */
+      toolName: string
       /** The SDK's own "don't ask again" rules, replayed on `allow_always`. */
       suggestions: PermissionUpdate[]
       resolve: (r: PermissionResult) => void
@@ -1046,6 +1050,11 @@ class LiveSession {
     return this.pendingPermissions.size > 0
   }
 
+  /** The tool the oldest pending prompt is about. Absent = nothing is waiting. */
+  get waitingOn(): string | undefined {
+    return this.pendingPermissions.values().next().value?.toolName
+  }
+
   async sendUserMessage(text: string, images?: ImageAttachment[], mentions?: Mention[], opts: { from?: string } = {}) {
     // Mentions are resolved now, against this session's folder, so the event
     // log records what the model was actually given (and why a file wasn't).
@@ -1122,7 +1131,7 @@ class LiveSession {
     const id = randomUUID()
     const suggestions = opts.suggestions ?? []
     return new Promise<PermissionResult>((resolve) => {
-      this.pendingPermissions.set(id, { input: toolInput, suggestions, resolve })
+      this.pendingPermissions.set(id, { input: toolInput, toolName, suggestions, resolve })
       if (this.pendingPermissions.size === 1) broadcastSessionList(this.rt)
       this.emit(
         {
@@ -1307,7 +1316,7 @@ function summarize(rt: WorkspaceRuntime, row: StoredSession): SessionSummary {
     ...(row.jobId ? { jobId: row.jobId } : {}),
     ...(rt.sessionItem.has(row.id) ? { itemId: rt.sessionItem.get(row.id) } : {}),
     ...(teamRunLink(rt, row.id) ? { teamRun: teamRunLink(rt, row.id) } : {}),
-    ...(l?.waiting ? { waiting: true } : {}),
+    ...(l?.waiting ? { waiting: true, waitingOn: l.waitingOn } : {}),
     live: !!l,
   }
 }
@@ -1812,7 +1821,7 @@ function continueJobRun(rt: WorkspaceRuntime, row: StoredSession, text: string, 
     try {
       const spec = await jobQuery(
         rt,
-        { instruction: job.instruction, tools: job.tools, project, model: job.model, output: job.output, schedule: scheduleOf(job), scope: job.scope },
+        { instruction: job.instruction, tools: job.tools, project, model: job.model, output: job.output, schedule: scheduleOf(job), scope: job.scope, skills: job.skills, agents: job.agents },
         scanMcp,
         abort,
         budget.maxBudgetUsd != null ? { maxBudgetUsd: budget.maxBudgetUsd } : {},
@@ -2209,6 +2218,19 @@ const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit'])
 // files; anything that changes them reloads every live session, so a new skill
 // is in `/` and a new agent is spawnable without starting over.
 // ---------------------------------------------------------------------------
+
+/** Every skill and agent on this machine a job could name, keyed by the name Claude calls it. */
+async function jobLibrary(rt: WorkspaceRuntime): Promise<JobLibrary> {
+  const roots = await libraryRootsFor(rt)
+  const [skills, agents] = await Promise.all([listLibrary('skill', roots), listLibrary('agent', roots)])
+  // first one wins, as the tabs list them: the workspace library, then personal, projects, plugins
+  const byName = (entries: LibraryEntry[]) => {
+    const m = new Map<string, LibrarySource>()
+    for (const e of entries) if (!m.has(e.name)) m.set(e.name, e.source)
+    return m
+  }
+  return { skills: byName(skills), agents: byName(agents) }
+}
 
 /** The roots this workspace's sessions see: its library, ~/.claude, its projects' .claude, plugins. */
 async function libraryRootsFor(rt: WorkspaceRuntime): Promise<LibraryRoot[]> {
@@ -2874,8 +2896,12 @@ function syncInbox(rt: WorkspaceRuntime): Promise<InboxSnapshot> {
       }
       const { items: ranked } = buildInbox({ items, notices, now })
       await withFlows(rt, ranked, true)
-      const [landedToday, alerts] = await Promise.all([rt.store.items.countDoneSince(startOfDay(now)), inboxAlerts(rt)])
-      rt.inboxCache = { syncedAt: now, items: ranked, notices, landedToday, alerts }
+      const [landedToday, alerts, counts] = await Promise.all([
+        rt.store.items.countDoneSince(startOfDay(now)),
+        inboxAlerts(rt),
+        statusCounts(rt, now),
+      ])
+      rt.inboxCache = { syncedAt: now, items: ranked, notices, landedToday, alerts, counts }
       void rt.store.inbox.save(rt.inboxCache)
       return rt.inboxCache
     } finally {
@@ -2918,7 +2944,19 @@ function scopeGitHub<T extends { source: string; repo: string }>(items: T[], sco
 async function listItemsByStatus(rt: WorkspaceRuntime, status: ItemStatus, now = Date.now()): Promise<InboxSnapshot['items']> {
   const scoped = new Set(await connectedRepos(rt))
   const items = scopeGitHub(await rt.store.items.list(status), scoped)
+  if (status === 'archived') {
+    const deleted = await rt.store.items.deletedIds()
+    for (const i of items) if (deleted.has(i.id)) i.deleted = true
+  }
   return withFlows(rt, linkByRefs(rank(items, now)), false)
+}
+
+/** How many rows each status tab holds — the same scoping and folding its list gets. */
+async function statusCounts(rt: WorkspaceRuntime, now: number): Promise<NonNullable<InboxSnapshot['counts']>> {
+  const scoped = new Set(await connectedRepos(rt))
+  const rows = async (s: ItemStatus) => linkByRefs(rank(scopeGitHub(await rt.store.items.list(s), scoped), now)).length
+  const [snoozed, archived] = await Promise.all([rows('snoozed'), rows('archived')])
+  return { snoozed, archived }
 }
 
 // ---------------------------------------------------------------------------
@@ -3493,6 +3531,9 @@ type RunSpec = {
   schedule: string
   scope?: string
   lateness?: string
+  /** the skills and agents the job names, as Claude calls them */
+  skills?: string[]
+  agents?: string[]
 }
 
 type PreviewSpec = Omit<RunSpec, 'project'> & { projectId: string }
@@ -3593,14 +3634,29 @@ async function jobQuery(
     nowIso: new Date(now).toISOString(),
     ...(spec.scope ? { scope: spec.scope } : {}),
     ...(spec.lateness ? { lateness: spec.lateness } : {}),
+    ...(spec.skills?.length ? { skills: spec.skills } : {}),
+    ...(spec.agents?.length ? { agents: spec.agents } : {}),
   })
-  const fence = fenceFor(spec.tools, spec.output, spec.project.path)
+  // A job's skills and agents: only the ones it names load, checked again
+  // here — the library may have changed since the file was. The workspace
+  // library comes in as its plugin only when the job names something in it.
+  const skills = spec.skills ?? []
+  const agents = spec.agents ?? []
+  if (skills.length || agents.length) {
+    const missing = checkLibrary({ skills, agents }, await jobLibrary(rt))
+    if (missing.length) throw new Error(missing.join('; '))
+  }
+  const extraTools = [...(skills.length ? ['Skill'] : []), ...(agents.length ? ['Agent'] : [])]
+  const fromLibrary = [...skills, ...agents].some((n) => n.startsWith(`${WORKSPACE_PLUGIN}:`))
+  const fence = fenceFor(spec.tools, spec.output, spec.project.path, { skills, agents })
   return {
     prompt,
     cwd: spec.project.path,
     userConfig: true,
-    tools: runBaseTools(spec.tools),
-    allowedTools: runAllowedTools(spec.tools, spec.output),
+    tools: [...runBaseTools(spec.tools), ...extraTools],
+    allowedTools: [...runAllowedTools(spec.tools, spec.output), ...extraTools],
+    ...(skills.length ? { skills } : {}),
+    ...(fromLibrary ? { plugins: [rt.libraryDir] } : {}),
     ...(disallowedTools.length ? { disallowedTools } : {}),
     unattended: true,
     veto: (toolName, input) => fenceDecision(fence, toolName, input),
@@ -3841,7 +3897,7 @@ async function runJob(rt: WorkspaceRuntime, run: QueuedRun, startedMs: number, r
     }, runLimits.timeoutMs)
     const runSpec = await jobQuery(
       rt,
-      { instruction: job.instruction, tools: job.tools, project, model: job.model, output: job.output, schedule: scheduleOf(job), scope: job.scope, lateness },
+      { instruction: job.instruction, tools: job.tools, project, model: job.model, output: job.output, schedule: scheduleOf(job), scope: job.scope, lateness, skills: job.skills, agents: job.agents },
       scanMcp,
       abort,
       runLimits,
@@ -4041,6 +4097,8 @@ function jobConfigFrom(spec: JobFileSpec, file: string) {
     enabled: spec.enabled,
     brief: spec.brief ?? null,
     draft: !!spec.draft,
+    skills: spec.skills ?? null,
+    agents: spec.agents ?? null,
     file,
   }
 }
@@ -4064,23 +4122,28 @@ function jobSpecFrom(w: Job): JobFileSpec {
     ...(w.brief ? { brief: w.brief } : {}),
     // enabling a draft is its review
     ...(w.draft && !w.enabled ? { draft: true } : {}),
+    ...(w.skills?.length ? { skills: w.skills } : {}),
+    ...(w.agents?.length ? { agents: w.agents } : {}),
     instruction: w.instruction,
   }
 }
 
 type JobConfig = ReturnType<typeof jobConfigFrom>
-const configKey = (w: Pick<Job, Exclude<keyof JobConfig, 'catchUpWindow' | 'timeoutMs' | 'maxBudgetUsd' | 'dailyBudgetUsd' | 'brief' | 'draft'>> & {
+const configKey = (w: Pick<Job, Exclude<keyof JobConfig, 'catchUpWindow' | 'timeoutMs' | 'maxBudgetUsd' | 'dailyBudgetUsd' | 'brief' | 'draft' | 'skills' | 'agents'>> & {
   catchUpWindow?: string | null
   timeoutMs?: number | null
   maxBudgetUsd?: number | null
   dailyBudgetUsd?: number | null
   brief?: JobBrief | null
   draft?: boolean
+  skills?: string[] | null
+  agents?: string[] | null
 }) =>
   JSON.stringify([
     w.title, w.instruction, w.schedule, w.tools, w.projectId || '', w.model ?? null, w.output, w.catchUpWindow ?? null,
     w.timeoutMs ?? null, w.maxBudgetUsd ?? null, w.dailyBudgetUsd ?? null, w.notify, w.enabled, w.file ?? null,
     w.brief ? [w.brief.model ?? null, w.brief.template ?? null] : null, !!w.draft,
+    w.skills?.length ? w.skills : null, w.agents?.length ? w.agents : null,
   ])
 
 /**
@@ -4102,7 +4165,11 @@ function syncJobFiles(rt: WorkspaceRuntime, opts: { force?: boolean; deferFirstR
 async function syncJobFilesNow(rt: WorkspaceRuntime, { force = false, deferFirstRun }: { force?: boolean; deferFirstRun?: string }): Promise<void> {
   const files = await rt.jobFiles.scan()
   const projects = await rt.store.projects.list()
+  // only listed when a job names a skill or an agent — a skill removed later holds that job at the next tick
+  const named = files.some((f) => /^(skills|agents)\s*:/m.test(f.text))
+  const lib: JobLibrary = named ? await jobLibrary(rt) : { skills: new Map(), agents: new Map() }
   const sig = JSON.stringify([
+    named ? [[...lib.skills], [...lib.agents]] : null,
     rt.provider.id,
     files.map((f) => [f.name, f.mtimeMs]),
     projects.map((p) => [p.id, p.path]),
@@ -4124,7 +4191,7 @@ async function syncJobFilesNow(rt: WorkspaceRuntime, { force = false, deferFirst
       await rt.jobFiles.stampId(f.name, spec.id).catch((err) => errors.push(`could not write an id into the file: ${err}`))
     }
     seen.add(spec.id)
-    const checked = checkJobSpec(rt, spec, projects)
+    const checked = checkJobSpec(rt, spec, projects, lib)
     errors.push(...checked.errors)
     const cfg = jobConfigFrom({ ...spec, tools: checked.tools }, f.name)
     const configError = errors.length ? errors.join('; ') : null
@@ -4144,6 +4211,8 @@ async function syncJobFilesNow(rt: WorkspaceRuntime, { force = false, deferFirst
         createsItems: true,
         consecutiveFailures: 0,
         brief: cfg.brief ?? undefined,
+        skills: cfg.skills ?? undefined,
+        agents: cfg.agents ?? undefined,
         ...(configError ? { configError } : {}),
         // never run → due at once ("run once now"), unless the creator said wait
         ...(deferFirstRun === spec.id ? { lastRunStartedAt: now } : {}),
@@ -4178,7 +4247,7 @@ async function syncJobFilesNow(rt: WorkspaceRuntime, { force = false, deferFirst
  * missing one, or grant a tool the connector probes don't know. Fills each
  * grant's scope from the probe. The sync and the editor's save share it.
  */
-function checkJobSpec(rt: WorkspaceRuntime, spec: JobFileSpec, projects: Project[]): { tools: JobToolGrant[]; errors: string[] } {
+function checkJobSpec(rt: WorkspaceRuntime, spec: JobFileSpec, projects: Project[], lib: JobLibrary): { tools: JobToolGrant[]; errors: string[] } {
   const errors: string[] = []
   const project = projects.find((p) => p.id === spec.project) ?? null
   if (!spec.project) errors.push(NEEDS_PROJECT)
@@ -4187,11 +4256,11 @@ function checkJobSpec(rt: WorkspaceRuntime, spec: JobFileSpec, projects: Project
   if (refusal) errors.push(refusal)
   const probes = [rt.connectorCache, project ? rt.folderProbes.get(project.path) : undefined].filter((p): p is ConnectorProbe => p != null)
   const checked = checkGrants(spec.tools, probes.length ? probes.flatMap((p) => p.connectors) : null)
-  return { tools: checked.tools, errors: [...errors, ...checked.errors] }
+  return { tools: checked.tools, errors: [...errors, ...checked.errors, ...checkLibrary(spec, lib)] }
 }
 
-/** The editor's side list: project ids and every tool line the probes know. */
-function jobFileReference(rt: WorkspaceRuntime, projects: Project[]): JobFileReference {
+/** The editor's side list: project ids, every tool line the probes know, the skills and agents a job may name. */
+function jobFileReference(rt: WorkspaceRuntime, projects: Project[], lib: JobLibrary): JobFileReference {
   const servers = new Map<string, string[]>()
   const probes = [rt.connectorCache, ...rt.folderProbes.values()].filter((p): p is ConnectorProbe => p != null)
   for (const c of probes.flatMap((p) => p.connectors)) {
@@ -4204,6 +4273,8 @@ function jobFileReference(rt: WorkspaceRuntime, projects: Project[]): JobFileRef
     projects: projects.map((p) => ({ id: p.id, name: p.name })),
     builtins: ['web', 'github', 'files-write'],
     servers: [...servers].map(([server, tools]) => ({ server, tools })).sort((a, b) => a.server.localeCompare(b.server)),
+    skills: [...lib.skills].filter(([, src]) => src !== 'project').map(([name]) => name),
+    agents: [...lib.agents].filter(([, src]) => src !== 'project').map(([name]) => name),
   }
 }
 
@@ -4230,7 +4301,7 @@ async function saveJobText(rt: WorkspaceRuntime, id: string | null, raw: string)
   } else if (await rt.store.jobs.get(jobId)) {
     errors.push(`id ${jobId} belongs to another job — delete the id line and one is made for you`)
   }
-  errors.push(...checkJobSpec(rt, parsed.spec, await rt.store.projects.list()).errors)
+  errors.push(...checkJobSpec(rt, parsed.spec, await rt.store.projects.list(), await jobLibrary(rt)).errors)
   if (errors.length) return { errors }
   const name = existing?.file ?? rt.jobFiles.freeName(parsed.spec.title)
   await rt.jobFiles.writeText(name, text)
@@ -4268,6 +4339,9 @@ async function draftJobOp(rt: WorkspaceRuntime, raw: unknown): Promise<{ id: str
   const tools = grantsFromLines(lines.length ? lines : ['web'], errors)
   const output = text('output') || 'items'
   if (!JOB_OUTPUTS.includes(output as JobOutput)) errors.push(`output must be one of: ${JOB_OUTPUTS.join(', ')}`)
+  const names = (k: string) => (Array.isArray(r[k]) ? (r[k] as unknown[]).filter((x): x is string => typeof x === 'string' && x.trim() !== '').map((x) => x.trim()) : [])
+  const skills = names('skills')
+  const agents = names('agents')
   const brief = r.brief === true ? { ...(text('brief_model') ? { model: text('brief_model') } : {}), ...(text('brief_template') ? { template: text('brief_template') } : {}) } : undefined
   const spec: JobFileSpec = {
     id: randomUUID(),
@@ -4281,11 +4355,13 @@ async function draftJobOp(rt: WorkspaceRuntime, raw: unknown): Promise<{ id: str
     enabled: false,
     ...(brief ? { brief } : {}),
     draft: true,
+    ...(skills.length ? { skills } : {}),
+    ...(agents.length ? { agents } : {}),
     instruction,
   }
   // The file's own schema is the check: what it would refuse, this refuses.
   errors.push(...parseJobFile('draft', serializeJobFile(spec)).errors)
-  errors.push(...checkJobSpec(rt, spec, projects).errors)
+  errors.push(...checkJobSpec(rt, spec, projects, await jobLibrary(rt)).errors)
   if (errors.length) throw new Error(errors.join('; '))
   const warnings: string[] = []
   if (brief?.template && !(await listPlaybooks(rt.playbookDir)).some((p) => p.kind === brief.template)) {
@@ -4332,6 +4408,8 @@ async function tryJobOp(rt: WorkspaceRuntime, raw: unknown): Promise<string> {
     model: job.model,
     output: job.output,
     schedule: scheduleOf(job),
+    skills: job.skills,
+    agents: job.agents,
   })
   if (pv.status !== 'ready' || !pv.result) throw new Error(pv.error ?? 'the trial run ended without a result')
   const res = pv.result
@@ -4777,9 +4855,10 @@ async function initRuntime(rt: WorkspaceRuntime): Promise<void> {
   await loadTeamRuns(rt)
   // The last snapshot makes the first page load instant — but only while it
   // is still fresh, and only in today's shape: one saved before stage/turn
-  // carries no flows, and serving it leaves Today empty until the next sync.
+  // carries no flows, one before the inbox tabs no counts, and serving either
+  // leaves the sidebar wrong until the next sync.
   const saved = await rt.store.inbox.load()
-  rt.inboxCache = saved && saved.landedToday !== undefined && saved.items.every((i) => i.flow) ? saved : null
+  rt.inboxCache = saved && saved.counts !== undefined && saved.items.every((i) => i.flow) ? saved : null
   probeConnectors(rt).catch((err) => log('error', 'connectors', `probe failed: ${err}`, { workspace: rt.meta.id }))
   probeModels(rt).catch((err) => log('error', 'models', `probe failed: ${err}`, { workspace: rt.meta.id }))
   await rt.actionsFile.seed().catch((err) => log('warn', 'actions', `could not seed the actions file: ${errText(err)}`, { workspace: rt.meta.id }))
@@ -6943,6 +7022,8 @@ function makeTriageMcp(rt: WorkspaceRuntime) {
           brief: z.boolean().optional().describe('brief every item it files (items output only)'),
           brief_model: z.string().optional().describe('model for the briefs; default = the workspace’s brief default'),
           brief_template: z.string().optional().describe('playbook to brief with, e.g. "review-requested"; default = the item’s kind'),
+          skills: z.array(z.string()).optional().describe(SKILLS_ARG),
+          agents: z.array(z.string()).optional().describe(AGENTS_ARG),
         },
         async (args) => {
           try {
@@ -8325,7 +8406,7 @@ const server = http.createServer(async (req, res) => {
         let text = starterJobFile(projects)
         if (w?.file) text = await readFile(rt.jobFiles.pathOf(w.file), 'utf8').catch(() => serializeJobFile(jobSpecFrom(w)))
         else if (w) text = serializeJobFile(jobSpecFrom(w))
-        body = { ok: true, text, ...(w?.file ? { file: `jobs/${w.file}.md` } : {}), reference: jobFileReference(rt, projects) }
+        body = { ok: true, text, ...(w?.file ? { file: `jobs/${w.file}.md` } : {}), reference: jobFileReference(rt, projects, await jobLibrary(rt)) }
       } else if (req.method === 'POST') {
         const raw = (await readJsonBody(req)) as { text?: unknown }
         if (typeof raw?.text !== 'string') throw new Error('text must be a string')

@@ -35,7 +35,9 @@ import {
   type JobToolGrant,
 } from '../core/job/tools.js'
 import { JOB_NOTIFY, type JobBrief, type JobNotify, type JobOutput } from '../core/job/types.js'
+import type { LibrarySource } from '../shared/protocol.js'
 import { parseFrontmatter, serializeFrontmatter, type FrontmatterValue } from './artifacts.js'
+import { WORKSPACE_PLUGIN } from './library.js'
 import { defaultPlaybook } from './briefs.js'
 import { slugify } from './teams.js'
 
@@ -59,14 +61,21 @@ export type JobFileSpec = {
   brief?: JobBrief
   /** drafted by a chat, not yet reviewed — stays off until you enable it */
   draft?: boolean
+  /** skills a run may load, as Claude calls them (`triage:<name>` for the workspace library's) */
+  skills?: string[]
+  /** subagents a run may hand work to, named the same way */
+  agents?: string[]
   instruction: string
 }
 
 export const JOB_FILE_KEYS = [
-  'id', 'title', 'schedule', 'project', 'tools', 'model', 'output', 'catch_up',
+  'id', 'title', 'schedule', 'project', 'tools', 'skills', 'agents', 'model', 'output', 'catch_up',
   'timeout', 'budget_usd', 'daily_budget_usd', 'notify', 'enabled',
   'brief', 'brief_model', 'brief_template', 'draft',
 ] as const
+
+/** A skill or agent name as Claude calls it: `name`, or `namespace:name` for a plugin's (the workspace library is `triage:`). */
+const LIBRARY_NAME_RE = /^[A-Za-z0-9][\w.-]*(?::[A-Za-z0-9][\w.-]*)?$/
 
 /** A playbook name, as briefs read them (server/briefs.ts isPlaybookName). */
 const PLAYBOOK_RE = /^[a-z][a-z0-9-]{0,40}$/
@@ -150,6 +159,20 @@ export function parseJobFile(name: string, text: string): ParsedJobFile {
   const tools = grantsFromLines(toolLines, errors)
   if (!tools.length) errors.push('tools must list at least one integration')
 
+  const names = (key: 'skills' | 'agents'): string[] => {
+    const raw = d[key]
+    const list = Array.isArray(raw) ? raw.map((x) => x.trim()) : str(raw) ? [str(raw)] : []
+    const out: string[] = []
+    for (const n of list) {
+      if (!n) continue
+      if (!LIBRARY_NAME_RE.test(n)) errors.push(`${key}: "${n}" is not a name — write it as Claude calls it, e.g. triage:pr-review`)
+      else if (!out.includes(n)) out.push(n)
+    }
+    return out
+  }
+  const skills = names('skills')
+  const agents = names('agents')
+
   const output = (str(d.output) || 'items') as JobOutput
   if (!OUTPUTS.includes(output)) errors.push(`output must be one of: ${OUTPUTS.join(', ')}`)
 
@@ -195,6 +218,8 @@ export function parseJobFile(name: string, text: string): ParsedJobFile {
     schedule: schedule || '0 9 * * *',
     project: str(d.project),
     tools,
+    ...(skills.length ? { skills } : {}),
+    ...(agents.length ? { agents } : {}),
     ...(str(d.model) ? { model: str(d.model) } : {}),
     output: OUTPUTS.includes(output) ? output : 'items',
     ...(catchUp && isCatchUpSpec(catchUp) ? { catchUp } : {}),
@@ -221,6 +246,8 @@ export function serializeJobFile(s: JobFileSpec): string {
     project: s.project,
     tools: linesFromGrants(s.tools),
   }
+  if (s.skills?.length) data.skills = s.skills
+  if (s.agents?.length) data.agents = s.agents
   if (s.model) data.model = s.model
   data.output = s.output
   if (s.catchUp) data.catch_up = s.catchUp
@@ -268,6 +295,34 @@ export function checkGrants(
   return { tools: out, errors }
 }
 
+/** The skills and agents a job run could load, by the name Claude calls each, with where it lives. */
+export type JobLibrary = {
+  skills: Map<string, LibrarySource>
+  agents: Map<string, LibrarySource>
+}
+
+/**
+ * Check a spec's `skills:` and `agents:` against what is on this machine.
+ * A job run loads the workspace library, your personal ones and your
+ * plugins' — never a project's `.claude` folder, which would bring the
+ * project's settings and hooks with it. Pure.
+ */
+export function checkLibrary(spec: Pick<JobFileSpec, 'skills' | 'agents'>, lib: JobLibrary): string[] {
+  const errors: string[] = []
+  for (const [key, kind, have] of [['skills', 'skill', lib.skills], ['agents', 'agent', lib.agents]] as const) {
+    for (const name of spec[key] ?? []) {
+      const source = have.get(name)
+      if (!source) {
+        const hint = have.has(`${WORKSPACE_PLUGIN}:${name}`) ? ` — the workspace library's is called ${WORKSPACE_PLUGIN}:${name}` : ''
+        errors.push(`${key}: no ${kind} named "${name}"${hint}`)
+      } else if (source === 'project') {
+        errors.push(`${key}: "${name}" lives in a project's .claude folder, which job runs don't load — move it to the workspace library or your personal one`)
+      }
+    }
+  }
+  return errors
+}
+
 /**
  * Set one frontmatter key in a file's text, touching no other line: replace
  * the key's line if there is one, else add it first or last in the block. A
@@ -312,6 +367,9 @@ export function starterJobFile(projects: { id: string; name: string }[]): string
     `project: ${first ? first.id : ''}`,
     '# built-ins: web, github, files-write · an MCP tool: <server>/<tool>',
     'tools: [web]',
+    '# skills and agents the run may use, as Claude calls them (Settings → Skills, Agents):',
+    '# skills: [triage:pr-review]',
+    '# agents: [triage:code-reviewer]',
     '# items (one work item per match) or digest (one report per run)',
     'output: items',
     '# never, on_failure or always — a macOS notification',
@@ -325,7 +383,7 @@ export function starterJobFile(projects: { id: string; name: string }[]): string
     '# daily_budget_usd: 5     (across a day of runs)',
     '# brief: true             (brief every item it files — output: items only)',
     '# brief_model: sonnet     (the brief runs\' model; default = Settings → Briefs)',
-    '# brief_template: job-hit   (a playbook in playbooks/; default = the item\'s kind)',
+    '# brief_template: job-hit (a playbook in playbooks/; default = the item\'s kind)',
     '---',
     '',
     'What to look for, where, and what counts as a match.',

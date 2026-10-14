@@ -74,7 +74,7 @@ function trimInner(input: Record<string, unknown>, max: number): Record<string, 
 
 /** A refusal rather than a failure: the call never ran. Our own and Claude Code's wordings. */
 const DENIAL_RE =
-  /^(?:Denied by the user|The session ended before this request was answered|This is a brief session|Permission to use \S+ (?:has been|was) denied)|(?:tool use was rejected|is not granted to this job|job runs may not|this job may only run|outside this job's folder)/i
+  /^(?:Denied by the user|The session ended before this request was answered|This is a brief session|Permission to use \S+ (?:has been|was) denied)|(?:tool use was rejected|is not granted to this job|job runs may not|this job may only (?:run|use the skills|hand work to)|this job names no (?:skills|agents)|outside this job's folder)/i
 
 const clipError = (s: string): string => (s.length > 400 ? `${s.slice(0, 399)}…` : s)
 
