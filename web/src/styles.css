@@ -537,6 +537,16 @@ kbd { font-family: var(--mono); font-size: 0.8462rem; color: var(--ash); border:
   color: var(--stone); font-size: 0.8462rem; flex: none; flex-wrap: wrap;
 }
 .panelFoot .kbd { color: var(--ash); }
+.prow.tabRow.empty { color: var(--ash); }
+.prow.tabRow.empty > svg, .prow.tabRow.empty .m { color: var(--stone); }
+.prow.tabRow.hot-red .m { color: var(--red-ink); }
+.prow.tabRow.hot-red > svg { color: var(--red-ink); }
+.prow.tabRow.hot-amber .m { color: var(--amber); }
+.doneLink {
+  display: block; margin: 6px 6px 0; padding: 4px 14px; border: 0; background: transparent; cursor: pointer;
+  color: var(--stone); font: inherit; font-size: 0.8462rem; text-align: left;
+}
+.doneLink:hover, .doneLink.sel { color: var(--ink); }
 
 /* main + tab band */
 #main { flex: 1; min-width: 0; display: flex; flex-direction: column; position: relative; overflow: hidden; background: var(--canvas); }
@@ -734,27 +744,22 @@ kbd { font-family: var(--mono); font-size: 0.8462rem; color: var(--ash); border:
 .wrow .meta .state.flow-others { color: var(--mute); }
 .wrow .meta .state.flow-none { color: var(--stone); }
 .wrow .meta .state.flow-broken { color: var(--red); }
-/* Today's row extras: New / Updated, how long a person has waited, a stuck wait. */
+/* Row extras: New / Updated, how long a person has waited, a stuck wait. */
 .wrow .t .fresh { flex: none; font-family: var(--mono); font-size: 0.8077rem; }
 .wrow .t .fresh.new { color: var(--green); }
 .wrow .t .fresh.updated { color: var(--blue); }
 .wrow .t .waited { flex: none; font-family: var(--mono); font-size: 0.8462rem; color: var(--ash); }
 .wrow .t .waited.stuck { color: var(--amber); }
 
-/* Today (core/work/today.ts): five sections, the same ledger rows. Urgency
-   steps down the tiers; Something broke is the one red heading. */
-.todaySec { display: contents; }
-.homeList > .todaySec:first-child > .secLabel { margin-top: 0; }
-.secLabel.today-due .tier, .secLabel.today-waiting .tier { color: var(--ink); }
-.secLabel.today-approval .tier { color: var(--body); }
-.secLabel.today-broke .tier { color: var(--red-ink); }
-.secLabel.today-fresh .tier { color: var(--mute); }
-.landed {
-  display: flex; align-items: center; gap: 6px; margin-top: 26px; padding: 0 2px;
-  color: var(--ash); font-size: 0.9231rem;
-}
-.landed svg { color: var(--green); }
-.landed .n { font-family: var(--mono); color: var(--ink); }
+/* The inbox page's "landed today" — the day's progress, kept in the meta line. */
+.pageMeta .landed { display: inline-flex; align-items: center; gap: 4px; }
+.pageMeta .landed svg { color: var(--green); }
+.pageMeta .landed .n { font-family: var(--mono); color: var(--ink); }
+
+/* A session held on a prompt, in Needs you now: under its item, or its own row. */
+.wrow.sessionRow .glyph { color: var(--red-ink); }
+.wrow.sessionRow.nested { padding-left: 28px; }
+.wrow.sessionRow.nested .bar { opacity: 0; }
 .segBtn .segN { font-family: var(--mono); font-size: 0.8462rem; color: var(--stone); margin-left: 6px; }
 .toolRow .seg .segBtn svg { margin-left: 4px; color: var(--stone); }
 

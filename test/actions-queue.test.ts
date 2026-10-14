@@ -39,7 +39,7 @@ import { DEFAULT_RULES } from '../core/actions/rules.js'
 import type { ActionRecord, ActionStatus } from '../core/actions/types.js'
 import { openSqliteStore } from '../core/store/sqlite.js'
 import { flowOf } from '../core/work/flow.js'
-import { todaySectionOf } from '../core/work/today.js'
+import { inboxTabOf } from '../core/work/inbox-tabs.js'
 import { labelOf } from '../core/work/labels.js'
 import type { WorkItem } from '../core/work/types.js'
 
@@ -375,8 +375,8 @@ test('flow: an action waiting on approval puts the item on my turn, in Ready for
   } as WorkItem
   const running = flowOf(item, { session: { running: true, waiting: false, error: false, at: T0 - 1000 }, actions: { pending: 1, at: T0 } })
   assert.deepEqual([running.stage, running.turn, running.ask], ['review', 'me', 'approve action'])
-  // A review request is a human ask (Today's "waiting"), but a queued action outranks it.
-  assert.equal(todaySectionOf({ ...item, label: labelOf(item), score: 1, flow: running }, T0), 'approval')
+  // A review request is a human ask (People waiting), but a queued action outranks it.
+  assert.equal(inboxTabOf({ ...item, label: labelOf(item), score: 1, flow: running }, T0), 'needs')
   const none = flowOf(item, { session: { running: true, waiting: false, error: false, at: T0 - 1000 }, actions: { pending: 0, at: T0 } })
   assert.equal(none.turn, 'ai')
   // An override older than the action gives way to it.

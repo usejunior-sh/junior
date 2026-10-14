@@ -13,10 +13,12 @@ export type InboxSnapshot = {
   items: readonly ScoredItem[]
   syncedAt: number
   notices: readonly string[]
-  /** Today's "Something broke" entries that aren't items */
+  /** Needs you now's entries that aren't items: a failed job, a paused team run */
   alerts: readonly InboxAlert[]
-  /** Today's footer: items done since midnight */
+  /** items done since midnight */
   landedToday: number
+  /** snoozed and archived rows, for the sidebar's counts */
+  counts?: { snoozed: number; archived: number }
   /** false until the first successful load */
   loaded: boolean
   /** the last refresh's failure, cleared by the next success */
@@ -47,9 +49,18 @@ export const inboxStore = {
     items: readonly ScoredItem[],
     syncedAt: number,
     notices: readonly string[],
-    extras: { alerts?: readonly InboxAlert[]; landedToday?: number } = {},
+    extras: { alerts?: readonly InboxAlert[]; landedToday?: number; counts?: InboxSnapshot['counts'] } = {},
   ) {
-    snap = { items, syncedAt, notices, alerts: extras.alerts ?? [], landedToday: extras.landedToday ?? 0, loaded: true, loading: false }
+    snap = {
+      items,
+      syncedAt,
+      notices,
+      alerts: extras.alerts ?? [],
+      landedToday: extras.landedToday ?? 0,
+      counts: extras.counts ?? snap.counts,
+      loaded: true,
+      loading: false,
+    }
     notify()
   },
 
@@ -66,7 +77,7 @@ export const inboxStore = {
     inflight = fetch(`/api/inbox${force ? '?refresh=1' : ''}`)
       .then((r) => r.json() as Promise<InboxResponse>)
       .then((b) => {
-        if (b.ok) inboxStore.set(b.items, b.syncedAt, b.notices, { alerts: b.alerts, landedToday: b.landedToday })
+        if (b.ok) inboxStore.set(b.items, b.syncedAt, b.notices, { alerts: b.alerts, landedToday: b.landedToday, counts: b.counts })
         else {
           snap = { ...snap, loading: false, error: b.error }
           notify()

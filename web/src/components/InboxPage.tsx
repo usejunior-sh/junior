@@ -9,8 +9,10 @@ import {
   ExternalLink,
   ImagePlus,
   Link2,
+  MessageCircleQuestion,
   MoreHorizontal,
   Play,
+  ShieldQuestion,
   Sparkles,
   Square,
   Flag,
@@ -37,6 +39,7 @@ import type {
   ProjectsResponse,
   ReposResponse,
   ScoredItem,
+  SessionSummary,
   JobsResponse,
 } from '../../../shared/protocol.js'
 import { itemImageUrl } from '../../../shared/protocol.js'
@@ -52,8 +55,6 @@ import { DatePopover } from './Calendar.js'
 import { dayInput } from '../dueDay.js'
 import {
   LABELS,
-  LABEL_ORDER,
-  countOf,
   PRIORITY_LABEL,
   PRIORITY_VALUES,
   itemTone,
@@ -61,7 +62,6 @@ import {
   ago,
   priorityClass,
   shortAge,
-  weekday,
 } from '../itemUi.js'
 import { Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from '../ui/Menu.js'
 import { Select, SelectItem } from '../ui/Select.js'
@@ -69,7 +69,6 @@ import { choosesProject, defaultProjectOf, ProjectIdPicker } from './ProjectPick
 import { anyDialogOpen, isGoSequence, isTypingTarget } from '../keys.js'
 import {
   SECTION_ORDER,
-  TODAY_LIMIT,
   dueChip,
   dueFor,
   dueOf,
@@ -77,32 +76,9 @@ import {
   sectionTitle,
   type Section,
 } from '../../../core/work/due.js'
-import { FOLD_AFTER_DAYS, isOldFyi } from '../../../core/work/fade.js'
 import { STAGE_LABEL, TURN_LABEL, type ItemFlow, type Turn } from '../../../core/work/flow.js'
-import { TODAY_TITLE, inTurnTab, todaySections, waitedFor, type TodayEntry, type TodaySection, type TurnTab } from '../../../core/work/today.js'
-
-/**
- * Today first, then the turn tabs (core/work/today.ts): whose move it is. The
- * status tabs stay (.docs/jobs-v2.md) — items are durable and never deleted,
- * so done/snoozed/archived are viewable; the last two sit behind More.
- */
-const TABS = [
-  { id: 'today', label: 'Today' },
-  { id: 'mine', label: 'My turn' },
-  { id: 'ai', label: 'AI working' },
-  { id: 'others', label: 'Waiting on others' },
-  { id: 'all', label: 'All' },
-  { id: 'done', label: 'Done' },
-] as const
-const MORE_TABS = [
-  { id: 'snoozed', label: 'Snoozed' },
-  { id: 'archived', label: 'Archived' },
-] as const
-type Tab = (typeof TABS)[number]['id'] | (typeof MORE_TABS)[number]['id']
-type StatusTab = 'done' | 'snoozed' | 'archived'
-/** Tabs over the open inbox snapshot; the rest are loaded by status. */
-const LIVE_TABS: ReadonlySet<Tab> = new Set<Tab>(['today', 'mine', 'ai', 'others', 'all'])
-const tabLabelOf = (t: Tab) => [...TABS, ...MORE_TABS].find((x) => x.id === t)?.label ?? ''
+import { TAB_TITLE, isOpenTab, waitedFor, type InboxTab, type TabEntry } from '../../../core/work/inbox-tabs.js'
+import { waitingText, type Tabs } from '../inboxTabs.js'
 
 type OtherState =
   | { phase: 'loading' }
@@ -110,6 +86,10 @@ type OtherState =
   | { phase: 'error'; message: string }
 
 type Props = {
+  /** the tab in front — the route's (`#/inbox/<tab>`), resolved by the shell */
+  tab: InboxTab
+  /** the open tabs, shared with the sidebar so the counts are the rows */
+  tabs: Tabs
   onDispatch: (item: ScoredItem) => void
   onRefineJob: (item: ScoredItem) => void
   onOpenItem: (id: string) => void
@@ -121,11 +101,12 @@ type Props = {
   onNavigate: (path: string) => void
 }
 
-export function InboxPage({ onDispatch, onRefineJob, onOpenItem, onPinItem, composeSignal = 0, onNavigate }: Props) {
-  const [tab, setTab] = useState<Tab>('today')
-  // The open tab reads the shared snapshot (the Queue panel shows the same
-  // list); the other tabs are loaded here on demand.
+export function InboxPage({ tab, tabs, onDispatch, onRefineJob, onOpenItem, onPinItem, composeSignal = 0, onNavigate }: Props) {
+  // The open tabs read the shared snapshot (the sidebar counts the same rows);
+  // the status tabs are loaded here on demand.
   const snap = useInbox()
+  // Archived holds deleted to-dos too; this picks which of the two it lists.
+  const [deletedOnly, setDeletedOnly] = useState(false)
   const [other, setOther] = useState<OtherState>({ phase: 'loading' })
   const [reposOpen, setReposOpen] = useState(false)
   const [repoCount, setRepoCount] = useState<number | null>(null)
@@ -154,9 +135,9 @@ export function InboxPage({ onDispatch, onRefineJob, onOpenItem, onPinItem, comp
     })
   }, [])
 
-  const isOpen = LIVE_TABS.has(tab)
+  const isOpen = isOpenTab(tab)
 
-  const loadOther = useCallback(async (which: StatusTab) => {
+  const loadOther = useCallback(async (which: ItemStatus) => {
     setOther({ phase: 'loading' })
     try {
       const res = await fetch(`/api/items?status=${which}`)
@@ -169,8 +150,8 @@ export function InboxPage({ onDispatch, onRefineJob, onOpenItem, onPinItem, comp
 
   const reload = useCallback(
     (refresh: boolean) => {
-      if (LIVE_TABS.has(tab)) void inboxStore.refresh(refresh)
-      else void loadOther(tab as StatusTab)
+      if (isOpenTab(tab)) void inboxStore.refresh(refresh)
+      else void loadOther(tab)
     },
     [tab, loadOther],
   )
@@ -267,48 +248,25 @@ export function InboxPage({ onDispatch, onRefineJob, onOpenItem, onPinItem, comp
     }
   }, [])
 
-  const selectTab = useCallback(
-    (next: Tab) => {
-      setTab(next)
-      setSel(0)
-      if (!LIVE_TABS.has(next)) void loadOther(next as StatusTab)
-    },
-    [loadOther],
-  )
+  // The route picks the tab; a status tab loads its list when it comes up.
+  useEffect(() => {
+    setSel(0)
+    if (!isOpenTab(tab)) void loadOther(tab)
+  }, [tab, loadOther])
 
-  // The Open tab's day sections (core/work/due.ts); score still orders each.
-  // Old FYI (core/work/fade.ts) folds into one line at the end of its section.
-  const [fyiOpen, setFyiOpen] = useState(false)
-  const sections = useMemo(() => {
-    const now = Date.now()
-    const by = new Map<Section, { rows: ScoredItem[]; old: ScoredItem[] }>(SECTION_ORDER.map((s) => [s, { rows: [], old: [] }]))
-    for (const i of snap.items) {
-      const sec = by.get(dueOf(i, now).section)!
-      ;(isOldFyi(i, now) ? sec.old : sec.rows).push(i)
-    }
-    return by
-  }, [snap.items])
+  const entries = useMemo<readonly TabEntry<ScoredItem>[]>(() => (isOpenTab(tab) ? tabs.tabs.get(tab) ?? [] : []), [tab, tabs])
 
-  // Today's sections (core/work/today.ts): each item once, in its highest.
-  const today = useMemo(() => todaySections(snap.items, Date.now()), [snap.items])
-
-  // Items in on-screen order. Today and All render by section; the turn tabs
-  // are the ranked list filtered by turn; the status tabs a flat list.
+  // Items in on-screen order: the tab's entries, or the status list.
   const ordered = useMemo<readonly ScoredItem[]>(
     () =>
-      tab === 'today'
-        ? [...today.values()].flatMap((entries) => entries.map((e) => e.item))
-        : tab === 'all'
-          ? SECTION_ORDER.flatMap((s) => {
-              const sec = sections.get(s)
-              return sec ? [...sec.rows, ...(fyiOpen ? sec.old : [])] : []
-            })
-          : isOpen
-            ? snap.items.filter((i) => inTurnTab(i, tab as TurnTab))
-            : other.phase === 'ready'
-              ? other.items
-              : [],
-    [tab, isOpen, today, sections, fyiOpen, snap.items, other],
+      isOpen
+        ? entries.map((e) => e.item)
+        : other.phase === 'ready'
+          ? tab === 'archived'
+            ? other.items.filter((i) => !!i.deleted === deletedOnly)
+            : other.items
+          : [],
+    [isOpen, entries, other, tab, deletedOnly],
   )
 
   // The live selection: checked ids that are still on screen. Ids of rows that
@@ -446,30 +404,16 @@ export function InboxPage({ onDispatch, onRefineJob, onOpenItem, onPinItem, comp
   const loading = isOpen ? !snap.loaded && snap.loading : other.phase === 'loading'
   const error = isOpen ? (!snap.loaded ? snap.error : undefined) : other.phase === 'error' ? other.message : undefined
   const items = ordered
-  // The headline counts what is asked of you, by label; Read is not an ask.
-  const asks =
-    tab === 'all'
-      ? LABEL_ORDER.filter((l) => l !== 'read')
-          .map((l) => ({ label: l, n: snap.items.filter((i) => i.label === l).length }))
-          .filter((c) => c.n > 0)
-      : []
-  const alerts = snap.alerts
-  const todayCount = items.length + alerts.length
-  const tabLabel = tabLabelOf(tab)
+  // Needs you now also holds what isn't an item: a blocked session with no
+  // open item, a failed job, a paused team run.
+  const alerts = tab === 'needs' ? snap.alerts : []
+  const orphans = tab === 'needs' ? tabs.orphans : []
+  const count = items.length + alerts.length + orphans.length
+  const tabLabel = TAB_TITLE[tab]
   const emptyText =
-    tab === 'today'
-      ? 'Nothing needs you.'
-      : isOpen && snap.notices.length > 0
-        ? 'No open items to show — but a source is degraded, so this may be incomplete.'
-        : tab === 'all'
-          ? 'Inbox zero — nothing is waiting on you.'
-          : tab === 'mine'
-            ? 'Nothing is on your turn.'
-            : tab === 'ai'
-              ? 'The AI isn’t working on anything.'
-              : tab === 'others'
-                ? 'Nobody is holding anything of yours.'
-                : `Nothing in ${tabLabel.toLowerCase()}.`
+    isOpen && snap.notices.length > 0
+      ? 'Nothing here — but a source is degraded, so this may be incomplete.'
+      : EMPTY_TEXT[tab] ?? `Nothing in ${tabLabel.toLowerCase()}.`
 
   const rowProps: RowActions = {
     tab,
@@ -501,24 +445,16 @@ export function InboxPage({ onDispatch, onRefineJob, onOpenItem, onPinItem, comp
       <div className="inner">
         <div className="pageHead">
           <h1 className="display">
-            {tab === 'today' || tab === 'all' ? weekday() : tabLabel}.{' '}
-            {loading && items.length === 0 ? (
+            {tabLabel}.{' '}
+            {loading && count === 0 ? (
               <span className="muted">syncing…</span>
-            ) : tab === 'today' ? (
-              <span className="muted">
-                {todayCount === 0 ? 'Nothing needs you.' : `${todayCount} need${todayCount === 1 ? 's' : ''} you.`}
-              </span>
             ) : (
               <span className="muted">
-                {asks.length > 0
-                  ? asks.map((c, i) => (
-                      <span key={c.label}>
-                        {i > 0 && ' · '}
-                        <span className={LABELS[c.label].group === 'blocking' ? 'blk' : undefined}>{countOf(c.label, c.n)}</span>
-                      </span>
-                    ))
-                  : `${items.length} item${items.length === 1 ? '' : 's'}`}
-                .
+                {tab === 'needs'
+                  ? count === 0
+                    ? 'Nothing is held on you.'
+                    : `${count} held on you.`
+                  : `${count} item${count === 1 ? '' : 's'}.`}
               </span>
             )}
           </h1>
@@ -526,48 +462,39 @@ export function InboxPage({ onDispatch, onRefineJob, onOpenItem, onPinItem, comp
             <RefreshCw size={12} aria-hidden="true" />
             {snap.syncedAt ? `synced ${ago(snap.syncedAt)}` : 'not synced yet'}
             {repoCount != null && ` · ${repoCount === 0 ? 'no repos' : `${repoCount} repo${repoCount === 1 ? '' : 's'}`}`}
-            {jobTitles.size > 0 && ` · ${jobTitles.size} job${jobTitles.size === 1 ? '' : 'es'}`}
+            {jobTitles.size > 0 && ` · ${jobTitles.size} job${jobTitles.size === 1 ? '' : 's'}`}
+            {snap.loaded && (
+              <span className="landed" title="Items marked done since midnight">
+                {' · '}
+                <Check size={12} aria-hidden="true" /> landed today <span className="n">{snap.landedToday}</span>
+              </span>
+            )}
           </span>
         </div>
 
         <div className="toolRow">
-          <div className="seg" role="tablist">
-            {TABS.map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                role="tab"
-                aria-selected={tab === t.id}
-                className={`segBtn${tab === t.id ? ' active' : ''}`}
-                onClick={() => selectTab(t.id)}
-              >
-                {t.label}
-                {t.id !== 'today' && t.id !== 'all' && t.id !== 'done' && snap.loaded && (
-                  <span className="segN">{snap.items.filter((i) => inTurnTab(i, t.id as TurnTab)).length}</span>
-                )}
-              </button>
-            ))}
-            <Menu>
-              <MenuTrigger asChild>
+          {tab === 'archived' ? (
+            <div className="seg" role="tablist" aria-label="Archived or deleted">
+              {([false, true] as const).map((d) => (
                 <button
+                  key={String(d)}
                   type="button"
-                  className={`segBtn${MORE_TABS.some((t) => t.id === tab) ? ' active' : ''}`}
-                  title="Snoozed and archived items"
+                  role="tab"
+                  aria-selected={deletedOnly === d}
+                  className={`segBtn${deletedOnly === d ? ' active' : ''}`}
+                  onClick={() => {
+                    setDeletedOnly(d)
+                    setSel(0)
+                  }}
                 >
-                  {MORE_TABS.find((t) => t.id === tab)?.label ?? 'More'}
-                  <MoreHorizontal size={13} aria-hidden="true" />
+                  {d ? 'Deleted' : 'Archived'}
+                  {other.phase === 'ready' && <span className="segN">{other.items.filter((i) => !!i.deleted === d).length}</span>}
                 </button>
-              </MenuTrigger>
-              <MenuContent align="start">
-                {MORE_TABS.map((t) => (
-                  <MenuItem key={t.id} onSelect={() => selectTab(t.id)}>
-                    {t.label}
-                    {tab === t.id && <Check className="check" size={13} aria-hidden="true" />}
-                  </MenuItem>
-                ))}
-              </MenuContent>
-            </Menu>
-          </div>
+              ))}
+            </div>
+          ) : (
+            <span />
+          )}
           <div className="right">
             <button type="button" className="btn sm ghost" onClick={() => setComposer({ open: true, editing: null })}>
               + Add item
@@ -600,45 +527,37 @@ export function InboxPage({ onDispatch, onRefineJob, onOpenItem, onPinItem, comp
                   {n}
                 </div>
               ))}
-            {tab === 'today' ? (
-              <TodayView
-                sections={today}
-                alerts={alerts}
-                landedToday={snap.landedToday}
-                selectedId={ordered[sel]?.id ?? null}
-                onAlert={(a) => onNavigate(a.jobId ? `/jobs/${encodeURIComponent(a.jobId)}` : a.sessionId ?? '/inbox')}
-                onAdd={() => setComposer({ open: true, editing: null })}
-                {...rowProps}
-              />
-            ) : items.length === 0 ? (
+            {count === 0 ? (
               <div className="inboxEmpty">
                 {emptyText}
-                {tab === 'all' && (
+                {isOpen && (
                   <button type="button" className="btn" onClick={() => setComposer({ open: true, editing: null })}>
                     Add a work item
                   </button>
                 )}
               </div>
-            ) : tab === 'all' ? (
-              <div className="homeList">
-                {SECTION_ORDER.map((s) => (
-                  <DaySection
-                    key={s}
-                    section={s}
-                    items={sections.get(s)?.rows ?? []}
-                    old={sections.get(s)?.old ?? []}
-                    oldOpen={fyiOpen}
-                    onToggleOld={() => setFyiOpen((v) => !v)}
-                    selectedId={ordered[sel]?.id ?? null}
-                    {...rowProps}
-                  />
-                ))}
-              </div>
             ) : (
               <div className="homeList">
-                {items.map((item) => (
-                  <WorkRow key={item.id} item={item} selected={item.id === (ordered[sel]?.id ?? null)} {...rowProps} />
+                {orphans.map((s) => (
+                  <SessionRow key={s.id} session={s} project={projectName(s.projectId)} onOpen={() => onNavigate(s.id)} />
                 ))}
+                {alerts.map((a) => (
+                  <AlertRow key={a.id} alert={a} onOpen={() => onNavigate(a.jobId ? `/jobs/${encodeURIComponent(a.jobId)}` : a.sessionId ?? '/inbox')} />
+                ))}
+                {isOpen
+                  ? entries.map((e) => (
+                      <WorkRowWithSessions
+                        key={e.item.id}
+                        entry={e}
+                        sessions={tabs.sessionsByRow.get(e.item.id)}
+                        selected={e.item.id === (ordered[sel]?.id ?? null)}
+                        onOpenSession={(id) => onNavigate(id)}
+                        {...rowProps}
+                      />
+                    ))
+                  : items.map((item) => (
+                      <WorkRow key={item.id} item={item} selected={item.id === (ordered[sel]?.id ?? null)} {...rowProps} />
+                    ))}
               </div>
             )}
           </>
@@ -776,7 +695,7 @@ function SelectionBar({
 // ---------------------------------------------------------------------------
 
 type RowActions = {
-  tab: Tab
+  tab: InboxTab
   projectName: (id?: string) => string | undefined
   onSelect: (id: string) => void
   onOpen: (id: string) => void
@@ -800,61 +719,73 @@ type RowActions = {
   onSetTurn: (item: ScoredItem, turn: Turn | null) => void
 }
 
+const EMPTY_TEXT: Partial<Record<InboxTab, string>> = {
+  needs: 'Nothing is held on you — no agent is waiting, nothing broke.',
+  due: 'Nothing is due today.',
+  people: 'Nobody is waiting on you.',
+  new: 'Nothing new in the last day.',
+  ready: 'No brief is waiting on you.',
+  ai: 'The AI isn’t working on anything.',
+  review: 'Nothing to review.',
+  others: 'Nobody is holding anything of yours.',
+  backlog: 'The backlog is empty.',
+}
+
 /**
- * Today (core/work/today.ts): five sections, most urgent first, each item
- * once. Broken things that aren't items (a failed job, a paused team run)
- * sit in Something broke beside the items that broke. The footer counts what
- * landed since midnight — the day's progress, kept visible.
+ * An item row with the sessions dispatched for it that are held on a prompt,
+ * one line each beneath it — answering one opens the session.
  */
-function TodayView({
-  sections,
-  alerts,
-  landedToday,
-  selectedId,
-  onAlert,
-  onAdd,
+function WorkRowWithSessions({
+  entry,
+  sessions,
+  selected,
+  onOpenSession,
   ...actions
 }: {
-  sections: Map<TodaySection, TodayEntry<ScoredItem>[]>
-  alerts: readonly InboxAlert[]
-  landedToday: number
-  selectedId: string | null
-  onAlert: (a: InboxAlert) => void
-  onAdd: () => void
+  entry: TabEntry<ScoredItem>
+  sessions?: readonly SessionSummary[]
+  selected: boolean
+  onOpenSession: (id: string) => void
 } & RowActions) {
-  const order: TodaySection[] = ['due', 'waiting', 'approval', 'broke', 'fresh']
-  const shown = order.filter((s) => (sections.get(s)?.length ?? 0) > 0 || (s === 'broke' && alerts.length > 0))
   return (
-    <div className="homeList">
-      {shown.length === 0 && (
-        <div className="inboxEmpty">
-          Nothing needs you.
-          <button type="button" className="btn" onClick={onAdd}>
-            Add a work item
-          </button>
-        </div>
-      )}
-      {shown.map((sec) => {
-        const entries = sections.get(sec) ?? []
-        const n = entries.length + (sec === 'broke' ? alerts.length : 0)
-        return (
-          <div key={sec} className="todaySec">
-            <div className={`secLabel today-${sec}`}>
-              <span className="tier">{TODAY_TITLE[sec]}</span>
-              <span className="qual">
-                <span className="n">{n}</span>
-              </span>
-            </div>
-            {sec === 'broke' && alerts.map((a) => <AlertRow key={a.id} alert={a} onOpen={() => onAlert(a)} />)}
-            {entries.map((e) => (
-              <WorkRow key={e.item.id} item={e.item} entry={e} section={sec} selected={e.item.id === selectedId} {...actions} />
-            ))}
-          </div>
-        )
-      })}
-      <div className="landed" title="Items marked done since midnight">
-        <Check size={13} aria-hidden="true" /> Landed today: <span className="n">{landedToday}</span>
-      </div>
+    <>
+      <WorkRow item={entry.item} entry={entry} selected={selected} {...actions} />
+      {sessions?.map((s) => (
+        <SessionRow key={s.id} session={s} nested onOpen={() => onOpenSession(s.id)} />
+      ))}
+    </>
+  )
+}
+
+/** A session held on a permission prompt or a question. */
+function SessionRow({
+  session,
+  project,
+  nested,
+  onOpen,
+}: {
+  session: SessionSummary
+  project?: string
+  nested?: boolean
+  onOpen: () => void
+}) {
+  const what = waitingText(session)
+  return (
+    <div className={`wrow sessionRow${nested ? ' nested' : ''}`}>
+      <span className="check" aria-hidden="true" />
+      <span className="bar" />
+      <span className="glyph">
+        {session.waitingOn === 'AskUserQuestion' ? <MessageCircleQuestion size={14} aria-hidden="true" /> : <ShieldQuestion size={14} aria-hidden="true" />}
+      </span>
+      <button type="button" className="t" title={`${session.title} — ${what}`} onClick={onOpen}>
+        <span className="name">{nested ? what : session.title}</span>
+        {!nested && <span className="why">{what}</span>}
+      </button>
+      <span className="meta">
+        <span className="c state flow-ask">Answer</span>
+        <span className="c src">{nested ? session.title : project ?? ''}</span>
+        <span className="c when">{shortAge(session.updatedAt)}</span>
+      </span>
     </div>
   )
 }
@@ -900,54 +831,6 @@ function flowTitle(f: ItemFlow): string {
   return `${STAGE_LABEL[f.stage]} · ${TURN_LABEL[f.turn]}${f.overridden ? ' — set by you' : ''}${f.note ? ` — ${f.note}` : ''}`
 }
 
-/** One day section of the Open tab. Today says so when it holds more than a day can. */
-function DaySection({
-  section,
-  items,
-  old,
-  oldOpen,
-  onToggleOld,
-  selectedId,
-  ...actions
-}: {
-  section: Section
-  items: ScoredItem[]
-  old: ScoredItem[]
-  oldOpen: boolean
-  onToggleOld: () => void
-  selectedId: string | null
-} & RowActions) {
-  if (items.length === 0 && old.length === 0) return null
-  const over = section === 'today' && items.length > TODAY_LIMIT
-  return (
-    <>
-      <div className={`secLabel day-${section}`}>
-        <span className="tier">{sectionTitle(section, Date.now())}</span>
-        <span className="qual">
-          <span className="n">{items.length + old.length}</span>
-        </span>
-        {over && <span className="qual over">more than a day holds — push some to later</span>}
-      </div>
-      {items.map((item) => (
-        <WorkRow key={item.id} item={item} selected={item.id === selectedId} {...actions} />
-      ))}
-      {old.length > 0 && (
-        <button
-          type="button"
-          className="fyiFold"
-          aria-expanded={oldOpen}
-          title={`FYI older than ${FOLD_AFTER_DAYS} days. Untouched ones archive themselves after a week.`}
-          onClick={onToggleOld}
-        >
-          <ChevronRight size={13} aria-hidden="true" className="chev" />
-          {old.length} older FYI
-        </button>
-      )}
-      {oldOpen && old.map((item) => <WorkRow key={item.id} item={item} selected={item.id === selectedId} {...actions} />)}
-    </>
-  )
-}
-
 /**
  * One work item, one line (.docs/work-item-variations.html — variation A).
  *
@@ -984,11 +867,10 @@ function WorkRow({
   briefOf,
   onSetTurn,
   entry,
-  section,
-}: { item: ScoredItem; selected: boolean; entry?: TodayEntry<ScoredItem>; section?: TodaySection } & RowActions) {
+}: { item: ScoredItem; selected: boolean; entry?: TabEntry<ScoredItem> } & RowActions) {
   const [menuOpen, setMenuOpen] = useState(false)
   const isManual = item.source === 'manual'
-  const isOpen = LIVE_TABS.has(tab)
+  const isOpen = isOpenTab(tab)
   const isChecked = checked.has(item.id)
   const brief = briefPill(briefOf(item.id))
   const pri = item.priority ?? 0
@@ -1001,9 +883,9 @@ function WorkRow({
   const state = rowState(item, brief)
   const flow = item.flow
   const signals = signalsText(item)
-  // Today's extras: how long a person has waited, a stuck wait to nudge.
+  // Tab extras: how long a person has waited, a stuck wait to nudge.
   const now = Date.now()
-  const waited = section === 'waiting' ? waitedFor(Date.parse(item.createdAt) || now, now) : null
+  const waited = tab === 'people' ? waitedFor(Date.parse(item.createdAt) || now, now) : null
   const stuck = entry?.stuck && flow ? waitedFor(flow.since, now) : null
   // Only a stated deadline gets a date chip; a late one you set says how late.
   const due = isOpen ? dueOf(item, Date.now()) : null

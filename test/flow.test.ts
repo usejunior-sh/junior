@@ -1,11 +1,11 @@
 /**
- * Stage and turn (core/work/flow.ts) and the Today view (core/work/today.ts).
+ * Stage and turn (core/work/flow.ts) and the inbox tabs (core/work/inbox-tabs.ts).
  * Time is always an argument.
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { flowOf, isStuck, type FlowSignals } from '../core/work/flow.js'
-import { inTurnTab, todaySectionOf, todaySections, type TodayItem } from '../core/work/today.js'
+import { OPEN_TABS, inboxTabOf, inboxTabs, type OpenTab, type TabItem } from '../core/work/inbox-tabs.js'
 import { labelOf } from '../core/work/labels.js'
 import type { WorkItem } from '../core/work/types.js'
 
@@ -121,75 +121,83 @@ test('stuck: waiting on others for more than two days', () => {
 })
 
 // ---------------------------------------------------------------------------
-// Today
+// The inbox tabs
 // ---------------------------------------------------------------------------
 
-function scored(over: Partial<WorkItem> = {}, signals?: FlowSignals, score = 50): TodayItem & { title: string } {
+function scored(over: Partial<WorkItem> = {}, signals?: FlowSignals, score = 50): TabItem & { title: string } {
   const i = item(over)
   return { ...i, label: labelOf(i), score, flow: flowOf(i, signals) }
 }
 
 const startOfToday = new Date(2026, 9, 12).getTime()
+const running = { running: true, waiting: false, error: false, at: NOW }
 
-test('each item lands in its highest section', () => {
-  const due = scored({ id: 'manual:due', dueAt: startOfToday - DAY, dueSource: 'you' })
-  const review = scored({ id: 'github:o/r#2', source: 'github', kind: 'review-requested', author: 'ani', dueAt: startOfToday, dueSource: 'explicit' })
-  const asked = scored({ id: 'slack:c/1', source: 'slack', kind: 'slack-reply-pending', author: 'niraj' })
-  const ready = scored({ id: 'manual:ready' }, { brief: { status: 'ready', at: NOW - HOUR } })
-  const red = scored({ id: 'github:o/r#3', source: 'github', kind: 'own-pr-open', ciFailing: true })
-  const fresh = scored({ id: 'manual:fresh', ingestedAt: NOW - HOUR, createdAt: iso(NOW - HOUR), updatedAt: iso(NOW - HOUR) })
-  const old = scored({ id: 'manual:old' })
-  const ai = scored({ id: 'manual:ai', ingestedAt: NOW - HOUR }, { brief: { status: 'running', at: NOW } })
-
-  assert.equal(todaySectionOf(due, NOW), 'due')
-  assert.equal(todaySectionOf(review, NOW), 'due') // due beats people waiting
-  assert.equal(todaySectionOf(asked, NOW), 'waiting')
-  assert.equal(todaySectionOf(ready, NOW), 'approval')
-  assert.equal(todaySectionOf(red, NOW), 'broke')
-  assert.equal(todaySectionOf(fresh, NOW), 'fresh')
-  assert.equal(todaySectionOf(old, NOW), null) // my turn, but nothing new: My turn tab, not Today
-  assert.equal(todaySectionOf(ai, NOW), null) // the AI has it
-
-  const secs = todaySections([old, fresh, red, ready, asked, review, due, ai], NOW)
-  assert.deepEqual([...secs.keys()], ['due', 'waiting', 'approval', 'broke', 'fresh'])
-  assert.equal(secs.get('fresh')![0]!.badge, 'new')
+test('the table: each item lands in the first tab that matches', () => {
+  const cases: [string, TabItem, OpenTab][] = [
+    ['a session on a prompt', scored({}, { session: { ...running, waiting: true } }), 'needs'],
+    ['a team step to approve', scored({}, { team: { state: 'gate', at: NOW } }), 'needs'],
+    ['an action to approve', scored({}, { actions: { pending: 1, at: NOW } }), 'needs'],
+    ['red CI, even with reviewers', scored({ source: 'github', kind: 'own-pr-open', ciFailing: true }), 'needs'],
+    ['a failed brief', scored({}, { brief: { status: 'failed', at: NOW } }), 'needs'],
+    ['overdue, set by you', scored({ dueAt: startOfToday - DAY, dueSource: 'you' }), 'due'],
+    ['a review due today beats people waiting', scored({ source: 'github', kind: 'review-requested', dueAt: startOfToday, dueSource: 'explicit' }), 'due'],
+    ['a review request, no day set', scored({ source: 'github', kind: 'review-requested', author: 'ani' }), 'people'],
+    ['a Slack reply', scored({ source: 'slack', kind: 'slack-reply-pending' }), 'people'],
+    ['arrived an hour ago', scored({ ingestedAt: NOW - HOUR, createdAt: iso(NOW - HOUR) }), 'new'],
+    ['a brief is ready', scored({}, { brief: { status: 'ready', at: NOW - HOUR } }), 'ready'],
+    ['a team waits for approval', scored({}, { team: { state: 'proposed', at: NOW } }), 'ready'],
+    ['briefing', scored({ ingestedAt: NOW - HOUR }, { brief: { status: 'running', at: NOW } }), 'ai'],
+    ['a session running', scored({}, { session: running }), 'ai'],
+    ['a session finished', scored({}, { session: { ...running, running: false } }), 'review'],
+    ['your PR, approved', scored({ source: 'github', kind: 'own-pr-approved' }), 'review'],
+    ['your PR, with reviewers', scored({ source: 'github', kind: 'own-pr-open' }), 'others'],
+    ['set to others by you', scored({}, { override: { turn: 'others', at: NOW } }), 'others'],
+    ['new, three days old', scored(), 'backlog'],
+    ['a due day the AI holds stays in AI working', scored({ dueAt: startOfToday, dueSource: 'you' }, { session: running }), 'ai'],
+  ]
+  for (const [name, i, tab] of cases) assert.equal(inboxTabOf(i, NOW), tab, name)
 })
 
 test('a label default is a bucket, not a deadline', () => {
-  // review's default due is "today", but nobody set a day: it is a person waiting, not overdue
-  const r = scored({ id: 'github:o/r#4', source: 'github', kind: 'review-requested', author: 'ani' })
-  assert.equal(todaySectionOf(r, NOW), 'waiting')
+  // review's default due is "today", but nobody set a day: a person waiting, not overdue
+  assert.equal(inboxTabOf(scored({ source: 'github', kind: 'review-requested' }), NOW), 'people')
 })
 
-test('people waiting: oldest first', () => {
+test('blocked sessions: under their row, or a row of their own; counts add up', () => {
+  const a = scored({ id: 'manual:a' })
+  const b = { ...scored({ id: 'github:o/r#1', source: 'github', kind: 'own-pr-open' }), linked: [{ id: 'linear:K-1' }] }
+  const sessions = [
+    { id: 's1', itemId: 'manual:a', updatedAt: NOW - HOUR },
+    { id: 's2', itemId: 'linear:K-1', updatedAt: NOW }, // folded into b's row
+    { id: 's3', updatedAt: NOW }, // no item
+    { id: 's4', itemId: 'manual:snoozed', updatedAt: NOW }, // its item isn't open
+  ]
+  const t = inboxTabs([a, b], sessions, NOW)
+  assert.deepEqual(t.tabs.get('needs')!.map((e) => e.item.id), ['manual:a', 'github:o/r#1'])
+  assert.deepEqual(t.sessionsByRow.get('github:o/r#1')!.map((s) => s.id), ['s2'])
+  assert.deepEqual(t.orphans.map((s) => s.id), ['s3', 's4'])
+  assert.equal(t.counts.needs, 4)
+  assert.equal(OPEN_TABS.reduce((n, k) => n + t.tabs.get(k)!.length, 0), 2) // each row once
+})
+
+test('people waiting: oldest first; due: earliest first', () => {
   const a = scored({ id: 'slack:c/a', source: 'slack', kind: 'slack-reply-pending', createdAt: iso(NOW - DAY) }, undefined, 90)
   const b = scored({ id: 'slack:c/b', source: 'slack', kind: 'slack-reply-pending', createdAt: iso(NOW - 3 * DAY) }, undefined, 10)
-  assert.deepEqual(todaySections([a, b], NOW).get('waiting')!.map((e) => e.item.id), ['slack:c/b', 'slack:c/a'])
+  const d1 = scored({ id: 'manual:d1', dueAt: startOfToday, dueSource: 'you' }, undefined, 90)
+  const d2 = scored({ id: 'manual:d2', dueAt: startOfToday - 2 * DAY, dueSource: 'you' }, undefined, 10)
+  const t = inboxTabs([a, b, d1, d2], [], NOW)
+  assert.deepEqual(t.tabs.get('people')!.map((e) => e.item.id), ['slack:c/b', 'slack:c/a'])
+  assert.deepEqual(t.tabs.get('due')!.map((e) => e.item.id), ['manual:d2', 'manual:d1'])
 })
 
-test('a wait on others shows up only once it is stuck, flagged for a nudge', () => {
-  const waiting = scored({ id: 'github:o/r#5', source: 'github', kind: 'own-pr-open', updatedAt: iso(NOW - DAY) })
+test('badges: new, updated, and a stuck wait', () => {
+  const fresh = scored({ id: 'manual:f', ingestedAt: NOW - HOUR, createdAt: iso(NOW - HOUR) })
+  const updated = scored({ id: 'manual:u', updatedAt: iso(NOW - HOUR) })
   const stuck = scored({ id: 'github:o/r#6', source: 'github', kind: 'own-pr-stale', updatedAt: iso(NOW - 4 * DAY) })
-  assert.equal(todaySectionOf(waiting, NOW), null)
-  const secs = todaySections([waiting, stuck], NOW)
-  assert.equal(secs.get('broke')![0]!.item.id, 'github:o/r#6')
-  assert.equal(secs.get('broke')![0]!.stuck, true)
-})
-
-test('updated: an older item with fresh activity', () => {
-  const u = scored({ id: 'manual:u', updatedAt: iso(NOW - HOUR) })
-  assert.equal(todaySections([u], NOW).get('fresh')![0]!.badge, 'updated')
-})
-
-test('turn tabs filter by turn', () => {
-  const me = scored({ id: 'manual:me' })
-  const ai = scored({ id: 'manual:ai' }, { brief: { status: 'running', at: NOW } })
-  const others = scored({ id: 'github:o/r#7', source: 'github', kind: 'own-pr-open' })
-  const all = [me, ai, others]
-  assert.deepEqual(all.filter((i) => inTurnTab(i, 'mine')).map((i) => i.id), ['manual:me'])
-  assert.deepEqual(all.filter((i) => inTurnTab(i, 'ai')).map((i) => i.id), ['manual:ai'])
-  assert.deepEqual(all.filter((i) => inTurnTab(i, 'others')).map((i) => i.id), ['github:o/r#7'])
-  assert.equal(all.filter((i) => inTurnTab(i, 'all')).length, 3)
+  const t = inboxTabs([fresh, updated, stuck], [], NOW)
+  assert.equal(t.tabs.get('new')![0]!.badge, 'new')
+  assert.equal(t.tabs.get('backlog')![0]!.badge, 'updated')
+  assert.equal(t.tabs.get('others')![0]!.stuck, true)
 })
 
 // ---------------------------------------------------------------------------
@@ -217,6 +225,25 @@ test('recorded flows and overrides are logged on the item', async () => {
     assert.equal(await store.items.countDoneSince(Date.now() - 1000), 0)
     await store.items.transition(id, { status: 'done', actor: 'user' })
     assert.equal(await store.items.countDoneSince(Date.now() - 1000), 1)
+  } finally {
+    await store.close()
+  }
+})
+
+test('deleted: archived by a Delete, until archived again or reopened', async () => {
+  const { openSqliteStore } = await import('../core/store/sqlite.js')
+  const store = openSqliteStore(':memory:')
+  try {
+    const del = await store.items.createManual({ id: 'manual:del', title: 'Gone' })
+    const arc = await store.items.createManual({ id: 'manual:arc', title: 'Parked' })
+    await store.items.transition(del, { status: 'archived', actor: 'user', detail: { reason: 'deleted by user' } })
+    await store.items.transition(arc, { status: 'archived', actor: 'user' })
+    assert.deepEqual([...(await store.items.deletedIds())], ['manual:del'])
+    // reopened and archived plainly: an archive, not a delete any more
+    await store.items.transition(del, { status: 'open', actor: 'user' })
+    assert.deepEqual([...(await store.items.deletedIds())], [])
+    await store.items.transition(del, { status: 'archived', actor: 'user' })
+    assert.deepEqual([...(await store.items.deletedIds())], [])
   } finally {
     await store.close()
   }

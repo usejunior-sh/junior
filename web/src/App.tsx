@@ -29,7 +29,8 @@ import { GoneCheckoutBar } from './components/GoneCheckoutBar.js'
 import { Composer } from './components/Composer.js'
 import { BrowserPane } from './components/BrowserPane.js'
 import { browserPane, hasBrowser, useBrowserOpen } from './browser.js'
-import { ArtifactsPanel, NewTerminalMenu, PanelCollapseContext, QueuePanel, SessionsPanel, TerminalsPanel } from './components/ContextPanel.js'
+import { ArtifactsPanel, InboxTabsPanel, NewTerminalMenu, PanelCollapseContext, SessionsPanel, TerminalsPanel } from './components/ContextPanel.js'
+import { resolveTab, tabOfItem, useInboxTabs } from './inboxTabs.js'
 import { HelpOverlay } from './components/HelpOverlay.js'
 import { InboxPage } from './components/InboxPage.js'
 import { ItemPage } from './components/ItemPage.js'
@@ -133,9 +134,9 @@ const PAGE_TABS: Record<'jobs' | 'terminals' | 'artifacts' | 'changes' | 'action
 }
 
 /** The sections whose list is the panel: on a phone, their bottom-bar tab opens it as a sheet. */
-const MOBILE_SHEETS: readonly RailSection[] = ['sessions', 'terminals', 'changes']
+const MOBILE_SHEETS: readonly RailSection[] = ['inbox', 'sessions', 'terminals', 'changes']
 const SHEET_LABEL: Record<RailSection, string> = {
-  inbox: 'Queue',
+  inbox: 'Inbox',
   sessions: 'Sessions',
   artifacts: 'Artifacts',
   changes: 'Changes',
@@ -284,6 +285,7 @@ export function App() {
   const drafts = useDrafts()
   const models = useModels()
   const inbox = useInbox()
+  const inboxTabs = useInboxTabs()
   const artifacts = useArtifacts()
   const changes = useChanges()
   const [route, navigate] = useHashRoute()
@@ -723,8 +725,8 @@ export function App() {
   const onRailGo = useCallback(
     (section: RailSection) => {
       if (mobile) {
-        // Sessions, Terminals and Changes have no index page worth a phone
-        // screen — their list is the panel — so those open it as a sheet; the
+        // The inbox's tabs, Sessions, Terminals and Changes live in the panel —
+        // so on a phone their tab opens it as a sheet; the
         // rest go to their page, and a second tap pops to its root.
         if (MOBILE_SHEETS.includes(section)) setSheet((s) => (s === section ? null : section))
         else {
@@ -997,6 +999,8 @@ export function App() {
     // An open sheet sits over the page: back closes it.
     if (sheet) return () => setSheet(null)
     switch (route.page) {
+      case 'inbox':
+        return () => setSheet('inbox')
       case 'item':
         return () => navigate('/inbox')
       case 'artifact':
@@ -1060,12 +1064,12 @@ export function App() {
         onSearch={() => setPaletteOpen(true)}
       />
     ) : panelSection === 'inbox' ? (
-      <QueuePanel
-        items={inbox.items}
+      <InboxTabsPanel
+        tabs={inboxTabs}
+        statusCounts={inbox.counts}
         loaded={inbox.loaded}
-        selectedId={route.page === 'item' ? route.id : null}
-        onOpenItem={openItem}
-        onPinItem={(id, title) => pin(`item:${id}`, title)}
+        current={route.page === 'inbox' ? resolveTab(route.tab, inboxTabs.counts) : route.page === 'item' ? tabOfItem(inboxTabs, route.id) : null}
+        onGo={(t) => navigate(`/inbox/${t}`)}
         onAdd={() => {
           setComposeSignal((n) => n + 1)
           if (route.page !== 'inbox') navigate('/inbox')
@@ -1163,6 +1167,8 @@ export function App() {
           <div className="content">
             {route.page === 'inbox' ? (
               <InboxPage
+                tab={resolveTab(route.tab, inboxTabs.counts)}
+                tabs={inboxTabs}
                 onDispatch={dispatch}
                 onRefineJob={refineJob}
                 onOpenItem={openItem}

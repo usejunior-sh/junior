@@ -47,16 +47,6 @@ export const KIND_LABEL: Record<string, string> = {
 export const PRIORITY_LABEL: Record<number, string> = { 0: 'none', 1: 'Urgent', 2: 'High', 3: 'Normal', 4: 'Low' }
 export const PRIORITY_VALUES = [0, 1, 2, 3, 4]
 
-export const GROUP_ORDER: Group[] = ['blocking', 'blocked-stale', 'cycle', 'fyi']
-
-/** Panel headings — short. */
-export const GROUP_SHORT: Record<Group, string> = {
-  blocking: 'Blocking',
-  'blocked-stale': 'Stale',
-  cycle: 'Your cycle',
-  fyi: 'FYI',
-}
-
 /** Page headings — with the one-line reason the group exists. */
 export const GROUP_TITLE: Record<Group, string> = {
   blocking: 'Blocking · people are waiting on you',
@@ -131,7 +121,3 @@ export function ago(input: number | string | undefined | null): string {
   return r === 'just now' || r === '—' ? r : `${r} ago`
 }
 
-/** "Wednesday" — the inbox headline opens with the day. */
-export function weekday(d = new Date()): string {
-  return d.toLocaleDateString(undefined, { weekday: 'long' })
-}

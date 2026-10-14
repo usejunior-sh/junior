@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
 import { DEFAULT_SETTINGS_TAB, isSettingsTab, LEGACY_SETTINGS_TABS, type SettingsTab } from './settings.js'
 import { store } from './store.js'
+import { isInboxTab, type InboxTab } from '../../core/work/inbox-tabs.js'
 
 export function useConn() {
   return useSyncExternalStore(store.subscribeStructural, store.getConn)
@@ -54,7 +55,8 @@ export type Route =
   | { page: 'home' }
   | { page: 'session'; id: string }
   | { page: 'draft'; id: string }
-  | { page: 'inbox' }
+  /** `#/inbox/<tab>` — one inbox tab; bare `#/inbox` opens the first that needs you */
+  | { page: 'inbox'; tab?: InboxTab }
   | { page: 'item'; id: string }
   | { page: 'terminal'; id: string }
   | { page: 'terminals' }
@@ -79,6 +81,10 @@ export const itemHash = (id: string) => `/item/${encodeURIComponent(id)}`
 function parseRoute(hash: string): Route {
   if (!hash) return { page: 'home' }
   if (hash === '/inbox') return { page: 'inbox' }
+  if (hash.startsWith('/inbox/')) {
+    const tab = hash.slice('/inbox/'.length)
+    return isInboxTab(tab) ? { page: 'inbox', tab } : { page: 'inbox' }
+  }
   if (hash.startsWith('/new/')) return { page: 'draft', id: hash.slice('/new/'.length) }
   if (hash.startsWith('/item/')) {
     try {

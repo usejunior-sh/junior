@@ -4,13 +4,23 @@
  * session pages). Both open with the search field, which is the ⌘K palette.
  */
 import {
+  AlarmClock,
+  Archive,
+  Bot,
+  CalendarClock,
+  Check,
   ChevronDown,
   ChevronRight,
   ExternalLink,
   FileText,
   Folder,
+  Eye,
   GitBranch,
+  Hand,
   Home,
+  Hourglass,
+  Layers,
+  type LucideIcon,
   MoreHorizontal,
   PanelLeftClose,
   Pencil,
@@ -20,16 +30,19 @@ import {
   Plus,
   RefreshCw,
   Search,
+  Sparkle,
   Terminal,
   Trash2,
+  Users,
   X,
 } from 'lucide-react'
 import { createContext, useContext, useEffect, useRef, useState } from 'react'
-import type { ArtifactWithLinks, Project, ProjectsResponse, ScoredItem, SessionSummary, TerminalSummary } from '../../../shared/protocol.js'
+import type { ArtifactWithLinks, Project, ProjectsResponse, SessionSummary, TerminalSummary } from '../../../shared/protocol.js'
+import { OPEN_TABS, TAB_TITLE, type InboxTab } from '../../../core/work/inbox-tabs.js'
+import type { Tabs } from '../inboxTabs.js'
 import { checkoutOf } from '../checkouts.js'
 import { draftTitle, type Draft } from '../drafts.js'
 import { useCheckouts } from '../hooks.js'
-import { GROUP_ORDER, GROUP_SHORT, itemTone, kindIcon } from '../itemUi.js'
 import { MOD_LABEL } from '../keys.js'
 import { rowOpen } from '../tabs.js'
 import { Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from '../ui/Menu.js'
@@ -56,29 +69,65 @@ export function PanelSearch({ onSearch, placeholder }: { onSearch: () => void; p
 }
 
 // ---------------------------------------------------------------------------
-// Queue — the open inbox, grouped and ranked
+// Inbox tabs — the inbox's sidebar, one tab per step (core/work/inbox-tabs.ts)
 // ---------------------------------------------------------------------------
 
-type QueueProps = {
-  items: readonly ScoredItem[]
+const TAB_ICON: Record<InboxTab, LucideIcon> = {
+  needs: Hand,
+  due: CalendarClock,
+  people: Users,
+  new: Sparkle,
+  ready: FileText,
+  ai: Bot,
+  review: Eye,
+  others: Hourglass,
+  backlog: Layers,
+  snoozed: AlarmClock,
+  archived: Archive,
+  done: Check,
+}
+
+/** Tabs whose count is called out while it isn't zero: something is held on you. */
+const HOT: Partial<Record<InboxTab, string>> = { needs: 'hot-red', due: 'hot-amber' }
+
+type InboxTabsProps = {
+  tabs: Tabs
+  /** snoozed and archived row counts, from the snapshot */
+  statusCounts?: { snoozed: number; archived: number }
   loaded: boolean
-  selectedId: string | null
-  onOpenItem: (id: string) => void
-  /** Keep it in the band without leaving where you are (⌘-click, middle-click). */
-  onPinItem: (id: string, title: string) => void
+  /** the tab in front: the inbox page's, or the open item's */
+  current: InboxTab | null
+  onGo: (tab: InboxTab) => void
   onAdd: () => void
   onRefresh: () => void
   onSearch: () => void
 }
 
-export function QueuePanel({ items, loaded, selectedId, onOpenItem, onPinItem, onAdd, onRefresh, onSearch }: QueueProps) {
+export function InboxTabsPanel({ tabs, statusCounts, loaded, current, onGo, onAdd, onRefresh, onSearch }: InboxTabsProps) {
+  const open = OPEN_TABS.reduce((n, t) => n + tabs.tabs.get(t)!.length, 0)
+  const row = (t: InboxTab, n: number | null) => {
+    const Icon = TAB_ICON[t]
+    return (
+      <button
+        key={t}
+        type="button"
+        className={['prow', 'tabRow', current === t && 'sel', n === 0 && 'empty', n && HOT[t]].filter(Boolean).join(' ')}
+        aria-current={current === t ? 'page' : undefined}
+        onClick={() => onGo(t)}
+      >
+        <Icon size={13} aria-hidden="true" />
+        <span className="t">{TAB_TITLE[t]}</span>
+        {loaded && n != null && <span className="m">{n}</span>}
+      </button>
+    )
+  }
   return (
-    <aside className="panel" aria-label="Queue">
+    <aside className="panel" aria-label="Inbox">
       <PanelSearch onSearch={onSearch} placeholder="Search items, sessions…" />
       <div className="panelBody">
         <div className="panelHead">
-          <span>Queue</span>
-          <span className="n">{items.length}</span>
+          <span>Inbox</span>
+          <span className="n">{loaded ? open : ''}</span>
           <span className="acts">
             <button type="button" className="iconBtn sm" title="Add a work item (n)" onClick={onAdd}>
               <Plus size={13} aria-hidden="true" />
@@ -88,40 +137,15 @@ export function QueuePanel({ items, loaded, selectedId, onOpenItem, onPinItem, o
             </button>
           </span>
         </div>
-        {loaded && items.length === 0 && <div className="panelEmpty">Inbox zero — nothing is waiting on you.</div>}
-        {GROUP_ORDER.map((g) => {
-          const rows = items.filter((i) => i.group === g)
-          if (rows.length === 0) return null
-          return (
-            <div key={g}>
-              <div className="panelGroup">
-                {GROUP_SHORT[g]}
-                <span className="n">{rows.length}</span>
-              </div>
-              {rows.map((item) => {
-                const Icon = kindIcon(item)
-                const tone = itemTone(item)
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    className={`prow${item.id === selectedId ? ' sel' : ''}`}
-                    title={item.title}
-                    {...rowOpen(
-                      () => onOpenItem(item.id),
-                      () => onPinItem(item.id, item.title),
-                    )}
-                  >
-                    <Icon size={13} aria-hidden="true" />
-                    <span className="t">{item.title}</span>
-                    {tone && <span className={`dot sm ${tone}`} aria-hidden="true" />}
-                    <span className="m">{Math.round(item.score)}</span>
-                  </button>
-                )
-              })}
-            </div>
-          )
-        })}
+        <nav aria-label="Inbox tabs">
+          {OPEN_TABS.map((t) => row(t, tabs.counts[t]))}
+          <div className="panelGroup">Parked</div>
+          {row('snoozed', statusCounts?.snoozed ?? null)}
+          {row('archived', statusCounts?.archived ?? null)}
+          <button type="button" className={`doneLink${current === 'done' ? ' sel' : ''}`} onClick={() => onGo('done')}>
+            Done
+          </button>
+        </nav>
       </div>
       <div className="panelFoot">
         <span className="kbd">j</span>
