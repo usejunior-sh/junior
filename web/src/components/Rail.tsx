@@ -18,12 +18,12 @@ type Props = {
 
 const ITEMS: Array<{ id: RailSection; label: string; icon: ComponentType<LucideProps> }> = [
   { id: 'inbox', label: 'Inbox', icon: Inbox },
+  { id: 'actions', label: 'Actions', icon: Send },
   { id: 'sessions', label: 'Sessions', icon: MessagesSquare },
   { id: 'artifacts', label: 'Artifacts', icon: FileText },
   { id: 'changes', label: 'Changes', icon: FileDiff },
   { id: 'terminals', label: 'Terminals', icon: Terminal },
   { id: 'jobs', label: 'Jobs', icon: CalendarClock },
-  { id: 'actions', label: 'Actions', icon: Send },
 ]
 
 /** The labelled 64px rail — one button per destination, counts as small badges. */
