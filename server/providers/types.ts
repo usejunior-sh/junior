@@ -159,7 +159,7 @@ export type SessionSpec = {
   resume?: string
   /** local plugin folders to load (the workspace's skills and agents); adapters without plugins ignore it */
   plugins?: string[]
-  /** a veto on every call, before any mode or allow rule (a held action, in a watch run or a team worker) */
+  /** a veto on every call, before any mode or allow rule (a held action, in a job run or a team worker) */
   veto?: ToolVeto
   approve: ToolApproval
 }
@@ -181,7 +181,7 @@ export interface AgentSession extends AsyncIterable<ProviderEvent> {
   reloadLibrary?(): Promise<CommandEntry[]>
 }
 
-/** One headless prompt run to completion (watches, scans, drafts). */
+/** One headless prompt run to completion (jobs, scans, drafts). */
 export type RunSpec = {
   prompt: string
   cwd?: string
@@ -202,7 +202,7 @@ export type RunSpec = {
   maxBudgetUsd?: number
   /** stop after this many agent turns */
   maxTurns?: number
-  /** the agent's own session id to continue (a watch run sent a redraft) */
+  /** the agent's own session id to continue (a job run sent a redraft) */
   resume?: string
   /** token deltas as well as whole messages */
   streamDeltas?: boolean

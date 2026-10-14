@@ -1,15 +1,15 @@
 /**
- * Watches as files: one markdown file per watch in the workspace folder, like
+ * Jobs as files: one markdown file per job in the workspace folder, like
  * agents and teams.
  *
- *   <workspace>/watches/<slug>.md          frontmatter = what the code enforces,
- *                                          body = the instruction
- *   <workspace>/watches/.seeded.json       what triage wrote, so edits are never clobbered
+ *   <workspace>/jobs/<slug>.md       frontmatter = what the code enforces,
+ *                                    body = the instruction
+ *   <workspace>/jobs/.seeded.json    what triage wrote, so edits are never clobbered
  *
  * The schema is strict: an unknown key is an error, never ignored, so a typo
  * can't silently drop a limit. A file that doesn't validate never crashes
- * anything — its watch is held with a visible config error. The `id` is the
- * watch's stable identity: SQLite keeps only state (the slot ledger, the
+ * anything — its job is held with a visible config error. The `id` is the
+ * job's stable identity: SQLite keeps only state (the slot ledger, the
  * failure streak, config errors) on a row with that id.
  *
  * Tools are one entry per grant line: a built-in (`web`, `github`,
@@ -17,11 +17,11 @@
  * Code names it ("claude.ai Slack/slack_search_public").
  */
 import { createHash, randomUUID } from 'node:crypto'
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
-import { isValidCron } from '../core/watch/cron.js'
-import { isCatchUpSpec, parseDuration } from '../core/watch/schedule.js'
+import { isValidCron } from '../core/job/cron.js'
+import { isCatchUpSpec, parseDuration } from '../core/job/schedule.js'
 import {
   BUILTIN_TOOLS,
   RESERVED_SERVER,
@@ -32,36 +32,37 @@ import {
   serverLabel,
   type BuiltinToolId,
   type ConnectorScope,
-  type WatchToolGrant,
-} from '../core/watch/tools.js'
-import { WATCH_NOTIFY, type WatchBrief, type WatchNotify, type WatchOutput } from '../core/watch/types.js'
+  type JobToolGrant,
+} from '../core/job/tools.js'
+import { JOB_NOTIFY, type JobBrief, type JobNotify, type JobOutput } from '../core/job/types.js'
 import { parseFrontmatter, serializeFrontmatter, type FrontmatterValue } from './artifacts.js'
+import { defaultPlaybook } from './briefs.js'
 import { slugify } from './teams.js'
 
-/** Everything a watch file says. */
-export type WatchFileSpec = {
+/** Everything a job file says. */
+export type JobFileSpec = {
   id: string
   title: string
   schedule: string
   /** project id; '' = none picked yet */
   project: string
-  tools: WatchToolGrant[]
+  tools: JobToolGrant[]
   model?: string
-  output: WatchOutput
+  output: JobOutput
   catchUp?: string
   timeoutMs?: number
   budgetUsd?: number
   dailyBudgetUsd?: number
-  notify: WatchNotify
+  notify: JobNotify
   enabled: boolean
-  /** brief every item this watch files (`brief: true`, `brief_model`, `brief_template`) */
-  brief?: WatchBrief
+  /** brief every item this job files (`brief: true`, `brief_model`, `brief_template`) */
+  brief?: JobBrief
   /** drafted by a chat, not yet reviewed — stays off until you enable it */
   draft?: boolean
   instruction: string
 }
 
-export const WATCH_FILE_KEYS = [
+export const JOB_FILE_KEYS = [
   'id', 'title', 'schedule', 'project', 'tools', 'model', 'output', 'catch_up',
   'timeout', 'budget_usd', 'daily_budget_usd', 'notify', 'enabled',
   'brief', 'brief_model', 'brief_template', 'draft',
@@ -70,15 +71,15 @@ export const WATCH_FILE_KEYS = [
 /** A playbook name, as briefs read them (server/briefs.ts isPlaybookName). */
 const PLAYBOOK_RE = /^[a-z][a-z0-9-]{0,40}$/
 
-const KEYS = new Set<string>(WATCH_FILE_KEYS)
+const KEYS = new Set<string>(JOB_FILE_KEYS)
 const BUILTINS = Object.keys(BUILTIN_TOOLS) as BuiltinToolId[]
-const OUTPUTS: WatchOutput[] = ['items', 'digest']
+const OUTPUTS: JobOutput[] = ['items', 'digest']
 const MIN_TIMEOUT_MS = 60_000
 const MAX_TIMEOUT_MS = 3_600_000
 
-export type ParsedWatchFile = {
+export type ParsedJobFile = {
   /** best effort, defaults filled in — usable even when `errors` is not empty */
-  spec: WatchFileSpec
+  spec: JobFileSpec
   errors: string[]
   /** false when the file carries no id (a fresh id was minted into `spec.id`) */
   hadId: boolean
@@ -99,8 +100,8 @@ function dollars(key: string, v: string, max: number, errors: string[]): number 
 }
 
 /** Tool lines → grants: built-ins by id, MCP tools grouped by server. */
-export function grantsFromLines(lines: string[], errors: string[]): WatchToolGrant[] {
-  const out: WatchToolGrant[] = []
+export function grantsFromLines(lines: string[], errors: string[]): JobToolGrant[] {
+  const out: JobToolGrant[] = []
   const mcp = new Map<string, Set<string>>()
   for (const raw of lines) {
     const line = raw.trim()
@@ -116,7 +117,7 @@ export function grantsFromLines(lines: string[], errors: string[]): WatchToolGra
     }
     const server = line.slice(0, slash).trim()
     if (server === RESERVED_SERVER) {
-      errors.push(`tools: "${RESERVED_SERVER}" is the run's own server; its write tool comes with every watch`)
+      errors.push(`tools: "${RESERVED_SERVER}" is the run's own server; its write tool comes with every job`)
       continue
     }
     if (!mcp.has(server)) mcp.set(server, new Set())
@@ -127,18 +128,18 @@ export function grantsFromLines(lines: string[], errors: string[]): WatchToolGra
 }
 
 /** Grants → tool lines, the inverse of grantsFromLines. */
-export function linesFromGrants(grants: WatchToolGrant[]): string[] {
+export function linesFromGrants(grants: JobToolGrant[]): string[] {
   return grants.flatMap((g) => (g.source.kind === 'builtin' ? [g.source.id] : g.tools.map((t) => `${(g.source as { server: string }).server}/${leafOf(t)}`)))
 }
 
-/** A watch file → its spec, plus every reason it can't run as written. Pure. */
-export function parseWatchFile(name: string, text: string): ParsedWatchFile {
+/** A job file → its spec, plus every reason it can't run as written. Pure. */
+export function parseJobFile(name: string, text: string): ParsedJobFile {
   const fm = parseFrontmatter(text)
   const errors: string[] = []
   if (!fm.present) errors.push('no frontmatter — the file must start with a --- block')
   else if (!fm.ok) errors.push('frontmatter has a line that is not "key: value"')
   const d = fm.data
-  for (const k of Object.keys(d)) if (!KEYS.has(k)) errors.push(`unknown key "${k}" — allowed: ${WATCH_FILE_KEYS.join(', ')}`)
+  for (const k of Object.keys(d)) if (!KEYS.has(k)) errors.push(`unknown key "${k}" — allowed: ${JOB_FILE_KEYS.join(', ')}`)
 
   const id = str(d.id)
   const schedule = str(d.schedule)
@@ -149,7 +150,7 @@ export function parseWatchFile(name: string, text: string): ParsedWatchFile {
   const tools = grantsFromLines(toolLines, errors)
   if (!tools.length) errors.push('tools must list at least one integration')
 
-  const output = (str(d.output) || 'items') as WatchOutput
+  const output = (str(d.output) || 'items') as JobOutput
   if (!OUTPUTS.includes(output)) errors.push(`output must be one of: ${OUTPUTS.join(', ')}`)
 
   const catchUp = str(d.catch_up)
@@ -164,8 +165,8 @@ export function parseWatchFile(name: string, text: string): ParsedWatchFile {
   const budgetUsd = dollars('budget_usd', str(d.budget_usd), 100, errors)
   const dailyBudgetUsd = dollars('daily_budget_usd', str(d.daily_budget_usd), 1000, errors)
 
-  const notify = (str(d.notify) || 'on_failure') as WatchNotify
-  if (!WATCH_NOTIFY.includes(notify)) errors.push(`notify must be one of: ${WATCH_NOTIFY.join(', ')}`)
+  const notify = (str(d.notify) || 'on_failure') as JobNotify
+  if (!JOB_NOTIFY.includes(notify)) errors.push(`notify must be one of: ${JOB_NOTIFY.join(', ')}`)
 
   const enabledRaw = str(d.enabled) || 'true'
   if (enabledRaw !== 'true' && enabledRaw !== 'false') errors.push('enabled must be true or false')
@@ -180,7 +181,7 @@ export function parseWatchFile(name: string, text: string): ParsedWatchFile {
   if (briefRaw !== 'true' && (briefModel || briefTemplate)) errors.push('brief_model and brief_template need brief: true')
   if (briefTemplate && !PLAYBOOK_RE.test(briefTemplate)) errors.push(`brief_template "${briefTemplate}" is not a playbook name (a file in playbooks/, without .md)`)
   if (briefRaw === 'true' && output === 'digest') errors.push('brief works with output: items — a digest files no items to brief')
-  const brief: WatchBrief | undefined =
+  const brief: JobBrief | undefined =
     briefRaw === 'true'
       ? { ...(briefModel ? { model: briefModel } : {}), ...(briefTemplate && PLAYBOOK_RE.test(briefTemplate) ? { template: briefTemplate } : {}) }
       : undefined
@@ -188,7 +189,7 @@ export function parseWatchFile(name: string, text: string): ParsedWatchFile {
   const draftRaw = str(d.draft) || 'false'
   if (draftRaw !== 'true' && draftRaw !== 'false') errors.push('draft must be true or false')
 
-  const spec: WatchFileSpec = {
+  const spec: JobFileSpec = {
     id: id || randomUUID(),
     title: str(d.title) || titleCase(name),
     schedule: schedule || '0 9 * * *',
@@ -200,7 +201,7 @@ export function parseWatchFile(name: string, text: string): ParsedWatchFile {
     ...(timeoutMs != null && timeoutMs >= MIN_TIMEOUT_MS && timeoutMs <= MAX_TIMEOUT_MS ? { timeoutMs } : {}),
     ...(budgetUsd != null ? { budgetUsd } : {}),
     ...(dailyBudgetUsd != null ? { dailyBudgetUsd } : {}),
-    notify: WATCH_NOTIFY.includes(notify) ? notify : 'on_failure',
+    notify: JOB_NOTIFY.includes(notify) ? notify : 'on_failure',
     enabled: enabledRaw !== 'false',
     ...(brief ? { brief } : {}),
     ...(draftRaw === 'true' ? { draft: true } : {}),
@@ -212,7 +213,7 @@ export function parseWatchFile(name: string, text: string): ParsedWatchFile {
 const fmtTimeout = (ms: number) => (ms % 3_600_000 === 0 ? `${ms / 3_600_000}h` : `${Math.round(ms / 60_000)}m`)
 
 /** A spec → the file's text. Optional keys are written only when set. */
-export function serializeWatchFile(s: WatchFileSpec): string {
+export function serializeJobFile(s: JobFileSpec): string {
   const data: Record<string, FrontmatterValue> = {
     id: s.id,
     title: s.title,
@@ -244,9 +245,9 @@ export function serializeWatchFile(s: WatchFileSpec): string {
  * loudly if a tool truly isn't there). Pure.
  */
 export function checkGrants(
-  tools: WatchToolGrant[],
+  tools: JobToolGrant[],
   connectors: { server: string; scope: ConnectorScope; tools: { fullName: string }[] }[] | null,
-): { tools: WatchToolGrant[]; errors: string[] } {
+): { tools: JobToolGrant[]; errors: string[] } {
   if (!connectors) return { tools, errors: [] }
   const errors: string[] = []
   const out = tools.map((g) => {
@@ -257,7 +258,7 @@ export function checkGrants(
       errors.push(`tools: no connected server named "${server}"`)
       return g
     }
-    // a server that isn't connected right now lists no tools; watchReady holds the run instead
+    // a server that isn't connected right now lists no tools; jobReady holds the run instead
     if (found.tools.length) {
       const offered = new Set(found.tools.map((t) => t.fullName))
       for (const t of g.tools) if (!offered.has(t)) errors.push(`tools: ${serverLabel(server)} has no tool "${leafOf(t)}"`)
@@ -297,14 +298,14 @@ export function withoutKey(text: string, key: string): string {
 }
 
 /**
- * The text a new watch starts from in the editor: every key, the optional
+ * The text a new job starts from in the editor: every key, the optional
  * ones commented out, with the user's own projects to pick from. Pure.
  */
-export function starterWatchFile(projects: { id: string; name: string }[]): string {
+export function starterJobFile(projects: { id: string; name: string }[]): string {
   const first = projects[0]
   return [
     '---',
-    'title: New watch',
+    'title: New job',
     '# cron, local time: minute hour day-of-month month weekday',
     'schedule: 0 9 * * 1-5',
     '# the project folder the run works in — its id, from the list on the right',
@@ -324,7 +325,7 @@ export function starterWatchFile(projects: { id: string; name: string }[]): stri
     '# daily_budget_usd: 5     (across a day of runs)',
     '# brief: true             (brief every item it files — output: items only)',
     '# brief_model: sonnet     (the brief runs\' model; default = Settings → Briefs)',
-    '# brief_template: watch-hit   (a playbook in playbooks/; default = the item\'s kind)',
+    '# brief_template: job-hit   (a playbook in playbooks/; default = the item\'s kind)',
     '---',
     '',
     'What to look for, where, and what counts as a match.',
@@ -332,31 +333,60 @@ export function starterWatchFile(projects: { id: string; name: string }[]): stri
   ].join('\n')
 }
 
+/**
+ * Jobs were called watches before v1.1: a workspace from then keeps its job
+ * files in `watches/`, and the playbook and dispatch template for job hits as
+ * `watch-hit.md`. Move them to the new names, once, before anything seeds the
+ * new ones. A destination that exists wins and the old one stays put. A
+ * playbook still saying exactly the old default becomes the new default, so
+ * it doesn't read as edited.
+ */
+export function renameLegacyFolders(root: string): void {
+  const move = (from: string, to: string) => {
+    const src = path.join(root, from)
+    const dst = path.join(root, to)
+    if (!existsSync(src) || existsSync(dst)) return false
+    renameSync(src, dst)
+    return true
+  }
+  move('watches', 'jobs')
+  move(path.join('dispatch', 'watch-hit.md'), path.join('dispatch', 'job-hit.md'))
+  if (move(path.join('playbooks', 'watch-hit.md'), path.join('playbooks', 'job-hit.md'))) {
+    const file = path.join(root, 'playbooks', 'job-hit.md')
+    const text = readFileSync(file, 'utf8')
+    const renamed = text.replace(/watch(es)?/gi, (m, es) => {
+      const to = es ? 'jobs' : 'job'
+      return m === m.toUpperCase() ? to.toUpperCase() : m[0] === m[0].toUpperCase() ? to[0].toUpperCase() + to.slice(1) : to
+    })
+    if (renamed === defaultPlaybook('job-hit')) writeFileSync(file, renamed, 'utf8')
+  }
+}
+
 /** What triage wrote, per file — the difference between "untouched" and "yours". */
 type Manifest = { version: 1; files: Record<string, { hash: string | null; removed?: boolean }> }
 
 const hash = (s: string) => createHash('sha256').update(s).digest('hex').slice(0, 16)
 
-export type WatchFile = { name: string; path: string; mtimeMs: number; text: string }
+export type JobFile = { name: string; path: string; mtimeMs: number; text: string }
 
-export class WatchFiles {
+export class JobFiles {
   readonly dir: string
   private readonly manifestPath: string
 
   constructor(root: string) {
-    this.dir = path.join(root, 'watches')
+    this.dir = path.join(root, 'jobs')
     this.manifestPath = path.join(this.dir, '.seeded.json')
   }
 
   /** Every `<slug>.md` in the folder, read whole (they are small). */
-  async scan(): Promise<WatchFile[]> {
+  async scan(): Promise<JobFile[]> {
     let names: string[] = []
     try {
       names = await readdir(this.dir)
     } catch {
       return []
     }
-    const out: WatchFile[] = []
+    const out: JobFile[] = []
     for (const f of names.sort()) {
       if (!f.endsWith('.md') || f.startsWith('.')) continue
       const file = path.join(this.dir, f)
@@ -373,8 +403,8 @@ export class WatchFiles {
     return path.join(this.dir, `${name}.md`)
   }
 
-  async write(name: string, spec: WatchFileSpec): Promise<void> {
-    await atomicWrite(this.pathOf(name), serializeWatchFile(spec))
+  async write(name: string, spec: JobFileSpec): Promise<void> {
+    await atomicWrite(this.pathOf(name), serializeJobFile(spec))
   }
 
   /**
@@ -387,8 +417,8 @@ export class WatchFiles {
   }
 
   /**
-   * Turn a watch on or off by its `enabled:` line alone — comments and layout
-   * stay. Turning a drafted watch on is the review: its `draft:` line goes.
+   * Turn a job on or off by its `enabled:` line alone — comments and layout
+   * stay. Turning a drafted job on is the review: its `draft:` line goes.
    */
   async setEnabled(name: string, on: boolean): Promise<void> {
     const file = this.pathOf(name)
@@ -412,9 +442,9 @@ export class WatchFiles {
     }
   }
 
-  /** A file name for a new watch: the title's slug, suffixed until nothing holds it. */
+  /** A file name for a new job: the title's slug, suffixed until nothing holds it. */
   freeName(title: string): string {
-    const base = slugify(title) || 'watch'
+    const base = slugify(title) || 'job'
     for (let n = 1; ; n++) {
       const name = n === 1 ? base : `${base.slice(0, 44)}-${n}`
       if (!existsSync(this.pathOf(name))) return name
@@ -440,14 +470,14 @@ export class WatchFiles {
    * version; an edited one is left alone; a deleted one stays deleted; a
    * user's own file of the same name wins.
    */
-  async seed(templates: Record<string, WatchFileSpec>): Promise<void> {
+  async seed(templates: Record<string, JobFileSpec>): Promise<void> {
     await mkdir(this.dir, { recursive: true })
     const m = await this.manifest()
     let changed = false
     for (const [name, spec] of Object.entries(templates)) {
       const rel = `${name}.md`
       const file = this.pathOf(name)
-      const content = serializeWatchFile(spec)
+      const content = serializeJobFile(spec)
       const entry = m.files[rel]
       const exists = existsSync(file)
       if (!entry) {

@@ -1,7 +1,7 @@
 /**
  * Codex through `codex app-server` — JSON-RPC 2.0 as newline-delimited JSON
  * over stdio, one subprocess per session. Chat sessions only: Codex has no
- * hook triage could fence a tool call with, so watches, scans and team workers
+ * hook triage could fence a tool call with, so jobs, scans and team workers
  * stay on Claude (`hooks: false` keeps `requireVeto` refusing them), and it
  * can't host triage's in-process MCP server — the user's own
  * ~/.codex/config.toml brings its MCP servers instead.

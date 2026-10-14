@@ -23,7 +23,7 @@ export type TrackContext = {
   sessionKind: string
   /** the session's permission mode (chats); null = the default (ask) */
   permissionMode: string | null
-  watchId: string | null
+  jobId: string | null
   teamRunId: string | null
   itemId: string | null
 }
@@ -74,7 +74,7 @@ function trimInner(input: Record<string, unknown>, max: number): Record<string, 
 
 /** A refusal rather than a failure: the call never ran. Our own and Claude Code's wordings. */
 const DENIAL_RE =
-  /^(?:Denied by the user|The session ended before this request was answered|This is a brief session|Permission to use \S+ (?:has been|was) denied)|(?:tool use was rejected|is not granted to this watch|watch runs may not|this watch may only run|outside this watch's folder)/i
+  /^(?:Denied by the user|The session ended before this request was answered|This is a brief session|Permission to use \S+ (?:has been|was) denied)|(?:tool use was rejected|is not granted to this job|job runs may not|this job may only run|outside this job's folder)/i
 
 const clipError = (s: string): string => (s.length > 400 ? `${s.slice(0, 399)}…` : s)
 
@@ -119,7 +119,7 @@ export function recordFor(
     whyDetail: s.whyDetail,
     allowedBy: null,
     allowedDetail: null,
-    watchId: ctx.watchId,
+    jobId: ctx.jobId,
     teamRunId: ctx.teamRunId,
     itemId: ctx.itemId,
     groupKey: s.pushBranch !== undefined ? pushKey(ctx.sessionId, s.pushBranch) : null,
@@ -238,10 +238,10 @@ export class ActionTracker {
     }
   }
 
-  /** You, through a prompt; else the session's mode, a watch's grants, a brief's policy, or an allow rule. */
+  /** You, through a prompt; else the session's mode, a job's grants, a brief's policy, or an allow rule. */
   private allowedBy(p: Pending): [ActionAllowedBy, string | null] {
     if (p.prompt) return ['prompt', p.prompt.behavior === 'allow_always' ? 'always, for this session' : null]
-    if (this.ctx.sessionKind === 'watch-run') return ['rule', 'the watch’s grants']
+    if (this.ctx.sessionKind === 'job-run') return ['rule', 'the job’s grants']
     if (this.ctx.sessionKind === 'brief') return ['policy', 'brief sessions']
     const mode = this.ctx.permissionMode
     if (mode === 'bypassPermissions' || mode === 'auto') return ['mode', mode === 'auto' ? 'auto mode' : 'bypass permissions']

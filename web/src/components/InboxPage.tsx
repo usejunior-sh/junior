@@ -37,7 +37,7 @@ import type {
   ProjectsResponse,
   ReposResponse,
   ScoredItem,
-  WatchesResponse,
+  JobsResponse,
 } from '../../../shared/protocol.js'
 import { itemImageUrl } from '../../../shared/protocol.js'
 import { withWorkspace } from '../workspaceUrl.js'
@@ -83,7 +83,7 @@ import { TODAY_TITLE, inTurnTab, todaySections, waitedFor, type TodayEntry, type
 
 /**
  * Today first, then the turn tabs (core/work/today.ts): whose move it is. The
- * status tabs stay (.docs/watches-v2.md) — items are durable and never deleted,
+ * status tabs stay (.docs/jobs-v2.md) — items are durable and never deleted,
  * so done/snoozed/archived are viewable; the last two sit behind More.
  */
 const TABS = [
@@ -111,17 +111,17 @@ type OtherState =
 
 type Props = {
   onDispatch: (item: ScoredItem) => void
-  onRefineWatch: (item: ScoredItem) => void
+  onRefineJob: (item: ScoredItem) => void
   onOpenItem: (id: string) => void
   /** Keep it in the band without leaving the inbox (⌘-click, middle-click). */
   onPinItem: (id: string, title: string) => void
   /** Bumped by the shell (Queue panel "+") to open the new-item composer. */
   composeSignal?: number
-  /** Go to a route — a watch or a session an alert points at. */
+  /** Go to a route — a job or a session an alert points at. */
   onNavigate: (path: string) => void
 }
 
-export function InboxPage({ onDispatch, onRefineWatch, onOpenItem, onPinItem, composeSignal = 0, onNavigate }: Props) {
+export function InboxPage({ onDispatch, onRefineJob, onOpenItem, onPinItem, composeSignal = 0, onNavigate }: Props) {
   const [tab, setTab] = useState<Tab>('today')
   // The open tab reads the shared snapshot (the Queue panel shows the same
   // list); the other tabs are loaded here on demand.
@@ -129,7 +129,7 @@ export function InboxPage({ onDispatch, onRefineWatch, onOpenItem, onPinItem, co
   const [other, setOther] = useState<OtherState>({ phase: 'loading' })
   const [reposOpen, setReposOpen] = useState(false)
   const [repoCount, setRepoCount] = useState<number | null>(null)
-  const [watchTitles, setWatchTitles] = useState<Map<string, string>>(new Map())
+  const [jobTitles, setJobTitles] = useState<Map<string, string>>(new Map())
   const [projects, setProjects] = useState<Project[]>([])
   const [composer, setComposer] = useState<{ open: boolean; editing: ScoredItem | null }>({
     open: false,
@@ -200,7 +200,7 @@ export function InboxPage({ onDispatch, onRefineWatch, onOpenItem, onPinItem, co
   )
 
   // A status change is a recorded transition on a durable item — the row leaves
-  // the current tab optimistically; the item is never deleted (.docs/watches-v2.md).
+  // the current tab optimistically; the item is never deleted (.docs/jobs-v2.md).
   // A row is every signal folded into it, so they all move together.
   const setItemState = useCallback(
     async (item: ScoredItem, status: ItemStatus, snoozeUntil?: number) => {
@@ -425,10 +425,10 @@ export function InboxPage({ onDispatch, onRefineWatch, onOpenItem, onPinItem, co
         if (b.ok) setRepoCount(b.connected.length)
       })
       .catch(() => {})
-    void fetch('/api/watches')
-      .then((r) => r.json() as Promise<WatchesResponse>)
+    void fetch('/api/jobs')
+      .then((r) => r.json() as Promise<JobsResponse>)
       .then((b) => {
-        if (b.ok) setWatchTitles(new Map(b.watches.map((w) => [w.id, w.title])))
+        if (b.ok) setJobTitles(new Map(b.jobs.map((w) => [w.id, w.title])))
       })
       .catch(() => {})
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -482,7 +482,7 @@ export function InboxPage({ onDispatch, onRefineWatch, onOpenItem, onPinItem, co
     onSnooze: snooze1d,
     onArchive: (i) => void setItemState(i, 'archived'),
     onReopen: (i) => void setItemState(i, 'open'),
-    onRefineWatch,
+    onRefineJob,
     onSetPriority: setPriority,
     onSetDue: (i, due) => setDue([i], due),
     onPickDue: setPickingDue,
@@ -526,7 +526,7 @@ export function InboxPage({ onDispatch, onRefineWatch, onOpenItem, onPinItem, co
             <RefreshCw size={12} aria-hidden="true" />
             {snap.syncedAt ? `synced ${ago(snap.syncedAt)}` : 'not synced yet'}
             {repoCount != null && ` · ${repoCount === 0 ? 'no repos' : `${repoCount} repo${repoCount === 1 ? '' : 's'}`}`}
-            {watchTitles.size > 0 && ` · ${watchTitles.size} watch${watchTitles.size === 1 ? '' : 'es'}`}
+            {jobTitles.size > 0 && ` · ${jobTitles.size} job${jobTitles.size === 1 ? '' : 'es'}`}
           </span>
         </div>
 
@@ -606,7 +606,7 @@ export function InboxPage({ onDispatch, onRefineWatch, onOpenItem, onPinItem, co
                 alerts={alerts}
                 landedToday={snap.landedToday}
                 selectedId={ordered[sel]?.id ?? null}
-                onAlert={(a) => onNavigate(a.watchId ? `/watches/${encodeURIComponent(a.watchId)}` : a.sessionId ?? '/inbox')}
+                onAlert={(a) => onNavigate(a.jobId ? `/jobs/${encodeURIComponent(a.jobId)}` : a.sessionId ?? '/inbox')}
                 onAdd={() => setComposer({ open: true, editing: null })}
                 {...rowProps}
               />
@@ -786,7 +786,7 @@ type RowActions = {
   onSnooze: (item: ScoredItem) => void
   onArchive: (item: ScoredItem) => void
   onReopen: (item: ScoredItem) => void
-  onRefineWatch: (item: ScoredItem) => void
+  onRefineJob: (item: ScoredItem) => void
   onSetPriority: (item: ScoredItem, priority: number) => void
   onSetDue: (item: ScoredItem, due: Section) => void
   onPickDue: (item: ScoredItem) => void
@@ -802,7 +802,7 @@ type RowActions = {
 
 /**
  * Today (core/work/today.ts): five sections, most urgent first, each item
- * once. Broken things that aren't items (a failed watch, a paused team run)
+ * once. Broken things that aren't items (a failed job, a paused team run)
  * sit in Something broke beside the items that broke. The footer counts what
  * landed since midnight — the day's progress, kept visible.
  */
@@ -873,7 +873,7 @@ function AlertRow({ alert, onOpen }: { alert: InboxAlert; onOpen: () => void }) 
         {alert.detail && <span className="why">{alert.detail}</span>}
       </button>
       <span className="meta">
-        <span className="c state flow-broken">{alert.kind === 'watch' ? 'Open watch' : 'Open run'}</span>
+        <span className="c state flow-broken">{alert.kind === 'job' ? 'Open job' : 'Open run'}</span>
         <span className="c when">{alert.at ? shortAge(alert.at) : ''}</span>
       </span>
     </div>
@@ -972,7 +972,7 @@ function WorkRow({
   onSnooze,
   onArchive,
   onReopen,
-  onRefineWatch,
+  onRefineJob,
   onSetPriority,
   onSetDue,
   onPickDue,
@@ -992,8 +992,8 @@ function WorkRow({
   const isChecked = checked.has(item.id)
   const brief = briefPill(briefOf(item.id))
   const pri = item.priority ?? 0
-  // watchId now rides in the provenance list; fall back to the item field.
-  const watchId = item.watchId ?? item.foundBy?.[item.foundBy.length - 1]?.watchId
+  // jobId now rides in the provenance list; fall back to the item field.
+  const jobId = item.jobId ?? item.foundBy?.[item.foundBy.length - 1]?.jobId
   const Icon = kindIcon(item)
   const alert = itemTone(item) === 'red'
 
@@ -1214,9 +1214,9 @@ function WorkRow({
                     <Pencil size={13} aria-hidden="true" /> Edit
                   </MenuItem>
                 )}
-                {watchId && (
-                  <MenuItem onSelect={() => onRefineWatch(item)}>
-                    <ThumbsDown size={13} aria-hidden="true" /> Bad match — refine this watch
+                {jobId && (
+                  <MenuItem onSelect={() => onRefineJob(item)}>
+                    <ThumbsDown size={13} aria-hidden="true" /> Bad match — refine this job
                   </MenuItem>
                 )}
                 <MenuItem className="danger" onSelect={() => (isManual ? onDelete(item) : onArchive(item))}>

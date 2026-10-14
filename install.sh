@@ -240,7 +240,7 @@ SHIM
   esac
 }
 
-# Watches are a background promise: they only run while the daemon runs, and a
+# Jobs are a background promise: they only run while the daemon runs, and a
 # detached daemon dies on reboot. The LaunchAgent is what makes them durable,
 # so it goes in by default rather than waiting to be discovered.
 keep_running() {
@@ -251,13 +251,13 @@ keep_running() {
   # session is mid-turn. Busy means we write nothing and say so.
   if [ "${live:-0}" -gt 0 ] 2>/dev/null; then
     printf '  %s!%s %s session(s) mid-thought, so we didn%st restart triage under them.\n' "$BOLD" "$RESET" "$live" "'"
-    printf '    Run %striage install%s when they finish, so watches survive the next reboot.\n' "$BOLD" "$RESET"
+    printf '    Run %striage install%s when they finish, so jobs survive the next reboot.\n' "$BOLD" "$RESET"
     return 0
   fi
   if spin "asking launchd to keep triage alive" quiet "$node" "$cli" install; then
     ok "LaunchAgent installed — triage now outlives reboots ${DIM}(undo: triage uninstall)${RESET}"
   else
-    printf '  %s!%s couldn%st install the LaunchAgent — watches will stop at the next reboot.\n' "$BOLD" "$RESET" "'"
+    printf '  %s!%s couldn%st install the LaunchAgent — jobs will stop at the next reboot.\n' "$BOLD" "$RESET" "'"
     printf '    Run %striage install%s and read the error — it%ss usually specific.\n' "$BOLD" "$RESET" "'"
   fi
 }
@@ -383,7 +383,7 @@ main() {
   ${ORANGE}${BOLD}Triage is installed.${RESET}
 
   The app is only a window. Quit it and triage keeps working: live
-  sessions finish, watches fire, and launchd brings it back after a
+  sessions finish, jobs fire, and launchd brings it back after a
   reboot or a crash. Quitting the app doesn't send the staff home.
 
   ${DIM}triage status${RESET}     what's running, and which build

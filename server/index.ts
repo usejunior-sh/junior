@@ -182,13 +182,13 @@ import type {
   SessionContext,
   SessionContextResponse,
   UpsertResponse,
-  WatchDraftResponse,
-  WatchPreviewStartResponse,
-  WatchPreviewStatusResponse,
-  WatchesResponse,
-  WatchRunsResponse,
-  WatchFileReference,
-  WatchFileResponse,
+  JobDraftResponse,
+  JobPreviewStartResponse,
+  JobPreviewStatusResponse,
+  JobsResponse,
+  JobRunsResponse,
+  JobFileReference,
+  JobFileResponse,
   WorkItem,
   WorkspaceResponse,
   WorkspacesResponse,
@@ -279,33 +279,33 @@ import type { ItemStatus } from '../core/work/state.js'
 import type { Provenance, WorkItem as CoreWorkItem, WorkSource } from '../core/work/types.js'
 import { fetchGitHub, fetchGitHubClosed, listAffiliatedRepos } from '../core/sources/github.js'
 import {
-  draftWatch,
+  draftJob,
   permalinkId,
   safeWhen,
 } from '../core/sources/slack.js'
 import { scanUsage } from '../core/usage/ledger.js'
 import { summarize as summarizeUsage, summarizeBySession, summarizeModels } from '../core/usage/summary.js'
-import { budgetFor, decide, describeLateness, humanSpan, isCatchUpSpec, isOverdue, localMidnight, lookbackMs, missedSlots, parseCatchUp, scheduleOf, type SkipReason } from '../core/watch/schedule.js'
-import { cronFromCadence, isValidCron } from '../core/watch/cron.js'
+import { budgetFor, decide, describeLateness, humanSpan, isCatchUpSpec, isOverdue, localMidnight, lookbackMs, missedSlots, parseCatchUp, scheduleOf, type SkipReason } from '../core/job/schedule.js'
+import { cronFromCadence, isValidCron } from '../core/job/cron.js'
 import {
-  DEFAULT_WATCH_TIMEOUT_MS,
-  MAX_WATCH_TIMEOUT_MS,
-  WATCH_NOTIFY,
-  WATCH_OUTPUTS,
-  type NewWatch,
-  type Watch,
-  type WatchBrief,
-  type WatchCadence,
-  type WatchConnector,
-  type WatchNotify,
-  type WatchOutput,
-  type WatchPreviewResult,
-  type WatchPreviewRow,
-  type WatchRunStatus,
-  type WatchRunTrigger,
-} from '../core/watch/types.js'
-import { composeRunPrompt, MAX_ROWS_PER_RUN } from '../core/watch/connectors.js'
-import { WatchFiles, checkGrants, grantsFromLines, parseWatchFile, serializeWatchFile, starterWatchFile, withKey, type WatchFileSpec } from './watch-files.js'
+  DEFAULT_JOB_TIMEOUT_MS,
+  MAX_JOB_TIMEOUT_MS,
+  JOB_NOTIFY,
+  JOB_OUTPUTS,
+  type NewJob,
+  type Job,
+  type JobBrief,
+  type JobCadence,
+  type JobConnector,
+  type JobNotify,
+  type JobOutput,
+  type JobPreviewResult,
+  type JobPreviewRow,
+  type JobRunStatus,
+  type JobRunTrigger,
+} from '../core/job/types.js'
+import { composeRunPrompt, MAX_ROWS_PER_RUN } from '../core/job/connectors.js'
+import { JobFiles, checkGrants, renameLegacyFolders, grantsFromLines, parseJobFile, serializeJobFile, starterJobFile, withKey, type JobFileSpec } from './job-files.js'
 import {
   grantLabel,
   grantsFrom,
@@ -318,9 +318,9 @@ import {
   runBaseTools,
   serverLabel,
   type LegacyConnector,
-  type WatchToolGrant,
-} from '../core/watch/tools.js'
-import { fenceDecision, fenceFor } from '../core/watch/fence.js'
+  type JobToolGrant,
+} from '../core/job/tools.js'
+import { fenceDecision, fenceFor } from '../core/job/fence.js'
 import { buildInfo, clearState, pkgVersion, TRIAGE_DIR, writeState } from './state.js'
 import { initLogFile, log, logFilePath, logSubsystems, recentLogs } from './log.js'
 import {
@@ -561,17 +561,17 @@ class WorkspaceRuntime {
   githubReconcileAt = 0
   githubReconcileInFlight: Promise<void> | null = null
 
-  // watch runs
+  // job runs
   readonly runQueue: QueuedRun[] = []
-  readonly runningWatches = new Set<string>()
+  readonly runningJobs = new Set<string>()
   /** in-flight and recently finished dry runs, by ephemeral session id (never persisted) */
-  readonly previews = new Map<string, WatchPreview>()
+  readonly previews = new Map<string, JobPreview>()
   activeRuns = 0
 
   // probes
   connectorCache: ConnectorProbe | null = null
   connectorInFlight: Promise<ConnectorProbe> | null = null
-  /** connector probes per project folder (its project + local MCP servers), for the watch picker */
+  /** connector probes per project folder (its project + local MCP servers), for the job picker */
   readonly folderProbes = new Map<string, ConnectorProbe>()
   readonly folderProbeInFlight = new Map<string, Promise<ConnectorProbe>>()
   /** model catalogs per agent: the workspace's own at boot, another's (Codex) on first ask */
@@ -624,12 +624,12 @@ class WorkspaceRuntime {
   readonly teamLibrary: TeamLibrary
   /** the workspace's own skills and agents — a local plugin every chat session loads (server/library.ts) */
   readonly libraryDir: string
-  // Watches are files (server/watch-files.ts); rows hold their state.
-  readonly watchFiles: WatchFiles
+  // Jobs are files (server/job-files.ts); rows hold their state.
+  readonly jobFiles: JobFiles
   /** what the last file sync saw — files, projects, probes; unchanged = nothing to do */
-  watchSyncSig = ''
+  jobSyncSig = ''
   /** syncs run one at a time: the tick and an API call can't interleave */
-  watchSync: Promise<void> = Promise.resolve()
+  jobSync: Promise<void> = Promise.resolve()
   readonly teamRuns = new Map<string, TeamRun>()
   /** session id → the run it leads or works on, mirrored from `teamRuns` */
   readonly sessionTeam = new Map<string, string>()
@@ -664,6 +664,11 @@ class WorkspaceRuntime {
   readonly turnDeltas = new Map<string, TreeChange[]>()
 
   constructor(public meta: WorkspaceMeta) {
+    try {
+      renameLegacyFolders(workspaceDir(meta.id))
+    } catch (err) {
+      log('error', 'job', `could not move a workspace folder to its new name: ${errText(err)}`, { workspace: meta.id })
+    }
     this.store = openSqliteStore(dbFileFor(meta.id, registry.defaultId))
     this.env = spawnEnvFor(meta)
     this.artifacts = new ArtifactIndex(path.join(workspaceDir(meta.id), 'artifacts'), this.store, () =>
@@ -677,7 +682,7 @@ class WorkspaceRuntime {
     this.teamLibrary = new TeamLibrary(workspaceDir(meta.id))
     this.libraryDir = path.join(workspaceDir(meta.id), 'library')
     void ensureWorkspacePlugin(this.libraryDir).catch((err) => log('warn', 'library', `could not set up ${this.libraryDir}: ${errText(err)}`))
-    this.watchFiles = new WatchFiles(workspaceDir(meta.id))
+    this.jobFiles = new JobFiles(workspaceDir(meta.id))
     this.actionsFile = new ActionsFile(workspaceDir(meta.id))
     this.triageMcp = () => makeTriageMcp(this)
     this.terminals = new TerminalManager(
@@ -751,7 +756,7 @@ type SessionExtras = {
  */
 const BRIEF_DISALLOWED_TOOLS = [
   'Write', 'Edit', 'MultiEdit', 'NotebookEdit', 'AskUserQuestion',
-  ...['create_work_item', 'edit_work_item', 'upsert_work_item', 'resolve_work_item', 'draft_watch',
+  ...['create_work_item', 'edit_work_item', 'upsert_work_item', 'resolve_work_item', 'draft_job',
     'write_artifact', 'update_artifact', 'link_artifact',
     'propose_team', 'split_step', 'revise_plan', 'submit_step'].map((t) => `mcp__triage__${t}`),
 ]
@@ -840,10 +845,10 @@ class LiveSession {
       permissionMode: row.permissionMode,
       // Revival: replay the agent's own transcript into the new subprocess.
       ...(resumeSdkSessionId ? { resume: resumeSdkSessionId } : {}),
-      // The workspace's own skills and agents, for a chat. Not for briefs, watch
+      // The workspace's own skills and agents, for a chat. Not for briefs, job
       // runs or team workers — each runs a lean, fixed toolset on purpose.
       ...(row.kind === 'chat' && !extras.tools ? { plugins: [rt.libraryDir] } : {}),
-      // A watch run or a team worker holds its outbound connector calls for
+      // A job run or a team worker holds its outbound connector calls for
       // you (core/actions/queue.ts) — a hook, so no mode or allow rule skips it.
       // Chats keep asking now, through `approve` below.
       ...(this.provider.capabilities.hooks && holdsActions(rt, row)
@@ -1299,7 +1304,7 @@ function summarize(rt: WorkspaceRuntime, row: StoredSession): SessionSummary {
     pinned: row.pinned || undefined,
     ...(row.checkoutId ? { checkoutId: row.checkoutId } : {}),
     ...(row.kind !== 'chat' ? { kind: row.kind } : {}),
-    ...(row.watchId ? { watchId: row.watchId } : {}),
+    ...(row.jobId ? { jobId: row.jobId } : {}),
     ...(rt.sessionItem.has(row.id) ? { itemId: rt.sessionItem.get(row.id) } : {}),
     ...(teamRunLink(rt, row.id) ? { teamRun: teamRunLink(rt, row.id) } : {}),
     ...(l?.waiting ? { waiting: true } : {}),
@@ -1308,13 +1313,13 @@ function summarize(rt: WorkspaceRuntime, row: StoredSession): SessionSummary {
 }
 
 /**
- * The chat session list: pinned first, then most recently active. Watch-run
+ * The chat session list: pinned first, then most recently active. Job-run
  * sessions are real sessions but not chats — they are excluded here and reached
- * through the watch that owns them (.docs/watches-v2.md).
+ * through the job that owns them (.docs/jobs-v2.md).
  */
 function summaries(rt: WorkspaceRuntime): SessionSummary[] {
   return [...rt.rows.values()]
-    .filter((r) => r.kind !== 'watch-run')
+    .filter((r) => r.kind !== 'job-run')
     .sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.updatedAt - a.updatedAt)
     .map((r) => summarize(rt, r))
 }
@@ -1372,9 +1377,9 @@ async function noteBrowserTurn(rt: WorkspaceRuntime, row: StoredSession, started
 
 // ---------------------------------------------------------------------------
 // Outbound actions (core/actions; spec 7ce2f076, phase 1 — record only).
-// Every persisted event of a Claude session — chat, brief, team worker, watch
+// Every persisted event of a Claude session — chat, brief, team worker, job
 // run — passes through its tracker; what leaves this machine becomes a record
-// with a card. Permissions are untouched: this only watches.
+// with a card. Permissions are untouched: this only jobs.
 // ---------------------------------------------------------------------------
 
 /** What a connector's server said about one of its tools, from the latest probes. */
@@ -1397,7 +1402,7 @@ function actionContext(rt: WorkspaceRuntime, row: StoredSession): TrackContext {
     sessionId: row.id,
     sessionKind: row.kind,
     permissionMode: row.permissionMode,
-    watchId: row.watchId,
+    jobId: row.jobId,
     teamRunId: teamRunOf(rt, row.id)?.id ?? null,
     itemId: rt.sessionItem.get(row.id) ?? null,
   }
@@ -1481,12 +1486,12 @@ async function backfillActions(rt: WorkspaceRuntime, opts: { force?: boolean } =
 /**
  * Records with names for their ids, as the Actions page and the item page show
  * them — their titles and "why it counted" in words, and a queued one's
- * history. Batched: one watch list, one history query, one item read per
+ * history. Batched: one job list, one history query, one item read per
  * distinct item, however many rows.
  */
 async function actionViews(rt: WorkspaceRuntime, records: ActionRecord[]): Promise<ActionView[]> {
   if (!records.length) return []
-  const watchTitles = new Map((await rt.store.watches.list()).map((w) => [w.id, w.title]))
+  const jobTitles = new Map((await rt.store.jobs.list()).map((w) => [w.id, w.title]))
   const queued = records.filter((a) => a.queue).map((a) => a.id)
   const history = queued.length ? await rt.store.actions.history(queued) : new Map()
   const itemOf = (a: ActionRecord) => a.itemId ?? rt.sessionItem.get(a.sessionId) ?? null
@@ -1509,7 +1514,7 @@ async function actionViews(rt: WorkspaceRuntime, records: ActionRecord[]): Promi
       short: shortActionId(a.id),
       ...(history.has(a.id) ? { history: history.get(a.id) } : {}),
       ...(row ? { sessionTitle: row.title } : {}),
-      ...(a.watchId && watchTitles.has(a.watchId) ? { watchTitle: watchTitles.get(a.watchId) } : {}),
+      ...(a.jobId && jobTitles.has(a.jobId) ? { jobTitle: jobTitles.get(a.jobId) } : {}),
       ...(run ? { teamLabel: run.recipe.label } : {}),
       ...(itemId && itemTitles.has(itemId) ? { itemTitle: itemTitles.get(itemId) } : {}),
       ...(overriddenOff(a, rules) ? { hidden: true } : {}),
@@ -1532,7 +1537,7 @@ async function setActionOverride(rt: WorkspaceRuntime, a: ActionRecord, verdict:
 }
 
 // ---------------------------------------------------------------------------
-// Queued actions (core/actions/queue.ts; spec 7ce2f076, phase 2). In a watch
+// Queued actions (core/actions/queue.ts; spec 7ce2f076, phase 2). In a job
 // run or a team worker, a connector call that sorts as an action is held, not
 // run: the agent is told "queued as #a1b2c3", and the call waits on the
 // Actions page for approve / edit / send back / reject. An approved one goes
@@ -1550,9 +1555,9 @@ const isTeamWorker = (rt: WorkspaceRuntime, sessionId: string): boolean => {
   return !!run && run.leadSessionId !== sessionId
 }
 
-/** Does this session hold its outbound calls for approval? Watch runs and team workers do; chats ask now. */
+/** Does this session hold its outbound calls for approval? Job runs and team workers do; chats ask now. */
 const holdsActions = (rt: WorkspaceRuntime, row: StoredSession): boolean =>
-  row.provider === 'claude' && (row.kind === 'watch-run' || isTeamWorker(rt, row.id))
+  row.provider === 'claude' && (row.kind === 'job-run' || isTeamWorker(rt, row.id))
 
 /**
  * The veto a holding session gets: an MCP call that sorts as an action is
@@ -1705,10 +1710,10 @@ async function actionVerbOp(rt: WorkspaceRuntime, verb: ActionVerb, raw: unknown
 /**
  * Send-back notes to the session that drafted the action — under exactly the
  * constraints it drafted under, never more:
- * - a watch run: a headless continuation of its own Claude session (resume),
- *   built by watchQuery like the run itself — the same grants, the same
+ * - a job run: a headless continuation of its own Claude session (resume),
+ *   built by jobQuery like the run itself — the same grants, the same
  *   fence, the hold wrap — so the redraft is held for approval again and can
- *   do nothing the watch couldn't. One still running gets them when it ends.
+ *   do nothing the job couldn't. One still running gets them when it ends.
  * - a team worker: revived as a worker (its tools, its permission mode, the
  *   hold veto), only while its run is still known; otherwise not at all.
  * Whatever happens is kept on the record, so the card can say whether they arrived.
@@ -1719,12 +1724,12 @@ async function deliverSendBack(rt: WorkspaceRuntime, rec: ActionRecord): Promise
   let delivery: string | null
   if (!row) delivery = 'not delivered: the session that drafted it was deleted'
   else if (row.provider !== 'claude') delivery = 'not delivered: that session runs on another agent'
-  else if (row.kind === 'watch-run') {
+  else if (row.kind === 'job-run') {
     if (!row.runStatus) delivery = null // still running: on its way at the end
     else if (!row.sdkSessionId) delivery = 'not delivered: the run never started an agent to resume'
     else {
       try {
-        await continueWatchRun(rt, row, text, () => void recordDelivery(rt, rec, 'delivered'))
+        await continueJobRun(rt, row, text, () => void recordDelivery(rt, rec, 'delivered'))
         return
       } catch (err) {
         delivery = `not delivered: ${errText(err)}`
@@ -1769,51 +1774,51 @@ async function recordDelivery(rt: WorkspaceRuntime, rec: ActionRecord, delivery:
   log(delivery === 'delivered' ? 'info' : 'warn', 'actions', `send back #${shortActionId(rec.id)}: ${delivery}`, { action: rec.id, session: rec.sessionId, workspace: rt.meta.id })
 }
 
-/** Watch-run continuations in flight, by session: a second send-back waits for the first. */
-const watchContinuations = new Map<string, Promise<void>>()
+/** Job-run continuations in flight, by session: a second send-back waits for the first. */
+const jobContinuations = new Map<string, Promise<void>>()
 
 /**
- * Continue a finished watch run's own Claude session with one message from
- * triage, headless, under the watch's own run spec (watchQuery: grants,
+ * Continue a finished job run's own Claude session with one message from
+ * triage, headless, under the job's own run spec (jobQuery: grants,
  * allowlist, unattended, the fence) plus the hold — the same box the run had.
  * The transcript continues on its session row. `onStarted` fires once the
  * agent is up with the message.
  */
-function continueWatchRun(rt: WorkspaceRuntime, row: StoredSession, text: string, onStarted: () => void): Promise<void> {
+function continueJobRun(rt: WorkspaceRuntime, row: StoredSession, text: string, onStarted: () => void): Promise<void> {
   const key = `${rt.meta.id}:${row.id}`
-  const prev = watchContinuations.get(key) ?? Promise.resolve()
+  const prev = jobContinuations.get(key) ?? Promise.resolve()
   const run = prev.catch(() => {}).then(async () => {
-    const watch = row.watchId ? await rt.store.watches.get(row.watchId) : null
-    if (!watch) throw new Error('the watch that drafted it was deleted')
-    const project = await watchProject(rt, watch.projectId)
-    const limits = await watchLimits(rt, watch)
-    // A redraft is a watch run like any other: it counts against the watch's
+    const job = row.jobId ? await rt.store.jobs.get(row.jobId) : null
+    if (!job) throw new Error('the job that drafted it was deleted')
+    const project = await jobProject(rt, job.projectId)
+    const limits = await jobLimits(rt, job)
+    // A redraft is a job run like any other: it counts against the job's
     // daily budget and gets its own row in the run ledger (trigger `redraft`).
     const startedAt = Date.now()
     const slot = startedAt
-    const spent = watch.dailyBudgetUsd != null ? await rt.store.watchRuns.spentSince(watch.id, localMidnight(startedAt)) : 0
-    const budget = budgetFor(limits.maxBudgetUsd, watch.dailyBudgetUsd, spent)
+    const spent = job.dailyBudgetUsd != null ? await rt.store.jobRuns.spentSince(job.id, localMidnight(startedAt)) : 0
+    const budget = budgetFor(limits.maxBudgetUsd, job.dailyBudgetUsd, spent)
     if (budget.skip) {
-      await ledger(rt, rt.store.watchRuns.insert({ watchId: watch.id, slot, trigger: 'redraft', status: 'skipped_budget', reason: budget.reason, sessionId: row.id, startedAt, endedAt: startedAt }))
-      throw new Error(`the watch is over its daily budget (${budget.reason}) — the notes stay here`)
+      await ledger(rt, rt.store.jobRuns.insert({ jobId: job.id, slot, trigger: 'redraft', status: 'skipped_budget', reason: budget.reason, sessionId: row.id, startedAt, endedAt: startedAt }))
+      throw new Error(`the job is over its daily budget (${budget.reason}) — the notes stay here`)
     }
-    await ledger(rt, rt.store.watchRuns.insert({ watchId: watch.id, slot, trigger: 'redraft', status: 'running', sessionId: row.id, startedAt }))
-    let status: WatchRunStatus = 'failed'
+    await ledger(rt, rt.store.jobRuns.insert({ jobId: job.id, slot, trigger: 'redraft', status: 'running', sessionId: row.id, startedAt }))
+    let status: JobRunStatus = 'failed'
     let reason: string | undefined
     let costUsd: number | undefined
     const abort = new AbortController()
     const timer = setTimeout(() => abort.abort(), limits.timeoutMs)
-    const scanMcp = makeScanMcp(rt, watch, row.id, () => {})
+    const scanMcp = makeScanMcp(rt, job, row.id, () => {})
     try {
-      const spec = await watchQuery(
+      const spec = await jobQuery(
         rt,
-        { instruction: watch.instruction, tools: watch.tools, project, model: watch.model, output: watch.output, schedule: scheduleOf(watch), scope: watch.scope },
+        { instruction: job.instruction, tools: job.tools, project, model: job.model, output: job.output, schedule: scheduleOf(job), scope: job.scope },
         scanMcp,
         abort,
         budget.maxBudgetUsd != null ? { maxBudgetUsd: budget.maxBudgetUsd } : {},
       )
       const fence = spec.veto
-      if (!fence) throw new Error('no fence for this watch run')
+      if (!fence) throw new Error('no fence for this job run')
       spec.veto = (toolName, input, ctx) => {
         const d = fence(toolName, input, ctx)
         return d.allow ? holdIfAction(rt, row, toolName, input, ctx) : d
@@ -1858,23 +1863,23 @@ function continueWatchRun(rt: WorkspaceRuntime, row: StoredSession, text: string
     } finally {
       clearTimeout(timer)
       rt.actionTrackers.delete(row.id)
-      await ledger(rt, rt.store.watchRuns.finish(watch.id, slot, { status, ...(reason ? { reason } : {}), sessionId: row.id, endedAt: Date.now(), ...(costUsd != null ? { costUsd } : {}) }))
-      log(status === 'ok' ? 'info' : 'warn', 'watch', `redraft ${status}: ${watch.title}${costUsd != null ? ` — $${costUsd.toFixed(2)}` : ''}${reason ? ` — ${reason}` : ''}`, {
-        watchId: watch.id,
+      await ledger(rt, rt.store.jobRuns.finish(job.id, slot, { status, ...(reason ? { reason } : {}), sessionId: row.id, endedAt: Date.now(), ...(costUsd != null ? { costUsd } : {}) }))
+      log(status === 'ok' ? 'info' : 'warn', 'job', `redraft ${status}: ${job.title}${costUsd != null ? ` — $${costUsd.toFixed(2)}` : ''}${reason ? ` — ${reason}` : ''}`, {
+        jobId: job.id,
         runId: row.id,
         trigger: 'redraft',
         workspace: rt.meta.id,
       })
     }
   })
-  watchContinuations.set(key, run)
+  jobContinuations.set(key, run)
   void run.finally(() => {
-    if (watchContinuations.get(key) === run) watchContinuations.delete(key)
+    if (jobContinuations.get(key) === run) jobContinuations.delete(key)
   }).catch(() => {})
   return run
 }
 
-/** A watch run just ended: notes sent back while it ran go to it now. */
+/** A job run just ended: notes sent back while it ran go to it now. */
 async function deliverPendingSendBacks(rt: WorkspaceRuntime, sessionId: string): Promise<void> {
   const waiting = (await rt.store.actions.list({ sessionId, status: ['sent_back'], limit: 100 })).filter((a) => a.queue && a.queue.delivery === null)
   for (const a of waiting) await deliverSendBack(rt, a)
@@ -1882,7 +1887,7 @@ async function deliverPendingSendBacks(rt: WorkspaceRuntime, sessionId: string):
 
 /**
  * Where a dispatch run gets its connector: the drafting session's folder, its
- * folder's own MCP server of that name (as a watch run loads them — passed
+ * folder's own MCP server of that name (as a job run loads them — passed
  * explicitly, the project's settings and hooks never loaded), a team worker's
  * agent-declared server, and the user's own config (user-scope servers and
  * claude.ai connectors).
@@ -1891,8 +1896,8 @@ async function dispatchOrigin(rt: WorkspaceRuntime, rec: ActionRecord): Promise<
   const server = serverOf(rec.tool)
   const row = rt.rows.get(rec.sessionId)
   let cwd = row?.cwd ?? null
-  if (rec.watchId) {
-    const w = await rt.store.watches.get(rec.watchId).catch(() => null)
+  if (rec.jobId) {
+    const w = await rt.store.jobs.get(rec.jobId).catch(() => null)
     const project = w ? (await rt.store.projects.list()).find((p) => p.id === w.projectId) : undefined
     if (project) cwd = project.path
   }
@@ -2057,7 +2062,7 @@ async function recoverActions(rt: WorkspaceRuntime): Promise<void> {
       await rt.store.actions.addHistory({ actionId: a.id, at: now, actor: 'triage', event: 'unknown', from: 'sending', to: 'unknown', note: error, args: null })
     }).catch((err) => log('warn', 'actions', `could not recover ${a.id}: ${errText(err)}`, { workspace: rt.meta.id }))
   }
-  // Notes sent back to a watch run that died before it ended never reached it: try now.
+  // Notes sent back to a job run that died before it ended never reached it: try now.
   for (const a of await rt.store.actions.list({ status: ['sent_back'], limit: 500 })) {
     if (a.queue && a.queue.delivery === null) void deliverSendBack(rt, a)
   }
@@ -2742,12 +2747,12 @@ const INBOX_KEEP_WARM_MS = 15 * 60_000
 const SCHEDULER_TICK_MS = 60_000
 const GITHUB_TTL_MS = 5 * 60_000
 const GITHUB_LOOKBACK_MS = 14 * 86_400_000
-/** how many watch runs may execute at once (avoid the top-of-hour stampede) */
-const WATCH_CONCURRENCY = 2
+/** how many job runs may execute at once (avoid the top-of-hour stampede) */
+const JOB_CONCURRENCY = 2
 /** how long past its timeout a run may hang (the SDK ignored the abort) before the watchdog frees its slot */
 const WATCHDOG_GRACE_MS = 60_000
-const WATCH_TIMEOUT_KEY = 'watches.defaultTimeoutMs'
-const WATCH_BUDGET_KEY = 'watches.defaultBudgetUsd'
+const JOB_TIMEOUT_KEY = 'jobs.defaultTimeoutMs'
+const JOB_BUDGET_KEY = 'jobs.defaultBudgetUsd'
 const FOLDER_PROBE_TTL_MS = 10 * 60_000
 
 const REPOS_KEY = 'github.repos'
@@ -2768,7 +2773,7 @@ function slackConnected(rt: WorkspaceRuntime): boolean | null {
 }
 
 /**
- * GitHub reconciliation (.docs/watches-v2.md). GitHub is a deterministic source,
+ * GitHub reconciliation (.docs/jobs-v2.md). GitHub is a deterministic source,
  * not an LLM scan, so it stays plain code — but it now writes into the SAME
  * durable store as everything else instead of being refetched-and-discarded
  * every view. Open PRs/issues are upserted (idempotent, newer-wins); a tracked
@@ -2854,16 +2859,16 @@ function syncInbox(rt: WorkspaceRuntime): Promise<InboxSnapshot> {
       }
       if (slackConnected(rt) === false) {
         notices.push('slack: the claude.ai Slack connector is disconnected — reconnect it for Slack items to appear')
-      } else if (slackConnected(rt) === true && (await watchesEnabled(rt))) {
-        // Honest empty state: surface any watch that failed or has gone overdue,
+      } else if (slackConnected(rt) === true && (await jobsEnabled(rt))) {
+        // Honest empty state: surface any job that failed or has gone overdue,
         // so "nothing here" is never confused with "the scan never looked".
-        const enabled = (await rt.store.watches.list()).filter((w) => w.enabled)
-        const overdue = await overdueWatches(rt, enabled, now)
+        const enabled = (await rt.store.jobs.list()).filter((w) => w.enabled)
+        const overdue = await overdueJobs(rt, enabled, now)
         for (const w of enabled) {
           if (w.lastRunStatus === 'failed') {
-            notices.push(`watch “${w.title}” last run failed${w.lastRunError ? `: ${w.lastRunError}` : ''}`)
+            notices.push(`job “${w.title}” last run failed${w.lastRunError ? `: ${w.lastRunError}` : ''}`)
           } else if (overdue.has(w.id)) {
-            notices.push(`watch “${w.title}” hasn’t completed a run recently — items from it may be missing`)
+            notices.push(`job “${w.title}” hasn’t completed a run recently — items from it may be missing`)
           }
         }
       }
@@ -3013,18 +3018,18 @@ async function setFlowOverrideOp(rt: WorkspaceRuntime, raw: unknown, actor: stri
   invalidateInbox(rt)
 }
 
-/** Broken things that aren't items: a watch whose last run failed, a team run that paused. */
+/** Broken things that aren't items: a job whose last run failed, a team run that paused. */
 async function inboxAlerts(rt: WorkspaceRuntime): Promise<InboxAlert[]> {
   const alerts: InboxAlert[] = []
-  if (await watchesEnabled(rt)) {
-    for (const w of await rt.store.watches.list()) {
+  if (await jobsEnabled(rt)) {
+    for (const w of await rt.store.jobs.list()) {
       if (!w.enabled || (w.lastRunStatus !== 'failed' && w.lastRunStatus !== 'timeout')) continue
       alerts.push({
-        id: `watch:${w.id}`,
-        kind: 'watch',
-        title: `Watch “${w.title}” ${w.lastRunStatus === 'timeout' ? 'timed out' : 'failed'}`,
+        id: `job:${w.id}`,
+        kind: 'job',
+        title: `Job “${w.title}” ${w.lastRunStatus === 'timeout' ? 'timed out' : 'failed'}`,
         ...(w.lastRunError ? { detail: w.lastRunError } : {}),
-        watchId: w.id,
+        jobId: w.id,
         at: w.lastRunAt ?? 0,
       })
     }
@@ -3064,19 +3069,19 @@ function noteDispatchedSessions(rt: WorkspaceRuntime): void {
 }
 
 // ---------------------------------------------------------------------------
-// Watch runs (.docs/watches-v2.md): one run per watch, each a real session so
+// Job runs (.docs/jobs-v2.md): one run per job, each a real session so
 // its transcript is the run's receipt. A small queue caps concurrency and
-// jitters starts so the top of the hour doesn't stampede; a per-watch in-flight
+// jitters starts so the top of the hour doesn't stampede; a per-job in-flight
 // guard turns "already running" into a recorded 'skipped', never a silent no-op.
 // The output contract is TOOL CALLS: the run gets a permalink-shaped
 // upsert_work_item that stamps identity, kind, and provenance, so a work item
 // exists because a tool call created it — no JSON parsing, no cursor-advance-on-
 // garbled-output bug. Cursors advance only on a successful run.
 // ---------------------------------------------------------------------------
-/** Which watches are overdue — no `ok` ledger row within grace (isOverdue). */
-async function overdueWatches(rt: WorkspaceRuntime, watches: Watch[], now: number): Promise<Set<string>> {
-  const lastOk = await rt.store.watchRuns.lastOkAt().catch(() => new Map<string, number>())
-  return new Set(watches.filter((w) => isOverdue(scheduleOf(w), w, lastOk.get(w.id), now)).map((w) => w.id))
+/** Which jobs are overdue — no `ok` ledger row within grace (isOverdue). */
+async function overdueJobs(rt: WorkspaceRuntime, jobs: Job[], now: number): Promise<Set<string>> {
+  const lastOk = await rt.store.jobRuns.lastOkAt().catch(() => new Map<string, number>())
+  return new Set(jobs.filter((w) => isOverdue(scheduleOf(w), w, lastOk.get(w.id), now)).map((w) => w.id))
 }
 
 /** The daemon's live status for one workspace, for the System modal. */
@@ -3098,8 +3103,8 @@ function claudeProjectRoots(): string[] {
 
 async function systemStatus(rt: WorkspaceRuntime): Promise<SystemStatus> {
   const now = Date.now()
-  const watches = await rt.store.watches.list()
-  const enabled = watches.filter((w) => w.enabled)
+  const jobs = await rt.store.jobs.list()
+  const enabled = jobs.filter((w) => w.enabled)
   return {
     version: VERSION,
     build: BUILD,
@@ -3113,17 +3118,17 @@ async function systemStatus(rt: WorkspaceRuntime): Promise<SystemStatus> {
     connectorsProbedAt: rt.connectorCache?.probedAt ?? null,
     connectorCount: rt.connectorCache?.connectors.length ?? null,
     schedulerLastTickAt: lastSchedulerTickAt,
-    runningWatches: rt.runningWatches.size,
-    watchesEnabled: await watchesEnabled(rt),
+    runningJobs: rt.runningJobs.size,
+    jobsEnabled: await jobsEnabled(rt),
     inboxSyncedAt: rt.inboxCache?.syncedAt ?? null,
     githubReconcileAt: rt.githubReconcileAt || null,
     githubNotice: rt.githubNotice,
-    watches: {
-      total: watches.length,
+    jobs: {
+      total: jobs.length,
       enabled: enabled.length,
-      overdue: (await overdueWatches(rt, enabled, now)).size,
+      overdue: (await overdueJobs(rt, enabled, now)).size,
       failing: enabled.filter((w) => w.lastRunStatus === 'failed' || w.lastRunStatus === 'timeout').length,
-      configErrors: watches.filter((w) => w.configError).length,
+      configErrors: jobs.filter((w) => w.configError).length,
     },
     launchAgent: launchAgentInstalled(),
     logDir: logFilePath(),
@@ -3132,15 +3137,15 @@ async function systemStatus(rt: WorkspaceRuntime): Promise<SystemStatus> {
 
 /** One run waiting for a slot in the queue. Waiting keeps its slot: the due
  * rule's clock only moves when the run actually starts. */
-type QueuedRun = { id: string; trigger: WatchRunTrigger; slot: number }
+type QueuedRun = { id: string; trigger: JobRunTrigger; slot: number }
 
 /**
- * Is every MCP server this watch uses up, per the latest probes? Only a server
+ * Is every MCP server this job uses up, per the latest probes? Only a server
  * the probe positively reports broken (needs auth, failed, disabled) blocks a
  * run — a server missing from a stale probe gets the benefit of the doubt, and
  * a run that truly can't reach it fails loudly with no-connector-tools.
  */
-function watchReady(rt: WorkspaceRuntime, w: Watch, project: Project | null): true | string {
+function jobReady(rt: WorkspaceRuntime, w: Job, project: Project | null): true | string {
   const probes = [rt.connectorCache, project ? rt.folderProbes.get(project.path) : undefined].filter(
     (p): p is ConnectorProbe => p != null,
   )
@@ -3167,30 +3172,30 @@ const SKIP_TEXT: Record<SkipReason, string> = {
 function ledger(rt: WorkspaceRuntime, write: Promise<unknown>): Promise<void> {
   return write.then(
     () => {},
-    (err) => log('warn', 'watch', `slot ledger write failed: ${err}`, { workspace: rt.meta.id }),
+    (err) => log('warn', 'job', `slot ledger write failed: ${err}`, { workspace: rt.meta.id }),
   )
 }
 
 /** Record a skipped slot as a run receipt and move the due rule's clock. */
-async function recordSkip(rt: WorkspaceRuntime, w: Watch, reason: SkipReason, slot: number, detail?: string): Promise<void> {
+async function recordSkip(rt: WorkspaceRuntime, w: Job, reason: SkipReason, slot: number, detail?: string): Promise<void> {
   const now = Date.now()
-  await rt.store.watches.markRunStarted(w.id, { startedAt: now })
+  await rt.store.jobs.markRunStarted(w.id, { startedAt: now })
   const error = `skipped (${reason}): ${detail ?? SKIP_TEXT[reason]}`
-  await ledger(rt, rt.store.watchRuns.insert({ watchId: w.id, slot, trigger: 'scheduled', status: 'skipped', reason: `${reason}: ${detail ?? SKIP_TEXT[reason]}`, startedAt: now, endedAt: now }))
-  await rt.store.watches.recordRun(w.id, { lastRunAt: now, lastRunTokens: 0, lastRunMatches: 0, status: 'skipped', error })
-  log('warn', 'scheduler', `${w.title}: ${error}`, { watchId: w.id, reason, workspace: rt.meta.id })
+  await ledger(rt, rt.store.jobRuns.insert({ jobId: w.id, slot, trigger: 'scheduled', status: 'skipped', reason: `${reason}: ${detail ?? SKIP_TEXT[reason]}`, startedAt: now, endedAt: now }))
+  await rt.store.jobs.recordRun(w.id, { lastRunAt: now, lastRunTokens: 0, lastRunMatches: 0, status: 'skipped', error })
+  log('warn', 'scheduler', `${w.title}: ${error}`, { jobId: w.id, reason, workspace: rt.meta.id })
 }
 
 /**
- * The scheduler tick for one workspace (watch-spec.md, item 3): decide per
- * watch, record skips, queue due runs oldest slot first.
+ * The scheduler tick for one workspace (job-spec.md, item 3): decide per
+ * job, record skips, queue due runs oldest slot first.
  */
-async function runDueWatches(rt: WorkspaceRuntime, now = Date.now()): Promise<void> {
-  // The global switch (Settings → Sources) — off means the scheduler never runs a watch.
-  if (!(await watchesEnabled(rt))) return
-  await syncWatchFiles(rt).catch(() => {}) // logged by the sync; a bad file never stops the tick
+async function runDueJobs(rt: WorkspaceRuntime, now = Date.now()): Promise<void> {
+  // The global switch (Settings → Sources) — off means the scheduler never runs a job.
+  if (!(await jobsEnabled(rt))) return
+  await syncJobFiles(rt).catch(() => {}) // logged by the sync; a bad file never stops the tick
   const projects = await rt.store.projects.list()
-  for (const w of await rt.store.watches.list()) {
+  for (const w of await rt.store.jobs.list()) {
     if (!w.enabled || w.configError) continue
     if (rt.runQueue.some((q) => q.id === w.id)) continue // waiting already; keeps its slot
     const project = projects.find((p) => p.id === w.projectId) ?? null
@@ -3199,8 +3204,8 @@ async function runDueWatches(rt: WorkspaceRuntime, now = Date.now()): Promise<vo
       lastRunStartedAt: w.lastRunStartedAt,
       now,
       tickMs: SCHEDULER_TICK_MS,
-      running: rt.runningWatches.has(w.id),
-      ready: watchReady(rt, w, project),
+      running: rt.runningJobs.has(w.id),
+      ready: jobReady(rt, w, project),
       catchUp: parseCatchUp(w.catchUpWindow, w.output),
     })
     if (d.action === 'idle') continue
@@ -3214,12 +3219,12 @@ async function runDueWatches(rt: WorkspaceRuntime, now = Date.now()): Promise<vo
 }
 
 /**
- * Queue a single watch to run now (the per-watch "Run" button — a manual run,
+ * Queue a single job to run now (the per-job "Run" button — a manual run,
  * independent of the schedule). Respects the in-flight guard so a double-click
- * can't start two runs of the same watch.
+ * can't start two runs of the same job.
  */
-function enqueueWatch(rt: WorkspaceRuntime, id: string): 'queued' | 'running' {
-  if (rt.runningWatches.has(id)) return 'running'
+function enqueueJob(rt: WorkspaceRuntime, id: string): 'queued' | 'running' {
+  if (rt.runningJobs.has(id)) return 'running'
   if (!rt.runQueue.some((q) => q.id === id)) rt.runQueue.push({ id, trigger: 'manual', slot: Date.now() })
   pumpRunQueue(rt)
   return 'queued'
@@ -3228,21 +3233,21 @@ function enqueueWatch(rt: WorkspaceRuntime, id: string): 'queued' | 'running' {
 function pumpRunQueue(rt: WorkspaceRuntime): void {
   // oldest slot first, as wakecron does; the rest keep their slot for later
   rt.runQueue.sort((a, b) => a.slot - b.slot)
-  while (rt.activeRuns < WATCH_CONCURRENCY && rt.runQueue.length > 0) {
+  while (rt.activeRuns < JOB_CONCURRENCY && rt.runQueue.length > 0) {
     const run = rt.runQueue.shift()!
-    if (rt.runningWatches.has(run.id)) continue
-    rt.runningWatches.add(run.id)
+    if (rt.runningJobs.has(run.id)) continue
+    rt.runningJobs.add(run.id)
     rt.activeRuns += 1
     // The due rule's clock moves when the run starts — now, not after the
     // jitter — so a tick in between can't see a stale slot and skip it.
     const startedAt = Date.now()
     const runId = randomUUID()
-    void rt.store.watches.markRunStarted(run.id, { startedAt, trigger: run.trigger })
-    void ledger(rt, rt.store.watchRuns.insert({ id: runId, watchId: run.id, slot: run.slot, trigger: run.trigger, status: 'running', startedAt }))
+    void rt.store.jobs.markRunStarted(run.id, { startedAt, trigger: run.trigger })
+    void ledger(rt, rt.store.jobRuns.insert({ id: runId, jobId: run.id, slot: run.slot, trigger: run.trigger, status: 'running', startedAt }))
     const jitter = run.trigger === 'manual' ? 0 : Math.floor(Math.random() * 3_000)
     // The run's slot is freed exactly once: when it settles, or by the
     // watchdog if it hangs past its timeout — else every later slot of this
-    // watch would skip as overlap until a restart.
+    // job would skip as overlap until a restart.
     let released = false
     let dog: NodeJS.Timeout | undefined
     const release = () => {
@@ -3250,7 +3255,7 @@ function pumpRunQueue(rt: WorkspaceRuntime): void {
       released = true
       clearTimeout(dog)
       rt.activeRuns -= 1
-      rt.runningWatches.delete(run.id)
+      rt.runningJobs.delete(run.id)
       pumpRunQueue(rt)
     }
     const arm = (timeoutMs: number) => {
@@ -3258,19 +3263,19 @@ function pumpRunQueue(rt: WorkspaceRuntime): void {
       dog = setTimeout(() => {
         if (released) return
         const reason = `watchdog: still running ${humanSpan(Date.now() - startedAt)} after start, past its ${humanSpan(timeoutMs)} timeout`
-        log('error', 'watch', `${reason} — freeing its slot`, { watchId: run.id, workspace: rt.meta.id })
-        void ledger(rt, rt.store.watchRuns.finish(run.id, run.slot, { status: 'interrupted', reason, endedAt: Date.now() }))
+        log('error', 'job', `${reason} — freeing its slot`, { jobId: run.id, workspace: rt.meta.id })
+        void ledger(rt, rt.store.jobRuns.finish(run.id, run.slot, { status: 'interrupted', reason, endedAt: Date.now() }))
         release()
       }, Math.max(0, startedAt + timeoutMs + WATCHDOG_GRACE_MS - Date.now()))
     }
-    // until runWatch knows the watch's own timeout, the longest one allowed
-    arm(MAX_WATCH_TIMEOUT_MS)
+    // until runJob knows the job's own timeout, the longest one allowed
+    arm(MAX_JOB_TIMEOUT_MS)
     setTimeout(() => {
-      runWatch(rt, run, startedAt, runId, arm)
+      runJob(rt, run, startedAt, runId, arm)
         .catch(async (err) => {
-          log('error', 'watch', `run crashed: ${err}`, { workspace: rt.meta.id })
-          // a no-op when runWatch already closed the row
-          await ledger(rt, rt.store.watchRuns.finish(run.id, run.slot, { status: 'failed', reason: `run crashed: ${err}`, endedAt: Date.now() }))
+          log('error', 'job', `run crashed: ${err}`, { workspace: rt.meta.id })
+          // a no-op when runJob already closed the row
+          await ledger(rt, rt.store.jobRuns.finish(run.id, run.slot, { status: 'failed', reason: `run crashed: ${err}`, endedAt: Date.now() }))
         })
         .finally(release)
     }, jitter)
@@ -3279,7 +3284,7 @@ function pumpRunQueue(rt: WorkspaceRuntime): void {
 
 /**
  * Identity for a filed item, derived from the link the scanner saw — never from
- * the watch. A Slack permalink → slack:<tail>; a GitHub PR/issue URL →
+ * the job. A Slack permalink → slack:<tail>; a GitHub PR/issue URL →
  * github:owner/repo#n; a Linear URL or key → linear:KEY-n. Anything else is
  * rejected: an id we cannot canonicalize cannot dedupe.
  */
@@ -3332,12 +3337,12 @@ const DIGEST_SHAPE = {
 /**
  * The per-run ingestion tool. Upsert-only, link-shaped: the scanner passes
  * what it can see (a link, title, why, timestamp, refs); the server derives
- * identity from the link and stamps kind and provenance (this watch + run). So
+ * identity from the link and stamps kind and provenance (this job + run). So
  * the model only ADDS candidates and annotates why — lifecycle stays in code.
  */
-function makeScanMcp(rt: WorkspaceRuntime, watch: Watch, runId: string, onUpsert: (outcome: UpsertOutcome) => void) {
+function makeScanMcp(rt: WorkspaceRuntime, job: Job, runId: string, onUpsert: (outcome: UpsertOutcome) => void) {
   let count = 0
-  if (watch.output === 'digest') return makeDigestMcp(rt, watch, runId, onUpsert)
+  if (job.output === 'digest') return makeDigestMcp(rt, job, runId, onUpsert)
   return createSdkMcpServer({
     name: 'triage',
     version: VERSION,
@@ -3361,7 +3366,7 @@ function makeScanMcp(rt: WorkspaceRuntime, watch: Watch, runId: string, onUpsert
             const item: CoreWorkItem = {
               id: ident.id,
               source: ident.source,
-              kind: watch.createsItems ? 'watch-hit' : 'fyi',
+              kind: job.createsItems ? 'job-hit' : 'fyi',
               title: args.title,
               url: ident.url,
               repo: args.place?.trim() || ident.home,
@@ -3373,21 +3378,21 @@ function makeScanMcp(rt: WorkspaceRuntime, watch: Watch, runId: string, onUpsert
               ...(parseDue(args.due) != null ? { dueAt: parseDue(args.due)! } : {}),
               ...(refs ? { refs } : {}),
             }
-            const prov: Provenance = { watchId: watch.id, runId, at: now, why: args.why }
+            const prov: Provenance = { jobId: job.id, runId, at: now, why: args.why }
             const { outcome, reopened } = await upsertItem(rt, item, prov)
             onUpsert(outcome)
             invalidateInbox(rt)
-            // The watch briefs what it files: the item arrives ready, your turn.
-            if (watch.brief && (outcome === 'inserted' || reopened)) briefFiledItem(rt, watch, item.id, runId)
-            log('info', 'watch', `filed (${outcome}): ${item.title}`, {
+            // The job briefs what it files: the item arrives ready, your turn.
+            if (job.brief && (outcome === 'inserted' || reopened)) briefFiledItem(rt, job, item.id, runId)
+            log('info', 'job', `filed (${outcome}): ${item.title}`, {
               id: item.id,
-              watchId: watch.id,
+              jobId: job.id,
               runId,
               place: item.repo,
               outcome,
               workspace: rt.meta.id,
             })
-            // Stateless runs need to hear about repeats (watch-spec.md, item 4).
+            // Stateless runs need to hear about repeats (job-spec.md, item 4).
             if (outcome === 'inserted') return okResult(`new: filed ${item.id}`)
             if (reopened) return okResult(`already filed; it was done and has returned to the inbox: ${item.id}`)
             const status = (await rt.store.items.get(item.id))?.status ?? 'open'
@@ -3405,17 +3410,17 @@ function makeScanMcp(rt: WorkspaceRuntime, watch: Watch, runId: string, onUpsert
   })
 }
 
-/** The one file a digest watch rewrites: stable per watch, so writeAt updates in place. */
-const digestRelPath = (watch: Watch): string => `reports/${slug(watch.title) || 'digest'}-${watch.id.slice(0, 8)}.md`
+/** The one file a digest job rewrites: stable per job, so writeAt updates in place. */
+const digestRelPath = (job: Job): string => `reports/${slug(job.title) || 'digest'}-${job.id.slice(0, 8)}.md`
 
 /**
- * The digest watch's write tool. One call per run: the server rewrites the
- * watch's report artifact in place, upserts the watch's single rolling item
- * (id `watch:<id>`) with a fresh timestamp — so a done item returns with the
+ * The digest job's write tool. One call per run: the server rewrites the
+ * job's report artifact in place, upserts the job's single rolling item
+ * (id `job:<id>`) with a fresh timestamp — so a done item returns with the
  * "returned" marker — and links report → item. The model writes prose; code
  * owns identity, lifecycle and the link, as everywhere else.
  */
-function makeDigestMcp(rt: WorkspaceRuntime, watch: Watch, runId: string, onWrite: (outcome: UpsertOutcome) => void) {
+function makeDigestMcp(rt: WorkspaceRuntime, job: Job, runId: string, onWrite: (outcome: UpsertOutcome) => void) {
   let written = false
   return createSdkMcpServer({
     name: 'triage',
@@ -3428,9 +3433,9 @@ function makeDigestMcp(rt: WorkspaceRuntime, watch: Watch, runId: string, onWrit
         async (args) => {
           try {
             if (written) return errResult('the digest was already written this run — stop calling this tool')
-            const title = args.title.trim() || `${watch.title} · ${new Date().toLocaleDateString()}`
+            const title = args.title.trim() || `${job.title} · ${new Date().toLocaleDateString()}`
             const refs = canonicalizeRefs(args.refs)
-            const artifact = await rt.artifacts.writeAt(digestRelPath(watch), {
+            const artifact = await rt.artifacts.writeAt(digestRelPath(job), {
               title,
               body: args.body,
               author: 'model',
@@ -3438,25 +3443,25 @@ function makeDigestMcp(rt: WorkspaceRuntime, watch: Watch, runId: string, onWrit
             })
             const nowIso = new Date().toISOString()
             const item: CoreWorkItem = {
-              id: `watch:${watch.id}`,
-              source: 'watch',
+              id: `job:${job.id}`,
+              source: 'job',
               kind: 'digest',
               title,
               url: `#/artifact/${artifact.id}`,
-              repo: watch.title,
+              repo: job.title,
               author: '',
               peopleWaiting: 0,
               createdAt: nowIso,
               updatedAt: nowIso,
               ...(refs ? { refs } : {}),
             }
-            const prov: Provenance = { watchId: watch.id, runId, at: Date.now(), why: 'digest rewritten' }
+            const prov: Provenance = { jobId: job.id, runId, at: Date.now(), why: 'digest rewritten' }
             const { outcome, reopened } = await upsertItem(rt, item, prov)
             await rt.store.links.add({ fromKind: 'artifact', fromId: artifact.id, toKind: 'item', toId: item.id, role: 'report' })
             written = true
             onWrite(outcome)
             invalidateInbox(rt)
-            log('info', 'watch', `digest written (${outcome}${reopened ? ', returned' : ''}): ${title}`, { id: item.id, watchId: watch.id, runId, artifact: artifact.path, workspace: rt.meta.id })
+            log('info', 'job', `digest written (${outcome}${reopened ? ', returned' : ''}): ${title}`, { id: item.id, jobId: job.id, runId, artifact: artifact.path, workspace: rt.meta.id })
             return okResult(`ok: digest saved as ${artifact.path}`)
           } catch (err) {
             return errResult(err instanceof Error ? err.message : String(err))
@@ -3467,24 +3472,24 @@ function makeDigestMcp(rt: WorkspaceRuntime, watch: Watch, runId: string, onWrit
   })
 }
 
-type WatchPreview = {
+type JobPreview = {
   id: string
   status: 'running' | 'ready' | 'failed'
   /** the transcript, minus stream deltas — replayed to late subscribers like a session's log */
   events: SessionEvent[]
-  result?: WatchPreviewResult
+  result?: JobPreviewResult
   error?: string
   startedAt: number
 }
 const PREVIEW_TTL_MS = 15 * 60_000
 
-/** What a run (real or dry) is made of: the watch as saved, or the form as it stands. */
+/** What a run (real or dry) is made of: the job as saved, or the form as it stands. */
 type RunSpec = {
   instruction: string
-  tools: WatchToolGrant[]
+  tools: JobToolGrant[]
   project: Project
   model?: string
-  output: WatchOutput
+  output: JobOutput
   schedule: string
   scope?: string
   lateness?: string
@@ -3493,7 +3498,7 @@ type RunSpec = {
 type PreviewSpec = Omit<RunSpec, 'project'> & { projectId: string }
 
 // ---------------------------------------------------------------------------
-// Folder MCP servers (watch-spec.md, item 1): the `project` servers in a
+// Folder MCP servers (job-spec.md, item 1): the `project` servers in a
 // folder's .mcp.json and the user's private `local` servers for that folder
 // (in Claude's own config). Read by triage and passed explicitly — never by
 // loading the project's settings, which would also load its hooks, and hooks
@@ -3530,7 +3535,7 @@ async function folderMcpServers(rt: WorkspaceRuntime, cwd: string): Promise<Fold
 
 /**
  * Local-scope MCP servers the user configured for other folders (names only,
- * never their config). A watch runs in one folder, so these aren't usable
+ * never their config). A job runs in one folder, so these aren't usable
  * here — but listing them tells the user which project to pick instead.
  */
 async function localServersElsewhere(rt: WorkspaceRuntime, cwd: string, here: Connector[]): Promise<Array<{ name: string; folder: string }>> {
@@ -3544,21 +3549,21 @@ async function localServersElsewhere(rt: WorkspaceRuntime, cwd: string, here: Co
   return out.sort((a, b) => a.name.localeCompare(b.name) || a.folder.localeCompare(b.folder))
 }
 
-/** The workspace's default run limits, under a watch's own. */
-async function watchLimits(rt: WorkspaceRuntime, w: { timeoutMs?: number; maxBudgetUsd?: number }): Promise<{ timeoutMs: number; maxBudgetUsd?: number }> {
+/** The workspace's default run limits, under a job's own. */
+async function jobLimits(rt: WorkspaceRuntime, w: { timeoutMs?: number; maxBudgetUsd?: number }): Promise<{ timeoutMs: number; maxBudgetUsd?: number }> {
   const s = await readSettings(rt)
-  const budget = w.maxBudgetUsd ?? s.watchBudgetUsd ?? undefined
-  return { timeoutMs: w.timeoutMs ?? s.watchTimeoutMs, ...(budget != null ? { maxBudgetUsd: budget } : {}) }
+  const budget = w.maxBudgetUsd ?? s.jobBudgetUsd ?? undefined
+  return { timeoutMs: w.timeoutMs ?? s.jobTimeoutMs, ...(budget != null ? { maxBudgetUsd: budget } : {}) }
 }
 
 /**
- * The run spec every watch run shares, real or dry. Same prompt, same fence:
+ * The run spec every job run shares, real or dry. Same prompt, same fence:
  * built-in tools limited to what the grants need, the allowlist so granted
  * tools never prompt, unattended so nothing else ever does, and the fence as a
  * veto so nothing else ever runs — whatever the user's own global allow rules
  * say. Runs work in the project folder and nowhere else.
  */
-async function watchQuery(
+async function jobQuery(
   rt: WorkspaceRuntime,
   spec: RunSpec,
   triage: McpServers[string],
@@ -3566,11 +3571,11 @@ async function watchQuery(
   extra: { maxBudgetUsd?: number; includePartialMessages?: boolean } = {},
 ): Promise<AgentRunSpec> {
   // The fence below is the whole safety story: no veto, no run.
-  requireVeto(rt.provider, 'watch')
+  requireVeto(rt.provider, 'job')
   const folder = await folderMcpServers(rt, spec.project.path)
   const granted = new Set(mcpGrants(spec.tools).map((g) => g.source.server))
   const folderServers = Object.fromEntries(Object.entries(folder.servers).filter(([name]) => granted.has(name)))
-  // Servers the user has connected but this watch wasn't granted still load
+  // Servers the user has connected but this job wasn't granted still load
   // from their settings; take their tools out of the run's context entirely
   // (the fence would deny them anyway). Known from the latest probes.
   // A run right after boot can beat the first probe; wait for it (a few seconds, no API turn).
@@ -3608,38 +3613,38 @@ async function watchQuery(
   }
 }
 
-/** The project a watch runs in, checked: a removed project or a missing folder is an error, never a fallback. */
-async function watchProject(rt: WorkspaceRuntime, projectId: string): Promise<Project> {
+/** The project a job runs in, checked: a removed project or a missing folder is an error, never a fallback. */
+async function jobProject(rt: WorkspaceRuntime, projectId: string): Promise<Project> {
   const project = (await rt.store.projects.list()).find((p) => p.id === projectId)
-  if (!project) throw new Error('project removed — pick another project for this watch')
+  if (!project) throw new Error('project removed — pick another project for this job')
   const st = await stat(project.path).catch(() => null)
   if (!st?.isDirectory()) throw new Error(`folder not found: ${project.path}`)
   return project
 }
 
-const noConnectorError = (tools: WatchToolGrant[]) =>
+const noConnectorError = (tools: JobToolGrant[]) =>
   `no connector tools — connect ${tools.map(grantLabel).join(', ')} for Claude (claude.ai/settings/connectors, or the project's MCP config)`
 
 /**
- * Start a dry run of a watch as the form currently describes it. Same prompt,
+ * Start a dry run of a job as the form currently describes it. Same prompt,
  * tools and fences as a real run; the write tool only collects. The run is
  * streamed over the WebSocket under an ephemeral session id so the form can
  * show the transcript live, but nothing is persisted — no session row, no
  * events, no items, no artifact. The caller polls for the outcome.
  */
-function startWatchPreview(rt: WorkspaceRuntime, spec: PreviewSpec): string {
-  const pv: WatchPreview = { id: randomUUID(), status: 'running', events: [], startedAt: Date.now() }
+function startJobPreview(rt: WorkspaceRuntime, spec: PreviewSpec): string {
+  const pv: JobPreview = { id: randomUUID(), status: 'running', events: [], startedAt: Date.now() }
   rt.previews.set(pv.id, pv)
-  void runWatchPreview(rt, pv, spec)
+  void runJobPreview(rt, pv, spec)
   return pv.id
 }
 
-async function runWatchPreview(rt: WorkspaceRuntime, pv: WatchPreview, spec: PreviewSpec): Promise<void> {
+async function runJobPreview(rt: WorkspaceRuntime, pv: JobPreview, spec: PreviewSpec): Promise<void> {
   const emit = (event: SessionEvent, keep = true) => {
     if (keep) pv.events.push(event)
     broadcast(rt, { type: 'session_event', sessionId: pv.id, event, at: Date.now() })
   }
-  const rows: WatchPreviewRow[] = []
+  const rows: JobPreviewRow[] = []
   const wouldQueue: Array<{ tool: string; summary: string }> = []
   let digest: { title: string; body: string } | undefined
   const collector = createSdkMcpServer({
@@ -3682,10 +3687,10 @@ async function runWatchPreview(rt: WorkspaceRuntime, pv: WatchPreview, spec: Pre
   let resultText = ''
   let sawResult = false
   try {
-    const project = await watchProject(rt, spec.projectId)
-    const limits = await watchLimits(rt, {})
+    const project = await jobProject(rt, spec.projectId)
+    const limits = await jobLimits(rt, {})
     timer = setTimeout(() => abort.abort(), limits.timeoutMs)
-    const previewSpec = await watchQuery(rt, { ...spec, project }, collector, abort, { ...limits, includePartialMessages: true })
+    const previewSpec = await jobQuery(rt, { ...spec, project }, collector, abort, { ...limits, includePartialMessages: true })
     // A dry run never sends: past the fence, anything that counts as an action
     // (a connector write, an outbound command) is refused and listed instead.
     const fence = previewSpec.veto
@@ -3720,20 +3725,20 @@ async function runWatchPreview(rt: WorkspaceRuntime, pv: WatchPreview, spec: Pre
     if (!sawResult) throw new Error(abort.signal.aborted ? 'the preview timed out' : 'the preview ended without a result')
     pv.result = { output: spec.output, rows, ...(digest ? { digest } : {}), ...(wouldQueue.length ? { wouldQueue } : {}), tokens, ...(costUsd != null ? { costUsd } : {}), durationMs: Date.now() - pv.startedAt }
     pv.status = 'ready'
-    log('info', 'watch', `preview: ${rows.length} row(s)${digest ? ', digest' : ''}, ${Math.round(tokens / 1000)}k tok`, { previewId: pv.id, workspace: rt.meta.id })
+    log('info', 'job', `preview: ${rows.length} row(s)${digest ? ', digest' : ''}, ${Math.round(tokens / 1000)}k tok`, { previewId: pv.id, workspace: rt.meta.id })
   } catch (err) {
     pv.error = err instanceof Error ? err.message : String(err)
     pv.status = 'failed'
     emit({ kind: 'error', message: pv.error })
-    log('warn', 'watch', `preview failed: ${pv.error}`, { previewId: pv.id, workspace: rt.meta.id })
+    log('warn', 'job', `preview failed: ${pv.error}`, { previewId: pv.id, workspace: rt.meta.id })
   } finally {
     if (timer) clearTimeout(timer)
     setTimeout(() => rt.previews.delete(pv.id), PREVIEW_TTL_MS).unref()
   }
 }
 
-/** A macOS notification about a finished run, per the watch's notify setting. */
-function notifyRun(rt: WorkspaceRuntime, w: Watch, status: WatchRunStatus, detail?: string): void {
+/** A macOS notification about a finished run, per the job's notify setting. */
+function notifyRun(rt: WorkspaceRuntime, w: Job, status: JobRunStatus, detail?: string): void {
   if (process.platform !== 'darwin' || w.notify === 'never') return
   const failed = status === 'failed' || status === 'timeout'
   if (w.notify === 'on_failure' && !failed) return
@@ -3741,20 +3746,20 @@ function notifyRun(rt: WorkspaceRuntime, w: Watch, status: WatchRunStatus, detai
   const q = (s: string) => `"${s.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`
   const text = failed ? `${w.title} ${status === 'timeout' ? 'timed out' : 'failed'}${detail ? `: ${detail.slice(0, 120)}` : ''}` : `${w.title}: ${detail ?? 'ok'}`
   execFile('osascript', ['-e', `display notification ${q(text)} with title ${q('triage')}`], (err) => {
-    if (err) log('warn', 'watch', `notification failed: ${err.message}`, { watchId: w.id, workspace: rt.meta.id })
+    if (err) log('warn', 'job', `notification failed: ${err.message}`, { jobId: w.id, workspace: rt.meta.id })
   })
 }
 
 /**
- * Run one watch to completion as a headless session. Persists the transcript to
+ * Run one job to completion as a headless session. Persists the transcript to
  * the event log (so it is observable like any session) and records the run's
- * receipt on the watch row and its own session row. Stateless (watch-spec.md,
+ * receipt on the job row and its own session row. Stateless (job-spec.md,
  * item 4): nothing from this run feeds the next one's prompt.
  */
-async function runWatch(rt: WorkspaceRuntime, run: QueuedRun, startedMs: number, runId: string, armWatchdog: (timeoutMs: number) => void = () => {}): Promise<void> {
-  const watch = await rt.store.watches.get(run.id)
-  if (!watch) {
-    await ledger(rt, rt.store.watchRuns.finish(run.id, run.slot, { status: 'skipped', reason: 'the watch was removed', endedAt: Date.now() }))
+async function runJob(rt: WorkspaceRuntime, run: QueuedRun, startedMs: number, runId: string, armWatchdog: (timeoutMs: number) => void = () => {}): Promise<void> {
+  const job = await rt.store.jobs.get(run.id)
+  if (!job) {
+    await ledger(rt, rt.store.jobRuns.finish(run.id, run.slot, { status: 'skipped', reason: 'the job was removed', endedAt: Date.now() }))
     return
   }
   // A catch-up run stands in for every slot it slept through: each gets a
@@ -3762,47 +3767,47 @@ async function runWatch(rt: WorkspaceRuntime, run: QueuedRun, startedMs: number,
   // It is also told how late it is, so it covers the gap and skips what's stale.
   let lateness: string | undefined
   if (run.trigger === 'catch_up') {
-    const missed = missedSlots(scheduleOf(watch), run.slot, startedMs)
-    if (missed.length) await ledger(rt, rt.store.watchRuns.insertMissed(watch.id, missed, runId, startedMs))
+    const missed = missedSlots(scheduleOf(job), run.slot, startedMs)
+    if (missed.length) await ledger(rt, rt.store.jobRuns.insertMissed(job.id, missed, runId, startedMs))
     lateness = describeLateness(run.slot, missed, startedMs) ?? undefined
   }
   // The daily budget: over it, the slot is a `skipped_budget` row and no run;
   // under it, this run may spend at most what is left of the day.
-  const limits = await watchLimits(rt, watch)
-  const spent = watch.dailyBudgetUsd != null ? await rt.store.watchRuns.spentSince(watch.id, localMidnight(startedMs)) : 0
-  const budget = budgetFor(limits.maxBudgetUsd, watch.dailyBudgetUsd, spent)
+  const limits = await jobLimits(rt, job)
+  const spent = job.dailyBudgetUsd != null ? await rt.store.jobRuns.spentSince(job.id, localMidnight(startedMs)) : 0
+  const budget = budgetFor(limits.maxBudgetUsd, job.dailyBudgetUsd, spent)
   if (budget.skip) {
     const now = Date.now()
-    await ledger(rt, rt.store.watchRuns.finish(watch.id, run.slot, { status: 'skipped_budget', reason: budget.reason, endedAt: now }))
-    await rt.store.watches.recordRun(watch.id, { lastRunAt: now, lastRunTokens: 0, lastRunMatches: 0, status: 'skipped', trigger: run.trigger, error: `skipped (budget): ${budget.reason}` })
-    log('warn', 'watch', `${watch.title}: skipped, ${budget.reason}`, { watchId: watch.id, workspace: rt.meta.id })
+    await ledger(rt, rt.store.jobRuns.finish(job.id, run.slot, { status: 'skipped_budget', reason: budget.reason, endedAt: now }))
+    await rt.store.jobs.recordRun(job.id, { lastRunAt: now, lastRunTokens: 0, lastRunMatches: 0, status: 'skipped', trigger: run.trigger, error: `skipped (budget): ${budget.reason}` })
+    log('warn', 'job', `${job.title}: skipped, ${budget.reason}`, { jobId: job.id, workspace: rt.meta.id })
     return
   }
   const runLimits = { timeoutMs: limits.timeoutMs, ...(budget.maxBudgetUsd != null ? { maxBudgetUsd: budget.maxBudgetUsd } : {}) }
   armWatchdog(runLimits.timeoutMs)
-  const projectRow = (await rt.store.projects.list()).find((p) => p.id === watch.projectId) ?? null
+  const projectRow = (await rt.store.projects.list()).find((p) => p.id === job.projectId) ?? null
   if (!projectRow) {
     // The project went away: pause with a config error, never fall back to another folder.
-    await rt.store.watches.patchState(watch.id, { enabled: false, configError: 'project removed — pick another project for this watch' })
-    await rt.store.watches.recordRun(watch.id, { lastRunAt: Date.now(), lastRunTokens: 0, lastRunMatches: 0, status: 'skipped', trigger: run.trigger, error: 'skipped: the watch has no project' })
-    await ledger(rt, rt.store.watchRuns.finish(watch.id, run.slot, { status: 'skipped', reason: 'the watch has no project', endedAt: Date.now() }))
-    log('warn', 'watch', `paused ${watch.title}: its project was removed`, { watchId: watch.id, workspace: rt.meta.id })
+    await rt.store.jobs.patchState(job.id, { enabled: false, configError: 'project removed — pick another project for this job' })
+    await rt.store.jobs.recordRun(job.id, { lastRunAt: Date.now(), lastRunTokens: 0, lastRunMatches: 0, status: 'skipped', trigger: run.trigger, error: 'skipped: the job has no project' })
+    await ledger(rt, rt.store.jobRuns.finish(job.id, run.slot, { status: 'skipped', reason: 'the job has no project', endedAt: Date.now() }))
+    log('warn', 'job', `paused ${job.title}: its project was removed`, { jobId: job.id, workspace: rt.meta.id })
     return
   }
   const session = await rt.store.sessions.create({
     id: randomUUID(),
-    title: `Watch · ${watch.title}`,
+    title: `Job · ${job.title}`,
     cwd: projectRow.path,
     projectId: projectRow.id,
-    kind: 'watch-run',
-    watchId: watch.id,
+    kind: 'job-run',
+    jobId: job.id,
     runTrigger: run.trigger,
   })
   rt.rows.set(session.id, session)
-  await rt.store.watches.markRunStarted(watch.id, { startedAt: startedMs, trigger: run.trigger, sessionId: session.id })
-  await ledger(rt, rt.store.watchRuns.attachSession(watch.id, run.slot, session.id))
+  await rt.store.jobs.markRunStarted(job.id, { startedAt: startedMs, trigger: run.trigger, sessionId: session.id })
+  await ledger(rt, rt.store.jobRuns.attachSession(job.id, run.slot, session.id))
   broadcastSessionList(rt)
-  log('info', 'watch', `run started: ${watch.title} (${run.trigger})`, { watchId: watch.id, runId: session.id, tools: watch.tools.map(grantLabel), project: projectRow.name, model: watch.model, workspace: rt.meta.id })
+  log('info', 'job', `run started: ${job.title} (${run.trigger})`, { jobId: job.id, runId: session.id, tools: job.tools.map(grantLabel), project: projectRow.name, model: job.model, workspace: rt.meta.id })
 
   let seq = 0
   const emit = (event: SessionEvent, persist = true) => {
@@ -3818,25 +3823,25 @@ async function runWatch(rt: WorkspaceRuntime, run: QueuedRun, startedMs: number,
   let newCount = 0
   let tokens = 0
   let costUsd: number | undefined
-  let status: WatchRunStatus = 'failed'
+  let status: JobRunStatus = 'failed'
   let error: string | undefined
   let timedOut = false
   const abort = new AbortController()
   let timer: NodeJS.Timeout | undefined
-  const scanMcp = makeScanMcp(rt, watch, session.id, (outcome) => {
+  const scanMcp = makeScanMcp(rt, job, session.id, (outcome) => {
     matches += 1
     if (outcome === 'inserted') newCount += 1
   })
 
   try {
-    const project = await watchProject(rt, watch.projectId)
+    const project = await jobProject(rt, job.projectId)
     timer = setTimeout(() => {
       timedOut = true
       abort.abort()
     }, runLimits.timeoutMs)
-    const runSpec = await watchQuery(
+    const runSpec = await jobQuery(
       rt,
-      { instruction: watch.instruction, tools: watch.tools, project, model: watch.model, output: watch.output, schedule: scheduleOf(watch), scope: watch.scope, lateness },
+      { instruction: job.instruction, tools: job.tools, project, model: job.model, output: job.output, schedule: scheduleOf(job), scope: job.scope, lateness },
       scanMcp,
       abort,
       runLimits,
@@ -3869,20 +3874,20 @@ async function runWatch(rt: WorkspaceRuntime, run: QueuedRun, startedMs: number,
       }
     }
     if (overBudget) throw new Error(`budget cap reached ($${runLimits.maxBudgetUsd?.toFixed(2)})`)
-    if (resultText.includes('no-connector-tools') || resultText.includes('no-slack-tools')) throw new Error(noConnectorError(watch.tools))
+    if (resultText.includes('no-connector-tools') || resultText.includes('no-slack-tools')) throw new Error(noConnectorError(job.tools))
     if (!sawResult) throw new Error('scan ended without a result')
     status = 'ok'
   } catch (err) {
     if (timedOut) {
       status = 'timeout'
-      error = `timed out after ${humanSpan((await watchLimits(rt, watch)).timeoutMs)}`
+      error = `timed out after ${humanSpan((await jobLimits(rt, job)).timeoutMs)}`
     } else {
       error = err instanceof Error ? err.message : String(err)
     }
     emit({ kind: 'error', message: error })
   } finally {
     if (timer) clearTimeout(timer)
-    await rt.store.watches.recordRun(watch.id, {
+    await rt.store.jobs.recordRun(job.id, {
       lastRunAt: Date.now(),
       lastRunTokens: tokens,
       lastRunMatches: matches,
@@ -3892,7 +3897,7 @@ async function runWatch(rt: WorkspaceRuntime, run: QueuedRun, startedMs: number,
       sessionId: session.id,
       error,
     })
-    await ledger(rt, rt.store.watchRuns.finish(watch.id, run.slot, { status, reason: error, sessionId: session.id, endedAt: Date.now(), costUsd }))
+    await ledger(rt, rt.store.jobRuns.finish(job.id, run.slot, { status, reason: error, sessionId: session.id, endedAt: Date.now(), costUsd }))
     // the run's own receipt, on its session row — powers the Activity view
     session.runStatus = status
     session.runMatches = matches
@@ -3901,17 +3906,17 @@ async function runWatch(rt: WorkspaceRuntime, run: QueuedRun, startedMs: number,
     session.runCostUsd = costUsd
     session.runError = error
     session.updatedAt = Date.now()
-    await rt.store.sessions.recordWatchRun(session.id, { status, matches, newCount, tokens, costUsd, error })
+    await rt.store.sessions.recordJobRun(session.id, { status, matches, newCount, tokens, costUsd, error })
     log(
       status === 'ok' ? 'info' : 'error',
-      'watch',
-      `run ${status}: ${watch.title}${status === 'ok' ? ` — ${newCount} new, ${matches - newCount} already filed, ${Math.round(tokens / 1000)}k tok${costUsd != null ? `, $${costUsd.toFixed(2)}` : ''}` : ''}${error ? ` — ${error}` : ''}`,
-      { watchId: watch.id, runId: session.id, status, trigger: run.trigger, matches, newCount, tokens, durationMs: Date.now() - startedMs, workspace: rt.meta.id, ...(error ? { error } : {}) },
+      'job',
+      `run ${status}: ${job.title}${status === 'ok' ? ` — ${newCount} new, ${matches - newCount} already filed, ${Math.round(tokens / 1000)}k tok${costUsd != null ? `, $${costUsd.toFixed(2)}` : ''}` : ''}${error ? ` — ${error}` : ''}`,
+      { jobId: job.id, runId: session.id, status, trigger: run.trigger, matches, newCount, tokens, durationMs: Date.now() - startedMs, workspace: rt.meta.id, ...(error ? { error } : {}) },
     )
     rt.actionTrackers.delete(session.id)
     // Notes on an action sent back while the run was still going reach it now.
     void deliverPendingSendBacks(rt, session.id)
-    notifyRun(rt, watch, status, status === 'ok' ? `${newCount} new` : error)
+    notifyRun(rt, job, status, status === 'ok' ? `${newCount} new` : error)
     if (status === 'ok') {
       invalidateInbox(rt)
       void syncInbox(rt)
@@ -3921,37 +3926,37 @@ async function runWatch(rt: WorkspaceRuntime, run: QueuedRun, startedMs: number,
 }
 
 /**
- * Boot: a watch run still without a final status died with the previous
- * process. Mark it interrupted — on its session and, when it was the watch's
- * latest run, on the watch — instead of leaving it "running" forever. No
+ * Boot: a job run still without a final status died with the previous
+ * process. Mark it interrupted — on its session and, when it was the job's
+ * latest run, on the job — instead of leaving it "running" forever. No
  * retry: the next run's look-back window overlaps the lost one.
  */
 async function markInterruptedRuns(rt: WorkspaceRuntime): Promise<void> {
   const error = 'interrupted: triage stopped during the run'
-  await ledger(rt, rt.store.watchRuns.sweepInterrupted(Date.now(), error))
+  await ledger(rt, rt.store.jobRuns.sweepInterrupted(Date.now(), error))
   for (const row of rt.rows.values()) {
-    if (row.kind !== 'watch-run' || row.runStatus) continue
+    if (row.kind !== 'job-run' || row.runStatus) continue
     const events = await rt.store.events.read(row.id)
     const seq = events.length ? events[events.length - 1].seq : 0
     await rt.store.events.append(row.id, seq + 1, { kind: 'error', message: error })
-    await rt.store.sessions.recordWatchRun(row.id, { status: 'interrupted', matches: row.runMatches ?? 0, tokens: row.runTokens ?? 0, error })
+    await rt.store.sessions.recordJobRun(row.id, { status: 'interrupted', matches: row.runMatches ?? 0, tokens: row.runTokens ?? 0, error })
     row.runStatus = 'interrupted'
     row.runError = error
-    const w = row.watchId ? await rt.store.watches.get(row.watchId) : null
+    const w = row.jobId ? await rt.store.jobs.get(row.jobId) : null
     if (w && w.lastRunSessionId === row.id) {
-      await rt.store.watches.recordRun(w.id, { lastRunAt: row.updatedAt, lastRunTokens: 0, lastRunMatches: 0, status: 'interrupted', sessionId: row.id, error })
+      await rt.store.jobs.recordRun(w.id, { lastRunAt: row.updatedAt, lastRunTokens: 0, lastRunMatches: 0, status: 'interrupted', sessionId: row.id, error })
     }
-    log('warn', 'watch', `marked interrupted: ${row.title}`, { runId: row.id, watchId: row.watchId, workspace: rt.meta.id })
+    log('warn', 'job', `marked interrupted: ${row.title}`, { runId: row.id, jobId: row.jobId, workspace: rt.meta.id })
   }
 }
 
 /**
- * Pre-installed watch templates (.docs/watches-v2.md): the old built-in Slack
+ * Pre-installed job templates (.docs/jobs-v2.md): the old built-in Slack
  * rules, shipped as data and seeded as editable copies on first run. A user can
  * disable, edit, or duplicate them; a `templateId` marks the origin.
  */
-const WATCH_TEMPLATES: Array<
-  Pick<Watch, 'title' | 'instruction' | 'schedule' | 'cadence' | 'createsItems' | 'tools'> & { templateId: string }
+const JOB_TEMPLATES: Array<
+  Pick<Job, 'title' | 'instruction' | 'schedule' | 'cadence' | 'createsItems' | 'tools'> & { templateId: string }
 > = [
   {
     templateId: 'unread-dms',
@@ -3973,53 +3978,53 @@ const WATCH_TEMPLATES: Array<
   },
 ]
 
-const NEEDS_PROJECT = 'pick the project this watch runs in'
+const NEEDS_PROJECT = 'pick the project this job runs in'
 
 /**
- * Every watch runs in a project folder (watch-spec.md, item 2) and there is no
- * fallback folder. A watch without one — saved before the rule, its project
+ * Every job runs in a project folder (job-spec.md, item 2) and there is no
+ * fallback folder. A job without one — saved before the rule, its project
  * since removed, or left in the retired scratch project — pauses with a config
  * error until the user picks a project. It never runs somewhere else.
  */
-async function migrateWatchProjects(rt: WorkspaceRuntime): Promise<void> {
+async function migrateJobProjects(rt: WorkspaceRuntime): Promise<void> {
   // Retire the scratch projects a dev build created, and their folders if still empty.
   for (const p of await rt.store.projects.retireBuiltin()) {
     await rmdir(p.path).catch(() => {}) // only succeeds on an empty folder
-    log('info', 'watch', `removed the retired scratch project ${p.path}`, { workspace: rt.meta.id })
+    log('info', 'job', `removed the retired scratch project ${p.path}`, { workspace: rt.meta.id })
   }
   const projects = await rt.store.projects.list()
-  for (const w of await rt.store.watches.list()) {
-    if (w.file) continue // a file watch's project is checked on every sync
+  for (const w of await rt.store.jobs.list()) {
+    if (w.file) continue // a file job's project is checked on every sync
     if (w.projectId && projects.some((p) => p.id === w.projectId)) continue
     if (w.configError && !w.enabled) continue
-    await rt.store.watches.patchState(w.id, { projectId: null, enabled: false, configError: NEEDS_PROJECT })
-    log('info', 'watch', `paused "${w.title}": it has no project — pick one to run it`, { watchId: w.id, workspace: rt.meta.id })
+    await rt.store.jobs.patchState(w.id, { projectId: null, enabled: false, configError: NEEDS_PROJECT })
+    log('info', 'job', `paused "${w.title}": it has no project — pick one to run it`, { jobId: w.id, workspace: rt.meta.id })
   }
 }
 
-/** The built-in templates as watch files: paused, asking for a project. */
-const WATCH_TEMPLATE_FILES: Record<string, WatchFileSpec> = Object.fromEntries(
-  WATCH_TEMPLATES.map((t) => [
+/** The built-in templates as job files: paused, asking for a project. */
+const JOB_TEMPLATE_FILES: Record<string, JobFileSpec> = Object.fromEntries(
+  JOB_TEMPLATES.map((t) => [
     t.templateId,
     { id: `template-${t.templateId}`, title: t.title, schedule: t.schedule, project: '', tools: t.tools, output: 'items', notify: 'on_failure', enabled: false, instruction: t.instruction },
   ]),
 )
 
 /**
- * Install the built-in templates as files in `watches/`, tracked in its
+ * Install the built-in templates as files in `jobs/`, tracked in its
  * `.seeded.json` (teams' pattern): an untouched one follows upgrades, an edited
  * one is the user's, a deleted one stays deleted.
  */
-async function seedWatchTemplates(rt: WorkspaceRuntime): Promise<void> {
-  await rt.watchFiles.seed(WATCH_TEMPLATE_FILES)
-  await syncWatchFiles(rt, { force: true })
+async function seedJobTemplates(rt: WorkspaceRuntime): Promise<void> {
+  await rt.jobFiles.seed(JOB_TEMPLATE_FILES)
+  await syncJobFiles(rt, { force: true })
 }
 
-/** A row saved before watch files: shown, never run, until it is saved as a file. */
-const LEGACY_WATCH = 'saved before watch files — open it and Save to move it into watches/, or recreate it'
+/** A row saved before job files: shown, never run, until it is saved as a file. */
+const LEGACY_JOB = 'saved before job files — open it and Save to move it into jobs/, or recreate it'
 
-/** A watch file's spec → the row's config columns. */
-function watchConfigFrom(spec: WatchFileSpec, file: string) {
+/** A job file's spec → the row's config columns. */
+function jobConfigFrom(spec: JobFileSpec, file: string) {
   return {
     title: spec.title,
     instruction: spec.instruction,
@@ -4040,8 +4045,8 @@ function watchConfigFrom(spec: WatchFileSpec, file: string) {
   }
 }
 
-/** A watch (row or patched row) → the file that says the same. */
-function watchSpecFrom(w: Watch): WatchFileSpec {
+/** A job (row or patched row) → the file that says the same. */
+function jobSpecFrom(w: Job): JobFileSpec {
   return {
     id: w.id,
     title: w.title,
@@ -4063,13 +4068,13 @@ function watchSpecFrom(w: Watch): WatchFileSpec {
   }
 }
 
-type WatchConfig = ReturnType<typeof watchConfigFrom>
-const configKey = (w: Pick<Watch, Exclude<keyof WatchConfig, 'catchUpWindow' | 'timeoutMs' | 'maxBudgetUsd' | 'dailyBudgetUsd' | 'brief' | 'draft'>> & {
+type JobConfig = ReturnType<typeof jobConfigFrom>
+const configKey = (w: Pick<Job, Exclude<keyof JobConfig, 'catchUpWindow' | 'timeoutMs' | 'maxBudgetUsd' | 'dailyBudgetUsd' | 'brief' | 'draft'>> & {
   catchUpWindow?: string | null
   timeoutMs?: number | null
   maxBudgetUsd?: number | null
   dailyBudgetUsd?: number | null
-  brief?: WatchBrief | null
+  brief?: JobBrief | null
   draft?: boolean
 }) =>
   JSON.stringify([
@@ -4079,23 +4084,23 @@ const configKey = (w: Pick<Watch, Exclude<keyof WatchConfig, 'catchUpWindow' | '
   ])
 
 /**
- * Bring the rows in line with `watches/*.md`. Cheap when nothing moved: it
+ * Bring the rows in line with `jobs/*.md`. Cheap when nothing moved: it
  * re-reads only when a file, the project list or a connector probe changed
  * (or `force`). A file is never trusted blindly — anything that fails the
  * schema, names a missing project or a tool the probe doesn't know becomes a
- * config error on its row, which holds the watch; it never throws. A file
+ * config error on its row, which holds the job; it never throws. A file
  * without an id (hand-written) or with a copied one gets its own, written
- * back. A row whose file is gone is deleted like any watch; a row from before
+ * back. A row whose file is gone is deleted like any job; a row from before
  * files is held as legacy.
  */
-function syncWatchFiles(rt: WorkspaceRuntime, opts: { force?: boolean; deferFirstRun?: string } = {}): Promise<void> {
-  const run = rt.watchSync.then(() => syncWatchFilesNow(rt, opts))
-  rt.watchSync = run.catch((err) => log('error', 'watch', `watch file sync failed: ${err}`, { workspace: rt.meta.id }))
+function syncJobFiles(rt: WorkspaceRuntime, opts: { force?: boolean; deferFirstRun?: string } = {}): Promise<void> {
+  const run = rt.jobSync.then(() => syncJobFilesNow(rt, opts))
+  rt.jobSync = run.catch((err) => log('error', 'job', `job file sync failed: ${err}`, { workspace: rt.meta.id }))
   return run
 }
 
-async function syncWatchFilesNow(rt: WorkspaceRuntime, { force = false, deferFirstRun }: { force?: boolean; deferFirstRun?: string }): Promise<void> {
-  const files = await rt.watchFiles.scan()
+async function syncJobFilesNow(rt: WorkspaceRuntime, { force = false, deferFirstRun }: { force?: boolean; deferFirstRun?: string }): Promise<void> {
+  const files = await rt.jobFiles.scan()
   const projects = await rt.store.projects.list()
   const sig = JSON.stringify([
     rt.provider.id,
@@ -4104,28 +4109,28 @@ async function syncWatchFilesNow(rt: WorkspaceRuntime, { force = false, deferFir
     rt.connectorCache?.probedAt ?? 0,
     [...rt.folderProbes].map(([k, v]) => [k, v.probedAt]),
   ])
-  if (!force && sig === rt.watchSyncSig) return
-  const rows = await rt.store.watches.list()
+  if (!force && sig === rt.jobSyncSig) return
+  const rows = await rt.store.jobs.list()
   const byId = new Map(rows.map((r) => [r.id, r]))
   const seen = new Set<string>()
   const now = Date.now()
   for (const f of files) {
-    const parsed = parseWatchFile(f.name, f.text)
+    const parsed = parseJobFile(f.name, f.text)
     let spec = parsed.spec
     const errors = [...parsed.errors]
     if (!parsed.hadId || seen.has(spec.id)) {
       // a copied file arrives with its original's id: the copy gets its own
       if (parsed.hadId) spec = { ...spec, id: randomUUID() }
-      await rt.watchFiles.stampId(f.name, spec.id).catch((err) => errors.push(`could not write an id into the file: ${err}`))
+      await rt.jobFiles.stampId(f.name, spec.id).catch((err) => errors.push(`could not write an id into the file: ${err}`))
     }
     seen.add(spec.id)
-    const checked = checkWatchSpec(rt, spec, projects)
+    const checked = checkJobSpec(rt, spec, projects)
     errors.push(...checked.errors)
-    const cfg = watchConfigFrom({ ...spec, tools: checked.tools }, f.name)
+    const cfg = jobConfigFrom({ ...spec, tools: checked.tools }, f.name)
     const configError = errors.length ? errors.join('; ') : null
     const row = byId.get(spec.id)
     if (!row) {
-      await rt.store.watches.create({
+      await rt.store.jobs.create({
         ...cfg,
         id: spec.id,
         source: 'slack',
@@ -4145,40 +4150,40 @@ async function syncWatchFilesNow(rt: WorkspaceRuntime, { force = false, deferFir
         createdAt: now,
         updatedAt: now,
       })
-      log('info', 'watch', `loaded ${f.name}.md${configError ? ` — held: ${configError}` : ''}`, { watchId: spec.id, workspace: rt.meta.id })
+      log('info', 'job', `loaded ${f.name}.md${configError ? ` — held: ${configError}` : ''}`, { jobId: spec.id, workspace: rt.meta.id })
       continue
     }
     if (configKey(row) !== configKey(cfg)) {
-      await rt.store.watches.update(row.id, cfg)
+      await rt.store.jobs.update(row.id, cfg)
       // Turned on: wait for the next slot, no burst of catch-up runs.
-      if (cfg.enabled && !row.enabled) await rt.store.watches.patchState(row.id, { lastRunStartedAt: now })
-      log('info', 'watch', `reloaded ${f.name}.md`, { watchId: row.id, workspace: rt.meta.id })
+      if (cfg.enabled && !row.enabled) await rt.store.jobs.patchState(row.id, { lastRunStartedAt: now })
+      log('info', 'job', `reloaded ${f.name}.md`, { jobId: row.id, workspace: rt.meta.id })
     }
     if ((row.configError ?? null) !== configError) {
-      await rt.store.watches.patchState(row.id, { configError })
-      if (configError) log('warn', 'watch', `${f.name}.md is held: ${configError}`, { watchId: row.id, workspace: rt.meta.id })
+      await rt.store.jobs.patchState(row.id, { configError })
+      if (configError) log('warn', 'job', `${f.name}.md is held: ${configError}`, { jobId: row.id, workspace: rt.meta.id })
     }
   }
   for (const r of rows) {
     if (seen.has(r.id)) continue
-    if (r.file) await deleteWatch(rt, r.id, 'its file was deleted')
-    else if (r.configError !== LEGACY_WATCH) await rt.store.watches.patchState(r.id, { configError: LEGACY_WATCH })
+    if (r.file) await deleteJob(rt, r.id, 'its file was deleted')
+    else if (r.configError !== LEGACY_JOB) await rt.store.jobs.patchState(r.id, { configError: LEGACY_JOB })
   }
   // only a sync that got this far counts; one that threw is retried next tick
-  rt.watchSyncSig = sig
+  rt.jobSyncSig = sig
 }
 
 /**
- * What a parsed watch file can't do on this machine: name no project or a
+ * What a parsed job file can't do on this machine: name no project or a
  * missing one, or grant a tool the connector probes don't know. Fills each
  * grant's scope from the probe. The sync and the editor's save share it.
  */
-function checkWatchSpec(rt: WorkspaceRuntime, spec: WatchFileSpec, projects: Project[]): { tools: WatchToolGrant[]; errors: string[] } {
+function checkJobSpec(rt: WorkspaceRuntime, spec: JobFileSpec, projects: Project[]): { tools: JobToolGrant[]; errors: string[] } {
   const errors: string[] = []
   const project = projects.find((p) => p.id === spec.project) ?? null
   if (!spec.project) errors.push(NEEDS_PROJECT)
-  else if (!project) errors.push(`unknown project "${spec.project}" — pick another project for this watch`)
-  const refusal = vetoRefusal(rt.provider, 'watch')
+  else if (!project) errors.push(`unknown project "${spec.project}" — pick another project for this job`)
+  const refusal = vetoRefusal(rt.provider, 'job')
   if (refusal) errors.push(refusal)
   const probes = [rt.connectorCache, project ? rt.folderProbes.get(project.path) : undefined].filter((p): p is ConnectorProbe => p != null)
   const checked = checkGrants(spec.tools, probes.length ? probes.flatMap((p) => p.connectors) : null)
@@ -4186,7 +4191,7 @@ function checkWatchSpec(rt: WorkspaceRuntime, spec: WatchFileSpec, projects: Pro
 }
 
 /** The editor's side list: project ids and every tool line the probes know. */
-function watchFileReference(rt: WorkspaceRuntime, projects: Project[]): WatchFileReference {
+function jobFileReference(rt: WorkspaceRuntime, projects: Project[]): JobFileReference {
   const servers = new Map<string, string[]>()
   const probes = [rt.connectorCache, ...rt.folderProbes.values()].filter((p): p is ConnectorProbe => p != null)
   for (const c of probes.flatMap((p) => p.connectors)) {
@@ -4204,44 +4209,44 @@ function watchFileReference(rt: WorkspaceRuntime, projects: Project[]): WatchFil
 
 /**
  * The editor's save: check the text exactly as the sync would (schema, project,
- * tools) and write it only when nothing is wrong. A new watch gets a fresh id
+ * tools) and write it only when nothing is wrong. A new job gets a fresh id
  * (a pasted one that is taken is refused); an edit keeps its id, so its runs
  * and items stay attached.
  */
-async function saveWatchText(rt: WorkspaceRuntime, id: string | null, raw: string): Promise<{ id: string } | { errors: string[] }> {
-  const existing = id ? await rt.store.watches.get(id) : null
-  if (id && !existing) return { errors: ['unknown watch id'] }
+async function saveJobText(rt: WorkspaceRuntime, id: string | null, raw: string): Promise<{ id: string } | { errors: string[] }> {
+  const existing = id ? await rt.store.jobs.get(id) : null
+  if (id && !existing) return { errors: ['unknown job id'] }
   if (raw.length > 64_000) return { errors: ['the file is too large (64 KB at most)'] }
-  const parsed = parseWatchFile(existing?.file ?? 'watch', raw)
+  const parsed = parseJobFile(existing?.file ?? 'job', raw)
   const errors = [...parsed.errors]
   let text = raw
-  let watchId = parsed.spec.id
+  let jobId = parsed.spec.id
   if (existing) {
-    if (parsed.hadId && parsed.spec.id !== existing.id) errors.push(`id must stay ${existing.id} — it ties the watch to its runs and items`)
-    watchId = existing.id
-    if (!parsed.hadId) text = withKey(text, 'id', watchId, 'first')
+    if (parsed.hadId && parsed.spec.id !== existing.id) errors.push(`id must stay ${existing.id} — it ties the job to its runs and items`)
+    jobId = existing.id
+    if (!parsed.hadId) text = withKey(text, 'id', jobId, 'first')
   } else if (!parsed.hadId) {
-    text = withKey(text, 'id', watchId, 'first')
-  } else if (await rt.store.watches.get(watchId)) {
-    errors.push(`id ${watchId} belongs to another watch — delete the id line and one is made for you`)
+    text = withKey(text, 'id', jobId, 'first')
+  } else if (await rt.store.jobs.get(jobId)) {
+    errors.push(`id ${jobId} belongs to another job — delete the id line and one is made for you`)
   }
-  errors.push(...checkWatchSpec(rt, parsed.spec, await rt.store.projects.list()).errors)
+  errors.push(...checkJobSpec(rt, parsed.spec, await rt.store.projects.list()).errors)
   if (errors.length) return { errors }
-  const name = existing?.file ?? rt.watchFiles.freeName(parsed.spec.title)
-  await rt.watchFiles.writeText(name, text)
-  await syncWatchFiles(rt, { force: true })
-  log('info', 'watch', `${existing ? 'updated' : 'created'}: ${parsed.spec.title} (watches/${name}.md)`, { watchId, workspace: rt.meta.id })
-  return { id: watchId }
+  const name = existing?.file ?? rt.jobFiles.freeName(parsed.spec.title)
+  await rt.jobFiles.writeText(name, text)
+  await syncJobFiles(rt, { force: true })
+  log('info', 'job', `${existing ? 'updated' : 'created'}: ${parsed.spec.title} (jobs/${name}.md)`, { jobId, workspace: rt.meta.id })
+  return { id: jobId }
 }
 
 /**
- * A chat drafts a watch (MCP draft_watch): the file is written exactly as a
+ * A chat drafts a job (MCP draft_job): the file is written exactly as a
  * form or a hand edit would write it, but saved off and marked a draft. Only
- * the user's click on the watch page turns it on — a model never schedules
- * runs by itself. Checked like any watch file; anything wrong is refused with
+ * the user's click on the job page turns it on — a model never schedules
+ * runs by itself. Checked like any job file; anything wrong is refused with
  * the reasons, so the chat can fix them and try again.
  */
-async function draftWatchOp(rt: WorkspaceRuntime, raw: unknown): Promise<{ id: string; title: string; file: string; warnings: string[] }> {
+async function draftJobOp(rt: WorkspaceRuntime, raw: unknown): Promise<{ id: string; title: string; file: string; warnings: string[] }> {
   const r = (raw ?? {}) as Record<string, unknown>
   const text = (k: string) => (typeof r[k] === 'string' ? (r[k] as string).trim() : '')
   const title = text('title')
@@ -4262,16 +4267,16 @@ async function draftWatchOp(rt: WorkspaceRuntime, raw: unknown): Promise<{ id: s
   const lines = Array.isArray(r.tools) ? r.tools.filter((t): t is string => typeof t === 'string') : []
   const tools = grantsFromLines(lines.length ? lines : ['web'], errors)
   const output = text('output') || 'items'
-  if (!WATCH_OUTPUTS.includes(output as WatchOutput)) errors.push(`output must be one of: ${WATCH_OUTPUTS.join(', ')}`)
+  if (!JOB_OUTPUTS.includes(output as JobOutput)) errors.push(`output must be one of: ${JOB_OUTPUTS.join(', ')}`)
   const brief = r.brief === true ? { ...(text('brief_model') ? { model: text('brief_model') } : {}), ...(text('brief_template') ? { template: text('brief_template') } : {}) } : undefined
-  const spec: WatchFileSpec = {
+  const spec: JobFileSpec = {
     id: randomUUID(),
     title,
     schedule,
     project: project.id,
     tools,
     ...(text('model') ? { model: text('model') } : {}),
-    output: output as WatchOutput,
+    output: output as JobOutput,
     notify: 'on_failure',
     enabled: false,
     ...(brief ? { brief } : {}),
@@ -4279,55 +4284,55 @@ async function draftWatchOp(rt: WorkspaceRuntime, raw: unknown): Promise<{ id: s
     instruction,
   }
   // The file's own schema is the check: what it would refuse, this refuses.
-  errors.push(...parseWatchFile('draft', serializeWatchFile(spec)).errors)
-  errors.push(...checkWatchSpec(rt, spec, projects).errors)
+  errors.push(...parseJobFile('draft', serializeJobFile(spec)).errors)
+  errors.push(...checkJobSpec(rt, spec, projects).errors)
   if (errors.length) throw new Error(errors.join('; '))
   const warnings: string[] = []
   if (brief?.template && !(await listPlaybooks(rt.playbookDir)).some((p) => p.kind === brief.template)) {
     warnings.push(`no playbook named "${brief.template}" yet — briefs will use the generic one until playbooks/${brief.template}.md exists`)
   }
-  const name = rt.watchFiles.freeName(title)
-  await rt.watchFiles.write(name, spec)
-  await syncWatchFiles(rt, { force: true })
-  log('info', 'watch', `drafted: ${title} (watches/${name}.md) — off until reviewed`, { watchId: spec.id, workspace: rt.meta.id })
-  return { id: spec.id, title, file: `watches/${name}.md`, warnings }
+  const name = rt.jobFiles.freeName(title)
+  await rt.jobFiles.write(name, spec)
+  await syncJobFiles(rt, { force: true })
+  log('info', 'job', `drafted: ${title} (jobs/${name}.md) — off until reviewed`, { jobId: spec.id, workspace: rt.meta.id })
+  return { id: spec.id, title, file: `jobs/${name}.md`, warnings }
 }
 
-/** What draft_watch hands back: where the draft is and how to turn it on. */
-function draftWatchText(d: { id: string; title: string; file: string; warnings: string[] }): string {
+/** What draft_job hands back: where the draft is and how to turn it on. */
+function draftJobText(d: { id: string; title: string; file: string; warnings: string[] }): string {
   return [
-    `ok: drafted the watch “${d.title}” (${d.file}). It is saved OFF and will not run until the user reviews and enables it.`,
-    `Review and enable: #/watches/${d.id}`,
+    `ok: drafted the job “${d.title}” (${d.file}). It is saved OFF and will not run until the user reviews and enables it.`,
+    `Review and enable: #/jobs/${d.id}`,
     ...d.warnings.map((w) => `note: ${w}`),
     'Tell the user it is drafted and waiting for their review — do not claim it is running.',
   ].join('\n')
 }
 
 /**
- * Drop a watch's row. Never hard-delete its items: this watch's open and
- * snoozed ones are archived with a recorded reason (.docs/watches-v2.md).
+ * Drop a job's row. Never hard-delete its items: this job's open and
+ * snoozed ones are archived with a recorded reason (.docs/jobs-v2.md).
  */
-async function deleteWatch(rt: WorkspaceRuntime, id: string, why: string): Promise<void> {
+async function deleteJob(rt: WorkspaceRuntime, id: string, why: string): Promise<void> {
   let archived = 0
   for (const it of await rt.store.items.listAll()) {
-    const fromWatch = it.watchId === id || (it.foundBy ?? []).some((p) => p.watchId === id)
-    if (fromWatch && (it.status === 'open' || it.status === 'snoozed')) {
-      await rt.store.items.transition(it.id, { status: 'archived', actor: 'system', detail: { reason: 'watch deleted' } })
+    const fromJob = it.jobId === id || (it.foundBy ?? []).some((p) => p.jobId === id)
+    if (fromJob && (it.status === 'open' || it.status === 'snoozed')) {
+      await rt.store.items.transition(it.id, { status: 'archived', actor: 'system', detail: { reason: 'job deleted' } })
       archived += 1
     }
   }
-  await rt.store.watches.remove(id)
+  await rt.store.jobs.remove(id)
   invalidateInbox(rt)
-  log('info', 'watch', `deleted watch ${id} (${why}); archived ${archived} item(s)`, { watchId: id, archived, workspace: rt.meta.id })
+  log('info', 'job', `deleted job ${id} (${why}); archived ${archived} item(s)`, { jobId: id, archived, workspace: rt.meta.id })
 }
 
-// The minute tick (.docs/watches.md): due watches run, elapsed snoozes wake — in
+// The minute tick (.docs/jobs.md): due jobs run, elapsed snoozes wake — in
 // every workspace. No cron — the server is the long-running process; missed
 // runs are simply due on the first tick after wake.
 setInterval(() => {
   lastSchedulerTickAt = Date.now()
   for (const rt of runtimes.values()) {
-    runDueWatches(rt).catch((err) => log('error', 'scheduler', `tick failed: ${err}`, { workspace: rt.meta.id }))
+    runDueJobs(rt).catch((err) => log('error', 'scheduler', `tick failed: ${err}`, { workspace: rt.meta.id }))
     // Queued actions: expire the stale, send what a lost timer left due.
     tickActions(rt).catch((err) => log('error', 'actions', `tick failed: ${errText(err)}`, { workspace: rt.meta.id }))
     rt.store.items
@@ -4376,7 +4381,7 @@ const CLAUDE_AI_PREFIX = 'claude.ai '
 
 const SCOPES: ConnectorScope[] = ['claudeai', 'user', 'local', 'project', 'plugin', 'managed']
 
-/** One server as the SDK reports it → our Connector, tools and all (watch-spec.md, item 1). */
+/** One server as the SDK reports it → our Connector, tools and all (job-spec.md, item 1). */
 function toConnector(srv: McpStatus, scopeOverride?: ConnectorScope): Connector {
   const claudeAi = srv.name.startsWith(CLAUDE_AI_PREFIX)
   const scope: ConnectorScope =
@@ -4404,7 +4409,7 @@ function toConnector(srv: McpStatus, scopeOverride?: ConnectorScope): Connector 
 
 /**
  * Probe which MCP servers connect. With no folder: the user-level view
- * (Settings), from the home folder. With a folder: exactly what a watch run in
+ * (Settings), from the home folder. With a folder: exactly what a job run in
  * that folder loads — the user's servers plus the folder's project and local
  * servers, passed explicitly (never by loading the project's settings/hooks).
  */
@@ -4719,10 +4724,10 @@ async function initRuntime(rt: WorkspaceRuntime): Promise<void> {
   await loadCheckouts(rt)
   await loadSessions(rt)
   await markInterruptedRuns(rt)
-  await migrateWatchProjects(rt)
-  // Watches are off by default in 0.7 (.docs/next-version.md); seeding follows the switch.
-  if (await watchesEnabled(rt)) await seedWatchTemplates(rt)
-  else await syncWatchFiles(rt, { force: true }).catch(() => {})
+  await migrateJobProjects(rt)
+  // Jobs are off by default in 0.7 (.docs/next-version.md); seeding follows the switch.
+  if (await jobsEnabled(rt)) await seedJobTemplates(rt)
+  else await syncJobFiles(rt, { force: true }).catch(() => {})
   await bootBriefs(rt)
   await rt.teamLibrary.seed().catch((err) => log('error', 'teams', `could not seed agents and teams: ${err}`, { workspace: rt.meta.id }))
   await loadTeamRuns(rt)
@@ -4865,7 +4870,7 @@ function resolveRuntime(req: http.IncomingMessage, url: URL): WorkspaceRuntime {
 // bodies are validated into domain shapes, and rejected rather than repaired.
 // ---------------------------------------------------------------------------
 
-const CADENCES = new Set<WatchCadence>(['hourly', 'daily', 'weekly'])
+const CADENCES = new Set<JobCadence>(['hourly', 'daily', 'weekly'])
 const ITEM_STATUSES = new Set<ItemStatus>(['open', 'done', 'snoozed', 'archived'])
 const VALID_KINDS = new Set(Object.keys(BASE))
 const VALID_SOURCES = new Set(['github', 'slack', 'linear', 'web'])
@@ -4876,14 +4881,14 @@ const ANY_ITEM_ID_RE = /^(github|slack|linear|web|manual):\S+$/
 const MAX_ITEM_BODY_BYTES = Math.ceil(MAX_IMAGES_PER_ITEM * MAX_IMAGE_BYTES * 1.4) + 100_000
 const MAX_URLS_PER_ITEM = 20
 
-type WatchPatch = Partial<NewWatch> & { enabled?: boolean; runOnceNow?: boolean }
+type JobPatch = Partial<NewJob> & { enabled?: boolean; runOnceNow?: boolean }
 
 const LEGACY_CONNECTORS: LegacyConnector[] = ['web', 'slack', 'linear', 'github']
 
-function watchPatchFrom(raw: unknown): { patch: WatchPatch } | { error: string } {
+function jobPatchFrom(raw: unknown): { patch: JobPatch } | { error: string } {
   if (typeof raw !== 'object' || raw === null) return { error: 'body must be a JSON object' }
   const r = raw as Record<string, unknown>
-  const patch: WatchPatch = {}
+  const patch: JobPatch = {}
   if (r.title !== undefined) {
     if (typeof r.title !== 'string' || !r.title.trim()) return { error: 'title must be a non-empty string' }
     patch.title = r.title.trim()
@@ -4905,8 +4910,8 @@ function watchPatchFrom(raw: unknown): { patch: WatchPatch } | { error: string }
     patch.tools = grantsFromLegacy([...new Set(r.connectors as LegacyConnector[])])
   }
   if (r.projectId !== undefined) {
-    // required: every watch runs in a project folder (watch-spec.md, item 2)
-    if (typeof r.projectId !== 'string' || !r.projectId) return { error: 'projectId is required — pick the project this watch runs in' }
+    // required: every job runs in a project folder (job-spec.md, item 2)
+    if (typeof r.projectId !== 'string' || !r.projectId) return { error: 'projectId is required — pick the project this job runs in' }
     patch.projectId = r.projectId
   }
   if (r.catchUpWindow !== undefined) {
@@ -4915,8 +4920,8 @@ function watchPatchFrom(raw: unknown): { patch: WatchPatch } | { error: string }
   }
   if (r.timeoutMs !== undefined) {
     const t = r.timeoutMs
-    if (t !== null && (typeof t !== 'number' || !Number.isInteger(t) || t < 30_000 || t > MAX_WATCH_TIMEOUT_MS)) {
-      return { error: `timeoutMs must be null or whole milliseconds from 30000 to ${MAX_WATCH_TIMEOUT_MS}` }
+    if (t !== null && (typeof t !== 'number' || !Number.isInteger(t) || t < 30_000 || t > MAX_JOB_TIMEOUT_MS)) {
+      return { error: `timeoutMs must be null or whole milliseconds from 30000 to ${MAX_JOB_TIMEOUT_MS}` }
     }
     patch.timeoutMs = t as number | null
   }
@@ -4931,16 +4936,16 @@ function watchPatchFrom(raw: unknown): { patch: WatchPatch } | { error: string }
     patch.dailyBudgetUsd = b as number | null
   }
   if (r.notify !== undefined) {
-    if (!WATCH_NOTIFY.includes(r.notify as WatchNotify)) return { error: `notify must be one of: ${WATCH_NOTIFY.join(', ')}` }
-    patch.notify = r.notify as WatchNotify
+    if (!JOB_NOTIFY.includes(r.notify as JobNotify)) return { error: `notify must be one of: ${JOB_NOTIFY.join(', ')}` }
+    patch.notify = r.notify as JobNotify
   }
   if (r.runOnceNow !== undefined) {
     if (typeof r.runOnceNow !== 'boolean') return { error: 'runOnceNow must be a boolean' }
     patch.runOnceNow = r.runOnceNow
   }
   if (r.output !== undefined) {
-    if (!WATCH_OUTPUTS.includes(r.output as WatchOutput)) return { error: `output must be one of: ${WATCH_OUTPUTS.join(', ')}` }
-    patch.output = r.output as WatchOutput
+    if (!JOB_OUTPUTS.includes(r.output as JobOutput)) return { error: `output must be one of: ${JOB_OUTPUTS.join(', ')}` }
+    patch.output = r.output as JobOutput
   }
   if (r.model !== undefined) {
     // an alias or wire id as the model picker reports it; null/empty = default
@@ -4952,8 +4957,8 @@ function watchPatchFrom(raw: unknown): { patch: WatchPatch } | { error: string }
     patch.instruction = r.instruction.trim()
   }
   if (r.cadence !== undefined) {
-    if (!CADENCES.has(r.cadence as WatchCadence)) return { error: 'cadence must be hourly | daily | weekly' }
-    patch.cadence = r.cadence as WatchCadence
+    if (!CADENCES.has(r.cadence as JobCadence)) return { error: 'cadence must be hourly | daily | weekly' }
+    patch.cadence = r.cadence as JobCadence
   }
   if (r.schedule !== undefined) {
     if (typeof r.schedule !== 'string' || !isValidCron(r.schedule)) {
@@ -4978,7 +4983,7 @@ function watchPatchFrom(raw: unknown): { patch: WatchPatch } | { error: string }
     patch.enabled = r.enabled
   }
   if (r.brief !== undefined) {
-    const b = watchBriefFrom(r.brief)
+    const b = jobBriefFrom(r.brief)
     if (typeof b === 'string') return { error: b }
     patch.brief = b
   }
@@ -4986,7 +4991,7 @@ function watchPatchFrom(raw: unknown): { patch: WatchPatch } | { error: string }
 }
 
 /** The brief option off the wire: null = off, {} = on with the defaults. A string is the error. */
-function watchBriefFrom(raw: unknown): WatchBrief | null | string {
+function jobBriefFrom(raw: unknown): JobBrief | null | string {
   if (raw === null || raw === false) return null
   if (raw === true) return {}
   if (typeof raw !== 'object') return 'brief must be null, true, or { model?, template? }'
@@ -5024,7 +5029,7 @@ function workItemFrom(raw: unknown): { item: WorkItem } | { error: string } {
       peopleWaiting: typeof r.peopleWaiting === 'number' && r.peopleWaiting >= 0 ? Math.floor(r.peopleWaiting) : 0,
       createdAt,
       updatedAt: r.updatedAt,
-      ...(typeof r.watchId === 'string' ? { watchId: r.watchId } : {}),
+      ...(typeof r.jobId === 'string' ? { jobId: r.jobId } : {}),
       ...(typeof r.why === 'string' && r.why ? { why: r.why } : {}),
       ...(isLabel(r.ask) ? { ask: r.ask } : {}),
       ...(parseDue(r.due) != null ? { dueAt: parseDue(r.due)! } : {}),
@@ -5464,7 +5469,7 @@ async function openInEditor(abs: string): Promise<void> {
 
 // --- settings, briefs and dispatch (.docs/next-version.md, phase 2) ----------
 
-const WATCHES_ENABLED_KEY = 'watches.enabled'
+const JOBS_ENABLED_KEY = 'jobs.enabled'
 const BRIEFS_CAP_KEY = 'briefs.dailyCap'
 const BRIEFS_MODEL_KEY = 'briefs.defaultModel'
 const HIDDEN_MODELS_KEY = 'models.hidden'
@@ -5472,20 +5477,20 @@ const CUSTOM_MODELS_KEY = 'models.custom'
 const DEFAULT_BRIEF_CAP = 20
 const BRIEF_TIMEOUT_MS = 300_000
 
-/** The global watches switch. Off by default: 0.7 is pull-before-push. */
-async function watchesEnabled(rt: WorkspaceRuntime): Promise<boolean> {
-  return (await rt.store.config.get<boolean>(WATCHES_ENABLED_KEY)) === true
+/** The global jobs switch. Off by default: 0.7 is pull-before-push. */
+async function jobsEnabled(rt: WorkspaceRuntime): Promise<boolean> {
+  return (await rt.store.config.get<boolean>(JOBS_ENABLED_KEY)) === true
 }
 
 async function readSettings(rt: WorkspaceRuntime): Promise<WorkspaceSettings> {
   const cap = await rt.store.config.get<number>(BRIEFS_CAP_KEY)
   const model = await rt.store.config.get<string>(BRIEFS_MODEL_KEY)
-  const timeout = await rt.store.config.get<number>(WATCH_TIMEOUT_KEY)
-  const budget = await rt.store.config.get<number>(WATCH_BUDGET_KEY)
+  const timeout = await rt.store.config.get<number>(JOB_TIMEOUT_KEY)
+  const budget = await rt.store.config.get<number>(JOB_BUDGET_KEY)
   return {
-    watchesEnabled: await watchesEnabled(rt),
-    watchTimeoutMs: typeof timeout === 'number' && timeout > 0 ? timeout : DEFAULT_WATCH_TIMEOUT_MS,
-    watchBudgetUsd: typeof budget === 'number' && budget > 0 ? budget : null,
+    jobsEnabled: await jobsEnabled(rt),
+    jobTimeoutMs: typeof timeout === 'number' && timeout > 0 ? timeout : DEFAULT_JOB_TIMEOUT_MS,
+    jobBudgetUsd: typeof budget === 'number' && budget > 0 ? budget : null,
     briefsDailyCap: typeof cap === 'number' && cap > 0 ? cap : DEFAULT_BRIEF_CAP,
     briefsDefaultModel: typeof model === 'string' && model ? model : null,
     hiddenModels: await readIdList(rt, HIDDEN_MODELS_KEY),
@@ -5508,21 +5513,21 @@ function modelIdList(v: unknown, field: string): string[] {
 
 async function writeSettings(rt: WorkspaceRuntime, raw: unknown): Promise<WorkspaceSettings> {
   const r = (raw ?? {}) as Record<string, unknown>
-  if (r.watchesEnabled !== undefined) {
-    if (typeof r.watchesEnabled !== 'boolean') throw new Error('watchesEnabled must be a boolean')
-    await rt.store.config.set(WATCHES_ENABLED_KEY, r.watchesEnabled)
-    if (r.watchesEnabled) await seedWatchTemplates(rt)
-    log('info', 'watch', `watches ${r.watchesEnabled ? 'enabled' : 'disabled'}`, { workspace: rt.meta.id })
+  if (r.jobsEnabled !== undefined) {
+    if (typeof r.jobsEnabled !== 'boolean') throw new Error('jobsEnabled must be a boolean')
+    await rt.store.config.set(JOBS_ENABLED_KEY, r.jobsEnabled)
+    if (r.jobsEnabled) await seedJobTemplates(rt)
+    log('info', 'job', `jobs ${r.jobsEnabled ? 'enabled' : 'disabled'}`, { workspace: rt.meta.id })
   }
-  if (r.watchTimeoutMs !== undefined) {
-    const t = r.watchTimeoutMs
-    if (typeof t !== 'number' || !Number.isInteger(t) || t < 30_000 || t > MAX_WATCH_TIMEOUT_MS) throw new Error(`watchTimeoutMs must be whole milliseconds from 30000 to ${MAX_WATCH_TIMEOUT_MS}`)
-    await rt.store.config.set(WATCH_TIMEOUT_KEY, t)
+  if (r.jobTimeoutMs !== undefined) {
+    const t = r.jobTimeoutMs
+    if (typeof t !== 'number' || !Number.isInteger(t) || t < 30_000 || t > MAX_JOB_TIMEOUT_MS) throw new Error(`jobTimeoutMs must be whole milliseconds from 30000 to ${MAX_JOB_TIMEOUT_MS}`)
+    await rt.store.config.set(JOB_TIMEOUT_KEY, t)
   }
-  if (r.watchBudgetUsd !== undefined) {
-    const b = r.watchBudgetUsd
-    if (b !== null && (typeof b !== 'number' || !Number.isFinite(b) || b <= 0 || b > 100)) throw new Error('watchBudgetUsd must be null or dollars from 0.01 to 100')
-    await rt.store.config.set(WATCH_BUDGET_KEY, b)
+  if (r.jobBudgetUsd !== undefined) {
+    const b = r.jobBudgetUsd
+    if (b !== null && (typeof b !== 'number' || !Number.isFinite(b) || b <= 0 || b > 100)) throw new Error('jobBudgetUsd must be null or dollars from 0.01 to 100')
+    await rt.store.config.set(JOB_BUDGET_KEY, b)
   }
   if (r.briefsDailyCap !== undefined) {
     const n = r.briefsDailyCap
@@ -5783,19 +5788,19 @@ async function enqueueBriefsOp(rt: WorkspaceRuntime, raw: unknown): Promise<Brie
 }
 
 /**
- * Queue the brief a watch asks for on an item it just filed. Never fails the
+ * Queue the brief a job asks for on an item it just filed. Never fails the
  * scan: a brief that can't be queued (the daily cap) shows on the item as a
  * failed brief, which Today raises under Something broke.
  */
-function briefFiledItem(rt: WorkspaceRuntime, watch: Watch, itemId: string, runId: string): void {
-  const b = watch.brief ?? {}
+function briefFiledItem(rt: WorkspaceRuntime, job: Job, itemId: string, runId: string): void {
+  const b = job.brief ?? {}
   enqueueBriefsOp(rt, {
     itemIds: [itemId],
     ...(b.model ? { model: b.model } : {}),
     ...(b.template ? { playbook: b.template } : {}),
   })
-    .then(() => log('info', 'watch', `brief queued for ${itemId}`, { watchId: watch.id, runId, itemId, workspace: rt.meta.id }))
-    .catch((err) => log('error', 'watch', `could not queue a brief for ${itemId}: ${errText(err)}`, { watchId: watch.id, runId, itemId, workspace: rt.meta.id }))
+    .then(() => log('info', 'job', `brief queued for ${itemId}`, { jobId: job.id, runId, itemId, workspace: rt.meta.id }))
+    .catch((err) => log('error', 'job', `could not queue a brief for ${itemId}: ${errText(err)}`, { jobId: job.id, runId, itemId, workspace: rt.meta.id }))
 }
 
 /**
@@ -6830,7 +6835,7 @@ function makeTriageMcp(rt: WorkspaceRuntime) {
         {
           status: z.enum(['open', 'snoozed', 'done', 'archived']).optional().describe('which list to read (default "open")'),
           source: z.enum(['github', 'slack', 'linear', 'manual']).optional().describe('only items from this source'),
-          kind: z.string().optional().describe('only items of this kind, e.g. "watch-hit"'),
+          kind: z.string().optional().describe('only items of this kind, e.g. "job-hit"'),
         },
         async (args) => {
           try {
@@ -6878,8 +6883,8 @@ function makeTriageMcp(rt: WorkspaceRuntime) {
         },
       ),
       tool(
-        'draft_watch',
-        'Draft a watch — a scheduled headless run that files matches as work items (or writes a digest). It is saved OFF as a draft: only the user can enable it, from the watch page this returns a link to. Use when the user asks to watch, monitor or keep an eye on something on a schedule.',
+        'draft_job',
+        'Draft a job — a scheduled headless run that files matches as work items (or writes a digest). It is saved OFF as a draft: only the user can enable it, from the job page this returns a link to. Use when the user asks to run something on a schedule, monitor it or keep an eye on it.',
         {
           title: z.string().describe('a short name, e.g. "Anirudha’s PRs"'),
           schedule: z.string().describe('a 5-field cron line in local time: "0 * * * *" hourly, "0 9 * * 1-5" weekdays at 9'),
@@ -6897,7 +6902,7 @@ function makeTriageMcp(rt: WorkspaceRuntime) {
         },
         async (args) => {
           try {
-            return okResult(draftWatchText(await draftWatchOp(rt, args)))
+            return okResult(draftJobText(await draftJobOp(rt, args)))
           } catch (err) {
             return errResult(`not drafted: ${errText(err)}`)
           }
@@ -6954,7 +6959,7 @@ function makeTriageMcp(rt: WorkspaceRuntime) {
         'Idempotently upsert one ingested work item (for scanners). Id-keyed, update-only-if-newer by updatedAt, user-state-preserving: repeated calls never create duplicates or clobber done/snoozed/dismissed state. Invalid items are rejected, never repaired.',
         {
           id: z.string().describe('stable id: "slack:...", "github:owner/repo#123", or "linear:KEY-123"'),
-          kind: z.string().describe('item kind, e.g. "watch-hit", "mention", "fyi"'),
+          kind: z.string().describe('item kind, e.g. "job-hit", "mention", "fyi"'),
           title: z.string(),
           url: z.string(),
           updatedAt: z.string().describe('ISO 8601 — the upsert applies only if newer than what is stored'),
@@ -6962,9 +6967,9 @@ function makeTriageMcp(rt: WorkspaceRuntime) {
           author: z.string().optional(),
           peopleWaiting: z.number().optional(),
           createdAt: z.string().optional(),
-          watchId: z.string().optional(),
+          jobId: z.string().optional(),
           why: z.string().optional(),
-          ask: z.enum(LABEL_ORDER as [Label, ...Label[]]).optional().describe('what it asks of the user (watch hits)'),
+          ask: z.enum(LABEL_ORDER as [Label, ...Label[]]).optional().describe('what it asks of the user (job hits)'),
           due: z.string().optional().describe('a deadline the source states, ISO 8601 day'),
           refs: z.array(z.string()).optional(),
         },
@@ -7608,7 +7613,7 @@ const server = http.createServer(async (req, res) => {
       // The key first: a key the agent refuses fails the save before anything changes.
       if (apiKey) await saveProviderKey(meta, provider, apiKey)
       if (provider === meta.provider) {
-        if (raw?.connected === false) throw new Error(`${providerFor(provider).label} runs this workspace's watches and briefs — it can't be disconnected`)
+        if (raw?.connected === false) throw new Error(`${providerFor(provider).label} runs this workspace's jobs and briefs — it can't be disconnected`)
         const changed = (authBackend && authBackend !== meta.authBackend) || apiKey !== undefined
         if (authBackend) meta.authBackend = authBackend
         saveRegistry(registry)
@@ -7958,11 +7963,11 @@ const server = http.createServer(async (req, res) => {
           await rt.store.checkouts.removeForProject(id)
           for (const c of checkoutList(rt)) if (c.projectId === id) rt.checkouts.delete(c.id)
           broadcast(rt, { type: 'checkouts', checkouts: checkoutList(rt) })
-          // Its watches pause with a visible reason — never run somewhere else (watch-spec.md, item 2).
-          for (const w of await rt.store.watches.list()) {
+          // Its jobs pause with a visible reason — never run somewhere else (job-spec.md, item 2).
+          for (const w of await rt.store.jobs.list()) {
             if (w.projectId !== id) continue
-            await rt.store.watches.patchState(w.id, { enabled: false, configError: 'project removed — pick another project for this watch' })
-            log('info', 'watch', `paused "${w.title}": its project was removed`, { watchId: w.id, workspace: rt.meta.id })
+            await rt.store.jobs.patchState(w.id, { enabled: false, configError: 'project removed — pick another project for this job' })
+            log('info', 'job', `paused "${w.title}": its project was removed`, { jobId: w.id, workspace: rt.meta.id })
           }
         }
       }
@@ -7990,24 +7995,24 @@ const server = http.createServer(async (req, res) => {
     json(body.ok ? 200 : 500, body)
     return
   }
-  if (url.pathname === '/api/watches') {
-    let body: WatchesResponse
+  if (url.pathname === '/api/jobs') {
+    let body: JobsResponse
     let status = 200
     try {
-      // Watches are files: create and edit write `watches/<name>.md`, then sync
+      // Jobs are files: create and edit write `jobs/<name>.md`, then sync
       // the row from it — the same path a hand edit takes.
       if (req.method === 'POST') {
-        const parsed = watchPatchFrom(await readJsonBody(req))
+        const parsed = jobPatchFrom(await readJsonBody(req))
         if ('error' in parsed) throw new Error(parsed.error)
         const p = parsed.patch
         if (!p.title || !p.instruction || !p.tools?.length) {
-          throw new Error('a watch needs a title, instructions, and at least one integration')
+          throw new Error('a job needs a title, instructions, and at least one integration')
         }
-        if (!p.projectId) throw new Error('pick the project this watch runs in')
+        if (!p.projectId) throw new Error('pick the project this job runs in')
         if (!(await rt.store.projects.list()).some((pr) => pr.id === p.projectId)) throw new Error('unknown project')
         // Schedule is the source of truth; accept a legacy cadence as a fallback.
         const schedule = p.schedule ?? (p.cadence ? cronFromCadence(p.cadence, p.windowStart, p.windowDay) : '0 9 * * *')
-        const spec: WatchFileSpec = {
+        const spec: JobFileSpec = {
           id: randomUUID(),
           title: p.title,
           schedule,
@@ -8024,17 +8029,17 @@ const server = http.createServer(async (req, res) => {
           ...(p.brief ? { brief: p.brief } : {}),
           instruction: p.instruction,
         }
-        const name = rt.watchFiles.freeName(p.title)
-        await rt.watchFiles.write(name, spec)
+        const name = rt.jobFiles.freeName(p.title)
+        await rt.jobFiles.write(name, spec)
         // "Run once now" off: the first run waits for the next slot.
-        await syncWatchFiles(rt, { force: true, ...(p.runOnceNow === false ? { deferFirstRun: spec.id } : {}) })
-        log('info', 'watch', `created: ${p.title} (watches/${name}.md)`, { tools: p.tools.map(grantLabel), schedule, workspace: rt.meta.id })
+        await syncJobFiles(rt, { force: true, ...(p.runOnceNow === false ? { deferFirstRun: spec.id } : {}) })
+        log('info', 'job', `created: ${p.title} (jobs/${name}.md)`, { tools: p.tools.map(grantLabel), schedule, workspace: rt.meta.id })
         // active on the next scheduler tick (never run → due immediately, unless runOnceNow was off)
       } else if (req.method === 'PUT') {
         const id = url.searchParams.get('id')
-        const existing = id ? await rt.store.watches.get(id) : null
-        if (!id || !existing) throw new Error('unknown watch id')
-        const parsed = watchPatchFrom(await readJsonBody(req))
+        const existing = id ? await rt.store.jobs.get(id) : null
+        if (!id || !existing) throw new Error('unknown job id')
+        const parsed = jobPatchFrom(await readJsonBody(req))
         if ('error' in parsed) throw new Error(parsed.error)
         if (parsed.patch.projectId && !(await rt.store.projects.list()).some((pr) => pr.id === parsed.patch.projectId)) {
           throw new Error('unknown project')
@@ -8043,26 +8048,26 @@ const server = http.createServer(async (req, res) => {
         // The on/off switch edits only the `enabled:` line, so a hand-kept file stays as written.
         const onlyToggle = Object.keys(patch).every((k) => k === 'enabled') && patch.enabled !== undefined
         // A legacy row gets its first file here — saving it is the way across.
-        const name = existing.file ?? rt.watchFiles.freeName(patch.title ?? existing.title)
-        const merged = { ...existing, ...patch } as Watch
+        const name = existing.file ?? rt.jobFiles.freeName(patch.title ?? existing.title)
+        const merged = { ...existing, ...patch } as Job
         if (patch.schedule) merged.schedule = patch.schedule
-        if (onlyToggle && existing.file) await rt.watchFiles.setEnabled(existing.file, patch.enabled!)
-        else await rt.watchFiles.write(name, watchSpecFrom(merged))
-        await syncWatchFiles(rt, { force: true })
-        const after = await rt.store.watches.get(id)
+        if (onlyToggle && existing.file) await rt.jobFiles.setEnabled(existing.file, patch.enabled!)
+        else await rt.jobFiles.write(name, jobSpecFrom(merged))
+        await syncJobFiles(rt, { force: true })
+        const after = await rt.store.jobs.get(id)
         if (patch.enabled === true && after?.configError) throw new Error(after.configError)
-        log('info', 'watch', `updated: ${merged.title} (watches/${name}.md)`, { watchId: id, workspace: rt.meta.id })
+        log('info', 'job', `updated: ${merged.title} (jobs/${name}.md)`, { jobId: id, workspace: rt.meta.id })
       } else if (req.method === 'DELETE') {
         const id = url.searchParams.get('id')
-        const existing = id ? await rt.store.watches.get(id) : null
+        const existing = id ? await rt.store.jobs.get(id) : null
         if (id && existing) {
-          if (existing.file) await rt.watchFiles.remove(existing.file)
-          await deleteWatch(rt, id, 'deleted by the user')
+          if (existing.file) await rt.jobFiles.remove(existing.file)
+          await deleteJob(rt, id, 'deleted by the user')
         }
       } else {
-        await syncWatchFiles(rt)
+        await syncJobFiles(rt)
       }
-      body = { ok: true, watches: await rt.store.watches.list() }
+      body = { ok: true, jobs: await rt.store.jobs.list() }
     } catch (err) {
       status = 400
       body = { ok: false, error: err instanceof Error ? err.message : String(err) }
@@ -8070,18 +8075,18 @@ const server = http.createServer(async (req, res) => {
     json(body.ok ? 200 : status, body)
     return
   }
-  // Dry run of the form's current state (.docs/watches.md "Preview step"):
+  // Dry run of the form's current state (.docs/jobs.md "Preview step"):
   // POST starts it and hands back an ephemeral session id to subscribe to for
   // the live transcript; GET polls its outcome. Nothing is written anywhere.
-  if (url.pathname === '/api/watches/preview' && req.method === 'POST') {
-    let body: WatchPreviewStartResponse
+  if (url.pathname === '/api/jobs/preview' && req.method === 'POST') {
+    let body: JobPreviewStartResponse
     try {
-      const parsed = watchPatchFrom(await readJsonBody(req))
+      const parsed = jobPatchFrom(await readJsonBody(req))
       if ('error' in parsed) throw new Error(parsed.error)
       const p = parsed.patch
       if (!p.instruction || !p.tools?.length) throw new Error('a preview needs instructions and at least one integration')
-      if (!p.projectId) throw new Error('pick the project this watch runs in')
-      const previewId = startWatchPreview(rt, {
+      if (!p.projectId) throw new Error('pick the project this job runs in')
+      const previewId = startJobPreview(rt, {
         instruction: p.instruction,
         tools: p.tools,
         projectId: p.projectId,
@@ -8096,34 +8101,34 @@ const server = http.createServer(async (req, res) => {
     json(body.ok ? 200 : 400, body)
     return
   }
-  if (url.pathname === '/api/watches/preview' && req.method === 'GET') {
+  if (url.pathname === '/api/jobs/preview' && req.method === 'GET') {
     const pv = rt.previews.get(url.searchParams.get('id') ?? '')
-    const body: WatchPreviewStatusResponse = pv
+    const body: JobPreviewStatusResponse = pv
       ? { ok: true, status: pv.status, ...(pv.result ? { result: pv.result } : {}), ...(pv.error ? { error: pv.error } : {}) }
       : { ok: false, error: 'unknown or expired preview' }
     json(body.ok ? 200 : 404, body)
     return
   }
-  // MCP draft_watch over HTTP (the stdio shim and POST /mcp): saved off, a draft.
-  if (url.pathname === '/api/watches/drafted' && req.method === 'POST') {
+  // MCP draft_job over HTTP (the stdio shim and POST /mcp): saved off, a draft.
+  if (url.pathname === '/api/jobs/drafted' && req.method === 'POST') {
     let body: { ok: true; text: string; id: string } | { ok: false; error: string }
     try {
-      const d = await draftWatchOp(rt, await readJsonBody(req))
-      body = { ok: true, text: draftWatchText(d), id: d.id }
+      const d = await draftJobOp(rt, await readJsonBody(req))
+      body = { ok: true, text: draftJobText(d), id: d.id }
     } catch (err) {
       body = { ok: false, error: errText(err) }
     }
     json(body.ok ? 200 : 400, body)
     return
   }
-  if (url.pathname === '/api/watches/draft' && req.method === 'POST') {
-    let body: WatchDraftResponse
+  if (url.pathname === '/api/jobs/draft' && req.method === 'POST') {
+    let body: JobDraftResponse
     try {
       const parsed = (await readJsonBody(req)) as { text?: unknown } | null
       const text = typeof parsed?.text === 'string' ? parsed.text.trim() : ''
-      if (!text) throw new Error('describe the watch in plain text first')
-      const draft = await draftWatch(rt.provider, text, undefined, rt.env)
-      if (!draft) throw new Error('could not parse that into a watch — fill the form manually')
+      if (!text) throw new Error('describe the job in plain text first')
+      const draft = await draftJob(rt.provider, text, undefined, rt.env)
+      if (!draft) throw new Error('could not parse that into a job — fill the form manually')
       body = { ok: true, draft }
     } catch (err) {
       body = { ok: false, error: err instanceof Error ? err.message : String(err) }
@@ -8142,7 +8147,7 @@ const server = http.createServer(async (req, res) => {
       }
       const snoozeUntil = typeof parsed?.snoozeUntil === 'number' ? parsed.snoozeUntil : undefined
       if (statusV === 'snoozed' && !snoozeUntil) throw new Error('snoozed needs snoozeUntil (epoch ms)')
-      // A recorded transition on the durable item — never a delete (.docs/watches-v2.md).
+      // A recorded transition on the durable item — never a delete (.docs/jobs-v2.md).
       await rt.store.items.transition(id, { status: statusV, actor: 'user', snoozeUntil })
       invalidateInbox(rt)
       log('info', 'inbox', `${statusV}: ${id} (by user)`, { id, status: statusV, actor: 'user', workspace: rt.meta.id })
@@ -8202,20 +8207,20 @@ const server = http.createServer(async (req, res) => {
     json(body.ok ? 200 : 400, body)
     return
   }
-  // Activity: watch runs (each a session) as a browsable history, newest first.
+  // Activity: job runs (each a session) as a browsable history, newest first.
   if (url.pathname === '/api/activity' && req.method === 'GET') {
     let body: ActivityResponse
     try {
-      const watchId = url.searchParams.get('watchId')
-      const titles = new Map((await rt.store.watches.list()).map((w) => [w.id, w.title]))
+      const jobId = url.searchParams.get('jobId')
+      const titles = new Map((await rt.store.jobs.list()).map((w) => [w.id, w.title]))
       const runs = [...rt.rows.values()]
-        .filter((r) => r.kind === 'watch-run' && (!watchId || r.watchId === watchId))
+        .filter((r) => r.kind === 'job-run' && (!jobId || r.jobId === jobId))
         .sort((a, b) => b.createdAt - a.createdAt)
         .slice(0, 200)
         .map((r) => ({
           sessionId: r.id,
-          ...(r.watchId ? { watchId: r.watchId } : {}),
-          watchTitle: (r.watchId && titles.get(r.watchId)) || r.title.replace(/^Watch · /, ''),
+          ...(r.jobId ? { jobId: r.jobId } : {}),
+          jobTitle: (r.jobId && titles.get(r.jobId)) || r.title.replace(/^Job · /, ''),
           status: r.runStatus,
           ...(r.runTrigger ? { trigger: r.runTrigger } : {}),
           matches: r.runMatches,
@@ -8233,13 +8238,13 @@ const server = http.createServer(async (req, res) => {
     json(body.ok ? 200 : 502, body)
     return
   }
-  // Every item a watch has ever filed, any status — the watch page's Items tab.
-  if (url.pathname === '/api/watches/items' && req.method === 'GET') {
+  // Every item a job has ever filed, any status — the job page's Items tab.
+  if (url.pathname === '/api/jobs/items' && req.method === 'GET') {
     let body: ItemListResponse
     try {
       const id = url.searchParams.get('id') ?? ''
       const all = await rt.store.items.listAll()
-      const mine = all.filter((it) => it.watchId === id || (it.foundBy ?? []).some((p) => p.watchId === id))
+      const mine = all.filter((it) => it.jobId === id || (it.foundBy ?? []).some((p) => p.jobId === id))
       body = { ok: true, items: linkByRefs(rank(mine)) }
     } catch (err) {
       body = { ok: false, error: err instanceof Error ? err.message : String(err) }
@@ -8247,28 +8252,28 @@ const server = http.createServer(async (req, res) => {
     json(body.ok ? 200 : 502, body)
     return
   }
-  // The watch file editor: GET the text (an existing watch's file, a legacy
+  // The job file editor: GET the text (an existing job's file, a legacy
   // row rendered as one, or a starter) plus a reference list; POST saves it.
-  if (url.pathname === '/api/watches/file') {
-    let body: WatchFileResponse
+  if (url.pathname === '/api/jobs/file') {
+    let body: JobFileResponse
     let status = 200
     try {
       const id = url.searchParams.get('id')
       const projects = await rt.store.projects.list()
       if (req.method === 'GET') {
-        const w = id ? await rt.store.watches.get(id) : null
+        const w = id ? await rt.store.jobs.get(id) : null
         if (id && !w) {
           status = 404
-          throw new Error('unknown watch id')
+          throw new Error('unknown job id')
         }
-        let text = starterWatchFile(projects)
-        if (w?.file) text = await readFile(rt.watchFiles.pathOf(w.file), 'utf8').catch(() => serializeWatchFile(watchSpecFrom(w)))
-        else if (w) text = serializeWatchFile(watchSpecFrom(w))
-        body = { ok: true, text, ...(w?.file ? { file: `watches/${w.file}.md` } : {}), reference: watchFileReference(rt, projects) }
+        let text = starterJobFile(projects)
+        if (w?.file) text = await readFile(rt.jobFiles.pathOf(w.file), 'utf8').catch(() => serializeJobFile(jobSpecFrom(w)))
+        else if (w) text = serializeJobFile(jobSpecFrom(w))
+        body = { ok: true, text, ...(w?.file ? { file: `jobs/${w.file}.md` } : {}), reference: jobFileReference(rt, projects) }
       } else if (req.method === 'POST') {
         const raw = (await readJsonBody(req)) as { text?: unknown }
         if (typeof raw?.text !== 'string') throw new Error('text must be a string')
-        const saved = await saveWatchText(rt, id, raw.text)
+        const saved = await saveJobText(rt, id, raw.text)
         body = 'errors' in saved ? { ok: false, error: 'the file has problems', errors: saved.errors } : { ok: true, id: saved.id }
       } else {
         status = 405
@@ -8281,18 +8286,18 @@ const server = http.createServer(async (req, res) => {
     json(status, body)
     return
   }
-  // The slot ledger for one watch — the watch page's Runs table.
-  if (url.pathname === '/api/watches/runs' && req.method === 'GET') {
-    let body: WatchRunsResponse
+  // The slot ledger for one job — the job page's Runs table.
+  if (url.pathname === '/api/jobs/runs' && req.method === 'GET') {
+    let body: JobRunsResponse
     let status = 200
     try {
       const id = url.searchParams.get('id') ?? ''
-      if (!(await rt.store.watches.get(id))) {
+      if (!(await rt.store.jobs.get(id))) {
         status = 404
-        throw new Error('unknown watch id')
+        throw new Error('unknown job id')
       }
       const limit = Math.min(500, Math.max(1, Number(url.searchParams.get('limit')) || 100))
-      body = { ok: true, runs: await rt.store.watchRuns.list(id, limit) }
+      body = { ok: true, runs: await rt.store.jobRuns.list(id, limit) }
     } catch (err) {
       if (status === 200) status = 502
       body = { ok: false, error: err instanceof Error ? err.message : String(err) }
@@ -8314,17 +8319,17 @@ const server = http.createServer(async (req, res) => {
     json(body.ok ? 200 : 502, body)
     return
   }
-  // Force-run one watch now (the per-watch Run button). The run appears under
+  // Force-run one job now (the per-job Run button). The run appears under
   // Activity; scheduled cadence runs continue on their own.
-  if (url.pathname === '/api/watches/run' && req.method === 'POST') {
+  if (url.pathname === '/api/jobs/run' && req.method === 'POST') {
     let body: ItemStateResponse
     try {
       const id = url.searchParams.get('id') ?? ''
-      const w = await rt.store.watches.get(id)
-      if (!w) throw new Error('unknown watch id')
+      const w = await rt.store.jobs.get(id)
+      if (!w) throw new Error('unknown job id')
       if (w.configError) throw new Error(w.configError)
-      enqueueWatch(rt, id)
-      log('info', 'watch', `run requested: ${w.title}`, { watchId: id, workspace: rt.meta.id })
+      enqueueJob(rt, id)
+      log('info', 'job', `run requested: ${w.title}`, { jobId: id, workspace: rt.meta.id })
       body = { ok: true }
     } catch (err) {
       body = { ok: false, error: err instanceof Error ? err.message : String(err) }
@@ -8456,7 +8461,7 @@ const server = http.createServer(async (req, res) => {
     json(body.ok ? 200 : 500, body)
     return
   }
-  // Manual "scan now": force every due (and overdue) watch to run and refresh GitHub.
+  // Manual "scan now": force every due (and overdue) job to run and refresh GitHub.
   if (url.pathname === '/api/scan' && req.method === 'POST') {
     let body: ItemStateResponse
     try {
@@ -8465,11 +8470,11 @@ const server = http.createServer(async (req, res) => {
         void syncInbox(rt)
       })
       void (async () => {
-        // "Scan now": every enabled watch, now, as a manual run.
-        if (!(await watchesEnabled(rt))) return
-        for (const w of await rt.store.watches.list()) if (w.enabled && !w.configError) enqueueWatch(rt, w.id)
+        // "Scan now": every enabled job, now, as a manual run.
+        if (!(await jobsEnabled(rt))) return
+        for (const w of await rt.store.jobs.list()) if (w.enabled && !w.configError) enqueueJob(rt, w.id)
       })()
-      log('info', 'scheduler', 'manual scan requested (all watches + GitHub)', { workspace: rt.meta.id })
+      log('info', 'scheduler', 'manual scan requested (all jobs + GitHub)', { workspace: rt.meta.id })
       body = { ok: true }
     } catch (err) {
       body = { ok: false, error: err instanceof Error ? err.message : String(err) }
@@ -8477,7 +8482,7 @@ const server = http.createServer(async (req, res) => {
     json(body.ok ? 200 : 502, body)
     return
   }
-  // The ingestion contract (.docs/watches.md): idempotent upsert + resolve,
+  // The ingestion contract (.docs/jobs.md): idempotent upsert + resolve,
   // shared by external scanners over HTTP and the MCP shim (server/mcp.ts).
   // User state is never written by upsert; resolve is a normal 'done'.
   if (url.pathname === '/api/items/upsert' && req.method === 'POST') {
@@ -8516,7 +8521,7 @@ const server = http.createServer(async (req, res) => {
         if (!id) throw new Error('need a manual item id')
         await editManualOp(rt, id, await readJsonBody(req, MAX_ITEM_BODY_BYTES))
       } else if (req.method === 'DELETE') {
-        // Never hard-delete (.docs/watches-v2.md): "delete" archives the item,
+        // Never hard-delete (.docs/jobs-v2.md): "delete" archives the item,
         // recorded, so it survives in the Archived tab.
         const id = url.searchParams.get('id')
         if (id) {
@@ -8624,7 +8629,7 @@ const server = http.createServer(async (req, res) => {
       const refresh = url.searchParams.get('refresh') === '1'
       const projectId = url.searchParams.get('projectId')
       if (projectId) {
-        // The watch picker: what a run in this project's folder can load.
+        // The job picker: what a run in this project's folder can load.
         const project = (await rt.store.projects.list()).find((p) => p.id === projectId)
         if (!project) throw new Error('unknown project')
         const cached = rt.folderProbes.get(project.path)

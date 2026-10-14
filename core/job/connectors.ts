@@ -1,5 +1,5 @@
 /**
- * The watch run prompt (.docs/watches-v2.md, watch-spec.md items 1 and 4). The
+ * The job run prompt (.docs/jobs-v2.md, job-spec.md items 1 and 4). The
  * tool fence lives in tools.ts / fence.ts; this file only tells the model how
  * to use what it was granted. Where to look inside a connector is the
  * instruction's job; the model finds channels, teams and labels itself.
@@ -8,8 +8,8 @@
  * their instructions) or a default computed from the schedule.
  */
 import { humanSpan } from './schedule.js'
-import { MAX_WEB_FETCHES, grantLabel, runDeferredTools, serverLabel, type WatchToolGrant } from './tools.js'
-import type { WatchOutput } from './types.js'
+import { MAX_WEB_FETCHES, grantLabel, runDeferredTools, serverLabel, type JobToolGrant } from './tools.js'
+import type { JobOutput } from './types.js'
 import { labelGuide } from '../work/labels.js'
 
 export { MAX_WEB_FETCHES } from './tools.js'
@@ -19,7 +19,7 @@ export const MAX_ROWS_PER_RUN = 15
 const BUILTIN_HOW_TO = {
   github: 'GitHub: use the `gh` CLI, read verbs only (pr list/view/diff/checks, issue list/view, search, run list/view). One command per call: no pipes, `&&`, redirects or `$(...)`. The PR or issue URL identifies it.',
   web: `Web: search with WebSearch and read pages with WebFetch. WebFetch takes two parameters, url and prompt (what to extract from the page) — always pass both. Fetch at most ${MAX_WEB_FETCHES} pages per run; judge from search snippets first. Check the date on the page itself before trusting it. The page URL identifies a find.`,
-  'files-write': 'Files: you may write and edit files inside the project folder only, e.g. notes this watch keeps for itself.',
+  'files-write': 'Files: you may write and edit files inside the project folder only, e.g. notes this job keeps for itself.',
 } as const
 
 const SERVER_HOW_TO: Record<string, string> = {
@@ -27,7 +27,7 @@ const SERVER_HOW_TO: Record<string, string> = {
   'claude.ai Linear': 'Linear: list and read issues, teams, projects and comments through the Linear tools. Find the team or label the instructions name by searching; never assume a key. The issue URL (or its key, e.g. PX-123) identifies an issue.',
 }
 
-function howTo(g: WatchToolGrant): string {
+function howTo(g: JobToolGrant): string {
   if (g.source.kind === 'builtin') return BUILTIN_HOW_TO[g.source.id]
   return (
     SERVER_HOW_TO[g.source.server] ??
@@ -37,18 +37,18 @@ function howTo(g: WatchToolGrant): string {
 
 /**
  * The run prompt. Output contract is tool calls, not JSON: one upsert per
- * match, the server stamps identity and provenance (.docs/watches-v2.md).
+ * match, the server stamps identity and provenance (.docs/jobs-v2.md).
  */
 export function composeRunPrompt(w: {
   instruction: string
-  tools: WatchToolGrant[]
+  tools: JobToolGrant[]
   project: { name: string; path: string }
-  output?: WatchOutput
+  output?: JobOutput
   /** default look-back when the instructions name none, from the schedule */
   lookbackMs: number
   /** now, ISO — the run has no other clock */
   nowIso: string
-  /** legacy place hint from pre-connector watches */
+  /** legacy place hint from pre-connector jobs */
   scope?: string
   /** a catch-up run's lateness line (describeLateness) */
   lateness?: string
@@ -56,7 +56,7 @@ export function composeRunPrompt(w: {
   const deferred = runDeferredTools(w.tools)
   const span = humanSpan(w.lookbackMs)
   const lines = [
-    `You are a triage scanner running ONE watch, read-only unless a tool below says otherwise. It is now ${w.nowIso}.`,
+    `You are a triage scanner running ONE job, read-only unless a tool below says otherwise. It is now ${w.nowIso}.`,
     w.lateness ?? '',
     `Time window: if the instructions name one, use it. Otherwise look at roughly the last ${span}. If the instructions ask for what is true now (open tasks, pending reviews) rather than what is new, ignore this window.`,
     deferred.length

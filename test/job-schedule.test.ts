@@ -1,11 +1,11 @@
 /**
- * The due rule, one test per row of the scenario table in watch-spec.md
+ * The due rule, one test per row of the scenario table in job-spec.md
  * (item 3.8, ported from wakecron's §6). Time is always an argument — no test
  * waits on the real clock. Dates are built in local time, as cron is.
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { decide, humanSpan, lookbackMs, parseCatchUp, pickToRun, type CatchUpWindow, type Decision } from '../core/watch/schedule.js'
+import { decide, humanSpan, lookbackMs, parseCatchUp, pickToRun, type CatchUpWindow, type Decision } from '../core/job/schedule.js'
 
 const TICK = 60_000
 const DAY = 86_400_000
@@ -95,12 +95,12 @@ test('11: clock set backwards: nothing due, no double run', () => {
   assert.equal(run({ schedule: '0 10 * * *', last: at(10, 10, 0, 5), now: at(10, 9, 30) }).action, 'idle')
 })
 
-test('12: a connector the watch needs is down: skip (connector)', () => {
+test('12: a connector the job needs is down: skip (connector)', () => {
   const d = run({ schedule: '0 10 * * *', last: at(9, 10, 0, 5), now: at(10, 10, 0, 20), ready: 'Slack needs-auth' })
   assert.deepEqual([d.action, d.action === 'skip' && d.reason, d.action === 'skip' && d.detail], ['skip', 'connector', 'Slack needs-auth'])
 })
 
-test('13: connectors fine (e.g. a Web-only watch while Slack is down): runs', () => {
+test('13: connectors fine (e.g. a Web-only job while Slack is down): runs', () => {
   assert.equal(run({ schedule: '0 10 * * *', last: at(9, 10, 0, 5), now: at(10, 10, 0, 20), ready: true }).action, 'run')
 })
 

@@ -1,10 +1,10 @@
 /**
- * What a watch run may call (watch-spec.md, items 1 and 2). A watch stores an
+ * What a job run may call (job-spec.md, items 1 and 2). A job stores an
  * explicit list of tool grants, resolved to full tool names when the user
  * saves it, so the fence never grows silently. Two kinds of source:
  *
  * - built-ins: Web (Claude Code's own search/fetch), GitHub (read verbs of the
- *   user's `gh`), and an opt-in write grant scoped to the watch's folder;
+ *   user's `gh`), and an opt-in write grant scoped to the job's folder;
  * - MCP servers the user has connected anywhere Claude Code looks (claude.ai,
  *   global, local, project, plugins), discovered by the connector probe.
  *
@@ -18,12 +18,12 @@ export type ConnectorScope = 'claudeai' | 'user' | 'local' | 'project' | 'plugin
 
 export type BuiltinToolId = 'web' | 'github' | 'files-write'
 
-export type WatchToolSource =
+export type JobToolSource =
   | { kind: 'builtin'; id: BuiltinToolId }
   | { kind: 'mcp'; server: string; scope: ConnectorScope }
 
-export type WatchToolGrant = {
-  source: WatchToolSource
+export type JobToolGrant = {
+  source: JobToolSource
   /** full tool names as the allowlist spells them, resolved at save time */
   tools: string[]
 }
@@ -80,7 +80,7 @@ export const BUILTIN_TOOLS: Record<BuiltinToolId, string[]> = {
   'files-write': FILES_WRITE_TOOLS,
 }
 
-export const builtinGrant = (id: BuiltinToolId): WatchToolGrant => ({ source: { kind: 'builtin', id }, tools: [...BUILTIN_TOOLS[id]] })
+export const builtinGrant = (id: BuiltinToolId): JobToolGrant => ({ source: { kind: 'builtin', id }, tools: [...BUILTIN_TOOLS[id]] })
 
 // ---------------------------------------------------------------------------
 // Curated presets for MCP servers — they win over the server's own read-only
@@ -103,7 +103,7 @@ export const MCP_PRESETS: Record<string, string[]> = {
   'claude.ai Linear': LINEAR_READ,
 }
 
-export const presetGrant = (server: string): WatchToolGrant | null =>
+export const presetGrant = (server: string): JobToolGrant | null =>
   MCP_PRESETS[server]
     ? { source: { kind: 'mcp', server, scope: 'claudeai' }, tools: MCP_PRESETS[server].map((t) => mcpToolName(server, t)) }
     : null
@@ -134,13 +134,13 @@ export function defaultToolsFor(server: string, tools: ProbedTool[]): string[] {
 }
 
 // ---------------------------------------------------------------------------
-// Legacy connectors → grants (watches saved before grants existed)
+// Legacy connectors → grants (jobs saved before grants existed)
 // ---------------------------------------------------------------------------
 
 export type LegacyConnector = 'slack' | 'linear' | 'github' | 'web'
 
-export function grantsFromLegacy(connectors: LegacyConnector[]): WatchToolGrant[] {
-  const out: WatchToolGrant[] = []
+export function grantsFromLegacy(connectors: LegacyConnector[]): JobToolGrant[] {
+  const out: JobToolGrant[] = []
   for (const c of connectors) {
     if (c === 'web' || c === 'github') out.push(builtinGrant(c))
     else if (c === 'slack') out.push(presetGrant('claude.ai Slack')!)
@@ -150,9 +150,9 @@ export function grantsFromLegacy(connectors: LegacyConnector[]): WatchToolGrant[
 }
 
 /** Validate grants off the wire. Rejects, never repairs. */
-export function grantsFrom(raw: unknown): { grants: WatchToolGrant[] } | { error: string } {
+export function grantsFrom(raw: unknown): { grants: JobToolGrant[] } | { error: string } {
   if (!Array.isArray(raw) || raw.length === 0) return { error: 'tools must be a non-empty list of grants' }
-  const out: WatchToolGrant[] = []
+  const out: JobToolGrant[] = []
   const seen = new Set<string>()
   for (const g of raw) {
     if (typeof g !== 'object' || g === null) return { error: 'each grant must be an object' }
@@ -162,7 +162,7 @@ export function grantsFrom(raw: unknown): { grants: WatchToolGrant[] } | { error
     if (!Array.isArray(r.tools) || !r.tools.every((t) => typeof t === 'string' && t.length > 0 && t.length < 300)) {
       return { error: 'grant tools must be a list of tool names' }
     }
-    let source: WatchToolSource
+    let source: JobToolSource
     if (s.kind === 'builtin') {
       if (s.id !== 'web' && s.id !== 'github' && s.id !== 'files-write') return { error: `unknown built-in "${String(s.id)}"` }
       source = { kind: 'builtin', id: s.id }
@@ -171,7 +171,7 @@ export function grantsFrom(raw: unknown): { grants: WatchToolGrant[] } | { error
     } else if (s.kind === 'mcp') {
       if (typeof s.server !== 'string' || !s.server.trim()) return { error: 'an MCP grant needs a server name' }
       const server = s.server
-      if (server === RESERVED_SERVER) return { error: `"${RESERVED_SERVER}" is the run's own server; its write tool comes with every watch` }
+      if (server === RESERVED_SERVER) return { error: `"${RESERVED_SERVER}" is the run's own server; its write tool comes with every job` }
       const prefix = mcpToolName(server, '')
       const tools = [...new Set(r.tools as string[])]
       if (tools.length === 0) return { error: `pick at least one tool from ${serverLabel(server)}` }
@@ -189,16 +189,16 @@ export function grantsFrom(raw: unknown): { grants: WatchToolGrant[] } | { error
   return { grants: out }
 }
 
-export const grantKey = (s: WatchToolSource): string => (s.kind === 'builtin' ? `builtin:${s.id}` : `mcp:${s.server}`)
+export const grantKey = (s: JobToolSource): string => (s.kind === 'builtin' ? `builtin:${s.id}` : `mcp:${s.server}`)
 
-export const grantLabel = (g: WatchToolGrant): string =>
+export const grantLabel = (g: JobToolGrant): string =>
   g.source.kind === 'builtin' ? BUILTIN_LABEL[g.source.id] : serverLabel(g.source.server)
 
-export const hasBuiltin = (grants: WatchToolGrant[], id: BuiltinToolId): boolean =>
+export const hasBuiltin = (grants: JobToolGrant[], id: BuiltinToolId): boolean =>
   grants.some((g) => g.source.kind === 'builtin' && g.source.id === id)
 
-export const mcpGrants = (grants: WatchToolGrant[]) =>
-  grants.filter((g): g is WatchToolGrant & { source: Extract<WatchToolSource, { kind: 'mcp' }> } => g.source.kind === 'mcp')
+export const mcpGrants = (grants: JobToolGrant[]) =>
+  grants.filter((g): g is JobToolGrant & { source: Extract<JobToolSource, { kind: 'mcp' }> } => g.source.kind === 'mcp')
 
 // ---------------------------------------------------------------------------
 // Composition: what the SDK is handed
@@ -210,7 +210,7 @@ export const triageWriteTool = (output: RunOutput): string =>
   output === 'digest' ? 'mcp__triage__write_digest' : 'mcp__triage__upsert_work_item'
 
 /** The exact tools a run may call: its grants, the project's read tools, and its one triage write tool. */
-export function runAllowedTools(grants: WatchToolGrant[], output: RunOutput = 'items'): string[] {
+export function runAllowedTools(grants: JobToolGrant[], output: RunOutput = 'items'): string[] {
   const tools = new Set<string>(['ToolSearch', triageWriteTool(output), ...PROJECT_TOOLS])
   for (const g of grants) for (const t of g.tools) tools.add(t)
   return [...tools]
@@ -221,7 +221,7 @@ export function runAllowedTools(grants: WatchToolGrant[], output: RunOutput = 'i
  * `tools` option). Anything not listed doesn't exist for the run, whatever
  * the user's own allow rules say.
  */
-export function runBaseTools(grants: WatchToolGrant[]): string[] {
+export function runBaseTools(grants: JobToolGrant[]): string[] {
   const base = new Set(['ToolSearch', 'Read', 'Grep', 'Glob', 'Bash'])
   if (hasBuiltin(grants, 'web')) for (const t of WEB_TOOLS) base.add(t)
   if (hasBuiltin(grants, 'files-write')) for (const t of FILES_WRITE_TOOLS) base.add(t)
@@ -232,7 +232,7 @@ export function runBaseTools(grants: WatchToolGrant[]): string[] {
  * Tools the run must load with ToolSearch before calling. Connector MCP tools
  * are always deferred; so are Claude Code's own web tools in many setups.
  */
-export function runDeferredTools(grants: WatchToolGrant[]): string[] {
+export function runDeferredTools(grants: JobToolGrant[]): string[] {
   const out: string[] = []
   for (const g of grants) {
     if (g.source.kind === 'mcp') out.push(...g.tools)

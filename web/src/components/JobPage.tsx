@@ -1,5 +1,5 @@
 /**
- * One watch (#/watches/<id>): a health strip that answers "is it working", then
+ * One job (#/jobs/<id>): a health strip that answers "is it working", then
  * Overview (the rule and its settings), Runs (every run is a session — the
  * receipt first, the transcript one click deeper), and Items (what it filed).
  */
@@ -7,18 +7,18 @@ import * as Dialog from '@radix-ui/react-dialog'
 import * as Switch from '@radix-ui/react-switch'
 import { Ellipsis, ExternalLink, Pencil, Play, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import type { ActivityResponse, ActivityRun, ItemListResponse, Project, ProjectsResponse, Watch, WatchesResponse, WatchRunsResponse, WatchSlotRun } from '../../../shared/protocol.js'
+import type { ActivityResponse, ActivityRun, ItemListResponse, Project, ProjectsResponse, Job, JobsResponse, JobRunsResponse, JobSlotRun } from '../../../shared/protocol.js'
 import type { ScoredItem } from '../../../core/work/types.js'
-import { nextScheduled } from '../../../core/watch/cron.js'
+import { nextScheduled } from '../../../core/job/cron.js'
 import { itemHash, useEvents } from '../hooks.js'
 import { kindIcon, relTime } from '../itemUi.js'
 import { store } from '../store.js'
 import { Transcript } from './Transcript.js'
 import { Menu, MenuContent, MenuItem, MenuTrigger } from '../ui/Menu.js'
-import { humanSpan, lookbackMs, parseCatchUp } from '../../../core/watch/schedule.js'
-import { TRIGGER_LABEL, cronText, grantIcon, grantLabel, runStatusText } from '../watchUi.js'
-import { ago, nextRunText, runDotClass } from './WatchesPage.js'
-import { runRows, type RunRow } from '../../../core/watch/run-rows.js'
+import { humanSpan, lookbackMs, parseCatchUp } from '../../../core/job/schedule.js'
+import { TRIGGER_LABEL, cronText, grantIcon, grantLabel, runStatusText } from '../jobUi.js'
+import { ago, nextRunText, runDotClass } from './JobsPage.js'
+import { runRows, type RunRow } from '../../../core/job/run-rows.js'
 
 type Tab = 'overview' | 'runs' | 'items'
 const WEEK_MS = 7 * 86_400_000
@@ -74,10 +74,10 @@ function outcomeText(r: RunRow): string {
   }
 }
 
-export function WatchPage({ id, onNavigate }: { id: string; onNavigate: (hash: string) => void }) {
-  const [watch, setWatch] = useState<Watch | null | undefined>(undefined)
+export function JobPage({ id, onNavigate }: { id: string; onNavigate: (hash: string) => void }) {
+  const [job, setJob] = useState<Job | null | undefined>(undefined)
   const [runs, setRuns] = useState<ActivityRun[]>([])
-  const [ledger, setLedger] = useState<WatchSlotRun[]>([])
+  const [ledger, setLedger] = useState<JobSlotRun[]>([])
   const [items, setItems] = useState<ScoredItem[]>([])
   const [projects, setProjects] = useState<Project[]>([])
   const [tab, setTab] = useState<Tab>('runs')
@@ -89,18 +89,18 @@ export function WatchPage({ id, onNavigate }: { id: string; onNavigate: (hash: s
   const load = useCallback(async () => {
     try {
       const [wr, ar, ir, lr] = await Promise.all([
-        fetch('/api/watches'),
-        fetch(`/api/activity?watchId=${encodeURIComponent(id)}`),
-        fetch(`/api/watches/items?id=${encodeURIComponent(id)}`),
-        fetch(`/api/watches/runs?id=${encodeURIComponent(id)}&limit=500`),
+        fetch('/api/jobs'),
+        fetch(`/api/activity?jobId=${encodeURIComponent(id)}`),
+        fetch(`/api/jobs/items?id=${encodeURIComponent(id)}`),
+        fetch(`/api/jobs/runs?id=${encodeURIComponent(id)}&limit=500`),
       ])
-      const wb = (await wr.json()) as WatchesResponse
-      setWatch(wb.ok ? (wb.watches.find((w) => w.id === id) ?? null) : null)
+      const wb = (await wr.json()) as JobsResponse
+      setJob(wb.ok ? (wb.jobs.find((w) => w.id === id) ?? null) : null)
       const ab = (await ar.json()) as ActivityResponse
       if (ab.ok) setRuns(ab.runs)
       const ib = (await ir.json()) as ItemListResponse
       if (ib.ok) setItems(ib.items)
-      const lb = (await lr.json()) as WatchRunsResponse
+      const lb = (await lr.json()) as JobRunsResponse
       if (lb.ok) setLedger(lb.runs)
     } catch (err) {
       setError(String(err))
@@ -143,8 +143,8 @@ export function WatchPage({ id, onNavigate }: { id: string; onNavigate: (hash: s
   const rows = useMemo(() => runRows(ledger, runs), [ledger, runs])
 
   async function toggle(on: boolean) {
-    if (!watch) return
-    await fetch(`/api/watches?id=${encodeURIComponent(watch.id)}`, {
+    if (!job) return
+    await fetch(`/api/jobs?id=${encodeURIComponent(job.id)}`, {
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ enabled: on }),
@@ -153,10 +153,10 @@ export function WatchPage({ id, onNavigate }: { id: string; onNavigate: (hash: s
   }
 
   async function runNow() {
-    if (!watch) return
+    if (!job) return
     setRunning(true)
     try {
-      const res = await fetch(`/api/watches/run?id=${encodeURIComponent(watch.id)}`, { method: 'POST' })
+      const res = await fetch(`/api/jobs/run?id=${encodeURIComponent(job.id)}`, { method: 'POST' })
       const body = (await res.json()) as { ok: boolean; error?: string }
       if (!body.ok) setError(body.error ?? 'could not start the run')
     } catch (err) {
@@ -167,13 +167,13 @@ export function WatchPage({ id, onNavigate }: { id: string; onNavigate: (hash: s
   }
 
   async function remove() {
-    if (!watch) return
-    if (!confirm(`Delete watch “${watch.title}”? Its open items move to Archived (nothing is deleted).`)) return
-    await fetch(`/api/watches?id=${encodeURIComponent(watch.id)}`, { method: 'DELETE' })
-    onNavigate('/watches')
+    if (!job) return
+    if (!confirm(`Delete job “${job.title}”? Its open items move to Archived (nothing is deleted).`)) return
+    await fetch(`/api/jobs?id=${encodeURIComponent(job.id)}`, { method: 'DELETE' })
+    onNavigate('/jobs')
   }
 
-  if (watch === undefined) {
+  if (job === undefined) {
     return (
       <div className="page">
         <div className="probing">
@@ -182,47 +182,47 @@ export function WatchPage({ id, onNavigate }: { id: string; onNavigate: (hash: s
       </div>
     )
   }
-  if (watch === null) {
+  if (job === null) {
     return (
       <div className="page">
         <div className="inner">
           <div className="crumbs">
-            <button type="button" className="crumb link" onClick={() => onNavigate('/watches')}>
-              Watches
+            <button type="button" className="crumb link" onClick={() => onNavigate('/jobs')}>
+              Jobs
             </button>
           </div>
-          <div className="msg error">{error || 'This watch no longer exists.'}</div>
+          <div className="msg error">{error || 'This job no longer exists.'}</div>
         </div>
       </div>
     )
   }
 
-  const project = watch.projectId ? projects.find((p) => p.id === watch.projectId) : undefined
-  const nextDue = watch.enabled && !watch.configError ? nextScheduled(watch.schedule, watch.lastRunStartedAt ?? Date.now()) : null
-  const catchUp = parseCatchUp(watch.catchUpWindow, watch.output)
+  const project = job.projectId ? projects.find((p) => p.id === job.projectId) : undefined
+  const nextDue = job.enabled && !job.configError ? nextScheduled(job.schedule, job.lastRunStartedAt ?? Date.now()) : null
+  const catchUp = parseCatchUp(job.catchUpWindow, job.output)
   const catchUpText = catchUp.kind === 'unlimited' ? 'always, once on wake' : catchUp.kind === 'never' ? 'never — on-time slots only' : `within ${humanSpan(catchUp.ms)}`
-  const uses = watch.tools.map(grantLabel).join(', ')
+  const uses = job.tools.map(grantLabel).join(', ')
   const shownRows = showAll ? rows : rows.slice(0, SHOW_RUNS)
-  const edit = () => onNavigate(`/watches/${encodeURIComponent(watch.id)}/edit`)
+  const edit = () => onNavigate(`/jobs/${encodeURIComponent(job.id)}/edit`)
 
   return (
     <div className="page">
       <div className="glow orange" aria-hidden="true" />
       <div className="inner">
         <div className="crumbs" style={{ marginBottom: 14 }}>
-          <button type="button" className="crumb link" onClick={() => onNavigate('/watches')}>
-            Watches
+          <button type="button" className="crumb link" onClick={() => onNavigate('/jobs')}>
+            Jobs
           </button>
           <span className="crumbSep">›</span>
-          <span className="crumb now">{watch.title}</span>
+          <span className="crumb now">{job.title}</span>
         </div>
 
-        <div className="watchPageHead">
+        <div className="jobPageHead">
           <div style={{ minWidth: 0 }}>
-            <h1 className="display">{watch.title}</h1>
-            <div className="watchMetaLine">
+            <h1 className="display">{job.title}</h1>
+            <div className="jobMetaLine">
               <span className="uses">
-                {watch.tools.map((g) => {
+                {job.tools.map((g) => {
                   const Icon = grantIcon(g)
                   return (
                     <span key={grantLabel(g)} className="u" title={grantLabel(g)}>
@@ -239,44 +239,44 @@ export function WatchPage({ id, onNavigate }: { id: string; onNavigate: (hash: s
                 </>
               )}
               <span className="sep">·</span>
-              <span>{cronText(watch.schedule)}</span>
-              {watch.output === 'digest' && (
+              <span>{cronText(job.schedule)}</span>
+              {job.output === 'digest' && (
                 <>
                   <span className="sep">·</span>
                   <span>digest</span>
                 </>
               )}
-              {watch.model && (
+              {job.model && (
                 <>
                   <span className="sep">·</span>
-                  <span className="mono">{watch.model}</span>
+                  <span className="mono">{job.model}</span>
                 </>
               )}
-              {watch.brief && (
+              {job.brief && (
                 <>
                   <span className="sep">·</span>
-                  <span title={`Each item it files is briefed${watch.brief.template ? ` with the ${watch.brief.template} playbook` : ''}${watch.brief.model ? ` by ${watch.brief.model}` : ''}`}>
+                  <span title={`Each item it files is briefed${job.brief.template ? ` with the ${job.brief.template} playbook` : ''}${job.brief.model ? ` by ${job.brief.model}` : ''}`}>
                     briefs items
                   </span>
                 </>
               )}
               <span className="sep">·</span>
-              <span className="mono">last {runStatusText(watch.lastRunStatus, watch.lastRunTrigger, watch.consecutiveFailures)}</span>
+              <span className="mono">last {runStatusText(job.lastRunStatus, job.lastRunTrigger, job.consecutiveFailures)}</span>
               {nextDue != null && (
                 <>
                   <span className="sep">·</span>
-                  <span>next {nextDue <= Date.now() ? nextRunText(watch) : fmtWhen(nextDue)}</span>
+                  <span>next {nextDue <= Date.now() ? nextRunText(job) : fmtWhen(nextDue)}</span>
                 </>
               )}
             </div>
-            <p className="watchRuleLine" title={watch.instruction}>
-              {watch.instruction}
+            <p className="jobRuleLine" title={job.instruction}>
+              {job.instruction}
             </p>
           </div>
           <div className="acts">
             <span className="onLbl">
               On
-              <Switch.Root className="uiSwitch" checked={watch.enabled} onCheckedChange={(on) => void toggle(on)} aria-label={watch.enabled ? 'Pause watch' : 'Resume watch'}>
+              <Switch.Root className="uiSwitch" checked={job.enabled} onCheckedChange={(on) => void toggle(on)} aria-label={job.enabled ? 'Pause job' : 'Resume job'}>
                 <Switch.Thumb className="uiSwitchThumb" />
               </Switch.Root>
             </span>
@@ -293,7 +293,7 @@ export function WatchPage({ id, onNavigate }: { id: string; onNavigate: (hash: s
                 </button>
               </MenuTrigger>
               <MenuContent align="end">
-                <MenuItem onSelect={() => void toggle(!watch.enabled)}>{watch.enabled ? 'Pause' : 'Resume'}</MenuItem>
+                <MenuItem onSelect={() => void toggle(!job.enabled)}>{job.enabled ? 'Pause' : 'Resume'}</MenuItem>
                 <MenuItem className="danger" onSelect={() => void remove()}>
                   Delete…
                 </MenuItem>
@@ -303,7 +303,7 @@ export function WatchPage({ id, onNavigate }: { id: string; onNavigate: (hash: s
         </div>
 
         {error && <div className="msg error">{error}</div>}
-        {watch.draft && !watch.enabled && (
+        {job.draft && !job.enabled && (
           <div className="draftBanner" role="status">
             <span className="tag">Draft</span>
             <span className="txt">
@@ -315,25 +315,25 @@ export function WatchPage({ id, onNavigate }: { id: string; onNavigate: (hash: s
             <button
               type="button"
               className="btn sm primary"
-              disabled={!!watch.configError}
-              title={watch.configError ? 'Fix the problem below first' : 'Turn it on — runs start at the next slot'}
+              disabled={!!job.configError}
+              title={job.configError ? 'Fix the problem below first' : 'Turn it on — runs start at the next slot'}
               onClick={() => void toggle(true)}
             >
               Enable
             </button>
           </div>
         )}
-        {watch.configError && (
+        {job.configError && (
           <div className="msg error">
-            This watch can’t run: {watch.configError}.{' '}
+            This job can’t run: {job.configError}.{' '}
             <button type="button" className="tlink" onClick={edit}>
-              Edit the watch
+              Edit the job
             </button>
           </div>
         )}
-        {!watch.configError && watch.consecutiveFailures > 1 && (
+        {!job.configError && job.consecutiveFailures > 1 && (
           <div className="msg error">
-            The last {watch.consecutiveFailures} runs failed{watch.lastRunError ? `: ${watch.lastRunError}` : ''}.
+            The last {job.consecutiveFailures} runs failed{job.lastRunError ? `: ${job.lastRunError}` : ''}.
           </div>
         )}
 
@@ -401,7 +401,7 @@ export function WatchPage({ id, onNavigate }: { id: string; onNavigate: (hash: s
         <CostChart runs={runs} />
         </div>
 
-        <div className="watchTabs" role="tablist">
+        <div className="jobTabs" role="tablist">
           {(
             [
               ['overview', 'Overview', null],
@@ -409,7 +409,7 @@ export function WatchPage({ id, onNavigate }: { id: string; onNavigate: (hash: s
               ['items', 'Items', items.length],
             ] as Array<[Tab, string, number | null]>
           ).map(([t, label, n]) => (
-            <button key={t} type="button" role="tab" aria-selected={tab === t} className={`watchTab${tab === t ? ' active' : ''}`} onClick={() => setTab(t)}>
+            <button key={t} type="button" role="tab" aria-selected={tab === t} className={`jobTab${tab === t ? ' active' : ''}`} onClick={() => setTab(t)}>
               {label}
               {n != null && <span className="n">{n}</span>}
             </button>
@@ -417,52 +417,52 @@ export function WatchPage({ id, onNavigate }: { id: string; onNavigate: (hash: s
         </div>
 
         {tab === 'overview' && (
-          <div className="watchOverview">
-            <div className="card watchRule">
+          <div className="jobOverview">
+            <div className="card jobRule">
               <div className="head">
                 <span className="k">Instructions</span>
                 <button type="button" className="btn xs ghost" onClick={edit}>
                   <Pencil size={12} aria-hidden="true" /> Edit
                 </button>
               </div>
-              <div className="text">{watch.instruction}</div>
+              <div className="text">{job.instruction}</div>
             </div>
-            <div className="card soft watchKv">
+            <div className="card soft jobKv">
               <span className="k">Uses</span>
               <span className="v">
-                {watch.tools.map((g) => `${grantLabel(g)} (${g.tools.length} tool${g.tools.length === 1 ? '' : 's'})`).join(', ')}
+                {job.tools.map((g) => `${grantLabel(g)} (${g.tools.length} tool${g.tools.length === 1 ? '' : 's'})`).join(', ')}
               </span>
               <span className="k">Project</span>
               <span className="v mono">{project ? `${project.name} · ${project.path}` : 'removed'}</span>
               <span className="k">Output</span>
-              <span className="v">{watch.output === 'digest' ? 'one rolling digest with a report' : 'work items'}</span>
+              <span className="v">{job.output === 'digest' ? 'one rolling digest with a report' : 'work items'}</span>
               <span className="k">Model</span>
-              <span className="v mono">{watch.model ?? 'default'}</span>
+              <span className="v mono">{job.model ?? 'default'}</span>
               <span className="k">Schedule</span>
               <span className="v">
-                {cronText(watch.schedule)} <span className="mono" style={{ color: 'var(--stone)' }}>{watch.schedule}</span>
+                {cronText(job.schedule)} <span className="mono" style={{ color: 'var(--stone)' }}>{job.schedule}</span>
               </span>
               <span className="k">Looks back</span>
-              <span className="v">about {humanSpan(lookbackMs(watch.schedule, Date.now()))} unless the instructions say otherwise</span>
+              <span className="v">about {humanSpan(lookbackMs(job.schedule, Date.now()))} unless the instructions say otherwise</span>
               <span className="k">Missed slots</span>
               <span className="v">{catchUpText}</span>
               <span className="k">Limits</span>
               <span className="v mono">
-                {watch.timeoutMs ? humanSpan(watch.timeoutMs) : 'default timeout'} · {watch.maxBudgetUsd != null ? `$${watch.maxBudgetUsd} cap` : 'default budget'}
-                {watch.dailyBudgetUsd != null ? ` · $${watch.dailyBudgetUsd}/day` : ''}
+                {job.timeoutMs ? humanSpan(job.timeoutMs) : 'default timeout'} · {job.maxBudgetUsd != null ? `$${job.maxBudgetUsd} cap` : 'default budget'}
+                {job.dailyBudgetUsd != null ? ` · $${job.dailyBudgetUsd}/day` : ''}
               </span>
               <span className="k">Notify</span>
-              <span className="v">{watch.notify === 'on_failure' ? 'on failure' : watch.notify}</span>
+              <span className="v">{job.notify === 'on_failure' ? 'on failure' : job.notify}</span>
               <span className="k">Next due</span>
-              <span className="v">{watch.configError ? 'blocked' : nextDue != null ? fmtWhen(nextDue) : watch.enabled ? '—' : 'paused'}</span>
+              <span className="v">{job.configError ? 'blocked' : nextDue != null ? fmtWhen(nextDue) : job.enabled ? '—' : 'paused'}</span>
               <span className="k">File</span>
-              <span className="v mono">{watch.file ? `watches/${watch.file}.md` : 'none yet — Save it to move it into a file'}</span>
+              <span className="v mono">{job.file ? `jobs/${job.file}.md` : 'none yet — Save it to move it into a file'}</span>
               <span className="k">Created</span>
-              <span className="v">{new Date(watch.createdAt).toLocaleDateString()}</span>
-              {watch.scope && (
+              <span className="v">{new Date(job.createdAt).toLocaleDateString()}</span>
+              {job.scope && (
                 <>
                   <span className="k">Legacy place</span>
-                  <span className="v mono">{watch.scope}</span>
+                  <span className="v mono">{job.scope}</span>
                 </>
               )}
             </div>
@@ -471,7 +471,7 @@ export function WatchPage({ id, onNavigate }: { id: string; onNavigate: (hash: s
 
         {tab === 'runs' &&
           (rows.length === 0 ? (
-            <div className="watchEmpty">No runs yet. Run now, or wait for the schedule.</div>
+            <div className="jobEmpty">No runs yet. Run now, or wait for the schedule.</div>
           ) : (
             <>
               <table className="rtbl">
@@ -529,12 +529,12 @@ export function WatchPage({ id, onNavigate }: { id: string; onNavigate: (hash: s
 
         {tab === 'items' &&
           (items.length === 0 ? (
-            <div className="watchEmpty">Nothing filed yet.</div>
+            <div className="jobEmpty">Nothing filed yet.</div>
           ) : (
-            <div className="homeList watchItems">
+            <div className="homeList jobItems">
               {items.map((it) => {
                 const Icon = kindIcon(it)
-                const why = it.foundBy?.find((p) => p.watchId === watch.id)?.why
+                const why = it.foundBy?.find((p) => p.jobId === job.id)?.why
                 return (
                   <div key={it.id} className="wrow">
                     <span className="glyph">
@@ -556,7 +556,7 @@ export function WatchPage({ id, onNavigate }: { id: string; onNavigate: (hash: s
           ))}
       </div>
 
-      <RunTranscriptModal run={openRun} watchTitle={watch.title} onClose={() => setOpenRun(null)} onNavigate={onNavigate} />
+      <RunTranscriptModal run={openRun} jobTitle={job.title} onClose={() => setOpenRun(null)} onNavigate={onNavigate} />
     </div>
   )
 }
@@ -646,7 +646,7 @@ const days0 = (days: Array<{ at: number }>) => days[0].at
 // log into the same Transcript the session page uses.
 // ---------------------------------------------------------------------------
 
-function RunTranscriptModal({ run, watchTitle, onClose, onNavigate }: { run: ActivityRun | null; watchTitle: string; onClose: () => void; onNavigate: (hash: string) => void }) {
+function RunTranscriptModal({ run, jobTitle, onClose, onNavigate }: { run: ActivityRun | null; jobTitle: string; onClose: () => void; onNavigate: (hash: string) => void }) {
   const sessionId = run?.sessionId ?? null
   const events = useEvents(sessionId)
   useEffect(() => {
@@ -662,7 +662,7 @@ function RunTranscriptModal({ run, watchTitle, onClose, onNavigate }: { run: Act
               <div className="head">
                 <Dialog.Title className="title">
                   <span className={`dot ${!run.status ? 'blue live' : run.status === 'ok' ? 'green' : run.status === 'failed' ? 'red' : 'stone'}`} />
-                  {watchTitle}
+                  {jobTitle}
                 </Dialog.Title>
                 <div className="meta">
                   <span>{fmtWhen(run.startedAt)}</span>

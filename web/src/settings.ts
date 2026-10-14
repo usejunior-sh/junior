@@ -49,7 +49,7 @@ export const SETTINGS_TABS: ReadonlyArray<SettingsTabMeta> = [
   { id: 'teams', label: 'Teams', sub: 'The teams a run can use — recipe files in this workspace’s folder. Their agents live under Agents.', group: 'workspace' },
   { id: 'connectors', label: 'Connectors', sub: 'What a dispatched session can reach — claude.ai connectors and local MCP servers.', group: 'workspace', fill: true },
   { id: 'mcp', label: 'MCP', sub: 'How another agent — Claude Code, Codex, Cursor — connects to this inbox from outside triage.', group: 'workspace' },
-  { id: 'activity', label: 'Activity', sub: 'Recent watch runs in this workspace — what ran, when, and what it filed.', group: 'diagnostics', fill: true },
+  { id: 'activity', label: 'Activity', sub: 'Recent job runs in this workspace — what ran, when, and what it filed.', group: 'diagnostics', fill: true },
   { id: 'usage', label: 'Usage', sub: 'What Claude Code has cost on this machine — tokens, spend, and where they went.', group: 'diagnostics', fill: true },
   { id: 'logs', label: 'Logs', sub: 'The daemon’s log, filterable by level and subsystem.', group: 'diagnostics', fill: true },
   { id: 'appearance', label: 'Appearance', sub: 'Theme and text size — how this browser renders the workbench.', group: 'app' },

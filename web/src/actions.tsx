@@ -75,7 +75,7 @@ export const STATUS_TONE: Record<ActionView['status'], 'green' | 'red' | 'yellow
   expired: 'mute',
 }
 
-/** Who let it run, as a short phrase ("you", "bypass permissions", "the watch’s grants"). */
+/** Who let it run, as a short phrase ("you", "bypass permissions", "the job’s grants"). */
 export function allowedText(a: ActionView): string {
   switch (a.allowedBy) {
     case 'prompt':
@@ -91,9 +91,9 @@ export function allowedText(a: ActionView): string {
   }
 }
 
-/** Who did it: the session, or the watch or team it ran for. */
+/** Who did it: the session, or the job or team it ran for. */
 export function whoText(a: ActionView): string {
-  if (a.sessionKind === 'watch-run') return `Watch · ${a.watchTitle ?? 'run'}`
+  if (a.sessionKind === 'job-run') return `Job · ${a.jobTitle ?? 'run'}`
   if (a.teamRunId) return `Team · ${a.teamLabel ?? 'run'}`
   if (a.sessionKind === 'brief') return 'Brief run'
   return a.sessionTitle ?? 'a session'
@@ -128,9 +128,9 @@ export function spanText(ms: number): string {
   return `${Math.round(s / 86_400)}d`
 }
 
-/** Where it came from, short: "watch x-content", "team Build", the session's title. */
+/** Where it came from, short: "job x-content", "team Build", the session's title. */
 export function originText(a: ActionView): string {
-  if (a.sessionKind === 'watch-run') return `watch ${a.watchTitle ?? ''}`.trim()
+  if (a.sessionKind === 'job-run') return `job ${a.jobTitle ?? ''}`.trim()
   if (a.teamRunId) return `team ${a.teamLabel ?? ''}`.trim()
   if (a.sessionKind === 'brief') return 'brief run'
   return a.sessionTitle ?? 'a session'

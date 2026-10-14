@@ -47,7 +47,7 @@ const T0 = new Date(2026, 9, 13, 10).getTime()
 const TOOL = 'mcp__claude_ai_Slack__slack_send_message'
 const ARGS = { channel_id: 'C0123ABCD', text: 'Shipped: every action now lands in one list.' }
 
-const ctx: TrackContext = { sessionId: 's1', sessionKind: 'watch-run', permissionMode: null, watchId: 'w1', teamRunId: null, itemId: 'manual:1' }
+const ctx: TrackContext = { sessionId: 's1', sessionKind: 'job-run', permissionMode: null, jobId: 'w1', teamRunId: null, itemId: 'manual:1' }
 
 function held(args: Record<string, unknown> = ARGS, tool = TOOL, at = T0): ActionRecord {
   const sorted = sortCall(tool, args, { rules: DEFAULT_RULES })
@@ -506,11 +506,11 @@ test('fix 7: the Today line says how many failed', () => {
 
 test('fix 8: a redraft is a ledger row of its own, counted in the day’s spend', async () => {
   const store = freshStore()
-  await store.watchRuns.insert({ watchId: 'w1', slot: T0, trigger: 'scheduled', status: 'ok', sessionId: 's1', startedAt: T0, endedAt: T0 + 1, costUsd: 0.2 })
-  await store.watchRuns.insert({ watchId: 'w1', slot: T0 + 5000, trigger: 'redraft', status: 'running', sessionId: 's1', startedAt: T0 + 5000 })
-  await store.watchRuns.finish('w1', T0 + 5000, { status: 'ok', sessionId: 's1', endedAt: T0 + 9000, costUsd: 0.05 })
-  const rows = await store.watchRuns.list('w1')
+  await store.jobRuns.insert({ jobId: 'w1', slot: T0, trigger: 'scheduled', status: 'ok', sessionId: 's1', startedAt: T0, endedAt: T0 + 1, costUsd: 0.2 })
+  await store.jobRuns.insert({ jobId: 'w1', slot: T0 + 5000, trigger: 'redraft', status: 'running', sessionId: 's1', startedAt: T0 + 5000 })
+  await store.jobRuns.finish('w1', T0 + 5000, { status: 'ok', sessionId: 's1', endedAt: T0 + 9000, costUsd: 0.05 })
+  const rows = await store.jobRuns.list('w1')
   assert.deepEqual(rows.map((r) => [r.trigger, r.status]), [['redraft', 'ok'], ['scheduled', 'ok']])
-  assert.ok(Math.abs((await store.watchRuns.spentSince('w1', T0 - 1)) - 0.25) < 1e-9)
+  assert.ok(Math.abs((await store.jobRuns.spentSince('w1', T0 - 1)) - 0.25) < 1e-9)
   await store.close()
 })

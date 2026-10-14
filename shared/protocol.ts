@@ -11,7 +11,7 @@
 // Domain
 // ---------------------------------------------------------------------------
 
-import type { WatchRunStatus, WatchRunTrigger } from '../core/watch/types.js'
+import type { JobRunStatus, JobRunTrigger } from '../core/job/types.js'
 import type { TeamRecipe } from '../core/teams/recipe.js'
 import type { RunState, TeamRun } from '../core/teams/engine.js'
 import type { ActionHistoryEntry, ActionRecord } from '../core/actions/types.js'
@@ -21,7 +21,7 @@ export type SessionStatus = 'starting' | 'idle' | 'running' | 'error'
 
 // ---------------------------------------------------------------------------
 // Workspaces (.docs/workspaces.md) — the top-level scope isolating work from
-// personal. Each workspace has its own DB (projects, inbox, watches, sessions)
+// personal. Each workspace has its own DB (projects, inbox, jobs, sessions)
 // and its own Claude auth backend. Every HTTP request and WS connection is
 // bound to exactly one workspace (?workspace= param, else the triage_ws
 // cookie, else the default).
@@ -33,7 +33,7 @@ export type SessionStatus = 'starting' | 'idle' | 'running' | 'error'
  *   claude.ai connectors), exactly like before workspaces existed.
  * - `api-key` — spawned with ANTHROPIC_API_KEY from the workspace's .env.
  *   Billed to the key; NO claude.ai connectors (they ride the claude.ai
- *   login), so Slack watches don't run here. `gh` is unaffected.
+ *   login), so Slack jobs don't run here. `gh` is unaffected.
  * - `config-dir` — spawned with CLAUDE_CONFIG_DIR pointing into the workspace:
  *   a separate claude.ai login with its own subscription and connectors.
  *   Needs a one-time interactive login (see `loginCommand`).
@@ -60,7 +60,7 @@ export type Workspace = {
 
 /**
  * One agent as a workspace has it set up. The primary runs everything —
- * watches, briefs, team workers — and is always connected; its auth is the
+ * jobs, briefs, team workers — and is always connected; its auth is the
  * workspace's own `authBackend`. Any other is connected per workspace, with an
  * auth of its own, and only chats run on it.
  */
@@ -141,15 +141,15 @@ export type WorkspaceVerifyResponse =
 
 /**
  * What kind of session a row is. `chat` = a normal user conversation (the
- * default). `watch-run` = one watch's scan, run as a real session so its
- * transcript is the run's observability (.docs/watches-v2.md); the sidebar
+ * default). `job-run` = one job's scan, run as a real session so its
+ * transcript is the run's observability (.docs/jobs-v2.md); the sidebar
  * filters these out of the chat list.
  */
-export type SessionKind = 'chat' | 'watch-run' | 'brief'
+export type SessionKind = 'chat' | 'job-run' | 'brief'
 
 /**
  * The coding agent a session runs on, fixed for its life. Chats can pick;
- * watches, briefs and team workers are always `claude`.
+ * jobs, briefs and team workers are always `claude`.
  */
 export const PROVIDER_IDS = ['claude', 'codex'] as const
 export type ProviderId = (typeof PROVIDER_IDS)[number]
@@ -370,10 +370,10 @@ export type SessionSummary = {
   pinned?: boolean
   /** The checkout (folder of the project) the session runs in — stored, never derived from `cwd`. Look it up in `checkouts`. */
   checkoutId?: string
-  /** chat (default, absent), watch-run, or brief (a headless run that writes an item's brief). */
+  /** chat (default, absent), job-run, or brief (a headless run that writes an item's brief). */
   kind?: SessionKind
-  /** the watch a watch-run session belongs to. */
-  watchId?: string
+  /** the job a job-run session belongs to. */
+  jobId?: string
   /** the work item this session was dispatched for, or briefs (from the links table). */
   itemId?: string
   /** A permission prompt is waiting on the user. Absent = none. */
@@ -432,7 +432,7 @@ export type McpServerInfo = { name: string; status: string }
 
 export type ConnectorSource = 'claude.ai' | 'local'
 
-/** Where Claude Code found the server (watch-spec.md, item 1). */
+/** Where Claude Code found the server (job-spec.md, item 1). */
 export type ConnectorScope = 'claudeai' | 'user' | 'local' | 'project' | 'plugin' | 'managed' | 'unknown'
 
 export type ConnectorTool = {
@@ -467,7 +467,7 @@ export type ConnectorsResponse =
       probedAt: number
       connectors: Connector[]
       cwd?: string
-      /** local-scope servers configured for OTHER folders — usable once the watch runs there */
+      /** local-scope servers configured for OTHER folders — usable once the job runs there */
       elsewhere?: Array<{ name: string; folder: string }>
     }
   | { ok: false; error: string }
@@ -542,18 +542,18 @@ export type InboxSnapshot = {
   notices: string[]
   /** Today's footer: items that went done since local midnight and are still done */
   landedToday?: number
-  /** broken things that are not items — a failed watch, a paused team run — for Today's "Something broke" */
+  /** broken things that are not items — a failed job, a paused team run — for Today's "Something broke" */
   alerts?: InboxAlert[]
 }
 
 /** Something broke that isn't a work item; links to where it can be fixed. */
 export type InboxAlert = {
   id: string
-  kind: 'watch' | 'team'
+  kind: 'job' | 'team'
   title: string
   detail?: string
-  /** the watch to open */
-  watchId?: string
+  /** the job to open */
+  jobId?: string
   /** the session to open (a team run's lead) */
   sessionId?: string
   at: number
@@ -627,17 +627,17 @@ export type ItemEventsResponse =
   | { ok: false; error: string }
 
 // ---------------------------------------------------------------------------
-// Activity (GET /api/activity) — watch runs, each a real session, as a browsable
+// Activity (GET /api/activity) — job runs, each a real session, as a browsable
 // history. Each run links to the transcript (its sessionId) and its produced
-// items (.docs/watches-v2.md).
+// items (.docs/jobs-v2.md).
 // ---------------------------------------------------------------------------
 export type ActivityRun = {
   sessionId: string
-  watchId?: string
-  watchTitle: string
-  status?: WatchRunStatus
+  jobId?: string
+  jobTitle: string
+  status?: JobRunStatus
   /** why the run happened */
-  trigger?: WatchRunTrigger
+  trigger?: JobRunTrigger
   matches?: number
   /** of the matches, how many were new to the inbox */
   newCount?: number
@@ -706,15 +706,15 @@ export type SystemStatus = {
   connectorsProbedAt: number | null
   connectorCount: number | null
   schedulerLastTickAt: number | null
-  runningWatches: number
+  runningJobs: number
   inboxSyncedAt: number | null
   githubReconcileAt: number | null
   githubNotice: string | null
-  watches: { total: number; enabled: number; overdue: number; failing: number; configErrors: number }
+  jobs: { total: number; enabled: number; overdue: number; failing: number; configErrors: number }
   /** the macOS LaunchAgent that keeps triage running after reboot/crash: installed? (null off macOS) */
   launchAgent: boolean | null
-  /** the workspace's global watches switch — off = the scheduler never runs a watch */
-  watchesEnabled: boolean
+  /** the workspace's global jobs switch — off = the scheduler never runs a job */
+  jobsEnabled: boolean
   /** where JSONL log files are written, or null if file logging is off */
   logDir: string | null
 }
@@ -1101,20 +1101,20 @@ export type PickFolderResponse =
   | { ok: false; error: string }
 
 // ---------------------------------------------------------------------------
-// Watches (GET/POST/PUT/DELETE /api/watches, POST /api/watches/draft,
-// POST /api/watches/preview) — the ingestion engine (.docs/watches.md).
-// Domain types live in core/watch/types.ts; type-only re-exports, so nothing
+// Jobs (GET/POST/PUT/DELETE /api/jobs, POST /api/jobs/draft,
+// POST /api/jobs/preview) — the ingestion engine (.docs/jobs.md).
+// Domain types live in core/job/types.ts; type-only re-exports, so nothing
 // server-side leaks into the browser bundle.
 // ---------------------------------------------------------------------------
 
-export type { NewWatch, Watch, WatchCadence, WatchConnector, WatchDraft, WatchNotify, WatchOutput, WatchPreviewResult, WatchPreviewRow, WatchRunStatus, WatchRunTrigger, WatchSlotRun, WatchSlotStatus, WatchToolGrant } from '../core/watch/types.js'
+export type { NewJob, Job, JobCadence, JobConnector, JobDraft, JobNotify, JobOutput, JobPreviewResult, JobPreviewRow, JobRunStatus, JobRunTrigger, JobSlotRun, JobSlotStatus, JobToolGrant } from '../core/job/types.js'
 
-export type WatchesResponse =
-  | { ok: true; watches: import('../core/watch/types.js').Watch[] }
+export type JobsResponse =
+  | { ok: true; jobs: import('../core/job/types.js').Job[] }
   | { ok: false; error: string }
 
-/** The watch file editor's side list: what a file may name on this machine. */
-export type WatchFileReference = {
+/** The job file editor's side list: what a file may name on this machine. */
+export type JobFileReference = {
   projects: { id: string; name: string }[]
   builtins: string[]
   /** each connected MCP server and its tool lines, as a file spells them (`<server>/<tool>`) */
@@ -1122,30 +1122,30 @@ export type WatchFileReference = {
 }
 
 /**
- * GET /api/watches/file[?id=] — a watch's file text (or a starter) and the
- * reference list. POST /api/watches/file[?id=] { text } — saved only when it
+ * GET /api/jobs/file[?id=] — a job's file text (or a starter) and the
+ * reference list. POST /api/jobs/file[?id=] { text } — saved only when it
  * validates; otherwise `errors` lists every problem and nothing is written.
  */
-export type WatchFileResponse =
-  | { ok: true; text: string; file?: string; reference: WatchFileReference }
+export type JobFileResponse =
+  | { ok: true; text: string; file?: string; reference: JobFileReference }
   | { ok: true; id: string }
   | { ok: false; error: string; errors?: string[] }
 
-/** GET /api/watches/runs?id= — the slot ledger for one watch, newest slot first. */
-export type WatchRunsResponse =
-  | { ok: true; runs: import('../core/watch/types.js').WatchSlotRun[] }
+/** GET /api/jobs/runs?id= — the slot ledger for one job, newest slot first. */
+export type JobRunsResponse =
+  | { ok: true; runs: import('../core/job/types.js').JobSlotRun[] }
   | { ok: false; error: string }
 
-export type WatchDraftResponse =
-  | { ok: true; draft: import('../core/watch/types.js').WatchDraft }
+export type JobDraftResponse =
+  | { ok: true; draft: import('../core/job/types.js').JobDraft }
   | { ok: false; error: string }
 
 // A preview is a dry run streamed like a session: POST starts it and returns
 // an ephemeral session id to subscribe to; GET polls its outcome. Nothing is
 // stored — the events live in memory for a few minutes and then go.
-export type WatchPreviewStartResponse = { ok: true; previewId: string } | { ok: false; error: string }
-export type WatchPreviewStatusResponse =
-  | { ok: true; status: 'running' | 'ready' | 'failed'; result?: import('../core/watch/types.js').WatchPreviewResult; error?: string }
+export type JobPreviewStartResponse = { ok: true; previewId: string } | { ok: false; error: string }
+export type JobPreviewStatusResponse =
+  | { ok: true; status: 'running' | 'ready' | 'failed'; result?: import('../core/job/types.js').JobPreviewResult; error?: string }
   | { ok: false; error: string }
 
 // ---------------------------------------------------------------------------
@@ -1457,12 +1457,12 @@ export type PlaybookResponse = { ok: true; kind: string; body: string; custom: b
 
 // Workspace settings (GET/PUT /api/settings) — the few server-side knobs.
 export type WorkspaceSettings = {
-  /** the global watches switch; off = the scheduler never runs a watch */
-  watchesEnabled: boolean
-  /** default per-run limits for watches that don't set their own */
-  watchTimeoutMs: number
+  /** the global jobs switch; off = the scheduler never runs a job */
+  jobsEnabled: boolean
+  /** default per-run limits for jobs that don't set their own */
+  jobTimeoutMs: number
   /** null = no cap */
-  watchBudgetUsd: number | null
+  jobBudgetUsd: number | null
   /** how many brief runs may start per local day */
   briefsDailyCap: number
   /** the model briefs run on when the modal doesn't pick one; null = Claude Code's default */
@@ -1517,7 +1517,7 @@ export type ActionView = ActionRecord & {
   /** a queued action's steps, oldest first; absent on one recorded as it ran */
   history?: ActionHistoryEntry[]
   sessionTitle?: string
-  watchTitle?: string
+  jobTitle?: string
   /** the team run's label, for a lead's or a worker's action */
   teamLabel?: string
   itemTitle?: string
@@ -1850,7 +1850,7 @@ export type ServerMessage =
   | { type: 'artifacts_changed' }
   /** A skill or agent file changed (the settings editor, or a session wrote one) — refetch. */
   | { type: 'library_changed' }
-  /** A work item was created, edited or moved (by a chat, a watch, another tab) — refetch the inbox. */
+  /** A work item was created, edited or moved (by a chat, a job, another tab) — refetch the inbox. */
   | { type: 'inbox_changed' }
   /**
    * A folder's `/` command list changed — a session's subprocess discovered

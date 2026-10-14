@@ -1,6 +1,6 @@
 /**
- * The macOS LaunchAgent that keeps triage running (watch-spec.md, item 3.7).
- * Watches only run while the server runs; a detached `triage start` dies on
+ * The macOS LaunchAgent that keeps triage running (job-spec.md, item 3.7).
+ * Jobs only run while the server runs; a detached `triage start` dies on
  * reboot or crash. A user LaunchAgent with KeepAlive restarts it, and runs as
  * the user, so it can reach the login keychain where Claude's credentials live.
  * Ported from wakecron's launchd.ts. Shared by the CLI (install/uninstall/

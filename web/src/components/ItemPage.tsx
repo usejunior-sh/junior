@@ -25,7 +25,7 @@ import type {
   ScoredItem,
   SessionsUsage,
   SessionsUsageResponse,
-  WatchesResponse,
+  JobsResponse,
 } from '../../../shared/protocol.js'
 import { itemImageUrl } from '../../../shared/protocol.js'
 import { withWorkspace } from '../workspaceUrl.js'
@@ -94,7 +94,7 @@ function actorLabel(actor: string): string {
   if (actor === 'user') return 'you'
   if (actor === 'system') return 'system'
   if (actor === 'agent' || actor.startsWith('agent:')) return 'an agent'
-  if (actor.startsWith('watch:')) return 'a watch run'
+  if (actor.startsWith('job:')) return 'a job run'
   return actor
 }
 
@@ -121,11 +121,11 @@ export function ItemPage({ id, onDispatch, onNavigate, onDirty }: Props) {
   const [other, setOther] = useState<{ id: string; item: ScoredItem | null } | null>(null)
   const [events, setEvents] = useState<ItemEvent[] | null>(null)
   const [eventsRev, setEventsRev] = useState(0)
-  const [watchTitles, setWatchTitles] = useState<Map<string, string>>(new Map())
+  const [jobTitles, setJobTitles] = useState<Map<string, string>>(new Map())
   const [projects, setProjects] = useState<Project[]>([])
   const [pickingDue, setPickingDue] = useState(false)
   const [links, setLinks] = useState<Link[]>([])
-  // A digest item's report: the artifact a watch run wrote, linked with role `report`.
+  // A digest item's report: the artifact a job run wrote, linked with role `report`.
   const [report, setReport] = useState<{ id: string; title: string; body: string; updated: number } | null>(null)
   const [brief, setBrief] = useState<BriefView | null>(null)
   const [briefOpen, setBriefOpen] = useState(false)
@@ -180,10 +180,10 @@ export function ItemPage({ id, onDispatch, onNavigate, onDirty }: Props) {
   }, [id, eventsRev])
 
   useEffect(() => {
-    void fetch('/api/watches')
-      .then((r) => r.json() as Promise<WatchesResponse>)
+    void fetch('/api/jobs')
+      .then((r) => r.json() as Promise<JobsResponse>)
       .then((b) => {
-        if (b.ok) setWatchTitles(new Map(b.watches.map((w) => [w.id, w.title])))
+        if (b.ok) setJobTitles(new Map(b.jobs.map((w) => [w.id, w.title])))
       })
       .catch(() => {})
     void fetch('/api/projects')
@@ -460,7 +460,7 @@ export function ItemPage({ id, onDispatch, onNavigate, onDirty }: Props) {
       : due.at != null
         ? dueChip(due.at, Date.now())
         : sectionTitle(due.section, Date.now())
-  const watchId = item.watchId ?? item.foundBy?.[item.foundBy.length - 1]?.watchId
+  const jobId = item.jobId ?? item.foundBy?.[item.foundBy.length - 1]?.jobId
   const project = item.projectId ? projects.find((p) => p.id === item.projectId) : undefined
   const settled = !job || job.status === 'ready' || job.status === 'failed'
   const pill = briefPill(job, brief?.stale ?? false)
@@ -495,7 +495,7 @@ export function ItemPage({ id, onDispatch, onNavigate, onDirty }: Props) {
           {item.isDraft && <span className="pill mute">draft</span>}
           {item.returned && <span className="pill green">returned</span>}
           {project && <span className="pill">{project.name}</span>}
-          {watchId && watchTitles.has(watchId) && <span className="pill blue">{watchTitles.get(watchId)}</span>}
+          {jobId && jobTitles.has(jobId) && <span className="pill blue">{jobTitles.get(jobId)}</span>}
           {!isOpen && <span className="pill mute">{status}</span>}
           {pill && (
             <span className={`pill ${pill.tone}`}>
@@ -745,7 +745,7 @@ export function ItemPage({ id, onDispatch, onNavigate, onDirty }: Props) {
                 <div className="line" key={`${p.at}-${i}`}>
                   <span className="dash">—</span>
                   <span>
-                    <span className="k">{p.watchId ? watchTitles.get(p.watchId) ?? 'a watch' : 'source scan'}</span> · {ago(p.at)}
+                    <span className="k">{p.jobId ? jobTitles.get(p.jobId) ?? 'a job' : 'source scan'}</span> · {ago(p.at)}
                     {p.why ? ` · ${p.why}` : ''}
                   </span>
                 </div>

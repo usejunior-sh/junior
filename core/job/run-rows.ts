@@ -1,18 +1,18 @@
 /**
- * The watch page's Runs table: one row per slot from the ledger (run, skipped,
+ * The job page's Runs table: one row per slot from the ledger (run, skipped,
  * missed or over budget), joined to the run's session receipt for what only a
  * session knows — tokens and what it filed. Runs from before the ledger have
  * no row there, so they come in from their session alone. Pure.
  */
-import type { ActivityRun, WatchRunTrigger, WatchSlotRun, WatchSlotStatus } from '../../shared/protocol.js'
+import type { ActivityRun, JobRunTrigger, JobSlotRun, JobSlotStatus } from '../../shared/protocol.js'
 
 export type RunRow = {
   key: string
   /** the slot the row is for; a run from before the ledger uses its start */
   slot: number
   /** undefined while running */
-  status?: WatchSlotStatus
-  trigger?: WatchRunTrigger
+  status?: JobSlotStatus
+  trigger?: JobRunTrigger
   reason?: string
   startedAt: number
   endedAt?: number
@@ -25,7 +25,7 @@ export type RunRow = {
 
 const COVERED = /^covered by (.+)$/
 
-export function runRows(ledger: WatchSlotRun[], runs: ActivityRun[]): RunRow[] {
+export function runRows(ledger: JobSlotRun[], runs: ActivityRun[]): RunRow[] {
   const bySession = new Map(runs.map((r) => [r.sessionId, r]))
   const byId = new Map(ledger.map((l) => [l.id, l]))
   const seen = new Set<string>()

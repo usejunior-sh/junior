@@ -11,7 +11,7 @@
  * Three steps: identity (name, colour, default project folder — every
  * workspace has one, decision 549a251e) → Claude auth (three cards, the
  * tradeoffs spelled out on each) → verify (a live probe with the workspace's own env, so a workspace
- * is never left silently broken — watches fail in the background, auth must be
+ * is never left silently broken — jobs fail in the background, auth must be
  * proven in the foreground).
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -171,7 +171,7 @@ export function WorkspaceModal({ mode, onClose }: Props) {
       <h3>{heading}</h3>
       {mode.kind === 'onboarding' && step === 'identity' && (
         <p className="wsIntro">
-          A workspace keeps its projects, inbox, watches, and Claude account separate — work and
+          A workspace keeps its projects, inbox, jobs, and Claude account separate — work and
           personal never share a pile. This sets up your first one; more can be added any time from
           the sidebar.
         </p>
@@ -200,7 +200,7 @@ export function WorkspaceModal({ mode, onClose }: Props) {
           <label>Color</label>
           <ColorPicker value={color} onChange={setColor} />
           <label>
-            Default project <span className="hint">· the folder sessions, terminals and watches start in</span>
+            Default project <span className="hint">· the folder sessions, terminals and jobs start in</span>
           </label>
           <FolderField value={folder} onChange={setFolder} onError={setFolderError} />
           {folderError && <div className="projError">{folderError}</div>}

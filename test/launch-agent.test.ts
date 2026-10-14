@@ -1,5 +1,5 @@
 /**
- * The LaunchAgent (server/launchd.ts) is what makes watches a promise rather
+ * The LaunchAgent (server/launchd.ts) is what makes jobs a promise rather
  * than a hope: without it the daemon dies at the next reboot and nothing brings
  * it back. Triage.app writes it on launch, so two things have to hold — the
  * plist must name the exact node + script we meant, and `load: false` must be
@@ -57,7 +57,7 @@ test('plistFor runs `<node> <cli> serve` and restarts on crash and at login', ()
   const xml = plistFor(spec)
   assert.match(xml, /<string>\/Applications\/Triage\.app\/Contents\/Resources\/node\/bin\/node<\/string>/)
   assert.match(xml, /<string>serve<\/string>/)
-  // Without both of these a reboot or a crash leaves watches dead.
+  // Without both of these a reboot or a crash leaves jobs dead.
   assert.match(xml, /<key>RunAtLoad<\/key>\s*<true\/>/)
   assert.match(xml, /<key>KeepAlive<\/key>\s*<true\/>/)
   // PATH has to ride along or the daemon can't find `claude` under launchd.

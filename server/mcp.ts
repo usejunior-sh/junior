@@ -2,9 +2,9 @@
 /**
  * Triage MCP server (stdio) — the ingestion contract as MCP tools, so any
  * external scanner (a Claude Code routine, a cron'd headless session, a gh-aw
- * workflow) can *be* a watch-runner: "read #channel, find X, call
+ * workflow) can *be* a job-runner: "read #channel, find X, call
  * upsert_work_item" — and cannot create duplicates or clobber user state,
- * because every rule is enforced server-side (.docs/watches.md).
+ * because every rule is enforced server-side (.docs/jobs.md).
  *
  * A thin shim: JSON-RPC 2.0 over stdio (newline-delimited, per the MCP stdio
  * transport), forwarding to the running triage server's HTTP API. Hand-rolled

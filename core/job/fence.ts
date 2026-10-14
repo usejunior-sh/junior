@@ -1,12 +1,12 @@
 /**
- * The run fence (watch-spec.md, items 1 and 2): one decision per tool call,
- * wired in as a PreToolUse hook on every watch run. It is the real fence —
+ * The run fence (job-spec.md, items 1 and 2): one decision per tool call,
+ * wired in as a PreToolUse hook on every job run. It is the real fence —
  * the allowlist keeps granted tools from prompting, this denies everything
  * else, including tools the user's own global allow rules would let through.
  * Server-only (node:path).
  */
 import path from 'node:path'
-import { hasBuiltin, runAllowedTools, type RunOutput, type WatchToolGrant } from './tools.js'
+import { hasBuiltin, runAllowedTools, type RunOutput, type JobToolGrant } from './tools.js'
 
 export type Fence = {
   /** exact tool names allowed (non-Bash, non-pattern) */
@@ -19,7 +19,7 @@ export type Fence = {
   write: boolean
 }
 
-export function fenceFor(grants: WatchToolGrant[], output: RunOutput, root: string): Fence {
+export function fenceFor(grants: JobToolGrant[], output: RunOutput, root: string): Fence {
   const exact = new Set<string>(['TodoWrite'])
   const bash: string[] = []
   for (const t of runAllowedTools(grants, output)) {
@@ -51,31 +51,31 @@ export function fenceDecision(f: Fence, toolName: string, input: unknown): Fence
   if (toolName === 'Bash') {
     const cmd = (str('command') ?? '').trim()
     if (!cmd) return { allow: false, reason: 'empty command' }
-    if (SHELL_META.test(cmd)) return { allow: false, reason: 'watch runs may not chain, redirect, or substitute shell commands' }
+    if (SHELL_META.test(cmd)) return { allow: false, reason: 'job runs may not chain, redirect, or substitute shell commands' }
     const ok = f.bash.some((p) => cmd === p || cmd.startsWith(p + ' '))
-    return ok ? { allow: true } : { allow: false, reason: `this watch may only run: ${f.bash.join(', ') || 'no shell commands'}` }
+    return ok ? { allow: true } : { allow: false, reason: `this job may only run: ${f.bash.join(', ') || 'no shell commands'}` }
   }
 
   if (toolName === 'Read' || toolName === 'Grep' || toolName === 'Glob' || toolName === 'Write' || toolName === 'Edit') {
     if ((toolName === 'Write' || toolName === 'Edit') && !f.write) {
-      return { allow: false, reason: 'this watch may not write files' }
+      return { allow: false, reason: 'this job may not write files' }
     }
     if (!f.exact.has(toolName) && !(f.write && (toolName === 'Write' || toolName === 'Edit'))) {
-      return { allow: false, reason: `${toolName} is not granted to this watch` }
+      return { allow: false, reason: `${toolName} is not granted to this job` }
     }
     const target = toolName === 'Read' || toolName === 'Write' || toolName === 'Edit' ? str('file_path') : str('path')
     if (target !== undefined && !inside(f.root, target)) {
-      return { allow: false, reason: `outside this watch's folder (${f.root})` }
+      return { allow: false, reason: `outside this job's folder (${f.root})` }
     }
     if (toolName === 'Glob') {
       const pat = str('pattern') ?? ''
       if (path.isAbsolute(pat) && !inside(f.root, pat.replace(/[*?[{].*$/, ''))) {
-        return { allow: false, reason: `outside this watch's folder (${f.root})` }
+        return { allow: false, reason: `outside this job's folder (${f.root})` }
       }
     }
     return { allow: true }
   }
 
   if (f.exact.has(toolName)) return { allow: true }
-  return { allow: false, reason: `${toolName} is not granted to this watch` }
+  return { allow: false, reason: `${toolName} is not granted to this job` }
 }

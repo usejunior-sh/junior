@@ -49,7 +49,7 @@ export const AUTH_CARDS: AuthCard[] = [
     backend: 'api-key',
     icon: KeyRound,
     title: 'Claude API key',
-    body: 'Billed to this key. No claude.ai connectors in this workspace — Slack watches won’t run here; GitHub via gh still works.',
+    body: 'Billed to this key. No claude.ai connectors in this workspace — Slack jobs won’t run here; GitHub via gh still works.',
   },
   {
     backend: 'config-dir',
@@ -205,7 +205,7 @@ export function VerifyPanel({
               return <div className="wsVerifyRow dim">— Slack not connected ({claudeAi.length} claude.ai connector{claudeAi.length === 1 ? '' : 's'} live)</div>
             return (
               <div className="wsVerifyRow dim">
-                — No claude.ai connectors{workspace.authBackend === 'api-key' ? ' (they ride a claude.ai login — expected for an API-key workspace; Slack watches won’t run here)' : ''}
+                — No claude.ai connectors{workspace.authBackend === 'api-key' ? ' (they ride a claude.ai login — expected for an API-key workspace; Slack jobs won’t run here)' : ''}
               </div>
             )
           })()}

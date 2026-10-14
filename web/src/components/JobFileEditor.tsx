@@ -1,6 +1,6 @@
 /**
- * A watch as its file (#/watches/new, #/watches/<id>/edit): the whole
- * `watches/<slug>.md` in one editor — frontmatter for the settings, the body
+ * A job as its file (#/jobs/new, #/jobs/<id>/edit): the whole
+ * `jobs/<slug>.md` in one editor — frontmatter for the settings, the body
  * for the instruction. Save checks it exactly as the scheduler would and
  * writes it only when nothing is wrong; every problem is listed at once. The
  * side list carries what a file has to name by id: projects and tool lines.
@@ -8,20 +8,20 @@
 import * as Collapsible from '@radix-ui/react-collapsible'
 import { Check, ChevronRight, Copy } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import type { WatchFileReference, WatchFileResponse } from '../../../shared/protocol.js'
+import type { JobFileReference, JobFileResponse } from '../../../shared/protocol.js'
 
-export function WatchFileEditor({ id, onNavigate }: { id?: string; onNavigate: (hash: string) => void }) {
+export function JobFileEditor({ id, onNavigate }: { id?: string; onNavigate: (hash: string) => void }) {
   const [text, setText] = useState<string | null>(null)
   const [file, setFile] = useState<string | undefined>()
-  const [reference, setReference] = useState<WatchFileReference | null>(null)
+  const [reference, setReference] = useState<JobFileReference | null>(null)
   const [errors, setErrors] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
   const [dirty, setDirty] = useState(false)
 
   useEffect(() => {
     const q = id ? `?id=${encodeURIComponent(id)}` : ''
-    fetch(`/api/watches/file${q}`)
-      .then((r) => r.json() as Promise<WatchFileResponse>)
+    fetch(`/api/jobs/file${q}`)
+      .then((r) => r.json() as Promise<JobFileResponse>)
       .then((b) => {
         if (!b.ok) return setErrors([b.error])
         if (!('text' in b)) return
@@ -38,14 +38,14 @@ export function WatchFileEditor({ id, onNavigate }: { id?: string; onNavigate: (
     setErrors([])
     try {
       const q = id ? `?id=${encodeURIComponent(id)}` : ''
-      const res = await fetch(`/api/watches/file${q}`, {
+      const res = await fetch(`/api/jobs/file${q}`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ text }),
       })
-      const b = (await res.json()) as WatchFileResponse
+      const b = (await res.json()) as JobFileResponse
       if (!b.ok) setErrors(b.errors?.length ? b.errors : [b.error])
-      else if ('id' in b) onNavigate(`/watches/${encodeURIComponent(b.id)}`)
+      else if ('id' in b) onNavigate(`/jobs/${encodeURIComponent(b.id)}`)
     } catch (err) {
       setErrors([String(err)])
     } finally {
@@ -73,7 +73,7 @@ export function WatchFileEditor({ id, onNavigate }: { id?: string; onNavigate: (
 
   const cancel = () => {
     if (dirty && !confirm('Discard your changes to this file?')) return
-    onNavigate(id ? `/watches/${encodeURIComponent(id)}` : '/watches')
+    onNavigate(id ? `/jobs/${encodeURIComponent(id)}` : '/jobs')
   }
 
   return (
@@ -81,11 +81,11 @@ export function WatchFileEditor({ id, onNavigate }: { id?: string; onNavigate: (
       <div className="glow blue" aria-hidden="true" />
       <div className="inner wfile">
         <div className="crumbs">
-          <button type="button" className="crumb link" onClick={() => onNavigate('/watches')}>
-            Watches
+          <button type="button" className="crumb link" onClick={() => onNavigate('/jobs')}>
+            Jobs
           </button>
           <span className="crumbSep">›</span>
-          <span className="crumb now">{id ? 'Edit watch' : 'New watch'}</span>
+          <span className="crumb now">{id ? 'Edit job' : 'New job'}</span>
           {file && <span className="wfileName mono">{file}</span>}
         </div>
 
@@ -102,7 +102,7 @@ export function WatchFileEditor({ id, onNavigate }: { id?: string; onNavigate: (
             <div className="wfileMain">
               <textarea
                 className="wfileText"
-                aria-label="Watch file"
+                aria-label="Job file"
                 spellCheck={false}
                 autoCapitalize="off"
                 autoCorrect="off"
@@ -141,7 +141,7 @@ export function WatchFileEditor({ id, onNavigate }: { id?: string; onNavigate: (
 }
 
 /** What a file names by id, click to copy. */
-function ReferencePanel({ reference }: { reference: WatchFileReference }) {
+function ReferencePanel({ reference }: { reference: JobFileReference }) {
   return (
     <aside className="wfileRef" aria-label="Reference">
       <div className="secLabel">Projects</div>

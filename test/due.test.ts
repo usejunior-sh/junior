@@ -72,7 +72,7 @@ test('store: a due you set outlives a rescan; a stated one fills in otherwise', 
   const store = openSqliteStore(':memory:')
   const base = {
     source: 'slack' as const,
-    kind: 'watch-hit' as const,
+    kind: 'job-hit' as const,
     title: 't',
     url: 'https://x.slack.com/archives/C1/p1',
     repo: '#eng',

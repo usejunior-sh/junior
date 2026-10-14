@@ -36,7 +36,7 @@ installed and logged in, same as the npm package.
   `triage start` takes, so an installed LaunchAgent is used when there is one.
   If something other than triage holds the port, the app says so and stops.
 - **Quitting the app leaves triage running.** Live Claude sessions, terminals
-  and watches belong to the daemon, not the window. Restart it from
+  and jobs belong to the daemon, not the window. Restart it from
   *Triage › Restart triage server…* (or the menu bar icon). That ends live
   sessions, so the app asks first.
 - **Bundled runtime.** `Contents/Resources/node` is an official Node 22 binary

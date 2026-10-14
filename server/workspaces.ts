@@ -145,7 +145,7 @@ export function loadRegistry(): WorkspaceRegistry {
  * on Claude, so it gets `claude` — and keeps everything else it had, its
  * config dir included (`claude/` is that provider's dir). True = changed.
  *
- * Only Claude can be a workspace's provider for now: watches, briefs, probes
+ * Only Claude can be a workspace's provider for now: jobs, briefs, probes
  * and team workers all run on it, and Codex is picked per chat session
  * instead. A file naming another agent is put back on Claude. Other agents
  * are `connections`; a malformed one is dropped.

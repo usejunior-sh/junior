@@ -122,7 +122,7 @@ export async function fetchGitHub(repos: string[] = [], now = Date.now()): Promi
 }
 
 // Closed/merged PRs the user is involved in, for source-side completion
-// (.docs/watches-v2.md): a tracked open item whose PR merged/closed is
+// (.docs/jobs-v2.md): a tracked open item whose PR merged/closed is
 // auto-done with evidence, never silently removed. `involves:` covers authored,
 // mentioned, review-requested, and commented — broad enough to catch anything
 // the open searches surfaced.

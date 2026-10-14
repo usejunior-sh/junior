@@ -1,17 +1,17 @@
 /**
- * The watch page's Runs table fold (core/watch/run-rows.ts): ledger rows joined
+ * The job page's Runs table fold (core/job/run-rows.ts): ledger rows joined
  * to session receipts, plus pre-ledger runs from their session alone.
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { runRows } from '../core/watch/run-rows.js'
-import type { ActivityRun, WatchSlotRun } from '../shared/protocol.js'
+import { runRows } from '../core/job/run-rows.js'
+import type { ActivityRun, JobSlotRun } from '../shared/protocol.js'
 
-const row = (slot: number, extra: Partial<WatchSlotRun> = {}): WatchSlotRun => ({
-  id: `r${slot}`, watchId: 'w1', slot, trigger: 'scheduled', status: 'ok', startedAt: slot + 5, endedAt: slot + 50, ...extra,
+const row = (slot: number, extra: Partial<JobSlotRun> = {}): JobSlotRun => ({
+  id: `r${slot}`, jobId: 'w1', slot, trigger: 'scheduled', status: 'ok', startedAt: slot + 5, endedAt: slot + 50, ...extra,
 })
 const session = (sessionId: string, startedAt: number, extra: Partial<ActivityRun> = {}): ActivityRun => ({
-  sessionId, watchTitle: 'W', status: 'ok', startedAt, finishedAt: startedAt + 40, ...extra,
+  sessionId, jobTitle: 'W', status: 'ok', startedAt, finishedAt: startedAt + 40, ...extra,
 })
 
 test('ledger rows join their session; pre-ledger sessions come in alone; newest slot first', () => {

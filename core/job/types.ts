@@ -1,49 +1,49 @@
 /**
- * Watches — user-defined ingestion rules (.docs/watches.md, watch-spec.md). A
- * watch is plain-English instructions, a schedule, the tools its runs may call,
+ * Jobs — user-defined ingestion rules (.docs/jobs.md, job-spec.md). A
+ * job is plain-English instructions, a schedule, the tools its runs may call,
  * and the project folder its runs work in. Server-managed rows → SQLite.
  */
-import type { WatchToolGrant } from './tools.js'
+import type { JobToolGrant } from './tools.js'
 
-export type { WatchToolGrant } from './tools.js'
+export type { JobToolGrant } from './tools.js'
 
-export type WatchCadence = 'hourly' | 'daily' | 'weekly'
+export type JobCadence = 'hourly' | 'daily' | 'weekly'
 
 /** Legacy (pre-grants) connector ids; old rows are migrated to tool grants. */
-export type WatchConnector = 'slack' | 'linear' | 'github' | 'web'
+export type JobConnector = 'slack' | 'linear' | 'github' | 'web'
 
 /**
  * What a run produces. `items`: one work item per match, deduped by the link
- * it passes. `digest`: ONE rolling work item per watch with a markdown report
+ * it passes. `digest`: ONE rolling work item per job with a markdown report
  * attached; each run rewrites the report and the item returns to the inbox.
  */
-export type WatchOutput = 'items' | 'digest'
-export const WATCH_OUTPUTS: WatchOutput[] = ['items', 'digest']
+export type JobOutput = 'items' | 'digest'
+export const JOB_OUTPUTS: JobOutput[] = ['items', 'digest']
 
-/** The outcome of one watch run (watch-spec.md, item 3). */
-export type WatchRunStatus = 'ok' | 'failed' | 'timeout' | 'skipped' | 'interrupted'
-export const WATCH_RUN_STATUSES: WatchRunStatus[] = ['ok', 'failed', 'timeout', 'skipped', 'interrupted']
+/** The outcome of one job run (job-spec.md, item 3). */
+export type JobRunStatus = 'ok' | 'failed' | 'timeout' | 'skipped' | 'interrupted'
+export const JOB_RUN_STATUSES: JobRunStatus[] = ['ok', 'failed', 'timeout', 'skipped', 'interrupted']
 
 /** Why a run happened. */
 /** redraft = a finished run's own session continued with your send-back notes (core/actions/queue.ts) */
-export type WatchRunTrigger = 'scheduled' | 'catch_up' | 'manual' | 'redraft'
+export type JobRunTrigger = 'scheduled' | 'catch_up' | 'manual' | 'redraft'
 
 /**
  * The slot ledger's status: a run's outcome plus the states only a ledger row
  * can have — still `running`, over its daily budget, or `missed` (covered by a
- * later catch-up run). The watch row and session receipts keep WatchRunStatus.
+ * later catch-up run). The job row and session receipts keep JobRunStatus.
  */
-export type WatchSlotStatus = WatchRunStatus | 'running' | 'skipped_budget' | 'missed'
-export const WATCH_SLOT_STATUSES: WatchSlotStatus[] = [...WATCH_RUN_STATUSES, 'running', 'skipped_budget', 'missed']
+export type JobSlotStatus = JobRunStatus | 'running' | 'skipped_budget' | 'missed'
+export const JOB_SLOT_STATUSES: JobSlotStatus[] = [...JOB_RUN_STATUSES, 'running', 'skipped_budget', 'missed']
 
-/** One row of the slot ledger (`watch_runs`): every slot, run or not, gets one. */
-export interface WatchSlotRun {
+/** One row of the slot ledger (`job_runs`): every slot, run or not, gets one. */
+export interface JobSlotRun {
   id: string
-  watchId: string
-  /** the schedule slot this row is for — UNIQUE with watchId; a manual run uses its start time */
+  jobId: string
+  /** the schedule slot this row is for — UNIQUE with jobId; a manual run uses its start time */
   slot: number
-  trigger: WatchRunTrigger
-  status: WatchSlotStatus
+  trigger: JobRunTrigger
+  status: JobSlotStatus
   reason?: string
   sessionId?: string
   startedAt: number
@@ -52,76 +52,76 @@ export interface WatchSlotRun {
 }
 
 /** What opens a ledger row; the store mints the id unless the caller needs it up front. */
-export type NewWatchSlotRun = Omit<WatchSlotRun, 'id'> & { id?: string }
+export type NewJobSlotRun = Omit<JobSlotRun, 'id'> & { id?: string }
 
 /** What closes one. */
-export interface WatchSlotFinish {
-  status: WatchSlotStatus
+export interface JobSlotFinish {
+  status: JobSlotStatus
   reason?: string
   sessionId?: string
   endedAt: number
   costUsd?: number
 }
 
-export type WatchNotify = 'never' | 'on_failure' | 'always'
-export const WATCH_NOTIFY: WatchNotify[] = ['never', 'on_failure', 'always']
+export type JobNotify = 'never' | 'on_failure' | 'always'
+export const JOB_NOTIFY: JobNotify[] = ['never', 'on_failure', 'always']
 
-/** Built-in run limits when neither the watch nor the workspace sets one. */
-export const DEFAULT_WATCH_TIMEOUT_MS = 240_000
-export const MAX_WATCH_TIMEOUT_MS = 60 * 60_000
+/** Built-in run limits when neither the job nor the workspace sets one. */
+export const DEFAULT_JOB_TIMEOUT_MS = 240_000
+export const MAX_JOB_TIMEOUT_MS = 60 * 60_000
 
 /**
- * A brief for every item a watch files (.docs/work-item-model.md): the item
+ * A brief for every item a job files (.docs/work-item-model.md): the item
  * arrives briefed — briefing → ready, your turn. Absent = no briefs.
  */
-export interface WatchBrief {
+export interface JobBrief {
   /** model for the brief runs; absent = the workspace's brief default */
   model?: string
   /** the playbook to brief with (a playbooks/<name>.md); absent = the item's kind */
   template?: string
 }
 
-export interface Watch {
+export interface Job {
   id: string
   /** v0.2: slack only (connector-neutral machinery; Slack lives in the prompt) */
   source: 'slack'
   /** "PX topics in #novus-px" */
   title: string
   /**
-   * Legacy (pre-connectors) place hint: '#channel' | '@dm'. Empty for watches
+   * Legacy (pre-connectors) place hint: '#channel' | '@dm'. Empty for jobs
    * created since; kept so old rows still say where they used to look.
    */
   scope: string
   /** the NL instructions: where to look and what counts; editable forever */
   instruction: string
   /** the tools runs may call, resolved at save time (never empty) */
-  tools: WatchToolGrant[]
+  tools: JobToolGrant[]
   /** the project whose folder every run works in, and nowhere else */
   projectId: string
-  /** set when the watch cannot run until the user fixes it (e.g. its project was removed) */
+  /** set when the job cannot run until the user fixes it (e.g. its project was removed) */
   configError?: string
   /** skip a missed slot older than this: "6h" | "never" | "unlimited"; omitted = default by output */
   catchUpWindow?: string
   /** per-run limits; omitted = the workspace default */
   timeoutMs?: number
   maxBudgetUsd?: number
-  /** dollars this watch may spend per local day, across all its runs; omitted = no daily cap */
+  /** dollars this job may spend per local day, across all its runs; omitted = no daily cap */
   dailyBudgetUsd?: number
-  /** the file this watch's config lives in (`watches/<file>.md`); omitted = a row from before watch files */
+  /** the file this job's config lives in (`jobs/<file>.md`); omitted = a row from before job files */
   file?: string
   /** when to post a macOS notification about a run */
-  notify: WatchNotify
+  notify: JobNotify
   /** model alias or wire id for the run; omitted = Claude Code's own default */
   model?: string
   /** items (default) or one rolling digest with a report */
-  output: WatchOutput
+  output: JobOutput
   /**
-   * A 5-field cron expression, the source of truth for when the watch runs
-   * (.docs/watches-v2.md). Legacy rows without one derive it from `cadence`.
+   * A 5-field cron expression, the source of truth for when the job runs
+   * (.docs/jobs-v2.md). Legacy rows without one derive it from `cadence`.
    */
   schedule: string
   /** legacy coarse cadence; retained for back-compat / draft suggestions */
-  cadence: WatchCadence
+  cadence: JobCadence
   /** daily/weekly: local time "09:00" */
   windowStart?: string
   /** weekly: 0-6 (JS getDay convention, Sunday = 0) */
@@ -136,83 +136,83 @@ export interface Watch {
   /** items the last run filed that were not already in the inbox */
   lastRunNew?: number
   /** why the last run happened */
-  lastRunTrigger?: WatchRunTrigger
+  lastRunTrigger?: JobRunTrigger
   /** failed/timeout runs in a row; reset by an ok run */
   consecutiveFailures: number
-  /** what the last run cost/produced, surfaced in the watch list UI */
+  /** what the last run cost/produced, surfaced in the job list UI */
   lastRunTokens?: number
   lastRunMatches?: number
   /** the last run's outcome, so the list can show ok/failed honestly */
-  lastRunStatus?: WatchRunStatus
+  lastRunStatus?: JobRunStatus
   /** the session id of the last run, for opening its transcript */
   lastRunSessionId?: string
   /** the last run's error message, when it failed */
   lastRunError?: string
-  /** the template this watch was seeded from (pre-installed as a copy), if any */
+  /** the template this job was seeded from (pre-installed as a copy), if any */
   templateId?: string
-  /** brief every item this watch files; absent = off */
-  brief?: WatchBrief
-  /** drafted by a chat (draft_watch) and not yet reviewed: saved off until you enable it */
+  /** brief every item this job files; absent = off */
+  brief?: JobBrief
+  /** drafted by a chat (draft_job) and not yet reviewed: saved off until you enable it */
   draft?: boolean
   createdAt: number
   updatedAt: number
 }
 
-export type NewWatch = Pick<Watch, 'title' | 'instruction' | 'schedule' | 'createsItems' | 'tools' | 'projectId'> & {
-  /** legacy place hint; new watches leave it empty */
+export type NewJob = Pick<Job, 'title' | 'instruction' | 'schedule' | 'createsItems' | 'tools' | 'projectId'> & {
+  /** legacy place hint; new jobs leave it empty */
   scope?: string
   model?: string
-  output?: WatchOutput
+  output?: JobOutput
   catchUpWindow?: string | null
   timeoutMs?: number | null
   maxBudgetUsd?: number | null
   dailyBudgetUsd?: number | null
   file?: string
-  notify?: WatchNotify
+  notify?: JobNotify
   /** null turns briefs off */
-  brief?: WatchBrief | null
+  brief?: JobBrief | null
   draft?: boolean
   /** legacy; defaults to a coarse bucket when omitted */
-  cadence?: WatchCadence
+  cadence?: JobCadence
   windowStart?: string
   windowDay?: number
 }
 
 /**
  * What one finished (or skipped, or interrupted) run attempt writes back to the
- * row. Runs are stateless (watch-spec.md, item 4): nothing here feeds the next
+ * row. Runs are stateless (job-spec.md, item 4): nothing here feeds the next
  * run's prompt.
  */
-export interface WatchRunResult {
+export interface JobRunResult {
   lastRunAt: number
   lastRunTokens: number
   lastRunMatches: number
   /** of the matches, how many were new to the inbox */
   lastRunNew?: number
-  status: WatchRunStatus
-  trigger?: WatchRunTrigger
+  status: JobRunStatus
+  trigger?: JobRunTrigger
   sessionId?: string
   error?: string
 }
 
 /** What starting (or skipping) a slot writes: the due rule's clock. */
-export interface WatchRunStart {
+export interface JobRunStart {
   startedAt: number
-  trigger?: WatchRunTrigger
+  trigger?: JobRunTrigger
   sessionId?: string
 }
 
 /** The draft step's parse of a plain-text wish — every field stays editable. */
-export interface WatchDraft {
+export interface JobDraft {
   title: string
   scope: string
   instruction: string
-  cadence: WatchCadence
+  cadence: JobCadence
   createsItems: boolean
 }
 
 /** One thread a preview run would have matched, with its why-line. */
-export interface WatchPreviewRow {
+export interface JobPreviewRow {
   /** the canonical id the real run would file under */
   id: string
   title: string
@@ -226,9 +226,9 @@ export interface WatchPreviewRow {
 }
 
 /** What a dry run returns: the would-be items or the would-be digest, and what it cost. Nothing is saved. */
-export interface WatchPreviewResult {
-  output: WatchOutput
-  rows: WatchPreviewRow[]
+export interface JobPreviewResult {
+  output: JobOutput
+  rows: JobPreviewRow[]
   digest?: { title: string; body: string }
   /** outbound calls the dry run refused — the real run would queue these for your approval */
   wouldQueue?: Array<{ tool: string; summary: string }>

@@ -1,13 +1,13 @@
 /**
- * Shared bits for the Watches surfaces: integration labels and icons, and the
+ * Shared bits for the Jobs surfaces: integration labels and icons, and the
  * schedule presets the form and the table both speak.
  */
 import { FilePen, GitBranch, Globe, Hash, Layers, Plug, type LucideProps } from 'lucide-react'
 import type { ComponentType } from 'react'
-import type { WatchOutput, WatchRunStatus, WatchRunTrigger, WatchToolGrant } from '../../shared/protocol.js'
-import { grantLabel, type BuiltinToolId } from '../../core/watch/tools.js'
+import type { JobOutput, JobRunStatus, JobRunTrigger, JobToolGrant } from '../../shared/protocol.js'
+import { grantLabel, type BuiltinToolId } from '../../core/job/tools.js'
 import cronstrue from 'cronstrue'
-import { describeCron, nextScheduled } from '../../core/watch/cron.js'
+import { describeCron, nextScheduled } from '../../core/job/cron.js'
 
 export const BUILTINS: Array<{ id: BuiltinToolId; label: string; icon: ComponentType<LucideProps>; hint: string }> = [
   { id: 'web', label: 'Web', icon: Globe, hint: 'Search and read web pages' },
@@ -18,7 +18,7 @@ export const BUILTINS: Array<{ id: BuiltinToolId; label: string; icon: Component
 const SERVER_ICONS: Record<string, ComponentType<LucideProps>> = { 'claude.ai Slack': Hash, 'claude.ai Linear': Layers }
 
 /** The icon for one grant: built-ins have their own, a known server its own, anything else a plug. */
-export function grantIcon(g: WatchToolGrant): ComponentType<LucideProps> {
+export function grantIcon(g: JobToolGrant): ComponentType<LucideProps> {
   if (g.source.kind === 'builtin') {
     const id = g.source.id
     return BUILTINS.find((b) => b.id === id)?.icon ?? Plug
@@ -29,7 +29,7 @@ export function grantIcon(g: WatchToolGrant): ComponentType<LucideProps> {
 export { grantLabel }
 
 /** "ok (caught up)", "failed ×3", … — a run status the way the list shows it. */
-export function runStatusText(status: WatchRunStatus | undefined, trigger?: WatchRunTrigger, failures = 0): string {
+export function runStatusText(status: JobRunStatus | undefined, trigger?: JobRunTrigger, failures = 0): string {
   if (!status) return 'never'
   if (status === 'ok') return trigger === 'catch_up' ? 'ok (caught up)' : 'ok'
   if ((status === 'failed' || status === 'timeout') && failures > 1) return `${status} ×${failures}`
@@ -46,7 +46,7 @@ export function fmtUntil(at: number, now = Date.now()): string {
   return `${d.toLocaleDateString(undefined, { weekday: 'short' })} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
-export const TRIGGER_LABEL: Record<WatchRunTrigger, string> = { scheduled: 'scheduled', catch_up: 'caught up', manual: 'manual', redraft: 'redraft after a send-back' }
+export const TRIGGER_LABEL: Record<JobRunTrigger, string> = { scheduled: 'scheduled', catch_up: 'caught up', manual: 'manual', redraft: 'redraft after a send-back' }
 
 /** The schedule presets — a preset plus a local time renders to one cron line. */
 export type SchedulePreset = 'hourly' | 'daily' | 'weekdays' | 'weekly' | 'custom'
@@ -83,7 +83,7 @@ export function cronToPreset(cron: string): { preset: SchedulePreset; time: stri
 }
 
 /** What a run produces. */
-export const OUTPUTS: Array<{ id: WatchOutput; label: string; hint: string }> = [
+export const OUTPUTS: Array<{ id: JobOutput; label: string; hint: string }> = [
   { id: 'items', label: 'Work items', hint: 'One item per match, deduped by its link.' },
   { id: 'digest', label: 'Digest', hint: 'One rolling item with a markdown report. Each run rewrites it and it returns to the inbox.' },
 ]

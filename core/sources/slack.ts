@@ -1,5 +1,5 @@
 /**
- * Slack scanning — built-in rules + user-defined watches (.docs/watches.md),
+ * Slack scanning — built-in rules + user-defined jobs (.docs/jobs.md),
  * re-based onto the Agent SDK. Fetched *through* the installed Claude Code's
  * claude.ai Slack connector, headless and read-only by construction (tool
  * allowlist) — this repo never holds Slack credentials.
@@ -9,15 +9,15 @@
  * (+ a one-line why)". It never scores, never merges, never decides done.
  * Malformed output rows are discarded, never repaired.
  *
- * One composed scan per due batch, not one session per watch: the fixed
- * built-in sections plus one section per due watch, in a single subprocess.
+ * One composed scan per due batch, not one session per job: the fixed
+ * built-in sections plus one section per due job, in a single subprocess.
  */
 import { canonicalizeRefs } from '../work/link.js'
 import type { WorkItem } from '../work/types.js'
-import type { WatchDraft } from '../watch/types.js'
+import type { JobDraft } from '../job/types.js'
 
 /** the legacy Slack-only preview row (the live preview lives in server/index.ts now) */
-interface WatchPreviewRow {
+interface JobPreviewRow {
   title: string
   permalink: string
   channel: string
@@ -34,10 +34,10 @@ export const READ_ONLY_SLACK_TOOLS = [
   'mcp__claude_ai_Slack__slack_read_user_profile',
 ]
 
-/** rows a single watch may emit per scan (cost control; also enforced here) */
-export const MAX_ROWS_PER_WATCH = 15
+/** rows a single job may emit per scan (cost control; also enforced here) */
+export const MAX_ROWS_PER_JOB = 15
 
-export interface WatchScanSpec {
+export interface JobScanSpec {
   id: string
   /** '#channel' | '@dm' — the boundary the section may not leave */
   scope: string
@@ -58,32 +58,32 @@ Judge each candidate on its title and first ~200 characters; only read a full th
 const BUILTIN_SECTION = `SECTION builtins — across the workspace, from the last 3 days:
 1. Messages that mention/tag the user (the authenticated Slack account).
 2. Threads the user participated in where the LATEST message is a question or request directed at the user that they have not answered yet (a reply is pending from them).
-Rules: deduplicate threads (one row per thread, prefer kind reply-pending); if the user already answered, exclude it. Rows from this section carry "kind": "mention" or "reply-pending" (no watchId).`
+Rules: deduplicate threads (one row per thread, prefer kind reply-pending); if the user already answered, exclude it. Rows from this section carry "kind": "mention" or "reply-pending" (no jobId).`
 
-function watchSection(w: WatchScanSpec): string {
+function jobSection(w: JobScanSpec): string {
   const window = w.cursor
     ? `messages newer than ${w.cursor}`
     : `messages from the last 7 days`
-  return `SECTION watch ${w.id} — in ${w.scope} ONLY, scan ${window}. Match threads where: ${w.instruction}
-Rules: one row per thread; at most ${MAX_ROWS_PER_WATCH} rows; skip anything outside ${w.scope}. Rows from this section carry "watchId": "${w.id}" (no kind), a one-line "why" stating what matched, and "refs": an array of any GitHub PR/issue URLs or Linear issue keys visible in the matched content (empty array if none).`
+  return `SECTION job ${w.id} — in ${w.scope} ONLY, scan ${window}. Match threads where: ${w.instruction}
+Rules: one row per thread; at most ${MAX_ROWS_PER_JOB} rows; skip anything outside ${w.scope}. Rows from this section carry "jobId": "${w.id}" (no kind), a one-line "why" stating what matched, and "refs": an array of any GitHub PR/issue URLs or Linear issue keys visible in the matched content (empty array if none).`
 }
 
 const OUTPUT_CONTRACT = `Output ONLY one JSON array combining all sections' rows — no prose, no code fence. Each row:
-{"title": "<one-line summary>", "permalink": "<slack message permalink>", "channel": "#<channel name>", "from": "<display name of the author/asker>", "lastActivity": "<ISO 8601 timestamp of the newest message in the thread>", "kind": "mention" | "reply-pending" (builtins only), "watchId": "<id>" (watch sections only), "why": "<one line>" (watch sections only), "refs": ["..."] (watch sections only)}
+{"title": "<one-line summary>", "permalink": "<slack message permalink>", "channel": "#<channel name>", "from": "<display name of the author/asker>", "lastActivity": "<ISO 8601 timestamp of the newest message in the thread>", "kind": "mention" | "reply-pending" (builtins only), "jobId": "<id>" (job sections only), "why": "<one line>" (job sections only), "refs": ["..."] (job sections only)}
 If nothing qualifies anywhere, output [].
 If you cannot access any Slack tools at all, output exactly: {"error": "no-slack-tools"}`
 
-export function composeScanPrompt(builtins: boolean, watches: WatchScanSpec[]): string {
+export function composeScanPrompt(builtins: boolean, jobs: JobScanSpec[]): string {
   return [
     SCAN_PREAMBLE,
     ...(builtins ? [BUILTIN_SECTION] : []),
-    ...watches.map(watchSection),
+    ...jobs.map(jobSection),
     OUTPUT_CONTRACT,
   ].join('\n\n')
 }
 
 // ---------------------------------------------------------------------------
-// Per-watch run prompt (.docs/watches-v2.md) — one watch, one session. The
+// Per-job run prompt (.docs/jobs-v2.md) — one job, one session. The
 // output contract is TOOL CALLS, not JSON: for each match the scanner calls
 // upsert_work_item, so a work item exists because a tool call created it (no
 // parse-failure-reads-as-empty bug), and the run transcript is the receipt.
@@ -93,9 +93,9 @@ export function composeScanPrompt(builtins: boolean, watches: WatchScanSpec[]): 
 
 const SLACK_MCP_TOOLS = READ_ONLY_SLACK_TOOLS.filter((t) => t.startsWith('mcp__'))
 
-export function composeWatchRunPrompt(w: { scope: string; instruction: string; cursor?: string }): string {
+export function composeJobRunPrompt(w: { scope: string; instruction: string; cursor?: string }): string {
   const window = w.cursor ? `messages newer than ${w.cursor}` : `messages from the last 7 days`
-  return `You are a triage scanner for ONE watch. Your Slack tools are deferred: first call ToolSearch to load ${SLACK_MCP_TOOLS.join(', ')}, then use them (read-only) to perform the scan.
+  return `You are a triage scanner for ONE job. Your Slack tools are deferred: first call ToolSearch to load ${SLACK_MCP_TOOLS.join(', ')}, then use them (read-only) to perform the scan.
 
 Scan ${w.scope} ONLY, ${window}. Judge each candidate on its title and first ~200 characters; read a full thread only when the snippet is not enough to decide. Stay strictly inside ${w.scope} — never scan any other channel or DM.
 
@@ -109,7 +109,7 @@ For EACH matching thread, call the upsert_work_item tool exactly once, with:
 - why: one line stating exactly what matched the instruction
 - refs: an array of any GitHub PR/issue URLs or Linear issue keys visible in the matched content (omit when there are none)
 
-Call upsert_work_item at most ${MAX_ROWS_PER_WATCH} times, once per matching thread. It is the ONLY write tool you may use. If nothing matches, do not call it at all — just finish. If you cannot access any Slack tools at all, reply with exactly no-slack-tools and stop.`
+Call upsert_work_item at most ${MAX_ROWS_PER_JOB} times, once per matching thread. It is the ONLY write tool you may use. If nothing matches, do not call it at all — just finish. If you cannot access any Slack tools at all, reply with exactly no-slack-tools and stop.`
 }
 
 // ---------------------------------------------------------------------------
@@ -125,13 +125,13 @@ export interface RawBuiltinRow {
   kind: 'mention' | 'reply-pending'
 }
 
-export interface RawWatchRow {
+export interface RawJobRow {
   title: string
   permalink: string
   channel: string
   from: string
   lastActivity: string
-  watchId: string
+  jobId: string
   why: string
   refs?: string[]
 }
@@ -148,35 +148,35 @@ function validBase(r: Record<string, unknown>): boolean {
 /** Extract and validate the JSON array from agent output. Pure. */
 export function parseScanRows(
   raw: string,
-  knownWatchIds: Set<string>,
-): { builtins: RawBuiltinRow[]; watches: RawWatchRow[] } {
+  knownJobIds: Set<string>,
+): { builtins: RawBuiltinRow[]; jobs: RawJobRow[] } {
   const builtins: RawBuiltinRow[] = []
-  const watches: RawWatchRow[] = []
+  const jobs: RawJobRow[] = []
   const start = raw.indexOf('[')
   const end = raw.lastIndexOf(']')
-  if (start === -1 || end <= start) return { builtins, watches }
+  if (start === -1 || end <= start) return { builtins, jobs }
   let parsed: unknown
   try {
     parsed = JSON.parse(raw.slice(start, end + 1))
   } catch {
-    return { builtins, watches }
+    return { builtins, jobs }
   }
-  if (!Array.isArray(parsed)) return { builtins, watches }
-  const perWatch = new Map<string, number>()
+  if (!Array.isArray(parsed)) return { builtins, jobs }
+  const perJob = new Map<string, number>()
   for (const row of parsed) {
     if (typeof row !== 'object' || row === null) continue
     const r = row as Record<string, unknown>
     if (!validBase(r)) continue
     if (r.kind === 'mention' || r.kind === 'reply-pending') {
       builtins.push(r as unknown as RawBuiltinRow)
-    } else if (typeof r.watchId === 'string' && knownWatchIds.has(r.watchId) && typeof r.why === 'string' && r.why.length > 0) {
-      const n = perWatch.get(r.watchId) ?? 0
-      if (n >= MAX_ROWS_PER_WATCH) continue
-      perWatch.set(r.watchId, n + 1)
-      watches.push(r as unknown as RawWatchRow)
+    } else if (typeof r.jobId === 'string' && knownJobIds.has(r.jobId) && typeof r.why === 'string' && r.why.length > 0) {
+      const n = perJob.get(r.jobId) ?? 0
+      if (n >= MAX_ROWS_PER_JOB) continue
+      perJob.set(r.jobId, n + 1)
+      jobs.push(r as unknown as RawJobRow)
     }
   }
-  return { builtins, watches }
+  return { builtins, jobs }
 }
 
 // ---------------------------------------------------------------------------
@@ -211,19 +211,19 @@ export function normalizeBuiltinRows(rows: RawBuiltinRow[], now = Date.now()): W
   })
 }
 
-export function normalizeWatchRows(
-  rows: RawWatchRow[],
-  specs: Map<string, WatchScanSpec>,
+export function normalizeJobRows(
+  rows: RawJobRow[],
+  specs: Map<string, JobScanSpec>,
   now = Date.now(),
 ): WorkItem[] {
   return rows.flatMap((row) => {
-    const spec = specs.get(row.watchId)
+    const spec = specs.get(row.jobId)
     if (!spec) return []
     const when = safeWhen(row.lastActivity, now)
     return [{
       id: permalinkId(row.permalink),
       source: 'slack' as const,
-      kind: spec.createsItems ? ('watch-hit' as const) : ('fyi' as const),
+      kind: spec.createsItems ? ('job-hit' as const) : ('fyi' as const),
       title: row.title,
       url: row.permalink,
       repo: row.channel,
@@ -231,7 +231,7 @@ export function normalizeWatchRows(
       peopleWaiting: 0,
       createdAt: when,
       updatedAt: when,
-      watchId: row.watchId,
+      jobId: row.jobId,
       why: row.why,
       refs: canonicalizeRefs(row.refs),
     }]
@@ -244,11 +244,11 @@ export function normalizeWatchRows(
 
 export interface SlackScanOutcome {
   builtinItems: WorkItem[]
-  watchItems: WorkItem[]
-  matchesByWatch: Map<string, number>
+  jobItems: WorkItem[]
+  matchesByJob: Map<string, number>
   /** total tokens the scan consumed (0 when the SDK reports none) */
   tokens: number
-  /** ISO time the scan started — the next cursor for every watch it covered */
+  /** ISO time the scan started — the next cursor for every job it covered */
   startedAt: string
 }
 
@@ -307,31 +307,31 @@ async function runHeadless(
 }
 
 /**
- * One composed scan: built-in rules (when due) + every due watch, in a single
+ * One composed scan: built-in rules (when due) + every due job, in a single
  * session. Throws on timeout or a missing connector; the caller decides how
  * that degrades (notice + retry on the next tick).
  */
 export async function runSlackScan(
   agent: HeadlessAgent,
-  opts: { builtins: boolean; watches: WatchScanSpec[]; timeoutMs?: number },
+  opts: { builtins: boolean; jobs: JobScanSpec[]; timeoutMs?: number },
   now = Date.now(),
 ): Promise<SlackScanOutcome> {
   const startedAt = new Date(now).toISOString()
   const { text, tokens } = await runHeadless(
     agent,
-    composeScanPrompt(opts.builtins, opts.watches),
+    composeScanPrompt(opts.builtins, opts.jobs),
     opts.timeoutMs ?? 240_000,
   )
-  const specs = new Map(opts.watches.map((w) => [w.id, w]))
+  const specs = new Map(opts.jobs.map((w) => [w.id, w]))
   const rows = parseScanRows(text, new Set(specs.keys()))
-  const matchesByWatch = new Map<string, number>(opts.watches.map((w) => [w.id, 0]))
-  for (const row of rows.watches) {
-    matchesByWatch.set(row.watchId, (matchesByWatch.get(row.watchId) ?? 0) + 1)
+  const matchesByJob = new Map<string, number>(opts.jobs.map((w) => [w.id, 0]))
+  for (const row of rows.jobs) {
+    matchesByJob.set(row.jobId, (matchesByJob.get(row.jobId) ?? 0) + 1)
   }
   return {
     builtinItems: normalizeBuiltinRows(rows.builtins, now),
-    watchItems: normalizeWatchRows(rows.watches, specs, now),
-    matchesByWatch,
+    jobItems: normalizeJobRows(rows.jobs, specs, now),
+    matchesByJob,
     tokens,
     startedAt,
   }
@@ -339,26 +339,26 @@ export async function runSlackScan(
 
 /** Backwards-compatible built-ins-only scan. */
 export async function scanSlack(agent: HeadlessAgent, timeoutMs = 180_000): Promise<WorkItem[]> {
-  const outcome = await runSlackScan(agent, { builtins: true, watches: [], timeoutMs })
+  const outcome = await runSlackScan(agent, { builtins: true, jobs: [], timeoutMs })
   return outcome.builtinItems
 }
 
 // ---------------------------------------------------------------------------
-// Watch preview — the trust-maker in the creation flow: run a draft against
+// Job preview — the trust-maker in the creation flow: run a draft against
 // the scope's recent history and show what it *would have* matched. Reads
-// only; never touches watches, cursors, or items.
+// only; never touches jobs, cursors, or items.
 // ---------------------------------------------------------------------------
 
-export async function previewWatch(
+export async function previewJob(
   agent: HeadlessAgent,
   scope: string,
   instruction: string,
   timeoutMs = 240_000,
   env?: Record<string, string>,
-): Promise<{ rows: WatchPreviewRow[]; tokens: number }> {
-  const spec: WatchScanSpec = { id: 'preview', scope, instruction, createsItems: true }
+): Promise<{ rows: JobPreviewRow[]; tokens: number }> {
+  const spec: JobScanSpec = { id: 'preview', scope, instruction, createsItems: true }
   const { text, tokens } = await runHeadless(agent, composeScanPrompt(false, [spec]), timeoutMs, env)
-  const rows = parseScanRows(text, new Set(['preview'])).watches.map((r) => ({
+  const rows = parseScanRows(text, new Set(['preview'])).jobs.map((r) => ({
     title: r.title,
     permalink: r.permalink,
     channel: r.channel,
@@ -370,24 +370,24 @@ export async function previewWatch(
 }
 
 // ---------------------------------------------------------------------------
-// Watch drafting — one LLM call parsing a plain-text wish into the structured
+// Job drafting — one LLM call parsing a plain-text wish into the structured
 // form. Every field stays editable in the UI; this is a convenience, not an
 // authority, so a parse failure just returns null and the user fills the form.
 // ---------------------------------------------------------------------------
 
-const DRAFT_PROMPT = (text: string) => `Parse this watch request into JSON. A watch scans one Slack scope (a "#channel" or "@dm") on a cadence for threads matching a plain-English instruction.
+const DRAFT_PROMPT = (text: string) => `Parse this job request into JSON. A job scans one Slack scope (a "#channel" or "@dm") on a cadence for threads matching a plain-English instruction.
 
 Request: ${JSON.stringify(text)}
 
 Output ONLY a JSON object, no prose, no code fence:
 {"title": "<short name, e.g. 'PX topics in #novus-px'>", "scope": "<#channel or @dm mentioned>", "instruction": "<the matching criteria as one clear sentence, including any exclusions>", "cadence": "hourly" | "daily" | "weekly" (default "daily" unless the request implies otherwise), "createsItems": true unless the request says FYI/digest-only}`
 
-export async function draftWatch(
+export async function draftJob(
   agent: HeadlessAgent,
   text: string,
   timeoutMs = 60_000,
   env?: Record<string, string>,
-): Promise<WatchDraft | null> {
+): Promise<JobDraft | null> {
   const abort = new AbortController()
   const timer = setTimeout(() => abort.abort(), timeoutMs)
   try {

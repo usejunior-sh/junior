@@ -137,7 +137,7 @@ type IdProps = {
   value: string
   onChange: (id: string) => void
   caption?: string
-  /** offer "No project" (default); off where a project is required, e.g. a watch */
+  /** offer "No project" (default); off where a project is required, e.g. a job */
   allowNone?: boolean
   /** the trigger, given what to show — so each caller keeps its own chrome */
   children: (current: Project | undefined) => ReactNode

@@ -1,7 +1,7 @@
 /**
- * The watch form's integrations field (watch-spec.md, item 1): the built-ins
+ * The job form's integrations field (job-spec.md, item 1): the built-ins
  * (Web, GitHub, writing files) plus every MCP server Claude Code can load in
- * the watch's project folder — claude.ai connectors, global, local and project
+ * the job's project folder — claude.ai connectors, global, local and project
  * servers — discovered by the server's probe, so a newly connected server
  * shows up without a triage release.
  *
@@ -14,10 +14,10 @@ import * as Collapsible from '@radix-ui/react-collapsible'
 import * as Tabs from '@radix-ui/react-tabs'
 import { AlertTriangle, Check, ChevronRight, RefreshCw, Search } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
-import type { Connector, ConnectorScope, ConnectorsResponse, ConnectorTool, WatchToolGrant } from '../../../shared/protocol.js'
-import { builtinGrant, defaultToolsFor, grantKey, looksReadOnly, serverLabel, type BuiltinToolId } from '../../../core/watch/tools.js'
+import type { Connector, ConnectorScope, ConnectorsResponse, ConnectorTool, JobToolGrant } from '../../../shared/protocol.js'
+import { builtinGrant, defaultToolsFor, grantKey, looksReadOnly, serverLabel, type BuiltinToolId } from '../../../core/job/tools.js'
 import { relTime } from '../itemUi.js'
-import { BUILTINS, grantIcon } from '../watchUi.js'
+import { BUILTINS, grantIcon } from '../jobUi.js'
 
 const SCOPE_LABEL: Record<ConnectorScope, string> = {
   claudeai: 'claude.ai connectors',
@@ -53,14 +53,14 @@ type Probe =
 const healthy = (c: Connector) => c.status === 'connected'
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 
-export function WatchToolPicker({
+export function JobToolPicker({
   projectId,
   value,
   onChange,
 }: {
   projectId: string
-  value: WatchToolGrant[]
-  onChange: (grants: WatchToolGrant[]) => void
+  value: JobToolGrant[]
+  onChange: (grants: JobToolGrant[]) => void
 }) {
   const [probe, setProbe] = useState<Probe>({ phase: 'loading' })
   const [nonce, setNonce] = useState(0)
@@ -124,7 +124,7 @@ export function WatchToolPicker({
   // Saved grants for servers this folder's probe doesn't report — kept, flagged, removable.
   const orphans = value.filter((g) => g.source.kind === 'mcp' && probe.phase === 'ready' && !known.has(g.source.server))
 
-  // Connected servers (and any server this watch already uses) are listed by
+  // Connected servers (and any server this job already uses) are listed by
   // scope; the rest — usually a long tail of connectors awaiting auth — fold
   // into one line so they don't bury the ones that work. Tabs split by source,
   // the search narrows by server or tool name.
@@ -325,7 +325,7 @@ function ServerRow({
   onTools,
 }: {
   connector: Connector
-  grant: WatchToolGrant | undefined
+  grant: JobToolGrant | undefined
   open: boolean
   onOpenChange: (open: boolean) => void
   onToggle: () => void

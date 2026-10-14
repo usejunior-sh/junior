@@ -3,10 +3,10 @@
  * reads by label ("3 replies · 2 reviews"), not by where an item came from.
  *
  * Scanner kinds map to a label and keep their own BASE weight and group
- * (score.ts); a watch hit carries the label its run picked (`ask`) and takes
- * the label's weight and group, so a watch that finds a real reply ranks with
+ * (score.ts); a job hit carries the label its run picked (`ask`) and takes
+ * the label's weight and group, so a job that finds a real reply ranks with
  * replies instead of sinking into FYI. An `ask` that is no longer a label
- * falls back to Read. `meaning` is the line the watch prompt hands the model.
+ * falls back to Read. `meaning` is the line the job prompt hands the model.
  */
 import type { Group, ItemKind, WorkItem } from './types.js'
 
@@ -19,10 +19,10 @@ export interface LabelDef {
   name: string
   /** the header's count noun, one and many: "1 reply", "3 replies" */
   noun: [string, string]
-  /** fed to the watch prompt — how the model picks this label */
+  /** fed to the job prompt — how the model picks this label */
   meaning: string
   group: Group
-  /** BASE weight for a watch hit with this label */
+  /** BASE weight for a job hit with this label */
   weight: number
   due: DueDefault
 }
@@ -91,8 +91,8 @@ export const KIND_TO_LABEL: Record<ItemKind, Label> = {
   'own-pr-approved': 'do',
   'own-pr-stale': 'follow-up',
   'own-pr-open': 'follow-up',
-  // a watch hit without an ask (filed before labels, or by an external scanner)
-  'watch-hit': 'read',
+  // a job hit without an ask (filed before labels, or by an external scanner)
+  'job-hit': 'read',
   digest: 'read',
   mention: 'read',
   'slack-mention': 'read',
@@ -103,9 +103,9 @@ export function isLabel(v: unknown): v is Label {
   return typeof v === 'string' && Object.hasOwn(LABELS, v)
 }
 
-/** The label an item is filed under: a watch hit's ask, else its kind's. */
+/** The label an item is filed under: a job hit's ask, else its kind's. */
 export function labelOf(item: Pick<WorkItem, 'kind' | 'ask'>): Label {
-  if (item.kind === 'watch-hit') return isLabel(item.ask) ? item.ask : 'read'
+  if (item.kind === 'job-hit') return isLabel(item.ask) ? item.ask : 'read'
   return KIND_TO_LABEL[item.kind] ?? 'read'
 }
 
@@ -115,7 +115,7 @@ export function countOf(label: Label, n: number): string {
   return `${n} ${n === 1 ? one : many}`
 }
 
-/** The watch prompt's list of labels, one per line. */
+/** The job prompt's list of labels, one per line. */
 export function labelGuide(): string {
   return LABEL_ORDER.map((l) => `  - ${l}: ${LABELS[l].meaning}`).join('\n')
 }

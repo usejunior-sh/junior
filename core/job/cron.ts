@@ -1,5 +1,5 @@
 /**
- * A small, dependency-free 5-field cron engine (.docs/watches-v2.md).
+ * A small, dependency-free 5-field cron engine (.docs/jobs-v2.md).
  *
  * Standard fields: minute hour day-of-month month day-of-week, each supporting
  * `*`, lists (`a,b`), ranges (`a-b`), and steps (`* /n`, `a-b/n`, `a/n`).
@@ -8,7 +8,7 @@
  *
  * Scheduling is coalescing by construction (like Hermes): the due-checker asks
  * `lastScheduled(expr, now)` — the most recent minute at or before now that the
- * expression matches — and a watch is due when its last run predates that. A
+ * expression matches — and a job is due when its last run predates that. A
  * machine that slept through a slot fires it once on wake; it never stacks,
  * because the next check finds the same (now past) slot already covered.
  */

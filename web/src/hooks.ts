@@ -58,11 +58,11 @@ export type Route =
   | { page: 'item'; id: string }
   | { page: 'terminal'; id: string }
   | { page: 'terminals' }
-  | { page: 'watches' }
-  /** `#/watches/new` or `#/watches/<id>/edit` — the full-page watch form */
-  | { page: 'watch-form'; id: string | null }
-  /** `#/watches/<id>` — one watch: health, runs, items */
-  | { page: 'watch'; id: string }
+  | { page: 'jobs' }
+  /** `#/jobs/new` or `#/jobs/<id>/edit` — the full-page job form */
+  | { page: 'job-form'; id: string | null }
+  /** `#/jobs/<id>` — one job: health, runs, items */
+  | { page: 'job'; id: string }
   | { page: 'artifacts' }
   | { page: 'artifact'; id: string }
   | { page: 'changes' }
@@ -93,13 +93,15 @@ function parseRoute(hash: string): Route {
   if (hash === '/connectors') return { page: 'settings', tab: 'connectors' }
   // Projects used to be a page too; same deal.
   if (hash === '/projects') return { page: 'settings', tab: 'projects' }
-  if (hash === '/watches') return { page: 'watches' }
-  if (hash === '/watches/new') return { page: 'watch-form', id: null }
+  // Jobs were called watches; their old links still open them.
+  if (hash === '/watches' || hash.startsWith('/watches/')) return parseRoute(`/jobs${hash.slice('/watches'.length)}`)
+  if (hash === '/jobs') return { page: 'jobs' }
+  if (hash === '/jobs/new') return { page: 'job-form', id: null }
   {
-    const m = /^\/watches\/([^/]+)\/edit$/.exec(hash)
-    if (m) return { page: 'watch-form', id: decodeURIComponent(m[1]) }
-    const d = /^\/watches\/([^/]+)$/.exec(hash)
-    if (d) return { page: 'watch', id: decodeURIComponent(d[1]) }
+    const m = /^\/jobs\/([^/]+)\/edit$/.exec(hash)
+    if (m) return { page: 'job-form', id: decodeURIComponent(m[1]) }
+    const d = /^\/jobs\/([^/]+)$/.exec(hash)
+    if (d) return { page: 'job', id: decodeURIComponent(d[1]) }
   }
   if (hash === '/actions') return { page: 'actions' }
   if (hash === '/artifacts') return { page: 'artifacts' }

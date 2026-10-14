@@ -1,5 +1,5 @@
 /**
- * Item lifecycle (.docs/watches-v2.md). A work item is a durable fact: once
+ * Item lifecycle (.docs/jobs-v2.md). A work item is a durable fact: once
  * created it is never hard-deleted and never silently removed. It moves between
  * four states only via recorded transitions, and every transition is appended
  * to a per-item event log — the item's `status` is just a materialization of
@@ -35,7 +35,7 @@ export type ItemEventKind =
 
 /**
  * Who caused a transition. `user` = a click in the web UI; `agent:<sessionId>`
- * = a chat/dispatch session's tool call; `watch:<runId>` = a watch run;
+ * = a chat/dispatch session's tool call; `job:<runId>` = a job run;
  * `system` = deterministic reconciliation (a merged PR auto-done, a snooze that
  * elapsed).
  */
@@ -52,7 +52,7 @@ export interface ItemEvent {
 
 /**
  * A user/agent-driven status change. Snooze carries a wake time; archive may
- * carry a reason (kept for the later refine-the-watch feedback loop).
+ * carry a reason (kept for the later refine-the-job feedback loop).
  */
 export interface StatusChange {
   status: ItemStatus

@@ -1,7 +1,7 @@
 /**
  * Phase 2 of the actions spec (7ce2f076): queue → approve → dispatch.
  *
- * In a watch run or a team worker, a connector call that sorts as an action
+ * In a job run or a team worker, a connector call that sorts as an action
  * is held instead of run: the agent is told it was queued, and the call waits
  * here for you. Every status change goes through `move`, which says what is
  * allowed from where and writes the history line for it:
@@ -61,13 +61,13 @@ export function queuedMessage(actionId: string): string {
 }
 
 /**
- * A watch's dry run (preview) never sends: a call that sorts as an action —
+ * A job's dry run (preview) never sends: a call that sorts as an action —
  * a connector write or an outbound command — is refused with this, and listed
  * in the preview as what the real run would queue for approval.
  */
 export const DRY_RUN_MESSAGE = 'dry run: this would be queued for approval — nothing was sent. Carry on as if it had been queued.'
 
-/** The dry run's veto, past the watch's own fence: what counts as an action is refused, the rest passes. */
+/** The dry run's veto, past the job's own fence: what counts as an action is refused, the rest passes. */
 export function dryRunDecision(sorted: { summary: string } | null): FenceDecision {
   return sorted ? { allow: false, reason: DRY_RUN_MESSAGE } : { allow: true }
 }

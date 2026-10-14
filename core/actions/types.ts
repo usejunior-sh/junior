@@ -30,7 +30,7 @@ export const KIND_LABEL: Record<ActionKind, [string, string]> = {
  * Where an action is. Phase 1 (recorded as it ran):
  *   attempted  the call was made and nothing has come back yet
  *   succeeded / failed / denied
- * Phase 2 (queued, core/actions/queue.ts — a watch run's or a team worker's
+ * Phase 2 (queued, core/actions/queue.ts — a job run's or a team worker's
  * connector call held for you instead of run):
  *   needs_you  waiting on your approve / edit / send back / reject
  *   scheduled  approved; goes out at `queue.sendAt` (undo until then)
@@ -124,7 +124,7 @@ export const isActionWhy = (v: unknown): v is ActionWhy => ACTION_WHYS.includes(
  * prompt: you, by answering a permission prompt.
  * mode: the session's permission mode (bypass or auto) let it through.
  * rule: an allow rule — your settings, an "always allow" earlier in the
- *       session, or a watch's grants.
+ *       session, or a job's grants.
  * policy: triage's own fixed policy for that kind of session (a brief).
  */
 export type ActionAllowedBy = 'prompt' | 'mode' | 'rule' | 'policy'
@@ -135,7 +135,7 @@ export type ActionRecord = {
   /** `<sessionId>:<first tool_use id>` — deterministic, so a backfill can't duplicate */
   id: string
   sessionId: string
-  /** chat, watch-run or brief — a team worker is a chat with `teamRunId` */
+  /** chat, job-run or brief — a team worker is a chat with `teamRunId` */
   sessionKind: string
   tool: string
   kind: ActionKind
@@ -155,7 +155,7 @@ export type ActionRecord = {
   allowedBy: ActionAllowedBy | null
   /** the mode's name, the rule's source, … */
   allowedDetail: string | null
-  watchId: string | null
+  jobId: string | null
   teamRunId: string | null
   itemId: string | null
   /** set on records that collapse (one `git push` record per branch per session) */

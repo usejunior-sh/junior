@@ -82,7 +82,7 @@ test('your own PRs read from GitHub: reviewers, approval, conflicts, red CI', ()
 })
 
 test('a follow-up waits on someone else', () => {
-  assert.equal(flow(item({ source: 'slack', kind: 'watch-hit', ask: 'follow-up' })), 'new/others')
+  assert.equal(flow(item({ source: 'slack', kind: 'job-hit', ask: 'follow-up' })), 'new/others')
 })
 
 test('team runs: proposed, gate, running, paused, done', () => {
@@ -115,9 +115,9 @@ test('an override holds until something newer happens to the item', () => {
 })
 
 test('stuck: waiting on others for more than two days', () => {
-  const f = flowOf(item({ source: 'slack', kind: 'watch-hit', ask: 'follow-up', updatedAt: iso(NOW - 3 * DAY) }))
+  const f = flowOf(item({ source: 'slack', kind: 'job-hit', ask: 'follow-up', updatedAt: iso(NOW - 3 * DAY) }))
   assert.equal(isStuck(f, NOW), true)
-  assert.equal(isStuck(flowOf(item({ source: 'slack', kind: 'watch-hit', ask: 'follow-up', updatedAt: iso(NOW - DAY) })), NOW), false)
+  assert.equal(isStuck(flowOf(item({ source: 'slack', kind: 'job-hit', ask: 'follow-up', updatedAt: iso(NOW - DAY) })), NOW), false)
 })
 
 // ---------------------------------------------------------------------------

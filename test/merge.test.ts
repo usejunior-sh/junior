@@ -14,7 +14,7 @@ function it(id: string, title: string, extra: Partial<WorkItem> = {}): WorkItem 
   return {
     id,
     source: id.startsWith('github:') ? 'github' : 'slack',
-    kind: id.startsWith('github:') ? 'review-requested' : 'watch-hit',
+    kind: id.startsWith('github:') ? 'review-requested' : 'job-hit',
     title,
     url: 'https://example.com',
     repo: '#eng',

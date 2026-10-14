@@ -1,7 +1,7 @@
-import { Eye, FileDiff, FileText, Inbox, MessagesSquare, Send, Terminal, type LucideProps } from 'lucide-react'
+import { CalendarClock, FileDiff, FileText, Inbox, MessagesSquare, Send, Terminal, type LucideProps } from 'lucide-react'
 import type { ComponentType } from 'react'
 
-export type RailSection = 'inbox' | 'sessions' | 'artifacts' | 'changes' | 'terminals' | 'watches' | 'actions'
+export type RailSection = 'inbox' | 'sessions' | 'artifacts' | 'changes' | 'terminals' | 'jobs' | 'actions'
 
 type Props = {
   active: RailSection | null
@@ -22,7 +22,7 @@ const ITEMS: Array<{ id: RailSection; label: string; icon: ComponentType<LucideP
   { id: 'artifacts', label: 'Artifacts', icon: FileText },
   { id: 'changes', label: 'Changes', icon: FileDiff },
   { id: 'terminals', label: 'Terminals', icon: Terminal },
-  { id: 'watches', label: 'Watches', icon: Eye },
+  { id: 'jobs', label: 'Jobs', icon: CalendarClock },
   { id: 'actions', label: 'Actions', icon: Send },
 ]
 

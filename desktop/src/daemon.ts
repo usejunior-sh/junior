@@ -2,7 +2,7 @@
  * Find, start and restart the local triage daemon from the Electron main
  * process (ARCHITECTURE.md). The app attaches, it does not own: the daemon runs
  * under the same LaunchAgent `triage install` writes, so it survives the app
- * quitting — and a reboot, a logout and a crash, which is what watches need.
+ * quitting — and a reboot, a logout and a crash, which is what jobs need.
  *
  * Deliberately free of an `electron` import — packaging is detected from the
  * bundled runtime on disk — so this module also loads under plain node.
@@ -170,7 +170,7 @@ function dedupe(dirs: string[]): string[] {
  *
  * Installing the app is the only step anyone takes, so the app — not the
  * installer, which a drag-from-DMG user never runs — is what guarantees the
- * LaunchAgent exists. Watches are a background promise, and a daemon this
+ * LaunchAgent exists. Jobs are a background promise, and a daemon this
  * process merely detached dies at the next reboot.
  */
 export async function ensureDaemon(onStatus?: (msg: string) => void): Promise<DaemonHealth> {

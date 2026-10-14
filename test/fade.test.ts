@@ -14,7 +14,7 @@ function fyi(age: number, extra: Partial<WorkItem> = {}): WorkItem {
   return {
     id: 'slack:C1/p1',
     source: 'slack',
-    kind: 'watch-hit',
+    kind: 'job-hit',
     ask: 'read',
     title: 'a thing to know',
     url: 'https://x.slack.com/archives/C1/p1',

@@ -194,7 +194,7 @@ export function useMentionSearch(active: ActiveMention | null, root: string, exc
       push('item', fuzzyRank(query, inbox.items, (i) => i.title, cap, 2.5).map(itemHit).filter(keep))
     }
     if (kind === null || kind === 'session') {
-      const chat = sessions.filter((s) => s.kind !== 'watch-run' && s.kind !== 'brief')
+      const chat = sessions.filter((s) => s.kind !== 'job-run' && s.kind !== 'brief')
       push('session', fuzzyRank(query, chat, (s) => s.title, cap, 2.5).map(sessionHit).filter(keep))
     }
     return groups

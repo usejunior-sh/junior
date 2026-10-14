@@ -69,7 +69,7 @@ export function DefaultProjectGate({ workspaceId, suspended }: Props) {
             </Dialog.Title>
             <Dialog.Description asChild>
               <p className="wsIntro">
-                Sessions, terminals and watches in this workspace start in its default project. Pick the folder you
+                Sessions, terminals and jobs in this workspace start in its default project. Pick the folder you
                 work in most. You can add more projects, or change the default, in Settings → Projects.
               </p>
             </Dialog.Description>

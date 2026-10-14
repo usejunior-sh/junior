@@ -90,7 +90,7 @@ export function SystemModal({
       <div className="sheetBody">
         <div className="sheetHead">
           <span className="title">{title}</span>
-          <span className="sub">{tab === 'status' ? 'the daemon and its sources' : tab === 'activity' ? 'recent watch runs' : 'daemon log'}</span>
+          <span className="sub">{tab === 'status' ? 'the daemon and its sources' : tab === 'activity' ? 'recent job runs' : 'daemon log'}</span>
           <span className="right">
             <button type="button" className="iconBtn" title="Refresh" onClick={() => setNonce((n) => n + 1)}>
               <RefreshCw size={13} aria-hidden="true" />
@@ -179,11 +179,11 @@ function StatusTab({ conn }: { conn: ConnState }) {
       {status.launchAgent !== null && (
         <Row
           label="Keeps running"
-          value={status.launchAgent ? 'LaunchAgent installed — restarts after reboot or crash' : 'not installed — run `triage install` so watches survive a reboot'}
+          value={status.launchAgent ? 'LaunchAgent installed — restarts after reboot or crash' : 'not installed — run `triage install` so jobs survive a reboot'}
           tone={status.launchAgent ? 'ok' : 'warn'}
         />
       )}
-      <Row label="Watch runs in flight" value={String(status.runningWatches)} />
+      <Row label="Job runs in flight" value={String(status.runningJobs)} />
       <Row label="Inbox last synced" value={rel(status.inboxSyncedAt)} />
       <Row
         label="GitHub last reconcile"
@@ -191,9 +191,9 @@ function StatusTab({ conn }: { conn: ConnState }) {
         tone={status.githubNotice ? 'bad' : 'dim'}
       />
       <Row
-        label="Watches"
-        value={`${status.watches.enabled}/${status.watches.total} enabled${status.watches.failing ? ` · ${status.watches.failing} failing` : ''}${status.watches.configErrors ? ` · ${status.watches.configErrors} need fixing` : ''}${status.watches.overdue ? ` · ${status.watches.overdue} overdue` : ''}`}
-        tone={status.watches.failing || status.watches.configErrors ? 'bad' : status.watches.overdue ? 'warn' : 'ok'}
+        label="Jobs"
+        value={`${status.jobs.enabled}/${status.jobs.total} enabled${status.jobs.failing ? ` · ${status.jobs.failing} failing` : ''}${status.jobs.configErrors ? ` · ${status.jobs.configErrors} need fixing` : ''}${status.jobs.overdue ? ` · ${status.jobs.overdue} overdue` : ''}`}
+        tone={status.jobs.failing || status.jobs.configErrors ? 'bad' : status.jobs.overdue ? 'warn' : 'ok'}
       />
       <Row label="Logs" value={status.logDir ?? 'in-memory only'} tone="dim" />
     </div>
@@ -217,7 +217,7 @@ export function ActivityTab() {
         return (
           <div key={r.sessionId} className="sysRunRow">
             <span className={`runStatus ${st}`}>{st}</span>
-            <span className="sysRunTitle">{r.watchTitle}</span>
+            <span className="sysRunTitle">{r.jobTitle}</span>
             <span className="sysRunMeta">
               {rel(r.startedAt)}
               {r.status === 'ok' && ` · ${r.matches ?? 0} filed`}

@@ -164,7 +164,7 @@ function SystemIcons({
         <Gauge size={15} aria-hidden="true" />
         <span className={`connDot ${conn === 'connected' ? '' : conn === 'connecting' ? 'connecting' : 'down'}`} aria-hidden="true" />
       </button>
-      <button type="button" className="topIcon" title="Watch runs and activity" onClick={() => onOpenSystem('activity')}>
+      <button type="button" className="topIcon" title="Job runs and activity" onClick={() => onOpenSystem('activity')}>
         <Activity size={15} aria-hidden="true" />
       </button>
       <button

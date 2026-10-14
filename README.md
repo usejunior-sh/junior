@@ -6,7 +6,7 @@
   <a href="#install">Install</a> ·
   <a href="#mac-app">Mac app</a> ·
   <a href="#what-feeds-it">Sources</a> ·
-  <a href="#watches">Watches</a> ·
+  <a href="#jobs">Jobs</a> ·
   <a href="#development">Development</a> ·
   <a href="https://usetriage.sh">Website</a>
 </p>
@@ -30,13 +30,13 @@ It runs on your machine, uses your existing Claude Code login, and never holds a
 
 ## Features
 
-- **One inbox.** GitHub, Slack, Linear and your own watches, ranked by the same rules. No LLM in the scoring path.
+- **One inbox.** GitHub, Slack, Linear and your own jobs, ranked by the same rules. No LLM in the scoring path.
 - **Dispatch.** Any item opens a Claude Code session in the right project folder with a brief attached.
-- **Watches.** One paragraph of instructions, the integrations it may use, a schedule. It files work items or writes a digest.
+- **Jobs.** One paragraph of instructions, the integrations it may use, a schedule. It files work items or writes a digest.
 - **Briefs.** Queue an item and a playbook writes a markdown brief before you look at it.
 - **Sessions and terminals.** Full Claude Code chats and real PTY terminals in the same workspace, same auth.
 - **Receipts.** Every automated run is a session you can open. "Found nothing" is provably "looked and found nothing".
-- **Workspaces.** Work and personal stay apart: separate inbox, watches, connectors and Claude login per workspace.
+- **Workspaces.** Work and personal stay apart: separate inbox, jobs, connectors and Claude login per workspace.
 
 <table>
   <tr>
@@ -61,7 +61,7 @@ Then open [http://triage.localhost:5178](http://triage.localhost:5178). Safari u
 | Requirement | Why |
 | --- | --- |
 | Node ≥ 22.5 | uses `node:sqlite`, no native deps |
-| [Claude Code](https://claude.com/claude-code), logged in | sessions and watch runs use your login, not an API key |
+| [Claude Code](https://claude.com/claude-code), logged in | sessions and job runs use your login, not an API key |
 | `gh` logged in | GitHub source · optional |
 | claude.ai Slack or Linear connector | Slack and Linear sources · optional |
 
@@ -85,7 +85,7 @@ curl -fsSL https://usetriage.sh/install.sh | sh
 
 Triage.app is a native window over the same server, with its own Node bundled, so it doesn't need the npm package. On
 launch it attaches to the triage that's already running, or starts one. Quitting the app leaves triage running, so live
-sessions and watches keep going. You still need Claude Code installed and logged in.
+sessions and jobs keep going. You still need Claude Code installed and logged in.
 
 Run the same line again to update. The app is ad-hoc signed, not notarized: install it with the script, not a browser
 download. More in [desktop/README.md](desktop/README.md).
@@ -103,30 +103,30 @@ download. More in [desktop/README.md](desktop/README.md).
 | Source | How | What arrives |
 | --- | --- | --- |
 | GitHub | your local `gh` login | review requests, your PRs by state, mentions |
-| Slack | claude.ai connector, read-only | unread DMs, mentions, anything a watch finds |
-| Linear | claude.ai connector, read-only | issues a watch finds |
-| Web | Claude Code's own search and fetch | pages a watch finds |
+| Slack | claude.ai connector, read-only | unread DMs, mentions, anything a job finds |
+| Linear | claude.ai connector, read-only | issues a job finds |
+| Web | Claude Code's own search and fetch | pages a job finds |
 | You | the composer, the palette, or MCP | anything, by hand or by paste |
 
 Every item has a canonical id, so the same PR asked about in Slack and requested on GitHub is one row, not two.
 
-## Watches
+## Jobs
 
-A watch is what you would tell a colleague: where to look, what counts, how often.
+A job is what you would tell a colleague: where to look, what counts, how often.
 
 - **Instructions** in plain English. The run finds teams, channels and labels itself.
 - **Integrations** it may use. This is the fence: the run only gets those tools, read-only.
 - **Output**: work items, one per match, or a single rolling digest with a markdown report.
 - **Schedule**, plus a model if you want to pin one.
 
-Creating one is two steps. Fill in the details, then preview: the watch runs once as a dry run, the
+Creating one is two steps. Fill in the details, then preview: the job runs once as a dry run, the
 transcript streams in, and you see exactly what it would have filed. Nothing is saved until you create it.
 
-Every run is a session. Each watch has a page with its health, cost in dollars, and every run's transcript.
+Every run is a session. Each job has a page with its health, cost in dollars, and every run's transcript.
 
 ## Ingestion API
 
-Any Claude Code routine or script can be a watch runner. The bundled stdio MCP shim exposes the inbox as tools:
+Any Claude Code routine or script can be a job runner. The bundled stdio MCP shim exposes the inbox as tools:
 
 ```sh
 claude mcp add triage -- triage-mcp
@@ -139,7 +139,7 @@ never overwrite your own state, so an external scanner cannot create duplicates 
 
 Everything runs locally. Data lives in SQLite under `~/.triage/`. The server binds to localhost.
 This package holds no Slack, GitHub or Linear credentials: sources go through your `gh` login and your
-claude.ai connectors. Watch runs and briefs spend your Claude tokens; the app shows you what each one cost.
+claude.ai connectors. Job runs and briefs spend your Claude tokens; the app shows you what each one cost.
 
 ## Development
 
@@ -156,7 +156,7 @@ the end-to-end check against a running server.
 | Path | What lives there |
 | --- | --- |
 | `shared/protocol.ts` | the WebSocket contract, imported by both sides |
-| `core/` | store interfaces and SQLite adapter, scoring, watches, sources |
+| `core/` | store interfaces and SQLite adapter, scoring, jobs, sources |
 | `server/` | HTTP and WebSocket server, the `triage` and `triage-mcp` bins |
 | `web/` | Vite + React UI |
 | `desktop/` | Triage.app, the Electron window over the server |

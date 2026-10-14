@@ -203,14 +203,14 @@ function linkifyText(text: string, refs: RefIndex, onRef: (hash: string) => void
 }
 
 /**
- * A watch a chat drafted (draft_watch) is off until the user turns it on —
+ * A job a chat drafted (draft_job) is off until the user turns it on —
  * so the call's result carries a way there, right under it.
  */
-function DraftWatchLinks({ tools, onRef }: { tools: readonly TranscriptItem[]; onRef: (hash: string) => void }) {
+function DraftJobLinks({ tools, onRef }: { tools: readonly TranscriptItem[]; onRef: (hash: string) => void }) {
   const ids = tools.flatMap((t) => {
-    if (t.kind !== 'tool' || !t.name.endsWith('__draft_watch') || !t.result || t.result.isError) return []
-    const m = /#(\/watches\/[\w-]+)/.exec(t.result.text)
-    return m ? [{ key: t.key, hash: m[1]!, title: typeof t.input.title === 'string' ? t.input.title : 'the watch' }] : []
+    if (t.kind !== 'tool' || !t.name.endsWith('__draft_job') || !t.result || t.result.isError) return []
+    const m = /#(\/jobs\/[\w-]+)/.exec(t.result.text)
+    return m ? [{ key: t.key, hash: m[1]!, title: typeof t.input.title === 'string' ? t.input.title : 'the job' }] : []
   })
   if (!ids.length) return null
   return (
@@ -362,7 +362,7 @@ const Item = memo(function Item({
         <>
           <ToolCard item={item} />
           <ActionNotes tools={[item]} byCall={actionByCall} onNavigate={onRef} />
-          <DraftWatchLinks tools={[item]} onRef={onRef} />
+          <DraftJobLinks tools={[item]} onRef={onRef} />
           <BrowserShots sessionId={sessionId} tools={[item]} />
         </>
       )
@@ -371,7 +371,7 @@ const Item = memo(function Item({
         <>
           <ToolGroup item={item} />
           <ActionNotes tools={item.members} byCall={actionByCall} onNavigate={onRef} />
-          <DraftWatchLinks tools={item.members} onRef={onRef} />
+          <DraftJobLinks tools={item.members} onRef={onRef} />
           <BrowserShots sessionId={sessionId} tools={item.members} />
         </>
       )

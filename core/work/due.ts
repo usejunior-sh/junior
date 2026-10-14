@@ -3,7 +3,7 @@
  * Time is always an argument.
  *
  * An item is due on a *day* (local midnight, ms). Where the day comes from:
- *   explicit — the source said so (a Linear/Jira due date, "by EOD" read by a watch)
+ *   explicit — the source said so (a Linear/Jira due date, "by EOD" read by a job)
  *   you      — set from the inbox (t / m / w / l); survives rescans
  *   default  — nothing set: the label's default (labels.ts), resolved against
  *              now, so a default is never late — it is a section, not a date
@@ -138,7 +138,7 @@ export function dueChip(at: number, now: number): string {
 }
 
 /**
- * A deadline a source or a watch stated. A bare date ("2026-10-12") is that
+ * A deadline a source or a job stated. A bare date ("2026-10-12") is that
  * local day, not UTC midnight — which in the Americas is the day before.
  */
 export function parseDue(raw: unknown): number | null {

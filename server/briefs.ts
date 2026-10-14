@@ -11,7 +11,7 @@
  * places the pipeline is customisable in prose; everything else is code.
  *
  * The queue, the runner and the routes live in server/index.ts beside the
- * watch runs; this module is imported by it and imports nothing from it.
+ * job runs; this module is imported by it and imports nothing from it.
  */
 import { existsSync } from 'node:fs'
 import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises'
@@ -148,7 +148,7 @@ Suggested sections:
 - **Open questions**
 ${COMMON_TAIL}`,
 
-  'watch-hit': `# A watch matched this
+  'job-hit': `# A job matched this
 
 Read the matched content and what it references. Do NOT post or change anything.
 

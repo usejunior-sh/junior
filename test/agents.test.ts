@@ -49,7 +49,7 @@ function foreground(): SessionEvent[] {
     sdk({ type: 'system', subtype: 'task_progress', task_id: 'a1b2', tool_use_id: 'toolu_A', description: 'Reading index.ts', usage: { total_tokens: 18200, tool_uses: 1, duration_ms: 2400 }, last_tool_name: 'Read' }),
     result('toolu_R', 'file body', 'toolu_A'),
     sdk({ type: 'system', subtype: 'task_notification', task_id: 'a1b2', tool_use_id: 'toolu_A', status: 'completed', summary: 'find callers', usage: { total_tokens: 20100, tool_uses: 1, duration_ms: 3100 } }),
-    result('toolu_A', [{ type: 'text', text: 'Two callers: server/index.ts:2398 and core/watch/tools.ts:41.\nagentId: a1b2 (use SendMessage to continue)\n<usage>total_tokens: 20100</usage>' }]),
+    result('toolu_A', [{ type: 'text', text: 'Two callers: server/index.ts:2398 and core/job/tools.ts:41.\nagentId: a1b2 (use SendMessage to continue)\n<usage>total_tokens: 20100</usage>' }]),
     say('Found two callers.'),
   ]
 }
@@ -65,7 +65,7 @@ test('a foreground agent: started, worked, reported back in its tool result', ()
   assert.equal(a.background, false)
   assert.equal(a.tokens, 20100)
   assert.equal(a.toolUses, 1)
-  assert.equal(a.report, 'Two callers: server/index.ts:2398 and core/watch/tools.ts:41.')
+  assert.equal(a.report, 'Two callers: server/index.ts:2398 and core/job/tools.ts:41.')
   assert.equal(a.parentToolUseId, null)
 })
 

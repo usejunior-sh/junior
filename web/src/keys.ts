@@ -20,7 +20,7 @@ export function anyDialogOpen(): boolean {
 }
 
 /**
- * True for the second key of a `g` sequence (`g t`, `g w`): App handles it as
+ * True for the second key of a `g` sequence (`g t`, `g j`): App handles it as
  * navigation, so a page's own single-key hotkeys must stand aside. Recorded in
  * the capture phase, before any page listener sees the event; the window
  * matches App's prefix timer.
@@ -57,7 +57,7 @@ export const SHORTCUTS: ReadonlyArray<[keys: string, what: string]> = [
   ['g i', 'Go to Inbox'],
   ['g s', 'Go to Sessions'],
   ['g t', 'Go to Terminals (n opens a new one there)'],
-  ['g w', 'Go to Watches'],
+  ['g j', 'Go to Jobs'],
   ['g p', 'Projects (in Settings)'],
   ['g c', 'Connectors (in Settings)'],
   ['j / k', 'Inbox: move selection'],

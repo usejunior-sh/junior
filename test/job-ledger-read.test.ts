@@ -4,8 +4,8 @@
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { budgetFor, describeLateness, isOverdue, localMidnight, MISSED_CAP, missedSlots } from '../core/watch/schedule.js'
-import { composeRunPrompt } from '../core/watch/connectors.js'
+import { budgetFor, describeLateness, isOverdue, localMidnight, MISSED_CAP, missedSlots } from '../core/job/schedule.js'
+import { composeRunPrompt } from '../core/job/connectors.js'
 
 const at = (d: number, h: number, m = 0) => new Date(2026, 8, d, h, m).getTime() // Sept 2026, local
 

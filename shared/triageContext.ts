@@ -30,7 +30,7 @@ export const TRIAGE_MCP_INSTRUCTIONS = `Triage is a local work inbox for one eng
 
 list_work_items, get_work_item, get_session_context, list_artifacts and read_artifact are free reads — use them rather than guessing. Every other tool writes, and the user is asked first.`
 
-export type TriageSessionKind = 'chat' | 'watch-run' | 'brief'
+export type TriageSessionKind = 'chat' | 'job-run' | 'brief'
 
 export type TriageSessionIdentity = {
   /** the triage session id — the handle for get_session_context and `links` */

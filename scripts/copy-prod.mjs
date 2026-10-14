@@ -1,6 +1,6 @@
 // `npm run dev:copy-prod` — seed the dev data root (~/.triage-dev, see
 // dev-home.mjs) from prod's ~/.triage, so dev runs against real workspaces
-// without its migrations, watches or phone pairing ever touching prod.
+// without its migrations, jobs or phone pairing ever touching prod.
 //
 // Copied: the workspace registry and every workspace folder (artifacts, agents,
 // teams, playbooks, dispatch, attachments, claude/, .env kept at 0600). Each

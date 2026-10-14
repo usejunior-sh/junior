@@ -10,7 +10,7 @@
  *   triage logs        print the tail of ~/.triage/server.log
  *   triage install     keep it running: a macOS LaunchAgent (restarts after reboot/crash)
  *   triage uninstall   remove the LaunchAgent
- *   triage doctor      check the environment watches depend on
+ *   triage doctor      check the environment jobs depend on
  *
  * "Is triage running" is always decided by GET /api/health — a pid file can
  * lie after a crash or reboot; the health check cannot. The state file
@@ -88,7 +88,7 @@ const HELP = `
     ${cyan('triage status')}      show whether the server is running and where
     ${cyan('triage logs')}        print the tail of the server log
 
-  ${bold('Keep it running')} ${dim('(macOS — watches only run while triage runs)')}
+  ${bold('Keep it running')} ${dim('(macOS — jobs only run while triage runs)')}
     ${cyan('triage install')}     install a LaunchAgent: starts at login, restarts after a crash
     ${dim('--defer')}            ${dim('write it without restarting a running server (takes effect at next login)')}
     ${cyan('triage uninstall')}   remove the LaunchAgent
@@ -676,13 +676,13 @@ async function doctor(port: number) {
   const claude = await version('claude').catch(() => null)
   check(claude !== null, 'claude', claude ?? 'not found on PATH', 'install Claude Code, or fix PATH')
   const gh = await version('gh').catch(() => null)
-  check(gh === null ? null : true, 'gh', gh ?? 'not found — GitHub watches and the GitHub source need it')
+  check(gh === null ? null : true, 'gh', gh ?? 'not found — GitHub jobs and the GitHub source need it')
   const claudeDir = process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude')
   check(existsSync(claudeDir) ? true : null, 'claude dir', tilde(claudeDir))
   if (process.platform === 'darwin') {
     const installed = launchAgentInstalled()
     const loaded = installed ? await launchAgentLoaded() : false
-    check(installed ? loaded : null, 'agent', installed ? (loaded ? 'installed and loaded' : 'installed but not loaded') : `not installed — watches stop after a reboot`, `triage start (loads it)`)
+    check(installed ? loaded : null, 'agent', installed ? (loaded ? 'installed and loaded' : 'installed but not loaded') : `not installed — jobs stop after a reboot`, `triage start (loads it)`)
     if (!installed) console.log(dim(`             install it with ${cyan('triage install')}`))
   }
   const health = await checkHealth(port)

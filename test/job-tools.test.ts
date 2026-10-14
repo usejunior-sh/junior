@@ -1,10 +1,10 @@
 /**
- * Tool grants and the run fence (watch-spec.md, items 1 and 2). The fence is
+ * Tool grants and the run fence (job-spec.md, items 1 and 2). The fence is
  * the real boundary of an unattended run, so it gets the most cases.
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { fenceDecision, fenceFor } from '../core/watch/fence.js'
+import { fenceDecision, fenceFor } from '../core/job/fence.js'
 import {
   builtinGrant,
   defaultToolsFor,
@@ -16,12 +16,12 @@ import {
   runAllowedTools,
   runBaseTools,
   runDeferredTools,
-  type WatchToolGrant,
-} from '../core/watch/tools.js'
-import { composeRunPrompt } from '../core/watch/connectors.js'
+  type JobToolGrant,
+} from '../core/job/tools.js'
+import { composeRunPrompt } from '../core/job/connectors.js'
 
 const ROOT = '/Users/me/Code/app'
-const notion: WatchToolGrant = {
+const notion: JobToolGrant = {
   source: { kind: 'mcp', server: 'claude.ai Notion', scope: 'claudeai' },
   tools: [mcpToolName('claude.ai Notion', 'notion-search'), mcpToolName('claude.ai Notion', 'notion-fetch')],
 }
@@ -72,7 +72,7 @@ test('fence: file tools stay inside the project folder', () => {
 test('fence: writing needs the files-write grant, and stays inside the folder', () => {
   assert.ok(!allow('Write', { file_path: `${ROOT}/notes.md` }))
   const w = fenceFor([...grants, builtinGrant('files-write')], 'items', ROOT)
-  assert.ok(fenceDecision(w, 'Write', { file_path: `${ROOT}/watch-notes/x.md` }).allow)
+  assert.ok(fenceDecision(w, 'Write', { file_path: `${ROOT}/job-notes/x.md` }).allow)
   assert.ok(fenceDecision(w, 'Edit', { file_path: 'notes.md' }).allow)
   assert.ok(!fenceDecision(w, 'Write', { file_path: '/tmp/x' }).allow)
 })

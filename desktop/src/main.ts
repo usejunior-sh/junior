@@ -1,7 +1,7 @@
 /**
  * Triage.app's main process (ARCHITECTURE.md): windows over the local daemon,
  * a menu, a menu-bar icon. The app attaches, it does not own — quitting it
- * never stops the daemon, so live sessions and watches carry on.
+ * never stops the daemon, so live sessions and jobs carry on.
  *
  * One main window, which only hides on close so the app lives on in the Dock;
  * opening a workspace "in a new tab" (the switcher's ⌘-click / external icon)
@@ -339,7 +339,7 @@ async function confirmRestart(message = 'Restart the triage server?') {
       (live
         ? `This stops ${live} live session${live === 1 ? '' : 's'} mid-turn. `
         : 'Any live session is stopped. ') +
-      'Each one picks up again on its next message. Watches skip a beat; nothing is lost.',
+      'Each one picks up again on its next message. Jobs skip a beat; nothing is lost.',
     buttons: ['Restart', 'Cancel'],
     defaultId: 1,
     cancelId: 1,

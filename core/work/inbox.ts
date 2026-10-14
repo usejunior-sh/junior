@@ -1,6 +1,6 @@
 /**
- * Inbox assembly (.docs/watches-v2.md). Under the durable model every source —
- * GitHub, Slack watch hits, manual to-dos — is already a row in the work-item
+ * Inbox assembly (.docs/jobs-v2.md). Under the durable model every source —
+ * GitHub, Slack job hits, manual to-dos — is already a row in the work-item
  * store; nothing is fetched here and there is no user-state overlay (status
  * lives on the row). This is a pure fold: take the items for a status, score
  * them deterministically, and link cross-source refs into one card. No LLM, no

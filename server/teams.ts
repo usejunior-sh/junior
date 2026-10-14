@@ -471,7 +471,7 @@ function isOneCheck(cmd: string, checks: string[]): boolean {
 
 /**
  * The project's own checks, from its package.json: typecheck, lint, test — the
- * free verification that runs before any checker is paid (Kiro, Copilot). Watch
+ * free verification that runs before any checker is paid (Kiro, Copilot). Job
  * modes and npm's placeholder test script are skipped.
  */
 export async function detectChecks(root: string): Promise<string[]> {

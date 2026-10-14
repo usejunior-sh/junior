@@ -1,9 +1,9 @@
 import {
   ArrowLeft,
   ArrowRight,
+  CalendarClock,
   ChevronRight,
   CircleDot,
-  Eye,
   FileDiff,
   FileText,
   Folder,
@@ -56,7 +56,7 @@ const homely = (p: string) => p.replace(/^\/(?:Users|home)\/[^/]+/, '~')
  * would be lost; the rest are *documents*, which is why only they are ever
  * peeked at rather than pinned.
  */
-export type TabKind = 'session' | 'terminal' | 'draft' | 'item' | 'artifact' | 'watch' | 'watch-form' | 'change'
+export type TabKind = 'session' | 'terminal' | 'draft' | 'item' | 'artifact' | 'job' | 'job-form' | 'change'
 
 const ICON: Record<TabKind, ComponentType<LucideProps>> = {
   session: MessageSquare,
@@ -64,8 +64,8 @@ const ICON: Record<TabKind, ComponentType<LucideProps>> = {
   draft: PenLine,
   item: CircleDot,
   artifact: FileText,
-  watch: Eye,
-  'watch-form': Eye,
+  job: CalendarClock,
+  'job-form': CalendarClock,
   change: FileDiff,
 }
 
@@ -93,7 +93,7 @@ type Props = {
   tabs: readonly OpenTab[]
   /** The one document being peeked at, if any — it outlives navigating away. */
   preview?: OpenTab | null
-  /** A transient tab for a rail *index* (Watches, Terminals, Artifacts). */
+  /** A transient tab for a rail *index* (Jobs, Terminals, Artifacts). */
   pageTab?: PageTab | null
   onInbox: () => void
   /** Set while the panel is hidden: its show button leads the band. */

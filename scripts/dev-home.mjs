@@ -1,4 +1,4 @@
-// Dev keeps its data apart from prod's ~/.triage: migrations, watch schedulers,
+// Dev keeps its data apart from prod's ~/.triage: migrations, job schedulers,
 // server.json, phone pairing and logs all live under TRIAGE_HOME. An explicit
 // TRIAGE_HOME (e.g. `TRIAGE_HOME=~/.triage npm run dev`) wins unchanged.
 //

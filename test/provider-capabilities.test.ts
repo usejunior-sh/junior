@@ -18,7 +18,7 @@ test('claude reports every capability', () => {
   assert.deepEqual(Object.keys(claude.capabilities).sort(), [...ALL].sort())
   for (const c of ALL) assert.equal(claude.capabilities[c], true, c)
   assert.deepEqual(missingCapabilities(claude, ALL), [])
-  assert.doesNotThrow(() => requireCapabilities(claude, ALL, 'run a watch'))
+  assert.doesNotThrow(() => requireCapabilities(claude, ALL, 'run a job'))
 })
 
 test('a flag set false is reported unsupported', () => {
@@ -34,21 +34,21 @@ test('several missing come back in the order asked', () => {
 })
 
 test('requireCapabilities names what is missing', () => {
-  assert.throws(() => requireCapabilities(fake(['hooks', 'toolApproval']), ['hooks', 'toolApproval', 'resume'], 'run a watch'), {
-    message: "Fake can't run a watch: no hooks, toolApproval",
+  assert.throws(() => requireCapabilities(fake(['hooks', 'toolApproval']), ['hooks', 'toolApproval', 'resume'], 'run a job'), {
+    message: "Fake can't run a job: no hooks, toolApproval",
   })
 })
 
-test('claude may run watches and teams', () => {
-  assert.equal(vetoRefusal(claude, 'watch'), null)
+test('claude may run jobs and teams', () => {
+  assert.equal(vetoRefusal(claude, 'job'), null)
   assert.equal(vetoRefusal(claude, 'team'), null)
-  assert.doesNotThrow(() => requireVeto(claude, 'watch'))
+  assert.doesNotThrow(() => requireVeto(claude, 'job'))
   assert.doesNotThrow(() => requireVeto(claude, 'team'))
 })
 
-test('a watch on a hooks:false adapter is refused', () => {
-  assert.throws(() => requireVeto(fake(['hooks']), 'watch'), {
-    message: "Fake can't run a watch: it has no tool-call veto (no hooks), so nothing could fence its tool calls",
+test('a job on a hooks:false adapter is refused', () => {
+  assert.throws(() => requireVeto(fake(['hooks']), 'job'), {
+    message: "Fake can't run a job: it has no tool-call veto (no hooks), so nothing could fence its tool calls",
   })
 })
 
@@ -60,11 +60,11 @@ test('a team on a hooks:false adapter is refused', () => {
 
 test('no tool approval is refused too, and every other gap is not', () => {
   assert.match(vetoRefusal(fake(['toolApproval']), 'team') ?? '', /no toolApproval/)
-  assert.match(vetoRefusal(fake(['hooks', 'toolApproval']), 'watch') ?? '', /no hooks, toolApproval/)
-  assert.equal(vetoRefusal(fake(['resume', 'interrupt', 'setModel', 'inProcessMcp', 'streamDeltas']), 'watch'), null)
+  assert.match(vetoRefusal(fake(['hooks', 'toolApproval']), 'job') ?? '', /no hooks, toolApproval/)
+  assert.equal(vetoRefusal(fake(['resume', 'interrupt', 'setModel', 'inProcessMcp', 'streamDeltas']), 'job'), null)
 })
 
 test('a missing hooks key counts as no veto', () => {
   const p = { label: 'Partial', capabilities: { toolApproval: true } as unknown as Capabilities }
-  assert.throws(() => requireVeto(p, 'watch'), /Partial can't run a watch/)
+  assert.throws(() => requireVeto(p, 'job'), /Partial can't run a job/)
 })

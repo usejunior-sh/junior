@@ -1,5 +1,5 @@
 /**
- * Cross-source linking (.docs/watches.md): two items about the same work get
+ * Cross-source linking (.docs/jobs.md): two items about the same work get
  * linked, not merged. The scanner *extracts* refs (verifiable); this module
  * canonicalizes them and folds items sharing a canonical ref into one card.
  * No shared ref → never auto-linked. No LLM anywhere.

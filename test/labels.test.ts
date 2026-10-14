@@ -1,5 +1,5 @@
 /**
- * Labels (core/work/labels.ts): scanner kinds keep their weights, a watch hit
+ * Labels (core/work/labels.ts): scanner kinds keep their weights, a job hit
  * ranks by the label its run picked, and an unknown ask reads as Read.
  */
 import { test } from 'node:test'
@@ -39,21 +39,21 @@ test('scanner kinds keep their base weight and group', () => {
   assert.equal(scoreItem(item('own-pr-open'), NOW).group, 'fyi')
 })
 
-test('a watch hit takes its label weight and group', () => {
-  const reply = scoreItem(item('watch-hit', { ask: 'reply' }), NOW)
+test('a job hit takes its label weight and group', () => {
+  const reply = scoreItem(item('job-hit', { ask: 'reply' }), NOW)
   assert.equal(reply.label, 'reply')
   assert.equal(reply.group, 'blocking')
   assert.equal(reply.score, LABELS.reply.weight)
-  // a watch-found reply outranks a plain mention
+  // a job-found reply outranks a plain mention
   assert.ok(reply.score > scoreItem(item('slack-mention'), NOW).score)
 })
 
-test('a watch hit with no ask, or one that is no longer a label, is Read', () => {
-  assert.equal(labelOf(item('watch-hit')), 'read')
-  assert.equal(labelOf(item('watch-hit', { ask: 'escalate' })), 'read')
-  assert.equal(scoreItem(item('watch-hit', { ask: 'escalate' }), NOW).group, 'fyi')
+test('a job hit with no ask, or one that is no longer a label, is Read', () => {
+  assert.equal(labelOf(item('job-hit')), 'read')
+  assert.equal(labelOf(item('job-hit', { ask: 'escalate' })), 'read')
+  assert.equal(scoreItem(item('job-hit', { ask: 'escalate' }), NOW).group, 'fyi')
 })
 
-test('ask only moves watch hits; a scanner kind ignores it', () => {
+test('ask only moves job hits; a scanner kind ignores it', () => {
   assert.equal(labelOf(item('mention', { ask: 'decide' })), 'read')
 })

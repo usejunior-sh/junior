@@ -83,8 +83,8 @@ export const inboxStore = {
   },
 }
 
-// Once loaded, stay current: a chat's create_work_item, a watch run and another
-// tab all move items, and the server says so. A burst (a watch filing twenty
+// Once loaded, stay current: a chat's create_work_item, a job run and another
+// tab all move items, and the server says so. A burst (a job filing twenty
 // items) coalesces into one refetch, queued behind any load already in flight
 // so it can't be answered by a snapshot taken before the change.
 let pending: ReturnType<typeof setTimeout> | null = null

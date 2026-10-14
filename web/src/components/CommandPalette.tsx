@@ -6,16 +6,16 @@ import type {
   ScoredItem,
   SessionSummary,
   TerminalSummary,
-  Watch,
-  WatchesResponse,
+  Job,
+  JobsResponse,
 } from '../../../shared/protocol.js'
 import { MOD_LABEL } from '../keys.js'
 import { SETTINGS_TABS, type SettingsTab } from '../settings.js'
-import { grantLabel } from '../../../core/watch/tools.js'
+import { grantLabel } from '../../../core/job/tools.js'
 
 export type Command = {
   id: string
-  section: 'Actions' | 'Pages' | 'Settings' | 'Projects' | 'Sessions' | 'Terminals' | 'Watches' | 'Work items'
+  section: 'Actions' | 'Pages' | 'Settings' | 'Projects' | 'Sessions' | 'Terminals' | 'Jobs' | 'Work items'
   label: string
   hint?: string
   run: () => void
@@ -32,12 +32,12 @@ type Props = {
   onOpenItem: (item: ScoredItem) => void
   onNewSessionIn: (project: Project) => void
   onSyncInbox: () => void
-  onAddWatch: () => void
+  onAddJob: () => void
   onOpenSettings: (tab?: SettingsTab) => void
   onHelp: () => void
 }
 
-const SECTION_ORDER: Command['section'][] = ['Actions', 'Pages', 'Settings', 'Projects', 'Sessions', 'Terminals', 'Watches', 'Work items']
+const SECTION_ORDER: Command['section'][] = ['Actions', 'Pages', 'Settings', 'Projects', 'Sessions', 'Terminals', 'Jobs', 'Work items']
 
 export function CommandPalette({
   open,
@@ -50,7 +50,7 @@ export function CommandPalette({
   onOpenItem,
   onNewSessionIn,
   onSyncInbox,
-  onAddWatch,
+  onAddJob,
   onOpenSettings,
   onHelp,
 }: Props) {
@@ -59,7 +59,7 @@ export function CommandPalette({
   const [sel, setSel] = useState(0)
   const [items, setItems] = useState<ScoredItem[]>([])
   const [projects, setProjects] = useState<Project[]>([])
-  const [watches, setWatches] = useState<Watch[]>([])
+  const [jobs, setJobs] = useState<Job[]>([])
 
   useEffect(() => {
     const el = dialog.current
@@ -81,10 +81,10 @@ export function CommandPalette({
           if (b.ok) setProjects(b.projects)
         })
         .catch(() => {})
-      void fetch('/api/watches')
-        .then((r) => r.json() as Promise<WatchesResponse>)
+      void fetch('/api/jobs')
+        .then((r) => r.json() as Promise<JobsResponse>)
         .then((b) => {
-          if (b.ok) setWatches(b.watches)
+          if (b.ok) setJobs(b.jobs)
         })
         .catch(() => {})
     }
@@ -96,7 +96,7 @@ export function CommandPalette({
       { id: 'new', section: 'Actions', label: 'New session', hint: 'n', run: onNewSession },
       { id: 'newterm', section: 'Actions', label: 'New terminal', run: onNewTerminal },
       { id: 'sync', section: 'Actions', label: 'Sync inbox now', run: onSyncInbox },
-      { id: 'addwatch', section: 'Actions', label: 'Add watch', run: onAddWatch },
+      { id: 'addjob', section: 'Actions', label: 'Add job', run: onAddJob },
       { id: 'help', section: 'Actions', label: 'Keyboard shortcuts', hint: '?', run: onHelp },
       { id: 'settings', section: 'Actions', label: 'Settings', hint: `${MOD_LABEL},`, run: () => onOpenSettings() },
       ...SETTINGS_TABS.map((t): Command => ({
@@ -109,15 +109,15 @@ export function CommandPalette({
       { id: 'inbox', section: 'Pages', label: 'Inbox', hint: 'g i', run: () => onNavigate('/inbox') },
       { id: 'sessions', section: 'Pages', label: 'Sessions', hint: 'g s', run: () => onNavigate('') },
       { id: 'terminals', section: 'Pages', label: 'Terminals', hint: 'g t', run: () => onNavigate('/terminals') },
-      { id: 'watches', section: 'Pages', label: 'Watches', hint: 'g w', run: () => onNavigate('/watches') },
+      { id: 'jobs', section: 'Pages', label: 'Jobs', hint: 'g j', run: () => onNavigate('/jobs') },
       { id: 'actions', section: 'Pages', label: 'Actions', hint: 'g a', run: () => onNavigate('/actions') },
-      ...watches.map((w): Command => ({
+      ...jobs.map((w): Command => ({
         id: `wa:${w.id}`,
-        section: 'Watches',
-        label: `${w.enabled ? 'Pause' : 'Resume'} watch: ${w.title}`,
+        section: 'Jobs',
+        label: `${w.enabled ? 'Pause' : 'Resume'} job: ${w.title}`,
         hint: w.tools.map(grantLabel).join(', '),
         run: () => {
-          void fetch(`/api/watches?id=${encodeURIComponent(w.id)}`, {
+          void fetch(`/api/jobs?id=${encodeURIComponent(w.id)}`, {
             method: 'PUT',
             headers: { 'content-type': 'application/json' },
             body: JSON.stringify({ enabled: !w.enabled }),
@@ -153,7 +153,7 @@ export function CommandPalette({
         run: () => onOpenItem(i),
       })),
     ],
-    [sessions, terminals, items, projects, watches, onNavigate, onNewSession, onNewTerminal, onOpenItem, onNewSessionIn, onSyncInbox, onAddWatch, onOpenSettings, onHelp],
+    [sessions, terminals, items, projects, jobs, onNavigate, onNewSession, onNewTerminal, onOpenItem, onNewSessionIn, onSyncInbox, onAddJob, onOpenSettings, onHelp],
   )
 
   const shown = useMemo(() => {

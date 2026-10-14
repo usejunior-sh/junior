@@ -39,7 +39,7 @@ export const TOOLS = [
           description: 'which list to read (default "open")',
         },
         source: { type: 'string', enum: ['github', 'slack', 'linear'], description: 'only items from this source' },
-        kind: { type: 'string', description: 'only items of this kind, e.g. "watch-hit"' },
+        kind: { type: 'string', description: 'only items of this kind, e.g. "job-hit"' },
       },
     },
   },
@@ -77,7 +77,7 @@ export const TOOLS = [
       type: 'object',
       properties: {
         id: { type: 'string', description: 'stable id: "slack:...", "github:owner/repo#123", or "linear:KEY-123"' },
-        kind: { type: 'string', description: 'item kind, e.g. "watch-hit", "mention", "fyi"' },
+        kind: { type: 'string', description: 'item kind, e.g. "job-hit", "mention", "fyi"' },
         title: { type: 'string' },
         url: { type: 'string' },
         repo: { type: 'string', description: 'the item\'s home: repo, Slack channel, or Linear team' },
@@ -85,12 +85,12 @@ export const TOOLS = [
         peopleWaiting: { type: 'number' },
         createdAt: { type: 'string', description: 'ISO 8601' },
         updatedAt: { type: 'string', description: 'ISO 8601 — the upsert applies only if newer than what is stored' },
-        watchId: { type: 'string', description: 'the watch that produced it, if any' },
+        jobId: { type: 'string', description: 'the job that produced it, if any' },
         why: { type: 'string', description: 'one-line match reason, rendered on the item' },
         ask: {
           type: 'string',
           enum: ['review', 'reply', 'decide', 'do', 'follow-up', 'read'],
-          description: 'what it asks of the user (watch hits); decides its label',
+          description: 'what it asks of the user (job hits); decides its label',
         },
         due: { type: 'string', description: 'a deadline the source states, ISO 8601 day (e.g. 2026-10-12)' },
         refs: { type: 'array', items: { type: 'string' }, description: 'PR/issue URLs or Linear keys seen in the content' },
@@ -117,9 +117,9 @@ export const TOOLS = [
     },
   },
   {
-    name: 'draft_watch',
+    name: 'draft_job',
     description:
-      'Draft a watch — a scheduled headless run that files matches as work items (or writes a digest). It is saved OFF as a draft: only the user can enable it, from the watch page this returns a link to. Use when the user asks to watch, monitor or keep an eye on something on a schedule.',
+      'Draft a job — a scheduled headless run that files matches as work items (or writes a digest). It is saved OFF as a draft: only the user can enable it, from the job page this returns a link to. Use when the user asks to run something on a schedule, monitor it or keep an eye on it.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -322,8 +322,8 @@ export async function callTool(
     const body = (await api('/api/items/manual', args)) as { ok: boolean; error?: string }
     return body.ok ? { text: 'ok: created', isError: false } : { text: `rejected: ${body.error}`, isError: true }
   }
-  if (name === 'draft_watch') {
-    const body = (await api('/api/watches/drafted', args)) as { ok: boolean; text?: string; error?: string }
+  if (name === 'draft_job') {
+    const body = (await api('/api/jobs/drafted', args)) as { ok: boolean; text?: string; error?: string }
     return body.ok ? { text: body.text ?? 'ok: drafted', isError: false } : { text: `not drafted: ${body.error}`, isError: true }
   }
   if (name === 'edit_work_item') {

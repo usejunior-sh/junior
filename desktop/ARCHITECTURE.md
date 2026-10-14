@@ -6,7 +6,7 @@ server is Node: nothing in `server/` or `core/` is ported.
 ## Decisions
 
 - **The app attaches, it does not own.** The daemon (`server/index.ts`) keeps
-  running when the app quits — live Claude sessions and watches must survive
+  running when the app quits — live Claude sessions and jobs must survive
   closing a window. The app finds a running triage via `GET /api/health`
   (`{ app: 'triage', … }`) and loads it in a `BrowserWindow`.
 - **If nothing is running, the app starts the bundled daemon**, detached, using

@@ -18,7 +18,7 @@ export const BASE: Record<ItemKind, number> = {
   manual: 45,
   'own-pr-stale': 40,
   // deliberately modest: mentions and reviews must outrank topical matches
-  'watch-hit': 40,
+  'job-hit': 40,
   // a report to read, not a thread waiting on you
   digest: 15,
   'slack-mention': 35,
@@ -36,7 +36,7 @@ const GROUP: Record<ItemKind, Group> = {
   'own-pr-stale': 'blocked-stale',
   'ticket-assigned': 'cycle',
   manual: 'cycle',
-  'watch-hit': 'fyi',
+  'job-hit': 'fyi',
   digest: 'fyi',
   'own-pr-open': 'fyi',
   'slack-mention': 'fyi',
@@ -60,11 +60,11 @@ export function ageWeightFor(group: Group): number {
 }
 
 /**
- * Weight and group: a scanner kind keeps its own; a watch hit takes its
+ * Weight and group: a scanner kind keeps its own; a job hit takes its
  * label's, so what the run judged it to be decides where it ranks.
  */
 function placeOf(item: WorkItem): { base: number; group: Group } {
-  if (item.kind !== 'watch-hit') return { base: BASE[item.kind], group: GROUP[item.kind] }
+  if (item.kind !== 'job-hit') return { base: BASE[item.kind], group: GROUP[item.kind] }
   const def = LABELS[labelOf(item)]
   return { base: def.weight, group: def.group }
 }
@@ -127,8 +127,8 @@ function reasonFor(item: WorkItem, waitDays: number): string {
       const pri = item.priority === 1 ? 'urgent · ' : item.priority === 2 ? 'high · ' : ''
       return `${pri}assigned to you, in the current cycle (${age(waitDays)})`
     }
-    case 'watch-hit':
-      return `matched a watch in ${item.repo} (${age(waitDays)})`
+    case 'job-hit':
+      return `matched a job in ${item.repo} (${age(waitDays)})`
     case 'digest':
       return `digest from ${item.repo} (${age(waitDays)})`
     case 'manual': {

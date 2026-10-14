@@ -182,7 +182,7 @@ export const claude: Provider = {
   mcpStatus({ cwd, env, servers }) {
     return withProbe(
       servers
-        ? // Exactly what a watch run in `cwd` loads: the user's servers plus the
+        ? // Exactly what a job run in `cwd` loads: the user's servers plus the
           // folder's, passed explicitly (never by loading the project's settings/hooks).
           { cwd, systemPrompt: PRESET, settingSources: ['user'], mcpServers: servers, ...(env ? { env } : {}) }
         : { cwd, systemPrompt: PRESET, settingSources: ['user', 'project', 'local'], ...(env ? { env } : {}) },

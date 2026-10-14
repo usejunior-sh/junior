@@ -250,7 +250,7 @@ const ctx = (over: Partial<TrackContext> = {}): TrackContext => ({
   sessionId: 's1',
   sessionKind: 'chat',
   permissionMode: null,
-  watchId: null,
+  jobId: null,
   teamRunId: null,
   itemId: null,
   ...over,
@@ -292,7 +292,7 @@ test('fold: a PR via Bash — attempted, then succeeded with its link; reads are
   })
 })
 
-test('fold: who allowed it — your prompt, a watch’s grants, a rule; a denial is denied', () => {
+test('fold: who allowed it — your prompt, a job’s grants, a rule; a denial is denied', () => {
   const send = { channel: 'C1', text: 'shipped' }
   const tool = 'mcp__claude_ai_Slack__slack_send_message'
   // Prompt after the call, matched by input (older logs carry no toolUseId).
@@ -312,8 +312,8 @@ test('fold: who allowed it — your prompt, a watch’s grants, a rule; a denial
   assert.equal(s.op === 'settle' && s.patch.allowedBy, null)
   // The result that follows a denial changes nothing more.
   assert.deepEqual(t.feed(result('t2', 'Denied by the user in the triage web UI.', true), 4), [])
-  // A watch run's grants; a plain chat's allow rule; a failure is a failure.
-  t = tracker({ sessionKind: 'watch-run', watchId: 'w1' })
+  // A job run's grants; a plain chat's allow rule; a failure is a failure.
+  t = tracker({ sessionKind: 'job-run', jobId: 'w1' })
   t.feed(use('t3', tool, send), 1)
   ;[s] = t.feed(result('t3', 'ok'), 2)
   assert.equal(s.op === 'settle' && s.patch.allowedBy, 'rule')
@@ -321,10 +321,10 @@ test('fold: who allowed it — your prompt, a watch’s grants, a rule; a denial
   t.feed(use('t4', 'Bash', { command: 'git push' }), 1)
   ;[s] = t.feed(result('t4', 'remote: Permission to acme/app.git denied to bot.', true), 2)
   assert.equal(s.op === 'settle' && s.patch.status, 'failed')
-  // A watch fence refusal reads as denied.
-  t = tracker({ sessionKind: 'watch-run' })
+  // A job fence refusal reads as denied.
+  t = tracker({ sessionKind: 'job-run' })
   t.feed(use('t5', tool, send), 1)
-  ;[s] = t.feed(result('t5', `${tool} is not granted to this watch`, true), 2)
+  ;[s] = t.feed(result('t5', `${tool} is not granted to this job`, true), 2)
   assert.equal(s.op === 'settle' && s.patch.status, 'denied')
 })
 

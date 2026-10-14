@@ -3,7 +3,7 @@
  * the web inbox renders. Kinds for sources not yet ported (slack, linear)
  * are kept: scoring is source-agnostic and the ids/kinds are settled.
  */
-export type WorkSource = 'github' | 'slack' | 'linear' | 'web' | 'watch' | 'manual'
+export type WorkSource = 'github' | 'slack' | 'linear' | 'web' | 'job' | 'manual'
 
 export type ItemKind =
   | 'review-requested' // someone asked you to review their PR
@@ -16,22 +16,22 @@ export type ItemKind =
   | 'slack-reply-pending'
   | 'slack-mention'
   | 'ticket-assigned'
-  | 'watch-hit' // a user-defined watch matched this thread
-  | 'digest' // a watch's rolling report: one item per watch, rewritten each run (see .docs/watches.md)
+  | 'job-hit' // a user-defined job matched this thread
+  | 'digest' // a job's rolling report: one item per job, rewritten each run (see .docs/jobs.md)
   | 'manual' // a to-do the user added by hand, in the inbox
   | 'fyi'
 
 export type Group = 'blocking' | 'blocked-stale' | 'cycle' | 'fyi'
 
 /**
- * One record of a scan finding (or refinding) an item (.docs/watches-v2.md).
- * Provenance is a list, so a thread matched by two watches keeps both — "found
+ * One record of a scan finding (or refinding) an item (.docs/jobs-v2.md).
+ * Provenance is a list, so a thread matched by two jobs keeps both — "found
  * by Mentions (run 41), also matched Onboarding (run 42)" — rather than the
  * inbox doubling up or a later find clobbering the first.
  */
 export interface Provenance {
-  /** the watch that produced this find; absent = a deterministic source (github) */
-  watchId?: string
+  /** the job that produced this find; absent = a deterministic source (github) */
+  jobId?: string
   /** the run/session that produced it, for linking to the transcript */
   runId?: string
   /** epoch ms of the find */
@@ -67,14 +67,14 @@ export interface WorkItem {
   priority?: number
   /** canonical refs extracted from content, e.g. "github:org/repo#123", "linear:NOV-456" */
   refs?: string[]
-  /** which watch produced it (undefined = built-in) */
-  watchId?: string
+  /** which job produced it (undefined = built-in) */
+  jobId?: string
   /** the project this item belongs to (manual items; empty = none) */
   projectId?: string
   /** scanner's one-line match reason (rendered on the item) — the latest find's */
   why?: string
   /**
-   * what a watch hit asks of you, picked by the run (labels.ts) — the latest
+   * what a job hit asks of you, picked by the run (labels.ts) — the latest
    * find's. A string, not a Label: a stored ask can outlive its label.
    */
   ask?: string

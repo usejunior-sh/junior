@@ -1,19 +1,19 @@
 /**
- * The due rule (watch-spec.md, item 3). A due-checker, not a cron daemon: on
- * each scheduler tick, `decide` asks one question per watch — has a scheduled
+ * The due rule (job-spec.md, item 3). A due-checker, not a cron daemon: on
+ * each scheduler tick, `decide` asks one question per job — has a scheduled
  * slot passed since the last run STARTED? — and layers wakecron's refinements
  * on top: overlap, connector readiness, and the catch-up window. Missed slots
  * coalesce by construction: the next slot after the last start is one slot, no
  * matter how many were slept through.
  *
  * Pure: time is an argument, so every rule is testable with a fake clock
- * (test/watch-schedule.test.ts).
+ * (test/job-schedule.test.ts).
  */
 import { cronFromCadence, nextScheduled } from './cron.js'
-import type { Watch, WatchOutput } from './types.js'
+import type { Job, JobOutput } from './types.js'
 
-/** The watch's cron schedule, falling back to the legacy cadence for old rows. */
-export function scheduleOf(w: Pick<Watch, 'schedule' | 'cadence' | 'windowStart' | 'windowDay'>): string {
+/** The job's cron schedule, falling back to the legacy cadence for old rows. */
+export function scheduleOf(w: Pick<Job, 'schedule' | 'cadence' | 'windowStart' | 'windowDay'>): string {
   return w.schedule || cronFromCadence(w.cadence ?? 'daily', w.windowStart, w.windowDay)
 }
 
@@ -32,14 +32,14 @@ export function parseDuration(s: string): number | null {
   return n > 0 ? n * UNIT_MS[m[2]] : null
 }
 
-/** A digest's stale edition is noise; an items watch's late run finds what was missed. */
-export const defaultCatchUp = (output: WatchOutput): string => (output === 'digest' ? '6h' : 'unlimited')
+/** A digest's stale edition is noise; an items job's late run finds what was missed. */
+export const defaultCatchUp = (output: JobOutput): string => (output === 'digest' ? '6h' : 'unlimited')
 
 /** Is this a catch-up window string the store accepts? */
 export const isCatchUpSpec = (s: unknown): s is string =>
   typeof s === 'string' && (s === 'never' || s === 'unlimited' || parseDuration(s) !== null)
 
-export function parseCatchUp(spec: string | undefined, output: WatchOutput): CatchUpWindow {
+export function parseCatchUp(spec: string | undefined, output: JobOutput): CatchUpWindow {
   const s = spec && isCatchUpSpec(spec) ? spec : defaultCatchUp(output)
   if (s === 'never') return { kind: 'never' }
   if (s === 'unlimited') return { kind: 'unlimited' }
@@ -57,9 +57,9 @@ export type DecideParams = {
   lastRunStartedAt: number | undefined
   now: number
   tickMs: number
-  /** a run of this watch is in flight */
+  /** a run of this job is in flight */
   running: boolean
-  /** every connector the watch uses is up; else why not */
+  /** every connector the job uses is up; else why not */
   ready: true | string
   catchUp: CatchUpWindow
 }
@@ -67,12 +67,12 @@ export type DecideParams = {
 const NEVER = 8_640_000_000_000_000
 
 /**
- * The one rule: a watch is due when nextScheduled(lastRunStartedAt) <= now.
+ * The one rule: a job is due when nextScheduled(lastRunStartedAt) <= now.
  * Returns what the scheduler should do; the caller owns concurrency and
  * persistence (a skip moves lastRunStartedAt to now; a run sets it at start).
  */
 export function decide(p: DecideParams): Decision {
-  // Never run: due right away (the "run once now" default on create). A watch
+  // Never run: due right away (the "run once now" default on create). A job
   // saved without it starts life with lastRunStartedAt = its creation time.
   if (p.lastRunStartedAt == null) {
     if (p.running) return { action: 'skip', reason: 'overlap', slot: p.now }
@@ -100,7 +100,7 @@ export function pickToRun<T extends { slot: number }>(due: T[], capacity: number
   return [...due].sort((a, b) => a.slot - b.slot).slice(0, Math.max(0, capacity))
 }
 
-/** The most missed slots a catch-up run records — an every-minute watch asleep for a week stops here. */
+/** The most missed slots a catch-up run records — an every-minute job asleep for a week stops here. */
 export const MISSED_CAP = 50
 
 /**
@@ -172,14 +172,14 @@ export function budgetFor(perRunUsd: number | undefined, dailyUsd: number | unde
 }
 
 /**
- * A watch is overdue when no run has ended `ok` within a grace window of two
+ * A job is overdue when no run has ended `ok` within a grace window of two
  * schedule intervals plus an hour. Skips and failures never count — they used
  * to, by moving lastRunAt. `lastOkAt` is the ledger's latest ok row; without
- * one, a watch whose last receipt was ok counts from it, else from creation.
+ * one, a job whose last receipt was ok counts from it, else from creation.
  */
 export function isOverdue(
   schedule: string,
-  w: Pick<Watch, 'createdAt' | 'lastRunAt' | 'lastRunStatus'>,
+  w: Pick<Job, 'createdAt' | 'lastRunAt' | 'lastRunStatus'>,
   lastOkAt: number | undefined,
   now: number,
 ): boolean {

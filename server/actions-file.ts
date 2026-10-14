@@ -2,7 +2,7 @@
  * The actions file on disk — `<workspace>/actions.md` (core/actions/rules.ts):
  * the outbound Bash patterns and the per-tool overrides, one file.
  *
- * Seeded the way team and watch templates are: written when missing, kept up
+ * Seeded the way team and job templates are: written when missing, kept up
  * with the shipped default while the user hasn't touched it (a hash of what
  * triage wrote, in `.actions.seeded.json`), never overwritten once edited,
  * and not brought back after a delete. A file that doesn't parse never

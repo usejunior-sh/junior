@@ -18,10 +18,10 @@ import { isStage, isTurn, type FlowOverride } from '../work/flow.js'
 import { eventForStatus, shouldReopen } from '../work/state.js'
 import type { EffortLevel, PermissionMode, ProviderId } from '../../shared/protocol.js'
 import { isProviderId } from '../../shared/protocol.js'
-import type { NewWatch, Watch, WatchBrief, WatchCadence, WatchConnector, WatchNotify, WatchRunResult, WatchRunStart, WatchRunStatus, WatchRunTrigger, WatchSlotFinish, WatchSlotRun, WatchSlotStatus, NewWatchSlotRun } from '../watch/types.js'
-import { WATCH_NOTIFY, WATCH_RUN_STATUSES } from '../watch/types.js'
-import { cronFromCadence } from '../watch/cron.js'
-import { grantsFrom, grantsFromLegacy, type WatchToolGrant } from '../watch/tools.js'
+import type { NewJob, Job, JobBrief, JobCadence, JobConnector, JobNotify, JobRunResult, JobRunStart, JobRunStatus, JobRunTrigger, JobSlotFinish, JobSlotRun, JobSlotStatus, NewJobSlotRun } from '../job/types.js'
+import { JOB_NOTIFY, JOB_RUN_STATUSES } from '../job/types.js'
+import { cronFromCadence } from '../job/cron.js'
+import { grantsFrom, grantsFromLegacy, type JobToolGrant } from '../job/tools.js'
 import type { ActionActor, ActionHistoryEntry, ActionRecord, ActionStatus } from '../actions/types.js'
 import { isActionAllowedBy, isActionKind, isActionStatus, isActionWhy } from '../actions/types.js'
 import type {
@@ -47,12 +47,12 @@ import type {
   StoredFlow,
   StoredSession,
   StoredTurn,
-  WatchStatePatch,
+  JobStatePatch,
   TurnStore,
   UpsertResult,
-  WatchRunRecord,
-  WatchRunLedger,
-  WatchStore,
+  JobRunRecord,
+  JobRunLedger,
+  JobStore,
   WorkItemStore,
 } from './types.js'
 
@@ -95,10 +95,10 @@ const MIGRATIONS: string[] = [
      path       TEXT NOT NULL,
      created_at INTEGER NOT NULL
    );`,
-  // 5: the watches engine (.docs/watches.md) — user-defined watches, the
+  // 5: the jobs engine (.docs/jobs.md) — user-defined jobs, the
   // persistent ingested items they (and external scanners) produce, and the
   // user-state overlay that survives every snapshot rebuild.
-  `CREATE TABLE watches (
+  `CREATE TABLE jobs (
      id               TEXT PRIMARY KEY,
      source           TEXT NOT NULL,
      title            TEXT NOT NULL,
@@ -150,12 +150,12 @@ const MIGRATIONS: string[] = [
      created_at INTEGER NOT NULL,
      updated_at INTEGER NOT NULL
    );`,
-  // 10: the durable inbox (.docs/watches-v2.md). One row per work item for
-  // EVERY source (built-ins, watch hits, GitHub, manual), never hard-deleted;
+  // 10: the durable inbox (.docs/jobs-v2.md). One row per work item for
+  // EVERY source (built-ins, job hits, GitHub, manual), never hard-deleted;
   // lifecycle lives on the row and in an append-only per-item event log. This
   // supersedes ingested_items + item_state + manual_items + the slack.cache
-  // config (all left in place, unused — a fresh start, no fold-forward). Watch
-  // runs become real sessions (kind/watch_id on sessions); watches record each
+  // config (all left in place, unused — a fresh start, no fold-forward). Job
+  // runs become real sessions (kind/job_id on sessions); jobs record each
   // run's status/session/error and a template origin.
   `CREATE TABLE work_items (
      id                TEXT PRIMARY KEY,
@@ -185,20 +185,20 @@ const MIGRATIONS: string[] = [
      PRIMARY KEY (item_id, seq)
    );
    ALTER TABLE sessions ADD COLUMN kind TEXT;
-   ALTER TABLE sessions ADD COLUMN watch_id TEXT;
-   ALTER TABLE watches ADD COLUMN last_run_status TEXT;
-   ALTER TABLE watches ADD COLUMN last_run_session_id TEXT;
-   ALTER TABLE watches ADD COLUMN last_run_error TEXT;
-   ALTER TABLE watches ADD COLUMN template_id TEXT;`,
-  // 11: per-run outcome on the (watch-run) session row, so the Activity view is
+   ALTER TABLE sessions ADD COLUMN job_id TEXT;
+   ALTER TABLE jobs ADD COLUMN last_run_status TEXT;
+   ALTER TABLE jobs ADD COLUMN last_run_session_id TEXT;
+   ALTER TABLE jobs ADD COLUMN last_run_error TEXT;
+   ALTER TABLE jobs ADD COLUMN template_id TEXT;`,
+  // 11: per-run outcome on the (job-run) session row, so the Activity view is
   // a true history of runs — each run is a session, and these are its receipt.
   `ALTER TABLE sessions ADD COLUMN run_status TEXT;
    ALTER TABLE sessions ADD COLUMN run_matches INTEGER;
    ALTER TABLE sessions ADD COLUMN run_tokens INTEGER;
    ALTER TABLE sessions ADD COLUMN run_error TEXT;`,
-  // 12: cron schedule per watch — the precise fire schedule, superseding the
+  // 12: cron schedule per job — the precise fire schedule, superseding the
   // coarse hourly/daily/weekly cadence (old rows derive it from cadence).
-  `ALTER TABLE watches ADD COLUMN schedule TEXT;`,
+  `ALTER TABLE jobs ADD COLUMN schedule TEXT;`,
   // 13: fast mode per session — premium speed at premium price, so it is opt-in
   // per session and defaults off, including for every session that predates it.
   `ALTER TABLE sessions ADD COLUMN fast_mode INTEGER NOT NULL DEFAULT 0;`,
@@ -250,26 +250,26 @@ const MIGRATIONS: string[] = [
    );
    CREATE INDEX IF NOT EXISTS idx_brief_jobs_item ON brief_jobs(item_id, created_at DESC);
    CREATE INDEX IF NOT EXISTS idx_brief_jobs_status ON brief_jobs(status, created_at);`,
-  // 16: watches name the connectors they may use (their tool allowlist) and an
+  // 16: jobs name the connectors they may use (their tool allowlist) and an
   // optional project, instead of one Slack place. Old rows were all Slack; a
   // channel scope folds into the instruction so the rule stays readable.
-  `ALTER TABLE watches ADD COLUMN connectors TEXT;
-   ALTER TABLE watches ADD COLUMN project_id TEXT;
-   UPDATE watches SET instruction = 'In ' || scope || ': ' || instruction WHERE connectors IS NULL AND scope LIKE '#%';
-   UPDATE watches SET connectors = '["slack"]' WHERE connectors IS NULL;`,
-  // 17: what a watch run cost in dollars (the SDK's total_cost_usd on the result
-  // message), so the watch page can show spend, not just tokens. Backfilled from
+  `ALTER TABLE jobs ADD COLUMN connectors TEXT;
+   ALTER TABLE jobs ADD COLUMN project_id TEXT;
+   UPDATE jobs SET instruction = 'In ' || scope || ': ' || instruction WHERE connectors IS NULL AND scope LIKE '#%';
+   UPDATE jobs SET connectors = '["slack"]' WHERE connectors IS NULL;`,
+  // 17: what a job run cost in dollars (the SDK's total_cost_usd on the result
+  // message), so the job page can show spend, not just tokens. Backfilled from
   // the event log — the result message is already persisted there.
   `ALTER TABLE sessions ADD COLUMN run_cost_usd REAL;
    UPDATE sessions SET run_cost_usd = (
      SELECT json_extract(e.payload, '$.message.total_cost_usd') FROM session_events e
      WHERE e.session_id = sessions.id AND e.kind = 'sdk' AND json_extract(e.payload, '$.message.type') = 'result'
      ORDER BY e.seq DESC LIMIT 1)
-   WHERE kind = 'watch-run' AND run_cost_usd IS NULL;`,
-  // 18: a watch may pin the model its runs use; NULL = Claude Code's default.
-  `ALTER TABLE watches ADD COLUMN model TEXT;`,
+   WHERE kind = 'job-run' AND run_cost_usd IS NULL;`,
+  // 18: a job may pin the model its runs use; NULL = Claude Code's default.
+  `ALTER TABLE jobs ADD COLUMN model TEXT;`,
   // 19: what a run produces — many items (default) or one rolling digest.
-  `ALTER TABLE watches ADD COLUMN output TEXT;`,
+  `ALTER TABLE jobs ADD COLUMN output TEXT;`,
   `CREATE TABLE IF NOT EXISTS session_turns (
      session_id TEXT NOT NULL,
      seq        INTEGER NOT NULL,
@@ -282,25 +282,25 @@ const MIGRATIONS: string[] = [
      PRIMARY KEY (session_id, seq)
    );
    CREATE INDEX IF NOT EXISTS session_turns_root ON session_turns(root);`,
-  // 21: watch-spec.md — tool grants, required project, scheduler hardening (start-time clock, catch-up, limits, streaks),
+  // 21: job-spec.md — tool grants, required project, scheduler hardening (start-time clock, catch-up, limits, streaks),
   // and run receipts that say why a run happened and how many finds were new.
-  `ALTER TABLE watches ADD COLUMN tools TEXT;
-   ALTER TABLE watches ADD COLUMN config_error TEXT;
-   ALTER TABLE watches ADD COLUMN catch_up_window TEXT;
-   ALTER TABLE watches ADD COLUMN timeout_ms INTEGER;
-   ALTER TABLE watches ADD COLUMN max_budget_usd REAL;
-   ALTER TABLE watches ADD COLUMN notify TEXT;
-   ALTER TABLE watches ADD COLUMN consecutive_failures INTEGER NOT NULL DEFAULT 0;
-   ALTER TABLE watches ADD COLUMN last_run_started_at INTEGER;
-   ALTER TABLE watches ADD COLUMN last_run_new INTEGER;
-   ALTER TABLE watches ADD COLUMN last_run_trigger TEXT;
-   UPDATE watches SET last_run_started_at = last_run_at WHERE last_run_started_at IS NULL;
+  `ALTER TABLE jobs ADD COLUMN tools TEXT;
+   ALTER TABLE jobs ADD COLUMN config_error TEXT;
+   ALTER TABLE jobs ADD COLUMN catch_up_window TEXT;
+   ALTER TABLE jobs ADD COLUMN timeout_ms INTEGER;
+   ALTER TABLE jobs ADD COLUMN max_budget_usd REAL;
+   ALTER TABLE jobs ADD COLUMN notify TEXT;
+   ALTER TABLE jobs ADD COLUMN consecutive_failures INTEGER NOT NULL DEFAULT 0;
+   ALTER TABLE jobs ADD COLUMN last_run_started_at INTEGER;
+   ALTER TABLE jobs ADD COLUMN last_run_new INTEGER;
+   ALTER TABLE jobs ADD COLUMN last_run_trigger TEXT;
+   UPDATE jobs SET last_run_started_at = last_run_at WHERE last_run_started_at IS NULL;
    ALTER TABLE sessions ADD COLUMN run_trigger TEXT;
    ALTER TABLE sessions ADD COLUMN run_new INTEGER;`,
-  // 22: the slot ledger — one row per (watch, slot), however it ended. Additive; existing runs are not backfilled.
-  `CREATE TABLE IF NOT EXISTS watch_runs (
+  // 22: the slot ledger — one row per (job, slot), however it ended. Additive; existing runs are not backfilled.
+  `CREATE TABLE IF NOT EXISTS job_runs (
      id         TEXT PRIMARY KEY,
-     watch_id   TEXT NOT NULL,
+     job_id   TEXT NOT NULL,
      slot       INTEGER NOT NULL,
      trigger    TEXT NOT NULL,
      status     TEXT NOT NULL,
@@ -309,12 +309,12 @@ const MIGRATIONS: string[] = [
      started_at INTEGER NOT NULL,
      ended_at   INTEGER,
      cost_usd   REAL,
-     UNIQUE (watch_id, slot)
+     UNIQUE (job_id, slot)
    );`,
-  // 23: a per-watch daily spend cap, summed from the ledger.
-  `ALTER TABLE watches ADD COLUMN daily_budget_usd REAL;`,
-  // 24: watches as files — the row is state, keyed by the file's id; this names the file.
-  `ALTER TABLE watches ADD COLUMN file TEXT;`,
+  // 23: a per-job daily spend cap, summed from the ledger.
+  `ALTER TABLE jobs ADD COLUMN daily_budget_usd REAL;`,
+  // 24: jobs as files — the row is state, keyed by the file's id; this names the file.
+  `ALTER TABLE jobs ADD COLUMN file TEXT;`,
   // 25: due dates (core/work/due.ts). due_source is 'explicit' (the source
   // stated it) or 'you' (set in the inbox; survives rescans); NULL = the
   // label's default, resolved at read time. 'you' with no due_at = Later.
@@ -368,7 +368,7 @@ const MIGRATIONS: string[] = [
      why_detail     TEXT,
      allowed_by     TEXT,
      allowed_detail TEXT,
-     watch_id       TEXT,
+     job_id       TEXT,
      team_run_id    TEXT,
      item_id        TEXT,
      group_key      TEXT,
@@ -412,8 +412,10 @@ export function openSqliteStore(file: string): Store {
   const db = new DatabaseSync(file)
   db.exec('PRAGMA journal_mode = WAL')
   db.exec('PRAGMA foreign_keys = ON')
+  renameLegacyTables(db)
   migrate(db)
   ensureDurableSchema(db)
+  renameLegacyValues(db)
 
   return {
     sessions: new SqliteSessions(db),
@@ -423,8 +425,8 @@ export function openSqliteStore(file: string): Store {
     config: new SqliteConfig(db),
     projects: new SqliteProjects(db),
     checkouts: new SqliteCheckouts(db),
-    watches: new SqliteWatches(db),
-    watchRuns: new SqliteWatchRuns(db),
+    jobs: new SqliteJobs(db),
+    jobRuns: new SqliteJobRuns(db),
     items: new SqliteWorkItems(db),
     artifacts: new SqliteArtifacts(db),
     links: new SqliteLinks(db),
@@ -525,30 +527,30 @@ function ensureDurableSchema(db: DatabaseSync) {
 
   const s = cols('sessions')
   ensure('sessions', 'kind', 'kind TEXT', s)
-  ensure('sessions', 'watch_id', 'watch_id TEXT', s)
+  ensure('sessions', 'job_id', 'job_id TEXT', s)
   ensure('sessions', 'run_status', 'run_status TEXT', s)
   ensure('sessions', 'run_matches', 'run_matches INTEGER', s)
   ensure('sessions', 'run_tokens', 'run_tokens INTEGER', s)
   ensure('sessions', 'run_error', 'run_error TEXT', s)
   ensure('sessions', 'run_cost_usd', 'run_cost_usd REAL', s)
 
-  const w = cols('watches')
-  ensure('watches', 'last_run_status', 'last_run_status TEXT', w)
-  ensure('watches', 'last_run_session_id', 'last_run_session_id TEXT', w)
-  ensure('watches', 'last_run_error', 'last_run_error TEXT', w)
-  ensure('watches', 'template_id', 'template_id TEXT', w)
-  ensure('watches', 'schedule', 'schedule TEXT', w)
-  ensure('watches', 'connectors', 'connectors TEXT', w)
-  ensure('watches', 'project_id', 'project_id TEXT', w)
-  ensure('watches', 'model', 'model TEXT', w)
-  ensure('watches', 'output', 'output TEXT', w)
+  const w = cols('jobs')
+  ensure('jobs', 'last_run_status', 'last_run_status TEXT', w)
+  ensure('jobs', 'last_run_session_id', 'last_run_session_id TEXT', w)
+  ensure('jobs', 'last_run_error', 'last_run_error TEXT', w)
+  ensure('jobs', 'template_id', 'template_id TEXT', w)
+  ensure('jobs', 'schedule', 'schedule TEXT', w)
+  ensure('jobs', 'connectors', 'connectors TEXT', w)
+  ensure('jobs', 'project_id', 'project_id TEXT', w)
+  ensure('jobs', 'model', 'model TEXT', w)
+  ensure('jobs', 'output', 'output TEXT', w)
   for (const [col, decl] of [
     ['tools', 'tools TEXT'], ['config_error', 'config_error TEXT'], ['catch_up_window', 'catch_up_window TEXT'],
     ['timeout_ms', 'timeout_ms INTEGER'], ['max_budget_usd', 'max_budget_usd REAL'], ['daily_budget_usd', 'daily_budget_usd REAL'], ['file', 'file TEXT'], ['notify', 'notify TEXT'],
     ['consecutive_failures', 'consecutive_failures INTEGER NOT NULL DEFAULT 0'],
     ['last_run_started_at', 'last_run_started_at INTEGER'], ['last_run_new', 'last_run_new INTEGER'], ['last_run_trigger', 'last_run_trigger TEXT'],
     ['brief', 'brief TEXT'], ['draft', 'draft INTEGER NOT NULL DEFAULT 0'],
-  ]) ensure('watches', col, decl, w)
+  ]) ensure('jobs', col, decl, w)
   ensure('sessions', 'run_trigger', 'run_trigger TEXT', s)
   ensure('sessions', 'run_new', 'run_new INTEGER', s)
 
@@ -575,7 +577,7 @@ function ensureDurableSchema(db: DatabaseSync) {
      why_detail     TEXT,
      allowed_by     TEXT,
      allowed_detail TEXT,
-     watch_id       TEXT,
+     job_id       TEXT,
      team_run_id    TEXT,
      item_id        TEXT,
      group_key      TEXT,
@@ -631,6 +633,58 @@ function ensureDurableSchema(db: DatabaseSync) {
   ensure('work_items', 'flow_override', 'flow_override TEXT', wi)
 }
 
+/*
+ * Jobs were called watches before v1.1, and a DB from then says so: its
+ * tables, its `watch_id` columns, and the values it stored (session and item
+ * kinds, digest item ids, config keys). Both steps rename in place and find
+ * nothing to do once they have, so they run on every open. The tables go
+ * before `migrate`, whose later steps name the new ones; the values after
+ * `ensureDurableSchema`, which may be what created the tables they touch.
+ */
+function renameLegacyTables(db: DatabaseSync) {
+  const tables = new Set((db.prepare(`SELECT name FROM sqlite_master WHERE type = 'table'`).all() as { name: string }[]).map((r) => r.name))
+  if (tables.has('watches') && !tables.has('jobs')) db.exec('ALTER TABLE watches RENAME TO jobs')
+  if (tables.has('watch_runs') && !tables.has('job_runs')) db.exec('ALTER TABLE watch_runs RENAME TO job_runs')
+  for (const table of ['sessions', 'job_runs', 'actions']) {
+    const cols = new Set((db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).map((r) => r.name))
+    if (cols.has('watch_id') && !cols.has('job_id')) db.exec(`ALTER TABLE ${table} RENAME COLUMN watch_id TO job_id`)
+  }
+}
+
+function renameLegacyValues(db: DatabaseSync) {
+  const id = (col: string) => `${col} = 'job:' || substr(${col}, 7) WHERE ${col} GLOB 'watch:*'`
+  const steps = [
+    `UPDATE sessions SET kind = 'job-run' WHERE kind = 'watch-run'`,
+    `UPDATE actions SET session_kind = 'job-run' WHERE session_kind = 'watch-run'`,
+    `UPDATE OR IGNORE config SET key = 'jobs.' || substr(key, 9) WHERE key GLOB 'watches.*'`,
+    `UPDATE work_items SET kind = 'job-hit' WHERE kind = 'watch-hit'`,
+    `UPDATE work_items SET source = 'job' WHERE source = 'watch'`,
+    `UPDATE work_items SET payload = replace(replace(replace(replace(payload,
+       '"watchId":', '"jobId":'), '"kind":"watch-hit"', '"kind":"job-hit"'), '"source":"watch"', '"source":"job"'), '"id":"watch:', '"id":"job:')
+     WHERE payload GLOB '*"watchId":*' OR payload GLOB '*"kind":"watch-hit"*' OR payload GLOB '*"source":"watch"*' OR payload GLOB '*"id":"watch:*'`,
+    `UPDATE OR IGNORE work_items SET ${id('id')}`,
+    `UPDATE item_events SET ${id('item_id')}`,
+    `UPDATE item_events SET ${id('actor')}`,
+    `UPDATE OR IGNORE links SET ${id('from_id')} AND from_kind = 'item'`,
+    `UPDATE OR IGNORE links SET ${id('to_id')} AND to_kind = 'item'`,
+    `UPDATE brief_jobs SET ${id('item_id')}`,
+    `UPDATE brief_jobs SET playbook = 'job-hit' WHERE playbook = 'watch-hit'`,
+    `UPDATE checkouts SET ${id('item_id')}`,
+    `UPDATE actions SET ${id('item_id')}`,
+  ]
+  db.exec('BEGIN')
+  try {
+    let changed = 0
+    for (const sql of steps) changed += Number(db.prepare(sql).run().changes)
+    // the saved inbox was ranked from the old values; the next sync rebuilds it
+    if (changed) db.exec('DELETE FROM inbox_snapshot')
+    db.exec('COMMIT')
+  } catch (err) {
+    db.exec('ROLLBACK')
+    throw err
+  }
+}
+
 function migrate(db: DatabaseSync) {
   db.exec('CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, applied_at INTEGER NOT NULL)')
   const row = db.prepare('SELECT COALESCE(MAX(version), 0) AS v FROM schema_migrations').get() as { v: number }
@@ -661,7 +715,7 @@ type SessionRow = {
   provider: string | null
   pinned: number
   kind: string | null
-  watch_id: string | null
+  job_id: string | null
   run_status: string | null
   run_trigger: string | null
   run_matches: number | null
@@ -704,8 +758,8 @@ const toSession = (r: SessionRow): StoredSession => ({
   permissionMode: toPermissionMode(r.permission_mode),
   provider: toProvider(r.provider),
   pinned: r.pinned === 1,
-  kind: r.kind === 'watch-run' || r.kind === 'brief' ? r.kind : 'chat',
-  watchId: r.watch_id,
+  kind: r.kind === 'job-run' || r.kind === 'brief' ? r.kind : 'chat',
+  jobId: r.job_id,
   runStatus: toRunStatus(r.run_status),
   runTrigger: toTrigger(r.run_trigger),
   runMatches: r.run_matches ?? undefined,
@@ -728,14 +782,14 @@ class SqliteSessions implements SessionStore {
     const permissionMode = s.permissionMode ?? null
     const provider: ProviderId = s.provider ?? 'claude'
     const kind: SessionKind = s.kind ?? 'chat'
-    const watchId = s.watchId ?? null
+    const jobId = s.jobId ?? null
     const checkoutId = s.checkoutId ?? null
     this.db
       .prepare(
-        `INSERT INTO sessions (id, title, cwd, project_id, checkout_id, sdk_session_id, model, effort, fast_mode, permission_mode, provider, kind, watch_id, run_trigger, created_at, updated_at)
+        `INSERT INTO sessions (id, title, cwd, project_id, checkout_id, sdk_session_id, model, effort, fast_mode, permission_mode, provider, kind, job_id, run_trigger, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
-      .run(s.id, s.title, s.cwd, s.projectId, checkoutId, model, effort, fastMode ? 1 : 0, permissionMode, provider, kind, watchId, s.runTrigger ?? null, now, now)
+      .run(s.id, s.title, s.cwd, s.projectId, checkoutId, model, effort, fastMode ? 1 : 0, permissionMode, provider, kind, jobId, s.runTrigger ?? null, now, now)
     return {
       id: s.id,
       title: s.title,
@@ -748,7 +802,7 @@ class SqliteSessions implements SessionStore {
       permissionMode,
       provider,
       kind,
-      watchId,
+      jobId,
       ...(s.runTrigger ? { runTrigger: s.runTrigger } : {}),
       pinned: false,
       sdkSessionId: null,
@@ -847,7 +901,7 @@ class SqliteSessions implements SessionStore {
     this.db.prepare('UPDATE sessions SET updated_at = ? WHERE id = ?').run(Date.now(), id)
   }
 
-  async recordWatchRun(id: string, run: WatchRunRecord): Promise<void> {
+  async recordJobRun(id: string, run: JobRunRecord): Promise<void> {
     this.db
       .prepare('UPDATE sessions SET run_status = ?, run_matches = ?, run_new = ?, run_tokens = ?, run_cost_usd = ?, run_error = ?, updated_at = ? WHERE id = ?')
       .run(run.status, run.matches, run.newCount ?? null, run.tokens, run.costUsd ?? null, run.error ?? null, Date.now(), id)
@@ -1001,7 +1055,7 @@ class SqliteConfig implements ConfigStore {
   }
 }
 
-type WatchRow = {
+type JobRow = {
   id: string
   source: string
   title: string
@@ -1043,28 +1097,28 @@ type WatchRow = {
   updated_at: number
 }
 
-const CONNECTORS = new Set<WatchConnector>(['slack', 'linear', 'github', 'web'])
-/** Parse the stored connector list; a legacy row (NULL) was a Slack watch. */
-function toConnectors(raw: string | null): WatchConnector[] {
+const CONNECTORS = new Set<JobConnector>(['slack', 'linear', 'github', 'web'])
+/** Parse the stored connector list; a legacy row (NULL) was a Slack job. */
+function toConnectors(raw: string | null): JobConnector[] {
   if (!raw) return ['slack']
   try {
     const arr = JSON.parse(raw) as unknown
-    const out = Array.isArray(arr) ? arr.filter((c): c is WatchConnector => CONNECTORS.has(c as WatchConnector)) : []
+    const out = Array.isArray(arr) ? arr.filter((c): c is JobConnector => CONNECTORS.has(c as JobConnector)) : []
     return out.length ? out : ['slack']
   } catch {
     return ['slack']
   }
 }
 
-const toRunStatus = (v: string | null): WatchRunStatus | undefined =>
-  WATCH_RUN_STATUSES.includes(v as WatchRunStatus) ? (v as WatchRunStatus) : undefined
+const toRunStatus = (v: string | null): JobRunStatus | undefined =>
+  JOB_RUN_STATUSES.includes(v as JobRunStatus) ? (v as JobRunStatus) : undefined
 
-const TRIGGERS: WatchRunTrigger[] = ['scheduled', 'catch_up', 'manual', 'redraft']
-const toTrigger = (v: string | null): WatchRunTrigger | undefined =>
-  TRIGGERS.includes(v as WatchRunTrigger) ? (v as WatchRunTrigger) : undefined
+const TRIGGERS: JobRunTrigger[] = ['scheduled', 'catch_up', 'manual', 'redraft']
+const toTrigger = (v: string | null): JobRunTrigger | undefined =>
+  TRIGGERS.includes(v as JobRunTrigger) ? (v as JobRunTrigger) : undefined
 
 /** Stored grants; a row from before grants (NULL) migrates from its legacy connectors. */
-function toGrants(raw: string | null, legacy: string | null): WatchToolGrant[] {
+function toGrants(raw: string | null, legacy: string | null): JobToolGrant[] {
   if (raw) {
     try {
       const parsed = grantsFrom(JSON.parse(raw))
@@ -1077,7 +1131,7 @@ function toGrants(raw: string | null, legacy: string | null): WatchToolGrant[] {
 }
 
 /** The stored brief option: JSON, or NULL = off. */
-function toWatchBrief(raw: string | null | undefined): WatchBrief | null {
+function toJobBrief(raw: string | null | undefined): JobBrief | null {
   if (!raw) return null
   try {
     const o = JSON.parse(raw) as Record<string, unknown>
@@ -1090,14 +1144,14 @@ function toWatchBrief(raw: string | null | undefined): WatchBrief | null {
   }
 }
 
-const toWatch = (r: WatchRow): Watch => ({
+const toJob = (r: JobRow): Job => ({
   id: r.id,
   source: 'slack',
   title: r.title,
   scope: r.scope,
   instruction: r.instruction,
   tools: toGrants(r.tools, r.connectors),
-  // Required since watch-spec item 2; a legacy NULL is migrated to the scratch
+  // Required since job-spec item 2; a legacy NULL is migrated to the scratch
   // project at boot, and reads as '' (no project) until then.
   projectId: r.project_id ?? '',
   ...(r.config_error ? { configError: r.config_error } : {}),
@@ -1106,15 +1160,15 @@ const toWatch = (r: WatchRow): Watch => ({
   ...(r.max_budget_usd != null ? { maxBudgetUsd: r.max_budget_usd } : {}),
   ...(r.daily_budget_usd != null ? { dailyBudgetUsd: r.daily_budget_usd } : {}),
   ...(r.file ? { file: r.file } : {}),
-  notify: WATCH_NOTIFY.includes(r.notify as WatchNotify) ? (r.notify as WatchNotify) : 'on_failure',
+  notify: JOB_NOTIFY.includes(r.notify as JobNotify) ? (r.notify as JobNotify) : 'on_failure',
   consecutiveFailures: r.consecutive_failures ?? 0,
   model: r.model ?? undefined,
   output: r.output === 'digest' ? 'digest' : 'items',
-  cadence: r.cadence as WatchCadence,
+  cadence: r.cadence as JobCadence,
   windowStart: r.window_start ?? undefined,
   windowDay: r.window_day ?? undefined,
   // Precise schedule is the source of truth; legacy rows derive it from cadence.
-  schedule: r.schedule ?? cronFromCadence(r.cadence as WatchCadence, r.window_start ?? undefined, r.window_day ?? undefined),
+  schedule: r.schedule ?? cronFromCadence(r.cadence as JobCadence, r.window_start ?? undefined, r.window_day ?? undefined),
   enabled: r.enabled === 1,
   createsItems: r.creates_items === 1,
   lastRunStartedAt: r.last_run_started_at ?? undefined,
@@ -1127,29 +1181,29 @@ const toWatch = (r: WatchRow): Watch => ({
   lastRunSessionId: r.last_run_session_id ?? undefined,
   lastRunError: r.last_run_error ?? undefined,
   templateId: r.template_id ?? undefined,
-  ...(toWatchBrief(r.brief) ? { brief: toWatchBrief(r.brief)! } : {}),
+  ...(toJobBrief(r.brief) ? { brief: toJobBrief(r.brief)! } : {}),
   ...(r.draft ? { draft: true } : {}),
   createdAt: r.created_at,
   updatedAt: r.updated_at,
 })
 
-class SqliteWatches implements WatchStore {
+class SqliteJobs implements JobStore {
   constructor(private db: DatabaseSync) {}
 
-  async list(): Promise<Watch[]> {
-    const rows = this.db.prepare('SELECT * FROM watches ORDER BY created_at').all() as WatchRow[]
-    return rows.map(toWatch)
+  async list(): Promise<Job[]> {
+    const rows = this.db.prepare('SELECT * FROM jobs ORDER BY created_at').all() as JobRow[]
+    return rows.map(toJob)
   }
 
-  async get(id: string): Promise<Watch | null> {
-    const r = this.db.prepare('SELECT * FROM watches WHERE id = ?').get(id) as WatchRow | undefined
-    return r ? toWatch(r) : null
+  async get(id: string): Promise<Job | null> {
+    const r = this.db.prepare('SELECT * FROM jobs WHERE id = ?').get(id) as JobRow | undefined
+    return r ? toJob(r) : null
   }
 
-  async create(w: Watch): Promise<void> {
+  async create(w: Job): Promise<void> {
     this.db
       .prepare(
-        `INSERT INTO watches (id, source, title, scope, instruction, cadence, window_start, window_day,
+        `INSERT INTO jobs (id, source, title, scope, instruction, cadence, window_start, window_day,
            schedule, enabled, creates_items, cursor, last_run_at, last_run_tokens, last_run_matches, template_id,
            tools, project_id, model, output, catch_up_window, timeout_ms, max_budget_usd, daily_budget_usd, file, notify,
            config_error, last_run_started_at, consecutive_failures, brief, draft, created_at, updated_at)
@@ -1169,7 +1223,7 @@ class SqliteWatches implements WatchStore {
       )
   }
 
-  async update(id: string, patch: Partial<NewWatch> & { enabled?: boolean }): Promise<void> {
+  async update(id: string, patch: Partial<NewJob> & { enabled?: boolean }): Promise<void> {
     const current = await this.get(id)
     if (!current) return
     const next = { ...current, ...patch }
@@ -1177,7 +1231,7 @@ class SqliteWatches implements WatchStore {
     const opt = <T,>(v: T | null | undefined): T | null => (v === undefined || v === null ? null : v)
     this.db
       .prepare(
-        `UPDATE watches SET title = ?, scope = ?, instruction = ?, cadence = ?, window_start = ?,
+        `UPDATE jobs SET title = ?, scope = ?, instruction = ?, cadence = ?, window_start = ?,
            window_day = ?, schedule = ?, enabled = ?, creates_items = ?, tools = ?, project_id = ?, model = ?, output = ?,
            catch_up_window = ?, timeout_ms = ?, max_budget_usd = ?, daily_budget_usd = ?, file = ?, notify = ?,
            brief = ?, draft = ?, updated_at = ? WHERE id = ?`,
@@ -1194,7 +1248,7 @@ class SqliteWatches implements WatchStore {
       )
   }
 
-  async patchState(id: string, patch: WatchStatePatch): Promise<void> {
+  async patchState(id: string, patch: JobStatePatch): Promise<void> {
     const sets: string[] = []
     const vals: (string | number | null)[] = []
     if (patch.enabled !== undefined) { sets.push('enabled = ?'); vals.push(patch.enabled ? 1 : 0) }
@@ -1202,13 +1256,13 @@ class SqliteWatches implements WatchStore {
     if (patch.lastRunStartedAt !== undefined) { sets.push('last_run_started_at = ?'); vals.push(patch.lastRunStartedAt) }
     if (patch.projectId !== undefined) { sets.push('project_id = ?'); vals.push(patch.projectId) }
     if (!sets.length) return
-    this.db.prepare(`UPDATE watches SET ${sets.join(', ')} WHERE id = ?`).run(...vals, id)
+    this.db.prepare(`UPDATE jobs SET ${sets.join(', ')} WHERE id = ?`).run(...vals, id)
   }
 
-  async markRunStarted(id: string, start: WatchRunStart): Promise<void> {
+  async markRunStarted(id: string, start: JobRunStart): Promise<void> {
     this.db
       .prepare(
-        `UPDATE watches SET last_run_started_at = ?, last_run_trigger = COALESCE(?, last_run_trigger),
+        `UPDATE jobs SET last_run_started_at = ?, last_run_trigger = COALESCE(?, last_run_trigger),
            last_run_session_id = COALESCE(?, last_run_session_id) WHERE id = ?`,
       )
       .run(start.startedAt, start.trigger ?? null, start.sessionId ?? null, id)
@@ -1220,12 +1274,12 @@ class SqliteWatches implements WatchStore {
    * streak counts failed/timeout runs in a row; an ok run resets it; skips and
    * interruptions leave it alone.
    */
-  async recordRun(id: string, run: WatchRunResult): Promise<void> {
+  async recordRun(id: string, run: JobRunResult): Promise<void> {
     const streak =
       run.status === 'ok' ? '0' : run.status === 'failed' || run.status === 'timeout' ? 'consecutive_failures + 1' : 'consecutive_failures'
     this.db
       .prepare(
-        `UPDATE watches SET last_run_at = ?, last_run_tokens = ?, last_run_matches = ?, last_run_new = ?,
+        `UPDATE jobs SET last_run_at = ?, last_run_tokens = ?, last_run_matches = ?, last_run_new = ?,
            last_run_status = ?, last_run_session_id = COALESCE(?, last_run_session_id), last_run_error = ?,
            last_run_trigger = COALESCE(?, last_run_trigger), consecutive_failures = ${streak} WHERE id = ?`,
       )
@@ -1234,13 +1288,13 @@ class SqliteWatches implements WatchStore {
   }
 
   async remove(id: string): Promise<void> {
-    this.db.prepare('DELETE FROM watches WHERE id = ?').run(id)
+    this.db.prepare('DELETE FROM jobs WHERE id = ?').run(id)
   }
 }
 
-type WatchRunRow = {
+type JobRunRow = {
   id: string
-  watch_id: string
+  job_id: string
   slot: number
   trigger: string
   status: string
@@ -1251,43 +1305,43 @@ type WatchRunRow = {
   cost_usd: number | null
 }
 
-class SqliteWatchRuns implements WatchRunLedger {
+class SqliteJobRuns implements JobRunLedger {
   constructor(private db: DatabaseSync) {}
 
-  async insert(run: NewWatchSlotRun): Promise<boolean> {
+  async insert(run: NewJobSlotRun): Promise<boolean> {
     const res = this.db
       .prepare(
-        `INSERT OR IGNORE INTO watch_runs (id, watch_id, slot, trigger, status, reason, session_id, started_at, ended_at, cost_usd)
+        `INSERT OR IGNORE INTO job_runs (id, job_id, slot, trigger, status, reason, session_id, started_at, ended_at, cost_usd)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
-      .run(run.id ?? randomUUID(), run.watchId, run.slot, run.trigger, run.status, run.reason ?? null, run.sessionId ?? null,
+      .run(run.id ?? randomUUID(), run.jobId, run.slot, run.trigger, run.status, run.reason ?? null, run.sessionId ?? null,
         run.startedAt, run.endedAt ?? null, run.costUsd ?? null)
     return Number(res.changes) > 0
   }
 
-  async attachSession(watchId: string, slot: number, sessionId: string): Promise<void> {
-    this.db.prepare('UPDATE watch_runs SET session_id = ? WHERE watch_id = ? AND slot = ?').run(sessionId, watchId, slot)
+  async attachSession(jobId: string, slot: number, sessionId: string): Promise<void> {
+    this.db.prepare('UPDATE job_runs SET session_id = ? WHERE job_id = ? AND slot = ?').run(sessionId, jobId, slot)
   }
 
-  async finish(watchId: string, slot: number, end: WatchSlotFinish): Promise<boolean> {
+  async finish(jobId: string, slot: number, end: JobSlotFinish): Promise<boolean> {
     const res = this.db
       .prepare(
-        `UPDATE watch_runs SET status = ?, reason = ?, session_id = COALESCE(?, session_id), ended_at = ?, cost_usd = ?
-         WHERE watch_id = ? AND slot = ? AND status = 'running'`,
+        `UPDATE job_runs SET status = ?, reason = ?, session_id = COALESCE(?, session_id), ended_at = ?, cost_usd = ?
+         WHERE job_id = ? AND slot = ? AND status = 'running'`,
       )
-      .run(end.status, end.reason ?? null, end.sessionId ?? null, end.endedAt, end.costUsd ?? null, watchId, slot)
+      .run(end.status, end.reason ?? null, end.sessionId ?? null, end.endedAt, end.costUsd ?? null, jobId, slot)
     return Number(res.changes) > 0
   }
 
-  async insertMissed(watchId: string, slots: number[], runId: string, at: number): Promise<number> {
+  async insertMissed(jobId: string, slots: number[], runId: string, at: number): Promise<number> {
     const stmt = this.db.prepare(
-      `INSERT OR IGNORE INTO watch_runs (id, watch_id, slot, trigger, status, reason, started_at, ended_at)
+      `INSERT OR IGNORE INTO job_runs (id, job_id, slot, trigger, status, reason, started_at, ended_at)
        VALUES (?, ?, ?, 'catch_up', 'missed', ?, ?, ?)`,
     )
     let written = 0
     this.db.exec('BEGIN')
     try {
-      for (const slot of slots) written += Number(stmt.run(randomUUID(), watchId, slot, `covered by ${runId}`, at, at).changes)
+      for (const slot of slots) written += Number(stmt.run(randomUUID(), jobId, slot, `covered by ${runId}`, at, at).changes)
       this.db.exec('COMMIT')
     } catch (err) {
       this.db.exec('ROLLBACK')
@@ -1296,42 +1350,42 @@ class SqliteWatchRuns implements WatchRunLedger {
     return written
   }
 
-  async spentSince(watchId: string, since: number): Promise<number> {
+  async spentSince(jobId: string, since: number): Promise<number> {
     const row = this.db
-      .prepare('SELECT COALESCE(SUM(cost_usd), 0) AS spent FROM watch_runs WHERE watch_id = ? AND started_at >= ?')
-      .get(watchId, since) as { spent: number }
+      .prepare('SELECT COALESCE(SUM(cost_usd), 0) AS spent FROM job_runs WHERE job_id = ? AND started_at >= ?')
+      .get(jobId, since) as { spent: number }
     return row.spent
   }
 
   async lastOkAt(): Promise<Map<string, number>> {
     const rows = this.db
-      .prepare(`SELECT watch_id, MAX(COALESCE(ended_at, started_at)) AS at FROM watch_runs WHERE status = 'ok' GROUP BY watch_id`)
-      .all() as { watch_id: string; at: number }[]
-    return new Map(rows.map((r) => [r.watch_id, r.at]))
+      .prepare(`SELECT job_id, MAX(COALESCE(ended_at, started_at)) AS at FROM job_runs WHERE status = 'ok' GROUP BY job_id`)
+      .all() as { job_id: string; at: number }[]
+    return new Map(rows.map((r) => [r.job_id, r.at]))
   }
 
-  async list(watchId: string, limit = 100): Promise<WatchSlotRun[]> {
+  async list(jobId: string, limit = 100): Promise<JobSlotRun[]> {
     const rows = this.db
-      .prepare('SELECT * FROM watch_runs WHERE watch_id = ? ORDER BY slot DESC LIMIT ?')
-      .all(watchId, limit) as WatchRunRow[]
+      .prepare('SELECT * FROM job_runs WHERE job_id = ? ORDER BY slot DESC LIMIT ?')
+      .all(jobId, limit) as JobRunRow[]
     return rows.map(toSlotRun)
   }
 
   async sweepInterrupted(endedAt: number, reason: string): Promise<number> {
     const res = this.db
-      .prepare(`UPDATE watch_runs SET status = 'interrupted', reason = ?, ended_at = ? WHERE status = 'running'`)
+      .prepare(`UPDATE job_runs SET status = 'interrupted', reason = ?, ended_at = ? WHERE status = 'running'`)
       .run(reason, endedAt)
     return Number(res.changes)
   }
 }
 
-function toSlotRun(r: WatchRunRow): WatchSlotRun {
+function toSlotRun(r: JobRunRow): JobSlotRun {
   return {
     id: r.id,
-    watchId: r.watch_id,
+    jobId: r.job_id,
     slot: r.slot,
-    trigger: r.trigger as WatchRunTrigger,
-    status: r.status as WatchSlotStatus,
+    trigger: r.trigger as JobRunTrigger,
+    status: r.status as JobSlotStatus,
     reason: r.reason ?? undefined,
     sessionId: r.session_id ?? undefined,
     startedAt: r.started_at,
@@ -1414,7 +1468,7 @@ function payloadOf(item: WorkItem): string {
 function mergeProvenance(existing: Provenance[] | undefined, add?: Provenance): Provenance[] {
   const list = existing ? [...existing] : []
   if (!add) return list
-  const key = (p: Provenance) => `${p.watchId ?? ''}|${p.runId ?? ''}`
+  const key = (p: Provenance) => `${p.jobId ?? ''}|${p.runId ?? ''}`
   const i = list.findIndex((p) => key(p) === key(add))
   if (i >= 0) list[i] = add
   else list.push(add)
@@ -1423,18 +1477,18 @@ function mergeProvenance(existing: Provenance[] | undefined, add?: Provenance): 
 
 /** Who an ingestion transition is attributed to. */
 function upsertActor(p: Provenance | undefined): string {
-  if (p?.runId) return `watch:${p.runId}`
-  if (p?.watchId) return `watch:${p.watchId}`
+  if (p?.runId) return `job:${p.runId}`
+  if (p?.jobId) return `job:${p.jobId}`
   return 'system'
 }
 
 const evDetail = (p?: Provenance): Record<string, unknown> =>
-  p ? { ...(p.watchId ? { watchId: p.watchId } : {}), ...(p.runId ? { runId: p.runId } : {}), ...(p.why ? { why: p.why } : {}) } : {}
+  p ? { ...(p.jobId ? { jobId: p.jobId } : {}), ...(p.runId ? { runId: p.runId } : {}), ...(p.why ? { why: p.why } : {}) } : {}
 
 /**
  * The durable inbox: one row per work item, an append-only event log per item.
  * Never hard-deletes; the idempotent upsert and deterministic reopen rules live
- * here (.docs/watches-v2.md).
+ * here (.docs/jobs-v2.md).
  */
 class SqliteWorkItems implements WorkItemStore {
   constructor(private db: DatabaseSync) {}
@@ -2155,7 +2209,7 @@ type ActionRow = {
   why_detail: string | null
   allowed_by: string | null
   allowed_detail: string | null
-  watch_id: string | null
+  job_id: string | null
   team_run_id: string | null
   item_id: string | null
   group_key: string | null
@@ -2199,7 +2253,7 @@ function toAction(r: ActionRow, calls: string[]): ActionRecord {
     whyDetail: r.why_detail,
     allowedBy: isActionAllowedBy(r.allowed_by) ? r.allowed_by : null,
     allowedDetail: r.allowed_detail,
-    watchId: r.watch_id,
+    jobId: r.job_id,
     teamRunId: r.team_run_id,
     itemId: r.item_id,
     groupKey: r.group_key,
@@ -2286,14 +2340,14 @@ class SqliteActions implements ActionStore {
       this.db
         .prepare(
           `INSERT INTO actions (id, session_id, session_kind, tool, kind, summary, args, status, link, error, why, why_detail,
-             allowed_by, allowed_detail, watch_id, team_run_id, item_id, group_key, count, attempted_at, settled_at, updated_at,
+             allowed_by, allowed_detail, job_id, team_run_id, item_id, group_key, count, attempted_at, settled_at, updated_at,
              queue_args, queued_at, expires_at, send_at, queue_note, edits, delivery, cost_usd)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT (id) DO UPDATE SET
              session_kind = excluded.session_kind, tool = excluded.tool, kind = excluded.kind, summary = excluded.summary,
              args = excluded.args, status = excluded.status, link = excluded.link, error = excluded.error, why = excluded.why,
              why_detail = excluded.why_detail, allowed_by = excluded.allowed_by, allowed_detail = excluded.allowed_detail,
-             watch_id = excluded.watch_id, team_run_id = excluded.team_run_id, item_id = excluded.item_id,
+             job_id = excluded.job_id, team_run_id = excluded.team_run_id, item_id = excluded.item_id,
              group_key = excluded.group_key, count = excluded.count, attempted_at = excluded.attempted_at,
              settled_at = excluded.settled_at, updated_at = excluded.updated_at,
              queue_args = excluded.queue_args, queued_at = excluded.queued_at, expires_at = excluded.expires_at,
@@ -2302,7 +2356,7 @@ class SqliteActions implements ActionStore {
         )
         .run(
           a.id, a.sessionId, a.sessionKind, a.tool, a.kind, a.summary, JSON.stringify(a.args), a.status, a.link, a.error, a.why,
-          a.whyDetail, a.allowedBy, a.allowedDetail, a.watchId, a.teamRunId, a.itemId, a.groupKey, a.count, a.attemptedAt,
+          a.whyDetail, a.allowedBy, a.allowedDetail, a.jobId, a.teamRunId, a.itemId, a.groupKey, a.count, a.attemptedAt,
           a.settledAt, a.updatedAt,
           q ? JSON.stringify(q.args) : null, q?.queuedAt ?? null, q?.expiresAt ?? null, q?.sendAt ?? null, q?.note ?? null,
           q?.edits ?? 0, q?.delivery ?? null, q?.costUsd ?? null,

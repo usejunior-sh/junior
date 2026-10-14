@@ -1,8 +1,8 @@
 /**
- * The watch form, as a page (#/watches/new, #/watches/<id>/edit), in two
+ * The job form, as a page (#/jobs/new, #/jobs/<id>/edit), in two
  * steps. Details: a name, the instructions (where to look and what counts),
  * the project folder every run works in, the integrations and tools the run
- * may use (watch-spec.md, items 1–2), output, model, a schedule, and run
+ * may use (job-spec.md, items 1–2), output, model, a schedule, and run
  * limits (item 3). Preview: a dry run of exactly that — the transcript streams in as
  * it happens, and at the end the item(s) it would have filed. Nothing is
  * saved by the preview; Create is the only write.
@@ -16,18 +16,18 @@ import type {
   Project,
   ProjectsResponse,
   SettingsResponse,
-  Watch,
-  WatchNotify,
-  WatchOutput,
-  WatchToolGrant,
-  WatchPreviewResult,
-  WatchPreviewStartResponse,
-  WatchPreviewStatusResponse,
-  WatchesResponse,
+  Job,
+  JobNotify,
+  JobOutput,
+  JobToolGrant,
+  JobPreviewResult,
+  JobPreviewStartResponse,
+  JobPreviewStatusResponse,
+  JobsResponse,
 } from '../../../shared/protocol.js'
-import { isValidCron } from '../../../core/watch/cron.js'
-import { defaultCatchUp, humanSpan, lookbackMs } from '../../../core/watch/schedule.js'
-import { builtinGrant, hasBuiltin } from '../../../core/watch/tools.js'
+import { isValidCron } from '../../../core/job/cron.js'
+import { defaultCatchUp, humanSpan, lookbackMs } from '../../../core/job/schedule.js'
+import { builtinGrant, hasBuiltin } from '../../../core/job/tools.js'
 import { useEvents } from '../hooks.js'
 import { labelName, relTime } from '../itemUi.js'
 import { usePickableModels } from '../models.js'
@@ -37,21 +37,21 @@ import { Select, SelectItem } from '../ui/Select.js'
 import { choosesProject, defaultProjectOf, ProjectIdPicker } from './ProjectPicker.js'
 import { Markdown } from './Markdown.js'
 import { Transcript } from './Transcript.js'
-import { OUTPUTS, PRESETS, cronText, cronToPreset, fmtSlot, fmtUntil, nextRuns, presetToCron, type SchedulePreset } from '../watchUi.js'
-import { WatchToolPicker } from './WatchToolPicker.js'
+import { OUTPUTS, PRESETS, cronText, cronToPreset, fmtSlot, fmtUntil, nextRuns, presetToCron, type SchedulePreset } from '../jobUi.js'
+import { JobToolPicker } from './JobToolPicker.js'
 
 // Inbox thumbs-down → refine: the correction is appended to the instructions
 // so the rule stays human-readable. sessionStorage survives the hash change.
-export const REFINE_WATCH_KEY = 'triage.watch.refine'
+export const REFINE_JOB_KEY = 'triage.job.refine'
 
 type Form = {
   title: string
   instruction: string
-  tools: WatchToolGrant[]
+  tools: JobToolGrant[]
   projectId: string
   /** '' = Claude Code's default */
   model: string
-  output: WatchOutput
+  output: JobOutput
   preset: SchedulePreset
   time: string
   cron: string
@@ -63,7 +63,7 @@ type Form = {
   budget: string
   /** dollars per local day across runs; '' = no daily cap */
   dailyBudget: string
-  notify: WatchNotify
+  notify: JobNotify
   /** create only: run once as soon as it's saved */
   runOnceNow: boolean
   /** brief every item it files (items output only) */
@@ -102,13 +102,13 @@ const CATCH_UPS: Array<{ id: string; label: string }> = [
   { id: '1h', label: 'Within 1h' },
   { id: 'never', label: 'Never' },
 ]
-const NOTIFY: Array<{ id: WatchNotify; label: string }> = [
+const NOTIFY: Array<{ id: JobNotify; label: string }> = [
   { id: 'on_failure', label: 'On failure' },
   { id: 'always', label: 'Always' },
   { id: 'never', label: 'Never' },
 ]
 
-function formFrom(w: Watch): Form {
+function formFrom(w: Job): Form {
   const { preset, time } = cronToPreset(w.schedule)
   return {
     title: w.title,
@@ -137,10 +137,10 @@ type Step = 'details' | 'preview'
 type Preview =
   | { phase: 'idle' }
   | { phase: 'running'; id: string; sig: string }
-  | { phase: 'ready'; id: string; sig: string; result: WatchPreviewResult }
+  | { phase: 'ready'; id: string; sig: string; result: JobPreviewResult }
   | { phase: 'failed'; id: string; sig: string; message: string }
 
-export function WatchFormPage({ id, onNavigate }: { id: string | null; onNavigate: (hash: string) => void }) {
+export function JobFormPage({ id, onNavigate }: { id: string | null; onNavigate: (hash: string) => void }) {
   const [form, setForm] = useState<Form>(EMPTY)
   const [loaded, setLoaded] = useState(id === null)
   const [projects, setProjects] = useState<Project[]>([])
@@ -165,11 +165,11 @@ export function WatchFormPage({ id, onNavigate }: { id: string | null; onNavigat
       .catch(() => setPlaybooks([]))
     void fetch('/api/settings')
       .then((r) => r.json() as Promise<SettingsResponse>)
-      .then((b) => b.ok && setDefaults({ timeoutMs: b.settings.watchTimeoutMs, budget: b.settings.watchBudgetUsd }))
+      .then((b) => b.ok && setDefaults({ timeoutMs: b.settings.jobTimeoutMs, budget: b.settings.jobBudgetUsd }))
       .catch(() => {})
   }, [id])
 
-  // A new watch runs in the default project until another is picked.
+  // A new job runs in the default project until another is picked.
   useEffect(() => {
     const fallback = defaultProjectOf(projects)
     if (fallback) setForm((f) => (f.projectId ? f : { ...f, projectId: fallback.id }))
@@ -177,23 +177,23 @@ export function WatchFormPage({ id, onNavigate }: { id: string | null; onNavigat
 
   useEffect(() => {
     if (id === null) return
-    void fetch('/api/watches')
-      .then((r) => r.json() as Promise<WatchesResponse>)
+    void fetch('/api/jobs')
+      .then((r) => r.json() as Promise<JobsResponse>)
       .then((b) => {
-        const w = b.ok ? b.watches.find((x) => x.id === id) : undefined
+        const w = b.ok ? b.jobs.find((x) => x.id === id) : undefined
         if (!w) {
-          setError('unknown watch')
+          setError('unknown job')
           setLoaded(true)
           return
         }
         const f = formFrom(w)
         setConfigError(w.configError ?? '')
-        const raw = sessionStorage.getItem(REFINE_WATCH_KEY)
+        const raw = sessionStorage.getItem(REFINE_JOB_KEY)
         if (raw) {
-          sessionStorage.removeItem(REFINE_WATCH_KEY)
+          sessionStorage.removeItem(REFINE_JOB_KEY)
           try {
-            const { watchId, note } = JSON.parse(raw) as { watchId: string; note: string }
-            if (watchId === id) f.instruction = `${f.instruction}\nNot: things like “${note}”.`
+            const { jobId, note } = JSON.parse(raw) as { jobId: string; note: string }
+            if (jobId === id) f.instruction = `${f.instruction}\nNot: things like “${note}”.`
           } catch {
             // stale handoff — ignore
           }
@@ -215,7 +215,7 @@ export function WatchFormPage({ id, onNavigate }: { id: string | null; onNavigat
   // When it would run, as you type: the next three slots from now.
   const upcoming = useMemo(() => (cronOk ? nextRuns(cron, Date.now(), 3) : []), [cron, cronOk])
 
-  // whole minutes, 1–60: exactly what a watch file can say
+  // whole minutes, 1–60: exactly what a job file can say
   const timeoutMin = form.timeoutMin.trim() ? Number(form.timeoutMin) : null
   const timeoutMs = timeoutMin != null && Number.isInteger(timeoutMin) ? timeoutMin * 60_000 : timeoutMin == null ? null : NaN
   const budget = form.budget.trim() ? Number(form.budget) : null
@@ -254,14 +254,14 @@ export function WatchFormPage({ id, onNavigate }: { id: string | null; onNavigat
             : null,
         ...(id ? {} : { runOnceNow: form.runOnceNow }),
       }
-      const res = await fetch(id ? `/api/watches?id=${encodeURIComponent(id)}` : '/api/watches', {
+      const res = await fetch(id ? `/api/jobs?id=${encodeURIComponent(id)}` : '/api/jobs', {
         method: id ? 'PUT' : 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(payload),
       })
-      const body = (await res.json()) as WatchesResponse
+      const body = (await res.json()) as JobsResponse
       if (!body.ok) throw new Error(body.error)
-      onNavigate('/watches')
+      onNavigate('/jobs')
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
@@ -278,7 +278,7 @@ export function WatchFormPage({ id, onNavigate }: { id: string | null; onNavigat
     setError('')
     setStep('preview')
     try {
-      const res = await fetch('/api/watches/preview', {
+      const res = await fetch('/api/jobs/preview', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
@@ -290,7 +290,7 @@ export function WatchFormPage({ id, onNavigate }: { id: string | null; onNavigat
           schedule: cronOk ? cron : undefined,
         }),
       })
-      const body = (await res.json()) as WatchPreviewStartResponse
+      const body = (await res.json()) as JobPreviewStartResponse
       if (!body.ok) throw new Error(body.error)
       store.subscribeSession(body.previewId)
       setPreview({ phase: 'running', id: body.previewId, sig: previewSig })
@@ -306,8 +306,8 @@ export function WatchFormPage({ id, onNavigate }: { id: string | null; onNavigat
     let live = true
     const tick = async () => {
       try {
-        const res = await fetch(`/api/watches/preview?id=${encodeURIComponent(pid)}`)
-        const body = (await res.json()) as WatchPreviewStatusResponse
+        const res = await fetch(`/api/jobs/preview?id=${encodeURIComponent(pid)}`)
+        const body = (await res.json()) as JobPreviewStatusResponse
         if (!live) return
         if (!body.ok) setPreview({ phase: 'failed', id: pid, sig, message: body.error })
         else if (body.status === 'ready' && body.result) setPreview({ phase: 'ready', id: pid, sig, result: body.result })
@@ -331,11 +331,11 @@ export function WatchFormPage({ id, onNavigate }: { id: string | null; onNavigat
       <div className="glow blue" aria-hidden="true" />
       <div className={`inner wform${step === 'preview' ? ' wide' : ''}`}>
         <div className="crumbs">
-          <button type="button" className="crumb link" onClick={() => onNavigate('/watches')}>
-            Watches
+          <button type="button" className="crumb link" onClick={() => onNavigate('/jobs')}>
+            Jobs
           </button>
           <span className="crumbSep">›</span>
-          <span className="crumb now">{id ? 'Edit watch' : 'New watch'}</span>
+          <span className="crumb now">{id ? 'Edit job' : 'New job'}</span>
         </div>
 
         <div className="steps" aria-label="Steps">
@@ -390,7 +390,7 @@ export function WatchFormPage({ id, onNavigate }: { id: string | null; onNavigat
               {project && <span className="hint mono">{project.path}</span>}
               {projects.length === 0 && (
                 <span className="hint">
-                  A watch runs in a project folder. <a href="#/settings/projects">Add a project in Settings → Projects</a> first.
+                  A job runs in a project folder. <a href="#/settings/projects">Add a project in Settings → Projects</a> first.
                 </span>
               )}
               {configError && <span className="formError">{configError}</span>}
@@ -402,7 +402,7 @@ export function WatchFormPage({ id, onNavigate }: { id: string | null; onNavigat
                 Integrations <span className="hint">· the run only has these tools</span>
               </label>
               {form.projectId ? (
-                <WatchToolPicker projectId={form.projectId} value={form.tools} onChange={(t) => set('tools', t)} />
+                <JobToolPicker projectId={form.projectId} value={form.tools} onChange={(t) => set('tools', t)} />
               ) : (
                 <span className="hint">Pick a project first — which MCP servers load depends on its folder.</span>
               )}
@@ -501,7 +501,7 @@ export function WatchFormPage({ id, onNavigate }: { id: string | null; onNavigat
                         value={form.briefTemplate}
                         onValueChange={(v) => set('briefTemplate', v)}
                       >
-                        <SelectItem value="">Default (the item’s kind — watch-hit)</SelectItem>
+                        <SelectItem value="">Default (the item’s kind — job-hit)</SelectItem>
                         {playbooks.map((p) => (
                           <SelectItem key={p} value={p}>
                             {p}
@@ -589,7 +589,7 @@ export function WatchFormPage({ id, onNavigate }: { id: string | null; onNavigat
                     {form.catchUp === ''
                       ? form.output === 'digest'
                         ? 'Digests skip a slot missed by more than 6h.'
-                        : 'Item watches always catch up once on wake.'
+                        : 'Item jobs always catch up once on wake.'
                       : form.catchUp === 'never'
                         ? 'Only on-time slots run.'
                         : form.catchUp === 'unlimited'
@@ -641,8 +641,8 @@ export function WatchFormPage({ id, onNavigate }: { id: string | null; onNavigat
             {error && <div className="formError">{error}</div>}
 
             <div className="foot">
-              <span className="hint">Next runs the watch once as a dry run, so you see what it would file before it exists.</span>
-              <button type="button" className="btn outline" onClick={() => onNavigate('/watches')}>
+              <span className="hint">Next runs the job once as a dry run, so you see what it would file before it exists.</span>
+              <button type="button" className="btn outline" onClick={() => onNavigate('/jobs')}>
                 Cancel
               </button>
               <button type="button" className="btn ghost" disabled={!complete || saving} onClick={() => void save()} title="Skip the dry run">
@@ -657,13 +657,13 @@ export function WatchFormPage({ id, onNavigate }: { id: string | null; onNavigat
           <PreviewStep
             preview={preview}
             stale={stale}
-            title={form.title.trim() || 'Untitled watch'}
+            title={form.title.trim() || 'Untitled job'}
             onBack={() => setStep('details')}
             onAgain={() => void startPreview()}
             onSave={() => void save()}
             saving={saving}
             complete={complete}
-            saveLabel={id ? 'Save changes' : 'Create watch'}
+            saveLabel={id ? 'Save changes' : 'Create job'}
             error={error}
             onNavigate={onNavigate}
           />
@@ -749,7 +749,7 @@ function PreviewStep({
       {error && <div className="formError">{error}</div>}
 
       <div className="foot">
-        <span className="hint">{result ? 'Happy with it? Create the watch and its first real run starts from now.' : 'You can create the watch while the dry run is still going.'}</span>
+        <span className="hint">{result ? 'Happy with it? Create the job and its first real run starts from now.' : 'You can create the job while the dry run is still going.'}</span>
         <button type="button" className="btn outline" onClick={onBack}>
           Back to details
         </button>
@@ -768,7 +768,7 @@ const fmtTok = (n: number) => (n < 1000 ? String(n) : n < 1_000_000 ? `${Math.ro
 const fmtUsd = (n: number) => (n < 0.01 && n > 0 ? '<$0.01' : `$${n.toFixed(2)}`)
 
 /** What the run would have produced, rendered the way the inbox or the item page will show it. */
-function PreviewCard({ result }: { result: WatchPreviewResult }) {
+function PreviewCard({ result }: { result: JobPreviewResult }) {
   return (
     <div className="card previewCard" aria-live="polite">
       <div className="head">
@@ -822,7 +822,7 @@ function PreviewCard({ result }: { result: WatchPreviewResult }) {
           ))}
         </div>
       )}
-      <div className="foot">These were not created{result.wouldQueue?.length ? ', and nothing was sent' : ''}. The real run files them once the watch exists.</div>
+      <div className="foot">These were not created{result.wouldQueue?.length ? ', and nothing was sent' : ''}. The real run files them once the job exists.</div>
     </div>
   )
 }

@@ -1,4 +1,4 @@
-import { FileDiff, FileText, Eye, Globe, Send, Terminal as TerminalIcon } from 'lucide-react'
+import { CalendarClock, FileDiff, FileText, Globe, Send, Terminal as TerminalIcon } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from 'react'
 import type { CreateStep,
   DispatchPreviewResponse,
@@ -14,7 +14,7 @@ import type { CreateStep,
   SessionStatus,
   SessionSummary,
   TerminalSummary,
-  WatchesResponse,
+  JobsResponse,
 } from '../../shared/protocol.js'
 import { mentionToken } from '../../shared/protocol.js'
 import { CommandPalette } from './components/CommandPalette.js'
@@ -49,9 +49,9 @@ import { Transcript } from './components/Transcript.js'
 import { AgentBrief, AgentComposer, AgentDock, AgentHeader, AgentOutcome, AgentsMenu } from './components/Agents.js'
 import { agentLabel, buildAgents, spawnerOf, type AgentRun } from './agents.js'
 import { TeamDock, TeamSide, TeamStrip, useTeamRun } from './components/TeamRun.js'
-import { WatchesPage } from './components/WatchesPage.js'
-import { REFINE_WATCH_KEY, WatchFormPage } from './components/WatchFormPage.js'
-import { WatchPage } from './components/WatchPage.js'
+import { JobsPage } from './components/JobsPage.js'
+import { REFINE_JOB_KEY, JobFormPage } from './components/JobFormPage.js'
+import { JobPage } from './components/JobPage.js'
 import { ArtifactsPage } from './components/ArtifactsPage.js'
 import { ActionsPage } from './components/ActionsPage.js'
 import { usePendingActions } from './actions.js'
@@ -124,11 +124,11 @@ const STATUS_LABEL: Record<SessionStatus, string> = {
   error: 'error',
 }
 
-const PAGE_TABS: Record<'watches' | 'terminals' | 'artifacts' | 'changes' | 'actions', PageTab> = {
+const PAGE_TABS: Record<'jobs' | 'terminals' | 'artifacts' | 'changes' | 'actions', PageTab> = {
   terminals: { key: 'page:terminals', label: 'Terminals', icon: TerminalIcon },
   artifacts: { key: 'page:artifacts', label: 'Artifacts', icon: FileText },
   changes: { key: 'page:changes', label: 'Changes', icon: FileDiff },
-  watches: { key: 'page:watches', label: 'Watches', icon: Eye },
+  jobs: { key: 'page:jobs', label: 'Jobs', icon: CalendarClock },
   actions: { key: 'page:actions', label: 'Actions', icon: Send },
 }
 
@@ -140,7 +140,7 @@ const SHEET_LABEL: Record<RailSection, string> = {
   artifacts: 'Artifacts',
   changes: 'Changes',
   terminals: 'Terminals',
-  watches: 'Watches',
+  jobs: 'Jobs',
   actions: 'Actions',
 }
 
@@ -167,15 +167,15 @@ function tabKeyOf(route: Route): string | null {
       return `item:${route.id}`
     case 'artifact':
       return `artifact:${route.id}`
-    case 'watch':
-      return `watch:${route.id}`
-    case 'watch-form':
-      return `watch-form:${route.id ?? 'new'}`
+    case 'job':
+      return `job:${route.id}`
+    case 'job-form':
+      return `job-form:${route.id ?? 'new'}`
     case 'change':
       return `change:${changeId(route.checkoutId, route.path)}`
     case 'changes':
     case 'artifacts':
-    case 'watches':
+    case 'jobs':
     case 'terminals':
     case 'actions':
       return PAGE_TABS[route.page].key
@@ -198,10 +198,10 @@ function routeOfKey(key: string): string {
       return itemHash(id)
     case 'artifact':
       return `/artifact/${id}`
-    case 'watch':
-      return `/watches/${encodeURIComponent(id)}`
-    case 'watch-form':
-      return id === 'new' ? '/watches/new' : `/watches/${encodeURIComponent(id)}/edit`
+    case 'job':
+      return `/jobs/${encodeURIComponent(id)}`
+    case 'job-form':
+      return id === 'new' ? '/jobs/new' : `/jobs/${encodeURIComponent(id)}/edit`
     case 'change':
       return `/change/${id}`
     case 'page':
@@ -213,7 +213,7 @@ function routeOfKey(key: string): string {
 }
 
 /** Documents are peeked at; processes are pinned. */
-const DOC_KINDS: readonly TabKind[] = ['item', 'artifact', 'watch', 'watch-form', 'change']
+const DOC_KINDS: readonly TabKind[] = ['item', 'artifact', 'job', 'job-form', 'change']
 
 function kindOfKey(key: string): TabKind | null {
   const cut = key.indexOf(':')
@@ -238,8 +238,8 @@ const GENERIC: Record<TabKind, string> = {
   draft: 'Draft',
   item: 'Work item',
   artifact: 'Artifact',
-  watch: 'Watch',
-  'watch-form': 'Watch',
+  job: 'Job',
+  'job-form': 'Job',
   change: 'File',
 }
 
@@ -265,10 +265,10 @@ function sectionOf(route: Route): RailSection | null {
     case 'change':
     case 'changes':
       return 'changes'
-    case 'watch':
-    case 'watch-form':
-    case 'watches':
-      return 'watches'
+    case 'job':
+    case 'job-form':
+    case 'jobs':
+      return 'jobs'
     case 'actions':
       return 'actions'
     case 'settings':
@@ -340,7 +340,7 @@ export function App() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onboarded, activeWorkspace?.id])
-  // pending "g" prefix for two-key sequences (g i, g s, g w, g p, g c)
+  // pending "g" prefix for two-key sequences (g i, g s, g j, g p, g c)
   const goPrefix = useRef<number | undefined>(undefined)
 
   const current = sessions.find((s) => s.id === currentId) ?? null
@@ -392,19 +392,19 @@ export function App() {
     else if (route.page !== 'home') noteReturnHash(location.hash.slice(1) || '/inbox')
   }, [route])
 
-  // Watches have no client store; the band needs their titles, so fetch the
-  // (small) list once the first watch is in play and keep it.
-  const [watchTitles, setWatchTitles] = useState<Map<string, string>>(new Map())
-  const wantWatchTitles = sectionOf(route) === 'watches' || docKeys.some((k) => k.startsWith('watch'))
+  // Jobs have no client store; the band needs their titles, so fetch the
+  // (small) list once the first job is in play and keep it.
+  const [jobTitles, setJobTitles] = useState<Map<string, string>>(new Map())
+  const wantJobTitles = sectionOf(route) === 'jobs' || docKeys.some((k) => k.startsWith('job'))
   useEffect(() => {
-    if (conn !== 'connected' || !wantWatchTitles) return
-    void fetch('/api/watches')
-      .then((r) => r.json() as Promise<WatchesResponse>)
+    if (conn !== 'connected' || !wantJobTitles) return
+    void fetch('/api/jobs')
+      .then((r) => r.json() as Promise<JobsResponse>)
       .then((b) => {
-        if (b.ok) setWatchTitles(new Map(b.watches.map((w) => [w.id, w.title])))
+        if (b.ok) setJobTitles(new Map(b.jobs.map((w) => [w.id, w.title])))
       })
       .catch(() => {})
-  }, [conn, wantWatchTitles])
+  }, [conn, wantJobTitles])
 
   /** The live name for a document tab, or null while its store is still cold. */
   const liveTitle = useCallback(
@@ -412,8 +412,8 @@ export function App() {
       const id = key.slice(key.indexOf(':') + 1)
       if (key.startsWith('item:')) return inbox.items.find((i) => i.id === id)?.title ?? null
       if (key.startsWith('artifact:')) return artifacts.artifacts.find((a) => a.id === id)?.title ?? null
-      if (key.startsWith('watch:')) return watchTitles.get(id) ?? null
-      if (key.startsWith('watch-form:')) return id === 'new' ? 'New watch' : watchTitles.get(id) ?? null
+      if (key.startsWith('job:')) return jobTitles.get(id) ?? null
+      if (key.startsWith('job-form:')) return id === 'new' ? 'New job' : jobTitles.get(id) ?? null
       if (key.startsWith('change:')) {
         // A file is named by its basename; the path lives in the page header.
         const file = decodeURIComponent(id.slice(id.indexOf('/') + 1))
@@ -421,7 +421,7 @@ export function App() {
       }
       return null
     },
-    [inbox.items, artifacts.artifacts, watchTitles],
+    [inbox.items, artifacts.artifacts, jobTitles],
   )
 
   /** A document tab: its best known name, no project dot, nothing running. */
@@ -689,7 +689,7 @@ export function App() {
   const terminalCwd = current?.cwd ?? currentTerminal?.cwd ?? currentDraft?.cwd
 
   // Back to a section lands on what you were last doing there; clicking the
-  // section you are already in pops to its root (Inbox, Artifacts, Watches).
+  // section you are already in pops to its root (Inbox, Artifacts, Jobs).
   // Sessions and Terminals have no index page — their list *is* the panel — so
   // they keep their own "take me to the live one" fallback chain instead.
   const goTo = useCallback(
@@ -802,7 +802,7 @@ export function App() {
         if (e.key === 't') return goTo('terminals')
         if (e.key === 'c') return openSettings('connectors')
         if (e.key === 'p') return openSettings('projects')
-        if (e.key === 'w') return goTo('watches')
+        if (e.key === 'j') return goTo('jobs')
         if (e.key === 'a') return goTo('actions')
         return // unknown sequence — swallow
       }
@@ -848,15 +848,15 @@ export function App() {
     })
   }, [])
 
-  const addWatch = useCallback(() => navigate('/watches/new'), [navigate])
+  const addJob = useCallback(() => navigate('/jobs/new'), [navigate])
 
   // Thumbs-down on a matched item: the correction lands as appended text on
-  // the watch's instruction — the rule stays human-readable.
-  const refineWatch = useCallback(
+  // the job's instruction — the rule stays human-readable.
+  const refineJob = useCallback(
     (item: ScoredItem) => {
-      if (!item.watchId) return
-      sessionStorage.setItem(REFINE_WATCH_KEY, JSON.stringify({ watchId: item.watchId, note: item.title }))
-      navigate(`/watches/${encodeURIComponent(item.watchId)}/edit`)
+      if (!item.jobId) return
+      sessionStorage.setItem(REFINE_JOB_KEY, JSON.stringify({ jobId: item.jobId, note: item.title }))
+      navigate(`/jobs/${encodeURIComponent(item.jobId)}/edit`)
     },
     [navigate],
   )
@@ -967,10 +967,10 @@ export function App() {
     [tabs, sessions, terminals, drafts, docTab, worktreeTag],
   )
 
-  // Only the rail *indexes* get a transient page tab now: an artifact, watch
+  // Only the rail *indexes* get a transient page tab now: an artifact, job
   // or item in front is a document, and gets a real tab of its own.
   const pageTab =
-    route.page === 'watches' || route.page === 'terminals' || route.page === 'artifacts' || route.page === 'changes' || route.page === 'actions'
+    route.page === 'jobs' || route.page === 'terminals' || route.page === 'artifacts' || route.page === 'changes' || route.page === 'actions'
       ? PAGE_TABS[route.page]
       : null
 
@@ -997,10 +997,10 @@ export function App() {
         return () => navigate('/inbox')
       case 'artifact':
         return () => navigate('/artifacts')
-      case 'watch':
-        return () => navigate('/watches')
-      case 'watch-form':
-        return () => navigate(route.id ? `/watches/${encodeURIComponent(route.id)}` : '/watches')
+      case 'job':
+        return () => navigate('/jobs')
+      case 'job-form':
+        return () => navigate(route.id ? `/jobs/${encodeURIComponent(route.id)}` : '/jobs')
       case 'session':
       case 'draft':
         return () => setSheet('sessions')
@@ -1160,7 +1160,7 @@ export function App() {
             {route.page === 'inbox' ? (
               <InboxPage
                 onDispatch={dispatch}
-                onRefineWatch={refineWatch}
+                onRefineJob={refineJob}
                 onOpenItem={openItem}
                 onPinItem={(id, title) => pin(`item:${id}`, title)}
                 composeSignal={composeSignal}
@@ -1212,14 +1212,14 @@ export function App() {
                 path={route.path}
                 onDirty={pinCurrent}
               />
-            ) : route.page === 'watches' ? (
-              <WatchesPage onNavigate={navigate} onPin={(id, title) => pin(`watch:${id}`, title)} />
+            ) : route.page === 'jobs' ? (
+              <JobsPage onNavigate={navigate} onPin={(id, title) => pin(`job:${id}`, title)} />
             ) : route.page === 'actions' ? (
               <ActionsPage onNavigate={navigate} />
-            ) : route.page === 'watch' ? (
-              <WatchPage key={route.id} id={route.id} onNavigate={navigate} />
-            ) : route.page === 'watch-form' ? (
-              <WatchFormPage key={route.id ?? 'new'} id={route.id} onNavigate={navigate} />
+            ) : route.page === 'job' ? (
+              <JobPage key={route.id} id={route.id} onNavigate={navigate} />
+            ) : route.page === 'job-form' ? (
+              <JobFormPage key={route.id ?? 'new'} id={route.id} onNavigate={navigate} />
             ) : route.page === 'draft' ? (
               currentDraft ? (
                 <NewSessionComposer
@@ -1390,7 +1390,7 @@ export function App() {
         onOpenItem={(item) => openItem(item.id)}
         onNewSessionIn={newSessionIn}
         onSyncInbox={syncInbox}
-        onAddWatch={addWatch}
+        onAddJob={addJob}
         onOpenSettings={(tab) => openSettings(tab)}
         onHelp={() => setHelpOpen(true)}
       />

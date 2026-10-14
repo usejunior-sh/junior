@@ -37,7 +37,7 @@ import type { Provenance, WorkItem } from '../work/types.js'
 import type { ItemEvent, ItemStatus, StatusChange } from '../work/state.js'
 import type { FlowOverride } from '../work/flow.js'
 import type { ActionHistoryEntry, ActionKind, ActionRecord, ActionStatus } from '../actions/types.js'
-import type { NewWatch, NewWatchSlotRun, Watch, WatchRunResult, WatchRunStart, WatchRunStatus, WatchRunTrigger, WatchSlotFinish, WatchSlotRun } from '../watch/types.js'
+import type { NewJob, NewJobSlotRun, Job, JobRunResult, JobRunStart, JobRunStatus, JobRunTrigger, JobSlotFinish, JobSlotRun } from '../job/types.js'
 
 export type StoredSession = {
   id: string
@@ -61,14 +61,14 @@ export type StoredSession = {
   provider: ProviderId
   /** Pinned sessions sort above the rest, whatever their last activity. */
   pinned: boolean
-  /** chat (default) or watch-run. */
+  /** chat (default) or job-run. */
   kind: SessionKind
-  /** the watch this run belongs to, for watch-run sessions. */
-  watchId: string | null
-  /** watch-run outcome, recorded when the run finishes (else undefined). */
-  runStatus?: WatchRunStatus
-  /** why this watch run happened, set when it starts */
-  runTrigger?: WatchRunTrigger
+  /** the job this run belongs to, for job-run sessions. */
+  jobId: string | null
+  /** job-run outcome, recorded when the run finishes (else undefined). */
+  runStatus?: JobRunStatus
+  /** why this job run happened, set when it starts */
+  runTrigger?: JobRunTrigger
   runMatches?: number
   /** of the matches, how many were new to the inbox */
   runNew?: number
@@ -80,9 +80,9 @@ export type StoredSession = {
   updatedAt: number
 }
 
-/** The outcome a finished watch-run session records on its own row. */
-export type WatchRunRecord = {
-  status: WatchRunStatus
+/** The outcome a finished job-run session records on its own row. */
+export type JobRunRecord = {
+  status: JobRunStatus
   matches: number
   newCount?: number
   tokens: number
@@ -104,8 +104,8 @@ export type NewSession = {
   /** omitted = 'claude' */
   provider?: ProviderId
   kind?: SessionKind
-  watchId?: string | null
-  runTrigger?: WatchRunTrigger
+  jobId?: string | null
+  runTrigger?: JobRunTrigger
 }
 
 export type StoredEvent = {
@@ -138,8 +138,8 @@ export interface SessionStore {
   remove(id: string): Promise<void>
   /** Bump updatedAt (a session saw activity). */
   touch(id: string): Promise<void>
-  /** Record a watch-run session's outcome on its row (for the Activity view). */
-  recordWatchRun(id: string, run: WatchRunRecord): Promise<void>
+  /** Record a job-run session's outcome on its row (for the Activity view). */
+  recordJobRun(id: string, run: JobRunRecord): Promise<void>
 }
 
 /**
@@ -230,8 +230,8 @@ export interface CheckoutStore {
   removeForProject(projectId: string): Promise<void>
 }
 
-/** Scheduler-owned state on a watch — never part of the user's edit. */
-export type WatchStatePatch = {
+/** Scheduler-owned state on a job — never part of the user's edit. */
+export type JobStatePatch = {
   enabled?: boolean
   /** null clears it */
   configError?: string | null
@@ -240,44 +240,44 @@ export type WatchStatePatch = {
   projectId?: string | null
 }
 
-export interface WatchStore {
-  list(): Promise<Watch[]>
-  get(id: string): Promise<Watch | null>
-  create(w: Watch): Promise<void>
+export interface JobStore {
+  list(): Promise<Job[]>
+  get(id: string): Promise<Job | null>
+  create(w: Job): Promise<void>
   /** Edit the user-authored fields (and enabled). Bumps updatedAt. */
-  update(id: string, patch: Partial<NewWatch> & { enabled?: boolean }): Promise<void>
+  update(id: string, patch: Partial<NewJob> & { enabled?: boolean }): Promise<void>
   /** Scheduler-owned fields: config error, the due rule's clock, a forced project. */
-  patchState(id: string, patch: WatchStatePatch): Promise<void>
+  patchState(id: string, patch: JobStatePatch): Promise<void>
   /** A run started (or a slot was skipped): moves the due rule's clock. */
-  markRunStarted(id: string, start: WatchRunStart): Promise<void>
+  markRunStarted(id: string, start: JobRunStart): Promise<void>
   /** What a finished run writes back: status, cost, matches, failure streak. */
-  recordRun(id: string, run: WatchRunResult): Promise<void>
+  recordRun(id: string, run: JobRunResult): Promise<void>
   remove(id: string): Promise<void>
 }
 
 /**
- * The slot ledger (`watch_runs`): one durable row per (watch, slot) — scheduled,
- * catch-up, manual or skipped. Additive: the watch row and session receipts
+ * The slot ledger (`job_runs`): one durable row per (job, slot) — scheduled,
+ * catch-up, manual or skipped. Additive: the job row and session receipts
  * stay the source for what the UI reads today.
  */
-export interface WatchRunLedger {
-  /** INSERT OR IGNORE on (watchId, slot): the first write wins. True when a row was written. */
-  insert(run: NewWatchSlotRun): Promise<boolean>
+export interface JobRunLedger {
+  /** INSERT OR IGNORE on (jobId, slot): the first write wins. True when a row was written. */
+  insert(run: NewJobSlotRun): Promise<boolean>
   /** Point a row at the session holding its transcript, as soon as there is one. */
-  attachSession(watchId: string, slot: number, sessionId: string): Promise<void>
-  /** Close a still-`running` row for (watchId, slot). True when a row was updated. */
-  finish(watchId: string, slot: number, end: WatchSlotFinish): Promise<boolean>
+  attachSession(jobId: string, slot: number, sessionId: string): Promise<void>
+  /** Close a still-`running` row for (jobId, slot). True when a row was updated. */
+  finish(jobId: string, slot: number, end: JobSlotFinish): Promise<boolean>
   /**
    * The slots a catch-up run collapsed: one `missed` row each, reason
    * `covered by <runId>`. INSERT OR IGNORE — an existing row keeps its own
    * story. Returns how many were written.
    */
-  insertMissed(watchId: string, slots: number[], runId: string, at: number): Promise<number>
-  /** One watch's rows, newest slot first. */
-  list(watchId: string, limit?: number): Promise<WatchSlotRun[]>
-  /** Dollars one watch's runs recorded since `since` (epoch ms) — the daily budget's meter. */
-  spentSince(watchId: string, since: number): Promise<number>
-  /** When each watch's latest `ok` row ended — the overdue rule's clock. */
+  insertMissed(jobId: string, slots: number[], runId: string, at: number): Promise<number>
+  /** One job's rows, newest slot first. */
+  list(jobId: string, limit?: number): Promise<JobSlotRun[]>
+  /** Dollars one job's runs recorded since `since` (epoch ms) — the daily budget's meter. */
+  spentSince(jobId: string, since: number): Promise<number>
+  /** When each job's latest `ok` row ended — the overdue rule's clock. */
   lastOkAt(): Promise<Map<string, number>>
   /** Boot: every `running` row died with the previous process. Returns how many. */
   sweepInterrupted(endedAt: number, reason: string): Promise<number>
@@ -303,8 +303,8 @@ export type NewManualItem = {
 }
 
 /**
- * The durable inbox (.docs/watches-v2.md): one row per work item, keyed by its
- * canonical id, for every source — built-ins, watch hits, GitHub, and manual
+ * The durable inbox (.docs/jobs-v2.md): one row per work item, keyed by its
+ * canonical id, for every source — built-ins, job hits, GitHub, and manual
  * to-dos. Never hard-deleted, never auto-expired; an item leaves the open inbox
  * only by a recorded transition (done/snoozed/archived) or a wake. The
  * idempotent upsert rule and the deterministic reopen rule live in the adapter
@@ -492,8 +492,8 @@ export interface Store {
   config: ConfigStore
   projects: ProjectStore
   checkouts: CheckoutStore
-  watches: WatchStore
-  watchRuns: WatchRunLedger
+  jobs: JobStore
+  jobRuns: JobRunLedger
   items: WorkItemStore
   artifacts: ArtifactStore
   links: LinkStore

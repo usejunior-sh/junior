@@ -594,7 +594,7 @@ kbd { font-family: var(--mono); font-size: 0.8462rem; color: var(--ash); border:
 .tabband .add.showPanel { border-right: 1px solid var(--hair); }
 .content { flex: 1; min-height: 0; position: relative; display: flex; flex-direction: column; }
 
-/* ---------- page shell (inbox / item / watches / projects / connectors) ---------- */
+/* ---------- page shell (inbox / item / jobs / projects / connectors) ---------- */
 .page { flex: 1; min-height: 0; overflow-y: auto; padding: 28px 40px 48px; position: relative; }
 /* width tiers: list pages (.full) fill the pane like Linear — the extra width
    goes to the title column. Everything else is a centred 1100px column; forms
@@ -2135,14 +2135,14 @@ dialog.sheet[open] { display: grid; }
 .markdownPreviewClose { position: static; }
 .markdownPreviewBody { flex: 1; overflow: auto; }
 
-/* ---------- lists shared by watches / projects / connectors ---------- */
+/* ---------- lists shared by jobs / projects / connectors ---------- */
 .list { background: var(--card); border: 1px solid var(--hair-strong); border-radius: var(--r-lg); overflow: hidden; }
 .listRow { display: flex; align-items: center; gap: 12px; padding: 10px 14px; font-size: 1rem; transition: background 0.08s ease; }
 .listRow + .listRow { border-top: 1px solid var(--hair); }
 .listRow:hover { background: var(--wash-1); }
 
-/* watches */
-.watchList, .connList, .projList, .pickerList { background: var(--card); border: 1px solid var(--hair-strong); border-radius: var(--r-lg); overflow: hidden; }
+/* jobs */
+.jobList, .connList, .projList, .pickerList { background: var(--card); border: 1px solid var(--hair-strong); border-radius: var(--r-lg); overflow: hidden; }
 .projList { margin-bottom: 22px; }
 
 /* connectors */
@@ -2875,8 +2875,8 @@ dialog.artDialog { width: 640px; max-height: 84vh; overflow-y: auto; }
 dialog.artDialog textarea { min-height: 240px; font-family: var(--mono); font-size: 0.9615rem; line-height: 1.6; resize: vertical; }
 
 /* ---------- briefs (.docs/next-version.md, phase 2) ---------- */
-.notice.watchesOff { margin-bottom: 16px; }
-.notice.watchesOff b { color: var(--yellow); font-weight: 500; }
+.notice.jobsOff { margin-bottom: 16px; }
+.notice.jobsOff b { color: var(--yellow); font-weight: 500; }
 .briefCard { padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; }
 .briefCard .briefHead { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .briefCard .briefHead .title { font-size: 1.0769rem; color: var(--ink); font-weight: 500; }
@@ -3002,13 +3002,13 @@ dialog.briefDialog .knobs { display: flex; gap: 8px; align-items: center; flex-w
 .artEditor .keysHint { font-size: 0.8462rem; color: var(--stone); display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 @media (max-width: 900px) { .artEditPanes.split { grid-template-columns: minmax(0, 1fr); } }
 
-/* ---------- watches: the table (T1) ---------- */
-.watchHead { display: flex; align-items: flex-end; gap: 16px; margin-bottom: 18px; }
-.watchHead .seg { margin-left: 8px; margin-bottom: 5px; }
-.watchHead .segBtn .n { font-family: var(--mono); font-size: 0.8462rem; color: var(--stone); margin-left: 6px; }
-.watchHead .filter { margin-left: auto; width: 220px; height: 30px; padding: 0 10px; border-radius: var(--r); border: 1px solid var(--hair-strong); background: var(--canvas); color: var(--ink); font-size: 0.9231rem; outline: none; }
-.watchHead .filter::placeholder { color: var(--stone); }
-.watchHead .filter:focus { border-color: var(--ink); }
+/* ---------- jobs: the table (T1) ---------- */
+.jobHead { display: flex; align-items: flex-end; gap: 16px; margin-bottom: 18px; }
+.jobHead .seg { margin-left: 8px; margin-bottom: 5px; }
+.jobHead .segBtn .n { font-family: var(--mono); font-size: 0.8462rem; color: var(--stone); margin-left: 6px; }
+.jobHead .filter { margin-left: auto; width: 220px; height: 30px; padding: 0 10px; border-radius: var(--r); border: 1px solid var(--hair-strong); background: var(--canvas); color: var(--ink); font-size: 0.9231rem; outline: none; }
+.jobHead .filter::placeholder { color: var(--stone); }
+.jobHead .filter:focus { border-color: var(--ink); }
 .wtblWrap { background: var(--card); border: 1px solid var(--hair-strong); border-radius: var(--r-lg); overflow: hidden; }
 .wtbl { width: 100%; border-collapse: collapse; font-size: 0.9615rem; }
 .wtbl th { font-size: 0.8462rem; letter-spacing: 0.6px; text-transform: uppercase; color: var(--stone); text-align: left; font-weight: 400; padding: 8px 10px; border-bottom: 1px solid var(--hair-strong); white-space: nowrap; }
@@ -3036,7 +3036,7 @@ dialog.briefDialog .knobs { display: flex; gap: 8px; align-items: center; flex-w
 .runDots .dot { width: 6px; height: 6px; }
 .runDots .dot.none { background: transparent; border: 1px solid var(--hair-strong); width: 5px; height: 5px; }
 
-/* ---------- watches: the form page ---------- */
+/* ---------- jobs: the form page ---------- */
 .page .inner.wform { display: flex; flex-direction: column; gap: 20px; max-width: 720px; }
 .crumbs { display: flex; align-items: center; gap: 8px; font-size: 1rem; color: var(--ash); margin-bottom: 2px; }
 .crumb.link { background: none; border: 0; padding: 0; color: var(--ash); cursor: pointer; font-size: 1rem; }
@@ -3058,7 +3058,7 @@ dialog.briefDialog .knobs { display: flex; gap: 8px; align-items: center; flex-w
    properties on source order. It has to stay single, because it also dresses
    the project menu's plain <button>, which carries no .uiSelect. Keep it below
    the select block.
-   Project and model on the watch form are a menu trigger and a Select, but
+   Project and model on the job form are a menu trigger and a Select, but
    they sit in a column of text inputs, so they take the same box as their
    siblings above: same width, border, radius and padding, caret on the end. */
 .wformSelect {
@@ -3091,7 +3091,7 @@ dialog.briefDialog .knobs { display: flex; gap: 8px; align-items: center; flex-w
 .schedCard .nextRuns .at { color: var(--ink); }
 .schedCard .nextRuns .dim { color: var(--stone); }
 
-/* the watch file editor: the file left, what it can name (click to copy) right */
+/* the job file editor: the file left, what it can name (click to copy) right */
 .wfile .crumbs { align-items: center; }
 .wfileName { margin-left: auto; color: var(--stone); font-size: 0.8462rem; }
 .wfileGrid { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 20px; align-items: start; }
@@ -3127,7 +3127,7 @@ dialog.briefDialog .knobs { display: flex; gap: 8px; align-items: center; flex-w
 }
 .formError { color: var(--red); font-size: 0.9231rem; font-family: var(--mono); }
 
-/* ---------- watch form: integrations picker (watch-spec.md, item 1) ---------- */
+/* ---------- job form: integrations picker (job-spec.md, item 1) ---------- */
 .toolPicker { display: flex; flex-direction: column; gap: 8px; }
 .cchip.on.warn { border-color: var(--edge-yellow); }
 .cchip.on.warn .tick { color: var(--yellow); }
@@ -3165,7 +3165,7 @@ dialog.briefDialog .knobs { display: flex; gap: 8px; align-items: center; flex-w
 .tsMore svg.rot { transform: rotate(90deg); }
 .tsRow.off .tsPick { cursor: default; opacity: 0.55; }
 
-/* ---------- watch form: run limits (watch-spec.md, item 3) ---------- */
+/* ---------- job form: run limits (job-spec.md, item 3) ---------- */
 .limitsCard { padding: 0; }
 .limitsCard > .limitsHead { display: flex; align-items: center; gap: 8px; width: 100%; padding: 10px 14px; background: transparent; border: 0; color: var(--ink); cursor: pointer; font-size: 0.9615rem; text-align: left; }
 .limitsCard > .limitsHead .m { margin-left: auto; color: var(--ash); font-size: 0.8462rem; font-family: var(--mono); }
@@ -3177,18 +3177,18 @@ dialog.briefDialog .knobs { display: flex; gap: 8px; align-items: center; flex-w
 .limitsBody input.num { width: 96px; padding: 4px 8px; font-family: var(--mono); font-size: 0.9231rem; }
 .checkLine { display: inline-flex; align-items: center; gap: 8px; color: var(--body); font-size: 0.9615rem; cursor: pointer; }
 .checkLine .hint { color: var(--stone); }
-/* The watch form's brief option: model and template, under the checkbox. */
+/* The job form's brief option: model and template, under the checkbox. */
 .wform .briefOpts { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 4px; padding-left: 22px; }
 @media (max-width: 767px) { .wform .briefOpts { grid-template-columns: 1fr; padding-left: 0; } }
 
-/* ---------- watch page: health strip, tabs, runs table, items ---------- */
-.watchPageHead { display: flex; align-items: flex-start; gap: 16px; margin-bottom: 18px; }
-.watchPageHead .acts { margin-left: auto; display: flex; gap: 6px; align-items: center; flex: none; padding-top: 6px; }
-.watchPageHead .acts .onLbl { display: flex; align-items: center; gap: 8px; color: var(--ash); font-size: 0.9231rem; margin-right: 6px; }
-.watchMetaLine { display: flex; align-items: center; gap: 8px; color: var(--ash); font-size: 0.9231rem; margin-top: 8px; flex-wrap: wrap; }
-.watchMetaLine .sep { color: var(--stone); }
-.watchMetaLine > svg { flex: none; }
-.watchRuleLine { margin: 10px 0 0; color: var(--mute); font-size: 1rem; line-height: 1.5; max-width: 72ch; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+/* ---------- job page: health strip, tabs, runs table, items ---------- */
+.jobPageHead { display: flex; align-items: flex-start; gap: 16px; margin-bottom: 18px; }
+.jobPageHead .acts { margin-left: auto; display: flex; gap: 6px; align-items: center; flex: none; padding-top: 6px; }
+.jobPageHead .acts .onLbl { display: flex; align-items: center; gap: 8px; color: var(--ash); font-size: 0.9231rem; margin-right: 6px; }
+.jobMetaLine { display: flex; align-items: center; gap: 8px; color: var(--ash); font-size: 0.9231rem; margin-top: 8px; flex-wrap: wrap; }
+.jobMetaLine .sep { color: var(--stone); }
+.jobMetaLine > svg { flex: none; }
+.jobRuleLine { margin: 10px 0 0; color: var(--mute); font-size: 1rem; line-height: 1.5; max-width: 72ch; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .statsCard { border: 1px solid var(--hair-strong); border-radius: var(--r-lg); background: var(--card); overflow: hidden; margin-bottom: 22px; }
 .stats { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .stat { padding: 12px 16px; border-right: 1px solid var(--hair); min-width: 0; }
@@ -3198,12 +3198,12 @@ dialog.briefDialog .knobs { display: flex; gap: 8px; align-items: center; flex-w
 .stat .v small { font-size: 0.8846rem; color: var(--ash); font-family: var(--mono); white-space: nowrap; }
 .stat .v small.dim { color: var(--stone); }
 .stat .v.bad { color: var(--red); }
-.watchTabs { display: flex; gap: 4px; border-bottom: 1px solid var(--hair); margin-bottom: 4px; }
-.watchTab { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; font-size: 1rem; color: var(--mute); background: none; border: 0; border-bottom: 1px solid transparent; margin-bottom: -1px; cursor: pointer; transition: color 0.1s; }
-.watchTab:hover { color: var(--ink); }
-.watchTab:focus-visible { outline: 1px solid var(--hair-bright); outline-offset: -4px; border-radius: var(--r-sm); }
-.watchTab.active { color: var(--ink); border-bottom-color: var(--ink); }
-.watchTab .n { font-family: var(--mono); font-size: 0.8462rem; color: var(--stone); }
+.jobTabs { display: flex; gap: 4px; border-bottom: 1px solid var(--hair); margin-bottom: 4px; }
+.jobTab { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; font-size: 1rem; color: var(--mute); background: none; border: 0; border-bottom: 1px solid transparent; margin-bottom: -1px; cursor: pointer; transition: color 0.1s; }
+.jobTab:hover { color: var(--ink); }
+.jobTab:focus-visible { outline: 1px solid var(--hair-bright); outline-offset: -4px; border-radius: var(--r-sm); }
+.jobTab.active { color: var(--ink); border-bottom-color: var(--ink); }
+.jobTab .n { font-family: var(--mono); font-size: 0.8462rem; color: var(--stone); }
 .rtbl { width: 100%; border-collapse: collapse; font-size: 0.9615rem; }
 .rtbl th { font-size: 0.8462rem; letter-spacing: 0.6px; text-transform: uppercase; color: var(--stone); text-align: left; font-weight: 400; padding: 8px 12px; white-space: nowrap; }
 .rtbl th.r, .rtbl td.r { text-align: right; }
@@ -3220,21 +3220,21 @@ dialog.briefDialog .knobs { display: flex; gap: 8px; align-items: center; flex-w
 .rtbl .tlink svg { color: var(--ash); }
 .rtblFoot { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; font-size: 0.9231rem; color: var(--stone); }
 .rtblFoot button { background: none; border: 0; padding: 0; color: var(--blue); font-size: 0.9231rem; cursor: pointer; }
-.watchRule { padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; }
-.watchRule .head { display: flex; align-items: center; gap: 8px; }
-.watchRule .head .k { font-size: 0.8462rem; letter-spacing: 0.6px; text-transform: uppercase; color: var(--stone); }
-.watchRule .head .btn { margin-left: auto; }
-.watchRule .text { font-size: 1.0385rem; color: var(--body); line-height: 1.6; white-space: pre-wrap; }
-.watchKv { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 6px 12px; font-size: 0.9615rem; line-height: 1.5; padding: 14px 16px; }
-.watchKv .k { color: var(--stone); }
-.watchKv .v { color: var(--body); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.watchOverview { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; align-items: start; margin-top: 14px; }
-.watchItems .wrow { grid-template-columns: 20px minmax(0, 1fr) auto; }
-.watchItems .wrow .meta .state { width: 90px; }
-.watchEmpty { padding: 28px 0; color: var(--ash); font-size: 0.9615rem; }
-@media (max-width: 1100px) { .stats { grid-template-columns: repeat(3, minmax(0, 1fr)); } .stat:nth-child(3) { border-right: 0; } .stat:nth-child(n+4) { border-top: 1px solid var(--hair); } .watchOverview { grid-template-columns: 1fr; } }
+.jobRule { padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; }
+.jobRule .head { display: flex; align-items: center; gap: 8px; }
+.jobRule .head .k { font-size: 0.8462rem; letter-spacing: 0.6px; text-transform: uppercase; color: var(--stone); }
+.jobRule .head .btn { margin-left: auto; }
+.jobRule .text { font-size: 1.0385rem; color: var(--body); line-height: 1.6; white-space: pre-wrap; }
+.jobKv { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 6px 12px; font-size: 0.9615rem; line-height: 1.5; padding: 14px 16px; }
+.jobKv .k { color: var(--stone); }
+.jobKv .v { color: var(--body); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.jobOverview { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; align-items: start; margin-top: 14px; }
+.jobItems .wrow { grid-template-columns: 20px minmax(0, 1fr) auto; }
+.jobItems .wrow .meta .state { width: 90px; }
+.jobEmpty { padding: 28px 0; color: var(--ash); font-size: 0.9615rem; }
+@media (max-width: 1100px) { .stats { grid-template-columns: repeat(3, minmax(0, 1fr)); } .stat:nth-child(3) { border-right: 0; } .stat:nth-child(n+4) { border-top: 1px solid var(--hair); } .jobOverview { grid-template-columns: 1fr; } }
 
-/* ---------- watch page: cost chart + run transcript modal ---------- */
+/* ---------- job page: cost chart + run transcript modal ---------- */
 .costCard { padding: 10px 16px 8px; border-top: 1px solid var(--hair); display: flex; flex-direction: column; gap: 6px; }
 .costCard .head { display: flex; align-items: baseline; gap: 10px; font-size: 0.9231rem; color: var(--ash); }
 .costCard .head .t { color: var(--ink); font-size: 1rem; }
@@ -3268,7 +3268,7 @@ dialog.briefDialog .knobs { display: flex; gap: 8px; align-items: center; flex-w
 .runModal .body #transcript { padding: 20px 28px 24px; }
 .runModal .empty { padding: 32px; color: var(--ash); font-size: 1rem; }
 
-/* ---------- watch form: the dry-run preview ---------- */
+/* ---------- job form: the dry-run preview ---------- */
 .previewCard { padding: 0; overflow: hidden; }
 .previewCard .head { display: flex; align-items: baseline; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--hair); }
 .previewCard .head .t { color: var(--ink); font-size: 1rem; }
@@ -3286,7 +3286,7 @@ dialog.briefDialog .knobs { display: flex; gap: 8px; align-items: center; flex-w
 .previewCard .empty { padding: 18px 14px; color: var(--ash); font-size: 0.9615rem; }
 .previewCard .foot { padding: 8px 14px; border-top: 1px solid var(--hair); color: var(--stone); font-size: 0.8846rem; }
 
-/* ---------- watch form: two steps ---------- */
+/* ---------- job form: two steps ---------- */
 .steps { display: flex; align-items: center; gap: 10px; font-size: 0.9231rem; color: var(--stone); margin: -6px 0 4px; }
 .steps .step { display: inline-flex; align-items: center; gap: 7px; color: var(--stone); }
 .steps .step .n { width: 18px; height: 18px; border-radius: var(--r-full); border: 1px solid var(--hair-strong); display: inline-flex; align-items: center; justify-content: center; font-family: var(--mono); font-size: 0.8462rem; }
@@ -3596,7 +3596,7 @@ dialog.briefDialog .knobs { display: flex; gap: 8px; align-items: center; flex-w
 /* Radix collapsible content carries `hidden` when closed; our display rules must not override it. */
 .limitsBody[hidden], .tsTools[hidden] { display: none; }
 
-/* integrations picker: tabs by source, search, bounded scroll (watch-spec.md, item 1) */
+/* integrations picker: tabs by source, search, bounded scroll (job-spec.md, item 1) */
 .tsBar { display: flex; align-items: center; gap: 10px; padding: 6px 12px; border-bottom: 1px solid var(--hair); flex-wrap: wrap; }
 .tsTabList { display: flex; gap: 2px; }
 .tsTab { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 8px; border: 0; border-radius: var(--r-sm); background: transparent; color: var(--ash); font-size: 0.8846rem; cursor: pointer; }
@@ -3908,12 +3908,12 @@ html.kbOpen .shell.mobile .panel { bottom: 0; }
   .artEditor .keysHint { display: none; }
 }
 
-/* ---------- phone: watches — the table becomes one block per watch ---------- */
+/* ---------- phone: jobs — the table becomes one block per job ---------- */
 @media (max-width: 767px), (pointer: coarse) and (max-height: 500px) {
-  .watchHead { flex-wrap: wrap; align-items: center; gap: 10px; }
-  .watchHead .seg { margin: 0; order: 3; flex: 1 1 100%; overflow-x: auto; scrollbar-width: none; }
-  .watchHead .filter { order: 4; margin-left: 0; flex: 1; width: auto; height: 40px; }
-  .watchHead .btn.primary { margin-left: auto; }
+  .jobHead { flex-wrap: wrap; align-items: center; gap: 10px; }
+  .jobHead .seg { margin: 0; order: 3; flex: 1 1 100%; overflow-x: auto; scrollbar-width: none; }
+  .jobHead .filter { order: 4; margin-left: 0; flex: 1; width: auto; height: 40px; }
+  .jobHead .btn.primary { margin-left: auto; }
   .wtbl, .wtbl tbody { display: block; }
   .wtbl thead { display: none; }
   .wtbl tr { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 12px; border-bottom: 1px solid var(--hair); }
@@ -3931,25 +3931,25 @@ html.kbOpen .shell.mobile .panel { bottom: 0; }
   .wtblFoot { flex-wrap: wrap; gap: 6px 16px; }
 }
 
-/* ---------- phone: a watch ---------- */
+/* ---------- phone: a job ---------- */
 @media (max-width: 767px), (pointer: coarse) and (max-height: 500px) {
   .page .crumbs { display: none; } /* the top bar's back does this */
-  .watchPageHead { flex-direction: column; gap: 12px; }
-  .watchPageHead > div:first-child { min-width: 0; width: 100%; }
-  .watchPageHead .acts { margin-left: 0; padding-top: 0; flex-wrap: wrap; }
-  .watchPageHead .acts .btn { height: 40px; }
+  .jobPageHead { flex-direction: column; gap: 12px; }
+  .jobPageHead > div:first-child { min-width: 0; width: 100%; }
+  .jobPageHead .acts { margin-left: 0; padding-top: 0; flex-wrap: wrap; }
+  .jobPageHead .acts .btn { height: 40px; }
   .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .stat, .stat:nth-child(3) { border-right: 1px solid var(--hair); }
   .stat:nth-child(2n) { border-right: 0; }
   .stat:nth-child(n+3) { border-top: 1px solid var(--hair); }
-  .watchTabs { overflow-x: auto; scrollbar-width: none; }
-  .watchTab { flex: none; padding: 10px 12px; }
+  .jobTabs { overflow-x: auto; scrollbar-width: none; }
+  .jobTab { flex: none; padding: 10px 12px; }
   .rtbl { display: block; overflow-x: auto; }
 }
 @media (max-width: 767px), (pointer: coarse) and (max-height: 500px) {
   /* A segmented control wraps rather than run off the page; the page-level filters scroll instead. */
   .seg { flex-wrap: wrap; max-width: 100%; }
-  .toolRow .seg, .watchHead .seg { flex-wrap: nowrap; }
+  .toolRow .seg, .jobHead .seg { flex-wrap: nowrap; }
 }
 
 /* ---------- phone: terminals — the keys a phone keyboard lacks ---------- */
@@ -4106,7 +4106,7 @@ html.kbOpen .shell.mobile .panel { bottom: 0; }
   .tool { padding: 10px 12px; }
 }
 
-/* A watch a chat drafted (MCP draft_watch): off until you review and enable it. */
+/* A job a chat drafted (MCP draft_job): off until you review and enable it. */
 .draftBanner {
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0 0 14px; padding: 10px 12px;
   border: 1px dashed var(--hair-bright); border-radius: var(--r); background: var(--card);
@@ -4117,7 +4117,7 @@ html.kbOpen .shell.mobile .panel { bottom: 0; }
 }
 .draftBanner .txt { flex: 1 1 260px; color: var(--body); font-size: 0.9615rem; }
 .draftTag { margin-left: 8px; vertical-align: 1px; }
-/* draft_watch's result in a chat: one click to the watch page. */
+/* draft_job's result in a chat: one click to the job page. */
 .draftLink { display: flex; align-items: center; gap: 10px; margin: 4px 0 10px; color: var(--body); font-size: 0.9615rem; }
 
 /* ---------- Actions (core/actions): what left this machine — or wants to ----------
@@ -4277,6 +4277,6 @@ html.kbOpen .shell.mobile .panel { bottom: 0; }
   .asplit .ali:hover { background: transparent; }
 }
 
-/* A watch's dry run: what the real run would hold for approval (nothing was sent). */
+/* A job's dry run: what the real run would hold for approval (nothing was sent). */
 .previewQueued { border-top: 1px solid var(--hair); }
 .previewQueued > .t { padding: 10px 14px 2px; color: var(--yellow); font-size: 0.9231rem; }

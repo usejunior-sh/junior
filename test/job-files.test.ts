@@ -1,5 +1,5 @@
 /**
- * Watches as files (server/watch-files.ts): the strict schema, the round trip,
+ * Jobs as files (server/job-files.ts): the strict schema, the round trip,
  * grants against a probe, ids written into hand-made files, and seeding.
  * Files live in a temp dir — never ~/.triage.
  */
@@ -8,11 +8,11 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { WatchFiles, checkGrants, parseWatchFile, serializeWatchFile, starterWatchFile, withKey, withoutKey, type WatchFileSpec } from '../server/watch-files.js'
-import { builtinGrant, mcpToolName } from '../core/watch/tools.js'
+import { JobFiles, checkGrants, parseJobFile, serializeJobFile, starterJobFile, withKey, withoutKey, type JobFileSpec } from '../server/job-files.js'
+import { builtinGrant, mcpToolName } from '../core/job/tools.js'
 
 const SLACK = 'claude.ai Slack'
-const spec: WatchFileSpec = {
+const spec: JobFileSpec = {
   id: 'w-1',
   title: 'Mentions',
   schedule: '0 9 * * 1-5',
@@ -30,11 +30,11 @@ const spec: WatchFileSpec = {
 }
 
 test('a spec survives the round trip through its file', () => {
-  const text = serializeWatchFile(spec)
+  const text = serializeJobFile(spec)
   assert.match(text, /^---\nid: w-1\n/)
   assert.match(text, /^tools: \[web, claude\.ai Slack\/slack_search_public, claude\.ai Slack\/slack_read_thread\]$/m)
   assert.match(text, /timeout: 4m/)
-  const back = parseWatchFile('mentions', text)
+  const back = parseJobFile('mentions', text)
   assert.deepEqual(back.errors, [])
   assert.equal(back.hadId, true)
   assert.deepEqual(back.spec, spec)
@@ -42,14 +42,14 @@ test('a spec survives the round trip through its file', () => {
 
 test('optional keys are left out when unset', () => {
   const { model: _m, catchUp: _c, timeoutMs: _t, budgetUsd: _b, dailyBudgetUsd: _d, ...bare } = spec
-  const text = serializeWatchFile(bare)
+  const text = serializeJobFile(bare)
   for (const k of ['model', 'catch_up', 'timeout', 'budget_usd', 'daily_budget_usd']) assert.doesNotMatch(text, new RegExp(`^${k}:`, 'm'))
-  assert.deepEqual(parseWatchFile('m', text).spec, bare)
+  assert.deepEqual(parseJobFile('m', text).spec, bare)
 })
 
 test('an unknown key is an error, never ignored', () => {
-  const text = serializeWatchFile(spec).replace('notify: on_failure', 'notify: on_failure\nbudget: 3')
-  const { errors } = parseWatchFile('m', text)
+  const text = serializeJobFile(spec).replace('notify: on_failure', 'notify: on_failure\nbudget: 3')
+  const { errors } = parseJobFile('m', text)
   assert.equal(errors.length, 1)
   assert.match(errors[0], /unknown key "budget"/)
 })
@@ -68,7 +68,7 @@ notify: loudly
 enabled: yes
 ---
 `
-  const { spec: s, errors } = parseWatchFile('morning-scan', text)
+  const { spec: s, errors } = parseJobFile('morning-scan', text)
   const want = [/schedule "every morning"/, /"nonsense" is neither/, /output must be/, /catch_up must be/, /timeout must be/, /budget_usd must be/, /daily_budget_usd must be/, /notify must be/, /enabled must be/, /instruction .* is empty/]
   assert.equal(errors.length, want.length, errors.join('\n'))
   want.forEach((re, i) => assert.match(errors[i], re))
@@ -76,7 +76,7 @@ enabled: yes
 })
 
 test('no frontmatter, no id: errors, and a fresh id is minted', () => {
-  const p = parseWatchFile('x', 'just some text')
+  const p = parseJobFile('x', 'just some text')
   assert.equal(p.hadId, false)
   assert.ok(p.spec.id)
   assert.match(p.errors[0], /no frontmatter/)
@@ -89,13 +89,13 @@ test('grants are checked against the probe and take its scope', () => {
   assert.equal(r.tools[1].source.kind === 'mcp' && r.tools[1].source.scope, 'claudeai')
   assert.deepEqual(checkGrants(spec.tools, []).errors, [`tools: no connected server named "${SLACK}"`])
   assert.deepEqual(checkGrants(spec.tools, null).errors, [])
-  // a disconnected server lists no tools: held by watchReady at run time, not here
+  // a disconnected server lists no tools: held by jobReady at run time, not here
   assert.deepEqual(checkGrants(spec.tools, [{ server: SLACK, scope: 'claudeai', tools: [] }]).errors, [])
 })
 
-function withDir(fn: (root: string, files: WatchFiles) => Promise<void>) {
-  const root = mkdtempSync(path.join(tmpdir(), 'triage-watch-files-'))
-  return fn(root, new WatchFiles(root)).finally(() => rmSync(root, { recursive: true, force: true }))
+function withDir(fn: (root: string, files: JobFiles) => Promise<void>) {
+  const root = mkdtempSync(path.join(tmpdir(), 'triage-job-files-'))
+  return fn(root, new JobFiles(root)).finally(() => rmSync(root, { recursive: true, force: true }))
 }
 
 test('scan reads *.md only; stampId adds or replaces the id and nothing else', () =>
@@ -107,7 +107,7 @@ test('scan reads *.md only; stampId adds or replaces the id and nothing else', (
     await files.stampId('b', 'new-id')
     assert.equal(readFileSync(files.pathOf('b'), 'utf8'), '---\nid: new-id\ntitle: Hand made\nschedule: 0 * * * *\n---\n\nbody\n')
     await files.stampId('a', 'copy-id')
-    const a = parseWatchFile('a', readFileSync(files.pathOf('a'), 'utf8'))
+    const a = parseJobFile('a', readFileSync(files.pathOf('a'), 'utf8'))
     assert.deepEqual(a.spec, { ...spec, id: 'copy-id' })
     assert.equal(files.freeName('A'), 'a-2')
     assert.ok(root)
@@ -117,15 +117,15 @@ test('seeding: written once, untouched ones follow upgrades, edits and deletions
   withDir(async (_root, files) => {
     const v1 = { t: { ...spec, id: 'template-t', enabled: false, project: '' } }
     await files.seed(v1)
-    assert.equal(parseWatchFile('t', readFileSync(files.pathOf('t'), 'utf8')).spec.id, 'template-t')
+    assert.equal(parseJobFile('t', readFileSync(files.pathOf('t'), 'utf8')).spec.id, 'template-t')
     // untouched: follows the new shipped version
     const v2 = { t: { ...v1.t, instruction: 'v2' } }
     await files.seed(v2)
-    assert.equal(parseWatchFile('t', readFileSync(files.pathOf('t'), 'utf8')).spec.instruction, 'v2')
+    assert.equal(parseJobFile('t', readFileSync(files.pathOf('t'), 'utf8')).spec.instruction, 'v2')
     // edited: left alone
     writeFileSync(files.pathOf('t'), readFileSync(files.pathOf('t'), 'utf8').replace('project: ""', 'project: p-9'))
     await files.seed({ t: { ...v1.t, instruction: 'v3' } })
-    assert.equal(parseWatchFile('t', readFileSync(files.pathOf('t'), 'utf8')).spec.project, 'p-9')
+    assert.equal(parseJobFile('t', readFileSync(files.pathOf('t'), 'utf8')).spec.project, 'p-9')
     // deleted: stays deleted
     unlinkSync(files.pathOf('t'))
     await files.seed(v2)
@@ -134,10 +134,10 @@ test('seeding: written once, untouched ones follow upgrades, edits and deletions
   }))
 
 test('the starter file parses clean, comments and all, and names the first project', () => {
-  const p = parseWatchFile('new', starterWatchFile([{ id: 'p-1', name: 'Novus' }, { id: 'p-2', name: 'Other' }]))
+  const p = parseJobFile('new', starterJobFile([{ id: 'p-1', name: 'Novus' }, { id: 'p-2', name: 'Other' }]))
   assert.deepEqual(p.errors, [])
   assert.equal(p.hadId, false)
-  assert.deepEqual([p.spec.title, p.spec.project, p.spec.schedule, p.spec.enabled], ['New watch', 'p-1', '0 9 * * 1-5', true])
+  assert.deepEqual([p.spec.title, p.spec.project, p.spec.schedule, p.spec.enabled], ['New job', 'p-1', '0 9 * * 1-5', true])
   assert.equal(p.spec.timeoutMs, undefined)
 })
 
@@ -150,39 +150,39 @@ test('withKey sets one line and leaves comments and layout alone', () => {
 })
 
 test('brief and draft survive the round trip', () => {
-  const s: WatchFileSpec = { ...spec, enabled: false, brief: { model: 'haiku', template: 'review-requested' }, draft: true }
-  const text = serializeWatchFile(s)
+  const s: JobFileSpec = { ...spec, enabled: false, brief: { model: 'haiku', template: 'review-requested' }, draft: true }
+  const text = serializeJobFile(s)
   assert.match(text, /^brief: true$/m)
   assert.match(text, /^brief_model: haiku$/m)
   assert.match(text, /^brief_template: review-requested$/m)
   assert.match(text, /^draft: true$/m)
-  const back = parseWatchFile('mentions', text)
+  const back = parseJobFile('mentions', text)
   assert.deepEqual(back.errors, [])
   assert.deepEqual(back.spec, s)
   // brief on with the defaults: just the flag
-  const bare = parseWatchFile('m', serializeWatchFile({ ...spec, brief: {} }))
+  const bare = parseJobFile('m', serializeJobFile({ ...spec, brief: {} }))
   assert.deepEqual(bare.errors, [])
   assert.deepEqual(bare.spec.brief, {})
   // off: no keys at all
-  assert.doesNotMatch(serializeWatchFile(spec), /brief|draft/)
+  assert.doesNotMatch(serializeJobFile(spec), /brief|draft/)
 })
 
 test('brief options are checked like every other key', () => {
-  const base = serializeWatchFile(spec)
-  const errs = (extra: string) => parseWatchFile('m', base.replace('enabled: true', `enabled: true\n${extra}`)).errors
+  const base = serializeJobFile(spec)
+  const errs = (extra: string) => parseJobFile('m', base.replace('enabled: true', `enabled: true\n${extra}`)).errors
   assert.match(errs('brief_model: haiku').join(), /need brief: true/)
   assert.match(errs('brief: true\nbrief_template: Not A Name').join(), /not a playbook name/)
   assert.match(errs('brief: maybe').join(), /brief must be true or false/)
   assert.match(
-    parseWatchFile('m', serializeWatchFile({ ...spec, output: 'digest' }).replace('enabled: true', 'enabled: true\nbrief: true')).errors.join(),
+    parseJobFile('m', serializeJobFile({ ...spec, output: 'digest' }).replace('enabled: true', 'enabled: true\nbrief: true')).errors.join(),
     /brief works with output: items/,
   )
 })
 
-test('enabling a drafted watch drops its draft line, and nothing else', async () => {
-  const dir = mkdtempSync(path.join(tmpdir(), 'triage-watch-draft-'))
+test('enabling a drafted job drops its draft line, and nothing else', async () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'triage-job-draft-'))
   try {
-    const files = new WatchFiles(dir)
+    const files = new JobFiles(dir)
     await files.write('drafted', { ...spec, enabled: false, draft: true })
     const before = readFileSync(files.pathOf('drafted'), 'utf8')
     await files.setEnabled('drafted', true)
