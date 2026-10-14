@@ -623,6 +623,13 @@ export type SessionContext = {
 
 export type SessionContextResponse = { ok: true; context: SessionContext } | { ok: false; error: string }
 
+/**
+ * The end of a background shell's output file
+ * (GET /api/sessions/<id>/shells/<tool_use id>/output). `bytes` is the file's
+ * whole size; `truncated` says the text starts partway in.
+ */
+export type ShellOutputResponse = { ok: true; text: string; bytes: number; truncated: boolean } | { ok: false; error: string }
+
 // The append-only transition log for one item (GET /api/items/events?id=…).
 export type { ItemEvent, ItemEventKind } from '../core/work/state.js'
 
@@ -1236,7 +1243,7 @@ export type SdkMessage = {
   /** `task_*` system messages (a subagent, a background shell, …) */
   task_id?: string
   tool_use_id?: string
-  /** `task_started`: 'local_agent' is a subagent; 'local_bash' a background shell */
+  /** `task_started`: 'local_agent' is a subagent; 'local_bash' a shell command */
   task_type?: string
   description?: string
   subagent_type?: string
@@ -1250,6 +1257,8 @@ export type SdkMessage = {
   summary?: string
   /** `task_notification` */
   status?: string
+  /** `task_notification` for a shell: where its output went ('' for a foreground one) */
+  output_file?: string
   /** `task_notification`: the report a subagent handed back with SubagentHandback */
   handback_report?: { text?: string }
   /** `task_updated`: the fields that changed */
@@ -1420,8 +1429,10 @@ export type BriefJob = {
   status: BriefStatus
   /** the playbook used — an ItemKind name, resolved to a file under the workspace's playbooks/ */
   playbook: string
+  /** the template text as edited in the brief composer for this brief only; null = the file as it was */
+  playbookBody: string | null
   model: string | null
-  /** the user's context note from the Create-brief modal */
+  /** the user's context note from the brief composer */
   note: string | null
   /** the brief session (kind 'brief'); null while queued */
   sessionId: string | null
@@ -1452,8 +1463,10 @@ export type BriefRequest = {
   itemIds: string[]
   note?: string
   model?: string
-  /** override the playbook (an ItemKind name); default = the item's kind */
+  /** override the playbook (an ItemKind name or a brief type); default = the item's kind */
   playbook?: string
+  /** the playbook's text as edited for this brief; sent only when it differs from the file */
+  playbookBody?: string
 }
 
 // Playbooks (GET/PUT /api/playbooks?kind=) — one markdown file per ItemKind,
@@ -1798,7 +1811,7 @@ export type ClientMessage =
       answers?: QuestionAnswers
     }
   | { type: 'interrupt'; sessionId: string }
-  /** Stop one running subagent (`stopTask`). */
+  /** Stop one running task — a subagent, or a shell by its task id (`stopTask`). */
   | { type: 'agent_stop'; sessionId: string; agentId: string }
   /** Let the main agent carry on while a foreground subagent keeps running. */
   | { type: 'agent_background'; sessionId: string; toolUseId: string }

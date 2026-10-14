@@ -7,7 +7,7 @@
  * subprocess, and everything it does arrives on the same stream tagged with the
  * id of the tool_use that started it (`parent_tool_use_id`). Its lifecycle comes
  * from `task_*` system messages with task_type 'local_agent' — 'local_bash' is a
- * background shell, not an agent.
+ * shell command, not an agent (core/shells/fold.ts).
  */
 import { isToolResultBlock, isToolUseBlock, type RawBlock, type SdkMessage, type SessionEvent } from '../../shared/protocol.js'
 

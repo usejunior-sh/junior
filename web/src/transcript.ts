@@ -12,6 +12,7 @@
  * with `scope` set to that call, so it only keeps what the agent did.
  */
 import { AGENT_TOOLS, HANDBACK_TOOL, type AgentRun } from './agents.js'
+import { buildShells, type ShellRun } from '../../core/shells/fold.js'
 import {
   isTextBlock,
   isThinkingBlock,
@@ -41,6 +42,8 @@ export type ToolItem = {
   /** When the call was made and when its result came back (ms epoch), if known. */
   startedAt?: number
   endedAt?: number
+  /** Bash only: the shell it ran — still running after the call returned, if it went to the background. */
+  shell?: ShellRun
 }
 
 export type ThinkingItem = { key: string; kind: 'thinking'; text: string }
@@ -94,12 +97,14 @@ export type TranscriptScope = {
   scope?: string | null
   /** The session's agents (buildAgents) — which calls started one, and whose prompt is whose. */
   agents?: readonly AgentRun[]
+  /** The session's shells (buildShells); folded from `events` when not given. */
+  shells?: readonly ShellRun[]
 }
 
 export function buildTranscript(
   events: readonly SessionEvent[],
   timeOf: (ev: SessionEvent) => number | undefined = () => undefined,
-  { scope = null, agents = [] }: TranscriptScope = {},
+  { scope = null, agents = [], shells }: TranscriptScope = {},
 ): TranscriptItem[] {
   const items: TranscriptItem[] = []
   // The SDK sends init at the start of every turn, so only the first one is
@@ -118,6 +123,7 @@ export function buildTranscript(
   const toolsById = new Map<string, ToolItem>()
   const permsById = new Map<string, Extract<TranscriptItem, { kind: 'permission' }>>()
   const agentCalls = new Set(agents.map((a) => a.toolUseId))
+  const shellsById = new Map((shells ?? buildShells(events, timeOf)).map((r) => [r.toolUseId, r]))
   const scopedAgentId = scope ? agents.find((a) => a.toolUseId === scope)?.agentId : undefined
   // Relayed messages waiting for main's SendMessage, oldest first — matched by
   // recipient, whatever view is being built (the call itself is main's).
@@ -238,6 +244,7 @@ export function buildTranscript(
                 name: b.name,
                 input: b.input,
                 startedAt: timeOf(ev),
+                shell: shellsById.get(b.id),
               }
               toolsById.set(b.id, item)
               items.push(item)

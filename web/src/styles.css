@@ -1248,6 +1248,17 @@ kbd { font-family: var(--mono); font-size: 0.8462rem; color: var(--ash); border:
 }
 .adStop:hover:not(:disabled) { color: var(--ink); background: var(--wash-3); }
 .adStop:disabled { opacity: 0.4; cursor: default; }
+.shellDock .adNow { font-size: 0.8077rem; }
+.shellDock .adOpen { grid-template-columns: 12px auto minmax(0, 1fr) auto 11px; }
+.shellDock .adOpen:disabled { cursor: default; }
+.shellDock .chev { color: var(--stone); transition: transform 0.15s; }
+.shellDock .adOpen[aria-expanded="true"] .chev { transform: rotate(90deg); }
+.sdMark { color: var(--ash); }
+.shellDock .shellTail { margin: 2px 8px 6px 28px; }
+.shellTail { max-height: 280px; overflow: auto; font-size: 0.8077rem; color: var(--charcoal); white-space: pre-wrap; overflow-wrap: anywhere; }
+.shellTail.quiet { color: var(--stone); }
+.shellTail .stCut { color: var(--stone); }
+.tline .well.shellTail { max-height: 280px; }
 .adMore { align-self: flex-start; margin: 2px 4px 2px; padding: 3px 6px; background: none; border: 0; border-radius: var(--r-sm); color: var(--ash); font-size: 0.8462rem; cursor: pointer; }
 .adMore:hover { color: var(--ink); background: var(--wash-2); }
 
@@ -1705,15 +1716,18 @@ button.edText:focus-visible { outline: none; border-color: var(--hair-bright); }
 }
 .toolGroup > summary::-webkit-details-marker { display: none; }
 .toolGroup > summary:hover, .toolGroup[open] > summary { border-color: var(--hair-strong); }
-.toolGroup.busy > summary { border-color: var(--edge-blue); }
+.toolGroup.busy > summary, .toolGroup.bg > summary { border-color: var(--edge-blue); }
 .toolGroup.fail > summary { border-color: var(--edge-red); }
 .toolGroup .chev { flex: none; color: var(--stone); transition: transform 0.15s; }
 .toolGroup[open] > summary .chev { transform: rotate(90deg); }
 .toolGroup .glyph { display: flex; flex: none; color: var(--green); }
 .toolGroup .glyph.fail { color: var(--red); }
-.toolGroup .glyph.busy { color: var(--blue); animation: pulse 1.2s infinite; }
+.toolGroup .glyph.busy, .toolGroup .glyph.bg { color: var(--blue); animation: pulse 1.2s infinite; }
+.toolGroup .glyph.stopped { color: var(--stone); }
 .toolGroup .tgLabel { min-width: 0; font-family: var(--sans); font-size: 0.9231rem; color: var(--charcoal); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.toolGroup .tgCount { flex: none; color: var(--stone); }
+.toolGroup .tgNow { min-width: 0; max-width: 40%; flex: 0 1 auto; color: var(--ash); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.toolGroup .tgNow::before { content: "·"; margin-right: 8px; color: var(--stone); }
+.toolGroup .tgCount { flex: none; color: var(--stone); font-variant-numeric: tabular-nums; }
 .toolGroup .tgCount::before { content: "·"; margin-right: 8px; }
 .toolGroup.fail .tgCount { color: var(--red-ink); }
 /* the lines hang off a hairline under the pill, so they read as its contents */
@@ -2503,7 +2517,7 @@ dialog.itemComposer { width: 800px; max-width: calc(100vw - 48px); padding: 0; o
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .dot.live, .tool .glyph.busy, .toolGroup .glyph.busy, .probing .pip, .msg.assistant.live .md > :last-child::after, .topIcon .connDot.down { animation: none; }
+  .dot.live, .tool .glyph.busy, .toolGroup .glyph.busy, .toolGroup .glyph.bg, .probing .pip, .msg.assistant.live .md > :last-child::after, .topIcon .connDot.down { animation: none; }
   .uiMenu[data-state="open"] { animation: none; }
   .settingsOverlay, .mermaidModal, .setActions .saved { animation: none; }
   .selBar { animation: none; }
@@ -2953,12 +2967,45 @@ dialog.artDialog textarea { min-height: 240px; font-family: var(--mono); font-si
 .selBar .btn.ghost:hover:not(:disabled) { background: var(--wash-2); }
 .selBar .iconBtn.sm { border-radius: var(--r-full); }
 @keyframes selIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-dialog.briefDialog { width: 560px; max-height: 84vh; overflow-y: auto; }
-dialog.briefDialog .items { display: flex; flex-direction: column; gap: 4px; margin: 4px 0 6px; max-height: 140px; overflow-y: auto; }
-dialog.briefDialog .items .it { font-size: 1rem; color: var(--body); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-dialog.briefDialog .items .it .k { color: var(--ash); font-size: 0.8462rem; margin-right: 6px; }
-dialog.briefDialog textarea { min-height: 88px; resize: vertical; }
-dialog.briefDialog .knobs { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
+/* The brief composer (BriefComposer.tsx): one box, template above a dashed hairline, note below. */
+.briefComposer { display: flex; flex-direction: column; background: var(--deep); border: 1px solid var(--hair-strong); border-radius: var(--r-lg); overflow: hidden; }
+.briefComposer:focus-within { border-color: var(--hair-bright); }
+.briefComposer .bcHead { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-bottom: 1px solid var(--hair); }
+.briefComposer .bcChip {
+  display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px; border-radius: var(--r-sm);
+  background: var(--card); border: 1px solid var(--hair-strong); color: var(--ink); font-family: var(--mono); font-size: 0.9231rem; cursor: pointer;
+}
+.briefComposer .bcChip:hover { border-color: var(--hair-bright); }
+.briefComposer .bcChip .slash { color: var(--orange); }
+.briefComposer .bcChip .caret { color: var(--ash); font-size: 0.7692rem; }
+.briefComposer .bcLabel { color: var(--mute); font-size: 0.9231rem; }
+.briefComposer .bcHint { margin-left: auto; color: var(--stone); font-size: 0.8462rem; white-space: nowrap; }
+.briefComposer .bcHint kbd { color: var(--ash); }
+.briefComposer textarea { width: 100%; box-sizing: border-box; background: transparent; border: 0; outline: none; color: var(--ink); resize: vertical; }
+.briefComposer .bcTemplate { min-height: 220px; max-height: 60vh; padding: 14px 16px; font-family: var(--mono); font-size: 0.9615rem; line-height: 1.6; }
+.briefComposer .bcNote { border-top: 1px dashed var(--hair-strong); padding: 10px 16px 4px; }
+.briefComposer .bcNote label { display: block; margin: 0 0 4px; color: var(--ash); font-family: var(--mono); font-size: 0.8077rem; letter-spacing: 0.6px; text-transform: uppercase; }
+.briefComposer .bcNote textarea { min-height: 56px; max-height: 200px; padding: 0; font-size: 1rem; line-height: 1.5; }
+.briefComposer .bcConfirm { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 12px; background: var(--wash-2); border-bottom: 1px solid var(--hair); color: var(--body); font-size: 0.9231rem; }
+.briefComposer .bcConfirm b { color: var(--ink); font-family: var(--mono); font-weight: 400; }
+.briefComposer .bcConfirm .spacer, .briefComposer .bcFoot .spacer { flex: 1; }
+.briefComposer > .msg.error { margin: 8px 12px 0; }
+.briefComposer .bcFoot { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 12px; border-top: 1px solid var(--hair); }
+.briefComposer .bcFoot kbd { margin-left: 4px; font-size: 0.7692rem; opacity: 0.7; }
+.briefComposer .bcSaved { color: var(--ash); font-family: var(--mono); font-size: 0.8462rem; }
+/* Centred by margin, not transform: the `/` picker renders inside this element as position: fixed,
+   and a transform would make the dialog its containing block — offset, and clipped by the scroll. */
+.briefModal {
+  width: 760px; max-width: calc(100vw - 32px); max-height: calc(100vh - 48px); overflow-y: auto;
+  inset: 0; margin: auto; height: fit-content; transform: none;
+}
+.briefModal .bmItem { margin: 2px 0 14px; color: var(--body); font-size: 1rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.briefModal .bmItem .k { color: var(--ash); font-size: 0.8462rem; margin-right: 6px; }
+.briefModal .briefComposer .bcTemplate { min-height: 280px; max-height: 50vh; }
+.briefModal .bmSub { margin: 10px 0 0; }
+.bcPop { width: 360px; z-index: 95; }
+.bcPop .bcQuery { padding: 8px 14px 0; color: var(--ink); font-family: var(--mono); font-size: 0.9231rem; }
+.bcPop .bcOptWrap { display: contents; }
 .setPlaybook { display: flex; flex-direction: column; gap: 8px; }
 .setPlaybook .head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .setPlaybook textarea { width: 100%; box-sizing: border-box; min-height: 260px; resize: vertical; font-family: var(--mono); font-size: 0.9615rem; line-height: 1.6; background: var(--deep); border: 1px solid var(--hair-strong); border-radius: var(--r); color: var(--ink); padding: 10px 12px; outline: none; }
@@ -3851,7 +3898,7 @@ html.kbOpen .shell.mobile .panel { bottom: 0; }
 
 /* ---------- phone: dialogs — full width, pinned near the top so a keyboard never covers them ---------- */
 @media (max-width: 767px), (pointer: coarse) and (max-height: 500px) {
-  dialog, dialog.itemComposer, dialog#palette, dialog#helpOverlay, dialog.repoDialog, dialog.briefDialog, dialog.sheet {
+  dialog, dialog.itemComposer, dialog#palette, dialog#helpOverlay, dialog.repoDialog, dialog.sheet {
     width: calc(100vw - 16px); max-width: none;
     margin: calc(env(safe-area-inset-top) + 8px) 8px auto;
     max-height: calc(var(--vvh, 100dvh) - env(safe-area-inset-top) - 16px); overflow-y: auto;
@@ -4285,3 +4332,11 @@ html.kbOpen .shell.mobile .panel { bottom: 0; }
 /* A job's dry run: what the real run would hold for approval (nothing was sent). */
 .previewQueued { border-top: 1px solid var(--hair); }
 .previewQueued > .t { padding: 10px 14px 2px; color: var(--yellow); font-size: 0.9231rem; }
+
+/* The brief composer on a phone: the hint row would wrap under the chip, and the template needs less height. */
+@media (max-width: 767px) {
+  .briefComposer .bcHint { display: none; }
+  .briefComposer .bcTemplate { min-height: 160px; }
+  .briefComposer .bcFoot .btn.primary { margin-left: auto; }
+  .briefComposer .bcFoot kbd { display: none; }
+}

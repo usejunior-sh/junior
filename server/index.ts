@@ -34,6 +34,7 @@ import { randomUUID } from 'node:crypto'
 import { WebSocketServer, WebSocket } from 'ws'
 import { createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk'
 import { claude } from './providers/claude.js'
+import { shellOutput } from './shell-output.js'
 import { DEFAULT_PROVIDER, providerFor } from './providers/registry.js'
 import { requireVeto, vetoRefusal } from './providers/capabilities.js'
 import type {
@@ -132,6 +133,7 @@ import type {
   BrowserPickResponse,
   BrowserShotsResponse,
   RawBlock,
+  ShellOutputResponse,
 } from '../shared/protocol.js'
 import {
   MAX_IMAGES_PER_ITEM,
@@ -5887,6 +5889,9 @@ async function enqueueBriefsOp(rt: WorkspaceRuntime, raw: unknown): Promise<Brie
   const note = typeof r.note === 'string' && r.note.trim() ? r.note.trim() : null
   const model = typeof r.model === 'string' && r.model ? r.model : null
   if (r.playbook !== undefined && !isPlaybookName(r.playbook)) throw new Error('playbook must be a kind name')
+  if (r.playbookBody !== undefined && typeof r.playbookBody !== 'string') throw new Error('playbookBody must be text')
+  if (typeof r.playbookBody === 'string' && r.playbookBody.length > 20_000) throw new Error('the template is too long (20,000 characters at most)')
+  const edited = typeof r.playbookBody === 'string' && r.playbookBody.trim() ? r.playbookBody : null
   const jobs: BriefJob[] = []
   for (const id of ids) {
     const item = await rt.store.items.get(id)
@@ -5896,7 +5901,10 @@ async function enqueueBriefsOp(rt: WorkspaceRuntime, raw: unknown): Promise<Brie
       jobs.push(latest)
       continue
     }
-    const job = await rt.store.briefs.create({ id: randomUUID(), itemId: id, playbook: (r.playbook as string | undefined) ?? item.kind, model, note })
+    const playbook = (r.playbook as string | undefined) ?? item.kind
+    // Kept only when it differs from the file, so an untouched template keeps following the file.
+    const playbookBody = edited && edited !== (await readPlaybook(rt.playbookDir, playbook)).body ? edited : null
+    const job = await rt.store.briefs.create({ id: randomUUID(), itemId: id, playbook, playbookBody, model, note })
     // A re-brief of a finished brief continues the session that wrote it — it already knows the item.
     if (latest?.status === 'ready' && latest.sessionId && rt.rows.has(latest.sessionId)) {
       await rt.store.briefs.update(job.id, { sessionId: latest.sessionId })
@@ -6014,7 +6022,7 @@ async function startBriefRun(rt: WorkspaceRuntime, job: BriefJob): Promise<void>
   const settings = await readSettings(rt)
   const item = await rt.store.items.get(job.itemId)
   if (!item) throw new Error('the work item no longer exists')
-  const playbook = await readPlaybook(rt.playbookDir, job.playbook)
+  const playbook = job.playbookBody ?? (await readPlaybook(rt.playbookDir, job.playbook)).body
   const existing = await currentBrief(rt, item.id)
   const reuse = job.sessionId ? rt.rows.get(job.sessionId) ?? null : null
   let row: StoredSession
@@ -6050,7 +6058,7 @@ async function startBriefRun(rt: WorkspaceRuntime, job: BriefJob): Promise<void>
       item,
       reason: scored?.reason,
       playbookName: job.playbook,
-      playbook: playbook.body,
+      playbook,
       note: job.note,
       existing: existing?.body ?? null,
       iteration,
@@ -7795,6 +7803,21 @@ const server = http.createServer(async (req, res) => {
   if (url.pathname === '/api/sessions') {
     json(200, summaries(rt))
     return
+  }
+
+  // The tail of a background shell's output — polled by the chat while it runs.
+  {
+    const m = /^\/api\/sessions\/([^/]+)\/shells\/([^/]+)\/output$/.exec(url.pathname)
+    if (m && req.method === 'GET') {
+      let body: ShellOutputResponse
+      try {
+        body = await shellOutput((id) => rt.store.events.read(id), decodeURIComponent(m[1]), decodeURIComponent(m[2]))
+      } catch (err) {
+        body = { ok: false, error: errText(err) }
+      }
+      json(body.ok ? 200 : 404, body)
+      return
+    }
   }
 
   // What this session changed, and one file's patch. Session-scoped on

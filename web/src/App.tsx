@@ -49,6 +49,8 @@ import { SessionCost } from './components/SessionCost.js'
 import { Transcript } from './components/Transcript.js'
 import { AgentBrief, AgentComposer, AgentDock, AgentHeader, AgentOutcome, AgentsMenu } from './components/Agents.js'
 import { agentLabel, buildAgents, spawnerOf, type AgentRun } from './agents.js'
+import { buildShells, type ShellRun } from '../../core/shells/fold.js'
+import { ShellDock } from './components/Shells.js'
 import { TeamDock, TeamSide, TeamStrip, useTeamRun } from './components/TeamRun.js'
 import { JobsPage } from './components/JobsPage.js'
 import { REFINE_JOB_KEY, JobFormPage } from './components/JobFormPage.js'
@@ -367,6 +369,12 @@ export function App() {
     if (sessionLive !== false) return runs
     return runs.map((r) => (r.state === 'running' ? { ...r, state: 'interrupted' as const, waiting: false } : r))
   }, [events, sessionLive])
+  // Shells too: the transcript's Bash pills and the background dock read these.
+  const shells = useMemo(() => {
+    const runs = buildShells(events, store.eventTime)
+    if (sessionLive !== false) return runs
+    return runs.map((r) => (r.state === 'running' ? { ...r, state: 'interrupted' as const } : r))
+  }, [events, sessionLive])
   const [agentPick, setAgentPick] = useState<{ sessionId: string; toolUseId: string } | null>(null)
   const openAgent = agentPick && agentPick.sessionId === currentId ? agents.find((a) => a.toolUseId === agentPick.toolUseId) ?? null : null
   const showAgent = useCallback(
@@ -593,6 +601,14 @@ export function App() {
   const stopAgent = useCallback(
     (run: AgentRun) => {
       if (currentId && run.agentId) store.send({ type: 'agent_stop', sessionId: currentId, agentId: run.agentId })
+    },
+    [currentId],
+  )
+
+  // stopTask takes any task id, a shell's as well as an agent's.
+  const stopShell = useCallback(
+    (run: ShellRun) => {
+      if (currentId && run.taskId) store.send({ type: 'agent_stop', sessionId: currentId, agentId: run.taskId })
     },
     [currentId],
   )
@@ -1341,12 +1357,14 @@ export function App() {
                   onRespond={respond}
                   onNavigate={navigate}
                   agents={agents}
+                  shells={shells}
                   scope={openAgent?.toolUseId ?? null}
                   onOpenAgent={showAgent}
                   lead={openAgent && <AgentBrief run={openAgent} from={spawnerOf(agents, openAgent)} />}
                   tail={openAgent && <AgentOutcome run={openAgent} to={spawnerOf(agents, openAgent)} />}
                 />
                 {!openAgent && <AgentDock agents={agents} onOpen={showAgent} onStop={stopAgent} />}
+                {!openAgent && <ShellDock sessionId={current.id} shells={shells} onStop={stopShell} />}
                 {teamRun && current.teamRun?.role === 'lead' && !openAgent && <TeamDock run={teamRun} onDetails={() => setTeamSide((o) => !o)} onNavigate={navigate} />}
                 {openAgent ? (
                   <AgentComposer key={`agent-composer-${openAgent.toolUseId}`} run={openAgent} onSend={(text) => messageAgent(openAgent, text)} />

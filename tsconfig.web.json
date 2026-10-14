@@ -26,6 +26,7 @@
     "shared",
     "core/work/types.ts",
     "core/teams/recipe.ts",
+    "core/shells/fold.ts",
     "core/teams/engine.ts",
     "core/work/state.ts",
     "core/work/labels.ts",

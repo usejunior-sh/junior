@@ -15,6 +15,7 @@ import { store } from '../store.js'
 import { artifactStore, useArtifacts } from '../artifactStore.js'
 import { mentionHash, useRefIndex, type RefIndex } from '../refs.js'
 import { agentLabel, type AgentRun } from '../agents.js'
+import type { ShellRun } from '../../../core/shells/fold.js'
 import { buildTranscript, type TranscriptItem } from '../transcript.js'
 import { AgentCard } from './Agents.js'
 import { AskCard } from './AskCard.js'
@@ -39,6 +40,8 @@ type Props = {
   onNavigate: (hash: string) => void
   /** The session's subagents (buildAgents); with them, each Agent call is drawn as its card. */
   agents?: readonly AgentRun[]
+  /** The session's shells (buildShells); folded from `events` when not given. */
+  shells?: readonly ShellRun[]
   /** Show only what this subagent did (its Agent tool_use id). Unset = the main agent. */
   scope?: string | null
   /** Open a subagent's view (null = back to main). */
@@ -71,12 +74,13 @@ export function Transcript({
   onRespond,
   onNavigate,
   agents = NO_AGENTS,
+  shells,
   scope = null,
   onOpenAgent,
   lead,
   tail,
 }: Props) {
-  const items = useMemo(() => buildTranscript(events, store.eventTime, { scope, agents }), [events, scope, agents])
+  const items = useMemo(() => buildTranscript(events, store.eventTime, { scope, agents, shells }), [events, scope, agents, shells])
   const byCall = useMemo(() => new Map(agents.map((a) => [a.toolUseId, a])), [agents])
   const byAgentId = useMemo(() => new Map(agents.filter((a) => a.agentId).map((a) => [a.agentId!, a])), [agents])
   const openAgent = useCallback((id: string | null) => onOpenAgent?.(id), [onOpenAgent])
@@ -369,7 +373,7 @@ const Item = memo(function Item({
     case 'toolGroup':
       return (
         <>
-          <ToolGroup item={item} />
+          <ToolGroup sessionId={sessionId} item={item} />
           <ActionNotes tools={item.members} byCall={actionByCall} onNavigate={onRef} />
           <DraftJobLinks tools={item.members} onRef={onRef} />
           <BrowserShots sessionId={sessionId} tools={item.members} />
