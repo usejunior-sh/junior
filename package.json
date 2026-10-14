@@ -23,14 +23,14 @@
     "node": ">=22.5"
   },
   "scripts": {
-    "dev": "node scripts/dev.mjs",
+    "dev": "PORT=5188 node scripts/dev.mjs",
     "dev:copy-prod": "node scripts/copy-prod.mjs",
     "clear-port": "./clear-port.sh",
     "smoke": "node scripts/smoke.mjs",
     "smoke:mcp": "node scripts/smoke-mcp.mjs",
     "typecheck": "tsc -p tsconfig.server.json && tsc -p tsconfig.web.json",
     "test": "node --import tsx --test test/*.test.ts",
-    "dev:server": "tsx --import ./scripts/dev-home.mjs server/index.ts",
+    "dev:server": "PORT=5188 tsx --import ./scripts/dev-home.mjs server/index.ts",
     "mcp": "tsx server/mcp.ts",
     "dev:web": "vite",
     "build": "rm -rf dist && vite build && tsc -p tsconfig.publish.json",
