@@ -1820,6 +1820,18 @@ button.edText:focus-visible { outline: none; border-color: var(--hair-bright); }
 button.chip:hover:not(:disabled), .chip[data-state="open"] { color: var(--ink); border-color: var(--hair-bright); }
 .chip:disabled { opacity: 0.45; cursor: default; }
 .chip svg { width: 12px; height: 12px; flex: none; color: var(--ash); }
+/* The composer's chips — the knobs beside send and the project/branch pickers in its head — are one
+   height (28px), a size up from other chips, so they and the send button read as one set. Phones keep
+   their own row (see the end). */
+@media (min-width: 768px) {
+  .statusline .chip { height: 28px; padding: 0 10px; gap: 6px; font-size: 0.9231rem; }
+  .statusline .chip svg { width: 13px; height: 13px; }
+  .statusline .chip.attachBtn { width: 28px; padding: 0; justify-content: center; }
+  .statusline #sendBtn, .statusline #stopBtn { height: 28px; min-width: 28px; }
+  /* the head's project and branch pickers match the row below */
+  .cardHead .chip.pick { height: 28px; padding: 0 10px; font-size: 0.9231rem; }
+  .cardHead .chip.pick svg { width: 13px; height: 13px; }
+}
 .chip .name { overflow: hidden; text-overflow: ellipsis; }
 .chip.model { color: var(--ink); }
 .chip.model .eff { color: var(--ash); }
