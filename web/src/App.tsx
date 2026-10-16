@@ -1,4 +1,4 @@
-import { CalendarClock, FileDiff, FileText, Globe, Send, Terminal as TerminalIcon } from 'lucide-react'
+import { CalendarClock, FileDiff, FileText, Globe, Send, Target, Terminal as TerminalIcon } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from 'react'
 import type { CreateStep,
   DispatchPreviewResponse,
@@ -57,6 +57,9 @@ import { REFINE_JOB_KEY, JobFormPage } from './components/JobFormPage.js'
 import { JobPage } from './components/JobPage.js'
 import { ArtifactsPage } from './components/ArtifactsPage.js'
 import { ActionsPage } from './components/ActionsPage.js'
+import { GoalPage } from './components/GoalPage.js'
+import { GoalsPage } from './components/GoalsPage.js'
+import { goalHash, useGoals } from './goals.js'
 import { usePendingActions } from './actions.js'
 import { ArtifactPage } from './components/ArtifactPage.js'
 import { DefaultProjectGate } from './components/DefaultProjectGate.js'
@@ -127,12 +130,13 @@ const STATUS_LABEL: Record<SessionStatus, string> = {
   error: 'error',
 }
 
-const PAGE_TABS: Record<'jobs' | 'terminals' | 'artifacts' | 'changes' | 'actions', PageTab> = {
+const PAGE_TABS: Record<'jobs' | 'terminals' | 'artifacts' | 'changes' | 'actions' | 'goals', PageTab> = {
   terminals: { key: 'page:terminals', label: 'Terminals', icon: TerminalIcon },
   artifacts: { key: 'page:artifacts', label: 'Artifacts', icon: FileText },
   changes: { key: 'page:changes', label: 'Changes', icon: FileDiff },
   jobs: { key: 'page:jobs', label: 'Jobs', icon: CalendarClock },
   actions: { key: 'page:actions', label: 'Actions', icon: Send },
+  goals: { key: 'page:goals', label: 'Goals', icon: Target },
 }
 
 /** The sections whose list is the panel: on a phone, their bottom-bar tab opens it as a sheet. */
@@ -145,6 +149,7 @@ const SHEET_LABEL: Record<RailSection, string> = {
   terminals: 'Terminals',
   jobs: 'Jobs',
   actions: 'Actions',
+  goals: 'Goals',
 }
 
 const termKey = (id: string) => `term:${id}`
@@ -174,6 +179,8 @@ function tabKeyOf(route: Route): string | null {
       return `job:${route.id}`
     case 'job-form':
       return `job-form:${route.id ?? 'new'}`
+    case 'goal':
+      return `goal:${route.id}`
     case 'change':
       return `change:${changeId(route.checkoutId, route.path)}`
     case 'changes':
@@ -181,6 +188,7 @@ function tabKeyOf(route: Route): string | null {
     case 'jobs':
     case 'terminals':
     case 'actions':
+    case 'goals':
       return PAGE_TABS[route.page].key
     case 'home':
     case 'settings':
@@ -207,6 +215,8 @@ function routeOfKey(key: string): string {
       return id === 'new' ? '/jobs/new' : `/jobs/${encodeURIComponent(id)}/edit`
     case 'change':
       return `/change/${id}`
+    case 'goal':
+      return goalHash(id)
     case 'page':
       return `/${id}`
     default:
@@ -216,7 +226,7 @@ function routeOfKey(key: string): string {
 }
 
 /** Documents are peeked at; processes are pinned. */
-const DOC_KINDS: readonly TabKind[] = ['item', 'artifact', 'job', 'job-form', 'change']
+const DOC_KINDS: readonly TabKind[] = ['item', 'artifact', 'job', 'job-form', 'change', 'goal']
 
 function kindOfKey(key: string): TabKind | null {
   const cut = key.indexOf(':')
@@ -244,6 +254,7 @@ const GENERIC: Record<TabKind, string> = {
   job: 'Job',
   'job-form': 'Job',
   change: 'File',
+  goal: 'Goal',
 }
 
 /**
@@ -274,6 +285,9 @@ function sectionOf(route: Route): RailSection | null {
       return 'jobs'
     case 'actions':
       return 'actions'
+    case 'goal':
+    case 'goals':
+      return 'goals'
     case 'settings':
       return null
   }
@@ -333,6 +347,7 @@ export function App() {
   const mobile = useIsMobile()
   // Queued actions waiting on you — the Actions rail badge.
   const pendingActions = usePendingActions()
+  const goals = useGoals()
   const [sheet, setSheet] = useState<RailSection | null>(null)
   useEffect(() => setSheet(null), [route, mobile])
 
@@ -424,6 +439,7 @@ export function App() {
       if (key.startsWith('artifact:')) return artifacts.artifacts.find((a) => a.id === id)?.title ?? null
       if (key.startsWith('job:')) return jobTitles.get(id) ?? null
       if (key.startsWith('job-form:')) return id === 'new' ? 'New job' : jobTitles.get(id) ?? null
+      if (key.startsWith('goal:')) return goals.goals.find((g) => g.id === id)?.title ?? null
       if (key.startsWith('change:')) {
         // A file is named by its basename; the path lives in the page header.
         const file = decodeURIComponent(id.slice(id.indexOf('/') + 1))
@@ -431,7 +447,7 @@ export function App() {
       }
       return null
     },
-    [inbox.items, artifacts.artifacts, jobTitles],
+    [inbox.items, artifacts.artifacts, jobTitles, goals.goals],
   )
 
   /** A document tab: its best known name, no project dot, nothing running. */
@@ -872,6 +888,15 @@ export function App() {
     navigate(draftRoute(d.id))
   }, [navigate])
 
+  // An item becomes a goal the same way: a chat with Junior, linked to the item, opening "New goal:".
+  const goalFrom = useCallback(
+    (item: ScoredItem) => {
+      const d = draftStore.create({ intent: 'goal', itemId: item.id, text: `${item.title} (work item ${item.id})` })
+      navigate(draftRoute(d.id))
+    },
+    [navigate],
+  )
+
   // Thumbs-down on a matched item: the correction lands as appended text on
   // the job's instruction — the rule stays human-readable.
   const refineJob = useCallback(
@@ -992,7 +1017,7 @@ export function App() {
   // Only the rail *indexes* get a transient page tab now: an artifact, job
   // or item in front is a document, and gets a real tab of its own.
   const pageTab =
-    route.page === 'jobs' || route.page === 'terminals' || route.page === 'artifacts' || route.page === 'changes' || route.page === 'actions'
+    route.page === 'jobs' || route.page === 'terminals' || route.page === 'artifacts' || route.page === 'changes' || route.page === 'actions' || route.page === 'goals'
       ? PAGE_TABS[route.page]
       : null
 
@@ -1023,6 +1048,8 @@ export function App() {
         return () => navigate('/artifacts')
       case 'job':
         return () => navigate('/jobs')
+      case 'goal':
+        return () => navigate('/goals')
       case 'job-form':
         return () => navigate(route.id ? `/jobs/${encodeURIComponent(route.id)}` : '/jobs')
       case 'session':
@@ -1039,14 +1066,14 @@ export function App() {
     }
   }, [sheet, route, navigate])
 
-  // Brief runs are sessions too, but they belong to their item: the Sessions
-  // panel and the palette list only chats.
-  const chatSessions = useMemo(() => sessions.filter((s) => s.kind !== 'brief'), [sessions])
+  // Brief runs and goal leads are sessions too, but they belong to their item
+  // or goal: the Sessions panel and the palette list only chats.
+  const chatSessions = useMemo(() => sessions.filter((s) => s.kind !== 'brief' && s.kind !== 'goal'), [sessions])
   const runningCount = chatSessions.filter((s) => s.status === 'running' || s.status === 'starting').length
   const modelName = current ? findModel(models, current.model)?.name ?? current.model : undefined
 
   // The Actions page is a list and a detail side by side: it needs the room, so no panel beside it.
-  const panel = !panelSection || panelSection === 'actions' ? null : panelSection === 'terminals' ? (
+  const panel = !panelSection || panelSection === 'actions' || panelSection === 'goals' ? null : panelSection === 'terminals' ? (
       <TerminalsPanel
         terminals={terminals}
         currentId={currentTerminalId}
@@ -1142,6 +1169,7 @@ export function App() {
           terminalCount={terminals.filter((t) => t.status === 'running').length}
           changedCount={changes.projects.reduce((n, p) => n + p.checkouts.reduce((m, c) => m + c.files.length, 0), 0)}
           actionsCount={pendingActions}
+          goalsCount={goals.waitingOnYou}
           onGo={onRailGo}
         />
 
@@ -1186,6 +1214,7 @@ export function App() {
                 tab={resolveTab(route.tab, inboxTabs.counts)}
                 tabs={inboxTabs}
                 onDispatch={dispatch}
+                onGoal={goalFrom}
                 onRefineJob={refineJob}
                 onOpenItem={openItem}
                 onPinItem={(id, title) => pin(`item:${id}`, title)}
@@ -1242,6 +1271,10 @@ export function App() {
               <JobsPage onNavigate={navigate} onAddJob={addJob} onPin={(id, title) => pin(`job:${id}`, title)} />
             ) : route.page === 'actions' ? (
               <ActionsPage onNavigate={navigate} />
+            ) : route.page === 'goals' ? (
+              <GoalsPage onNavigate={navigate} onPin={(id, title) => pin(`goal:${id}`, title)} />
+            ) : route.page === 'goal' ? (
+              <GoalPage key={route.id} id={route.id} onNavigate={navigate} />
             ) : route.page === 'job' ? (
               <JobPage key={route.id} id={route.id} onNavigate={navigate} />
             ) : route.page === 'job-form' ? (

@@ -1,8 +1,8 @@
 /**
  * Phase 2 of the actions spec (7ce2f076): queue → approve → dispatch.
  *
- * In a job run or a team worker, a connector call that sorts as an action
- * is held instead of run: the agent is told it was queued, and the call waits
+ * In a job run or a team worker, a connector call or a Bash command that
+ * sorts as an action is held instead of run: the agent is told it was queued, and the call waits
  * here for you. Every status change goes through `move`, which says what is
  * allowed from where and writes the history line for it:
  *
@@ -21,9 +21,12 @@
  * Pure: time is always an argument.
  */
 import { extractLink } from './link.js'
-import { trimArgs } from './track.js'
+import { COMMAND_CAP, trimArgs } from './track.js'
 import type { ActionActor, ActionHistoryEntry, ActionRecord, ActionStatus } from './types.js'
 import { shortActionId } from './view.js'
+
+/** Calls the hold sorts: connector tools and the shell. Built-in file tools never leave the machine. */
+export const holdable = (toolName: string): boolean => toolName === 'Bash' || toolName.startsWith('mcp__')
 
 /** A held call waits this long for you, then expires. */
 export const QUEUE_TTL_MS = 24 * 3_600_000
@@ -89,7 +92,9 @@ export function heldRecord(base: ActionRecord, fullArgs: Record<string, unknown>
   return {
     ...base,
     status: 'needs_you',
-    args: trimArgs(fullArgs),
+    args: trimArgs(fullArgs, 600, base.tool === 'Bash' ? { command: COMMAND_CAP } : {}),
+    // A held push is its own action: later pushes to the branch never fold into it.
+    groupKey: null,
     link: null,
     error: null,
     allowedBy: null,
@@ -246,6 +251,18 @@ export const sendDelay = (rec: Pick<ActionRecord, 'queue'>, now: number): number
 
 /** What the dispatch run is told: call this one tool with these args, once. */
 export function dispatchPrompt(tool: string, args: Record<string, unknown>): string {
+  if (tool === 'Bash') {
+    return [
+      'Run this command exactly once with the Bash tool, in the foreground, unchanged:',
+      '',
+      '```sh',
+      typeof args.command === 'string' ? args.command : '',
+      '```',
+      '',
+      'Copy it character for character: do not reword, reformat, fix, add or drop anything, and run no other command.',
+      'After it finishes, reply with one word: done.',
+    ].join('\n')
+  }
   return [
     // Connector tools are deferred (claude.ai ones always): load the one tool before calling it.
     `First call ToolSearch with query \`select:${tool}\` to load the tool.`,
@@ -292,7 +309,12 @@ export class DispatchFence {
     if (toolName === TOOL_SEARCH && toolName !== this.tool) return { allow: true }
     if (toolName !== this.tool) return deny(`only ${this.tool} may be called in this run`)
     if (this.allowed) return deny('already called once — an approved action goes out exactly once')
-    if (!argsEqual(input, this.args)) return deny(`the arguments differ from the approved ones${diffHint(input, this.args)} — call it again with the JSON exactly as given`)
+    if (this.tool === 'Bash') {
+      // The command is the action; the description and timeout the run writes are its own.
+      const i = isArgsObject(input) ? input : {}
+      if (i.command !== this.args.command) return deny('the command differs from the approved one — run it again exactly as given')
+      if (i.run_in_background === true) return deny('run it in the foreground, so its result comes back')
+    } else if (!argsEqual(input, this.args)) return deny(`the arguments differ from the approved ones${diffHint(input, this.args)} — call it again with the JSON exactly as given`)
     this.allowed = true
     this.allowedCall = toolUseId ?? null
     return { allow: true }
@@ -382,7 +404,7 @@ const clipError = (s: string): string => (s.length > 400 ? `${s.slice(0, 399)}�
  * - let through, no result (the run died, timed out, was stopped): unknown —
  *   it may have gone out; never retried by itself
  */
-export function dispatchOutcome(t: DispatchTrace, serverName: string): DispatchOutcome {
+export function dispatchOutcome(t: DispatchTrace, serverName: string, link: { bash?: boolean; push?: boolean } = {}): DispatchOutcome {
   if (!t.allowed) {
     // Only when the server is truly absent or broken — a pending one may just have been slow, and a
     // claude.ai connector is often left out of the init list altogether: missing from it says
@@ -409,5 +431,5 @@ export function dispatchOutcome(t: DispatchTrace, serverName: string): DispatchO
     }
   }
   if (t.result.isError) return { status: 'failed', link: null, error: clipError(t.result.text.trim() || 'the tool returned an error') }
-  return { status: 'succeeded', link: extractLink(t.result.text), error: null }
+  return { status: 'succeeded', link: extractLink(t.result.text, link), error: null }
 }

@@ -1,7 +1,7 @@
-import { CalendarClock, FileDiff, FileText, Inbox, MessagesSquare, Send, Terminal, type LucideProps } from 'lucide-react'
+import { CalendarClock, FileDiff, FileText, Inbox, MessagesSquare, Send, Target, Terminal, type LucideProps } from 'lucide-react'
 import type { ComponentType } from 'react'
 
-export type RailSection = 'inbox' | 'sessions' | 'artifacts' | 'changes' | 'terminals' | 'jobs' | 'actions'
+export type RailSection = 'inbox' | 'sessions' | 'artifacts' | 'changes' | 'terminals' | 'jobs' | 'actions' | 'goals'
 
 type Props = {
   active: RailSection | null
@@ -13,12 +13,15 @@ type Props = {
   changedCount: number
   /** queued actions waiting on your approval */
   actionsCount: number
+  /** goals whose turn is yours */
+  goalsCount: number
   onGo: (section: RailSection) => void
 }
 
 const ITEMS: Array<{ id: RailSection; label: string; icon: ComponentType<LucideProps> }> = [
   { id: 'inbox', label: 'Inbox', icon: Inbox },
   { id: 'actions', label: 'Actions', icon: Send },
+  { id: 'goals', label: 'Goals', icon: Target },
   { id: 'sessions', label: 'Sessions', icon: MessagesSquare },
   { id: 'artifacts', label: 'Artifacts', icon: FileText },
   { id: 'changes', label: 'Changes', icon: FileDiff },
@@ -27,7 +30,7 @@ const ITEMS: Array<{ id: RailSection; label: string; icon: ComponentType<LucideP
 ]
 
 /** The labelled 64px rail — one button per destination, counts as small badges. */
-export function Rail({ active, collapsed, inboxCount, runningCount, terminalCount, changedCount, actionsCount, onGo }: Props) {
+export function Rail({ active, collapsed, inboxCount, runningCount, terminalCount, changedCount, actionsCount, goalsCount, onGo }: Props) {
   return (
     <nav className="rail" aria-label="Sections">
       {ITEMS.map(({ id, label, icon: Icon }) => {
@@ -42,7 +45,9 @@ export function Rail({ active, collapsed, inboxCount, runningCount, terminalCoun
                   ? changedCount
                   : id === 'actions'
                     ? actionsCount
-                    : 0
+                    : id === 'goals'
+                      ? goalsCount
+                      : 0
         // On a phone the active tab toggles its sheet, so its own tooltip and
         // aria-expanded speak to that instead of just naming itself.
         const isToggle = collapsed !== undefined && active === id
@@ -59,7 +64,10 @@ export function Rail({ active, collapsed, inboxCount, runningCount, terminalCoun
             <Icon size={18} aria-hidden="true" />
             <span className="label">{label}</span>
             {badge > 0 && (
-              <span className={`railBadge${id === 'actions' ? ' need' : ''}`} title={id === 'actions' ? `${badge} waiting on your approval` : undefined}>
+              <span
+                className={`railBadge${id === 'actions' || id === 'goals' ? ' need' : ''}`}
+                title={id === 'actions' ? `${badge} waiting on your approval` : id === 'goals' ? `${badge} waiting on you` : undefined}
+              >
                 {badge > 99 ? '99+' : badge}
               </span>
             )}

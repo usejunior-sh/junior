@@ -16,6 +16,8 @@ import type { TeamRecipe } from '../core/teams/recipe.js'
 import type { RunState, TeamRun } from '../core/teams/engine.js'
 import type { ActionHistoryEntry, ActionRecord } from '../core/actions/types.js'
 import type { KindCount } from '../core/actions/count.js'
+import type { Gate, Goal, GoalEvent, GoalPlan, GoalStepState, GoalTurn, StepRole } from '../core/goals/types.js'
+import type { PlanComment } from '../core/goals/review.js'
 
 export type SessionStatus = 'starting' | 'idle' | 'running' | 'error'
 
@@ -143,9 +145,10 @@ export type WorkspaceVerifyResponse =
  * What kind of session a row is. `chat` = a normal user conversation (the
  * default). `job-run` = one job's scan, run as a real session so its
  * transcript is the run's observability (.docs/jobs-v2.md); the sidebar
- * filters these out of the chat list.
+ * filters these out of the chat list. `goal` = a goal's headless lead,
+ * drafting or revising its plan (server/goals.ts).
  */
-export type SessionKind = 'chat' | 'job-run' | 'brief'
+export type SessionKind = 'chat' | 'job-run' | 'brief' | 'goal'
 
 /**
  * The coding agent a session runs on, fixed for its life. Chats can pick;
@@ -1884,7 +1887,116 @@ export type ServerMessage =
   | { type: 'brief_status'; job: BriefJob }
   /** An action was recorded or settled (or the actions file changed) — refetch the Actions page, the item, the transcript's lines. */
   | { type: 'actions_changed'; sessionId?: string }
+  /** A goal was created, moved, or its ledger was written — refetch the Goals list, the goal page, the Inbox count. */
+  | { type: 'goals_changed'; goalId?: string }
   | { type: 'error'; message: string }
+
+// ---------------------------------------------------------------------------
+// Goals (GET /api/goals, GET /api/goals/<id>) — outcomes Junior drives across
+// many sessions (.docs/goals/goals-engine.md). Domain types live in
+// core/goals/types.ts; the state machine in core/goals/machine.ts.
+// ---------------------------------------------------------------------------
+
+export type {
+  Gate,
+  GateEvaluator,
+  GateSpec,
+  GateStatus,
+  GateVerdict,
+  Goal,
+  GoalActor,
+  GoalBudget,
+  GoalEvent,
+  GoalEventKind,
+  GoalHorizon,
+  GoalLogEntry,
+  GoalPlan,
+  GoalState,
+  GoalStepState,
+  GoalTurn,
+  PlanStep,
+  StepRole,
+  StepStatus,
+  StepType,
+  TeamSeat,
+} from '../core/goals/types.js'
+
+/** One row of the Goals list. */
+export type GoalSummary = Pick<Goal, 'id' | 'title' | 'state' | 'horizon' | 'reason' | 'sourceItemId' | 'currentStep' | 'spentUsd' | 'budget' | 'updatedAt'> & {
+  turn: GoalTurn
+  /** gates still open, AI and user */
+  openGates: number
+}
+
+export type GoalsResponse =
+  | {
+      ok: true
+      goals: GoalSummary[]
+      /** goals whose turn is the user's — the Inbox's and the rail's count */
+      waitingOnYou: number
+    }
+  | { ok: false; error: string }
+
+/** A question or plan change from a goal's lead, open until the user answers it. */
+export type GoalAsk =
+  | { kind: 'ask'; question: string; recommended: string; evidence: string | null; options: string[] }
+  | { kind: 'plan_change'; why: string; plan: GoalPlan }
+  | { kind: 'other'; reason: string }
+
+/** The goal page: the record, its run-time state, and the ledger's files as text. */
+export type GoalResponse =
+  | {
+      ok: true
+      goal: Goal
+      turn: GoalTurn
+      steps: GoalStepState[]
+      gates: Gate[]
+      /** newest last */
+      events: GoalEvent[]
+      plan: string
+      handoff: string
+      /** the latest entries of log.md, oldest first */
+      log: string
+      /** set after repeated ledger commit failures (decision 7) */
+      ledgerWarning: string | null
+      /** comments on the plan under review, since it was proposed — what send-back hands the lead */
+      comments: PlanComment[]
+      /** the lead session drafting the plan right now, if one is */
+      leadSessionId: string | null
+      /** M3: the session working the goal right now (a run lead or a worker), if one is */
+      liveSession: { sessionId: string; role: StepRole; stepId: string | null } | null
+      /** M3: what the goal waits on the user for — a question with Junior's recommended answer, or a plan change */
+      ask: GoalAsk | null
+    }
+  | { ok: false; error: string }
+
+/**
+ * What a goal write did. created / existing = goal_create (existing: the key
+ * was taken, nothing written); proposed / unchanged = goal_propose_plan;
+ * appended / revised / unchanged = goal_log_append; written / unchanged =
+ * goal_handoff_write; approved / commented / sent_back = the user's plan
+ * review. `unchanged` is a repeat call that wrote nothing.
+ */
+export type GoalWriteOutcome =
+  | 'created'
+  | 'existing'
+  | 'proposed'
+  | 'appended'
+  | 'revised'
+  | 'written'
+  | 'approved'
+  | 'commented'
+  | 'sent_back'
+  | 'unchanged'
+  // M3: the run loop's steering — answers, messages, edits, take over and hand back, the result
+  | 'answered'
+  | 'messaged'
+  | 'edited'
+  | 'taken_over'
+  | 'handed_back'
+  | 'accepted'
+
+export type GoalWriteResponse = { ok: true; goal: Goal; outcome: GoalWriteOutcome } | { ok: false; error: string }
 
 // ---------------------------------------------------------------------------
 // The browser pane (.docs/browser.md). The page lives in Triage.app; these are

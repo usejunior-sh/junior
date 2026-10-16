@@ -25,6 +25,7 @@ import {
   dueToSend,
   heldEntry,
   heldRecord,
+  holdable,
   move,
   queuedMessage,
   sendDelay,
@@ -513,4 +514,55 @@ test('fix 8: a redraft is a ledger row of its own, counted in the day’s spend'
   assert.deepEqual(rows.map((r) => [r.trigger, r.status]), [['redraft', 'ok'], ['scheduled', 'ok']])
   assert.ok(Math.abs((await store.jobRuns.spentSince('w1', T0 - 1)) - 0.25) < 1e-9)
   await store.close()
+})
+
+// ---------------------------------------------------------------------------
+// Held outbound Bash (goals M0): `git push` / `gh pr create` in a held session
+// are Actions too — sorted, held, and dispatched as the one approved command.
+
+test('outbound Bash sorts as an action and is holdable; local Bash is not an action', () => {
+  assert.equal(holdable('Bash'), true)
+  assert.equal(holdable(TOOL), true)
+  assert.equal(holdable('Write'), false)
+  assert.ok(sortCall('Bash', { command: 'git push origin feat/x' }, { rules: DEFAULT_RULES }))
+  assert.ok(sortCall('Bash', { command: 'gh pr create --title x --body y' }, { rules: DEFAULT_RULES }))
+  assert.equal(sortCall('Bash', { command: 'git status' }, { rules: DEFAULT_RULES }), null)
+  // Inside a loop, a branch or a substitution, a push is still a push.
+  for (const command of ['for b in a c; do git push origin $b; done', 'if true; then gh pr create --fill; fi', 'echo $(git push)', 'echo "`git push`"']) {
+    assert.equal(sortCall('Bash', { command }, { rules: DEFAULT_RULES })?.kind != null, true, command)
+  }
+  const looped = held({ command: 'for b in a c; do git push origin $b; done' }, 'Bash')
+  assert.equal(looped.status, 'needs_you')
+  assert.equal(looped.kind, 'push')
+})
+
+test('a held push is its own action and keeps its command whole', () => {
+  const cmd = 'git push -u origin feat/goals-and-teams'
+  const rec = held({ command: cmd, description: 'Push the branch' }, 'Bash')
+  assert.equal(rec.status, 'needs_you')
+  assert.equal(rec.groupKey, null)
+  assert.equal(rec.args.command, cmd)
+})
+
+test('Bash dispatch fence: the approved command, in the foreground, once', () => {
+  const cmd = 'gh pr create --title "Goals" --body "M0"'
+  const f = new DispatchFence('Bash', { command: cmd, description: 'Open the PR' })
+  assert.equal(f.decide('Bash', { command: `${cmd} --draft` }).allow, false)
+  assert.equal(f.decide('Bash', { command: cmd, run_in_background: true }).allow, false)
+  assert.equal(f.decide(TOOL, ARGS).allow, false)
+  assert.equal(f.allowed, false)
+  // Its own description and timeout are the run's to write.
+  assert.deepEqual(f.decide('Bash', { command: cmd, description: 'Create pull request', timeout: 60_000 }, 'tu-b'), { allow: true })
+  assert.equal(f.allowedCall, 'tu-b')
+  assert.equal(f.decide('Bash', { command: cmd }).allow, false, 'once')
+  const p = dispatchPrompt('Bash', { command: cmd })
+  assert.ok(p.includes(cmd))
+  assert.doesNotMatch(p, /ToolSearch/)
+})
+
+test('a dispatched push links to the pushed branch', () => {
+  const out = 'To github.com:usetriage/triage.git\n * [new branch]      feat/x -> feat/x\n'
+  const o = dispatchOutcome({ allowed: true, connector: null, result: { isError: false, text: out } }, 'Bash', { bash: true, push: true })
+  assert.equal(o.status, 'succeeded')
+  assert.equal(o.link, 'https://github.com/usetriage/triage/tree/feat/x')
 })

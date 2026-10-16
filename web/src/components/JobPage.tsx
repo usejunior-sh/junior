@@ -129,7 +129,7 @@ export function JobPage({ id, onNavigate }: { id: string; onNavigate: (hash: str
       lastOk,
       ok: week.filter((r) => r.status === 'ok').length,
       failed: week.filter((r) => r.status === 'failed' || r.status === 'timeout').length,
-      skipped: week.filter((r) => r.status === 'skipped' || r.status === 'interrupted').length,
+      skipped: week.filter((r) => r.status === 'skipped' || r.status === 'interrupted' || r.status === 'slept').length,
       filed: week.reduce((n, r) => n + (r.newCount ?? r.matches ?? 0), 0),
       tokens: week.reduce((n, r) => n + (r.tokens ?? 0), 0),
       runsWithTokens: week.filter((r) => (r.tokens ?? 0) > 0).length,

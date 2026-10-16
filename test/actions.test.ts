@@ -57,7 +57,8 @@ it's done; git push --force && rm -rf /
 EOF
 )"`
   const parts = splitCommand(cmd)
-  assert.equal(parts.length, 1)
+  // The substitution's own script is opened up — `cat`, and nothing from the heredoc.
+  assert.deepEqual(parts.map((p) => p[0]), ['gh', 'cat'])
   assert.deepEqual(parts[0].slice(0, 5), ['gh', 'pr', 'create', '--title', 'Fix it'])
 })
 

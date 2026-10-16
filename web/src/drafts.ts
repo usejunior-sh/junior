@@ -27,8 +27,8 @@ export type Draft = {
   branchHint?: string
   /** a live worktree already made for the dispatched item, offered as "Continue in …" */
   continueIn?: string
-  /** `job` = "New job": a chat with Junior that sets one up, its first message prefixed "New job:" */
-  intent?: 'job'
+  /** `job` = "New job": a chat with Junior that sets one up, its first message prefixed "New job:"; `goal` = the same for a goal ("New goal:") */
+  intent?: 'job' | 'goal'
   createdAt: number
 }
 
@@ -123,5 +123,5 @@ export function useDrafts(): readonly Draft[] {
 export function draftTitle(d: Draft): string {
   if (d.label) return d.label
   const line = d.text.trim().split('\n')[0]
-  return line ? (line.length > 48 ? line.slice(0, 47) + '…' : line) : d.intent === 'job' ? 'New job' : 'New session'
+  return line ? (line.length > 48 ? line.slice(0, 47) + '…' : line) : d.intent === 'job' ? 'New job' : d.intent === 'goal' ? 'New goal' : 'New session'
 }

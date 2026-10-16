@@ -48,6 +48,7 @@ import type {
   ProviderId,
   RunSpec as AgentRunSpec,
   ToolCall,
+  ToolVeto,
   UserTurn,
 } from './providers/types.js'
 import { z } from 'zod'
@@ -259,6 +260,7 @@ import {
   dueToSend,
   heldEntry,
   heldRecord,
+  holdable,
   isArgsObject,
   move,
   queuedMessage,
@@ -325,6 +327,9 @@ import {
   type JobToolGrant,
 } from '../core/job/tools.js'
 import { fenceDecision, fenceFor } from '../core/job/fence.js'
+import { roleFenceDecision, type RoleFence } from '../core/goals/fence.js'
+import { HardStop, settleRunStatus, untilStopped } from '../core/goals/run-guard.js'
+import { power, sleepWatch, startSleepWatch } from './power.js'
 import { buildInfo, clearState, pkgVersion, TRIAGE_DIR, writeState } from './state.js'
 import { initLogFile, log, logFilePath, logSubsystems, recentLogs } from './log.js'
 import {
@@ -373,6 +378,32 @@ import { browserCallAllowed } from '../core/browser/policy.js'
 import { BROWSER_HOST_PATH } from '../core/browser/wire.js'
 import { FileIndexes, readProjectFile, resolveFileMention, writeProjectFile } from './files.js'
 import { ArtifactIndex, slug } from './artifacts.js'
+import { GoalLedger } from '../core/goals/ledger.js'
+import {
+  bootGoalRun,
+  goalActionHeldOp,
+  GoalHeldIndex,
+  goalLeadStartedOp,
+  goalLeadSettledOp,
+  goalMcpTools,
+  goalMessageOp,
+  goalOfSession,
+  goalsRoute,
+  goalSessionEndedOp,
+  goalSessionMcpTools,
+  goalWorkerMessageOp,
+  loadGoalHeld,
+  onGoalEvent,
+  pumpGoals,
+  replayGoalEvents,
+  type GoalDeps,
+  type GoalEngine,
+  type GoalSessionTag,
+  type StartSpec,
+} from './goals.js'
+import { GOAL_SESSION_TIMEOUT_MS, LEAD_RUN_APPEND, ROLE_AGENT, roleWrites, workerAppend as goalWorkerAppend } from '../core/goals/run.js'
+import { leadDraftPrompt, LEAD_DRAFT_APPEND, type LeadWake } from '../core/goals/review.js'
+import { DEFAULT_GOAL_MODELS, type Goal, type GoalEvent } from '../core/goals/types.js'
 import { WORKSPACE_PLUGIN, createLibraryEntry, ensureWorkspacePlugin, libraryRoots, locate as locateLibrary, libraryTargets, listLibrary, readLibraryFile, removeLibraryItem, writeLibraryFile, type LibraryRoot } from './library.js'
 import { TRIAGE_MCP_INSTRUCTIONS, triageSessionAppend } from '../shared/triageContext.js'
 import { AGENTS_ARG, SKILLS_ARG, callTool as callMcpTool, PROTOCOL_VERSION as MCP_PROTOCOL_VERSION, TOOLS as MCP_TOOLS } from '../core/mcp/tools.js'
@@ -497,6 +528,8 @@ const TRIAGE_READ_TOOLS = new Set([
   'mcp__triage__get_workspace',
   'mcp__triage__list_artifacts',
   'mcp__triage__read_artifact',
+  'mcp__triage__goal_get',
+  'mcp__triage__goal_list',
 ])
 
 // Verb tokens that mark a connector call's intent: READ_VERBS / WRITE_VERBS
@@ -606,6 +639,9 @@ class WorkspaceRuntime {
   readonly files = new FileIndexes()
   /** the workspace's markdown artifacts, indexed from its artifacts folder (.docs/next-version.md) */
   readonly artifacts: ArtifactIndex
+  /** goals (server/goals.ts): their ledger folders in the artifacts repo, and what every goal op needs */
+  readonly goalLedger: GoalLedger
+  readonly goalDeps: GoalDeps
   /** what sessions saw in the browser pane: screenshots, checkpoints, diffs (.docs/browser.md) */
   readonly shots: ShotStore
   /** playbooks and dispatch templates — the two prose-customisable stages, as files */
@@ -619,6 +655,12 @@ class WorkspaceRuntime {
   briefPumping = false
   readonly briefTimers = new Map<string, ReturnType<typeof setTimeout>>()
   readonly briefExtras = new Map<string, SessionExtras>()
+  /** goal id → its drafting lead while one runs (startGoalLead) */
+  readonly goalLeads = new Map<string, GoalLead>()
+  /** M3: the sessions the goal run loop started (run leads and workers), by session id */
+  readonly goalRuns = new Map<string, GoalRun>()
+  /** M3: actions a goal's workers queued, across sessions and restarts (server/goals.ts GoalHeldIndex) */
+  readonly goalHeld = new GoalHeldIndex()
   /** jobs whose run has called write_brief at least once */
   readonly briefWrote = new Set<string>()
   /** session id → the work item it was dispatched for or briefs (mirrors `links`) */
@@ -679,6 +721,26 @@ class WorkspaceRuntime {
       broadcast(this, { type: 'artifacts_changed' }),
     )
     void this.artifacts.ensure()
+    this.goalLedger = new GoalLedger(this.artifacts.root)
+    this.goalDeps = {
+      store: this.store,
+      ledger: this.goalLedger,
+      now: Date.now,
+      defaultProjectId: async () => (await defaultProject(this))?.id ?? null,
+      changed: (goalId) => {
+        broadcast(this, { type: 'goals_changed', goalId })
+        // A goal's state is its item's flow (flowSignals): the Inbox reads it again.
+        invalidateInbox(this)
+      },
+      // Plan review reacts the moment its event is written (server/goals.ts onGoalEvent) — no polling.
+      emit: (ev) =>
+        void onGoalEvent(this.goalDeps, goalEngineFor(this), ev).catch((err) =>
+          log('error', 'goals', `event ${ev.kind} on ${ev.goalId}: ${errText(err)}`, { workspace: meta.id }),
+        ),
+      // A goal made in chat lives under a new manual item, like a team proposed from one.
+      itemFor: (goal) =>
+        createManualOp(this, { title: goal.title.slice(0, 120), description: `Goal — done when: ${goal.doneWhen}`, ...(goal.projectId ? { projectId: goal.projectId } : {}) }),
+    }
     this.playbookDir = path.join(workspaceDir(meta.id), 'playbooks')
     this.shots = new ShotStore(path.join(workspaceDir(meta.id), 'browser'))
     this.dispatchDir = path.join(workspaceDir(meta.id), 'dispatch')
@@ -831,7 +893,7 @@ class LiveSession {
       },
       ...(extras.tools ? { tools: extras.tools } : {}),
       ...(extras.strictMcpConfig ? { strictMcp: true } : {}),
-      disallowedTools: [...(row.kind === 'brief' ? BRIEF_DISALLOWED_TOOLS : []), ...(extras.disallowedTools ?? [])],
+      disallowedTools: [...(row.kind === 'brief' ? BRIEF_DISALLOWED_TOOLS : row.kind === 'goal' && !rt.goalRuns.has(row.id) ? GOAL_LEAD_DISALLOWED_TOOLS : []), ...(extras.disallowedTools ?? [])],
       // The session's agent's auth in this workspace: api-key / config-dir
       // spawn with overrides; inherit passes nothing.
       ...(rt.envFor(row.provider) ? { env: rt.envFor(row.provider) } : {}),
@@ -854,12 +916,11 @@ class LiveSession {
       // The workspace's own skills and agents, for a chat. Not for briefs, job
       // runs or team workers — each runs a lean, fixed toolset on purpose.
       ...(row.kind === 'chat' && !extras.tools ? { plugins: [rt.libraryDir] } : {}),
-      // A job run or a team worker holds its outbound connector calls for
-      // you (core/actions/queue.ts) — a hook, so no mode or allow rule skips it.
-      // Chats keep asking now, through `approve` below.
-      ...(this.provider.capabilities.hooks && holdsActions(rt, row)
-        ? { veto: (toolName: string, input: unknown, ctx?: { toolUseId?: string }) => holdIfAction(rt, row, toolName, input, ctx) }
-        : {}),
+      // A read-only worker or brief is fenced, and a job run or a team worker
+      // holds its outbound calls for you (core/actions/queue.ts) — a hook, so
+      // no mode or ~/.claude allow rule skips either. Chats keep asking now,
+      // through `approve` below.
+      ...(this.provider.capabilities.hooks ? sessionVeto(rt, row) : {}),
       // Still set under every mode: the permissive modes short-circuit the
       // calls they cover before this runs, and whatever still reaches here
       // is a call that mode decided a human should see.
@@ -974,6 +1035,8 @@ class LiveSession {
           this.rt.files.invalidate(this.row.cwd)
           // A brief run is one turn: its result is the run's end.
           if (this.row.kind === 'brief') void onBriefTurnDone(this.rt, this.row.id)
+          // So is a goal lead's: it proposed the plan, or it never will.
+          if (this.row.kind === 'goal') void settleGoalLead(this.rt, this.row.id)
           // A skill or agent this turn wrote is usable now — here and in every other session.
           if (this.libraryTouched) {
             this.libraryTouched = false
@@ -987,6 +1050,8 @@ class LiveSession {
           const delta = cost === null ? 0 : Math.max(0, cost - this.costSeen)
           if (cost !== null) this.costSeen = cost
           if (this.rt.sessionTeam.has(this.row.id)) void noteTeamSpend(this.rt, this.row.id, delta, ev.overBudget)
+          // A goal session is one turn too: the run loop books its spend and moves the goal on.
+          if (this.rt.goalRuns.has(this.row.id)) void endGoalSession(this.rt, this.row.id, null, delta)
         }
       }
       this.setStatus('idle')
@@ -1000,6 +1065,8 @@ class LiveSession {
       if (this.rt.live.get(this.row.id) === this) this.rt.live.delete(this.row.id)
       broadcastSessionList(this.rt)
       if (this.row.kind === 'brief') void onBriefSessionEnded(this.rt, this.row.id)
+      if (this.row.kind === 'goal') void settleGoalLead(this.rt, this.row.id, 'the lead session ended before it proposed a plan')
+      if (this.rt.goalRuns.has(this.row.id)) void endGoalSession(this.rt, this.row.id, 'the session ended before its turn finished')
     }
   }
 
@@ -1111,6 +1178,34 @@ class LiveSession {
     // Brief sessions are headless (.docs/next-version.md): nobody is there to
     // answer a prompt, so the policy is fixed — reads and the brief's own write
     // tool run, narrow read-only gh/git commands run, everything else is denied.
+    // A goal's drafting lead is headless too: reads, read-only gh/git, and its plan.
+    // A goal run's sessions are headless as well. The role fence and the hold
+    // have vetoed already, so a worker may edit inside its worktree and run the
+    // shell (outbound calls were queued for approval before they got here).
+    const goalRun = this.rt.goalRuns.get(this.row.id)
+    if (goalRun) {
+      const own = toolName.startsWith('mcp__goal__')
+      const inTree = (p: unknown) => typeof p === 'string' && !path.relative(this.row.cwd, path.resolve(this.row.cwd, p)).startsWith('..')
+      const allowed =
+        own ||
+        effect === 'read' ||
+        (goalRun.role === 'lead'
+          ? toolName === 'Bash' && briefBashAllowed(toolInput)
+          : toolName === 'Bash' || (EDIT_TOOLS.has(toolName) && inTree(toolInput.file_path ?? toolInput.notebook_path)))
+      return Promise.resolve(
+        allowed
+          ? { behavior: 'allow', updatedInput: toolInput }
+          : { behavior: 'deny', message: `This is a goal's headless ${goalRun.role}: that tool isn't open to it. Note what you needed in goal_log_append.` },
+      )
+    }
+    if (this.row.kind === 'goal') {
+      const allowed = GOAL_LEAD_TOOLS.has(toolName) || effect === 'read' || (toolName === 'Bash' && briefBashAllowed(toolInput))
+      return Promise.resolve(
+        allowed
+          ? { behavior: 'allow', updatedInput: toolInput }
+          : { behavior: 'deny', message: "This is a goal's drafting lead: only reads, read-only gh/git commands, and goal_propose_plan are allowed." },
+      )
+    }
     if (this.row.kind === 'brief') {
       const allowed =
         toolName === 'mcp__brief__write_brief' || effect === 'read' || (toolName === 'Bash' && briefBashAllowed(toolInput))
@@ -1568,12 +1663,44 @@ const isTeamWorker = (rt: WorkspaceRuntime, sessionId: string): boolean => {
 
 /** Does this session hold its outbound calls for approval? Job runs and team workers do; chats ask now. */
 const holdsActions = (rt: WorkspaceRuntime, row: StoredSession): boolean =>
-  row.provider === 'claude' && (row.kind === 'job-run' || isTeamWorker(rt, row.id))
+  row.provider === 'claude' && (row.kind === 'job-run' || isTeamWorker(rt, row.id) || (rt.goalRuns.get(row.id)?.role ?? 'lead') !== 'lead')
 
 /**
- * The veto a holding session gets: an MCP call that sorts as an action is
- * refused with "queued as #…" and filed for approval; everything else passes.
- * Bash is never held in this phase (sending a command needs its folder).
+ * The role fence a session runs under (core/goals/fence.ts), or null: a team
+ * worker on a step that isn't the change step is read-only, and so is a brief.
+ */
+function roleFenceOf(rt: WorkspaceRuntime, row: StoredSession): RoleFence | null {
+  if (row.kind === 'brief') return { write: false, role: 'brief' }
+  const goalRun = rt.goalRuns.get(row.id)
+  if (goalRun) return { write: roleWrites(goalRun.role), role: goalRun.role }
+  if (row.kind === 'goal') return { write: false, role: 'lead' }
+  const run = teamRunOf(rt, row.id)
+  const worker = run && run.leadSessionId !== row.id ? [...run.workers].reverse().find((w) => w.sessionId === row.id) : undefined
+  if (!run || !worker) return null
+  const { writes } = workerSpec(run, worker)
+  return { write: writes, role: (worker.agent || 'worker').toLowerCase() }
+}
+
+/** A session's PreToolUse veto: its role fence first, then the hold. None for a session with neither. */
+function sessionVeto(rt: WorkspaceRuntime, row: StoredSession): { veto?: ToolVeto } {
+  const fence = roleFenceOf(rt, row)
+  if (!fence && !holdsActions(rt, row)) return {}
+  return {
+    veto: (toolName, input, ctx) => {
+      const d = fence ? roleFenceDecision(fence, toolName, input) : { allow: true as const }
+      if (!d.allow) {
+        log('info', 'fence', `refused ${toolName} in a read-only session: ${d.reason}`, { session: row.id, workspace: rt.meta.id })
+        return d
+      }
+      return holdIfAction(rt, row, toolName, input, ctx)
+    },
+  }
+}
+
+/**
+ * The veto a holding session gets: an MCP call or a Bash command that sorts
+ * as an action is refused with "queued as #…" and filed for approval;
+ * everything else passes. A held command is sent from the session's folder.
  */
 function holdIfAction(
   rt: WorkspaceRuntime,
@@ -1582,7 +1709,7 @@ function holdIfAction(
   input: unknown,
   ctx?: { toolUseId?: string },
 ): { allow: true } | { allow: false; reason: string } {
-  if (!toolName.startsWith('mcp__') || !holdsActions(rt, row)) return { allow: true }
+  if (!holdable(toolName) || !holdsActions(rt, row)) return { allow: true }
   const args = isArgsObject(input) ? input : {}
   let sorted
   try {
@@ -1592,6 +1719,11 @@ function holdIfAction(
     return { allow: true }
   }
   if (!sorted) return { allow: true }
+  // A goal's worker: the same call any of the goal's sessions already filed —
+  // before a crash, or by the worker this one replaced — is that action.
+  const goalRun = rt.goalRuns.get(row.id)
+  const filed = goalRun ? rt.goalHeld.find(goalRun.goalId, toolName, args) : null
+  if (filed) return { allow: false, reason: queuedMessage(filed) }
   // The same call with the same args, still waiting: name the action already filed.
   const key = `${row.id}\u0000${toolName}\u0000${canonJson(args)}`
   const dup = rt.heldCalls.get(key)
@@ -1608,6 +1740,10 @@ function holdIfAction(
   const toolUseId = ctx?.toolUseId || `held-${randomUUID()}`
   const id = `${row.id}:${toolUseId}`
   rt.heldCalls.set(key, id)
+  if (goalRun)
+    void goalActionHeldOp(rt.goalDeps, rt.goalHeld, { goalId: goalRun.goalId, sessionId: row.id, actionId: id, tool: toolName, args }).catch((err) =>
+      log('warn', 'goals', `could not note a held action on its goal: ${errText(err)}`, { session: row.id, workspace: rt.meta.id }),
+    )
   const now = Date.now()
   const base = recordFor(actionContext(rt, row), toolUseId, toolName, args, sorted, now)
   void onActionChain(rt, async () => {
@@ -1657,6 +1793,8 @@ async function moveAction(rt: WorkspaceRuntime, id: string, m: ActionMove, now =
     return r.next
   })
   if (next.status !== 'needs_you') forgetHeld(rt, id)
+  // Sent back or lapsed: a goal's worker may file the same call again.
+  if (next.status === 'sent_back' || next.status === 'expired') rt.goalHeld.drop(id)
   actionsChanged(rt, new Set([next.sessionId]))
   return next
 }
@@ -1912,7 +2050,13 @@ async function dispatchOrigin(rt: WorkspaceRuntime, rec: ActionRecord): Promise<
     const project = w ? (await rt.store.projects.list()).find((p) => p.id === w.projectId) : undefined
     if (project) cwd = project.path
   }
-  if (!cwd || !(await stat(cwd).then((st) => st.isDirectory(), () => false))) cwd = await mkdtemp(path.join(os.tmpdir(), 'triage-dispatch-'))
+  const isDir = !!cwd && (await stat(cwd).then((st) => st.isDirectory(), () => false))
+  // A command runs where it was drafted, or not at all: `git push` from a temp folder pushes nothing it meant to.
+  if (rec.tool === 'Bash') {
+    if (!cwd || !isDir) throw new Error(`the folder it was drafted in is gone${cwd ? ` (${cwd})` : ''}`)
+    return { cwd, mcpServers: {} }
+  }
+  if (!cwd || !isDir) cwd = await mkdtemp(path.join(os.tmpdir(), 'triage-dispatch-'))
   const servers: McpServers = {}
   const folder = await folderMcpServers(rt, cwd).catch(() => null)
   if (folder?.servers[server]) servers[server] = folder.servers[server]
@@ -1944,14 +2088,16 @@ async function runDispatch(rt: WorkspaceRuntime, rec: ActionRecord): Promise<{ t
     // Every other connector the user has: out of the run's context entirely (the fence would deny them anyway).
     const known = [...(rt.folderProbes.get(origin.cwd)?.connectors ?? []), ...(rt.connectorCache?.connectors ?? [])].map((c) => c.server)
     const disallowedTools = dispatchDisallowed([...known, ...Object.keys(origin.mcpServers)], rec.tool)
+    const bash = rec.tool === 'Bash'
     const run = rt.provider.run({
       prompt: dispatchPrompt(rec.tool, q.args),
       cwd: origin.cwd,
       // The user's own MCP servers and claude.ai connectors; never the project's settings, skills or hooks.
       userConfig: true,
       // ToolSearch only: connector tools are deferred (claude.ai ones start pending), so the run loads the one it needs.
-      tools: [TOOL_SEARCH],
-      allowedTools: [TOOL_SEARCH, rec.tool],
+      // A held command needs only the shell.
+      tools: bash ? ['Bash'] : [TOOL_SEARCH],
+      allowedTools: bash ? ['Bash'] : [TOOL_SEARCH, rec.tool],
       ...(disallowedTools.length ? { disallowedTools } : {}),
       unattended: true,
       veto: (toolName, input, ctx) => fence.decide(toolName, input, ctx?.toolUseId),
@@ -2017,7 +2163,8 @@ async function dispatchAction(rt: WorkspaceRuntime, id: string): Promise<void> {
   log('info', 'actions', `sending: ${claimed.summary} (#${shortActionId(id)})`, { action: id, tool: claimed.tool, workspace: rt.meta.id })
   try {
     const { trace, costUsd } = await runDispatch(rt, claimed)
-    const out = dispatchOutcome(trace, serverOf(claimed.tool))
+    const bash = claimed.tool === 'Bash'
+    const out = dispatchOutcome(trace, bash ? 'Bash' : serverOf(claimed.tool), { bash, push: bash && claimed.kind === 'push' })
     const done = await moveAction(rt, id, { type: 'settle', status: out.status, link: out.link, error: out.error, costUsd })
     log(out.status === 'succeeded' ? 'info' : 'warn', 'actions', `${out.status}: ${done.summary} (#${shortActionId(id)})${out.error ? ` — ${out.error}` : ''}`, {
       action: id,
@@ -2775,6 +2922,8 @@ const GITHUB_LOOKBACK_MS = 14 * 86_400_000
 const JOB_CONCURRENCY = 2
 /** how long past its timeout a run may hang (the SDK ignored the abort) before the watchdog frees its slot */
 const WATCHDOG_GRACE_MS = 60_000
+/** after a run's timeout aborts it, how long its stream may take to close before the run stops waiting on it */
+const RUN_KILL_GRACE_MS = 15_000
 const JOB_TIMEOUT_KEY = 'jobs.defaultTimeoutMs'
 const JOB_BUDGET_KEY = 'jobs.defaultBudgetUsd'
 const FOLDER_PROBE_TTL_MS = 10 * 60_000
@@ -2998,6 +3147,12 @@ async function flowSignals(rt: WorkspaceRuntime): Promise<Map<string, FlowSignal
     const at = Math.max(run.createdAt, lead?.updatedAt ?? 0)
     const s = of(run.itemId)
     if (!s.team || at > s.team.at) s.team = { state: run.state, at }
+  }
+  // Goals with an item: the newest live one per item (done and cancelled hand the item back to the rules).
+  for (const g of await rt.store.goals.list({ states: ['draft_plan', 'plan_ready', 'queued', 'running', 'waiting_world', 'waiting_you', 'result_ready', 'paused'] })) {
+    if (!g.sourceItemId || g.state === 'done' || g.state === 'cancelled') continue
+    const s = of(g.sourceItemId)
+    if (!s.goal || g.updatedAt > s.goal.at) s.goal = { state: g.state, at: g.updatedAt }
   }
   for (const [id, f] of stored) if (f.override) of(id).override = f.override
   // Queued actions waiting on you: the item is on your turn until they're answered.
@@ -3285,15 +3440,20 @@ function pumpRunQueue(rt: WorkspaceRuntime): void {
     void rt.store.jobs.markRunStarted(run.id, { startedAt, trigger: run.trigger })
     void ledger(rt, rt.store.jobRuns.insert({ id: runId, jobId: run.id, slot: run.slot, trigger: run.trigger, status: 'running', startedAt }))
     const jitter = run.trigger === 'manual' ? 0 : Math.floor(Math.random() * 3_000)
+    // Keep the Mac awake while the run is out: one that starts on a DarkWake
+    // otherwise freezes when the Mac sleeps again seconds later.
+    const letGo = power.hold(`job ${run.id}`)
     // The run's slot is freed exactly once: when it settles, or by the
     // watchdog if it hangs past its timeout — else every later slot of this
     // job would skip as overlap until a restart.
     let released = false
     let dog: NodeJS.Timeout | undefined
+    let stopRun: (() => void) | undefined
     const release = () => {
       if (released) return
       released = true
       clearTimeout(dog)
+      letGo()
       rt.activeRuns -= 1
       rt.runningJobs.delete(run.id)
       pumpRunQueue(rt)
@@ -3303,15 +3463,18 @@ function pumpRunQueue(rt: WorkspaceRuntime): void {
       dog = setTimeout(() => {
         if (released) return
         const reason = `watchdog: still running ${humanSpan(Date.now() - startedAt)} after start, past its ${humanSpan(timeoutMs)} timeout`
-        log('error', 'job', `${reason} — freeing its slot`, { jobId: run.id, workspace: rt.meta.id })
-        void ledger(rt, rt.store.jobRuns.finish(run.id, run.slot, { status: 'interrupted', reason, endedAt: Date.now() }))
+        log('error', 'job', `${reason} — stopping it and freeing its slot`, { jobId: run.id, workspace: rt.meta.id })
+        // Abort the run (the SDK closes its subprocess) and stop waiting on its stream.
+        stopRun?.()
+        const end = settleRunStatus('interrupted', sleepWatch.sleptBetween(startedAt, Date.now()), reason)
+        void ledger(rt, rt.store.jobRuns.finish(run.id, run.slot, { status: end.status, reason: end.error, endedAt: Date.now() }))
         release()
       }, Math.max(0, startedAt + timeoutMs + WATCHDOG_GRACE_MS - Date.now()))
     }
     // until runJob knows the job's own timeout, the longest one allowed
     arm(MAX_JOB_TIMEOUT_MS)
     setTimeout(() => {
-      runJob(rt, run, startedAt, runId, arm)
+      runJob(rt, run, startedAt, runId, arm, (stop) => (stopRun = stop))
         .catch(async (err) => {
           log('error', 'job', `run crashed: ${err}`, { workspace: rt.meta.id })
           // a no-op when runJob already closed the row
@@ -3814,7 +3977,14 @@ function notifyRun(rt: WorkspaceRuntime, w: Job, status: JobRunStatus, detail?: 
  * receipt on the job row and its own session row. Stateless (job-spec.md,
  * item 4): nothing from this run feeds the next one's prompt.
  */
-async function runJob(rt: WorkspaceRuntime, run: QueuedRun, startedMs: number, runId: string, armWatchdog: (timeoutMs: number) => void = () => {}): Promise<void> {
+async function runJob(
+  rt: WorkspaceRuntime,
+  run: QueuedRun,
+  startedMs: number,
+  runId: string,
+  armWatchdog: (timeoutMs: number) => void = () => {},
+  onStop: (stop: () => void) => void = () => {},
+): Promise<void> {
   const job = await rt.store.jobs.get(run.id)
   if (!job) {
     await ledger(rt, rt.store.jobRuns.finish(run.id, run.slot, { status: 'skipped', reason: 'the job was removed', endedAt: Date.now() }))
@@ -3886,6 +4056,15 @@ async function runJob(rt: WorkspaceRuntime, run: QueuedRun, startedMs: number, r
   let timedOut = false
   const abort = new AbortController()
   let timer: NodeJS.Timeout | undefined
+  let killTimer: NodeJS.Timeout | undefined
+  // The hard stop: the loop below stops waiting on the run's stream, so a run
+  // past its timeout is always recorded, even when the stream never closes.
+  let hardStop: () => void = () => {}
+  const stopped = new Promise<void>((resolve) => (hardStop = resolve))
+  onStop(() => {
+    abort.abort()
+    hardStop()
+  })
   const scanMcp = makeScanMcp(rt, job, session.id, (outcome) => {
     matches += 1
     if (outcome === 'inserted') newCount += 1
@@ -3895,7 +4074,10 @@ async function runJob(rt: WorkspaceRuntime, run: QueuedRun, startedMs: number, r
     const project = await jobProject(rt, job.projectId)
     timer = setTimeout(() => {
       timedOut = true
+      // The SDK closes the subprocess on abort (stdin EOF, then a kill); a
+      // stream still open past the grace is let go.
       abort.abort()
+      killTimer = setTimeout(hardStop, RUN_KILL_GRACE_MS)
     }, runLimits.timeoutMs)
     const runSpec = await jobQuery(
       rt,
@@ -3917,7 +4099,7 @@ async function runJob(rt: WorkspaceRuntime, run: QueuedRun, startedMs: number, r
     let sawResult = false
     let resultText = ''
     let overBudget = false
-    for await (const ev of q) {
+    for await (const ev of untilStopped(q, stopped)) {
       if (ev.kind === 'started' && ev.sessionId) {
         session.sdkSessionId = ev.sessionId
         rt.store.sessions.setSdkSessionId(session.id, ev.sessionId).catch(() => {})
@@ -3938,13 +4120,19 @@ async function runJob(rt: WorkspaceRuntime, run: QueuedRun, startedMs: number, r
   } catch (err) {
     if (timedOut) {
       status = 'timeout'
-      error = `timed out after ${humanSpan((await jobLimits(rt, job)).timeoutMs)}`
+      error = `timed out after ${humanSpan((await jobLimits(rt, job)).timeoutMs)}${err instanceof HardStop ? ', and stopped' : ''}`
+    } else if (err instanceof HardStop) {
+      status = 'interrupted'
+      error = 'stopped by the watchdog'
     } else {
       error = err instanceof Error ? err.message : String(err)
     }
-    emit({ kind: 'error', message: error })
+    // A run the Mac slept through is `slept`, not a failure of the job.
+    ;({ status, error } = settleRunStatus(status, sleepWatch.sleptBetween(startedMs, Date.now()), error))
+    emit({ kind: 'error', message: error ?? status })
   } finally {
     if (timer) clearTimeout(timer)
+    if (killTimer) clearTimeout(killTimer)
     await rt.store.jobs.recordRun(job.id, {
       lastRunAt: Date.now(),
       lastRunTokens: tokens,
@@ -4450,6 +4638,10 @@ async function deleteJob(rt: WorkspaceRuntime, id: string, why: string): Promise
   log('info', 'job', `deleted job ${id} (${why}); archived ${archived} item(s)`, { jobId: id, archived, workspace: rt.meta.id })
 }
 
+// The sleep watch's heartbeat: a long silence between beats was sleep, so a
+// run the Mac slept through is recorded `slept` (server/power.ts).
+startSleepWatch()
+
 // The minute tick (.docs/jobs.md): due jobs run, elapsed snoozes wake — in
 // every workspace. No cron — the server is the long-running process; missed
 // runs are simply due on the first tick after wake.
@@ -4853,6 +5045,11 @@ async function initRuntime(rt: WorkspaceRuntime): Promise<void> {
   if (await jobsEnabled(rt)) await seedJobTemplates(rt)
   else await syncJobFiles(rt, { force: true }).catch(() => {})
   await bootBriefs(rt)
+  // Plan review events the last daemon wrote but never finished: wake their lead, queue their steps.
+  await replayGoalEvents(rt.goalDeps, goalEngineFor(rt)).catch((err) => log('error', 'goals', `replay failed: ${errText(err)}`, { workspace: rt.meta.id }))
+  // M3: the goals that were mid-session when the daemon died pick up from their handoff, and nothing they queued is filed twice.
+  await loadGoalHeld(rt.goalDeps, rt.goalHeld).catch((err) => log('error', 'goals', `could not load held actions: ${errText(err)}`, { workspace: rt.meta.id }))
+  await bootGoalRun(rt.goalDeps, goalEngineFor(rt)).catch((err) => log('error', 'goals', `could not resume running goals: ${errText(err)}`, { workspace: rt.meta.id }))
   await rt.teamLibrary.seed().catch((err) => log('error', 'teams', `could not seed agents and teams: ${err}`, { workspace: rt.meta.id }))
   await loadTeamRuns(rt)
   // The last snapshot makes the first page load instant — but only while it
@@ -5811,6 +6008,20 @@ function extrasFor(rt: WorkspaceRuntime, row: StoredSession): SessionExtras {
   // A chat gets the browser pane's tools: with Triage.app closed they answer
   // "open Triage.app" rather than vanish, so a session never has to respawn.
   if (row.kind === 'chat') return { systemAppend: identity, mcp: { browser: browserMcpFor(rt, row) } }
+  // A goal run's session: its goal-bound tools, and its contract last.
+  const goalRun = rt.goalRuns.get(row.id)
+  if (goalRun) {
+    const mcp = { goal: createSdkMcpServer({ name: 'goal', version: VERSION, alwaysLoad: true, tools: goalSessionMcpTools(rt.goalDeps, goalRun) }) }
+    const spec = goalRun.spec
+    if (spec.role === 'lead') return { systemAppend: `${identity}\n${LEAD_RUN_APPEND}`, mcp, disallowedTools: GOAL_RUN_DISALLOWED_TOOLS }
+    return {
+      systemAppend: `${identity}\n${goalWorkerAppend(goalRun.role, spec.writes, goalRun.agentPrompt)}\n\n${spec.context}`,
+      mcp,
+      disallowedTools: GOAL_RUN_DISALLOWED_TOOLS.filter((t) => spec.writes || !EDIT_TOOLS.has(t)),
+    }
+  }
+  // A goal's lead: the drafting contract last, like a brief's.
+  if (row.kind === 'goal') return { systemAppend: `${identity}\n${LEAD_DRAFT_APPEND}` }
   if (row.kind !== 'brief') return { systemAppend: identity }
   let e = rt.briefExtras.get(row.id)
   if (!e) {
@@ -6112,6 +6323,190 @@ async function onBriefSessionEnded(rt: WorkspaceRuntime, sessionId: string): Pro
   const job = await rt.store.briefs.forSession(sessionId)
   if (!job || job.status !== 'running') return
   await finishBrief(rt, job.id, 'failed', 'the brief session ended before it finished')
+}
+
+// ---------------------------------------------------------------------------
+// Goals: the drafting lead (server/goals.ts reacts, this spawns). One headless,
+// read-only session per wake whose one write is goal_propose_plan; its turn's
+// end settles it, which marks the waking event handled.
+// ---------------------------------------------------------------------------
+
+const GOAL_LEAD_TIMEOUT_MS = 20 * 60_000
+/** What a drafting lead may call beyond reads: the goal reads and its plan. */
+const GOAL_LEAD_TOOLS = new Set(['mcp__triage__goal_get', 'mcp__triage__goal_list', 'mcp__triage__goal_propose_plan'])
+/** A brief's hidden tools, plus the goal writes that aren't the lead's in M2. */
+const GOAL_LEAD_DISALLOWED_TOOLS = [...BRIEF_DISALLOWED_TOOLS, ...['goal_create', 'goal_log_append', 'goal_handoff_write'].map((t) => `mcp__triage__${t}`)]
+
+type GoalLead = { goalId: string; sessionId: string; seq: number; timer: ReturnType<typeof setTimeout>; release: () => void }
+
+/**
+ * What a goal run's session can't reach: the questions nobody answers, the
+ * triage writes outside its goal, and the unbound goal tools (it has its own,
+ * bound to its goal, on the `goal` server). Write tools stay listed for a
+ * worker that may write only so the filter in extrasFor can lift them.
+ */
+const GOAL_RUN_DISALLOWED_TOOLS = [
+  ...BRIEF_DISALLOWED_TOOLS,
+  ...['goal_create', 'goal_propose_plan', 'goal_log_append', 'goal_handoff_write'].map((t) => `mcp__triage__${t}`),
+]
+
+/** One session the goal run loop started. */
+type GoalRun = GoalSessionTag & { spec: StartSpec; agentPrompt: string | null; timer: ReturnType<typeof setTimeout>; release: () => void }
+
+function goalEngineFor(rt: WorkspaceRuntime): GoalEngine {
+  const eng: GoalEngine = {
+    wakeLead: (goal, wake, ev) => startGoalLead(rt, goal, wake, ev),
+    stepsQueued: () => void pumpGoals(rt.goalDeps, eng).catch((err) => log('error', 'goals', `pump failed: ${errText(err)}`, { workspace: rt.meta.id })),
+    startSession: (goal, spec, started) => startGoalSession(rt, goal, spec, started),
+    stopSessions: async (goalId) => {
+      for (const g of [...rt.goalRuns.values()]) if (g.goalId === goalId) await endGoalSession(rt, g.sessionId, 'stopped: you took over')
+    },
+    worktreeHead: async (goal) => {
+      const c = goal.checkoutId ? rt.checkouts.get(goal.checkoutId) : undefined
+      if (!c) return null
+      const { stdout } = await pExecFile('git', ['-C', c.path, 'rev-parse', 'HEAD'])
+      return stdout.trim() || null
+    },
+    openWorktree: async (goal) => {
+      const c = goal.checkoutId ? rt.checkouts.get(goal.checkoutId) : undefined
+      if (c) await openInEditor(c.path)
+    },
+  }
+  return eng
+}
+
+/** The goal's one worktree (decision 2): made on its first session, on a goal/<slug> branch. */
+async function goalCheckout(rt: WorkspaceRuntime, goal: Goal, project: Project): Promise<Checkout> {
+  const have = goal.checkoutId ? rt.checkouts.get(goal.checkoutId) : undefined
+  if (have) return have
+  const slug = goal.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'goal'
+  const made = await makeWorktree(rt, project, `goal/${slug}-${goal.id.slice(0, 6)}`, goal.sourceItemId ?? undefined)
+  await rt.goalDeps.store.goals.update(goal.id, { checkoutId: made.id }, Date.now())
+  return made
+}
+
+/**
+ * Start the session the scheduler picked (server/goals.ts startGoal): the run
+ * lead for a wake, or a worker for one dispatched step, in the goal's
+ * worktree. A worker's first message is `/goal <the step is done>`, so it
+ * keeps going until the step's done-when holds. A throw before `started` is
+ * the scheduler's to handle; after, the session ends here.
+ */
+async function startGoalSession(rt: WorkspaceRuntime, goal: Goal, spec: StartSpec, started: (sessionId: string) => Promise<void>): Promise<void> {
+  const project = goal.projectId ? (await rt.store.projects.list()).find((p) => p.id === goal.projectId) : undefined
+  if (!project) throw new Error(goal.projectId ? `its project ${goal.projectId} is gone` : 'it has no project to work in')
+  const checkout = await goalCheckout(rt, goal, project)
+  const agent = spec.role === 'lead' ? null : ROLE_AGENT[spec.role]
+  const agentPrompt = agent ? ((await rt.teamLibrary.readAgent(agent))?.prompt ?? null) : null
+  const title = spec.role === 'lead' ? `Goal lead · ${goal.title.slice(0, 70)}` : `${spec.role[0]!.toUpperCase()}${spec.role.slice(1)} · ${spec.stepId} · ${goal.title.slice(0, 60)}`
+  const row = await createSession(rt, title, checkout.path, spec.model, null, false, 'gated', { kind: 'goal', projectId: project.id, checkoutId: checkout.id, spawn: false })
+  rt.goalRuns.set(row.id, {
+    goalId: goal.id,
+    sessionId: row.id,
+    role: spec.role,
+    stepId: spec.role === 'lead' ? null : spec.stepId,
+    spec,
+    agentPrompt,
+    // The Mac stays awake while a goal session runs: a sleeping Mac hangs a headless run (M0).
+    release: power.hold(`goal ${goal.id}`),
+    timer: setTimeout(() => void endGoalSession(rt, row.id, `timed out after ${GOAL_SESSION_TIMEOUT_MS / 60_000} minutes`), GOAL_SESSION_TIMEOUT_MS),
+  })
+  try {
+    await started(row.id)
+  } catch (err) {
+    const g = rt.goalRuns.get(row.id)
+    rt.goalRuns.delete(row.id)
+    if (g) {
+      clearTimeout(g.timer)
+      g.release()
+    }
+    throw err
+  }
+  try {
+    if (goal.sourceItemId && (await rt.store.items.get(goal.sourceItemId))) await linkSessionToItem(rt, row.id, goal.sourceItemId, 'dispatch')
+    const live = await getOrRevive(rt, row.id)
+    if (!live) throw new Error('could not start the session')
+    await live.sendUserMessage(spec.role === 'lead' ? spec.prompt : spec.first)
+    log('info', 'goals', `${spec.role}${spec.role === 'lead' ? '' : ` on ${spec.stepId}`} started: ${goal.title}`, { goalId: goal.id, sessionId: row.id, workspace: rt.meta.id })
+  } catch (err) {
+    await endGoalSession(rt, row.id, errText(err))
+  }
+}
+
+/** A goal run's session ended, timed out or was stopped: stop it, then let the run loop move the goal. Once per session. */
+async function endGoalSession(rt: WorkspaceRuntime, sessionId: string, error: string | null, costUsd = 0): Promise<void> {
+  const g = rt.goalRuns.get(sessionId)
+  if (!g) return
+  rt.goalRuns.delete(sessionId)
+  clearTimeout(g.timer)
+  g.release()
+  const live = rt.live.get(sessionId)
+  if (live) {
+    if (error) void live.interrupt()
+    live.stop()
+  }
+  try {
+    await goalSessionEndedOp(rt.goalDeps, goalEngineFor(rt), { goalId: g.goalId, sessionId, error, costUsd })
+  } catch (err) {
+    log('error', 'goals', `could not settle a session of ${g.goalId}: ${errText(err)}`, { workspace: rt.meta.id })
+  }
+}
+
+/** Start the lead for one wake. A throw before the session exists is settled by onGoalEvent; after, here. */
+async function startGoalLead(rt: WorkspaceRuntime, goal: Goal, wake: LeadWake, ev: GoalEvent): Promise<void> {
+  const prior = rt.goalLeads.get(goal.id)
+  if (prior) await settleGoalLead(rt, prior.sessionId, 'a newer wake replaced it')
+  const project = goal.projectId ? (await rt.store.projects.list()).find((p) => p.id === goal.projectId) : undefined
+  if (!project) throw new Error(goal.projectId ? `its project ${goal.projectId} is gone` : 'it has no project to work in')
+  const row = await createSession(
+    rt,
+    `Goal lead · ${goal.title.slice(0, 70)}`,
+    project.path,
+    goal.plan?.models?.lead ?? DEFAULT_GOAL_MODELS.lead,
+    null,
+    false,
+    'gated',
+    { kind: 'goal', projectId: project.id, spawn: false },
+  )
+  // The Mac stays awake while the lead drafts: a sleeping Mac hangs a headless run (M0).
+  const lead: GoalLead = {
+    goalId: goal.id,
+    sessionId: row.id,
+    seq: ev.seq,
+    release: power.hold(`goal ${goal.id}`),
+    timer: setTimeout(() => void settleGoalLead(rt, row.id, `timed out after ${GOAL_LEAD_TIMEOUT_MS / 60_000} minutes`), GOAL_LEAD_TIMEOUT_MS),
+  }
+  rt.goalLeads.set(goal.id, lead)
+  try {
+    await goalLeadStartedOp(rt.goalDeps, goal.id, row.id)
+    if (goal.sourceItemId && (await rt.store.items.get(goal.sourceItemId))) await linkSessionToItem(rt, row.id, goal.sourceItemId, 'dispatch')
+    const live = await getOrRevive(rt, row.id)
+    if (!live) throw new Error('could not start the lead session')
+    const plan = wake.kind === 'revise' ? (await rt.goalLedger.read(goal.id, 0)).plan : ''
+    await live.sendUserMessage(leadDraftPrompt(goal, wake, plan.trim() ? plan : null))
+    log('info', 'goals', `lead ${wake.kind === 'draft' ? 'drafting' : `revising v${wake.version}`}: ${goal.title}`, { goalId: goal.id, sessionId: row.id, workspace: rt.meta.id })
+  } catch (err) {
+    await settleGoalLead(rt, row.id, errText(err))
+  }
+}
+
+/** The lead's turn ended, it timed out, or its session died: stop it and settle its wake. Once per lead. */
+async function settleGoalLead(rt: WorkspaceRuntime, sessionId: string, error?: string): Promise<void> {
+  const lead = [...rt.goalLeads.values()].find((l) => l.sessionId === sessionId)
+  if (!lead) return
+  rt.goalLeads.delete(lead.goalId)
+  clearTimeout(lead.timer)
+  lead.release()
+  const live = rt.live.get(sessionId)
+  if (live) {
+    if (error) void live.interrupt()
+    live.stop()
+  }
+  try {
+    await goalLeadSettledOp(rt.goalDeps, { goalId: lead.goalId, seq: lead.seq, sessionId, error: error ?? null })
+  } catch (err) {
+    log('error', 'goals', `could not settle the lead of ${lead.goalId}: ${errText(err)}`, { workspace: rt.meta.id })
+  }
 }
 
 /** Boot: seed the prose files, mirror session→item links, fail runs the old daemon took down, pump. */
@@ -6960,6 +7355,8 @@ function makeTriageMcp(rt: WorkspaceRuntime) {
     tools: [
       // Teams v2: any chat can become a lead (list_teams, propose_team, split_step, submit_step).
       ...teamLeadTools(rt),
+      // Goals (server/goals.ts): goal_create, goal_get, goal_list, goal_propose_plan, goal_log_append, goal_handoff_write.
+      ...goalMcpTools(rt.goalDeps),
       tool(
         'list_work_items',
         'Read the ranked triage queue: work items with their score, group, and reason. Open items by default — pass status to read the done, snoozed or archived lists instead. Optional filters narrow by source or kind.',
@@ -9190,6 +9587,12 @@ const server = http.createServer(async (req, res) => {
   // Outbound actions (core/actions): every effect a session had that left
   // this machine, newest first. `item` = filed against it or made by a session
   // linked to it; records the actions file now sets aside come back `hidden`.
+  // Goals (server/goals.ts): list, the goal page, and the goal_* writes.
+  const goalReply = await goalsRoute(rt.goalDeps, req, url, () => readJsonBody(req), goalEngineFor(rt))
+  if (goalReply) {
+    json(goalReply.status, goalReply.body)
+    return
+  }
   if (url.pathname === '/api/actions' && req.method === 'GET') {
     let body: ActionsResponse
     try {
@@ -9789,6 +10192,22 @@ wss.on('connection', (ws, req) => {
         }
         case 'user_message': {
           if (!msg.text.trim() && !msg.images?.length && !msg.mentions?.length) break
+          // A goal's session: a live one takes the message (its goal keeps a copy);
+          // one that has ended is gone for good, so the message goes to the goal's lead.
+          const row = rt.rows.get(msg.sessionId)
+          if (row?.kind === 'goal' && !rt.goalLeads.has(row.id)) {
+            const run = rt.goalRuns.get(row.id)
+            if (run) void goalWorkerMessageOp(rt.goalDeps, run.goalId, row.id, msg.text.trim()).catch(() => {})
+            else {
+              const goal = await goalOfSession(rt.goalDeps, row.id).catch(() => null)
+              // Plan review keeps M2's behaviour: the drafting lead's session is revived as before.
+              if (goal && goal.state !== 'draft_plan' && goal.state !== 'plan_ready') {
+                const r = await goalMessageOp(rt.goalDeps, goalEngineFor(rt), { goalId: goal.id, text: msg.text.trim() }).catch((err: unknown) => err)
+                await sessionNotice(rt, row.id, r instanceof Error ? `Not sent: ${r.message}` : "This session has ended; your message went to the goal's lead.")
+                break
+              }
+            }
+          }
           const session = await getOrRevive(rt, msg.sessionId)
           void session?.sendUserMessage(msg.text.trim(), msg.images, msg.mentions)
           break

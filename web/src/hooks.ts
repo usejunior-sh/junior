@@ -72,6 +72,10 @@ export type Route =
   | { page: 'change'; checkoutId: string; path: string }
   /** `#/actions` — everything sessions did that left this machine */
   | { page: 'actions' }
+  /** `#/goals` — outcomes Junior drives across sessions */
+  | { page: 'goals' }
+  /** `#/goals/<id>` — one goal: its state and ledger */
+  | { page: 'goal'; id: string }
   /** `#/settings/<tab>` — the settings page, on that tab */
   | { page: 'settings'; tab: SettingsTab }
 
@@ -110,6 +114,17 @@ function parseRoute(hash: string): Route {
     if (d) return { page: 'job', id: decodeURIComponent(d[1]) }
   }
   if (hash === '/actions') return { page: 'actions' }
+  if (hash === '/goals') return { page: 'goals' }
+  {
+    const m = /^\/goals\/([^/]+)$/.exec(hash)
+    if (m) {
+      try {
+        return { page: 'goal', id: decodeURIComponent(m[1]) }
+      } catch {
+        return { page: 'goals' }
+      }
+    }
+  }
   if (hash === '/artifacts') return { page: 'artifacts' }
   if (hash.startsWith('/artifact/')) return { page: 'artifact', id: hash.slice('/artifact/'.length) }
   if (hash === '/changes') return { page: 'changes' }

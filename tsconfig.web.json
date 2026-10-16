@@ -42,6 +42,9 @@
     "core/job/run-rows.ts",
     "core/actions/types.ts",
     "core/actions/count.ts",
-    "core/actions/view.ts"
+    "core/actions/view.ts",
+    "core/goals/types.ts",
+    "core/goals/machine.ts",
+    "core/goals/review.ts"
   ]
 }

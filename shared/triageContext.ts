@@ -30,7 +30,7 @@ export const TRIAGE_MCP_INSTRUCTIONS = `Triage is a local work inbox for one eng
 
 list_work_items, get_work_item, get_session_context, list_artifacts and read_artifact are free reads — use them rather than guessing. Every other tool writes, and the user is asked first.`
 
-export type TriageSessionKind = 'chat' | 'job-run' | 'brief'
+export type TriageSessionKind = 'chat' | 'job-run' | 'brief' | 'goal'
 
 export type TriageSessionIdentity = {
   /** the triage session id — the handle for get_session_context and `links` */
@@ -59,12 +59,12 @@ Nothing about the current state of the inbox is in this prompt, because it would
 you read it. Look it up instead: get_session_context with this session's id says which work item this session
 was opened for and which artifacts are attached to it; get_work_item follows any item id, at any status.`
 
-  if (kind === 'brief') return head
+  if (kind === 'brief' || kind === 'goal') return head
 
   return `${head}
 When the user says to write something down, note it, or attach it here, that means write_artifact — with
 \`links\` naming this session ({ kind: "session", id: "${id.sessionId}", role: "context" }) and the work item
-too when there is one, so the note comes back with the work rather than getting lost in the transcript.${kind === 'chat' ? JOBS_SECTION : ''}${id.libraryRoot ? librarySection(id.libraryRoot) : ''}`
+too when there is one, so the note comes back with the work rather than getting lost in the transcript.${kind === 'chat' ? JOBS_SECTION + GOALS_SECTION : ''}${id.libraryRoot ? librarySection(id.libraryRoot) : ''}`
 }
 
 /**
@@ -86,6 +86,26 @@ message starting "New job:"), take it on the way a good junior engineer would:
 3. Draft it with draft_job, the don'ts written into the instruction and any skills or agents it should use
    named (only those load in its runs). It is saved off; only the user turns it on.
 4. Offer a trial run with try_job, so they see what it would file before they turn it on.`
+
+/**
+ * How a chat starts a goal (.docs/goals/goals-mapping.md, decision 13): small
+ * goals stay in the chat; the engine is for goals that wait on the world, span
+ * sessions, or send something out. "Turn into a goal" on an item opens a chat
+ * whose first message starts "New goal:" and names the item.
+ */
+export const GOALS_SECTION = `
+
+A goal is an outcome with a done-when that Junior drives to the end, across sessions if it has to. When the user
+says "our goal today is…", "get X done", or a message starts "New goal:":
+1. Read it back in a line: the outcome, and the done-when you would check it against.
+2. Say whether it is small or full, with your pick. Small = this session can finish it with no waiting:
+   do it here, keeping at it until the done-when holds. Full = it waits on something outside (CI, a person,
+   another system), needs more than one session or agent, or sends something out. The user can say
+   "make it a full goal".
+3. For a full goal, ask in ONE message whatever you can't look up (project, budget, horizon), each with your
+   suggested answer, then call goal_create with the source item's id when there is one. A lead then drafts
+   the plan headless and it waits in the Inbox for the user to approve, comment on, or send back. Don't
+   draft the plan yourself, and never approve it: that is the user's click.`
 
 /**
  * Where a skill or agent the user asks for should go. Triage reloads skills

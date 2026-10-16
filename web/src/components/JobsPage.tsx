@@ -23,7 +23,7 @@ export const ago = (at: number): string => {
 
 /** The dot colour for one run outcome. */
 export const runDotClass = (status: string | undefined): string =>
-  !status ? 'blue' : status === 'ok' ? 'green' : status === 'failed' || status === 'timeout' ? 'red' : status === 'interrupted' ? 'yellow' : 'stone'
+  !status ? 'blue' : status === 'ok' ? 'green' : status === 'failed' || status === 'timeout' ? 'red' : status === 'interrupted' || status === 'slept' ? 'yellow' : 'stone'
 
 /** When the job runs next, as the due rule sees it. */
 export function nextRunText(w: Job, now = Date.now()): string {

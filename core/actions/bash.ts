@@ -68,8 +68,12 @@ function readHeredoc(s: string, i: number): [Heredoc, number] {
   return [{ delim, strip }, i]
 }
 
-/** A double-quoted string from just after its `"`: its text and the index after the closing quote. */
-function readDouble(s: string, i: number): [string, number] {
+/**
+ * A double-quoted string from just after its `"`: its text and the index
+ * after the closing quote. The scripts of its `$( )` and backticks go into
+ * `subs` when given — they run, quotes or not.
+ */
+function readDouble(s: string, i: number, subs?: string[]): [string, number] {
   let out = ''
   while (i < s.length && s[i] !== '"') {
     const c = s[i]
@@ -79,11 +83,13 @@ function readDouble(s: string, i: number): [string, number] {
       i += 2
     } else if (c === '$' && s[i + 1] === '(') {
       const j = skipSubst(s, i + 2)
+      if (s[i + 2] !== '(') subs?.push(s.slice(i + 2, j - 1))
       out += s.slice(i, j)
       i = j
     } else if (c === '`') {
       const end = s.indexOf('`', i + 1)
       const j = end === -1 ? s.length : end + 1
+      subs?.push(s.slice(i + 1, end === -1 ? s.length : end))
       out += s.slice(i, j)
       i = j
     } else {
@@ -131,10 +137,31 @@ const SHELLS = new Set(['bash', 'sh', 'zsh', 'dash'])
  * Split a shell command into its simple commands, each as a list of words.
  * Not a shell: enough of one to find where commands start — quotes, escapes,
  * `$( )`, backticks, heredocs, comments and redirections (`2>&1` is not a
- * background `&`) are respected. `bash -c "…"` is opened up and split too.
+ * background `&`) are respected. `bash -c "…"` is opened up and split too,
+ * and so is every command substitution (`$( )`, backticks, also inside
+ * double quotes) and process substitution (`<( )`, `>( )`): what they run
+ * comes after the command they sit in.
  */
 export function splitCommand(src: string): CommandPart[] {
+  const { parts, subs } = scan(src)
+  // `bash -c "git push && …"` runs a whole script: split it too.
+  const opened = parts.flatMap((p) => {
+    const cmd = basename(p[0])
+    if (!SHELLS.has(cmd)) return [p]
+    const at = p.findIndex((w, k) => k > 0 && /^-[a-z]*c$/.test(w))
+    return at > 0 && p[at + 1] !== undefined ? [p, ...splitCommand(p[at + 1])] : [p]
+  })
+  return [...opened, ...subs.flatMap((body) => splitCommand(body))]
+}
+
+/** The scripts of the command's substitutions, outermost only (`$( )`, backticks, `<( )`, `>( )`). */
+export function substitutions(src: string): string[] {
+  return scan(src).subs
+}
+
+function scan(src: string): { parts: CommandPart[]; subs: string[] } {
   const parts: CommandPart[] = []
+  const subs: string[] = []
   let words: string[] = []
   let word = ''
   let inWord = false
@@ -174,12 +201,15 @@ export function splitCommand(src: string): CommandPart[] {
       inWord = true
       i = j + 1
     } else if (c === '"') {
-      const [text, j] = readDouble(s, i + 1)
+      const [text, j] = readDouble(s, i + 1, subs)
       word += text
       inWord = true
       i = j
-    } else if (c === '$' && s[i + 1] === '(') {
+    } else if ((c === '$' || ((c === '<' || c === '>') && !inWord)) && s[i + 1] === '(') {
+      // `$( )`, or a process substitution `<( )` / `>( )` — a word, whose script runs too.
       const j = skipSubst(s, i + 2)
+      // `$(( ))` is arithmetic, not a script.
+      if (s[i + 2] !== '(') subs.push(s.slice(i + 2, j - 1))
       word += s.slice(i, j)
       inWord = true
       i = j
@@ -192,6 +222,7 @@ export function splitCommand(src: string): CommandPart[] {
     } else if (c === '`') {
       const end = s.indexOf('`', i + 1)
       const j = end === -1 ? s.length : end + 1
+      subs.push(s.slice(i + 1, end === -1 ? s.length : end))
       word += s.slice(i, j)
       inWord = true
       i = j
@@ -236,13 +267,7 @@ export function splitCommand(src: string): CommandPart[] {
     }
   }
   endPart()
-  // `bash -c "git push && …"` runs a whole script: split it too.
-  return parts.flatMap((p) => {
-    const cmd = basename(p[0])
-    if (!SHELLS.has(cmd)) return [p]
-    const at = p.findIndex((w, k) => k > 0 && /^-[a-z]*c$/.test(w))
-    return at > 0 && p[at + 1] !== undefined ? [p, ...splitCommand(p[at + 1])] : [p]
-  })
+  return { parts, subs }
 }
 
 const basename = (w: string): string => w.slice(w.lastIndexOf('/') + 1)
@@ -252,12 +277,21 @@ const WRAPPERS = new Set(['sudo', 'command', 'env', 'time', 'nohup', 'exec', 'np
 /** Global flags that take the next word as their value (`git -C dir push`, `gh -R o/r …`). */
 const VALUE_FLAGS = new Set(['-C', '-c', '-R', '--repo', '--git-dir', '--work-tree', '--namespace'])
 
-/** The command as run: env assignments and wrappers dropped, the program by its basename. */
+/** Reserved words that lead into the command after them: `then rm x`, `do git push`, `! grep`. */
+const LEAD_WORDS = new Set(['if', 'then', 'elif', 'else', 'fi', 'while', 'until', 'do', 'done', 'esac', '!', '{', '}'])
+/** Reserved words whose part is a word list, not a command: `for f in a b`, `case $x in`. */
+const LIST_WORDS = new Set(['for', 'select', 'case'])
+
+/**
+ * The command as run: env assignments, wrappers and leading reserved words
+ * dropped, the program by its basename. A `for`/`case` header runs nothing: [].
+ */
 export function unwrap(part: CommandPart): CommandPart {
   let i = 0
   while (i < part.length) {
     const w = part[i]
-    if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(w)) i++
+    if (LIST_WORDS.has(w)) return []
+    if (LEAD_WORDS.has(w) || /^[A-Za-z_][A-Za-z0-9_]*=/.test(w)) i++
     else if (WRAPPERS.has(basename(w))) {
       i++
       while (i < part.length && part[i].startsWith('-')) i++

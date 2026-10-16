@@ -4002,6 +4002,40 @@ html.kbOpen .shell.mobile .panel { bottom: 0; }
   .jobTab { flex: none; padding: 10px 12px; }
   .rtbl { display: block; overflow-x: auto; }
 }
+
+/* ---------- goals: the list (jobs' table) and a goal ---------- */
+#goalsPage .wtbl td.sw { width: 18px; padding-right: 0; }
+.goalMain { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+.goalMain .secLabel { margin-bottom: 8px; }
+.goalDoneWhen { margin: 0; color: var(--ink); font-size: 1.0385rem; line-height: 1.5; }
+.notice.goalWarn { color: var(--yellow); }
+.goalList { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 0.9231rem; }
+.goalList li { display: flex; align-items: baseline; gap: 8px; min-width: 0; color: var(--body); }
+.goalList li.now .t { color: var(--ink); }
+.goalList .t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.goalList .mono { font-family: var(--mono); font-size: 0.8462rem; color: var(--ash); flex: none; }
+.goalList .s { color: var(--stone); }
+.goalReview { padding: 12px; }
+.goalReview textarea {
+  width: 100%; box-sizing: border-box; min-height: 64px; resize: vertical; outline: none;
+  background: var(--deep); border: 1px solid var(--hair-strong); border-radius: var(--r);
+  color: var(--ink); padding: 8px 12px; font-size: 1rem; line-height: 1.5;
+}
+.goalReview textarea:focus { border-color: var(--ink); }
+.goalComments { margin: 0 0 10px; }
+.goalComments .t { white-space: normal; }
+.goalReviewOn { max-width: 240px; }
+.goalReviewGap { flex: 1; }
+.goalAsk { margin: 0 0 10px; display: flex; flex-direction: column; gap: 4px; }
+.goalAsk .t { color: var(--ink); line-height: 1.5; }
+.goalBudget {
+  width: 120px; height: 28px; box-sizing: border-box; outline: none; background: var(--deep);
+  border: 1px solid var(--hair-strong); border-radius: var(--r); color: var(--ink); padding: 0 8px;
+}
+.goalBudget:focus { border-color: var(--ink); }
+@media (max-width: 767px) {
+  #goalsPage .wtbl td:nth-child(3), #goalsPage .wtbl td:nth-child(4) { padding-left: 18px; }
+}
 @media (max-width: 767px), (pointer: coarse) and (max-height: 500px) {
   /* A segmented control wraps rather than run off the page; the page-level filters scroll instead. */
   .seg { flex-wrap: wrap; max-width: 100%; }

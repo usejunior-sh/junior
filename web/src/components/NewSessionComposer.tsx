@@ -113,8 +113,10 @@ export function NewSessionComposer({ draft, onChange, onCreate, error, step }: P
   // No folder chosen yet → the default project. Until projects load the
   // server picks it: an empty cwd on send means "the default project".
   const fallback = defaultProjectOf(projects)
-  // "New job": a chat with Junior that sets one up — no checkout to pick, the job names its own project.
+  // "New job" / "New goal": a chat with Junior that sets one up — no checkout to pick, it names its own project.
   const job = draft.intent === 'job'
+  const goal = draft.intent === 'goal'
+  const prefix = job ? 'New job: ' : goal ? 'New goal: ' : ''
   const cwd = draft.cwd ?? fallback?.path ?? '~'
   // The project's live checkouts; the picker shows for git projects only (main has a branch, or worktrees exist).
   const project = projects.find((p) => p.path === cwd)
@@ -181,8 +183,8 @@ export function NewSessionComposer({ draft, onChange, onCreate, error, step }: P
   return (
     <div id="newSessionHome">
       <div className="glow blue" aria-hidden="true" />
-      <h2>{job ? 'Tell Junior about the job.' : draft.label ? 'Dispatching.' : 'What are we working on?'}</h2>
-      {draft.itemId && canPick && mainCo && (
+      <h2>{job ? 'Tell Junior about the job.' : goal ? 'Tell Junior about the goal.' : draft.label ? 'Dispatching.' : 'What are we working on?'}</h2>
+      {draft.itemId && canPick && mainCo && !goal && (
         <div className="runIn">
           <span className="lbl" id={`runin-${draft.id}`}>
             Run in
@@ -212,7 +214,7 @@ export function NewSessionComposer({ draft, onChange, onCreate, error, step }: P
             // A worktree belongs to one project: changing project drops it, keeps a new branch's name.
             onPick={(path) => onChange({ cwd: path, checkoutId: undefined })}
             checkout={
-              canPick && project && !job ? (
+              canPick && project && !job && !goal ? (
                 <CheckoutPicker
                   projectName={project.name}
                   checkouts={projectCheckouts}
@@ -236,7 +238,9 @@ export function NewSessionComposer({ draft, onChange, onCreate, error, step }: P
         placeholder={
           job
             ? 'What should it do, how often, and what must it never do? e.g. “Every weekday at 9, find PRs waiting on my review”'
-            : 'Describe what you want to work on — a bug, a feature, a question…'
+            : goal
+              ? 'What is the outcome, and how will we know it’s done? e.g. “CI green on main, the flaky test fixed”'
+              : 'Describe what you want to work on — a bug, a feature, a question…'
         }
         focusKey={draft.id}
         sendTitle="Start the session (Enter)"
@@ -252,9 +256,9 @@ export function NewSessionComposer({ draft, onChange, onCreate, error, step }: P
           setLocalError(null)
           if (isNew && !existing) setMaking(newBranch)
           onCreate({
-            title: job ? `New job: ${titleFrom(text, mentions)}` : (draft.label ?? titleFrom(text, mentions)),
+            title: prefix ? `${prefix}${titleFrom(text, mentions)}` : (draft.label ?? titleFrom(text, mentions)),
             cwd: draft.cwd ?? fallback?.path ?? '',
-            firstMessage: job ? `New job: ${text}` : text,
+            firstMessage: `${prefix}${text}`,
             model,
             effort,
             fastMode: onClaude && fastMode,

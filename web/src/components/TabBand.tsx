@@ -15,6 +15,7 @@ import {
   PenLine,
   Pin,
   Plus,
+  Target,
   Terminal,
   X,
   XCircle,
@@ -56,7 +57,7 @@ const homely = (p: string) => p.replace(/^\/(?:Users|home)\/[^/]+/, '~')
  * would be lost; the rest are *documents*, which is why only they are ever
  * peeked at rather than pinned.
  */
-export type TabKind = 'session' | 'terminal' | 'draft' | 'item' | 'artifact' | 'job' | 'job-form' | 'change'
+export type TabKind = 'session' | 'terminal' | 'draft' | 'item' | 'artifact' | 'job' | 'job-form' | 'change' | 'goal'
 
 const ICON: Record<TabKind, ComponentType<LucideProps>> = {
   session: MessageSquare,
@@ -67,6 +68,7 @@ const ICON: Record<TabKind, ComponentType<LucideProps>> = {
   job: CalendarClock,
   'job-form': CalendarClock,
   change: FileDiff,
+  goal: Target,
 }
 
 export type OpenTab = {

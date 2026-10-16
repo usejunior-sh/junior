@@ -21,6 +21,7 @@ import { isProviderId } from '../../shared/protocol.js'
 import type { NewJob, Job, JobBrief, JobCadence, JobConnector, JobNotify, JobRunResult, JobRunStart, JobRunStatus, JobRunTrigger, JobSlotFinish, JobSlotRun, JobSlotStatus, NewJobSlotRun } from '../job/types.js'
 import { JOB_NOTIFY, JOB_RUN_STATUSES } from '../job/types.js'
 import { cronFromCadence } from '../job/cron.js'
+import { SqliteGoals } from './sqlite-goals.js'
 import { grantsFrom, grantsFromLegacy, type JobToolGrant } from '../job/tools.js'
 import type { ActionActor, ActionHistoryEntry, ActionRecord, ActionStatus } from '../actions/types.js'
 import { isActionAllowedBy, isActionKind, isActionStatus, isActionWhy } from '../actions/types.js'
@@ -55,6 +56,101 @@ import type {
   JobStore,
   WorkItemStore,
 } from './types.js'
+
+/**
+ * Goals (core/goals/types.ts). `plan` and `budget` are JSON; `plan.md` in the
+ * ledger folder is the plan's source and this caches it parsed. `key` is
+ * goal_create's caller-stable id, unique when given. Transitions update `state`
+ * with `WHERE id = ? AND state = ?` and append a `goal_events` row in one
+ * transaction. IF NOT EXISTS throughout: migration 31 and ensureDurableSchema
+ * both run it.
+ */
+const GOALS_SCHEMA = `CREATE TABLE IF NOT EXISTS goals (
+     id             TEXT PRIMARY KEY,
+     title          TEXT NOT NULL,
+     done_when      TEXT NOT NULL,
+     horizon        TEXT NOT NULL,
+     state          TEXT NOT NULL,
+     reason         TEXT,
+     source_item_id TEXT,
+     key            TEXT,
+     project_id     TEXT,
+     checkout_id    TEXT,
+     plan           TEXT,
+     plan_version   INTEGER NOT NULL DEFAULT 0,
+     current_step   TEXT,
+     budget         TEXT NOT NULL,
+     spent_usd      REAL NOT NULL DEFAULT 0,
+     priority       INTEGER NOT NULL DEFAULT 0,
+     created_at     INTEGER NOT NULL,
+     updated_at     INTEGER NOT NULL
+   );
+   CREATE INDEX IF NOT EXISTS idx_goals_state ON goals(state);
+   CREATE INDEX IF NOT EXISTS idx_goals_item ON goals(source_item_id);
+   CREATE UNIQUE INDEX IF NOT EXISTS idx_goals_key ON goals(key) WHERE key IS NOT NULL;
+   CREATE TABLE IF NOT EXISTS goal_events (
+     goal_id    TEXT NOT NULL,
+     seq        INTEGER NOT NULL,
+     at         INTEGER NOT NULL,
+     actor      TEXT NOT NULL,
+     session_id TEXT,
+     kind       TEXT NOT NULL,
+     from_state TEXT,
+     to_state   TEXT,
+     detail     TEXT,
+     handled_at INTEGER,
+     PRIMARY KEY (goal_id, seq)
+   );
+   CREATE INDEX IF NOT EXISTS idx_goal_events_unhandled ON goal_events(handled_at) WHERE handled_at IS NULL;
+   CREATE TABLE IF NOT EXISTS goal_steps (
+     goal_id    TEXT NOT NULL,
+     step_id    TEXT NOT NULL,
+     status     TEXT NOT NULL,
+     attempts   INTEGER NOT NULL DEFAULT 0,
+     session_id TEXT,
+     started_at INTEGER,
+     ended_at   INTEGER,
+     updated_at INTEGER NOT NULL,
+     PRIMARY KEY (goal_id, step_id)
+   );
+   CREATE TABLE IF NOT EXISTS goal_gates (
+     id                   TEXT PRIMARY KEY,
+     goal_id              TEXT NOT NULL,
+     step_id              TEXT NOT NULL,
+     evaluator            TEXT NOT NULL,
+     condition            TEXT NOT NULL,
+     connectors           TEXT NOT NULL,
+     status               TEXT NOT NULL,
+     refs                 TEXT NOT NULL,
+     armed_at             INTEGER NOT NULL,
+     next_check_at        INTEGER,
+     checks               INTEGER NOT NULL DEFAULT 0,
+     check_every_ms       INTEGER,
+     deadline_at          INTEGER NOT NULL,
+     confirmations_needed INTEGER NOT NULL DEFAULT 1,
+     confirmations_seen   INTEGER NOT NULL DEFAULT 0,
+     last_verdict         TEXT,
+     item_id              TEXT,
+     settled_at           INTEGER
+   );
+   CREATE INDEX IF NOT EXISTS idx_goal_gates_goal ON goal_gates(goal_id);
+   CREATE INDEX IF NOT EXISTS idx_goal_gates_due ON goal_gates(next_check_at) WHERE status = 'open';
+   CREATE TABLE IF NOT EXISTS goal_sessions (
+     goal_id      TEXT NOT NULL,
+     session_id   TEXT NOT NULL,
+     role         TEXT NOT NULL,
+     step_id      TEXT,
+     plan_version INTEGER NOT NULL,
+     started_at   INTEGER NOT NULL,
+     ended_at     INTEGER,
+     commits      TEXT NOT NULL,
+     files        TEXT NOT NULL,
+     commands     TEXT NOT NULL,
+     actions      TEXT NOT NULL,
+     outcome      TEXT,
+     cost_usd     REAL,
+     PRIMARY KEY (goal_id, session_id)
+   );`
 
 // Numbered, append-only. A new migration is a new entry — never edit an old one.
 const MIGRATIONS: string[] = [
@@ -405,6 +501,10 @@ const MIGRATIONS: string[] = [
      args       TEXT
    );
    CREATE INDEX IF NOT EXISTS idx_action_history_action ON action_history(action_id, id);`,
+  // 31: goals (core/goals) — the goal record, its event log (transitions and
+  // the bus, replayed when unhandled), plan steps at run time, armed gates,
+  // and one row per session. Also converged by ensureDurableSchema.
+  GOALS_SCHEMA,
 ]
 
 export function openSqliteStore(file: string): Store {
@@ -432,6 +532,7 @@ export function openSqliteStore(file: string): Store {
     links: new SqliteLinks(db),
     briefs: new SqliteBriefJobs(db),
     actions: new SqliteActions(db),
+    goals: new SqliteGoals(db),
     close: async () => db.close(),
   }
 }
@@ -635,6 +736,8 @@ function ensureDurableSchema(db: DatabaseSync) {
 
   // The template text the user edited in the brief composer, when it differs from the file.
   ensure('brief_jobs', 'playbook_body', 'playbook_body TEXT', cols('brief_jobs'))
+
+  db.exec(GOALS_SCHEMA)
 }
 
 /*
@@ -762,7 +865,7 @@ const toSession = (r: SessionRow): StoredSession => ({
   permissionMode: toPermissionMode(r.permission_mode),
   provider: toProvider(r.provider),
   pinned: r.pinned === 1,
-  kind: r.kind === 'job-run' || r.kind === 'brief' ? r.kind : 'chat',
+  kind: r.kind === 'job-run' || r.kind === 'brief' || r.kind === 'goal' ? r.kind : 'chat',
   jobId: r.job_id,
   runStatus: toRunStatus(r.run_status),
   runTrigger: toTrigger(r.run_trigger),

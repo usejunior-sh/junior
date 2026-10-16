@@ -21,8 +21,8 @@ export type JobOutput = 'items' | 'digest'
 export const JOB_OUTPUTS: JobOutput[] = ['items', 'digest']
 
 /** The outcome of one job run (job-spec.md, item 3). */
-export type JobRunStatus = 'ok' | 'failed' | 'timeout' | 'skipped' | 'interrupted'
-export const JOB_RUN_STATUSES: JobRunStatus[] = ['ok', 'failed', 'timeout', 'skipped', 'interrupted']
+export type JobRunStatus = 'ok' | 'failed' | 'timeout' | 'skipped' | 'interrupted' | 'slept'
+export const JOB_RUN_STATUSES: JobRunStatus[] = ['ok', 'failed', 'timeout', 'skipped', 'interrupted', 'slept']
 
 /** Why a run happened. */
 /** redraft = a finished run's own session continued with your send-back notes (core/actions/queue.ts) */

@@ -7,7 +7,7 @@
  *   2. Due                your turn, and a day you or the source set is today or past
  *   3. People waiting     your turn, and a person asked: reviews, replies, decisions
  *   4. New                your turn, arrived in the last day
- *   5. Brief ready        a brief (or a team proposal) waits on you
+ *   5. Brief ready        a brief, a team proposal or a goal's plan waits on you
  *   6. AI working         briefing, a session running, a team running
  *   7. To review          a session or team finished, your PR to merge
  *   8. Waiting on others  your PR with reviewers, follow-ups, your own overrides
@@ -83,7 +83,7 @@ export interface InboxTabs<T, S> {
 const DAY = 86_400_000
 const HUMAN_ASKS: ReadonlySet<Label> = new Set(['review', 'reply', 'decide'])
 /** Asks that hold an agent until you answer: they jump the queue. */
-const BLOCKING_ASKS: ReadonlySet<string> = new Set(['approve action', 'approve the step', 'resume the team', 'answer the session'])
+const BLOCKING_ASKS: ReadonlySet<string> = new Set(['approve action', 'approve the step', 'resume the team', 'answer the session', 'answer the goal'])
 
 const ms = (iso: string): number => Date.parse(iso) || 0
 

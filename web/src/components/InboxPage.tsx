@@ -16,6 +16,7 @@ import {
   Sparkles,
   Square,
   Flag,
+  Target,
   UserRound,
   Folder,
   Pencil,
@@ -92,6 +93,8 @@ type Props = {
   /** the open tabs, shared with the sidebar so the counts are the rows */
   tabs: Tabs
   onDispatch: (item: ScoredItem) => void
+  /** "Turn into a goal": a chat with Junior about making the item a goal */
+  onGoal: (item: ScoredItem) => void
   onRefineJob: (item: ScoredItem) => void
   onOpenItem: (id: string) => void
   /** Keep it in the band without leaving the inbox (⌘-click, middle-click). */
@@ -102,7 +105,7 @@ type Props = {
   onNavigate: (path: string) => void
 }
 
-export function InboxPage({ tab, tabs, onDispatch, onRefineJob, onOpenItem, onPinItem, composeSignal = 0, onNavigate }: Props) {
+export function InboxPage({ tab, tabs, onDispatch, onGoal, onRefineJob, onOpenItem, onPinItem, composeSignal = 0, onNavigate }: Props) {
   // The open tabs read the shared snapshot (the sidebar counts the same rows);
   // the status tabs are loaded here on demand.
   const snap = useInbox()
@@ -448,6 +451,7 @@ export function InboxPage({ tab, tabs, onDispatch, onRefineJob, onOpenItem, onPi
     onOpen: onOpenItem,
     onPin: onPinItem,
     onDispatch,
+    onGoal,
     onDone: (i) => void setItemState(i, 'done'),
     onSnooze: snooze1d,
     onArchive: (i) => void setItemState(i, 'archived'),
@@ -724,6 +728,7 @@ type RowActions = {
   onOpen: (id: string) => void
   onPin: (id: string, title: string) => void
   onDispatch: (item: ScoredItem) => void
+  onGoal: (item: ScoredItem) => void
   onDone: (item: ScoredItem) => void
   onSnooze: (item: ScoredItem) => void
   onArchive: (item: ScoredItem) => void
@@ -874,6 +879,7 @@ function WorkRow({
   onOpen,
   onPin,
   onDispatch,
+  onGoal,
   onDone,
   onSnooze,
   onArchive,
@@ -1071,6 +1077,9 @@ function WorkRow({
                 </MenuItem>
                 <MenuItem onSelect={() => onDispatch(item)}>
                   <Play size={13} aria-hidden="true" /> Dispatch to a session<span className="k">d</span>
+                </MenuItem>
+                <MenuItem onSelect={() => onGoal(item)}>
+                  <Target size={13} aria-hidden="true" /> Turn into a goal
                 </MenuItem>
                 <MenuItem onSelect={() => onDone(item)}>
                   <Check size={13} aria-hidden="true" /> Mark done<span className="k">e</span>

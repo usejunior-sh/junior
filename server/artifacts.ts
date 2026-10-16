@@ -8,6 +8,7 @@
  *                    brief's rewrites without a versions table
  *     notes/         human notes (and model notes written via the MCP tool)
  *     briefs/        phase 2: one brief per work item
+ *     goals/         each goal's ledger (core/goals/ledger.ts) — not indexed here
  *
  * The file is the truth and this module never edits a file it did not write
  * except when asked to (PUT). Re-indexing is poll-on-demand: a listing older
@@ -294,6 +295,8 @@ export class ArtifactIndex {
       }
       for (const e of entries) {
         if (e.name === '.git' || e.name.startsWith('.')) continue
+        // goals/<id>/ is each goal's ledger (core/goals/ledger.ts), shown on the goal page, not as artifacts
+        if (!rel && e.name === 'goals') continue
         const p = rel ? `${rel}/${e.name}` : e.name
         if (e.isDirectory()) queue.push(p)
         else if (e.isFile() && e.name.endsWith('.md')) out.push(p)

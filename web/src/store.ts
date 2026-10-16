@@ -249,6 +249,8 @@ export class Store {
   readonly #commandsListeners = new Set<(cwd: string, commands: SlashCommandInfo[]) => void>()
   /** Who follows outbound actions (the Actions page, an item, a transcript's action lines). */
   readonly #actionsListeners = new Set<(sessionId: string | undefined) => void>()
+  /** Who follows goals (the Goals page, a goal page, the rail's count). */
+  readonly #goalsListeners = new Set<(goalId: string | undefined) => void>()
 
   #handle(msg: ServerMessage) {
     switch (msg.type) {
@@ -356,6 +358,9 @@ export class Store {
       case 'actions_changed':
         for (const fn of this.#actionsListeners) fn(msg.sessionId)
         break
+      case 'goals_changed':
+        for (const fn of this.#goalsListeners) fn(msg.goalId)
+        break
       case 'error':
         // Server-level failure, not scoped to a session.
         console.error('[triage] server error:', msg.message)
@@ -420,6 +425,14 @@ export class Store {
     this.#actionsListeners.add(fn)
     return () => {
       this.#actionsListeners.delete(fn)
+    }
+  }
+
+  /** Fires when a goal was created or written to (`goalId` = which). */
+  onGoalsChanged(fn: (goalId: string | undefined) => void): () => void {
+    this.#goalsListeners.add(fn)
+    return () => {
+      this.#goalsListeners.delete(fn)
     }
   }
 

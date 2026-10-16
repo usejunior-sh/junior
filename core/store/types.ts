@@ -37,6 +37,7 @@ import type { Provenance, WorkItem } from '../work/types.js'
 import type { ItemEvent, ItemStatus, StatusChange } from '../work/state.js'
 import type { FlowOverride } from '../work/flow.js'
 import type { ActionHistoryEntry, ActionKind, ActionRecord, ActionStatus } from '../actions/types.js'
+import type { Gate, Goal, GoalEvent, GoalLogEntry, GoalState, GoalStepState } from '../goals/types.js'
 import type { NewJob, NewJobSlotRun, Job, JobRunResult, JobRunStart, JobRunStatus, JobRunTrigger, JobSlotFinish, JobSlotRun } from '../job/types.js'
 
 export type StoredSession = {
@@ -488,6 +489,60 @@ export interface ActionStore {
   history(ids: string[]): Promise<Map<string, ActionHistoryEntry[]>>
 }
 
+/** Which goals to list. Newest update first. */
+export type GoalQuery = {
+  states?: GoalState[]
+  sourceItemId?: string
+  limit?: number
+}
+
+/** What goal_create writes: the record without its run-time fields, which start empty. */
+export type NewGoal = Pick<Goal, 'id' | 'title' | 'doneWhen' | 'horizon' | 'sourceItemId' | 'key' | 'projectId' | 'budget' | 'priority'>
+
+/** `goal_sessions` — a log entry's structured half; its words live in log.md. */
+export type GoalSessionRecord = Omit<GoalLogEntry, 'text'>
+
+/**
+ * Goals (core/goals): the record, its event log, its steps, gates and
+ * sessions (adapter: core/store/sqlite-goals.ts). Only the engine moves `state`, and only through
+ * `move`, which is atomic and logs the transition.
+ */
+export interface GoalStore {
+  get(id: string): Promise<Goal | null>
+  byKey(key: string): Promise<Goal | null>
+  list(q?: GoalQuery): Promise<Goal[]>
+  /**
+   * Insert in `draft_plan` with its `created` event. A taken `key` returns that goal, `created: false`;
+   * with no key, so does a live (not done/cancelled) key-less goal with the same title and done-when.
+   * The lookup and the insert are one transaction, so two concurrent identical calls make one goal.
+   */
+  create(goal: NewGoal, at: number): Promise<{ goal: Goal; created: boolean }>
+  /** Change anything but `state` (plan, current step, spend, worktree…). Null when there is no such goal. */
+  update(id: string, patch: Partial<Omit<Goal, 'id' | 'state' | 'createdAt' | 'updatedAt'>>, at: number): Promise<Goal | null>
+  /**
+   * Move `from` → `to` only if the goal is still in `from`, and append the
+   * `transition` event, in one transaction. True = this caller moved it.
+   */
+  move(id: string, from: GoalState, to: GoalState, ev: Pick<GoalEvent, 'actor' | 'sessionId' | 'detail'> & { reason?: string | null }, at: number): Promise<boolean>
+  /** Append an event at the goal's next seq. */
+  addEvent(e: Omit<GoalEvent, 'seq' | 'handledAt'>): Promise<GoalEvent>
+  /** One goal's events, oldest first; `after` = only seqs past it. */
+  events(goalId: string, opts?: { after?: number; limit?: number }): Promise<GoalEvent[]>
+  /** Every event not yet acted on, across goals, oldest first — the replay after a restart. */
+  unhandled(): Promise<GoalEvent[]>
+  markHandled(goalId: string, seq: number, at: number): Promise<void>
+  steps(goalId: string): Promise<GoalStepState[]>
+  putStep(s: GoalStepState): Promise<void>
+  gate(id: string): Promise<Gate | null>
+  gates(goalId: string): Promise<Gate[]>
+  putGate(g: Gate): Promise<void>
+  /** Open AI gates whose next check is at or before `now` — the sweep's work list. */
+  dueGates(now: number): Promise<Gate[]>
+  /** Upsert on (goalId, sessionId): a session's row is written at start and closed at its end. */
+  putSession(r: GoalSessionRecord): Promise<void>
+  sessions(goalId: string): Promise<GoalSessionRecord[]>
+}
+
 export interface Store {
   sessions: SessionStore
   events: EventStore
@@ -503,5 +558,6 @@ export interface Store {
   links: LinkStore
   briefs: BriefJobStore
   actions: ActionStore
+  goals: GoalStore
   close(): Promise<void>
 }
