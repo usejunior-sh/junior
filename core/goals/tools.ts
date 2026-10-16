@@ -181,7 +181,8 @@ export const ENGINE_TOOLS: readonly ToolDef[] = [
   },
   {
     name: 'arm_gate',
-    description: "Arm the gate on a gate step. The goal waits without any session running; resolving the gate wakes you again. Fields left out come from the plan's step.",
+    description:
+      "Arm the gate on a gate step. The goal waits without any session running; resolving the gate wakes you again. Fields left out come from the plan's step. An ai gate is checked by a read-only checker on a back-off; a gate on a merge, a deploy or production needs 2 \"met\" checks in a row. A user gate is an approval in the user's Inbox: give your recommended answer.",
     inputSchema: {
       type: 'object',
       properties: {
@@ -193,6 +194,8 @@ export const ENGINE_TOOLS: readonly ToolDef[] = [
         deadline: { type: 'string' },
         confirmations: { type: 'number' },
         connectors: { type: 'array', items: { type: 'string' } },
+        recommended: { type: 'string', description: 'a user gate: your recommended answer (required for one)' },
+        evidence: { type: 'string', description: 'a user gate: what the user should look at to decide' },
       },
       required: ['stepId'],
     },
@@ -276,6 +279,9 @@ export type ArmGateInput = {
   deadline?: string
   confirmations?: number
   connectors?: string[]
+  /** a user gate: Junior's recommended answer (required for one) */
+  recommended?: string
+  evidence?: string
 }
 export type ProposePlanChangeInput = { why: string; plan: PlanInput }
 export type AskUserInput = { question: string; evidence?: string; recommended: string; options?: string[] }

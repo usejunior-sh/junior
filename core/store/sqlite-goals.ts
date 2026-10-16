@@ -405,6 +405,11 @@ export class SqliteGoals implements GoalStore {
     return rows.map(toGate)
   }
 
+  async overdueGates(now: number): Promise<Gate[]> {
+    const rows = this.db.prepare(`SELECT * FROM goal_gates WHERE status = 'open' AND deadline_at <= ? ORDER BY deadline_at, id`).all(now) as GateRow[]
+    return rows.map(toGate)
+  }
+
   async putSession(r: GoalSessionRecord): Promise<void> {
     this.db
       .prepare(

@@ -538,6 +538,8 @@ export interface GoalStore {
   putGate(g: Gate): Promise<void>
   /** Open AI gates whose next check is at or before `now` — the sweep's work list. */
   dueGates(now: number): Promise<Gate[]>
+  /** Open gates of either kind whose deadline is at or before `now` — they go to the user. */
+  overdueGates(now: number): Promise<Gate[]>
   /** Upsert on (goalId, sessionId): a session's row is written at start and closed at its end. */
   putSession(r: GoalSessionRecord): Promise<void>
   sessions(goalId: string): Promise<GoalSessionRecord[]>

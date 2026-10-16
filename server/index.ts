@@ -388,6 +388,7 @@ import {
   goalMcpTools,
   goalMessageOp,
   goalOfSession,
+  goalGateSweepOp,
   goalsRoute,
   goalSessionEndedOp,
   goalSessionMcpTools,
@@ -397,13 +398,15 @@ import {
   pumpGoals,
   replayGoalEvents,
   type GoalDeps,
+  type GateChecker,
   type GoalEngine,
   type GoalSessionTag,
   type StartSpec,
 } from './goals.js'
 import { GOAL_SESSION_TIMEOUT_MS, LEAD_RUN_APPEND, ROLE_AGENT, roleWrites, workerAppend as goalWorkerAppend } from '../core/goals/run.js'
 import { leadDraftPrompt, LEAD_DRAFT_APPEND, type LeadWake } from '../core/goals/review.js'
-import { DEFAULT_GOAL_MODELS, type Goal, type GoalEvent } from '../core/goals/types.js'
+import { DEFAULT_GOAL_MODELS, GATE_SWEEP_INTERVAL_MS, type GateVerdict, type Goal, type GoalEvent } from '../core/goals/types.js'
+import { GATE_SERVER, GATE_TOOL_SEARCH, GATE_VERDICT_FULL, GATE_VERDICT_TOOL, gateCheckPrompt, gateFenceDecision, gateReadTools, gateServers, verdictFrom } from '../core/goals/gates.js'
 import { WORKSPACE_PLUGIN, createLibraryEntry, ensureWorkspacePlugin, libraryRoots, locate as locateLibrary, libraryTargets, listLibrary, readLibraryFile, removeLibraryItem, writeLibraryFile, type LibraryRoot } from './library.js'
 import { TRIAGE_MCP_INSTRUCTIONS, triageSessionAppend } from '../shared/triageContext.js'
 import { AGENTS_ARG, SKILLS_ARG, callTool as callMcpTool, PROTOCOL_VERSION as MCP_PROTOCOL_VERSION, TOOLS as MCP_TOOLS } from '../core/mcp/tools.js'
@@ -4663,6 +4666,12 @@ setInterval(() => {
   }
 }, SCHEDULER_TICK_MS).unref()
 
+// The gate sweep (decision 6): every 5 minutes, in every workspace. Nothing
+// due = no session started.
+setInterval(() => {
+  for (const rt of runtimes.values()) sweepGates(rt).catch((err) => log('error', 'goals', `gate sweep failed: ${errText(err)}`, { workspace: rt.meta.id }))
+}, GATE_SWEEP_INTERVAL_MS).unref()
+
 // The repo picker's "available" list; slow-ish (paginated), so cached.
 async function affiliatedRepos(rt: WorkspaceRuntime): Promise<string[]> {
   if (rt.affiliatedCache && Date.now() - rt.affiliatedCache.at < 10 * 60_000) return rt.affiliatedCache.repos
@@ -6352,6 +6361,108 @@ const GOAL_RUN_DISALLOWED_TOOLS = [
 
 /** One session the goal run loop started. */
 type GoalRun = GoalSessionTag & { spec: StartSpec; agentPrompt: string | null; timer: ReturnType<typeof setTimeout>; release: () => void }
+
+/** How long one gate check session may run before it is cut off. */
+const GATE_CHECK_TIMEOUT_MS = 5 * 60_000
+
+/**
+ * The gate checker (decision 6): one short, headless, read-only session over
+ * every due AI gate in a batch. It gets the condition and the ids, the read
+ * tools of the connectors those gates name (ToolSearch loads them), and one
+ * write — its verdicts, on its own `gate` server. The fence refuses anything
+ * else before any allow rule runs: no shell, no file tool, no connector write.
+ */
+const runGateCheck = (rt: WorkspaceRuntime): GateChecker => async (gates, model) => {
+  const verdicts = new Map<string, GateVerdict>()
+  let costUsd = 0
+  const home = rt.connectorCache ?? (await probeConnectors(rt).catch(() => null))
+  const probes = home?.connectors ?? []
+  const connectors = [...new Set(gates.flatMap((g) => g.connectors))]
+  const readTools = new Set(gateReadTools(connectors, probes))
+  const keep = new Set(gateServers(connectors, probes))
+  // Every other connector the user has: out of the run entirely (the fence would refuse them anyway).
+  const disallowedTools = [...new Set(probes.filter((c) => !keep.has(c.server)).map((c) => `mcp__${c.server.replace(/[^a-zA-Z0-9_-]/g, '_')}`))].sort()
+  const ids = new Set(gates.map((g) => g.id))
+  const server = createSdkMcpServer({
+    name: GATE_SERVER,
+    version: VERSION,
+    alwaysLoad: true,
+    tools: [
+      tool(
+        GATE_VERDICT_TOOL,
+        'Hand in one verdict per gate id you were given, then stop.',
+        {
+          verdicts: z.array(
+            z.object({
+              gateId: z.string(),
+              verdict: z.enum(['met', 'not_met', 'needs_user', 'error']),
+              evidence: z.string().describe('one short line: what you saw'),
+              checkAgainIn: z.string().optional().describe('like "2h", when you can tell it will be a while'),
+            }),
+          ),
+        },
+        async (a) => {
+          const bad: string[] = []
+          for (const raw of a.verdicts) {
+            const v = verdictFrom(raw)
+            if (v && ids.has(raw.gateId)) verdicts.set(raw.gateId, v)
+            else bad.push(raw.gateId)
+          }
+          const missing = [...ids].filter((id) => !verdicts.has(id))
+          const text = [bad.length ? `ignored: ${bad.join(', ')} (unknown id or off-format)` : null, missing.length ? `still missing: ${missing.join(', ')}` : 'all recorded; stop now'].filter(Boolean).join('; ')
+          return { content: [{ type: 'text' as const, text }] }
+        },
+      ),
+    ],
+  })
+  const abort = new AbortController()
+  const timer = setTimeout(() => abort.abort(), GATE_CHECK_TIMEOUT_MS)
+  const release = power.hold(`gate sweep ${rt.meta.id}`)
+  try {
+    const run = rt.provider.run({
+      prompt: gateCheckPrompt(gates),
+      cwd: workspaceDir(rt.meta.id),
+      // The user's own MCP servers and claude.ai connectors; no project settings, skills or hooks.
+      userConfig: true,
+      tools: [GATE_TOOL_SEARCH],
+      allowedTools: [GATE_TOOL_SEARCH, GATE_VERDICT_FULL, ...readTools],
+      ...(disallowedTools.length ? { disallowedTools } : {}),
+      unattended: true,
+      veto: (toolName) => {
+        const dec = gateFenceDecision(readTools, toolName)
+        if (!dec.allow) log('warn', 'goals', `gate checker refused ${toolName}`, { workspace: rt.meta.id, gates: [...ids] })
+        return dec
+      },
+      model,
+      // A few reads per gate, the verdict, the stop.
+      maxTurns: 4 + 3 * gates.length,
+      maxBudgetUsd: 0.5,
+      mcpServers: { [GATE_SERVER]: server },
+      abort,
+      ...(rt.env ? { env: rt.env } : {}),
+    })
+    for await (const ev of run) if (ev.kind === 'result' && ev.costUsd != null) costUsd = ev.costUsd
+  } catch (err) {
+    log('error', 'goals', `gate check failed: ${abort.signal.aborted ? `timed out after ${humanSpan(GATE_CHECK_TIMEOUT_MS)}` : errText(err)}`, { workspace: rt.meta.id })
+  } finally {
+    clearTimeout(timer)
+    release()
+  }
+  return { verdicts, costUsd }
+}
+
+/** One sweep per workspace at a time: a slow check never overlaps the next tick. */
+const gateSweeping = new WeakSet<WorkspaceRuntime>()
+async function sweepGates(rt: WorkspaceRuntime): Promise<void> {
+  if (gateSweeping.has(rt)) return
+  gateSweeping.add(rt)
+  try {
+    const r = await goalGateSweepOp(rt.goalDeps, goalEngineFor(rt), runGateCheck(rt))
+    if (r.checked || r.toUser) log('info', 'goals', `gate sweep: ${r.checked} checked, ${r.resolved} met, ${r.toUser} to you`, { workspace: rt.meta.id })
+  } finally {
+    gateSweeping.delete(rt)
+  }
+}
 
 function goalEngineFor(rt: WorkspaceRuntime): GoalEngine {
   const eng: GoalEngine = {

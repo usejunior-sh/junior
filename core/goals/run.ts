@@ -62,6 +62,10 @@ export type NextSession = { role: 'lead' } | ({ kind: 'worker' } & WorkerSpec)
 /** A step the lead dispatched whose worker hasn't started: running, no session. */
 export const isDispatched = (s: GoalStepState) => s.status === 'running' && s.sessionId === null
 
+/** A dispatched agent step waits for its worker. An armed gate step is running with no session too, but no worker comes for it. */
+export const workerDue = (plan: GoalPlan | null, steps: readonly GoalStepState[]): boolean =>
+  steps.some((s) => isDispatched(s) && plan?.steps.find((p) => p.id === s.stepId)?.type === 'agent')
+
 /** The latest dispatch of `stepId`: its brief and model. */
 export function dispatchOf(events: readonly GoalEvent[], stepId: string): { brief: string; model: string | null } | null {
   for (let i = events.length - 1; i >= 0; i--) {
@@ -117,7 +121,7 @@ export function afterSession(goal: Pick<Goal, 'plan'>, steps: readonly GoalStepS
     return { trigger: 'ask_you', reason: text.slice(0, 500) }
   }
   if (allDone(goal.plan, steps)) return { trigger: 'result', reason: null }
-  if (steps.some(isDispatched)) return { trigger: 'yield', reason: null }
+  if (workerDue(goal.plan, steps)) return { trigger: 'yield', reason: null }
   if (unreadWakes(events).length) return { trigger: 'yield', reason: null }
   const gate = gates.find((g) => g.status === 'open')
   if (gate) return { trigger: 'wait_world', reason: `Waiting for: ${gate.condition}`.slice(0, 500) }

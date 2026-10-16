@@ -1938,8 +1938,15 @@ export type GoalsResponse =
   | { ok: false; error: string }
 
 /** A question or plan change from a goal's lead, open until the user answers it. */
+/**
+ * A gate the user is asked about: a user gate (an approval), an AI gate its
+ * checker couldn't decide, or one past its deadline. Answered with
+ * approve / keep waiting (an AI gate only) / reject.
+ */
+export type GoalAskGate = { id: string; stepId: string; condition: string; evaluator: 'ai' | 'user'; why: 'approval' | 'needs_user' | 'deadline' }
+
 export type GoalAsk =
-  | { kind: 'ask'; question: string; recommended: string; evidence: string | null; options: string[] }
+  | { kind: 'ask'; question: string; recommended: string; evidence: string | null; options: string[]; gate: GoalAskGate | null }
   | { kind: 'plan_change'; why: string; plan: GoalPlan }
   | { kind: 'other'; reason: string }
 

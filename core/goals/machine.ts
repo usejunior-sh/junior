@@ -12,6 +12,7 @@
  *   running ──yield──────▶ queued
  *   running ──wait_world─▶ waiting_world ──gate_met──▶ queued
  *   running ──ask_you────▶ waiting_you   ──answer────▶ queued
+ *                          waiting_you   ──keep_waiting──▶ waiting_world  (a gate past its deadline: wait on)
  *   running ──result─────▶ result_ready  ──reopen────▶ queued
  *                                        ──accept────▶ done
  *   queued, waiting_world ──ask_you──▶ waiting_you   (budget pause, gate deadline)
@@ -34,6 +35,7 @@ export type GoalTrigger =
   | 'ask_you'
   | 'gate_met'
   | 'answer'
+  | 'keep_waiting'
   | 'result'
   | 'accept'
   | 'reopen'
@@ -67,6 +69,8 @@ export const TRANSITIONS: Readonly<Record<GoalTrigger, Rule>> = {
   ask_you: { from: ['queued', 'running', 'waiting_world'], to: 'waiting_you', by: 'engine' },
   gate_met: { from: ['waiting_world'], to: 'queued', by: 'engine' },
   answer: { from: ['waiting_you'], to: 'queued', by: 'you' },
+  /** a gate that ran past its deadline or stumped its checker: wait on it, without waking the lead */
+  keep_waiting: { from: ['waiting_you'], to: 'waiting_world', by: 'you' },
   /** the done-when holds */
   result: { from: ['running'], to: 'result_ready', by: 'engine' },
   /** accepting closes the source item through the Outbox */

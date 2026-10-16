@@ -40,10 +40,12 @@ import {
   roleWrites,
   unlock,
   unreadWakes,
+  workerDue,
   workerOutcome,
   workerPrompt,
   type HeldAction,
 } from '../core/goals/run.js'
+import { applyVerdict, NO_VERDICT, nextCheckDelay, requiredConfirmations } from '../core/goals/gates.js'
 import { commentFrom, MAX_COMMENT, pendingComments, reactTo, REVIEW_EVENTS, type LeadWake } from '../core/goals/review.js'
 import { ENGINE_TOOLS, GOAL_TOOLS } from '../core/goals/tools.js'
 import {
@@ -57,6 +59,7 @@ import {
   LEAD_LOG_ENTRIES,
   STEP_ROLES,
   type Gate,
+  type GateVerdict,
   type Goal,
   type GoalEvent,
   type GoalState,
@@ -64,7 +67,7 @@ import {
   type SessionOutcome,
   type StepRole,
 } from '../core/goals/types.js'
-import type { GoalAsk, GoalResponse, GoalSummary, GoalsResponse, GoalWriteOutcome, GoalWriteResponse } from '../shared/protocol.js'
+import type { GoalAsk, GoalAskGate, GoalResponse, GoalSummary, GoalsResponse, GoalWriteOutcome, GoalWriteResponse } from '../shared/protocol.js'
 
 export type GoalDeps = {
   store: Store
@@ -212,21 +215,25 @@ export async function goalGetOp(d: GoalDeps, goalId: string, logEntries = PAGE_L
     comments: goal.state === 'plan_ready' ? pendingComments(events) : [],
     leadSessionId: lead?.sessionId ?? null,
     liveSession: live ? { sessionId: live.sessionId, role: live.role, stepId: live.stepId } : null,
-    ask: goal.state === 'waiting_you' ? askOf(goal, events) : null,
+    ask: goal.state === 'waiting_you' ? askOf(goal, events, gates) : null,
   }
 }
 
 /** What a goal waiting on the user waits for, in the page's terms. */
-function askOf(goal: Goal, events: readonly GoalEvent[]): GoalAsk {
+function askOf(goal: Goal, events: readonly GoalEvent[], gates: readonly Gate[]): GoalAsk {
   const open = openAsk(events)
   const d = open?.ev.detail ?? {}
   if (open?.kind === 'ask') {
+    const g = typeof d.gateId === 'string' ? gates.find((x) => x.id === d.gateId && x.status === 'needs_user') : undefined
+    const why = d.why === 'deadline' || d.why === 'needs_user' ? d.why : 'approval'
+    const gate: GoalAskGate | null = g ? { id: g.id, stepId: g.stepId, condition: g.condition, evaluator: g.evaluator, why } : null
     return {
       kind: 'ask',
       question: String(d.question ?? ''),
       recommended: String(d.recommended ?? ''),
       evidence: typeof d.evidence === 'string' ? d.evidence : null,
       options: Array.isArray(d.options) ? d.options.filter((o): o is string => typeof o === 'string') : [],
+      gate,
     }
   }
   if (open?.kind === 'plan_change' && isObj(d.plan)) return { kind: 'plan_change', why: String(d.why ?? ''), plan: d.plan as unknown as NonNullable<Goal['plan']> }
@@ -817,15 +824,19 @@ export async function goalDispatchWorkerOp(d: GoalDeps, c: LeadCall, raw: unknow
   return `dispatched ${stepId} (try ${st.attempts + 1}); its worker starts when you end your turn`
 }
 
-/** arm_gate: the gate row the M4 sweep checks; the step is running until it resolves. */
+/**
+ * arm_gate: an AI gate is a row the sweep checks; a user gate is an approval
+ * on the goal's Inbox item at once. The step is running until it resolves.
+ */
 export async function goalArmGateOp(d: GoalDeps, c: LeadCall, raw: unknown): Promise<string> {
   const b = obj(raw)
-  const { goal, steps } = await asLead(d, c.goalId, c.sessionId)
+  const { goal, steps, events } = await asLead(d, c.goalId, c.sessionId)
   const stepId = id(b.stepId, 'stepId')
   const gates = await d.store.goals.gates(goal.id)
   const why = armRefusal(goal.plan, steps, gates, stepId)
   if (why) throw new Error(why)
-  const spec = goal.plan!.steps.find((s) => s.id === stepId)!.gate!
+  const step = goal.plan!.steps.find((s) => s.id === stepId)!
+  const spec = step.gate!
   const evaluator = b.evaluator === 'ai' || b.evaluator === 'user' ? b.evaluator : spec.evaluator
   const checkEvery = optStr(b.checkEvery, 'checkEvery', 20) ?? spec.checkEvery
   const deadline = optStr(b.deadline, 'deadline', 20) ?? spec.deadline ?? GATE_DEFAULT_DEADLINE
@@ -835,33 +846,48 @@ export async function goalArmGateOp(d: GoalDeps, c: LeadCall, raw: unknown): Pro
   if (deadlineMs === null) throw new Error(`deadline "${deadline}" isn't a duration like 4h`)
   const confirmations = b.confirmations === undefined ? spec.confirmations : Number(b.confirmations)
   if (!Number.isInteger(confirmations) || confirmations < 1 || confirmations > MAX_CONFIRMATIONS) throw new Error(`confirmations must be 1 to ${MAX_CONFIRMATIONS}`)
+  const condition = optStr(b.condition, 'condition') ?? spec.condition
+  const recommended = evaluator === 'user' ? str(b.recommended, 'recommended (your recommended answer, for a user gate)', 4_000) : null
+  if (evaluator === 'user' && openAsk(events)) throw new Error('something is already waiting on the user this wake')
   const at = d.now()
   const gate: Gate = {
     id: randomUUID(),
     goalId: goal.id,
     stepId,
     evaluator,
-    condition: optStr(b.condition, 'condition') ?? spec.condition,
+    condition,
     connectors: b.connectors === undefined ? spec.connectors : strList(b.connectors, 'connectors'),
-    status: 'open',
+    // A user gate is the user's from the start: there is nothing to sweep.
+    status: evaluator === 'user' ? 'needs_user' : 'open',
     refs: strList(b.refs, 'refs'),
     armedAt: at,
     nextCheckAt: evaluator === 'ai' ? at + (checkEveryMs ?? GATE_CHECK_SCHEDULE_MIN[0]! * 60_000) : null,
     checks: 0,
     checkEveryMs,
     deadlineAt: at + deadlineMs,
-    confirmationsNeeded: confirmations,
+    // High stakes (a merge, a deploy, production): never on one "met".
+    confirmationsNeeded: requiredConfirmations(confirmations, condition, step.title),
     confirmationsSeen: 0,
     lastVerdict: null,
-    itemId: null,
+    itemId: evaluator === 'user' ? goal.sourceItemId : null,
     settledAt: null,
   }
   await d.store.goals.putGate(gate)
   const st = steps.find((s) => s.stepId === stepId)!
   await d.store.goals.putStep({ ...st, status: 'running', attempts: st.attempts + 1, startedAt: at, endedAt: null, updatedAt: at })
-  await note(d, { actor: 'lead', sessionId: c.sessionId, kind: 'gate_armed', from: null, to: null, detail: { stepId, gateId: gate.id, condition: gate.condition } }, goal.id, at)
+  await note(d, { actor: 'lead', sessionId: c.sessionId, kind: 'gate_armed', from: null, to: null, detail: { stepId, gateId: gate.id, condition: gate.condition, evaluator } }, goal.id, at)
+  if (evaluator === 'user') {
+    await note(
+      d,
+      { actor: 'lead', sessionId: c.sessionId, kind: 'asked_you', from: null, to: null, detail: { gateId: gate.id, why: 'approval', question: condition, recommended, evidence: optStr(b.evidence, 'evidence'), options: [] } },
+      goal.id,
+      at,
+    )
+  }
   d.changed(goal.id)
-  return `armed the gate on ${stepId}: the goal waits for "${gate.condition}" once you end your turn`
+  return evaluator === 'user'
+    ? `asked the user to approve ${stepId}: "${condition}". End your turn — you wake when they answer`
+    : `armed the gate on ${stepId}: the goal waits for "${gate.condition}" once you end your turn${gate.confirmationsNeeded > 1 ? ` (${gate.confirmationsNeeded} "met" checks in a row)` : ''}`
 }
 
 /** ask_user: the question goes on the goal; it waits on the user once the lead ends. */
@@ -916,6 +942,154 @@ export async function goalReportStepResultOp(d: GoalDeps, c: LeadCall, raw: unkn
   return `step ${stepId} is ${r.status}`
 }
 
+// --- gates (M4, decision 6) -------------------------------------------------
+
+/** Goals whose gates the sweep looks at: a paused or finished goal's gates wait. */
+const SWEPT: ReadonlySet<GoalState> = new Set(['queued', 'running', 'waiting_world', 'waiting_you'])
+
+/**
+ * Check a batch of due AI gates — the one short read-only session (server
+ * side: index.ts runGateCheck). Returns a verdict per gate id it decided and
+ * what the session cost; a gate it left out counts as an error.
+ */
+export type GateChecker = (gates: Gate[], model: string) => Promise<{ verdicts: Map<string, GateVerdict>; costUsd: number }>
+
+export type SweepResult = { checked: number; resolved: number; toUser: number }
+
+const span = (ms: number) => (ms >= 86_400_000 ? `${Math.round(ms / 86_400_000)}d` : ms >= 3_600_000 ? `${Math.round(ms / 3_600_000)}h` : `${Math.max(1, Math.round(ms / 60_000))}m`)
+
+/**
+ * The gate sweep: every gate past its deadline goes to the user; every due AI
+ * gate is checked in one session per gate model, and its verdict applied —
+ * met (confirmed) wakes the lead, not met backs off, needs the user goes to
+ * the Inbox. Nothing due = nothing started.
+ */
+export async function goalGateSweepOp(d: GoalDeps, eng: GoalEngine, check: GateChecker): Promise<SweepResult> {
+  const out: SweepResult = { checked: 0, resolved: 0, toUser: 0 }
+  const goals = new Map<string, Goal | null>()
+  const goalOf = async (goalId: string) => {
+    if (!goals.has(goalId)) goals.set(goalId, await d.store.goals.get(goalId))
+    return goals.get(goalId) ?? null
+  }
+
+  for (const g of await d.store.goals.overdueGates(d.now())) {
+    const goal = await goalOf(g.goalId)
+    if (!goal || !SWEPT.has(goal.state)) continue
+    const last = g.lastVerdict ? ` Last check: ${g.lastVerdict.verdict.replace('_', ' ')}${g.lastVerdict.evidence ? ` — ${g.lastVerdict.evidence}` : ''}.` : ''
+    if (await gateToUser(d, eng, g, 'deadline', `Still waiting after ${span(g.deadlineAt - g.armedAt)} for: ${g.condition}. Keep waiting, or call it?`, 'Keep waiting another day', `${g.checks} checks.${last}`)) out.toUser++
+  }
+
+  const byModel = new Map<string, Gate[]>()
+  for (const g of await d.store.goals.dueGates(d.now())) {
+    const goal = await goalOf(g.goalId)
+    if (!goal || !SWEPT.has(goal.state)) continue
+    const model = goal.plan?.models?.gate ?? DEFAULT_GOAL_MODELS.gate
+    byModel.set(model, [...(byModel.get(model) ?? []), g])
+  }
+  for (const [model, due] of byModel) {
+    const { verdicts, costUsd } = await check(due, model)
+    const at = d.now()
+    // The session's cost, shared by the goals it checked for.
+    const share = costUsd > 0 ? costUsd / due.length : 0
+    for (const armed of due) {
+      out.checked++
+      const g = await d.store.goals.gate(armed.id)
+      const goal = await d.store.goals.get(armed.goalId)
+      if (goal && share) await d.store.goals.update(goal.id, { spentUsd: goal.spentUsd + share }, at)
+      // Settled or re-armed while it was being checked: the verdict is stale.
+      if (!g || !goal || g.status !== 'open' || g.checks !== armed.checks) continue
+      const v = verdicts.get(g.id) ?? NO_VERDICT
+      const r = applyVerdict(g, v, at)
+      await d.store.goals.putGate(r.gate)
+      await note(d, { actor: 'gate', sessionId: null, kind: 'gate_checked', from: null, to: null, detail: { gateId: g.id, stepId: g.stepId, verdict: v.verdict, evidence: v.evidence, seen: r.gate.confirmationsSeen, needed: g.confirmationsNeeded } }, goal.id, at)
+      if (r.outcome === 'resolved') {
+        await resolveGate(d, eng, r.gate, 'gate', v.evidence)
+        out.resolved++
+      } else if (r.outcome === 'to_user') {
+        if (await gateToUser(d, eng, r.gate, 'needs_user', `Junior's checker can't tell whether this holds: ${g.condition}`, 'Look, then approve if it holds — otherwise keep waiting', v.evidence || null)) out.toUser++
+      }
+      d.changed(goal.id)
+    }
+  }
+  return out
+}
+
+/** A gate met — by its checker or the user's approval: the step is done and the lead wakes. */
+async function resolveGate(d: GoalDeps, eng: GoalEngine, gate: Gate, by: 'gate' | 'you', evidence: string | null): Promise<void> {
+  const at = d.now()
+  await d.store.goals.putGate({ ...gate, status: 'met', nextCheckAt: null, settledAt: at })
+  const goal = (await d.store.goals.get(gate.goalId))!
+  const st = (await d.store.goals.steps(goal.id)).find((s) => s.stepId === gate.stepId)
+  if (st && st.status !== 'done') {
+    await d.store.goals.putStep({ ...st, status: 'done', endedAt: at, updatedAt: at })
+    for (const u of unlock(goal.plan!, await d.store.goals.steps(goal.id), at)) await d.store.goals.putStep(u)
+  }
+  await d.store.goals.addEvent({ goalId: goal.id, at, actor: by, sessionId: null, kind: 'gate_resolved', from: null, to: null, detail: { gateId: gate.id, stepId: gate.stepId, condition: gate.condition, by, evidence } })
+  if (goal.state === 'waiting_world') await engineMove(d, goal, 'gate_met', null, at, { gateId: gate.id })
+  d.changed(goal.id)
+  void pumpGoals(d, eng).catch(() => {})
+}
+
+/**
+ * A gate the user must settle — past its deadline, or its checker couldn't
+ * tell: an approval on the goal's Inbox item, with the evidence and Junior's
+ * recommended answer. Waits (false) while the user already has a question on
+ * this goal: one at a time.
+ */
+async function gateToUser(d: GoalDeps, _eng: GoalEngine, gate: Gate, why: 'deadline' | 'needs_user', question: string, recommended: string, evidence: string | null): Promise<boolean> {
+  const goal = await d.store.goals.get(gate.goalId)
+  if (!goal) return false
+  const at = d.now()
+  if (openAsk(await d.store.goals.events(goal.id))) {
+    // The user has a question on this goal already; ask after it, at the slow end of the schedule.
+    if (why === 'needs_user') await d.store.goals.putGate({ ...gate, nextCheckAt: at + nextCheckDelay(Number.MAX_SAFE_INTEGER, null) })
+    return false
+  }
+  await d.store.goals.putGate({ ...gate, status: 'needs_user', nextCheckAt: null, itemId: goal.sourceItemId })
+  await note(d, { actor: 'gate', sessionId: null, kind: 'asked_you', from: null, to: null, detail: { gateId: gate.id, why, question, recommended, evidence, options: [] } }, goal.id, at)
+  // A running goal is caught when its session ends (afterSession reads the open ask).
+  if (goal.state === 'waiting_world' || goal.state === 'queued') await engineMove(d, goal, 'ask_you', question.slice(0, 500), at, { gateId: gate.id })
+  d.changed(goal.id)
+  return true
+}
+
+const GATE_ANSWERS = ['approve', 'wait', 'reject'] as const
+type GateAnswer = (typeof GATE_ANSWERS)[number]
+
+/**
+ * The user settles a gate asked about: approve (the step is done; for an AI
+ * gate, the user's word stands in for the checker's), keep waiting (an AI
+ * gate only: checks resume with a fresh deadline and the lead isn't woken),
+ * or reject (the step failed; the lead wakes to decide what's next). Words
+ * alone settle it like a reject: the gate closes and the lead wakes to them.
+ */
+async function answerGate(d: GoalDeps, eng: GoalEngine, goal: Goal, gate: Gate, answer: GateAnswer | 'words', text: string | null, at: number): Promise<void> {
+  const said = (verb: string) => `${verb}: ${gate.condition}${text ? ` — ${text}` : ''}`
+  if (answer === 'wait') {
+    if (gate.evaluator !== 'ai') throw new Error("a user gate has nothing to wait for: approve or reject it")
+    const deadlineMs = parseDuration(GATE_DEFAULT_DEADLINE)!
+    await d.store.goals.putGate({ ...gate, status: 'open', itemId: null, confirmationsSeen: 0, nextCheckAt: at + nextCheckDelay(gate.checks, gate.checkEveryMs), deadlineAt: at + deadlineMs })
+    // Settled without waking the lead: it reads the answer with whatever wakes it next.
+    await note(d, { actor: 'you', sessionId: null, kind: 'answered', from: null, to: null, detail: { text: said('Keep waiting'), gateId: gate.id, gate: 'wait' } }, goal.id, at)
+    const [steps, events] = await Promise.all([d.store.goals.steps(goal.id), d.store.goals.events(goal.id)])
+    const cur = (await d.store.goals.get(goal.id))!
+    // Something else is due meanwhile (a finished step, a message): the lead runs instead of waiting.
+    const trigger = workerDue(cur.plan, steps) || unreadWakes(events).length ? 'answer' : 'keep_waiting'
+    await youMove(d, cur, trigger, trigger === 'keep_waiting' ? `Waiting for: ${gate.condition}`.slice(0, 500) : null, at, { gateId: gate.id })
+    return
+  }
+  if (answer === 'approve') {
+    await d.store.goals.addEvent({ goalId: goal.id, at, actor: 'you', sessionId: null, kind: 'answered', from: null, to: null, detail: { text: said('Approved'), gateId: gate.id, gate: 'approve' } })
+    await resolveGate(d, eng, gate, 'you', text)
+  } else {
+    await d.store.goals.putGate({ ...gate, status: 'cancelled', nextCheckAt: null, settledAt: at })
+    const st = (await d.store.goals.steps(goal.id)).find((s) => s.stepId === gate.stepId)
+    if (st && st.status === 'running') await d.store.goals.putStep({ ...st, status: 'failed', endedAt: at, updatedAt: at })
+    await d.store.goals.addEvent({ goalId: goal.id, at, actor: 'you', sessionId: null, kind: 'answered', from: null, to: null, detail: { text: answer === 'words' ? `${text} (about the gate: ${gate.condition})` : said('Not approved'), gateId: gate.id, gate: answer } })
+  }
+  await youMove(d, (await d.store.goals.get(goal.id))!, 'answer', null, at, { gateId: gate.id })
+}
+
 // --- the user's steering ----------------------------------------------------
 
 /** Accept the plan change the lead proposed: plan.md v+1, steps reconciled (done stays done). */
@@ -942,6 +1116,17 @@ export async function goalAnswerOp(d: GoalDeps, eng: GoalEngine, raw: unknown): 
   const minutes = optPositive(b.budgetMinutes, 'budgetMinutes')
   if (usd !== null || minutes !== null) await d.store.goals.update(goal.id, { budget: { usd: usd ?? goal.budget.usd, minutes: minutes ?? goal.budget.minutes } }, at)
   const open = openAsk(await d.store.goals.events(goal.id))
+  const gateId = open?.kind === 'ask' && typeof open.ev.detail?.gateId === 'string' ? open.ev.detail.gateId : null
+  const gate = gateId ? await d.store.goals.gate(gateId) : null
+  if (gate && gate.status === 'needs_user') {
+    // A gate asked about: approve, keep waiting or reject — or words alone, which close it and wake the lead.
+    const answer = b.gate === undefined && text ? 'words' : (b.gate as GateAnswer)
+    if (answer !== 'words' && !GATE_ANSWERS.includes(answer)) throw new Error('settle the gate: gate is approve, wait or reject')
+    await answerGate(d, eng, goal, gate, answer, text, at)
+    d.changed(goal.id)
+    void pumpGoals(d, eng)
+    return { goal: (await d.store.goals.get(goal.id))!, outcome: 'answered' }
+  }
   if (open?.kind === 'plan_change') {
     if (typeof b.accept !== 'boolean') throw new Error('accept or turn down the plan change (accept: true | false)')
     let version: number | null = null
@@ -1391,6 +1576,8 @@ export function goalSessionMcpTools(d: GoalDeps, tag: GoalSessionTag) {
         deadline: z.string().optional(),
         confirmations: z.number().optional(),
         connectors: z.array(z.string()).optional(),
+        recommended: z.string().optional().describe('a user gate: your recommended answer (required for one)'),
+        evidence: z.string().optional().describe('a user gate: what the user should look at to decide'),
       },
       run((a) => goalArmGateOp(d, call, a)),
     ),

@@ -8,7 +8,7 @@
  * the worktree and hand it back, accept the result.
  */
 import { useState } from 'react'
-import { Check, Hand, MessageSquarePlus, Send, Undo2 } from 'lucide-react'
+import { Check, Clock, Hand, MessageSquarePlus, Send, Undo2, X } from 'lucide-react'
 import { GOAL_STATE_LABEL, type Goal, type GoalHorizon } from '../../../core/goals/types.js'
 import type { PlanComment } from '../../../core/goals/review.js'
 import { TURN_LABEL } from '../../../core/work/flow.js'
@@ -139,6 +139,18 @@ async function goalVerb(goalId: string, verb: string, body: Record<string, unkno
 
 const STEERABLE = new Set<Goal['state']>(['queued', 'running', 'waiting_world', 'waiting_you', 'result_ready', 'paused'])
 
+const GATE_WHY = { approval: 'Approval', needs_user: "The checker can't tell", deadline: 'Past its deadline' } as const
+
+/** "in 5m", "in 3h" — or "due" once the time has come. */
+function inSpan(at: number | null): string {
+  if (at == null) return '—'
+  const s = Math.round((at - Date.now()) / 1000)
+  if (s < 45) return 'due'
+  if (s < 3600) return `in ${Math.max(1, Math.round(s / 60))}m`
+  if (s < 86400) return `in ${Math.round(s / 3600)}h`
+  return `in ${Math.round(s / 86400)}d`
+}
+
 /** What the goal waits on you for, in the words the lead used. */
 function AskText({ ask }: { ask: GoalAsk }) {
   if (ask.kind === 'plan_change')
@@ -151,6 +163,7 @@ function AskText({ ask }: { ask: GoalAsk }) {
   if (ask.kind === 'ask')
     return (
       <div className="goalAsk">
+        {ask.gate && <div className="artEmpty">{GATE_WHY[ask.gate.why]} · step {ask.gate.stepId}</div>}
         <div className="t">{ask.question}</div>
         <div className="artEmpty">Recommended: {ask.recommended}</div>
         {ask.evidence && <div className="artEmpty">{ask.evidence}</div>}
@@ -189,8 +202,11 @@ function GoalSteer({ goal, ask }: { goal: Goal; ask: GoalAsk | null }) {
   const waiting = goal.state === 'waiting_you'
   const paused = goal.state === 'paused'
   const result = goal.state === 'result_ready'
+  const gate = waiting && ask?.kind === 'ask' ? ask.gate : null
   const placeholder = waiting
-    ? ask?.kind === 'plan_change'
+    ? gate
+      ? 'A note for Junior with your answer (optional)'
+      : ask?.kind === 'plan_change'
       ? 'Why, if you turn it down (optional when accepting)'
       : 'Your answer — Junior wakes with it'
     : result
@@ -226,7 +242,21 @@ function GoalSteer({ goal, ask }: { goal: Goal; ask: GoalAsk | null }) {
             </button>
           )}
           <span className="goalReviewGap" />
-          {waiting && ask?.kind === 'plan_change' ? (
+          {gate ? (
+            <>
+              <button type="button" className="btn sm" disabled={busy} title="The step failed; Junior wakes to decide what's next" onClick={() => void act('answer', { gate: 'reject', ...(typed ? { text: typed } : {}) })}>
+                <X size={12} aria-hidden="true" /> Reject
+              </button>
+              {gate.evaluator === 'ai' && (
+                <button type="button" className="btn sm" disabled={busy} title="Checks resume with a fresh 24h deadline; Junior isn't woken" onClick={() => void act('answer', { gate: 'wait', ...(typed ? { text: typed } : {}) })}>
+                  <Clock size={12} aria-hidden="true" /> Keep waiting
+                </button>
+              )}
+              <button type="button" className="btn sm primary" disabled={busy} onClick={() => void act('answer', { gate: 'approve', ...(typed ? { text: typed } : {}) })}>
+                <Check size={12} aria-hidden="true" /> Approve
+              </button>
+            </>
+          ) : waiting && ask?.kind === 'plan_change' ? (
             <>
               <button type="button" className="btn sm" disabled={busy || !typed} onClick={() => void act('answer', { accept: false, text: typed })}>
                 <Undo2 size={12} aria-hidden="true" /> Turn down
@@ -395,13 +425,31 @@ export function GoalPage({ id, onNavigate }: { id: string; onNavigate: (hash: st
                 </ul>
               </section>
             )}
-            {gates.length > 0 && (
+            {gates.some((g) => g.status === 'open') && (
+              <section>
+                <div className="secLabel">Waiting on the world</div>
+                <ul className="goalList">
+                  {gates
+                    .filter((g) => g.status === 'open')
+                    .map((g) => (
+                      <li key={g.id} title={g.lastVerdict ? `Last check: ${g.lastVerdict.verdict.replace(/_/g, ' ')}${g.lastVerdict.evidence ? ` — ${g.lastVerdict.evidence}` : ''}` : 'Not checked yet'}>
+                        <span className="t">{g.condition}</span>
+                        <span className="mono s">
+                          next {inSpan(g.nextCheckAt)} · deadline {inSpan(g.deadlineAt)}
+                          {g.confirmationsNeeded > 1 ? ` · ${g.confirmationsSeen}/${g.confirmationsNeeded} met` : ''}
+                        </span>
+                      </li>
+                    ))}
+                </ul>
+              </section>
+            )}
+            {gates.some((g) => g.status !== 'open') && (
               <section>
                 <div className="secLabel">
-                  Gates <span className="n">{gates.length}</span>
+                  Gates <span className="n">{gates.filter((g) => g.status !== 'open').length}</span>
                 </div>
                 <ul className="goalList">
-                  {gates.map((g) => (
+                  {gates.filter((g) => g.status !== 'open').map((g) => (
                     <li key={g.id} title={g.lastVerdict?.evidence ?? undefined}>
                       <span className="mono">{g.evaluator}</span>
                       <span className="t">{g.condition}</span>
