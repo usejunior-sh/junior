@@ -1,0 +1,242 @@
+/* =========================================================================
+   The Junior tab (.docs/junior-goals-teams, direction E) — the app's own
+   tokens (styles.css), the deck's layout: one centred column like a
+   transcript, the face beside a two-tone serif headline, rows over cards.
+   ========================================================================= */
+
+/* rail + tab band: the face in place of an icon */
+.railBtn .jrRailFace { display: grid; place-items: center; width: 22px; height: 22px; }
+.railBtn.junior span.label { max-width: 52px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tab.lead .jrTabFace { display: inline-grid; place-items: center; width: 14px; height: 14px; flex: none; }
+
+/* ---------- the page ---------- */
+.jrPage { flex: 1; min-height: 0; overflow-y: auto; position: relative; padding: 36px 44px 72px; }
+.jrPage > .glow { top: -200px; left: 38%; }
+.jrCol { position: relative; max-width: var(--measure); margin: 0 auto; }
+
+.jrWho { display: flex; gap: 14px; align-items: flex-start; }
+.jrFace { flex: none; width: 44px; margin-top: 4px; }
+.jrMsg { flex: 1; min-width: 0; }
+
+/* "● Right now finding the auth test flake · step 2 of 3" */
+.jrKick {
+  display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0 0 10px; padding: 0;
+  border: 0; background: transparent; color: var(--mute); font: inherit; font-size: 0.9231rem; text-align: left;
+}
+.jrKick b { color: var(--ink); font-weight: 500; }
+.jrKick .jrStep { color: var(--mute); margin-left: -8px; }
+button.jrKick { cursor: pointer; }
+button.jrKick:hover b { text-decoration: underline; text-decoration-color: var(--hair-bright); text-underline-offset: 3px; }
+.jrDot { width: 7px; height: 7px; border-radius: 50%; background: var(--stone); flex: none; }
+.jrDot.live { background: var(--blue); animation: jrPulse 2s infinite; }
+@keyframes jrPulse {
+  0% { box-shadow: 0 0 0 0 var(--glow-blue); }
+  70% { box-shadow: 0 0 0 7px transparent; }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+
+.jrHello {
+  margin: 0; font-family: var(--serif); font-weight: 400; font-size: 2.3rem; line-height: 1.12; letter-spacing: -0.3px;
+  color: var(--ink); white-space: pre-line; max-width: 34ch; text-wrap: balance;
+}
+.jrHello .g { color: var(--mute); }
+.jrBrief { margin: 12px 0 0; color: var(--body); font-size: 1.077rem; line-height: 1.6; max-width: 60ch; }
+.jrBrief.err { color: var(--red-ink); }
+.jrRef {
+  display: inline; padding: 0; border: 0; background: none; font: inherit; color: var(--ink); cursor: pointer; text-align: left;
+  text-decoration: underline; text-decoration-color: var(--hair-bright); text-underline-offset: 3px;
+}
+.jrRef:hover { color: var(--ink); text-decoration-color: var(--ink); }
+a.jrRef { overflow-wrap: anywhere; }
+.jrRef:disabled { color: var(--mute); cursor: default; }
+
+/* the toolbar: underline tabs on the left, New chat on the right, one hairline under the row */
+.jrTabs { margin-left: 58px; }
+.jrBar { display: flex; align-items: center; gap: 10px; margin-top: 30px; border-bottom: 1px solid var(--hair); }
+.jrViews { display: flex; gap: 24px; margin-right: auto; }
+.jrView {
+  position: relative; height: 42px; padding: 0; border: 0; background: transparent;
+  color: var(--mute); font: inherit; font-size: 0.9615rem; cursor: pointer;
+}
+.jrView:hover { color: var(--ink); }
+.jrView[data-state="active"] { color: var(--ink); }
+.jrView[data-state="active"]::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; border-radius: 1px; background: var(--ink);
+}
+.jrNew { white-space: nowrap; }
+.jrKeys { display: inline-flex; gap: 3px; }
+.jrPane:focus-visible { outline: none; }
+
+/* section heads */
+.jrLh { display: flex; align-items: baseline; gap: 8px; margin: 28px 0 6px; color: var(--ash); font-size: 0.9231rem; font-weight: 400; }
+.jrLh .n { font-family: var(--mono); font-size: 0.8462rem; color: var(--stone); }
+.jrLh .aside { margin-left: auto; color: var(--ash); font-size: 0.8462rem; text-align: right; }
+.jrLead { margin: 22px 0 8px; color: var(--mute); font-size: 0.9615rem; max-width: 64ch; }
+.jrEmpty { margin: 0; padding: 12px 0; border-top: 1px solid var(--hair); color: var(--mute); font-size: 0.9615rem; }
+.jrPlan .jrEmpty { border-top: 0; border-bottom: 1px solid var(--hair); }
+.jrErr { margin: 10px 0 0; color: var(--red-ink); font-size: 0.9231rem; }
+
+/* Needs you: rows with a small orange dot, not a bar */
+.jrRows { border-top: 1px solid var(--hair); }
+.jrRow {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 170px) 84px 56px; align-items: center; gap: 14px;
+  width: 100%; min-height: 44px; padding: 0 8px 0 0; text-align: left; font: inherit; color: inherit;
+  background: transparent; border: 0; border-bottom: 1px solid var(--hair); cursor: pointer;
+}
+.jrRow:hover { background: var(--wash-2); }
+.jrRow .t { color: var(--ink); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.jrRow.need .t::before {
+  content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--orange);
+  margin: 0 10px 0 2px; vertical-align: 2px;
+}
+.jrRow .m { color: var(--ash); font-size: 0.9231rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.jrRow .r { color: var(--ash); font-size: 0.8462rem; text-align: right; white-space: nowrap; font-family: var(--mono); }
+.jrRow .go { justify-self: end; font-size: 0.8462rem; color: var(--mute); }
+.jrRow:hover .go { color: var(--ink); }
+
+/* Our plan for today */
+.jrPlan { border-top: 1px solid var(--hair); }
+.jrPlanRow {
+  display: grid; grid-template-columns: 18px minmax(0, 1fr) 84px 108px 128px 22px; align-items: center; gap: 12px;
+  min-height: 44px; padding: 0 0 0 2px; border-bottom: 1px solid var(--hair); cursor: pointer;
+}
+.jrPlanRow:hover { background: var(--wash-2); }
+.jrPlanRow .ck { width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid var(--stone); }
+.jrPlanRow.done .ck { border-color: var(--green); background: radial-gradient(circle, var(--green) 0 3px, transparent 3.5px); }
+.jrPlanRow .t {
+  min-width: 0; padding: 0; border: 0; background: none; font: inherit; text-align: left; cursor: pointer;
+  color: var(--ink); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.jrPlanRow.done .t { color: var(--ash); font-weight: 400; }
+.jrPlanRow .src { font-family: var(--mono); font-size: 0.8462rem; color: var(--ash); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.jrPlanRow .own { display: inline-flex; align-items: center; gap: 6px; min-width: 0; color: var(--mute); font-size: 0.9231rem; }
+.jrPlanRow .own .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.jrPlanRow .you {
+  display: grid; place-items: center; width: 16px; height: 16px; flex: none; border-radius: 50%;
+  border: 1px solid var(--hair-strong); font-size: 0.6154rem; color: var(--ink);
+}
+.jrPlanRow .mf { display: inline-flex; width: 16px; height: 16px; flex: none; }
+.jrPlanRow .st { text-align: right; font-size: 0.8462rem; color: var(--ash); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.jrPlanRow .st.warn { color: var(--orange); }
+.jrPlanRow .st.good { color: var(--green); }
+.jrPlanRow .st.live { color: var(--blue); }
+.jrPlanRow .st.carry { color: var(--yellow); }
+.jrPlanRow .jrStart { margin-left: auto; }
+.jrPlanRow .rm {
+  display: grid; place-items: center; width: 22px; height: 22px; padding: 0; border: 0; border-radius: var(--r-xs);
+  background: transparent; color: var(--ash); opacity: 0; cursor: pointer;
+}
+.jrPlanRow:hover .rm, .jrPlanRow .rm:focus-visible { opacity: 1; }
+.jrPlanRow .rm:hover { color: var(--ink); background: var(--elev); }
+.jrPlanRow.fresh { animation: jrFresh 1.4s ease-out; }
+@keyframes jrFresh { from { background: var(--wash-3); } to { background: transparent; } }
+
+/* "Also today…" and Junior's reply under it */
+.jrAdd { display: flex; align-items: center; gap: 12px; min-height: 44px; margin: 0; padding: 0 8px 0 2px; border-bottom: 1px solid var(--hair); }
+.jrAdd .plus { width: 18px; text-align: center; color: var(--ash); font-size: 1.15rem; }
+.jrAdd input { flex: 1; min-width: 0; padding: 0; border: 0; outline: none; background: transparent; color: var(--ink); font: inherit; }
+.jrAdd input::placeholder { color: var(--ash); }
+.jrReply { display: flex; align-items: flex-start; gap: 10px; padding: 12px 8px 14px 2px; border-bottom: 1px solid var(--hair); background: var(--wash-1); }
+.jrReply .mf { display: inline-flex; width: 20px; height: 20px; flex: none; margin-top: 1px; }
+.jrReply .txt { color: var(--body); }
+.jrReply .txt b { color: var(--ink); font-weight: 500; font-family: var(--mono); font-size: 0.9231rem; }
+.jrReply .acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 9px; }
+
+/* "I can also …" */
+.jrAlso { margin: 18px 0 0; color: var(--mute); font-size: 0.9615rem; }
+.jrAlso button {
+  padding: 0; border: 0; background: none; font: inherit; color: var(--body); cursor: pointer;
+  text-decoration: underline; text-decoration-color: var(--hair-bright); text-underline-offset: 3px;
+}
+.jrAlso button:hover { color: var(--ink); text-decoration-color: var(--ink); }
+
+/* first open: what Junior can see, and the offers */
+.jrSeen { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 14px 0 0; padding: 0; list-style: none; color: var(--mute); font-size: 0.9615rem; }
+.jrSeen li { display: flex; align-items: center; gap: 7px; }
+.jrSeen i { width: 6px; height: 6px; flex: none; border-radius: 50%; background: var(--green); }
+.jrSeen i.off { background: transparent; border: 1px solid var(--stone); }
+.jrSeen .mono { color: var(--body); }
+.jrOfferH { margin: 2px 0 10px; color: var(--body); font-size: 1.077rem; }
+.jrOfferH.jrOr { margin: 22px 0 8px; }
+.jrOffers { border-top: 1px solid var(--hair); }
+.jrOffer {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 16px; width: 100%;
+  padding: 12px 8px 12px 0; text-align: left; font: inherit; color: inherit;
+  background: transparent; border: 0; border-bottom: 1px solid var(--hair); cursor: pointer;
+}
+.jrOffer:hover { background: var(--wash-2); }
+.jrOffer .t { color: var(--ink); font-weight: 500; }
+.jrOffer .d { color: var(--mute); font-size: 0.9615rem; }
+.jrOffer .because { color: var(--ash); font-size: 0.8462rem; white-space: nowrap; }
+
+/* What I can do: the sentences */
+.jrCards { display: grid; grid-template-columns: 1fr 1fr; gap: 0 36px; margin-top: 6px; }
+.jrCard { padding: 12px 0 14px; border-top: 1px solid var(--hair); }
+.jrCard h3 { margin: 0 0 8px; color: var(--ash); font-size: 0.9231rem; font-weight: 500; }
+.jrCard .sent { font-family: var(--serif); font-size: 1.38rem; line-height: 1.32; letter-spacing: -0.1px; color: var(--ink); }
+.jrCard .blank {
+  padding: 0 1px; border: 0; border-radius: 0; border-bottom: 1px dashed var(--hair-bright); background: transparent;
+  font: inherit; color: var(--ink); cursor: pointer;
+}
+.jrCard .blank:hover:not(:disabled) { border-bottom-color: var(--blue); color: var(--blue); }
+.jrCard .blank:disabled { cursor: default; border-bottom-color: transparent; }
+.jrCard .send { display: flex; align-items: center; gap: 8px; margin-top: 10px; color: var(--ash); font-size: 0.8462rem; }
+
+/* About me */
+.jrMe { border-top: 1px solid var(--hair); }
+.jrMe .mrow { display: grid; grid-template-columns: 160px minmax(0, 1fr); align-items: center; gap: 16px; min-height: 50px; padding: 7px 0; border-bottom: 1px solid var(--hair); }
+.jrMe .ml { color: var(--ash); font-size: 0.9231rem; }
+.jrMe .mv { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; color: var(--body); min-width: 0; }
+.jrMe .hint { color: var(--ash); font-size: 0.8462rem; }
+.jrMe .quote { color: var(--ink); }
+.jrMe .none { color: var(--mute); }
+.jrMe .lock {
+  display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; border: 1px solid var(--hair-strong); border-radius: var(--r-full);
+  color: var(--ash); font-size: 0.8462rem; white-space: nowrap;
+}
+.jrName {
+  width: 180px; height: 30px; padding: 0 10px; border: 1px solid var(--hair-strong); border-radius: var(--r-sm);
+  background: var(--card); color: var(--ink); font: inherit; outline: none;
+}
+.jrName:focus { border-color: var(--hair-bright); }
+.jrSwatches { display: flex; gap: 10px; }
+.jrSwatches .sw { width: 20px; height: 20px; padding: 0; border: 0; border-radius: 50%; cursor: pointer; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.25); }
+.jrSwatches .sw[data-state="checked"] { outline: 2px solid var(--ink); outline-offset: 2px; }
+.jrSwatches .sw:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .jrDot.live, .jrPlanRow.fresh { animation: none; }
+}
+@media (hover: none) {
+  .jrPlanRow .rm { opacity: 1; }
+}
+
+/* ---------- phone ---------- */
+@media (max-width: 767px), (pointer: coarse) and (max-height: 500px) {
+  .jrPage { padding: 20px 16px calc(40px + env(safe-area-inset-bottom)); overflow-x: hidden; }
+  .jrWho { gap: 12px; }
+  .jrHello { font-size: 1.95rem; }
+  .jrTabs { margin-left: 0; }
+  .jrBar { margin-top: 22px; gap: 8px; }
+  .jrViews { gap: 16px; }
+  .jrKeys { display: none; }
+  .jrNew.btn { height: 28px; padding: 0 10px; font-size: 0.9231rem; }
+  .jrLh .aside { display: none; }
+  /* plan rows drop the source and owner columns */
+  .jrPlanRow { grid-template-columns: 18px minmax(0, 1fr) auto 22px; gap: 10px; min-height: 48px; }
+  .jrPlanRow .src, .jrPlanRow .own, .jrPlanRow .st .who { display: none; }
+  .jrOffer .because { display: none; }
+  /* Junior makes eight entries in the bottom bar: labels give up their tracking, then ellipsize. */
+  .shell.mobile .railBtn { padding: 0; }
+  .shell.mobile .railBtn span.label { max-width: 100%; font-size: 0.6667rem; letter-spacing: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .jrRow { grid-template-columns: minmax(0, 1fr) auto; min-height: 48px; }
+  .jrRow .m, .jrRow .go { display: none; }
+  .jrCards { grid-template-columns: 1fr; }
+  .jrMe .mrow { grid-template-columns: 1fr; gap: 4px; }
+}
+@media (max-width: 420px) {
+  /* Too narrow for the tabs and the button on one line: the button drops under them. */
+  .jrBar { flex-wrap: wrap; border-bottom: 0; }
+  .jrViews { width: 100%; border-bottom: 1px solid var(--hair); }
+  .jrNew.btn { order: 3; margin: 10px 0 2px; }
+}

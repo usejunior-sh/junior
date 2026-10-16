@@ -184,6 +184,8 @@ export interface AgentSession extends AsyncIterable<ProviderEvent> {
 /** One headless prompt run to completion (jobs, scans, drafts). */
 export type RunSpec = {
   prompt: string
+  /** text appended to the agent's own system prompt (a job run's persona) */
+  systemAppend?: string
   cwd?: string
   env?: SpawnEnv
   abort?: AbortController

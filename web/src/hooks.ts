@@ -53,6 +53,8 @@ export function useLiveText(sessionId: string | null) {
 
 export type Route =
   | { page: 'home' }
+  /** `#/junior` — Junior's page: the brief, today's plan, what it can do */
+  | { page: 'junior' }
   | { page: 'session'; id: string }
   | { page: 'draft'; id: string }
   /** `#/inbox/<tab>` — one inbox tab; bare `#/inbox` opens the first that needs you */
@@ -80,6 +82,7 @@ export const itemHash = (id: string) => `/item/${encodeURIComponent(id)}`
 
 function parseRoute(hash: string): Route {
   if (!hash) return { page: 'home' }
+  if (hash === '/junior') return { page: 'junior' }
   if (hash === '/inbox') return { page: 'inbox' }
   if (hash.startsWith('/inbox/')) {
     const tab = hash.slice('/inbox/'.length)

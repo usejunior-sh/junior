@@ -65,6 +65,13 @@ import type {
   ActionVerb,
   ActionView,
   AgentRelay,
+  JuniorDay,
+  JuniorDayResponse,
+  JuniorSeen,
+  PersonaResponse,
+  ScoredItem,
+  TodayMatchResponse,
+  TodayResponse,
   ClientMessage,
   RemoteStatus,
   Connector,
@@ -281,7 +288,7 @@ import { ARCHIVE_AFTER_DAYS, shouldArchive } from '../core/work/fade.js'
 import { canonicalizeRef, canonicalizeRefs, linkByRefs } from '../core/work/link.js'
 import type { ItemStatus } from '../core/work/state.js'
 import type { Provenance, WorkItem as CoreWorkItem, WorkSource } from '../core/work/types.js'
-import { fetchGitHub, fetchGitHubClosed, listAffiliatedRepos } from '../core/sources/github.js'
+import { fetchGitHub, fetchGitHubClosed, ghLogin, listAffiliatedRepos } from '../core/sources/github.js'
 import {
   draftJob,
   permalinkId,
@@ -375,6 +382,12 @@ import { FileIndexes, readProjectFile, resolveFileMention, writeProjectFile } fr
 import { ArtifactIndex, slug } from './artifacts.js'
 import { WORKSPACE_PLUGIN, createLibraryEntry, ensureWorkspacePlugin, libraryRoots, locate as locateLibrary, libraryTargets, listLibrary, readLibraryFile, removeLibraryItem, writeLibraryFile, type LibraryRoot } from './library.js'
 import { TRIAGE_MCP_INSTRUCTIONS, triageSessionAppend } from '../shared/triageContext.js'
+import { DEFAULT_PERSONA, personaAppend, personaFrom, type Persona } from '../core/junior/persona.js'
+import { needsRows, type SendsSource, type TeamSource } from '../core/junior/needs.js'
+import { pickNow, todoProgress, type NowCandidate, type TodoProgress } from '../core/junior/now.js'
+import { briefFacts, type FactRun } from '../core/junior/facts.js'
+import { canDoFill, firstOffers, type OfferItem } from '../core/junior/offers.js'
+import { carryOver, dayKey, draftPlan, isOwner, matchItem, planRows, shortRef, type AddedBy, type Owner, type PlanItem, type PlanRow, type PlanSession, type PlanView } from '../core/junior/today.js'
 import { AGENTS_ARG, SKILLS_ARG, callTool as callMcpTool, PROTOCOL_VERSION as MCP_PROTOCOL_VERSION, TOOLS as MCP_TOOLS } from '../core/mcp/tools.js'
 import {
   BRIEF_SYSTEM_APPEND,
@@ -497,6 +510,7 @@ const TRIAGE_READ_TOOLS = new Set([
   'mcp__triage__get_workspace',
   'mcp__triage__list_artifacts',
   'mcp__triage__read_artifact',
+  'mcp__triage__get_today',
 ])
 
 // Verb tokens that mark a connector call's intent: READ_VERBS / WRITE_VERBS
@@ -596,6 +610,8 @@ class WorkspaceRuntime {
    * mcp__triage__* tools whenever another session in the workspace is live.
    */
   readonly triageMcp: () => ReturnType<typeof createSdkMcpServer>
+  /** Junior's persona here (core/junior/persona.ts): loaded at boot, replaced on every save */
+  persona: Persona = DEFAULT_PERSONA
   /** the coding agent this workspace's sessions, runs and probes go through (its meta names it) */
   get provider(): Provider {
     return providerFor(this.meta.provider)
@@ -762,7 +778,8 @@ const BRIEF_DISALLOWED_TOOLS = [
   'Write', 'Edit', 'MultiEdit', 'NotebookEdit', 'AskUserQuestion',
   ...['create_work_item', 'edit_work_item', 'upsert_work_item', 'resolve_work_item', 'draft_job', 'try_job',
     'write_artifact', 'update_artifact', 'link_artifact',
-    'propose_team', 'split_step', 'revise_plan', 'submit_step'].map((t) => `mcp__triage__${t}`),
+    'propose_team', 'split_step', 'revise_plan', 'submit_step',
+    'add_to_today', 'remove_from_today', 'set_reply_style'].map((t) => `mcp__triage__${t}`),
 ]
 /** The only shell a brief may run: `gh`/`git` read verbs, no chaining or redirection. */
 const BRIEF_BASH_RE = /^\s*(gh\s+(pr|issue|api|search|run|repo)\s+(view|diff|checks|list|status|comments)\b|git\s+(log|show|diff|blame|status|branch|ls-files)\b)/
@@ -2524,7 +2541,7 @@ async function createSession(
   })
   rt.rows.set(row.id, row)
   // spawn: false = a row only; the first message starts it (getOrRevive).
-  if (opts.spawn !== false) rt.live.set(row.id, new LiveSession(rt, row, 0, null, extrasFor(rt, row)))
+  if (opts.spawn !== false) rt.live.set(row.id, new LiveSession(rt, row, 0, null, await extrasFor(rt, row)))
   return row
 }
 
@@ -2729,7 +2746,11 @@ async function getOrRevive(rt: WorkspaceRuntime, sessionId: string): Promise<Liv
   }
   if (existing) existing.stop()
   const lastSeq = await rt.store.events.lastSeq(row.id)
-  const revived = new LiveSession(rt, row, lastSeq, fresh ? null : row.sdkSessionId, extrasFor(rt, row))
+  const extras = await extrasFor(rt, row)
+  // Two messages racing to revive the same session: the first one's subprocess wins.
+  const raced = !fresh ? rt.live.get(row.id) : undefined
+  if (raced) return raced
+  const revived = new LiveSession(rt, row, lastSeq, fresh ? null : row.sdkSessionId, extras)
   rt.live.set(row.id, revived)
   if (fresh && row.sdkSessionId) revived.notice('fresh context — this member starts from the brief, not its earlier history')
   broadcastSessionList(rt)
@@ -3653,6 +3674,8 @@ async function jobQuery(
   const fence = fenceFor(spec.tools, spec.output, spec.project.path, { skills, agents })
   return {
     prompt,
+    // A job run is Junior's too: its name and voice, and the one rule an unattended run can keep.
+    systemAppend: personaAppend(rt.persona, 'job'),
     cwd: spec.project.path,
     userConfig: true,
     tools: [...runBaseTools(spec.tools), ...extraTools],
@@ -4844,6 +4867,7 @@ function workspaceInfo(rt: WorkspaceRuntime) {
 
 /** Bring a runtime up: sessions, seeds, cached snapshot, background probes. */
 async function initRuntime(rt: WorkspaceRuntime): Promise<void> {
+  rt.persona = await readPersona(rt)
   await migrateDefaultProject(rt)
   await loadCheckouts(rt)
   await loadSessions(rt)
@@ -5772,13 +5796,14 @@ const broadcastBrief = (rt: WorkspaceRuntime, job: BriefJob) => {
  * tool call, never a prompt. Brief sessions get the headless contract and their
  * write tool on top.
  */
-function extrasFor(rt: WorkspaceRuntime, row: StoredSession): SessionExtras {
+async function extrasFor(rt: WorkspaceRuntime, row: StoredSession): Promise<SessionExtras> {
   const identity = triageSessionAppend(row.kind, {
     sessionId: row.id,
     workspaceId: rt.meta.id,
     workspaceName: rt.meta.name,
     artifactsRoot: rt.artifacts.root,
     libraryRoot: rt.libraryDir,
+    juniorName: rt.persona.name,
   })
   const run = teamRunOf(rt, row.id)
   const worker = run && run.leadSessionId !== row.id ? [...run.workers].reverse().find((w) => w.sessionId === row.id) : undefined
@@ -5810,7 +5835,8 @@ function extrasFor(rt: WorkspaceRuntime, row: StoredSession): SessionExtras {
   }
   // A chat gets the browser pane's tools: with Triage.app closed they answer
   // "open Triage.app" rather than vanish, so a session never has to respawn.
-  if (row.kind === 'chat') return { systemAppend: identity, mcp: { browser: browserMcpFor(rt, row) } }
+  // It is one of Junior's chats, so it also gets the persona and today's plan.
+  if (row.kind === 'chat') return { systemAppend: `${identity}${await juniorAppend(rt)}`, mcp: { browser: browserMcpFor(rt, row) } }
   if (row.kind !== 'brief') return { systemAppend: identity }
   let e = rt.briefExtras.get(row.id)
   if (!e) {
@@ -6936,6 +6962,366 @@ async function dispatchPreviewOp(rt: WorkspaceRuntime, itemId: string): Promise<
   }
 }
 
+// ---------------------------------------------------------------------------
+// Junior (.docs/junior-goals-teams): the persona, the Junior page's day, and
+// today's plan. The rules are pure and tested in core/junior/; everything
+// here only gathers their inputs from the runtime and the store.
+// ---------------------------------------------------------------------------
+
+const PERSONA_KEY = 'junior.persona'
+
+async function readPersona(rt: WorkspaceRuntime): Promise<Persona> {
+  return personaFrom(await rt.store.config.get<unknown>(PERSONA_KEY))
+}
+
+/** Save a patch onto the persona; every open page and the rail repaint from the broadcast. */
+async function savePersonaOp(rt: WorkspaceRuntime, raw: unknown): Promise<Persona> {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('need a JSON object')
+  const next = personaFrom(raw, rt.persona)
+  await rt.store.config.set(PERSONA_KEY, next)
+  rt.persona = next
+  broadcast(rt, { type: 'persona', persona: next })
+  log('info', 'junior', `persona saved: ${next.name}, ${next.voice}`, { workspace: rt.meta.id })
+  return next
+}
+
+/** What the greeting calls the user: the first word of the Mac's full name, else of the login. Cached. */
+let youName: Promise<string | null> | null = null
+function userFirstName(): Promise<string | null> {
+  youName ??= (async () => {
+    const full = process.platform === 'darwin' ? await pExecFile('id', ['-F']).then((r) => r.stdout.trim(), () => '') : ''
+    const first = (full || os.userInfo().username).split(/[\s._-]+/).find(Boolean) ?? ''
+    return first ? first[0].toUpperCase() + first.slice(1) : null
+  })()
+  return youName
+}
+
+/** "the Mentions job", "the Build team", or the session's title — where a send came from. */
+function sendOrigin(v: ActionView): string {
+  if (v.sessionKind === 'job-run') return v.jobTitle ? `the ${v.jobTitle} job` : 'a job'
+  if (v.teamRunId) return v.teamLabel ? `the ${v.teamLabel} team` : 'a team'
+  return v.sessionTitle ?? 'a session'
+}
+
+/** The open inbox as the Junior page reads it: the warm cache, else a sync. */
+const juniorInbox = async (rt: WorkspaceRuntime): Promise<ScoredItem[]> => (rt.inboxCache ?? (await getInbox(rt, false))).items
+
+/** No plan has ever existed and no chat was ever started: Junior introduces itself. */
+async function isFirstOpen(rt: WorkspaceRuntime): Promise<boolean> {
+  return !(await rt.store.today.everPlanned()) && ![...rt.rows.values()].some((r) => r.kind === 'chat')
+}
+
+/**
+ * Today's plan, opened if it isn't yet: the day's record, and the rows that
+ * carry over from the last planned day (every row whose item is still open).
+ */
+async function ensureToday(rt: WorkspaceRuntime, now = Date.now()): Promise<string> {
+  const date = dayKey(now)
+  if (await rt.store.today.day(date)) return date
+  const prev = await rt.store.today.lastBefore(date)
+  const open = new Set<string>()
+  for (const e of prev?.entries ?? []) if ((await rt.store.items.get(e.itemId))?.status === 'open') open.add(e.itemId)
+  const carried = prev ? carryOver(prev.entries, (id) => open.has(id), date, now) : []
+  if (await rt.store.today.openDay({ date, createdAt: now, draftedAt: null }, carried)) {
+    if (carried.length) {
+      log('info', 'junior', `today: ${carried.length} carried over from ${prev?.date}`, { workspace: rt.meta.id })
+      broadcast(rt, { type: 'today_changed' })
+    }
+  }
+  return date
+}
+
+/**
+ * The page opened: the first open of a day drafts the plan, once — unless
+ * this is the first open ever, where Junior introduces itself instead.
+ * `force` = the user asked for a draft ("draft one from my inbox").
+ */
+async function openTodayOp(rt: WorkspaceRuntime, opts: { force?: boolean } = {}): Promise<PlanView> {
+  const now = Date.now()
+  const date = await ensureToday(rt, now)
+  const day = await rt.store.today.day(date)
+  if (opts.force || (day && !day.draftedAt && !(await isFirstOpen(rt)))) {
+    await rt.store.today.setDrafted(date, now)
+    const existing = await rt.store.today.entries(date)
+    const candidates = (await juniorInbox(rt)).map((i) => ({ id: i.id, score: i.score, turn: i.flow?.turn, group: i.group, kind: i.kind, status: i.status ?? 'open' }))
+    const rows = draftPlan({ date, now, existing, candidates })
+    for (const r of rows) await rt.store.today.put(r)
+    log('info', 'junior', `today: drafted ${rows.length} from the inbox`, { workspace: rt.meta.id })
+    broadcast(rt, { type: 'today_changed' })
+  }
+  return todayView(rt, date)
+}
+
+/** Read a running session's todo list for "step 2 of 3" — the last few hundred events are plenty. */
+async function sessionProgress(rt: WorkspaceRuntime, sessionId: string): Promise<TodoProgress | null> {
+  const last = await rt.store.events.lastSeq(sessionId)
+  const events = await rt.store.events.read(sessionId, Math.max(0, last - 400))
+  return todoProgress(events.map((e) => e.event))
+}
+
+const isRunning = (s: SessionStatus | undefined) => s === 'running' || s === 'starting'
+
+/** The plan as the page shows it: each row's item, owner and status. */
+async function todayView(rt: WorkspaceRuntime, date: string): Promise<PlanView> {
+  const entries = await rt.store.today.entries(date)
+  const ids = entries.map((e) => e.itemId)
+  const ranked = new Map((rt.inboxCache?.items ?? []).map((i) => [i.id, i]))
+  const times = await rt.store.items.statusTimes(ids)
+  const items = new Map<string, PlanItem>()
+  for (const id of ids) {
+    // The store is the truth for status; the ranked snapshot adds the label and the flow.
+    const it = await rt.store.items.get(id)
+    if (!it) continue
+    const r = ranked.get(id)
+    items.set(id, { ...it, status: it.status ?? 'open', statusAt: times.get(id), ...(r ? { label: r.label, flow: r.flow } : {}) })
+  }
+  const sessions: PlanSession[] = []
+  for (const [sessionId, itemId] of rt.sessionItem) {
+    if (!items.has(itemId) || teamRunOf(rt, sessionId)) continue
+    const row = rt.rows.get(sessionId)
+    const l = rt.live.get(sessionId)
+    if (!row || row.kind !== 'chat') continue
+    const running = isRunning(l?.status)
+    const todo = running ? await sessionProgress(rt, sessionId) : null
+    sessions.push({ id: sessionId, itemId, running, waiting: !!l?.waiting, step: todo ? { n: todo.n, of: todo.of } : null, activity: todo?.activity ?? null, updatedAt: row.updatedAt })
+  }
+  for (const run of rt.teamRuns.values()) {
+    if (!items.has(run.itemId) || run.state === 'done' || run.state === 'stopped') continue
+    sessions.push({
+      id: run.leadSessionId,
+      itemId: run.itemId,
+      running: run.state === 'running',
+      waiting: run.state === 'proposed' || run.state === 'gate' || !!run.revision,
+      step: { n: Math.min(run.step + 1, run.recipe.steps.length), of: run.recipe.steps.length },
+      activity: null,
+      updatedAt: rt.rows.get(run.leadSessionId)?.updatedAt ?? run.createdAt,
+    })
+  }
+  const projects = new Map((await rt.store.projects.list()).map((p) => [p.id, p.name]))
+  return planRows({ date, entries, items, sessions, projectName: (id) => (id ? projects.get(id) : undefined) })
+}
+
+/** Put an item on today (an existing one, or a new to-do made from `title`), or change whose it is. */
+async function addToTodayOp(rt: WorkspaceRuntime, raw: unknown, by: AddedBy): Promise<{ plan: PlanView; itemId: string; created: boolean }> {
+  const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>
+  // "user" is how the MCP tools say it (a model reads "you" as itself).
+  const owner: Owner = r.owner === 'user' ? 'you' : isOwner(r.owner) ? r.owner : 'you'
+  let itemId = typeof r.itemId === 'string' ? r.itemId.trim() : ''
+  let created = false
+  if (!itemId) {
+    const title = typeof r.title === 'string' ? r.title.trim() : ''
+    if (!title) throw new Error('need an itemId, or a title to create a to-do from')
+    itemId = await createManualOp(rt, { title })
+    created = true
+  } else if (!(await rt.store.items.get(itemId))) throw new Error(`no work item ${itemId} — find it with list_work_items, or create it first`)
+  const now = Date.now()
+  const date = await ensureToday(rt, now)
+  const existing = await rt.store.today.entries(date)
+  const had = existing.find((e) => e.itemId === itemId)
+  await rt.store.today.put({
+    date,
+    itemId,
+    owner,
+    addedBy: had?.addedBy ?? by,
+    addedAt: had?.addedAt ?? now,
+    order: had?.order ?? existing.reduce((m, e) => Math.max(m, e.order + 1), 0),
+    carriedFrom: had?.carriedFrom ?? null,
+  })
+  log('info', 'junior', `today: ${had ? 'owner of' : 'added'} ${itemId} → ${owner} (by ${by})`, { workspace: rt.meta.id })
+  broadcast(rt, { type: 'today_changed' })
+  return { plan: await todayView(rt, date), itemId, created }
+}
+
+async function removeFromTodayOp(rt: WorkspaceRuntime, raw: unknown): Promise<{ plan: PlanView; removed: boolean }> {
+  const itemId = typeof (raw as { itemId?: unknown } | null)?.itemId === 'string' ? (raw as { itemId: string }).itemId : ''
+  if (!itemId) throw new Error('need an itemId')
+  const date = await ensureToday(rt)
+  const removed = await rt.store.today.remove(date, itemId)
+  if (removed) broadcast(rt, { type: 'today_changed' })
+  return { plan: await todayView(rt, date), removed }
+}
+
+/** "Also today…": the open item a few typed words mean, if any. */
+async function matchTodayOp(rt: WorkspaceRuntime, q: string): Promise<{ id: string; title: string; ref: string; onToday: boolean } | null> {
+  const items = await juniorInbox(rt)
+  const hit = matchItem(q, items)
+  if (!hit) return null
+  const item = items.find((i) => i.id === hit.id)!
+  const date = await ensureToday(rt)
+  const onToday = (await rt.store.today.entries(date)).some((e) => e.itemId === hit.id)
+  return { id: item.id, title: item.title, ref: shortRef(item), onToday }
+}
+
+/** The plan for a model: compact JSON, ids first so every row is a next call. */
+function todayJson(plan: PlanView): string {
+  const status = (s: PlanRow['status']) =>
+    s.kind === 'done' ? 'done' : s.kind === 'needs' ? 'a session on it waits on the user' : s.kind === 'live' ? `in progress${s.step ? `, step ${s.step.n} of ${s.step.of}` : ''}` : s.kind === 'waiting' ? `${s.who ?? 'someone'} is waiting on the user` : s.kind === 'carried' ? `carried over from ${s.from}` : (s.note ?? 'to do')
+  return JSON.stringify(
+    { date: plan.date, done: plan.done, total: plan.total, rows: plan.rows.map((r) => ({ itemId: r.itemId, title: r.title, ref: r.ref, owner: r.owner === 'you' ? 'the user' : 'you (Junior)', status: status(r.status) })) },
+    null,
+    2,
+  )
+}
+
+/**
+ * Today's plan in a new Junior session's context, and what to do when the
+ * user adds to it mid-chat. A snapshot, said to be one: get_today reads it
+ * live. (shared/triageContext.ts keeps live state out of prompts; this is
+ * the one deliberate exception, so "today we also want X" works in any chat.)
+ */
+function todayAppend(plan: PlanView, name: string, now: number): string {
+  const when = new Date(now).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+  const rows = plan.rows.length
+    ? plan.rows
+        .map((r) => {
+          const who = r.owner === 'you' ? 'the user' : name
+          const st = r.status.kind === 'done' ? 'done' : r.status.kind === 'live' ? 'in progress' : r.status.kind === 'carried' ? 'carried over' : 'to do'
+          return `- [${who}] ${r.title} (${r.itemId}) — ${st}`
+        })
+        .join('\n')
+    : '(nothing on it yet)'
+  return `
+
+Today's plan, as of ${when} on ${plan.date}. It may have moved since; get_today reads it live:
+${rows}
+
+The plan is shared: you and the user both work from it, and every session today can see it. When the user says
+something is also for today ("today we also want X"), find the work item first with list_work_items, matching the
+title or a ref. If there is one, put it on with add_to_today, asking whose it is today (theirs or yours) only when
+they didn't say. If there is none, offer to create it with create_work_item and put it on today, in one reply.
+Take something off with remove_from_today.`
+}
+
+/** Spawn-time additions for one of Junior's chats: the persona, then today's plan. */
+async function juniorAppend(rt: WorkspaceRuntime): Promise<string> {
+  const now = Date.now()
+  let plan: PlanView | null = null
+  try {
+    plan = await todayView(rt, await ensureToday(rt, now))
+  } catch (err) {
+    log('warn', 'junior', `could not read today's plan for a session: ${errText(err)}`, { workspace: rt.meta.id })
+  }
+  return `${personaAppend(rt.persona)}${plan ? todayAppend(plan, rt.persona.name, now) : ''}`
+}
+
+/** Everything the Junior page shows, in one read. `since` = the brief's window. */
+async function juniorDayOp(rt: WorkspaceRuntime, q: { since: number; away: boolean }): Promise<JuniorDay> {
+  const now = Date.now()
+  const since = Number.isFinite(q.since) && q.since > 0 && q.since <= now ? q.since : startOfDay(now)
+  const items = await juniorInbox(rt)
+  const rows = [...rt.rows.values()]
+  const jobs = await rt.store.jobs.list()
+  const jobTitles = new Map(jobs.map((j) => [j.id, j.title]))
+  const projects = await rt.store.projects.list()
+  const plan = await todayView(rt, await ensureToday(rt, now))
+
+  // Needs you: held sessions, team runs waiting on you, sends waiting for your OK.
+  const blocked = rows
+    .filter((r) => rt.live.get(r.id)?.waiting)
+    .map((r) => ({ id: r.id, title: r.title, waitingOn: rt.live.get(r.id)?.waitingOn, at: r.updatedAt }))
+  const teams: TeamSource[] = []
+  for (const run of rt.teamRuns.values()) {
+    const state = run.revision ? 'revision' : run.state === 'proposed' ? 'proposed' : run.state === 'gate' ? 'gate' : null
+    if (!state) continue
+    teams.push({
+      runId: run.id,
+      leadSessionId: run.leadSessionId,
+      label: run.title,
+      goal: run.card.goal,
+      state,
+      steps: run.recipe.steps.length,
+      team: run.recipe.label || run.team,
+      budgetUsd: run.card.budgetUsd || run.budgetUsd,
+      ...(state === 'revision' ? { reason: run.revision?.why } : run.reason ? { reason: run.reason } : {}),
+      at: rt.rows.get(run.leadSessionId)?.updatedAt ?? run.createdAt,
+    })
+  }
+  const sends = new Map<string, SendsSource>()
+  for (const v of await actionViews(rt, await rt.store.actions.list({ status: ['needs_you'], limit: 500 }))) {
+    if (v.hidden) continue
+    const at = v.queue?.queuedAt ?? v.attemptedAt
+    const s = sends.get(v.sessionId) ?? { sessionId: v.sessionId, origin: sendOrigin(v), titles: [], at }
+    s.titles.push(v.title)
+    s.at = Math.min(s.at, at)
+    sends.set(v.sessionId, s)
+  }
+  const needs = needsRows({ blocked, teams, sends: [...sends.values()] }, now)
+
+  // The brief's facts.
+  const runs: FactRun[] = rows
+    .filter((r) => r.kind === 'job-run' && r.jobId && r.runStatus)
+    .map((r) => ({ jobId: r.jobId!, ok: r.runStatus === 'ok', endedAt: r.updatedAt, filed: r.runNew ?? r.runMatches ?? 0 }))
+  const sent = (await rt.store.actions.list({ since, status: ['succeeded'], limit: 1000 })).length
+  const facts = briefFacts({ since, away: q.away, items, runs, jobTitles, sent })
+
+  // Right now: team runs count once (at their lead), job runs by their job, chats by their own todo list.
+  const onPlan = new Set(plan.rows.map((r) => r.itemId))
+  const running: NowCandidate[] = []
+  for (const run of rt.teamRuns.values()) {
+    if (run.state !== 'running') continue
+    running.push({
+      target: { kind: 'session', id: run.leadSessionId },
+      title: run.card.goal || run.title,
+      updatedAt: rt.rows.get(run.leadSessionId)?.updatedAt ?? run.createdAt,
+      onPlan: onPlan.has(run.itemId),
+      todo: null,
+      team: { n: Math.min(run.step + 1, run.recipe.steps.length), of: run.recipe.steps.length },
+    })
+  }
+  for (const r of rows) {
+    if (r.kind !== 'chat' || !isRunning(rt.live.get(r.id)?.status) || teamRunOf(rt, r.id)) continue
+    const itemId = rt.sessionItem.get(r.id)
+    running.push({ target: { kind: 'session', id: r.id }, title: r.title, updatedAt: r.updatedAt, onPlan: !!itemId && onPlan.has(itemId), todo: await sessionProgress(rt, r.id), team: null })
+  }
+  for (const jobId of rt.runningJobs) {
+    running.push({ target: { kind: 'job', id: jobId }, title: `running the ${jobTitles.get(jobId) ?? 'scheduled'} job`, updatedAt: now, onPlan: false, todo: null, team: null })
+  }
+
+  const firstOpen = await isFirstOpen(rt)
+  const slack = slackConnected(rt) === true
+  const offerItems = items as OfferItem[]
+  let seen: JuniorSeen | null = null
+  if (firstOpen) {
+    // Every MCP server Claude Code can see is a source, by its plain name; triage's own server isn't one.
+    const conns = new Map<string, boolean>()
+    for (const c of rt.connectorCache?.connectors ?? []) {
+      if (c.server === RESERVED_SERVER || c.name === RESERVED_SERVER) continue
+      const name = c.name.replace(/^plugin:(?:[^:]+:)?/, '')
+      conns.set(name, (conns.get(name) ?? false) || c.status === 'connected')
+    }
+    seen = {
+      github: await ghLogin().catch(() => null),
+      sources: [...conns].map(([name, connected]) => ({ name, connected })).sort((a, b) => Number(b.connected) - Number(a.connected) || a.name.localeCompare(b.name)),
+      projects: projects.map((p) => p.name),
+    }
+  }
+
+  let routines: JuniorDay['routines'] = []
+  try {
+    const roots = await libraryRootsFor(rt)
+    routines = [...(await listLibrary('skill', roots)), ...(await listLibrary('agent', roots))]
+      .filter((e) => e.source === 'workspace')
+      .map((e) => ({ name: e.name, kind: e.kind, path: e.path }))
+  } catch (err) {
+    log('warn', 'junior', `could not list the workspace library: ${errText(err)}`, { workspace: rt.meta.id })
+  }
+
+  const you = await userFirstName()
+  return {
+    you: { name: you, initial: (you ?? 'You')[0].toUpperCase() },
+    firstOpen,
+    now: pickNow(running),
+    needs,
+    facts,
+    plan,
+    seen,
+    offers: firstOpen ? firstOffers(offerItems, { slack, now }) : [],
+    fill: canDoFill(offerItems, projects.map((p) => p.name), slack),
+    stuck: (await inboxAlerts(rt)).length > 0 || rows.some((r) => rt.live.get(r.id)?.status === 'error'),
+    routines,
+  }
+}
+
 const okResult = (text: string) => ({ content: [{ type: 'text' as const, text }] })
 const errResult = (text: string) => ({ content: [{ type: 'text' as const, text }], isError: true })
 
@@ -6974,6 +7360,61 @@ function makeTriageMcp(rt: WorkspaceRuntime) {
             return okResult(JSON.stringify(items, null, 2))
           } catch (err) {
             return errResult(err instanceof Error ? err.message : String(err))
+          }
+        },
+      ),
+      // Today's plan (core/junior/today.ts): get_today is a free read; the two writes prompt like any write.
+      tool(
+        'get_today',
+        "Today's plan: the work items the user and you mean to get through today, each with an owner (the user, or you) and a status. Done comes from the item itself; unfinished rows carried over from earlier days say so. Read it before planning work, and when the user mentions today.",
+        {},
+        async () => {
+          try {
+            return okResult(todayJson(await todayView(rt, await ensureToday(rt))))
+          } catch (err) {
+            return errResult(errText(err))
+          }
+        },
+      ),
+      tool(
+        'add_to_today',
+        "Put a work item on today's plan, or change whose it is today. Find the item first (list_work_items); if there is none, create it with create_work_item and pass its id. Ask whose it is when the user didn't say.",
+        {
+          itemId: z.string().describe('the work item, e.g. "github:owner/repo#12" or "manual:<uuid>"'),
+          owner: z.enum(['user', 'junior']).describe('whose it is today: "user" = the user does it, "junior" = you do'),
+        },
+        async (args) => {
+          try {
+            const { plan } = await addToTodayOp(rt, args, 'junior')
+            return okResult(`ok: ${args.itemId} is on today's plan, owned by ${args.owner === 'user' ? 'the user' : 'you'}\n${todayJson(plan)}`)
+          } catch (err) {
+            return errResult(`not added: ${errText(err)}`)
+          }
+        },
+      ),
+      tool(
+        'remove_from_today',
+        "Take a work item off today's plan. The item itself is untouched: it stays in the inbox, at its status.",
+        { itemId: z.string().describe('the work item on the plan') },
+        async (args) => {
+          try {
+            const { removed, plan } = await removeFromTodayOp(rt, args)
+            return okResult(`${removed ? 'ok: removed' : 'it was not on today\'s plan'}\n${todayJson(plan)}`)
+          } catch (err) {
+            return errResult(errText(err))
+          }
+        },
+      ),
+      tool(
+        'set_reply_style',
+        "Save how you reply to the user, in their words (About me → How I reply to you). Use it when they tell you how they want replies: tone, length, format. It shapes how you talk, never what you may do; the rules stay. Applies to new sessions.",
+        { text: z.string().max(400).describe("the user's preference, in a sentence or two, in their words; empty clears it") },
+        async (args) => {
+          try {
+            const p = await savePersonaOp(rt, { replyStyle: args.text })
+            return okResult(p.replyStyle ? `ok: saved. New sessions read: "${p.replyStyle}"` : 'ok: cleared')
+          } catch (err) {
+            return errResult(errText(err))
           }
         },
       ),
@@ -8809,6 +9250,58 @@ const server = http.createServer(async (req, res) => {
     return
   }
   // --- settings, briefs, playbooks, dispatch (.docs/next-version.md, phase 2) ---
+  // Junior (.docs/junior-goals-teams): the persona, the page's day, today's plan.
+  if (url.pathname === '/api/persona') {
+    let body: PersonaResponse
+    try {
+      if (req.method === 'GET') body = { ok: true, persona: rt.persona }
+      else if (req.method === 'PUT') body = { ok: true, persona: await savePersonaOp(rt, await readJsonBody(req, 10_000)) }
+      else throw new Error('method not allowed')
+    } catch (err) {
+      body = { ok: false, error: errText(err) }
+    }
+    json(body.ok ? 200 : 400, body)
+    return
+  }
+  if (url.pathname === '/api/junior' && req.method === 'GET') {
+    let body: JuniorDayResponse
+    try {
+      body = { ok: true, day: await juniorDayOp(rt, { since: Number(url.searchParams.get('since')), away: url.searchParams.get('away') === '1' }) }
+    } catch (err) {
+      body = { ok: false, error: errText(err) }
+    }
+    json(body.ok ? 200 : 502, body)
+    return
+  }
+  if (url.pathname === '/api/today/match' && req.method === 'GET') {
+    let body: TodayMatchResponse
+    try {
+      body = { ok: true, match: await matchTodayOp(rt, (url.searchParams.get('q') ?? '').slice(0, 300)) }
+    } catch (err) {
+      body = { ok: false, error: errText(err) }
+    }
+    json(body.ok ? 200 : 400, body)
+    return
+  }
+  if (url.pathname === '/api/today' || url.pathname.startsWith('/api/today/')) {
+    let body: TodayResponse
+    try {
+      if (url.pathname === '/api/today' && req.method === 'GET') body = { ok: true, plan: await todayView(rt, await ensureToday(rt)) }
+      else if (req.method !== 'POST') throw new Error('method not allowed')
+      else if (url.pathname === '/api/today/open') {
+        const raw = (await readJsonBody(req, 1_000).catch(() => null)) as { force?: unknown } | null
+        body = { ok: true, plan: await openTodayOp(rt, { force: raw?.force === true }) }
+      } else if (url.pathname === '/api/today/add') {
+        const raw = (await readJsonBody(req, 10_000)) as { by?: unknown } | null
+        body = { ok: true, plan: (await addToTodayOp(rt, raw, raw?.by === 'junior' ? 'junior' : 'you')).plan }
+      } else if (url.pathname === '/api/today/remove') body = { ok: true, plan: (await removeFromTodayOp(rt, await readJsonBody(req, 10_000))).plan }
+      else throw new Error('unknown route')
+    } catch (err) {
+      body = { ok: false, error: errText(err) }
+    }
+    json(body.ok ? 200 : 400, body)
+    return
+  }
   if (url.pathname === '/api/settings') {
     let body: SettingsResponse
     try {
@@ -9641,6 +10134,7 @@ wss.on('connection', (ws, req) => {
     terminals: rt.terminals.list(),
     checkouts: checkoutList(rt),
     build: BUILD,
+    persona: rt.persona,
   })
 
   ws.on('message', async (raw) => {

@@ -177,6 +177,31 @@ export const TOOLS = [
       required: ['id'],
     },
   },
+  // Today's plan (core/junior/today.ts) — one list for the user and Junior per local day.
+  {
+    name: 'get_today',
+    description:
+      "Today's plan: the work items the user and Junior mean to get through today, each with an owner and a status. Done comes from the item itself; unfinished rows from earlier days carry over and say so.",
+    inputSchema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'add_to_today',
+    description:
+      "Put a work item on today's plan, or change whose it is today. Find the item first (list_work_items); if there is none, create it with create_work_item and pass its id.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        itemId: { type: 'string', description: 'the work item, e.g. "github:owner/repo#12" or "manual:<uuid>"' },
+        owner: { type: 'string', enum: ['user', 'junior'], description: 'whose it is today: the user, or Junior' },
+      },
+      required: ['itemId', 'owner'],
+    },
+  },
+  {
+    name: 'remove_from_today',
+    description: "Take a work item off today's plan. The item itself is untouched: it stays in the inbox, at its status.",
+    inputSchema: { type: 'object', properties: { itemId: { type: 'string' } }, required: ['itemId'] },
+  },
   // Artifacts — markdown notes/briefs beside the inbox (.docs/next-version.md).
   {
     name: 'list_artifacts',
@@ -345,6 +370,21 @@ export async function callTool(
   if (name === 'resolve_work_item') {
     const body = (await api('/api/items/resolve', { id: args.id })) as { ok: boolean; error?: string }
     return body.ok ? { text: 'ok: done', isError: false } : { text: `rejected: ${body.error}`, isError: true }
+  }
+  if (name === 'get_today') {
+    const body = (await api('/api/today')) as { ok: boolean; plan?: unknown; error?: string }
+    return body.ok ? { text: JSON.stringify(body.plan, null, 2), isError: false } : { text: `failed: ${body.error}`, isError: true }
+  }
+  if (name === 'add_to_today') {
+    if (typeof args.itemId !== 'string' || !args.itemId) return { text: 'rejected: need a work-item id', isError: true }
+    if (args.owner !== 'user' && args.owner !== 'junior') return { text: 'rejected: owner is "user" or "junior"', isError: true }
+    const body = (await api('/api/today/add', { itemId: args.itemId, owner: args.owner, by: 'junior' })) as { ok: boolean; error?: string }
+    return body.ok ? { text: "ok: on today's plan", isError: false } : { text: `rejected: ${body.error}`, isError: true }
+  }
+  if (name === 'remove_from_today') {
+    if (typeof args.itemId !== 'string' || !args.itemId) return { text: 'rejected: need a work-item id', isError: true }
+    const body = (await api('/api/today/remove', { itemId: args.itemId })) as { ok: boolean; error?: string }
+    return body.ok ? { text: 'ok: removed', isError: false } : { text: `rejected: ${body.error}`, isError: true }
   }
   if (name === 'list_artifacts') {
     const body = (await api(`/api/artifacts${args.all === true ? '?all=1' : ''}`)) as {

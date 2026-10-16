@@ -30,7 +30,8 @@ import {
   type MouseEvent,
   type RefObject,
 } from 'react'
-import type { Project, ProjectsResponse } from '../../../shared/protocol.js'
+import type { Mood, Project, ProjectsResponse } from '../../../shared/protocol.js'
+import { JuniorFace } from './JuniorFace.js'
 import {
   CtxMenu,
   CtxMenuContent,
@@ -96,6 +97,10 @@ type Props = {
   /** A transient tab for a rail *index* (Jobs, Terminals, Artifacts). */
   pageTab?: PageTab | null
   onInbox: () => void
+  /** Junior's page, pinned first: the persona's name and the rail's mood */
+  onJunior: () => void
+  juniorName: string
+  juniorMood: Mood
   /** Set while the panel is hidden: its show button leads the band. */
   onShowPanel?: () => void
   onSelect: (key: string) => void
@@ -234,13 +239,16 @@ function useTabDrag(tabs: readonly OpenTab[], onReorder: (key: string, before: s
   return { bag, onStripDragLeave }
 }
 
-/** The tab band: Inbox pinned, one closable tab per open session or terminal, + for a new session. */
+/** The tab band: Junior and Inbox pinned, one closable tab per open session or terminal, + for a new session. */
 export function TabBand({
   activeKey,
   tabs,
   preview,
   pageTab,
   onInbox,
+  onJunior,
+  juniorName,
+  juniorMood,
   onShowPanel,
   onSelect,
   onClose,
@@ -266,6 +274,18 @@ export function TabBand({
           <PanelLeftOpen size={15} aria-hidden="true" />
         </button>
       )}
+      <button
+        type="button"
+        role="tab"
+        aria-selected={activeKey === 'junior'}
+        className={`tab lead${activeKey === 'junior' ? ' active' : ''}`}
+        onClick={onJunior}
+      >
+        <span className="jrTabFace">
+          <JuniorFace mood={juniorMood} size={14} motion="still" decorative />
+        </span>
+        <span className="t">{juniorName}</span>
+      </button>
       <button
         type="button"
         role="tab"

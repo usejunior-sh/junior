@@ -38,6 +38,7 @@ import type { ItemEvent, ItemStatus, StatusChange } from '../work/state.js'
 import type { FlowOverride } from '../work/flow.js'
 import type { ActionHistoryEntry, ActionKind, ActionRecord, ActionStatus } from '../actions/types.js'
 import type { NewJob, NewJobSlotRun, Job, JobRunResult, JobRunStart, JobRunStatus, JobRunTrigger, JobSlotFinish, JobSlotRun } from '../job/types.js'
+import type { TodayDay, TodayEntry } from '../junior/today.js'
 
 export type StoredSession = {
   id: string
@@ -358,6 +359,8 @@ export interface WorkItemStore {
   setFlowOverride(id: string, override: FlowOverride | null, actor: string): Promise<void>
   /** Items that went done at or after `since` and are still done ("Landed today"). */
   countDoneSince(since: number): Promise<number>
+  /** When each of these items last changed status (epoch ms) — a plan row's "done 06:10". Unknown ids are absent. */
+  statusTimes(ids: readonly string[]): Promise<Map<string, number>>
   /** Archived items whose latest archive was a Delete (`reason: 'deleted by user'`) — Archived's Deleted filter. */
   deletedIds(): Promise<Set<string>>
   /** The append-only transition log for one item, in order. */
@@ -488,6 +491,34 @@ export interface ActionStore {
   history(ids: string[]): Promise<Map<string, ActionHistoryEntry[]>>
 }
 
+/**
+ * Today's plan (core/junior/today.ts): rows per local day, plus each day's own
+ * record, so an emptied day stays opened and a removed row is not drafted back.
+ * Done is never stored here — it is the item's own status.
+ */
+export interface TodayStore {
+  /** The day's record, or null when it was never opened. */
+  day(date: string): Promise<TodayDay | null>
+  /**
+   * Open a day: its record and its first rows (the carry-overs), in one
+   * transaction. The record is INSERT OR IGNORE: false = someone opened it
+   * first, and the rows were not written.
+   */
+  openDay(day: TodayDay, rows: readonly TodayEntry[]): Promise<boolean>
+  /** The morning draft ran (whether or not it added anything). */
+  setDrafted(date: string, at: number): Promise<void>
+  /** One day's rows, in order. */
+  entries(date: string): Promise<TodayEntry[]>
+  /** The latest day before `date` with rows, and its rows — where carry-overs come from. */
+  lastBefore(date: string): Promise<{ date: string; entries: TodayEntry[] } | null>
+  /** Insert a row, or update its owner in place (a row keeps its position). */
+  put(e: TodayEntry): Promise<void>
+  /** Take a row off a day; false = it wasn't there. */
+  remove(date: string, itemId: string): Promise<boolean>
+  /** Has a plan ever existed in this workspace (any row, any drafted day)? */
+  everPlanned(): Promise<boolean>
+}
+
 export interface Store {
   sessions: SessionStore
   events: EventStore
@@ -503,5 +534,6 @@ export interface Store {
   links: LinkStore
   briefs: BriefJobStore
   actions: ActionStore
+  today: TodayStore
   close(): Promise<void>
 }
