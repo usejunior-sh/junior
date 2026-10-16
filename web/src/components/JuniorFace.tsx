@@ -110,6 +110,8 @@ class FaceCtl {
   target: Geo
   gaze = { x: 0, y: 0 }
   aim = { x: 0, y: 0 }
+  /** where to look instead of the pointer (-1…1 each way), or null */
+  look: { x: number; y: number } | null = null
   nextGlance = performance.now() + 800 + Math.random() * 2000
   blinkAt = performance.now() + 1500 + Math.random() * 3000
   blinkP = -1
@@ -151,7 +153,9 @@ class FaceCtl {
     this.cur.happy += dh * k
 
     const still = this.motion === 'still' || reduced()
-    if (!still && this.motion === 'follow' && pointer && now - pointer.t < 2500) {
+    if (!still && this.look) {
+      this.aim = { ...this.look }
+    } else if (!still && this.motion === 'follow' && pointer && now - pointer.t < 2500) {
       const r = this.els.svg.getBoundingClientRect()
       const dx = pointer.x - (r.left + r.width / 2)
       const dy = pointer.y - (r.top + r.height / 2)
@@ -245,11 +249,13 @@ type Props = {
   colour?: string
   /** decorative = hidden from assistive tech (a label beside it already names it) */
   decorative?: boolean
+  /** look here instead of at the pointer: x, y in -1…1 (down = +y); null = back to the pointer */
+  look?: { x: number; y: number } | null
   className?: string
 }
 
 /** Junior's face at any size. Colour and name come from the workspace's persona. */
-export const JuniorFace = memo(function JuniorFace({ mood = 'hello', size = 40, motion = 'wander', colour, decorative, className }: Props) {
+export const JuniorFace = memo(function JuniorFace({ mood = 'hello', size = 40, motion = 'wander', colour, decorative, className, look = null }: Props) {
   const persona = usePersona()
   const svg = useRef<SVGSVGElement>(null)
   const ctl = useRef<FaceCtl | null>(null)
@@ -290,6 +296,15 @@ export const JuniorFace = memo(function JuniorFace({ mood = 'hello', size = 40, 
   useEffect(() => {
     ctl.current?.setMood(mood)
   }, [mood])
+
+  const lx = look?.x
+  const ly = look?.y
+  useEffect(() => {
+    const c = ctl.current
+    if (!c) return
+    c.look = lx === undefined || ly === undefined ? null : { x: lx, y: ly }
+    if (!reduced()) wake(c)
+  }, [lx, ly])
 
   const label = `${persona.name}, ${MOOD_LABEL[mood].toLowerCase()}`
   return (

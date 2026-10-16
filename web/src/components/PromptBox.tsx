@@ -66,6 +66,8 @@ type Props = {
   draftKey?: string
   /** A send is already on its way (a worktree being made): send is locked and spins until it lands or fails. */
   busy?: boolean
+  /** Draw send as something else once it can send (Junior's face on a new session); `hover` = the pointer is on it. */
+  sendFace?: (hover: boolean) => ReactNode
 }
 
 /**
@@ -110,11 +112,15 @@ export function PromptBox({
   initialMentions,
   draftKey,
   busy,
+  sendFace,
 }: Props) {
   const box = useRef<HTMLTextAreaElement>(null)
   const filePicker = useRef<HTMLInputElement>(null)
   const [dragging, setDragging] = useState(false)
   const attach = useAttachments(draftKey)
+  const canSend = !!text.trim() || attach.images.length > 0
+  const faceOn = !!sendFace && canSend
+  const [sendHover, setSendHover] = useState(false)
   const mentions = useMentions(text, initialMentions)
 
   // --- the `@` picker ------------------------------------------------------
@@ -443,12 +449,20 @@ export function PromptBox({
           <button
             id="sendBtn"
             onClick={submit}
-            disabled={busy || (!text.trim() && attach.images.length === 0)}
+            disabled={busy || !canSend}
             title={busy ? 'Starting…' : sendTitle}
             aria-busy={busy || undefined}
-            className={busy ? 'busy' : undefined}
+            className={busy ? 'busy' : faceOn ? 'face' : undefined}
+            onPointerEnter={() => setSendHover(true)}
+            onPointerLeave={() => setSendHover(false)}
           >
-            {busy ? <LoaderCircle size={15} className="spin" aria-hidden="true" /> : <ArrowUp size={15} aria-hidden="true" />}
+            {busy ? (
+              <LoaderCircle size={15} className="spin" aria-hidden="true" />
+            ) : faceOn ? (
+              sendFace(sendHover)
+            ) : (
+              <ArrowUp size={15} aria-hidden="true" />
+            )}
           </button>
         </div>
       </div>

@@ -1850,6 +1850,56 @@ button.chip:hover:not(:disabled), .chip[data-state="open"] { color: var(--ink); 
 
 /* new-session home */
 #newSessionHome { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px; padding: 20px 40px; position: relative; }
+/* Junior's new session: the face asks in a bubble, reacts as you type, nods when you send.
+   Its colour (the persona's, as --junior) touches the glow, the bubble, the caret, the border
+   while you type and send — nothing else. */
+/* 22px from the page's gap + 14px here: about 36px between Junior's line and the box */
+#newSessionHome .nsWho { position: relative; display: flex; align-items: center; justify-content: center; gap: 16px; max-width: 760px; margin-bottom: 14px; }
+#newSessionHome .nsFace { position: relative; display: inline-flex; flex: none; }
+#newSessionHome .nsFace::before {
+  content: ""; position: absolute; inset: -40px; z-index: -1; border-radius: 50%; pointer-events: none;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--junior) 20%, transparent), transparent);
+}
+/* Junior's line beside its face: two-tone like the Junior page headline (muted greeting, ink question). */
+#newSessionHome .nsLine {
+  margin: 0; min-width: 0; font-family: var(--display); font-weight: 400; font-size: 2.2rem; line-height: 1.1; letter-spacing: -0.3px;
+  color: var(--ink); text-align: left; text-wrap: balance; min-height: 1.1em;
+}
+#newSessionHome .nsLine .g { color: var(--mute); }
+#newSessionHome .nsWho.handoff .nsFace { animation: nsNod 0.5s ease-in-out; }
+@keyframes nsNod {
+  0%, 100% { transform: none; }
+  30% { transform: translateY(6px) rotate(-4deg); }
+  60% { transform: translateY(-2px) rotate(2deg); }
+}
+#newSessionHome.junior #box { caret-color: var(--junior); }
+#newSessionHome.junior #sendBtn:not(:disabled) { background: var(--junior); color: #14121a; }
+#newSessionHome.junior #sendBtn:hover:not(:disabled) { background: color-mix(in srgb, var(--junior) 85%, white); }
+/* Once there's something to send, send is the primary button with Junior in it — the same white,
+   radius and height as the plain send, so it reads as the one bright control, not an oversized chip.
+   The face carries the colour. It pops in. */
+#sendBtn.face, #newSessionHome.junior #sendBtn.face:not(:disabled) {
+  width: auto; gap: 6px; padding: 0 9px 0 6px; font: inherit; font-size: 0.9231rem; font-weight: 500;
+  background: var(--ink); color: var(--on-primary); border-color: transparent;
+  animation: sendPillIn 0.2s ease-out;
+}
+#sendBtn.face:hover:not(:disabled), #newSessionHome.junior #sendBtn.face:hover:not(:disabled) { background: var(--primary-hover); }
+#sendBtn.face kbd { font-family: var(--mono); font-size: 0.8462rem; color: inherit; opacity: 0.55; background: none; border: 0; padding: 0; }
+@keyframes sendPillIn { from { transform: scale(0.85); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { #sendBtn.face { animation: none; } }
+#newSessionHome .nsPull { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; width: 100%; max-width: 760px; margin-top: -10px; font-size: 0.9231rem; color: var(--ash); }
+#newSessionHome .nsPullLb { margin-right: 2px; }
+#newSessionHome .nsPull .chip { display: inline-flex; align-items: center; gap: 6px; max-width: 280px; padding: 2px 4px 2px 10px; border: 1px solid color-mix(in srgb, var(--junior) 35%, var(--hair-strong)); border-radius: 999px; color: var(--body); }
+#newSessionHome .nsPull .chip b { font-family: var(--mono); font-weight: 500; font-size: 0.8462rem; color: var(--ink); }
+#newSessionHome .nsPull .chip .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#newSessionHome .nsPull .chip button { display: inline-grid; place-items: center; width: 18px; height: 18px; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--ash); cursor: pointer; }
+#newSessionHome .nsPull .chip button:hover { background: var(--wash-2); color: var(--ink); }
+@media (prefers-reduced-motion: reduce) { #newSessionHome .nsWho.handoff .nsFace { animation: none; } }
+/* Phones: a smaller line, still beside the face. */
+@media (max-width: 767px) {
+  #newSessionHome .nsWho { gap: 12px; }
+  #newSessionHome .nsLine { font-size: 1.6rem; }
+}
 #newSessionHome h2 { margin: 0; font-family: var(--display); font-weight: 400; font-size: 2.7692rem; letter-spacing: -0.36px; line-height: 1; color: var(--ink); }
 #newSessionHome #composer { width: 100%; padding: 0; display: flex; justify-content: center; }
 #newSessionHome .frame { width: 100%; }

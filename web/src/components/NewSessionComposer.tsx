@@ -1,7 +1,8 @@
 import * as RadioGroup from '@radix-ui/react-radio-group'
-import { Check, Folder, GitBranch, LoaderCircle, Plus } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { Check, Folder, GitBranch, LoaderCircle, Plus, X } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import {
+  MAX_MENTIONS_PER_MESSAGE,
   mentionToken,
   type BranchResponse,
   type CreateStep,
@@ -21,6 +22,95 @@ import { PromptBox } from './PromptBox.js'
 import { defaultProjectOf } from './ProjectPicker.js'
 import { CheckoutPicker } from './CheckoutPicker.js'
 import { PromptHead } from './PromptHead.js'
+import { JuniorFace } from './JuniorFace.js'
+import { usePersona, useYouName } from '../junior.js'
+import { inboxStore, useInbox } from '../inboxStore.js'
+import { sessionAsk } from '../../../core/junior/greeting.js'
+import type { Mood } from '../../../core/junior/mood.js'
+import { matchItem, refsIn, shortRef } from '../../../core/junior/today.js'
+import { offerFor } from '../../../core/junior/offers.js'
+
+const reducedMotion = () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
+
+/** How long the face nods "On it." before the session opens. */
+const HANDOFF_MS = 520
+/** No keystroke for this long, with something typed: Junior is thinking it over. */
+const PAUSE_MS = 1400
+
+/** Examples the empty box cycles through after the ones made from your own inbox. */
+const EXAMPLES = [
+  'Fix the failing test and show me the diff first',
+  'Read up on the auth flow and write me a note',
+  'Open the app at 390px and check the settings page',
+  'Draft release notes from this week’s merged PRs',
+  'Find why the build got slower and fix it',
+]
+
+/**
+ * The empty box's placeholder: examples that type themselves out, hold, erase
+ * and give way to the next. Reduced motion swaps whole lines every few seconds.
+ * `lines` must be stable between renders.
+ */
+function useRotating(lines: readonly string[], on: boolean): string {
+  const [shown, setShown] = useState('')
+  useEffect(() => {
+    if (!on || !lines.length) return
+    let i = 0
+    if (reducedMotion()) {
+      setShown(lines[0])
+      const t = setInterval(() => {
+        i = (i + 1) % lines.length
+        setShown(lines[i])
+      }, 4000)
+      return () => clearInterval(t)
+    }
+    let n = 0
+    let held = 0
+    let phase: 'type' | 'hold' | 'erase' = 'type'
+    const t = setInterval(() => {
+      const line = lines[i]
+      if (phase === 'type') {
+        n++
+        if (n >= line.length) phase = 'hold'
+      } else if (phase === 'hold') {
+        if (++held >= 55) phase = 'erase'
+      } else {
+        n = Math.max(0, n - 3)
+        if (n === 0) {
+          i = (i + 1) % lines.length
+          held = 0
+          phase = 'type'
+        }
+      }
+      setShown(line.slice(0, n))
+    }, 40)
+    return () => clearInterval(t)
+  }, [on, lines])
+  return shown
+}
+
+/**
+ * Junior's line, typed in once: `text` grows a character at a time until it is
+ * all there. Reduced motion shows it whole. A new `text` types again.
+ */
+function useTyped(text: string): string {
+  const [n, setN] = useState(() => (reducedMotion() ? text.length : 0))
+  useEffect(() => {
+    if (reducedMotion()) {
+      setN(text.length)
+      return
+    }
+    setN(0)
+    let i = 0
+    const t = setInterval(() => {
+      i++
+      setN(i)
+      if (i >= text.length) clearInterval(t)
+    }, 24)
+    return () => clearInterval(t)
+  }, [text])
+  return text.slice(0, n)
+}
 
 export type NewSession = {
   title: string
@@ -155,6 +245,60 @@ export function NewSessionComposer({ draft, onChange, onCreate, error, step }: P
   // overwritten by a pick made there.
   const [provider, setProvider] = useState<ProviderId>('claude')
   const onClaude = provider === 'claude'
+  const persona = usePersona()
+  const you = useYouName()
+
+  // Junior's line in the bubble: a greeting by time of day, then the question; "On it." once you send.
+  const [handoff, setHandoff] = useState(false)
+  useEffect(() => {
+    if (error) setHandoff(false)
+  }, [error])
+  const { greet, ask } = useMemo(() => sessionAsk(Date.now(), persona.voice, you), [persona.voice, you])
+  const question = job ? 'Tell me about the job.' : goal ? 'Tell me about the goal.' : draft.label ? 'Anything I should know before I start?' : ask
+  const said = useTyped(handoff ? 'On it.' : `${greet} ${question}`)
+
+  // The face: listens while you type, thinks when you pause, nods when you send.
+  const [typing, setTyping] = useState(false)
+  const pauseTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  useEffect(() => () => clearTimeout(pauseTimer.current), [])
+  const hasText = !!draft.text.trim()
+  const mood: Mood = handoff ? 'done' : making ? 'working' : !hasText ? 'hello' : typing ? 'listen' : 'think'
+  const look = handoff ? null : hasText && typing ? { x: 0, y: 1 } : hasText ? { x: 0.55, y: -0.6 } : null
+
+  // "I'll pull in…": refs typed in the message that name a real work item ride along as @item mentions.
+  const inbox = useInbox()
+  useEffect(() => {
+    if (!inbox.loaded && !inbox.loading) void inboxStore.refresh()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  // The empty box cycles examples: what Junior would do with your top inbox items first, then general ones.
+  const topKey = inbox.items
+    .filter((i) => i.kind !== 'digest' && i.group !== 'fyi')
+    .slice(0, 3)
+    .map((i) => i.id)
+    .join('|')
+  const examples = useMemo(() => {
+    const now = Date.now()
+    const own = inbox.items
+      .filter((i) => i.kind !== 'digest' && i.group !== 'fyi')
+      .slice(0, 3)
+      .map((i) => offerFor(i, now).title)
+    return [...own, ...EXAMPLES]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [topKey])
+  const example = useRotating(examples, onClaude && !job && !goal && !draft.label && !hasText)
+
+  const [dropped, setDropped] = useState<string[]>([])
+  const pulled = useMemo(() => {
+    const out: { id: string; title: string; ref: string }[] = []
+    for (const r of refsIn(draft.text)) {
+      const hit = matchItem(r, inbox.items)
+      const item = hit && inbox.items.find((i) => i.id === hit.id)
+      if (!item || item.id === draft.itemId || dropped.includes(item.id) || out.some((o) => o.id === item.id)) continue
+      out.push({ id: item.id, title: item.title, ref: shortRef(item) })
+    }
+    return out
+  }, [draft.text, inbox.items, dropped, draft.itemId])
 
   useEffect(() => {
     void fetch('/api/projects')
@@ -181,9 +325,31 @@ export function NewSessionComposer({ draft, onChange, onCreate, error, step }: P
   }, [cwd])
 
   return (
-    <div id="newSessionHome">
-      <div className="glow blue" aria-hidden="true" />
-      <h2>{job ? 'Tell Junior about the job.' : goal ? 'Tell Junior about the goal.' : draft.label ? 'Dispatching.' : 'What are we working on?'}</h2>
+    <div id="newSessionHome" className={onClaude ? 'junior' : undefined} style={{ '--junior': persona.colour } as CSSProperties}>
+      <div className={`glow ${onClaude ? 'junior' : 'blue'}`} aria-hidden="true" />
+      {onClaude ? (
+        // Junior is Claude here: it asks, its face beside the line, and the face reacts to you.
+        <div className={`nsWho${handoff ? ' handoff' : ''}`}>
+          <span className="nsFace">
+            <JuniorFace mood={mood} size={56} motion="follow" look={look} />
+          </span>
+          <h2 className="nsLine" aria-label={handoff ? 'On it.' : `${greet} ${question}`}>
+            <span aria-hidden="true">
+              {handoff ? (
+                said
+              ) : (
+                <>
+                  <span className="g">{said.slice(0, greet.length)}</span>
+                  {said.slice(greet.length)}
+                </>
+              )}
+            </span>
+          </h2>
+        </div>
+      ) : (
+        // A connected agent (Codex) gets the plain heading.
+        <h2>{job ? 'Tell me about the job.' : goal ? 'Tell me about the goal.' : draft.label ? 'Dispatching.' : 'What are we working on?'}</h2>
+      )}
       {draft.itemId && canPick && mainCo && !goal && (
         <div className="runIn">
           <span className="lbl" id={`runin-${draft.id}`}>
@@ -234,19 +400,43 @@ export function NewSessionComposer({ draft, onChange, onCreate, error, step }: P
         }
         cwd={cwd}
         text={draft.text}
-        onTextChange={(text) => onChange({ text })}
+        onTextChange={(text) => {
+          onChange({ text })
+          setTyping(true)
+          clearTimeout(pauseTimer.current)
+          pauseTimer.current = setTimeout(() => setTyping(false), PAUSE_MS)
+        }}
         placeholder={
           job
             ? 'What should it do, how often, and what must it never do? e.g. “Every weekday at 9, find PRs waiting on my review”'
             : goal
               ? 'What is the outcome, and how will we know it’s done? e.g. “CI green on main, the flaky test fixed”'
-              : 'Describe what you want to work on — a bug, a feature, a question…'
+              : onClaude
+                ? draft.label
+                  ? `Tell ${persona.name} what to work on — a bug, a feature, a question…`
+                  : `Try: ${example}`
+                : 'Describe what you want to work on — a bug, a feature, a question…'
         }
         focusKey={draft.id}
         sendTitle="Start the session (Enter)"
-        busy={!!making}
+        busy={!!making || handoff}
+        // Send, once there's something to send, is a pill with Junior in it: "Send ↵" keeps it unmistakable, the face
+        // only blinks (looking straight out) so the big face by the greeting stays the one that's alive.
+        sendFace={
+          onClaude
+            ? (hover) => (
+                <>
+                  <JuniorFace mood={hover ? 'listen' : 'hello'} size={18} motion="wander" look={{ x: 0, y: 0 }} decorative />
+                  <span>Send</span>
+                  <kbd aria-hidden="true">↵</kbd>
+                </>
+              )
+            : undefined
+        }
         initialMentions={draft.mentions}
-        onSubmit={(text, images, mentions) => {
+        onSubmit={(text, images, picked) => {
+          const typedIn = pulled.filter((p) => !picked?.some((m) => m.kind === 'item' && m.ref === p.id)).map((p) => ({ kind: 'item' as const, ref: p.id, label: p.title }))
+          const mentions = [...(picked ?? []), ...typedIn].slice(0, MAX_MENTIONS_PER_MESSAGE)
           const newBranch = isNew ? (draft.newBranch?.trim() || branchFromTitle(text)) : ''
           const existing = isNew ? projectCheckouts.find((c) => c.kind === 'worktree' && c.branch === newBranch) : undefined
           if (isNew && !existing && !plausibleBranch(newBranch)) {
@@ -254,27 +444,34 @@ export function NewSessionComposer({ draft, onChange, onCreate, error, step }: P
             return
           }
           setLocalError(null)
-          if (isNew && !existing) setMaking(newBranch)
-          onCreate({
-            title: prefix ? `${prefix}${titleFrom(text, mentions)}` : (draft.label ?? titleFrom(text, mentions)),
-            cwd: draft.cwd ?? fallback?.path ?? '',
-            firstMessage: `${prefix}${text}`,
-            model,
-            effort,
-            fastMode: onClaude && fastMode,
-            permissionMode,
-            ...(onClaude ? {} : { provider }),
-            images,
-            mentions,
-            ...(draft.itemId ? { itemId: draft.itemId } : {}),
-            ...(existing
-              ? { checkoutId: existing.id }
-              : isNew
-                ? { worktree: { branch: newBranch } }
-                : pickedCo
-                  ? { checkoutId: pickedCo.id }
-                  : {}),
-          })
+          const go = () => {
+            if (isNew && !existing) setMaking(newBranch)
+            onCreate({
+              title: prefix ? `${prefix}${titleFrom(text, mentions)}` : (draft.label ?? titleFrom(text, mentions)),
+              cwd: draft.cwd ?? fallback?.path ?? '',
+              firstMessage: `${prefix}${text}`,
+              model,
+              effort,
+              fastMode: onClaude && fastMode,
+              permissionMode,
+              ...(onClaude ? {} : { provider }),
+              images,
+              mentions,
+              ...(draft.itemId ? { itemId: draft.itemId } : {}),
+              ...(existing
+                ? { checkoutId: existing.id }
+                : isNew
+                  ? { worktree: { branch: newBranch } }
+                  : pickedCo
+                    ? { checkoutId: pickedCo.id }
+                    : {}),
+            })
+          }
+          // Junior nods "On it." first; the session opens as the nod ends.
+          if (onClaude && !reducedMotion()) {
+            setHandoff(true)
+            setTimeout(go, HANDOFF_MS)
+          } else go()
         }}
         model={model}
         effort={effort}
@@ -302,6 +499,20 @@ export function NewSessionComposer({ draft, onChange, onCreate, error, step }: P
           writeSessionDefaults({ permissionMode: m })
         }}
       />
+      {pulled.length > 0 && (
+        <div className="nsPull" aria-live="polite">
+          <span className="nsPullLb">{onClaude ? "I'll pull in" : 'Attaching'}</span>
+          {pulled.map((p) => (
+            <span key={p.id} className="chip" title={p.title}>
+              <b>{p.ref}</b>
+              <span className="t">{p.title}</span>
+              <button type="button" aria-label={`Don't attach ${p.ref}`} title="Don't attach" onClick={() => setDropped((d) => [...d, p.id])}>
+                <X size={11} aria-hidden="true" />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
       {(localError || (error && !making)) && (
         <p className="composeError" role="alert">
           {localError ?? error?.message}

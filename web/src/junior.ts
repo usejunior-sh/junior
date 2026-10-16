@@ -25,6 +25,24 @@ export function usePersona(): Persona {
   return useSyncExternalStore(store.subscribeStructural, store.getPersona)
 }
 
+/** What Junior calls you, read once per page load ("Samar"); null until known or when the Mac has no name. */
+let youName: Promise<string | null> | null = null
+export function useYouName(): string | null {
+  const [you, setYou] = useState<string | null>(null)
+  useEffect(() => {
+    youName ??= fetch('/api/persona')
+      .then((r) => r.json() as Promise<PersonaResponse>)
+      .then((b) => (b.ok ? (b.you ?? null) : null))
+      .catch(() => null)
+    let live = true
+    void youName.then((n) => live && setYou(n))
+    return () => {
+      live = false
+    }
+  }, [])
+  return you
+}
+
 /** Save a patch onto the persona. Resolves to the saved persona, or the error to show. */
 export async function savePersona(patch: Partial<Persona>): Promise<Persona | string> {
   try {
