@@ -7,13 +7,14 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { briefText, byPerson, composeBrief, type BriefFacts, type Segment } from '../core/junior/brief.js'
 import { briefFacts, type FactItem } from '../core/junior/facts.js'
-import { awayWindow, AWAY_GAP_MS, dayPart, headline, startOfDay, waitedWords } from '../core/junior/greeting.js'
+import { awayWindow, AWAY_GAP_MS, dayPart, headline, sessionAsk, startOfDay, waitedWords } from '../core/junior/greeting.js'
 import { pageMood, railMood } from '../core/junior/mood.js'
+import { morningBrief, overdueCount, type MorningItem } from '../core/junior/morning.js'
 import { needsRows, sendsTitle } from '../core/junior/needs.js'
 import { pickNow, todoProgress } from '../core/junior/now.js'
 import { canDoCards, canDoFill, firstOffers, sentenceOf, type OfferItem } from '../core/junior/offers.js'
 import { DEFAULT_PERSONA, RULES_PROMPT, RULES_PROMPT_HEADLESS, cleanName, personaAppend, personaFrom } from '../core/junior/persona.js'
-import { carryOver, dayKey, draftPlan, matchItem, planRows, shortRef, type PlanItem, type TodayEntry } from '../core/junior/today.js'
+import { carryOver, dayKey, draftPlan, matchItem, planRows, refsIn, shortRef, type PlanItem, type TodayEntry } from '../core/junior/today.js'
 import { openSqliteStore } from '../core/store/sqlite.js'
 
 const MIN = 60_000
@@ -224,6 +225,98 @@ test('brief facts: finished from the flow, jobs from their runs, arrivals by sou
       ['Priya', 'reply', '#api'],
     ],
   )
+})
+
+// ---------------------------------------------------------------------------
+// The morning brief: people, due, review, while you were away
+// ---------------------------------------------------------------------------
+
+test('morning brief: people oldest first, reviews then my work, due by lateness — each item once', () => {
+  const item = (over: Partial<MorningItem>): MorningItem => ({
+    id: 'x',
+    title: 't',
+    source: 'github',
+    kind: 'mention',
+    repo: 'acme/api',
+    author: 'someone',
+    url: '',
+    peopleWaiting: 0,
+    createdAt: iso(NOW - DAY),
+    ingestedAt: NOW - DAY,
+    ...over,
+  })
+  const yesterday = startOfDay(NOW) - DAY
+  const items: MorningItem[] = [
+    item({ id: 'slack:dana', source: 'slack', repo: 'infra', label: 'reply', author: 'Dana', createdAt: iso(NOW - 3 * HOUR) }),
+    item({ id: 'slack:priya', source: 'slack', repo: 'launch', label: 'decide', author: 'Priya', createdAt: iso(NOW - 2 * DAY) }),
+    // a review request that is also due today reads as a review, once
+    item({ id: 'github:acme/api#507', title: 'Move retries', label: 'review', author: 'Anirudha', createdAt: iso(NOW - 9 * HOUR), dueSource: 'you', dueAt: startOfDay(NOW) }),
+    item({ id: 'github:acme/api#512', title: 'Fix dates', kind: 'own-pr-open', label: 'do', flow: { stage: 'review', turn: 'me', since: NOW - HOUR } }),
+    item({ id: 'github:acme/api#513', title: 'Report done', kind: 'own-pr-approved', label: 'do', flow: { stage: 'review', turn: 'me', since: NOW - HOUR } }),
+    item({ id: 'linear:NOV-121', source: 'linear', title: 'Login loop', kind: 'ticket-assigned', label: 'do', dueSource: 'explicit', dueAt: yesterday }),
+    item({ id: 'linear:NOV-138', source: 'linear', title: 'Release notes', kind: 'ticket-assigned', label: 'do', dueSource: 'explicit', dueAt: startOfDay(NOW) }),
+    item({ id: 'linear:NOV-130', source: 'linear', title: 'SAML', kind: 'ticket-assigned', label: 'do', dueSource: 'explicit', dueAt: startOfDay(NOW) + 2 * DAY }),
+    // Junior's turn, done, a digest and your own to-do never count as people waiting
+    item({ id: 'slack:wei', source: 'slack', label: 'reply', author: 'Wei', flow: { stage: 'working', turn: 'ai', since: NOW } }),
+    item({ id: 'slack:old', source: 'slack', label: 'reply', status: 'done' }),
+    item({ id: 'job:d', source: 'job', kind: 'digest', label: 'read', peopleWaiting: 2 }),
+    item({ id: 'manual:a', source: 'manual', kind: 'manual', label: 'do', peopleWaiting: 1 }),
+    // FYI that arrived in the window: skipped
+    item({ id: 'slack:fyi', source: 'slack', label: 'read', group: 'fyi', ingestedAt: NOW - HOUR }),
+  ]
+  const facts = { since: NOW - 12 * HOUR, away: true, finished: [{ kind: 'job' as const, jobId: 'm', title: 'Mentions', runs: 2, filed: 1 }], sent: 3, arrived: [{ label: 'Slack', count: 4 }], blocking: [] }
+  const b = morningBrief({ items, facts, now: NOW })
+  assert.deepEqual(b.people.map((r) => [r.who, r.ask, r.ref]), [
+    ['Priya', 'decide', '#launch'],
+    ['Dana', 'reply', '#infra'],
+  ])
+  assert.deepEqual(b.review.map((r) => [r.ref, !!r.mine]), [
+    ['#507', false],
+    ['#513', true],
+  ])
+  assert.deepEqual(b.due.map((r) => [r.ref, r.late]), [
+    ['NOV-121', 1],
+    ['NOV-138', 0],
+  ])
+  assert.equal(overdueCount(b), 1)
+  assert.equal(b.away.skipped, 1)
+  assert.deepEqual(b.away.jobs.map((j) => j.title), ['Mentions'])
+  assert.equal(b.away.sent, 3)
+  assert.deepEqual(b.start, { itemId: 'slack:priya', title: 't', why: 'Priya has waited 2 days' })
+})
+
+test('morning brief: start with the overdue thing when nobody waits, nothing when the day is clear', () => {
+  const facts = { since: NOW - HOUR, away: false, finished: [], sent: 0, arrived: [], blocking: [] }
+  const late: MorningItem = { id: 'linear:NOV-1', title: 'Late one', source: 'linear', kind: 'ticket-assigned', repo: '', author: '', url: '', peopleWaiting: 0, createdAt: iso(NOW - DAY), label: 'do', dueSource: 'explicit', dueAt: startOfDay(NOW) - 3 * DAY }
+  assert.deepEqual(morningBrief({ items: [late], facts, now: NOW }).start, { itemId: 'linear:NOV-1', title: 'Late one', why: 'it was due 3 days ago' })
+  assert.equal(morningBrief({ items: [], facts, now: NOW }).start, null)
+})
+
+test('new session: the bubble greets by time of day, by name when known, in each voice', () => {
+  assert.deepEqual(sessionAsk(at(9), 'plain', 'Samar'), { greet: 'Morning, Samar.', ask: 'What are we working on?' })
+  assert.deepEqual(sessionAsk(at(14), 'plain', null), { greet: 'Afternoon.', ask: 'What are we working on?' })
+  assert.deepEqual(sessionAsk(at(20), 'warm', 'Samar'), { greet: 'Good evening, Samar!', ask: 'What are we working on today?' })
+  assert.deepEqual(sessionAsk(at(20), 'terse', 'Samar'), { greet: 'Evening.', ask: "What's next?" })
+})
+
+test('refs in a message: links, #numbers, ticket keys — once each, in order', () => {
+  assert.deepEqual(refsIn('Fix #511 and NOV-140, see https://github.com/acme/api/pull/507. Also #511 again'), [
+    'https://github.com/acme/api/pull/507',
+    '#511',
+    'NOV-140',
+  ])
+  // a heading, a URL's own #anchor, and lower-case words are not refs
+  assert.deepEqual(refsIn('## Plan\nread https://x.dev/doc#12 and nov-1'), ['https://x.dev/doc#12'])
+})
+
+test('headline: people waiting and overdue come before the needs count', () => {
+  const base = { now: at(9), name: 'Junior', you: 'Samar', firstOpen: false, needs: 2, plan: { done: 0, total: 3 } }
+  assert.equal(headline({ ...base, voice: 'plain', people: 3, overdue: 1 }).news, 'Three people are waiting on you, and one thing is overdue.')
+  assert.equal(headline({ ...base, voice: 'plain', people: 1, overdue: 0 }).news, 'One person is waiting on you.')
+  assert.equal(headline({ ...base, voice: 'warm', people: 1, overdue: 0 }).news, 'Just one person is waiting on you.')
+  assert.equal(headline({ ...base, voice: 'plain', people: 0, overdue: 2 }).news, 'Two things are overdue.')
+  assert.equal(headline({ ...base, voice: 'terse', people: 3, overdue: 1 }).news, '3 waiting, 1 overdue.')
+  assert.equal(headline({ ...base, voice: 'plain', people: 0, overdue: 0 }).news, 'Two things need you.')
 })
 
 // ---------------------------------------------------------------------------

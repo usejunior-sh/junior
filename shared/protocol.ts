@@ -1512,9 +1512,17 @@ export type { Blocking, BriefFacts, BriefRef, BriefTarget, Finished, Segment } f
 export type { NeedsRow, NeedsTarget } from '../core/junior/needs.js'
 export type { AddedBy, Owner, PlanRow, PlanStatus, PlanView, TodayEntry } from '../core/junior/today.js'
 export type { CanDoFill, Offer } from '../core/junior/offers.js'
+export type { MorningBrief, MorningRow } from '../core/junior/morning.js'
 
 /** GET/PUT /api/persona — the workspace's persona; PUT takes a partial patch. */
-export type PersonaResponse = { ok: true; persona: import('../core/junior/persona.js').Persona } | { ok: false; error: string }
+export type PersonaResponse =
+  | {
+      ok: true
+      persona: import('../core/junior/persona.js').Persona
+      /** what Junior calls you: the first word of the Mac's full name (GET only) */
+      you?: string | null
+    }
+  | { ok: false; error: string }
 
 /** Where Junior is right now: the most relevant live session or job run, or free. */
 export type JuniorNow =
@@ -1548,8 +1556,12 @@ export type JuniorDay = {
   needs: import('../core/junior/needs.js').NeedsRow[]
   facts: import('../core/junior/brief.js').BriefFacts
   plan: import('../core/junior/today.js').PlanView
-  /** first open only */
+  /** what Junior can see on this Mac: the sidebar's "Can see", and the first open's list */
   seen: JuniorSeen | null
+  /** the morning brief: people waiting, due today, to review, while you were away */
+  morning: import('../core/junior/morning.js').MorningBrief
+  /** jobs switched on here: "running for you" */
+  jobsOn: number
   /** first open only: 3–4 starters built from the top items */
   offers: import('../core/junior/offers.js').Offer[]
   /** the What I can do blanks */

@@ -229,6 +229,20 @@ function todoNote(item: PlanItem): string | null {
 // "Also today…": find the work item someone means
 // ---------------------------------------------------------------------------
 
+/**
+ * The references in a message, in order: links, "#455", "NOV-123". What the
+ * new-session composer offers to pull in as items; each is looked up with
+ * matchItem, so only refs that name a real item turn into anything.
+ */
+export function refsIn(text: string): string[] {
+  const out = new Set<string>()
+  for (const m of text.matchAll(/https?:\/\/[^\s)>\]]+/g)) out.add(m[0].replace(/[.,;:!?]+$/, ''))
+  const rest = text.replace(/https?:\/\/\S+/g, ' ')
+  for (const m of rest.matchAll(/(?:^|[\s(])#(\d+)\b/g)) out.add(`#${m[1]}`)
+  for (const m of rest.matchAll(/\b([A-Z][A-Z0-9]+-\d+)\b/g)) out.add(m[1])
+  return [...out]
+}
+
 /** What the matcher reads of an item. */
 export type MatchItem = { id: string; title: string; url: string; refs?: string[]; urls?: string[]; score?: number }
 

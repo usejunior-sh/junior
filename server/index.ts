@@ -424,6 +424,7 @@ import { DEFAULT_PERSONA, personaAppend, personaFrom, type Persona } from '../co
 import { needsRows, type SendsSource, type TeamSource } from '../core/junior/needs.js'
 import { pickNow, todoProgress, type NowCandidate, type TodoProgress } from '../core/junior/now.js'
 import { briefFacts, type FactRun } from '../core/junior/facts.js'
+import { morningBrief } from '../core/junior/morning.js'
 import { canDoFill, firstOffers, type OfferItem } from '../core/junior/offers.js'
 import { carryOver, dayKey, draftPlan, isOwner, matchItem, planRows, shortRef, type AddedBy, type Owner, type PlanItem, type PlanRow, type PlanSession, type PlanView } from '../core/junior/today.js'
 import { AGENTS_ARG, SKILLS_ARG, callTool as callMcpTool, PROTOCOL_VERSION as MCP_PROTOCOL_VERSION, TOOLS as MCP_TOOLS } from '../core/mcp/tools.js'
@@ -7616,7 +7617,7 @@ async function juniorDayOp(rt: WorkspaceRuntime, q: { since: number; away: boole
   const slack = slackConnected(rt) === true
   const offerItems = items as OfferItem[]
   let seen: JuniorSeen | null = null
-  if (firstOpen) {
+  {
     // Every MCP server Claude Code can see is a source, by its plain name; triage's own server isn't one.
     const conns = new Map<string, boolean>()
     for (const c of rt.connectorCache?.connectors ?? []) {
@@ -7654,6 +7655,8 @@ async function juniorDayOp(rt: WorkspaceRuntime, q: { since: number; away: boole
     fill: canDoFill(offerItems, projects.map((p) => p.name), slack),
     stuck: (await inboxAlerts(rt)).length > 0 || rows.some((r) => rt.live.get(r.id)?.status === 'error'),
     routines,
+    morning: morningBrief({ items, facts, now }),
+    jobsOn: jobs.filter((j) => j.enabled).length,
   }
 }
 
@@ -9592,7 +9595,7 @@ const server = http.createServer(async (req, res) => {
   if (url.pathname === '/api/persona') {
     let body: PersonaResponse
     try {
-      if (req.method === 'GET') body = { ok: true, persona: rt.persona }
+      if (req.method === 'GET') body = { ok: true, persona: rt.persona, you: await userFirstName() }
       else if (req.method === 'PUT') body = { ok: true, persona: await savePersonaOp(rt, await readJsonBody(req, 10_000)) }
       else throw new Error('method not allowed')
     } catch (err) {

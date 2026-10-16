@@ -30,6 +30,10 @@ export type HeadlineInput = {
   firstOpen: boolean
   /** rows under Needs you */
   needs: number
+  /** people waiting on you (the morning brief's first section) */
+  people?: number
+  /** things past their due day */
+  overdue?: number
   plan: { done: number; total: number }
 }
 
@@ -78,6 +82,9 @@ function news(h: HeadlineInput, part: DayPart): string {
     if (voice === 'terse') return `${plan.done} out of ${plan.total}.`
     return `${plan.done} of ${plan.total} done${voice === 'warm' ? ' today' : ''}.`
   }
+  const people = h.people ?? 0
+  const overdue = h.overdue ?? 0
+  if (people > 0 || overdue > 0) return waitingNews(people, overdue, voice)
   if (needs > 0) {
     if (voice === 'terse') return `${needs} need${needs === 1 ? 's' : ''} you.`
     if (needs === 1) return voice === 'warm' ? 'Just one thing needs you.' : 'One thing needs you.'
@@ -85,6 +92,28 @@ function news(h: HeadlineInput, part: DayPart): string {
   }
   if (voice === 'terse') return 'All clear.'
   return voice === 'warm' ? 'Nothing needs you right now.' : 'Nothing needs you.'
+}
+
+/** "Three people are waiting on you, and one thing is overdue." */
+function waitingNews(people: number, overdue: number, voice: Voice): string {
+  if (voice === 'terse') return [people > 0 ? `${people} waiting` : '', overdue > 0 ? `${overdue} overdue` : ''].filter(Boolean).join(', ') + '.'
+  const who = people === 1 ? (voice === 'warm' ? 'Just one person is waiting on you' : 'One person is waiting on you') : `${cap(numberWord(people))} people are waiting on you`
+  const late = overdue === 1 ? 'one thing is overdue' : `${numberWord(overdue)} things are overdue`
+  if (people > 0 && overdue > 0) return `${who}, and ${late}.`
+  if (people > 0) return `${who}.`
+  return `${cap(late)}.`
+}
+
+/**
+ * What Junior says on a new session, in a speech bubble: a greeting by time of
+ * day, then the question. "Evening, Samar." + "What are we working on?"
+ */
+export function sessionAsk(now: number, voice: Voice, you: string | null): { greet: string; ask: string } {
+  const part = dayPart(now)
+  const word = part === 'morning' ? 'Morning' : part === 'afternoon' ? 'Afternoon' : 'Evening'
+  if (voice === 'terse') return { greet: `${word}.`, ask: "What's next?" }
+  if (voice === 'warm') return { greet: you ? `Good ${word.toLowerCase()}, ${you}!` : `Good ${word.toLowerCase()}!`, ask: 'What are we working on today?' }
+  return { greet: you ? `${word}, ${you}.` : `${word}.`, ask: 'What are we working on?' }
 }
 
 /** Local midnight at or before `now`. */
