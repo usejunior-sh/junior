@@ -368,6 +368,8 @@ kbd { font-family: var(--mono); font-size: 0.8462rem; color: var(--ash); border:
 .glow.green { background: radial-gradient(closest-side, var(--glow-green), transparent); }
 .glow.yellow { background: radial-gradient(closest-side, var(--glow-yellow), transparent); }
 .glow.red { background: radial-gradient(closest-side, var(--glow-red), transparent); }
+/* Junior's own pages: the glow takes a little of its colour (--junior, the persona's) over the blue. */
+.glow.junior { background: radial-gradient(closest-side, color-mix(in srgb, var(--junior) 18%, var(--glow-blue)), transparent); opacity: 0.4; }
 
 /* ---------- app shell ---------- */
 .app { height: 100%; display: flex; flex-direction: column; background: var(--canvas); }

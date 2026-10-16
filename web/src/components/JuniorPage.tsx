@@ -1,24 +1,31 @@
 /**
- * The Junior tab (.docs/junior-goals-teams, direction E): one centred column,
- * like a transcript. The face, where Junior is right now, a two-tone serif
- * headline, the brief (a paragraph, composed from facts, references inline),
- * then Today · What I can do · About me and "New chat with {name}" (⌘J).
+ * The Junior page (.docs/junior-goals-teams/junior-home-v2.html, variation J):
+ * Junior on the left, the day on the right. The sidebar is Junior's card —
+ * Chat (⌘J), right now, what it can see, what it can do, Customize. The
+ * right side is a two-tone serif headline over three tabs: Morning brief,
+ * Today's goals, Blocked on you. "What I can do" in full and the persona open
+ * in a sheet over the page.
  */
+import * as Dialog from '@radix-ui/react-dialog'
 import * as Tabs from '@radix-ui/react-tabs'
-import { useMemo, useState } from 'react'
-import type { BriefTarget, JuniorDay, JuniorNow, Segment } from '../../../shared/protocol.js'
-import { composeBrief } from '../../../core/junior/brief.js'
+import { X } from 'lucide-react'
+import { useMemo, useState, type CSSProperties } from 'react'
+import type { JuniorDay } from '../../../shared/protocol.js'
 import { headline } from '../../../core/junior/greeting.js'
+import { overdueCount } from '../../../core/junior/morning.js'
 import { pageMood } from '../../../core/junior/mood.js'
-import { itemHash, useWorkspaceId } from '../hooks.js'
-import { startJuniorChat, useAwayWindow, useJuniorDay, usePersona } from '../junior.js'
-import { MOD_LABEL } from '../keys.js'
+import { useWorkspaceId } from '../hooks.js'
+import { useAwayWindow, useJuniorDay, usePersona } from '../junior.js'
 import { JuniorAbout } from './JuniorAbout.js'
+import { JuniorBrief } from './JuniorBrief.js'
 import { JuniorCanDo } from './JuniorCanDo.js'
-import { JuniorFace } from './JuniorFace.js'
-import { JuniorToday } from './JuniorToday.js'
+import { JuniorSide } from './JuniorSide.js'
+import { JuniorBlocked, JuniorFirstOpen, JuniorGoals } from './JuniorToday.js'
 
-export type JuniorView = 'today' | 'can' | 'me'
+/** What the sheet over the page shows: every capability, or the persona. */
+export type JuniorView = 'can' | 'me'
+
+type Tab = 'brief' | 'goals' | 'blocked'
 
 type Props = {
   onNavigate: (hash: string) => void
@@ -26,26 +33,13 @@ type Props = {
   onDispatch: (itemId: string) => void
 }
 
-/** Where a reference in the brief (or a row) goes. */
-export function targetHash(t: BriefTarget): string {
-  switch (t.kind) {
-    case 'session':
-      return t.id
-    case 'item':
-      return itemHash(t.id)
-    case 'job':
-      return `/jobs/${encodeURIComponent(t.id)}`
-    case 'actions':
-      return '/actions'
-  }
-}
-
 export function JuniorPage({ onNavigate, onDispatch }: Props) {
   const workspaceId = useWorkspaceId()
   const persona = usePersona()
   const win = useAwayWindow(workspaceId)
   const { day, error, reload } = useJuniorDay(win)
-  const [view, setView] = useState<JuniorView>('today')
+  const [tab, setTab] = useState<Tab>('brief')
+  const [sheet, setSheet] = useState<JuniorView | null>(null)
   // The clock the headline reads; the page re-reads it on every fetch.
   const now = Date.now()
 
@@ -59,84 +53,118 @@ export function JuniorPage({ onNavigate, onDispatch }: Props) {
             you: day.you.name,
             firstOpen: day.firstOpen,
             needs: day.needs.length,
+            people: day.morning.people.length,
+            overdue: overdueCount(day.morning),
             plan: { done: day.plan.done, total: day.plan.total },
           })
         : null,
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [day, persona.voice, persona.name],
   )
-  const brief = useMemo(() => (day && !day.firstOpen ? composeBrief(day.facts, persona.voice, now) : null), [day, persona.voice]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const mood = day
     ? pageMood({ needs: day.needs.length, stuck: day.stuck, working: !day.now.idle, firstOpen: day.firstOpen, planDone: day.plan.done, planTotal: day.plan.total })
     : 'hello'
+  const firstOpen = !!day && day.firstOpen && day.plan.total === 0
 
   return (
-    <div className="jrPage">
-      <div className="glow blue" aria-hidden="true" />
-      <div className="jrCol">
-        <header className="jrWho">
-          <div className="jrFace">
-            <JuniorFace mood={mood} size={56} motion="follow" />
-          </div>
-          <div className="jrMsg">
-            <h1 className="jrHello" aria-live="polite">
-              {head ? (
-                <>
-                  <span className="g">{head.greet}</span> {head.news}
-                </>
-              ) : (
-                <span className="g">{persona.name}</span>
-              )}
-            </h1>
-            {day ? <NowLine now={day.now} onNavigate={onNavigate} /> : <span className="jrKick">&nbsp;</span>}
-            {error && !day && (
-              <p className="jrBrief err" role="alert">
-                Couldn't load the day: {error}{' '}
-                <button type="button" className="jrRef" onClick={reload}>
-                  Try again
-                </button>
-              </p>
-            )}
-            {day?.firstOpen && <p className="jrBrief">{firstOpenLine(persona.voice)}</p>}
-            {brief && <BriefText segments={brief} onNavigate={onNavigate} />}
-          </div>
-        </header>
+    <div className="jrPage" style={{ '--junior': persona.colour } as CSSProperties}>
+      <JuniorSide day={day} mood={mood} onNavigate={onNavigate} onSeeAll={() => setSheet('can')} onCustomize={() => setSheet('me')} onDispatch={onDispatch} />
 
-        <Tabs.Root className="jrTabs" value={view} onValueChange={(v) => setView(v as JuniorView)}>
-          <div className="jrBar">
-            <Tabs.List className="jrViews" aria-label={persona.name}>
-              <Tabs.Trigger className="jrView" value="today">
-                Today
-              </Tabs.Trigger>
-              <Tabs.Trigger className="jrView" value="can">
-                What I can do
-              </Tabs.Trigger>
-              <Tabs.Trigger className="jrView" value="me">
-                About me
-              </Tabs.Trigger>
-            </Tabs.List>
-            <button type="button" className="btn primary jrNew" onClick={() => startJuniorChat()} title={`New chat with ${persona.name} (${MOD_LABEL}J)`}>
-              New chat with {persona.name}
+      <main className="jrMain">
+        <div className="glow junior" aria-hidden="true" />
+        <h1 className="jrHello" aria-live="polite">
+          {head ? (
+            <>
+              <span className="g">{head.greet}</span> {head.news}
+            </>
+          ) : (
+            <span className="g">{persona.name}</span>
+          )}
+        </h1>
+        {error && !day && (
+          <p className="jrBrief err" role="alert">
+            Couldn't load the day: {error}{' '}
+            <button type="button" className="jrRef" onClick={reload}>
+              Try again
             </button>
-            <span className="jrKeys" aria-hidden="true">
-              <kbd>{MOD_LABEL.replace(/\+$/, '')}</kbd>
-              <kbd>J</kbd>
-            </span>
-          </div>
-          <Tabs.Content value="today" className="jrPane">
-            {day ? <JuniorToday day={day} onNavigate={onNavigate} onDispatch={onDispatch} onView={setView} /> : <Loading />}
-          </Tabs.Content>
-          <Tabs.Content value="can" className="jrPane">
-            {day ? <JuniorCanDo fill={day.fill} /> : <Loading />}
-          </Tabs.Content>
-          <Tabs.Content value="me" className="jrPane">
-            <JuniorAbout routines={day?.routines ?? null} onNavigate={onNavigate} onView={setView} />
-          </Tabs.Content>
-        </Tabs.Root>
-      </div>
+          </p>
+        )}
+
+        {firstOpen && day ? (
+          <>
+            <p className="jrBrief">{firstOpenLine(persona.voice)}</p>
+            <JuniorFirstOpen day={day} />
+          </>
+        ) : (
+          <Tabs.Root className="jrTabs" value={tab} onValueChange={(v) => setTab(v as Tab)}>
+            <div className="jrBar">
+              <Tabs.List className="jrViews" aria-label={persona.name}>
+                <Tabs.Trigger className="jrView" value="brief">
+                  Morning brief <Count day={day} of="brief" />
+                </Tabs.Trigger>
+                <Tabs.Trigger className="jrView" value="goals">
+                  Today's goals <Count day={day} of="goals" />
+                </Tabs.Trigger>
+                <Tabs.Trigger className="jrView" value="blocked">
+                  Blocked on you <Count day={day} of="blocked" />
+                </Tabs.Trigger>
+              </Tabs.List>
+            </div>
+            <Tabs.Content value="brief" className="jrPane">
+              {day ? <JuniorBrief day={day} onNavigate={onNavigate} /> : <Loading />}
+            </Tabs.Content>
+            <Tabs.Content value="goals" className="jrPane">
+              {day ? <JuniorGoals day={day} onNavigate={onNavigate} onDispatch={onDispatch} /> : <Loading />}
+            </Tabs.Content>
+            <Tabs.Content value="blocked" className="jrPane">
+              {day ? <JuniorBlocked day={day} onNavigate={onNavigate} /> : <Loading />}
+            </Tabs.Content>
+          </Tabs.Root>
+        )}
+      </main>
+
+      <Dialog.Root open={sheet !== null} onOpenChange={(o) => !o && setSheet(null)}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="projOverlay" />
+          <Dialog.Content className="jrSheet" aria-describedby={undefined}>
+            <div className="jrSheetHead">
+              <Dialog.Title className="t">{sheet === 'can' ? `What ${persona.name} can do` : `About ${persona.name}`}</Dialog.Title>
+              <Dialog.Close asChild>
+                <button type="button" className="iconBtn" aria-label="Close">
+                  <X size={15} aria-hidden="true" />
+                </button>
+              </Dialog.Close>
+            </div>
+            <div className="jrSheetBody">
+              {sheet === 'can' && day && <JuniorCanDo fill={day.fill} />}
+              {sheet === 'me' && (
+                <JuniorAbout
+                  routines={day?.routines ?? null}
+                  onNavigate={(h) => {
+                    setSheet(null)
+                    onNavigate(h)
+                  }}
+                  onView={setSheet}
+                />
+              )}
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
     </div>
   )
+}
+
+/** The count on a tab: people waiting on the brief (orange), the plan's progress, what blocks Junior (orange). */
+function Count({ day, of }: { day: JuniorDay | null; of: Tab }) {
+  if (!day) return null
+  if (of === 'brief') {
+    const n = day.morning.people.length
+    return n ? <span className="c hot">{n} waiting</span> : null
+  }
+  if (of === 'goals') return day.plan.total ? <span className="c">{`${day.plan.done} of ${day.plan.total}`}</span> : null
+  return day.needs.length ? <span className="c hot">{day.needs.length}</span> : null
 }
 
 const Loading = () => (
@@ -151,53 +179,6 @@ function firstOpenLine(voice: string): string {
   if (voice === 'warm')
     return "I work right here on your Mac, with your tools and logins. I'll always read back what you ask, bundle my questions into one message, and never send anything without your OK. Here's what I can see so far:"
   return "I work on this Mac with your tools and logins. I read back what you ask, put every question in one message with my best guess, and nothing leaves without your OK. Here's what I can see:"
-}
-
-/** "● Right now finding the auth test flake · step 2 of 3", or "Free right now". */
-function NowLine({ now, onNavigate }: { now: JuniorNow; onNavigate: (hash: string) => void }) {
-  if (now.idle)
-    return (
-      <span className="jrKick">
-        <span className="jrDot" aria-hidden="true" />
-        Free right now
-      </span>
-    )
-  const hash = now.target.kind === 'session' ? now.target.id : `/jobs/${encodeURIComponent(now.target.id)}`
-  return (
-    <button type="button" className="jrKick" onClick={() => onNavigate(hash)}>
-      <span className="jrDot live" aria-hidden="true" />
-      Right now <b>{now.label}</b>
-      {now.step && <span className="jrStep"> · step {now.step.n} of {now.step.of}</span>}
-      {now.more > 0 && <span className="jrStep"> · {now.more} more running</span>}
-    </button>
-  )
-}
-
-/** The brief: prose, with references as underlined buttons. */
-export function BriefText({ segments, onNavigate }: { segments: Segment[]; onNavigate: (hash: string) => void }) {
-  return (
-    <p className="jrBrief">
-      {segments.map((s, i) =>
-        typeof s === 'string' ? (
-          <span key={i}>{s}</span>
-        ) : (
-          // A link, not a button: it navigates, and a long title must wrap with the sentence around it.
-          <a
-            key={i}
-            className="jrRef"
-            href={`#${targetHash(s.target)}`}
-            onClick={(e) => {
-              if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return
-              e.preventDefault()
-              onNavigate(targetHash(s.target))
-            }}
-          >
-            {s.label}
-          </a>
-        ),
-      )}
-    </p>
-  )
 }
 
 export type { JuniorDay }

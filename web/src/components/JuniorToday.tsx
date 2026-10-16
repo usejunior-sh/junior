@@ -1,7 +1,8 @@
 /**
- * The Today tab: what needs you, then our plan for today (one list, every row
- * with an owner), ending in "Also today…". On a first open — no plan yet,
- * nothing used — Junior says what it can see and offers work instead.
+ * The Junior page's two working tabs: Today's goals (one list, every row with
+ * an owner, ending in "Also today…") and Blocked on you (what holds Junior
+ * until you answer). On a first open — no plan yet, nothing used — Junior
+ * says what it can see and offers work instead (JuniorFirstOpen).
  */
 import { X } from 'lucide-react'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
@@ -10,55 +11,58 @@ import type { Mood } from '../../../core/junior/mood.js'
 import { addToday, draftToday, matchToday, removeToday, startJuniorChat, usePersona } from '../junior.js'
 import { itemHash } from '../hooks.js'
 import { JuniorFace } from './JuniorFace.js'
-import type { JuniorView } from './JuniorPage.js'
 
 type Props = {
   day: JuniorDay
   onNavigate: (hash: string) => void
   onDispatch: (itemId: string) => void
-  onView: (v: JuniorView) => void
 }
 
-export function JuniorToday({ day, onNavigate, onDispatch, onView }: Props) {
+/** Today's goals: the shared plan, then "Also today…". */
+export function JuniorGoals({ day, onNavigate, onDispatch }: Props) {
   const persona = usePersona()
   const [fresh, setFresh] = useState<string | null>(null)
-
-  if (day.firstOpen && day.plan.total === 0) return <FirstOpen day={day} onView={onView} />
-
   return (
-    <>
-      {day.needs.length > 0 && (
-        <section aria-label="Needs you">
-          <h2 className="jrLh">
-            Needs you <span className="n">{day.needs.length}</span>
-          </h2>
-          <div className="jrRows">
-            {day.needs.map((r) => (
-              <NeedsLine key={r.key} row={r} onNavigate={onNavigate} />
-            ))}
-          </div>
-        </section>
-      )}
+    <section aria-label="Today's goals">
+      <h2 className="jrLh">
+        Today's goals{' '}
+        <span className="n">
+          {day.plan.done} of {day.plan.total} done
+        </span>
+        <span className="aside">{day.plan.drafted ? 'I drafted it from your inbox · ' : ''}every session today can see it</span>
+      </h2>
+      <div className="jrPlan">
+        {day.plan.rows.map((r) => (
+          <PlanLine key={r.itemId} row={r} you={day.you} name={persona.name} fresh={fresh === r.itemId} onNavigate={onNavigate} onDispatch={onDispatch} />
+        ))}
+        {day.plan.total === 0 && <p className="jrEmpty">Nothing on it yet. Tell me what's on your plate.</p>}
+        <AlsoToday name={persona.name} onAdded={setFresh} />
+      </div>
+    </section>
+  )
+}
 
-      <section aria-label="Our plan for today">
-        <h2 className="jrLh">
-          Our plan for today{' '}
-          <span className="n">
-            {day.plan.done} of {day.plan.total} done
-          </span>
-          <span className="aside">{day.plan.drafted ? 'I drafted it from your inbox · ' : ''}every session today can see it</span>
-        </h2>
-        <div className="jrPlan">
-          {day.plan.rows.map((r) => (
-            <PlanLine key={r.itemId} row={r} you={day.you} name={persona.name} fresh={fresh === r.itemId} onNavigate={onNavigate} onDispatch={onDispatch} />
-          ))}
-          {day.plan.total === 0 && <p className="jrEmpty">Nothing on it yet. Tell me what's on your plate.</p>}
-          <AlsoToday name={persona.name} onAdded={setFresh} />
-        </div>
-      </section>
-
-      <CanAlso onView={onView} />
-    </>
+/** Blocked on you: what holds Junior until you answer. People waiting on you are in the brief. */
+export function JuniorBlocked({ day, onNavigate }: Pick<Props, 'day' | 'onNavigate'>) {
+  if (day.needs.length === 0)
+    return (
+      <p className="jrQuiet">
+        <JuniorFace mood="hello" size={18} motion="still" decorative />
+        Nothing is blocking me. I'll put anything I can't go on without here, with my best guess.
+      </p>
+    )
+  return (
+    <section aria-label="Blocked on you">
+      <h2 className="jrLh">
+        Blocked on you <span className="n">{day.needs.length}</span>
+        <span className="aside">only what stops me · people waiting on you are in the brief</span>
+      </h2>
+      <div className="jrRows">
+        {day.needs.map((r) => (
+          <NeedsLine key={r.key} row={r} onNavigate={onNavigate} />
+        ))}
+      </div>
+    </section>
   )
 }
 
@@ -342,36 +346,8 @@ function AlsoToday({ name, onAdded, placeholder }: { name: string; onAdded: (ite
   )
 }
 
-/** "I can also add a to-do, check something in a browser… See everything I can do." */
-function CanAlso({ onView }: { onView: (v: JuniorView) => void }) {
-  return (
-    <p className="jrAlso">
-      I can also{' '}
-      <button type="button" onClick={() => startJuniorChat('Remind me Friday to ')}>
-        add a to-do
-      </button>
-      ,{' '}
-      <button type="button" onClick={() => startJuniorChat('Open the app at 390px and check ')}>
-        check something in a browser
-      </button>
-      ,{' '}
-      <button type="button" onClick={() => startJuniorChat('Write a note on ')}>
-        write something down
-      </button>
-      , or{' '}
-      <button type="button" onClick={() => startJuniorChat('Make a skill that ')}>
-        learn a routine
-      </button>
-      .{' '}
-      <button type="button" onClick={() => onView('can')}>
-        See everything I can do
-      </button>
-    </p>
-  )
-}
-
 /** No plan yet, nothing used: what Junior can see, and work it found there. */
-function FirstOpen({ day, onView }: { day: JuniorDay; onView: (v: JuniorView) => void }) {
+export function JuniorFirstOpen({ day }: { day: JuniorDay }) {
   const persona = usePersona()
   const [drafting, setDrafting] = useState(false)
   const seen = day.seen
@@ -466,7 +442,6 @@ function FirstOpen({ day, onView }: { day: JuniorDay; onView: (v: JuniorView) =>
           ))}
         </div>
       )}
-      <CanAlso onView={onView} />
     </>
   )
 }
