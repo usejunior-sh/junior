@@ -11,6 +11,7 @@
  *
  *   running ──yield──────▶ queued
  *   running ──wait_world─▶ waiting_world ──gate_met──▶ queued
+ *                          waiting_world ──watcher_step──▶ queued  (the PR watcher queued a fix, a rebase, the merge)
  *   running ──ask_you────▶ waiting_you   ──answer────▶ queued
  *                          waiting_you   ──keep_waiting──▶ waiting_world  (a gate past its deadline: wait on)
  *   running ──result─────▶ result_ready  ──reopen────▶ queued
@@ -34,6 +35,7 @@ export type GoalTrigger =
   | 'wait_world'
   | 'ask_you'
   | 'gate_met'
+  | 'watcher_step'
   | 'answer'
   | 'keep_waiting'
   | 'result'
@@ -68,6 +70,8 @@ export const TRANSITIONS: Readonly<Record<GoalTrigger, Rule>> = {
    */
   ask_you: { from: ['queued', 'running', 'waiting_world'], to: 'waiting_you', by: 'engine' },
   gate_met: { from: ['waiting_world'], to: 'queued', by: 'engine' },
+  /** the PR watcher (M5) dispatched a step while the goal waits on its PR: the step's worker needs a slot */
+  watcher_step: { from: ['waiting_world'], to: 'queued', by: 'engine' },
   answer: { from: ['waiting_you'], to: 'queued', by: 'you' },
   /** a gate that ran past its deadline or stumped its checker: wait on it, without waking the lead */
   keep_waiting: { from: ['waiting_you'], to: 'waiting_world', by: 'you' },

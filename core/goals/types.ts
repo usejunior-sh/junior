@@ -117,8 +117,12 @@ export const STEP_TYPES: readonly StepType[] = ['agent', 'gate', 'block']
 export type StepRole = 'lead' | 'builder' | 'reviewer' | 'tester'
 export const STEP_ROLES: readonly StepRole[] = ['lead', 'builder', 'reviewer', 'tester']
 
-/** ai = a read-only checker session judges the condition; user = an approval in the Inbox. */
-export type GateEvaluator = 'ai' | 'user'
+/**
+ * ai = a read-only checker session judges the condition; user = an approval in
+ * the Inbox; watcher = plain code decides it (the PR watcher, M5) — never swept.
+ */
+export type GateEvaluator = 'ai' | 'user' | 'watcher'
+export const GATE_EVALUATORS: readonly GateEvaluator[] = ['ai', 'user', 'watcher']
 
 /** A gate as the plan states it. Durations are strings like "5m", "4h", "1d" (core/goals/machine.ts parseDuration). */
 export type GateSpec = {
@@ -145,7 +149,7 @@ export type PlanStep = {
   doneWhen: string
   /** set when type is 'gate' */
   gate: GateSpec | null
-  /** the workflow block's name, when type is 'block' (e.g. "shepherd-pr") */
+  /** the workflow block's name, when type is 'block'. "shepherd-pr" expands to a watcher gate as the plan is read. */
   block: string | null
 }
 

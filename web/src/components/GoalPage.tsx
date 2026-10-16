@@ -247,7 +247,7 @@ function GoalSteer({ goal, ask }: { goal: Goal; ask: GoalAsk | null }) {
               <button type="button" className="btn sm" disabled={busy} title="The step failed; Junior wakes to decide what's next" onClick={() => void act('answer', { gate: 'reject', ...(typed ? { text: typed } : {}) })}>
                 <X size={12} aria-hidden="true" /> Reject
               </button>
-              {gate.evaluator === 'ai' && (
+              {gate.evaluator !== 'user' && (
                 <button type="button" className="btn sm" disabled={busy} title="Checks resume with a fresh 24h deadline; Junior isn't woken" onClick={() => void act('answer', { gate: 'wait', ...(typed ? { text: typed } : {}) })}>
                   <Clock size={12} aria-hidden="true" /> Keep waiting
                 </button>

@@ -187,7 +187,7 @@ const toGate = (r: GateRow): Gate => ({
   id: r.id,
   goalId: r.goal_id,
   stepId: r.step_id,
-  evaluator: r.evaluator === 'ai' ? 'ai' : 'user',
+  evaluator: r.evaluator === 'ai' || r.evaluator === 'watcher' ? r.evaluator : 'user',
   condition: r.condition,
   connectors: strings(r.connectors),
   status: (GATE_STATUSES as readonly string[]).includes(r.status) ? (r.status as GateStatus) : 'needs_user',

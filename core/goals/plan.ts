@@ -10,7 +10,9 @@
  * Pure: no I/O, no clock.
  */
 import { parseDuration } from './machine.js'
+import { policyLines, SHEPHERD_BLOCK, SHEPHERD_GATE } from './shepherd.js'
 import {
+  GATE_EVALUATORS,
   isGoalHorizon,
   STEP_ROLES,
   STEP_TYPES,
@@ -81,7 +83,7 @@ function gateFrom(v: unknown, where: string): GateSpec {
   if (!isObj(v)) fail(`${where} must be an object`)
   const g = v as Record<string, unknown>
   only(g, GATE_KEYS, where)
-  if (g.evaluator !== 'ai' && g.evaluator !== 'user') fail(`${where}.evaluator must be "ai" or "user"`)
+  if (!GATE_EVALUATORS.includes(g.evaluator as GateSpec['evaluator'])) fail(`${where}.evaluator must be "ai", "user" or "watcher"`)
   let confirmations = 1
   if (g.confirmations !== undefined && g.confirmations !== null) {
     const c = g.confirmations
@@ -90,7 +92,7 @@ function gateFrom(v: unknown, where: string): GateSpec {
     confirmations = c as number
   }
   return {
-    evaluator: g.evaluator as 'ai' | 'user',
+    evaluator: g.evaluator as GateSpec['evaluator'],
     condition: text(g.condition, `${where}.condition`),
     checkEvery: duration(g.checkEvery, `${where}.checkEvery`),
     deadline: duration(g.deadline, `${where}.deadline`),
@@ -124,7 +126,11 @@ function stepFrom(v: unknown, i: number): PlanStep {
   if (type === 'block') block = text(s.block, `${where}.block`)
   else if (has('block')) fail(`${where}.block is only for block steps`)
 
-  return { id, title: text(s.title, `${where}.title`), type, role, dependsOn: textList(s.dependsOn, `${where}.dependsOn`), doneWhen: text(s.doneWhen, `${where}.doneWhen`), gate, block }
+  const step: PlanStep = { id, title: text(s.title, `${where}.title`), type, role, dependsOn: textList(s.dependsOn, `${where}.dependsOn`), doneWhen: text(s.doneWhen, `${where}.doneWhen`), gate, block }
+  if (type !== 'block') return step
+  // Blocks expand as the plan is read, so the user reviews what will run.
+  if (block === SHEPHERD_BLOCK) return { ...step, type: 'gate', gate: { ...SHEPHERD_GATE }, block: null }
+  return fail(`${where}.block "${block}" isn't a workflow block: the only one is "${SHEPHERD_BLOCK}"`)
 }
 
 function checkGraph(steps: PlanStep[]) {
@@ -167,8 +173,9 @@ function seatFrom(v: unknown, i: number): TeamSeat {
 
 /**
  * A proposed plan → the plan the user reviews, or why not. `goal` supplies
- * what the plan may leave out (horizon, budget). Policies start empty: the
- * engine fills them at approval (M5).
+ * what the plan may leave out (horizon, budget). A plan with a watcher gate
+ * (a `shepherd-pr` block) carries the default policies, so the user approves
+ * what the PR watcher may do on its own.
  */
 export function planFrom(raw: unknown, goal: Pick<Goal, 'horizon' | 'budget'>): PlanResult {
   try {
@@ -205,7 +212,7 @@ export function planFrom(raw: unknown, goal: Pick<Goal, 'horizon' | 'budget'>): 
         team: ((p.team as unknown[] | undefined) ?? []).map(seatFrom),
         budget,
         mayDo: textList(p.mayDo, 'plan.mayDo'),
-        policies: [],
+        policies: steps.some((st) => st.gate?.evaluator === 'watcher') ? policyLines() : [],
         models,
       },
     }

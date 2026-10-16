@@ -1943,7 +1943,7 @@ export type GoalsResponse =
  * checker couldn't decide, or one past its deadline. Answered with
  * approve / keep waiting (an AI gate only) / reject.
  */
-export type GoalAskGate = { id: string; stepId: string; condition: string; evaluator: 'ai' | 'user'; why: 'approval' | 'needs_user' | 'deadline' }
+export type GoalAskGate = { id: string; stepId: string; condition: string; evaluator: 'ai' | 'user' | 'watcher'; why: 'approval' | 'needs_user' | 'deadline' }
 
 export type GoalAsk =
   | { kind: 'ask'; question: string; recommended: string; evidence: string | null; options: string[]; gate: GoalAskGate | null }

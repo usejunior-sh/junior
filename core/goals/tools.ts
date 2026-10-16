@@ -22,7 +22,7 @@ const OUTCOME_ENUM: SessionOutcome[] = ['done', 'failed', 'blocked']
 const GATE_SCHEMA = {
   type: 'object',
   properties: {
-    evaluator: { type: 'string', enum: ['ai', 'user'], description: 'ai = a read-only checker judges it; user = an approval in the Inbox' },
+    evaluator: { type: 'string', enum: ['ai', 'user', 'watcher'], description: 'ai = a read-only checker judges it; user = an approval in the Inbox; watcher = the PR watcher (use the "shepherd-pr" block)' },
     condition: { type: 'string', description: 'what must hold, checkable from outside: "LIN-2214 is in QA"' },
     checkEvery: { type: 'string', description: 'a fixed interval like "15m"; omit for the default back-off' },
     deadline: { type: 'string', description: 'like "4h"; past it the gate becomes an approval. Default 24h' },
@@ -42,7 +42,7 @@ const STEP_SCHEMA = {
     dependsOn: { type: 'array', items: { type: 'string' }, description: 'step ids that must be done first' },
     doneWhen: { type: 'string', description: 'what the engine checks before it counts the step done' },
     gate: GATE_SCHEMA,
-    block: { type: 'string', description: 'a workflow block name, for a block step, e.g. "shepherd-pr"' },
+    block: { type: 'string', description: 'a workflow block name, for a block step. The one there is: "shepherd-pr" — the PR watcher gets the PR the step before opened to merged' },
   },
   required: ['id', 'title', 'type', 'doneWhen'],
 }

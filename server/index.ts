@@ -389,6 +389,8 @@ import {
   goalMessageOp,
   goalOfSession,
   goalGateSweepOp,
+  goalWatchPrsOp,
+  ghPrSource,
   goalsRoute,
   goalSessionEndedOp,
   goalSessionMcpTools,
@@ -406,6 +408,7 @@ import {
 import { GOAL_SESSION_TIMEOUT_MS, LEAD_RUN_APPEND, ROLE_AGENT, roleWrites, workerAppend as goalWorkerAppend } from '../core/goals/run.js'
 import { leadDraftPrompt, LEAD_DRAFT_APPEND, type LeadWake } from '../core/goals/review.js'
 import { DEFAULT_GOAL_MODELS, GATE_SWEEP_INTERVAL_MS, type GateVerdict, type Goal, type GoalEvent } from '../core/goals/types.js'
+import { WATCH_TICK_MS } from '../core/goals/shepherd.js'
 import { GATE_SERVER, GATE_TOOL_SEARCH, GATE_VERDICT_FULL, GATE_VERDICT_TOOL, gateCheckPrompt, gateFenceDecision, gateReadTools, gateServers, verdictFrom } from '../core/goals/gates.js'
 import { WORKSPACE_PLUGIN, createLibraryEntry, ensureWorkspacePlugin, libraryRoots, locate as locateLibrary, libraryTargets, listLibrary, readLibraryFile, removeLibraryItem, writeLibraryFile, type LibraryRoot } from './library.js'
 import { TRIAGE_MCP_INSTRUCTIONS, triageSessionAppend } from '../shared/triageContext.js'
@@ -4672,6 +4675,11 @@ setInterval(() => {
   for (const rt of runtimes.values()) sweepGates(rt).catch((err) => log('error', 'goals', `gate sweep failed: ${errText(err)}`, { workspace: rt.meta.id }))
 }, GATE_SWEEP_INTERVAL_MS).unref()
 
+// The PR watcher (M5): a cheap tick; each watched PR is polled on its own back-off.
+setInterval(() => {
+  for (const rt of runtimes.values()) watchPrs(rt).catch((err) => log('error', 'goals', `PR watcher failed: ${errText(err)}`, { workspace: rt.meta.id }))
+}, WATCH_TICK_MS).unref()
+
 // The repo picker's "available" list; slow-ish (paginated), so cached.
 async function affiliatedRepos(rt: WorkspaceRuntime): Promise<string[]> {
   if (rt.affiliatedCache && Date.now() - rt.affiliatedCache.at < 10 * 60_000) return rt.affiliatedCache.repos
@@ -6461,6 +6469,20 @@ async function sweepGates(rt: WorkspaceRuntime): Promise<void> {
     if (r.checked || r.toUser) log('info', 'goals', `gate sweep: ${r.checked} checked, ${r.resolved} met, ${r.toUser} to you`, { workspace: rt.meta.id })
   } finally {
     gateSweeping.delete(rt)
+  }
+}
+
+/** One PR watcher pass per workspace at a time. */
+const prWatching = new WeakSet<WorkspaceRuntime>()
+async function watchPrs(rt: WorkspaceRuntime): Promise<void> {
+  if (prWatching.has(rt)) return
+  prWatching.add(rt)
+  try {
+    const src = ghPrSource((goal) => (goal.checkoutId ? (rt.checkouts.get(goal.checkoutId)?.path ?? null) : null))
+    const r = await goalWatchPrsOp(rt.goalDeps, goalEngineFor(rt), src)
+    if (r.acted || r.toUser) log('info', 'goals', `PR watcher: ${r.polled} polled, ${r.acted} acted on, ${r.toUser} to you`, { workspace: rt.meta.id })
+  } finally {
+    prWatching.delete(rt)
   }
 }
 

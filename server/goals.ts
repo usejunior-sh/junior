@@ -15,7 +15,9 @@
  * (`replayGoalEvents`). Approve, comment and send back are the user's clicks
  * (HTTP only); agents never approve a plan.
  */
+import { execFile } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
+import { promisify } from 'node:util'
 import type http from 'node:http'
 import { tool } from '@anthropic-ai/claude-agent-sdk'
 import { z } from 'zod'
@@ -48,6 +50,26 @@ import {
 import { applyVerdict, NO_VERDICT, nextCheckDelay, requiredConfirmations } from '../core/goals/gates.js'
 import { commentFrom, MAX_COMMENT, pendingComments, reactTo, REVIEW_EVENTS, type LeadWake } from '../core/goals/review.js'
 import { ENGINE_TOOLS, GOAL_TOOLS } from '../core/goals/tools.js'
+import {
+  afterDecision,
+  assess,
+  fixCiBrief,
+  mergeBrief,
+  newWatch,
+  nextPoll,
+  policyFor,
+  PR_QUERY,
+  prRefFrom,
+  rebaseBrief,
+  snapshotFrom,
+  threadBrief,
+  type PolicyDecision,
+  type PrCheck,
+  type PrRef,
+  type PrSnapshot,
+  type PrWatch,
+  type WatcherEvent,
+} from '../core/goals/shepherd.js'
 import {
   DEFAULT_GOAL_MODELS,
   GATE_CHECK_SCHEDULE_MIN,
@@ -837,7 +859,8 @@ export async function goalArmGateOp(d: GoalDeps, c: LeadCall, raw: unknown): Pro
   if (why) throw new Error(why)
   const step = goal.plan!.steps.find((s) => s.id === stepId)!
   const spec = step.gate!
-  const evaluator = b.evaluator === 'ai' || b.evaluator === 'user' ? b.evaluator : spec.evaluator
+  // A watcher gate stays the watcher's: its PR is read by code, not judged.
+  const evaluator = spec.evaluator !== 'watcher' && (b.evaluator === 'ai' || b.evaluator === 'user') ? b.evaluator : spec.evaluator
   const checkEvery = optStr(b.checkEvery, 'checkEvery', 20) ?? spec.checkEvery
   const deadline = optStr(b.deadline, 'deadline', 20) ?? spec.deadline ?? GATE_DEFAULT_DEADLINE
   const checkEveryMs = checkEvery ? parseDuration(checkEvery) : null
@@ -865,8 +888,8 @@ export async function goalArmGateOp(d: GoalDeps, c: LeadCall, raw: unknown): Pro
     checks: 0,
     checkEveryMs,
     deadlineAt: at + deadlineMs,
-    // High stakes (a merge, a deploy, production): never on one "met".
-    confirmationsNeeded: requiredConfirmations(confirmations, condition, step.title),
+    // High stakes (a merge, a deploy, production): never on one "met" — unless code read it (the watcher).
+    confirmationsNeeded: evaluator === 'watcher' ? 1 : requiredConfirmations(confirmations, condition, step.title),
     confirmationsSeen: 0,
     lastVerdict: null,
     itemId: evaluator === 'user' ? goal.sourceItemId : null,
@@ -885,6 +908,7 @@ export async function goalArmGateOp(d: GoalDeps, c: LeadCall, raw: unknown): Pro
     )
   }
   d.changed(goal.id)
+  if (evaluator === 'watcher') return `the PR watcher has ${stepId}: it works the PR until "${gate.condition}". End your turn — you wake when its steps finish or the PR merges`
   return evaluator === 'user'
     ? `asked the user to approve ${stepId}: "${condition}". End your turn — you wake when they answer`
     : `armed the gate on ${stepId}: the goal waits for "${gate.condition}" once you end your turn${gate.confirmationsNeeded > 1 ? ` (${gate.confirmationsNeeded} "met" checks in a row)` : ''}`
@@ -1015,7 +1039,7 @@ export async function goalGateSweepOp(d: GoalDeps, eng: GoalEngine, check: GateC
 }
 
 /** A gate met — by its checker or the user's approval: the step is done and the lead wakes. */
-async function resolveGate(d: GoalDeps, eng: GoalEngine, gate: Gate, by: 'gate' | 'you', evidence: string | null): Promise<void> {
+async function resolveGate(d: GoalDeps, eng: GoalEngine, gate: Gate, by: 'gate' | 'you' | 'watcher', evidence: string | null): Promise<void> {
   const at = d.now()
   await d.store.goals.putGate({ ...gate, status: 'met', nextCheckAt: null, settledAt: at })
   const goal = (await d.store.goals.get(gate.goalId))!
@@ -1053,6 +1077,212 @@ async function gateToUser(d: GoalDeps, _eng: GoalEngine, gate: Gate, why: 'deadl
   return true
 }
 
+// --- the PR shepherd (M5) --------------------------------------------------
+
+/** How the watcher reads and pokes a PR — `gh` in production (ghPrSource), a fake in tests. */
+export type PrSource = {
+  /** the PR the gate watches: one named in its refs, else the PR open on the goal's branch; null = none yet */
+  find: (goal: Goal, gate: Gate) => Promise<PrRef | null>
+  snapshot: (pr: PrRef) => Promise<PrSnapshot>
+  /** the failing check's log (`gh run view --log-failed`); '' when there is none */
+  failedLog: (pr: PrRef, check: PrCheck) => Promise<string>
+  diff: (pr: PrRef) => Promise<string>
+  /** run a failed check again — one per check and head commit, a policy in the approved plan */
+  rerun: (pr: PrRef, check: PrCheck) => Promise<void>
+}
+
+export type WatchResult = { polled: number; acted: number; toUser: number }
+
+/** The watch's memory, per goal: in config, so no table for one small JSON blob. */
+const watchKey = (goalId: string) => `goals.prWatch.${goalId}`
+
+/**
+ * The watcher's tick: every open watcher gate whose poll is due reads its PR
+ * and acts on what's new through the default policies (core/goals/shepherd.ts)
+ * — a step dispatched to a worker, a flaky check rerun, a question to the
+ * user, or the gate met when the PR merges. No model runs here; nothing due =
+ * no `gh` call. An event that can't be acted on yet (its step is running, the
+ * user has a question open) stays unseen and is read again next poll.
+ */
+export async function goalWatchPrsOp(d: GoalDeps, eng: GoalEngine, src: PrSource): Promise<WatchResult> {
+  const out: WatchResult = { polled: 0, acted: 0, toUser: 0 }
+  for (const goal of await d.store.goals.list({ states: [...SWEPT] })) {
+    const gate = (await d.store.goals.gates(goal.id)).find((g) => g.evaluator === 'watcher' && g.status === 'open')
+    if (!gate) continue
+    const at = d.now()
+    const saved = await d.store.config.get<PrWatch>(watchKey(goal.id))
+    let w = saved && saved.gateId === gate.id ? saved : newWatch(gate.id, at)
+    if (w.nextPollAt > at) continue
+    out.polled++
+    let snap: PrSnapshot
+    try {
+      const pr = w.pr ?? (await src.find(goal, gate))
+      if (!pr) {
+        await d.store.config.set(watchKey(goal.id), nextPoll(w, false, at))
+        continue
+      }
+      w = { ...w, pr }
+      snap = await src.snapshot(pr)
+    } catch (err) {
+      const errors = w.errors + 1
+      // Once per streak: a gh that keeps failing says so on the goal, not every poll.
+      if (errors === 1) await note(d, { actor: 'watcher', sessionId: null, kind: 'watcher', from: null, to: null, detail: { text: `Couldn't read the PR: ${(err instanceof Error ? err.message : String(err)).slice(0, 300)}` } }, goal.id, at)
+      await d.store.config.set(watchKey(goal.id), nextPoll({ ...w, errors }, false, at))
+      continue
+    }
+    const pr = w.pr!
+    const moved = snap.headSha !== w.headSha
+    w = { ...w, errors: 0 }
+    let acted = false
+    for (const ev of assess(snap, w)) {
+      const log = ev.kind === 'checks_failed' && ev.check.runId !== null ? await src.failedLog(pr, ev.check).catch(() => '') : ''
+      const dec = policyFor(ev, w, pr, log)
+      const r = await carryOut(d, eng, goal.id, gate, w, ev, dec, { src, pr, snap, log })
+      if (r === 'deferred') continue
+      if (r === 'rerun_failed') {
+        // The rerun didn't go through: spend it anyway, so the next poll goes straight to a fix.
+        w = { ...w, reruns: [...w.reruns, `${(ev as Extract<WatcherEvent, { kind: 'checks_failed' }>).check.name}@${snap.headSha}`] }
+        continue
+      }
+      w = afterDecision(w, ev, dec)
+      acted = true
+      out.acted++
+      if (dec.do === 'ask_user') out.toUser++
+      if (dec.do === 'resolve') break
+    }
+    await d.store.config.set(watchKey(goal.id), nextPoll({ ...w, headSha: snap.headSha }, acted || moved, at))
+  }
+  return out
+}
+
+type Carry = { src: PrSource; pr: PrRef; snap: PrSnapshot; log: string }
+
+/** One decision, carried out. 'deferred' = not now; the event stays unseen. */
+async function carryOut(d: GoalDeps, eng: GoalEngine, goalId: string, gate: Gate, w: PrWatch, ev: WatcherEvent, dec: PolicyDecision, c: Carry): Promise<'done' | 'deferred' | 'rerun_failed'> {
+  const at = d.now()
+  const say = (text: string, extra: Record<string, unknown> = {}) => note(d, { actor: 'watcher', sessionId: null, kind: 'watcher', from: null, to: null, detail: { text, policy: dec.policy, pr: `${c.pr.repo}#${c.pr.number}`, ...extra } }, goalId, at)
+  switch (dec.do) {
+    case 'note':
+      await say(dec.text)
+      d.changed(goalId)
+      return 'done'
+    case 'rerun':
+      try {
+        await c.src.rerun(c.pr, dec.check)
+      } catch (err) {
+        await say(`${dec.check.name} looked flaky, but the rerun failed (${(err instanceof Error ? err.message : String(err)).slice(0, 200)}): fixing it instead`)
+        return 'rerun_failed'
+      }
+      await say(dec.text)
+      d.changed(goalId)
+      return 'done'
+    case 'ask_user':
+      return (await watcherAsk(d, goalId, dec.question, dec.recommended, dec.evidence)) ? 'done' : 'deferred'
+    case 'resolve': {
+      // The PR merged: the fixes nobody started are moot.
+      for (const st of await d.store.goals.steps(goalId)) if (w.steps.includes(st.stepId) && st.status !== 'done' && st.status !== 'skipped' && st.sessionId === null) await d.store.goals.putStep({ ...st, status: 'skipped', endedAt: at, updatedAt: at })
+      const g = await d.store.goals.gate(gate.id)
+      if (g?.status === 'open') await resolveGate(d, eng, g, 'watcher', `${c.snap.url || `${c.pr.repo}#${c.pr.number}`} merged`)
+      return 'done'
+    }
+    case 'step':
+      return dispatchShepherdStep(d, eng, goalId, gate, ev, dec, c)
+  }
+}
+
+/** A shepherd step onto the plan (once) and dispatched to a builder, with its brief; the goal comes off waiting for the world. */
+async function dispatchShepherdStep(d: GoalDeps, eng: GoalEngine, goalId: string, gate: Gate, ev: WatcherEvent, dec: Extract<PolicyDecision, { do: 'step' }>, c: Carry): Promise<'done' | 'deferred'> {
+  let goal = await d.store.goals.get(goalId)
+  if (!goal?.plan) return 'deferred'
+  const at = d.now()
+  const existing = (await d.store.goals.steps(goalId)).find((s) => s.stepId === dec.stepId)
+  // A fix already under way: what it pushes is the next thing to read.
+  if (existing?.status === 'running') return 'deferred'
+  if (!goal.plan.steps.some((s) => s.id === dec.stepId)) {
+    const gateStep = goal.plan.steps.find((s) => s.id === gate.stepId)
+    const step = { id: dec.stepId, title: dec.title, type: 'agent' as const, role: 'builder' as const, dependsOn: gateStep?.dependsOn ?? [], doneWhen: dec.doneWhen, gate: null, block: null }
+    const steps = [...goal.plan.steps]
+    steps.splice(Math.max(0, steps.findIndex((s) => s.id === gate.stepId)), 0, step)
+    await applyPlan(d, goal, { ...goal.plan, steps }, at)
+    goal = (await d.store.goals.get(goalId))!
+  }
+  const st = (await d.store.goals.steps(goalId)).find((s) => s.stepId === dec.stepId)
+  if (!st) return 'deferred'
+  const attempt = st.attempts + 1
+  const brief =
+    dec.step === 'fix_ci' && ev.kind === 'checks_failed'
+      ? fixCiBrief(c.pr, ev.check, attempt, c.log, await c.src.diff(c.pr).catch(() => ''))
+      : dec.step === 'fix_thread' && (ev.kind === 'bot_thread' || ev.kind === 'human_thread')
+        ? threadBrief(c.pr, ev.thread)
+        : dec.step === 'rebase'
+          ? rebaseBrief(c.pr, c.snap)
+          : mergeBrief(c.pr)
+  await d.store.goals.putStep({ ...st, status: 'running', sessionId: null, attempts: attempt, startedAt: at, endedAt: null, updatedAt: at })
+  await note(d, { actor: 'watcher', sessionId: null, kind: 'step_dispatched', from: null, to: null, detail: { stepId: dec.stepId, brief, model: null, attempt } }, goalId, at)
+  await note(d, { actor: 'watcher', sessionId: null, kind: 'watcher', from: null, to: null, detail: { text: dec.text, policy: dec.policy, stepId: dec.stepId, pr: `${c.pr.repo}#${c.pr.number}` } }, goalId, at)
+  if (goal.state === 'waiting_world') await engineMove(d, goal, 'watcher_step', dec.title.slice(0, 500), at, { stepId: dec.stepId })
+  d.changed(goalId)
+  void pumpGoals(d, eng).catch(() => {})
+  return 'done'
+}
+
+/** The watcher's question to the user, one at a time like every other; they answer in words and the lead wakes with it. */
+async function watcherAsk(d: GoalDeps, goalId: string, question: string, recommended: string, evidence: string | null): Promise<boolean> {
+  const goal = await d.store.goals.get(goalId)
+  if (!goal || openAsk(await d.store.goals.events(goalId))) return false
+  const at = d.now()
+  await note(d, { actor: 'watcher', sessionId: null, kind: 'asked_you', from: null, to: null, detail: { why: 'watcher', question, recommended, evidence, options: [] } }, goalId, at)
+  // A running goal is caught when its session ends (afterSession reads the open ask).
+  if (goal.state === 'waiting_world' || goal.state === 'queued') await engineMove(d, goal, 'ask_you', question.slice(0, 500), at)
+  d.changed(goalId)
+  return true
+}
+
+const pExec = promisify(execFile)
+
+/** The watcher's PR reads and its one write (a rerun), through the user's `gh` login. `cwdOf` = the goal's worktree, to find the PR on its branch. */
+export function ghPrSource(cwdOf: (goal: Goal) => string | null): PrSource {
+  const gh = async (args: string[], cwd?: string) => {
+    try {
+      return (await pExec('gh', args, { maxBuffer: 32 * 1024 * 1024, ...(cwd ? { cwd } : {}) })).stdout
+    } catch (err) {
+      const e = err as NodeJS.ErrnoException & { stderr?: string }
+      if (e.code === 'ENOENT') throw new Error('GitHub CLI (gh) not found')
+      throw new Error(`gh ${args.slice(0, 2).join(' ')} failed${e.stderr?.trim() ? `: ${e.stderr.trim().slice(0, 300)}` : ''}`)
+    }
+  }
+  return {
+    find: async (goal, gate) => {
+      const named = prRefFrom(gate.refs, null)
+      if (named) return named
+      const cwd = cwdOf(goal)
+      if (!cwd) return null
+      // `#12` in the refs: the repo is the worktree's.
+      if (gate.refs.some((r) => prRefFrom([r], 'x/x'))) {
+        const repo = (await gh(['repo', 'view', '--json', 'nameWithOwner', '-q', '.nameWithOwner'], cwd).catch(() => '')).trim()
+        const bare = repo ? prRefFrom(gate.refs, repo) : null
+        if (bare) return bare
+      }
+      // The PR open on the worktree's branch; none yet is not an error.
+      const raw = await gh(['pr', 'view', '--json', 'number,url,state'], cwd).catch(() => '')
+      if (!raw.trim()) return null
+      const j = JSON.parse(raw) as { number?: number; url?: string }
+      return prRefFrom([String(j.url ?? '')], null)
+    },
+    snapshot: async (pr) => {
+      const [owner, name] = pr.repo.split('/')
+      const raw = await gh(['api', 'graphql', '-f', `query=${PR_QUERY}`, '-F', `owner=${owner}`, '-F', `name=${name}`, '-F', `number=${pr.number}`])
+      return snapshotFrom(pr, JSON.parse(raw))
+    },
+    failedLog: async (pr, check) => (check.runId === null ? '' : gh(['run', 'view', String(check.runId), '-R', pr.repo, '--log-failed'])),
+    diff: (pr) => gh(['pr', 'diff', String(pr.number), '-R', pr.repo]),
+    rerun: async (pr, check) => {
+      if (check.runId === null) throw new Error(`${check.name} isn't an Actions run`)
+      await gh(['run', 'rerun', String(check.runId), '-R', pr.repo, '--failed'])
+    },
+  }
+}
+
 const GATE_ANSWERS = ['approve', 'wait', 'reject'] as const
 type GateAnswer = (typeof GATE_ANSWERS)[number]
 
@@ -1066,9 +1296,10 @@ type GateAnswer = (typeof GATE_ANSWERS)[number]
 async function answerGate(d: GoalDeps, eng: GoalEngine, goal: Goal, gate: Gate, answer: GateAnswer | 'words', text: string | null, at: number): Promise<void> {
   const said = (verb: string) => `${verb}: ${gate.condition}${text ? ` — ${text}` : ''}`
   if (answer === 'wait') {
-    if (gate.evaluator !== 'ai') throw new Error("a user gate has nothing to wait for: approve or reject it")
+    if (gate.evaluator === 'user') throw new Error("a user gate has nothing to wait for: approve or reject it")
     const deadlineMs = parseDuration(GATE_DEFAULT_DEADLINE)!
-    await d.store.goals.putGate({ ...gate, status: 'open', itemId: null, confirmationsSeen: 0, nextCheckAt: at + nextCheckDelay(gate.checks, gate.checkEveryMs), deadlineAt: at + deadlineMs })
+    const nextCheckAt = gate.evaluator === 'ai' ? at + nextCheckDelay(gate.checks, gate.checkEveryMs) : null
+    await d.store.goals.putGate({ ...gate, status: 'open', itemId: null, confirmationsSeen: 0, nextCheckAt, deadlineAt: at + deadlineMs })
     // Settled without waking the lead: it reads the answer with whatever wakes it next.
     await note(d, { actor: 'you', sessionId: null, kind: 'answered', from: null, to: null, detail: { text: said('Keep waiting'), gateId: gate.id, gate: 'wait' } }, goal.id, at)
     const [steps, events] = await Promise.all([d.store.goals.steps(goal.id), d.store.goals.events(goal.id)])
@@ -1409,7 +1640,7 @@ const describe = (name: string) => GOAL_TOOLS.find((t) => t.name === name)!.desc
 const roleZ = z.enum(STEP_ROLES as [StepRole, ...StepRole[]])
 const outcomeZ = z.enum(['done', 'failed', 'blocked'])
 const gateZ = z.looseObject({
-  evaluator: z.enum(['ai', 'user']).describe('ai = a read-only checker judges it; user = an approval in the Inbox'),
+  evaluator: z.enum(['ai', 'user', 'watcher']).describe('ai = a read-only checker judges it; user = an approval in the Inbox; watcher = the PR watcher (use the "shepherd-pr" block)'),
   condition: z.string().describe('what must hold, checkable from outside: "LIN-2214 is in QA"'),
   checkEvery: z.string().optional().describe('a fixed interval like "15m"; omit for the default back-off'),
   deadline: z.string().optional().describe('like "4h"; past it the gate becomes an approval. Default 24h'),

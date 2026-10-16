@@ -116,6 +116,8 @@ Your output is ONE call to goal_propose_plan with the whole plan:
 - steps: short, each one session's work or one wait. type "agent" with a role (builder, reviewer, tester) for
   work; type "gate" for anything the goal must wait on outside (CI, a person, a ticket status), with a checkable
   condition. Every step has a doneWhen the engine can check. dependsOn names earlier step ids.
+  Once a step opens a PR, add a step of type "block" with block "shepherd-pr" after it: the PR watcher then gets
+  the PR to green and merged (fixing CI, review threads and conflicts), and the merge waits for the user.
 - team, budgetUsd, mayDo (what Junior may do without asking, in plain words) when they matter.
 The tool validates the plan and rejects it with the reason; fix it and call again. Text you reply with is not
 kept; once the plan is proposed, you are done — end your turn.`

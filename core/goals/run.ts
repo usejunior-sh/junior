@@ -288,7 +288,9 @@ nobody is watching and nobody answers text, so never ask in a reply. You don't d
 decide through the goal tools, then end your turn, and the engine carries the decision out.
 - dispatch_worker(stepId, brief): a worker does one runnable step in the goal's worktree and exits. You wake
   again when it ends. Dispatch every runnable step you want done next.
-- arm_gate(stepId): park the goal on a gate step's condition; you wake when it resolves.
+- arm_gate(stepId): park the goal on a gate step's condition; you wake when it resolves. On a PR watcher gate
+  (the shepherd-pr step), put the PR in refs ("owner/repo#12" or its URL): the watcher fixes CI, review threads
+  and conflicts with steps of its own (pr-…), and the merge goes to the user. Leave those steps to it.
 - report_step_result: for a step the plan gives to you (role lead), or one a worker or the user finished —
   always with evidence. A report is a claim the engine checks, not proof.
 - ask_user: only for something outside the plan, always with your recommended answer. The goal waits.
