@@ -77,21 +77,19 @@ export function JuniorPage({ onNavigate, onDispatch }: Props) {
       <div className="jrCol">
         <header className="jrWho">
           <div className="jrFace">
-            <JuniorFace mood={mood} size={44} motion="follow" />
+            <JuniorFace mood={mood} size={56} motion="follow" />
           </div>
           <div className="jrMsg">
-            {day ? <NowLine now={day.now} onNavigate={onNavigate} /> : <span className="jrKick">&nbsp;</span>}
             <h1 className="jrHello" aria-live="polite">
               {head ? (
                 <>
-                  <span className="g">{head.greet}</span>
-                  {'\n'}
-                  {head.news}
+                  <span className="g">{head.greet}</span> {head.news}
                 </>
               ) : (
                 <span className="g">{persona.name}</span>
               )}
             </h1>
+            {day ? <NowLine now={day.now} onNavigate={onNavigate} /> : <span className="jrKick">&nbsp;</span>}
             {error && !day && (
               <p className="jrBrief err" role="alert">
                 Couldn't load the day: {error}{' '}

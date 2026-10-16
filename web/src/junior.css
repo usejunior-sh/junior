@@ -7,20 +7,20 @@
 /* rail + tab band: the face in place of an icon */
 .railBtn .jrRailFace { display: grid; place-items: center; width: 22px; height: 22px; }
 .railBtn.junior span.label { max-width: 52px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tab.lead .jrTabFace { display: inline-grid; place-items: center; width: 14px; height: 14px; flex: none; }
 
 /* ---------- the page ---------- */
 .jrPage { flex: 1; min-height: 0; overflow-y: auto; position: relative; padding: 36px 44px 72px; }
 .jrPage > .glow { top: -200px; left: 38%; }
-.jrCol { position: relative; max-width: var(--measure); margin: 0 auto; }
+/* a quarter wider than the transcript's measure: the page is lists, not prose */
+.jrCol { position: relative; max-width: calc(var(--measure) + 200px); margin: 0 auto; }
 
 .jrWho { display: flex; gap: 14px; align-items: flex-start; }
-.jrFace { flex: none; width: 44px; margin-top: 4px; }
+.jrFace { flex: none; width: 56px; margin-top: 2px; }
 .jrMsg { flex: 1; min-width: 0; }
 
-/* "● Right now finding the auth test flake · step 2 of 3" */
+/* under the greeting: "● Right now finding the auth test flake · step 2 of 3" */
 .jrKick {
-  display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0 0 10px; padding: 0;
+  display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 12px 0 0; padding: 0;
   border: 0; background: transparent; color: var(--mute); font: inherit; font-size: 0.9231rem; text-align: left;
 }
 .jrKick b { color: var(--ink); font-weight: 500; }
@@ -36,11 +36,11 @@ button.jrKick:hover b { text-decoration: underline; text-decoration-color: var(-
 }
 
 .jrHello {
-  margin: 0; font-family: var(--serif); font-weight: 400; font-size: 2.3rem; line-height: 1.12; letter-spacing: -0.3px;
-  color: var(--ink); white-space: pre-line; max-width: 34ch; text-wrap: balance;
+  margin: 0; font-family: var(--serif); font-weight: 400; font-size: 2.6rem; line-height: 1.1; letter-spacing: -0.4px;
+  color: var(--ink); text-wrap: balance;
 }
 .jrHello .g { color: var(--mute); }
-.jrBrief { margin: 12px 0 0; color: var(--body); font-size: 1.077rem; line-height: 1.6; max-width: 60ch; }
+.jrBrief { margin: 14px 0 0; color: var(--body); font-size: 1.077rem; line-height: 1.6; max-width: 70ch; }
 .jrBrief.err { color: var(--red-ink); }
 .jrRef {
   display: inline; padding: 0; border: 0; background: none; font: inherit; color: var(--ink); cursor: pointer; text-align: left;
@@ -51,8 +51,9 @@ a.jrRef { overflow-wrap: anywhere; }
 .jrRef:disabled { color: var(--mute); cursor: default; }
 
 /* the toolbar: underline tabs on the left, New chat on the right, one hairline under the row */
-.jrTabs { margin-left: 58px; }
-.jrBar { display: flex; align-items: center; gap: 10px; margin-top: 30px; border-bottom: 1px solid var(--hair); }
+/* lines up with the text beside the face: 56px face + 14px gap */
+.jrTabs { margin-left: 70px; }
+.jrBar { display: flex; align-items: center; gap: 10px; margin-top: 36px; border-bottom: 1px solid var(--hair); }
 .jrViews { display: flex; gap: 24px; margin-right: auto; }
 .jrView {
   position: relative; height: 42px; padding: 0; border: 0; background: transparent;
@@ -68,7 +69,7 @@ a.jrRef { overflow-wrap: anywhere; }
 .jrPane:focus-visible { outline: none; }
 
 /* section heads */
-.jrLh { display: flex; align-items: baseline; gap: 8px; margin: 28px 0 6px; color: var(--ash); font-size: 0.9231rem; font-weight: 400; }
+.jrLh { display: flex; align-items: baseline; gap: 8px; margin: 32px 0 8px; color: var(--ash); font-size: 0.9231rem; font-weight: 400; }
 .jrLh .n { font-family: var(--mono); font-size: 0.8462rem; color: var(--stone); }
 .jrLh .aside { margin-left: auto; color: var(--ash); font-size: 0.8462rem; text-align: right; }
 .jrLead { margin: 22px 0 8px; color: var(--mute); font-size: 0.9615rem; max-width: 64ch; }
@@ -79,8 +80,8 @@ a.jrRef { overflow-wrap: anywhere; }
 /* Needs you: rows with a small orange dot, not a bar */
 .jrRows { border-top: 1px solid var(--hair); }
 .jrRow {
-  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 170px) 84px 56px; align-items: center; gap: 14px;
-  width: 100%; min-height: 44px; padding: 0 8px 0 0; text-align: left; font: inherit; color: inherit;
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 240px) 96px 64px; align-items: center; gap: 16px;
+  width: 100%; min-height: 48px; padding: 0 8px 0 0; text-align: left; font: inherit; color: inherit;
   background: transparent; border: 0; border-bottom: 1px solid var(--hair); cursor: pointer;
 }
 .jrRow:hover { background: var(--wash-2); }
@@ -97,8 +98,8 @@ a.jrRef { overflow-wrap: anywhere; }
 /* Our plan for today */
 .jrPlan { border-top: 1px solid var(--hair); }
 .jrPlanRow {
-  display: grid; grid-template-columns: 18px minmax(0, 1fr) 84px 108px 128px 22px; align-items: center; gap: 12px;
-  min-height: 44px; padding: 0 0 0 2px; border-bottom: 1px solid var(--hair); cursor: pointer;
+  display: grid; grid-template-columns: 18px minmax(0, 1fr) 120px 120px 150px 22px; align-items: center; gap: 14px;
+  min-height: 48px; padding: 0 0 0 2px; border-bottom: 1px solid var(--hair); cursor: pointer;
 }
 .jrPlanRow:hover { background: var(--wash-2); }
 .jrPlanRow .ck { width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid var(--stone); }
@@ -132,7 +133,7 @@ a.jrRef { overflow-wrap: anywhere; }
 @keyframes jrFresh { from { background: var(--wash-3); } to { background: transparent; } }
 
 /* "Also today…" and Junior's reply under it */
-.jrAdd { display: flex; align-items: center; gap: 12px; min-height: 44px; margin: 0; padding: 0 8px 0 2px; border-bottom: 1px solid var(--hair); }
+.jrAdd { display: flex; align-items: center; gap: 14px; min-height: 48px; margin: 0; padding: 0 8px 0 2px; border-bottom: 1px solid var(--hair); }
 .jrAdd .plus { width: 18px; text-align: center; color: var(--ash); font-size: 1.15rem; }
 .jrAdd input { flex: 1; min-width: 0; padding: 0; border: 0; outline: none; background: transparent; color: var(--ink); font: inherit; }
 .jrAdd input::placeholder { color: var(--ash); }
@@ -170,7 +171,7 @@ a.jrRef { overflow-wrap: anywhere; }
 .jrOffer .because { color: var(--ash); font-size: 0.8462rem; white-space: nowrap; }
 
 /* What I can do: the sentences */
-.jrCards { display: grid; grid-template-columns: 1fr 1fr; gap: 0 36px; margin-top: 6px; }
+.jrCards { display: grid; grid-template-columns: 1fr 1fr; gap: 0 48px; margin-top: 6px; }
 .jrCard { padding: 12px 0 14px; border-top: 1px solid var(--hair); }
 .jrCard h3 { margin: 0 0 8px; color: var(--ash); font-size: 0.9231rem; font-weight: 500; }
 .jrCard .sent { font-family: var(--serif); font-size: 1.38rem; line-height: 1.32; letter-spacing: -0.1px; color: var(--ink); }

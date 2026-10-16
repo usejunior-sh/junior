@@ -36,7 +36,7 @@ export type HeadlineInput = {
 export type Headline = { greet: string; news: string }
 
 /**
- * Line one greets (muted), line two is the news (ink). First open introduces
+ * One line: the greeting (muted), then the news (ink). First open introduces
  * Junior; the evening reports the plan; otherwise it counts what needs you.
  */
 export function headline(h: HeadlineInput): Headline {

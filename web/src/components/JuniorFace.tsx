@@ -6,8 +6,8 @@
  *
  * Motion: `follow` tracks the pointer (the Junior page only), `wander`
  * glances and blinks, `still` moves only when the mood changes (the rail).
- * Reduced motion turns all of it off. Below 24px the brows drop and the eyes
- * grow, the way a logo has a small-size cut.
+ * Reduced motion turns all of it off. The face is the same at every size;
+ * only its lines thicken below ~24px so the brows never thin out of sight.
  *
  * React renders the skeleton once; one shared animation frame loop moves
  * every face that needs it, writing attributes directly, so a face never
@@ -116,7 +116,6 @@ class FaceCtl {
   constructor(
     public els: Els,
     mood: Mood,
-    public small: boolean,
     public motion: FaceMotion,
   ) {
     this.cur = clone(MOODS[mood])
@@ -185,22 +184,19 @@ class FaceCtl {
   }
 
   render() {
-    const { els, small } = this
-    const amp = small ? 0.55 : 1
-    const gx = this.gaze.x * amp
-    const gy = this.gaze.y * amp
+    const { els } = this
+    const gx = this.gaze.x
+    const gy = this.gaze.y
     els.face.setAttribute('transform', `translate(${gx * 10} ${gy * 7})`)
     els.front.setAttribute('transform', `translate(${gx * 3} ${gy * 2})`)
     els.back.setAttribute('transform', `translate(${-gx * 4} ${-gy * 3})`)
     const blink = this.blinkP >= 0 ? 1 - 0.88 * Math.sin(Math.PI * this.blinkP) : 1
-    const grow = small ? 1.7 : 1
     this.cur.eyes.forEach((e, i) => {
       const side = i === 0 ? -1 : 1
       const persp = 1 + side * gx * 0.1
-      const w = e.w * grow * persp
-      const h = Math.max(2.2, e.h * grow * persp * blink)
-      const x = 50 + (e.x - 50) * (small ? 1.25 : 1)
-      const y = 56 + (e.y - 56) * (small ? 1.1 : 1)
+      const w = e.w * persp
+      const h = Math.max(2.2, e.h * persp * blink)
+      const { x, y } = e
       const el = els.eyes[i]
       el.setAttribute('x', String(x - w / 2))
       el.setAttribute('y', String(y - h / 2))
@@ -209,9 +205,9 @@ class FaceCtl {
       el.setAttribute('rx', String(Math.min(w, h) / 2))
       el.setAttribute('transform', `rotate(${e.rot} ${x} ${y})`)
       el.setAttribute('opacity', String(1 - this.cur.happy))
-      const s = 8 * grow * 0.75
+      const s = 8 * 0.75
       const a = els.arcs[i]
-      a.setAttribute('d', `M${x - s} ${y + 3} Q${x} ${y - 7 * grow * 0.8} ${x + s} ${y + 3}`)
+      a.setAttribute('d', `M${x - s} ${y + 3} Q${x} ${y - 7 * 0.8} ${x + s} ${y + 3}`)
       a.setAttribute('opacity', String(this.cur.happy))
     })
     els.brows.forEach((el, i) => {
@@ -257,8 +253,9 @@ export const JuniorFace = memo(function JuniorFace({ mood = 'hello', size = 40, 
   const persona = usePersona()
   const svg = useRef<SVGSVGElement>(null)
   const ctl = useRef<FaceCtl | null>(null)
-  const small = size < 24
   const p = facePalette(colour ?? persona.colour)
+  // Lines in viewBox units, never thinner than about one screen pixel.
+  const line = Math.max(4.4, 112 / size)
 
   // Build the controller once the skeleton is in the DOM (before paint, so the
   // eyes never flash empty); drop it with the face.
@@ -275,7 +272,7 @@ export const JuniorFace = memo(function JuniorFace({ mood = 'hello', size = 40, 
       arcs: q<SVGPathElement>('[data-part="arc"]'),
       brows: q<SVGPathElement>('[data-part="brow"]'),
     }
-    const c = new FaceCtl(els, mood, small, motion)
+    const c = new FaceCtl(els, mood, motion)
     ctl.current = c
     c.render()
     if (motion !== 'still' && !reduced()) {
@@ -288,7 +285,7 @@ export const JuniorFace = memo(function JuniorFace({ mood = 'hello', size = 40, 
     }
     // the mood is applied by the effect below; a new size or motion is a new face
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [small, motion])
+  }, [motion])
 
   useEffect(() => {
     ctl.current?.setMood(mood)
@@ -310,9 +307,9 @@ export const JuniorFace = memo(function JuniorFace({ mood = 'hello', size = 40, 
       <path data-part="back" d={BACK} fill={p.edge} />
       <path data-part="front" d={FRONT} fill={p.body} />
       <g data-part="face">
-        {!small && [0, 1].map((i) => <path key={`b${i}`} data-part="brow" fill="none" strokeWidth={4.4} strokeLinecap="round" stroke={p.brow} />)}
+        {[0, 1].map((i) => <path key={`b${i}`} data-part="brow" fill="none" strokeWidth={line} strokeLinecap="round" stroke={p.brow} />)}
         {[0, 1].map((i) => <rect key={`e${i}`} data-part="eye" fill={p.eye} />)}
-        {[0, 1].map((i) => <path key={`a${i}`} data-part="arc" fill="none" strokeWidth={4.6} strokeLinecap="round" stroke={p.eye} opacity={0} />)}
+        {[0, 1].map((i) => <path key={`a${i}`} data-part="arc" fill="none" strokeWidth={line + 0.2} strokeLinecap="round" stroke={p.eye} opacity={0} />)}
       </g>
     </svg>
   )

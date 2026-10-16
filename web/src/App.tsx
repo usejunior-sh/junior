@@ -356,7 +356,7 @@ export function App() {
   // Queued actions waiting on you — the Actions rail badge.
   const pendingActions = usePendingActions()
   const goals = useGoals()
-  // Junior's name and face, everywhere it shows: the rail, the band, the phone's title.
+  // Junior's name and face, everywhere it shows: the rail and the phone's title.
   const persona = usePersona()
   const juniorMood = useRailMood(pendingActions)
   const [sheet, setSheet] = useState<RailSection | null>(null)
@@ -1240,9 +1240,6 @@ export function App() {
             onPin={pin}
             pageTab={pageTab}
             onInbox={() => navigate('/inbox')}
-            onJunior={() => navigate('/junior')}
-            juniorName={persona.name}
-            juniorMood={juniorMood}
             onShowPanel={panelSize.collapsed && !isDesktop ? () => panelSize.setCollapsed(false) : undefined}
             onSelect={(key) => navigate(routeOfKey(key))}
             onClose={closeOpenTab}
