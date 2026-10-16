@@ -124,6 +124,7 @@ export const claude: Provider = {
         ...(spec.planning ? { permissionMode: 'plan' as const } : sdkMode(spec.permissionMode) ? { permissionMode: sdkMode(spec.permissionMode) } : {}),
         // The SDK refuses 'bypassPermissions' without this explicit opt-in.
         ...(spec.permissionMode === 'bypassPermissions' ? { allowDangerouslySkipPermissions: true } : {}),
+        ...(spec.additionalDirectories?.length ? { additionalDirectories: spec.additionalDirectories } : {}),
         ...(spec.resume ? { resume: spec.resume } : {}),
         ...(spec.plugins?.length ? { plugins: spec.plugins.map((p) => ({ type: 'local' as const, path: p })) } : {}),
         ...(spec.veto ? { hooks: { PreToolUse: [{ hooks: [vetoHook(spec.veto)] }] } } : {}),

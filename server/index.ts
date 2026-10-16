@@ -116,6 +116,7 @@ import type {
   ItemImage,
   ItemImageEdit,
   ItemImagesResponse,
+  UploadResponse,
   PlaybookResponse,
   PlaybooksResponse,
   SessionKind,
@@ -405,6 +406,7 @@ import {
   type Access,
 } from './remote.js'
 import { launchAgentInstalled } from './launchd.js'
+import { handleUpload } from './attachments.js'
 import { applyImageEdits, itemImageAttachments, readItemImage } from './itemImages.js'
 import { BrowserHub, describePicked, makeBrowserMcp, renderVerification, ShotStore } from './browser.js'
 import { browserCallAllowed } from '../core/browser/policy.js'
@@ -970,6 +972,9 @@ class LiveSession {
       permissionMode: row.permissionMode,
       // Plan mode: the agent reads and plans until you approve its plan (ExitPlanMode).
       ...(row.planning ? { planning: true } : {}),
+      // Attached files live outside the project folder; Read there would prompt.
+      // Listing the workspace's attachments folder makes it part of the session's scope.
+      additionalDirectories: [rt.attachmentsDir],
       // Revival: replay the agent's own transcript into the new subprocess.
       ...(resumeSdkSessionId ? { resume: resumeSdkSessionId } : {}),
       // The workspace's own skills and agents, for a chat. Not for briefs, job
@@ -10825,6 +10830,19 @@ const server = http.createServer(async (req, res) => {
     } catch {
       json(404, { ok: false, error: 'the image file is missing' })
     }
+    return
+  }
+  // A file picked, dropped or pasted into a composer or an item description:
+  // the raw body, stored under attachments/uploads/<uuid>/<name> until a
+  // message or item save names its id (shared/protocol.ts FileRef).
+  if (url.pathname === '/api/uploads' && req.method === 'POST') {
+    let body: UploadResponse
+    try {
+      body = { ok: true, file: await handleUpload(rt.attachmentsDir, req, url.searchParams.get('name')) }
+    } catch (err) {
+      body = { ok: false, error: errText(err) }
+    }
+    json(body.ok ? 200 : 400, body)
     return
   }
   // --- artifacts + links (.docs/next-version.md, phase 1) ---------------------

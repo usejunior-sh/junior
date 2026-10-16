@@ -160,6 +160,8 @@ export type SessionSpec = {
   permissionMode?: PermissionMode | null
   /** plan mode: read and plan, edit nothing, until the plan is approved (Claude only) */
   planning?: boolean
+  /** folders outside `cwd` the agent may read without asking (attached files) */
+  additionalDirectories?: string[]
   /** the agent's own session id to continue */
   resume?: string
   /** local plugin folders to load (the workspace's skills and agents); adapters without plugins ignore it */

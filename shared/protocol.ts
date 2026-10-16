@@ -1302,6 +1302,8 @@ export type ManualItemInput = {
   priority?: number
   /** the complete desired image set — new base64 uploads and the refs to keep */
   images?: ItemImageEdit[]
+  /** the complete desired file set, as ids: files the item holds are kept, upload ids are claimed */
+  files?: string[]
 }
 
 /** `id` is the new item's on a create (POST). */
@@ -1433,6 +1435,30 @@ export type ItemImage = {
 export type ItemImageEdit = { id: string } | ImageAttachment
 
 export const MAX_IMAGES_PER_ITEM = 8
+
+/**
+ * Any file (pdf, csv, …) attached to a chat message or a work item. Bytes never
+ * ride the WebSocket or an item save: the client uploads them first
+ * (`POST /api/uploads?name=`, raw body) and then names the upload by id. The
+ * server keeps the real filename on disk, because Claude Code's Read picks
+ * pdf / notebook / image handling from the extension.
+ */
+export type FileRef = {
+  /** uuid of the stored file's folder */
+  id: string
+  /** sanitized filename, as stored */
+  name: string
+  /** size on disk */
+  bytes: number
+}
+
+/** Per-file ceiling (raw upload body) and how many files ride one message or item. */
+export const MAX_FILE_BYTES = 20 * 1024 * 1024
+export const MAX_FILES_PER_MESSAGE = 5
+export const MAX_FILES_PER_ITEM = 5
+
+/** POST /api/uploads?name= — the stored upload, ready to be named in `files`. */
+export type UploadResponse = { ok: true; file: FileRef } | { ok: false; error: string }
 
 /** Where an item image's raw bytes are served (the `triage_ws` cookie scopes it). */
 export const itemImageUrl = (itemId: string, imageId: string): string =>
@@ -1847,6 +1873,8 @@ export type SessionEvent =
       kind: 'local_user'
       text: string
       images?: ImageAttachment[]
+      /** files saved under the session's attachments folder */
+      files?: FileRef[]
       mentions?: ResolvedMention[]
       /** who sent it when it wasn't the user — a teammate agent's label, or 'triage'; absent = the user */
       from?: string
@@ -1979,6 +2007,8 @@ export type ClientMessage =
       firstMessage?: string
       /** Images attached to that first message. */
       images?: ImageAttachment[]
+      /** Upload ids of files attached to that first message. */
+      files?: string[]
       /** `@` mentions in that first message, resolved against `cwd`. */
       mentions?: Mention[]
       model?: string
@@ -2007,7 +2037,7 @@ export type ClientMessage =
   /** Delete a session and its transcript. Irreversible — the UI confirms. */
   | { type: 'delete_session'; sessionId: string }
   | { type: 'subscribe'; sessionId: string }
-  | { type: 'user_message'; sessionId: string; text: string; images?: ImageAttachment[]; mentions?: Mention[]; mode?: 'goal' }
+  | { type: 'user_message'; sessionId: string; text: string; images?: ImageAttachment[]; files?: string[]; mentions?: Mention[]; mode?: 'goal' }
   | {
       type: 'permission_response'
       sessionId: string
