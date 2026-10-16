@@ -46,6 +46,7 @@
     "core/goals/types.ts",
     "core/goals/machine.ts",
     "core/goals/review.ts",
-    "core/goals/blocks.ts"
+    "core/goals/blocks.ts",
+    "core/junior"
   ]
 }

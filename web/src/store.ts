@@ -12,6 +12,7 @@
  */
 import type { BriefJob,
   Build,
+  Persona,
   ClientMessage,
   ServerMessage,
   SessionEvent,
@@ -24,6 +25,7 @@ import type { BriefJob,
   WorkspacesResponse,
 } from '../../shared/protocol.js'
 import { adoptWorkspace, boundWorkspace, gotoWorkspace } from './workspaceUrl.js'
+import { DEFAULT_PERSONA } from '../../core/junior/persona.js'
 
 export type ConnState = 'connecting' | 'connected' | 'disconnected'
 
@@ -49,6 +51,8 @@ export class Store {
   #onboarded = true
   /** Which copy of triage this tab is talking to — null until `hello` lands. */
   #build: Build | null = null
+  /** Junior's persona in this workspace — the rail's name and face colour. */
+  #persona: Persona = DEFAULT_PERSONA
 
   #liveText = new Map<string, string>()
   /** Deltas received since the last animation frame. */
@@ -86,6 +90,7 @@ export class Store {
   getWorkspaces = (): readonly Workspace[] => this.#workspaces
   getOnboarded = (): boolean => this.#onboarded
   getBuild = (): Build | null => this.#build
+  getPersona = (): Persona => this.#persona
   getTerminals = (): readonly TerminalSummary[] => this.#terminals
   getCheckouts = (): readonly Checkout[] => this.#checkouts
 
@@ -251,6 +256,8 @@ export class Store {
   readonly #actionsListeners = new Set<(sessionId: string | undefined) => void>()
   /** Who follows goals (the Goals page, a goal page, the rail's count). */
   readonly #goalsListeners = new Set<(goalId: string | undefined) => void>()
+  /** Who follows today's plan (the Junior page). */
+  readonly #todayListeners = new Set<() => void>()
 
   #handle(msg: ServerMessage) {
     switch (msg.type) {
@@ -265,7 +272,15 @@ export class Store {
         this.#terminals = msg.terminals
         this.#checkouts = msg.checkouts
         this.#build = msg.build
+        if (msg.persona) this.#persona = msg.persona
         this.#notify()
+        break
+      case 'persona':
+        this.#persona = msg.persona
+        this.#notify()
+        break
+      case 'today_changed':
+        for (const fn of this.#todayListeners) fn()
         break
       case 'sessions':
         this.#sessions = msg.sessions
@@ -434,6 +449,20 @@ export class Store {
     return () => {
       this.#goalsListeners.delete(fn)
     }
+  }
+
+  /** Fires when today's plan changed (a row added or removed, the day drafted); returns the unsubscribe. */
+  onTodayChanged(fn: () => void): () => void {
+    this.#todayListeners.add(fn)
+    return () => {
+      this.#todayListeners.delete(fn)
+    }
+  }
+
+  /** A persona saved from this tab: apply it now rather than waiting for the broadcast. */
+  setPersona(p: Persona) {
+    this.#persona = p
+    this.#notify()
   }
 
   /** Fires when a session's turn ended and its changes may have moved. */

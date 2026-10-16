@@ -7,6 +7,7 @@ import { store } from './store.js'
 import { installWorkspaceFetch } from './workspaceUrl.js'
 import { trackViewport } from './viewport.js'
 import './styles.css'
+import './junior.css'
 
 // This tab's workspace comes from its own URL (`/w/<id>/`), so two tabs can
 // hold two workspaces at once. Tag every request before anything can fetch.

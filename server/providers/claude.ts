@@ -159,7 +159,7 @@ export const claude: Provider = {
       prompt: spec.prompt,
       options: {
         ...(spec.cwd ? { cwd: spec.cwd } : {}),
-        systemPrompt: PRESET,
+        systemPrompt: spec.systemAppend ? { ...PRESET, append: spec.systemAppend } : PRESET,
         settingSources: spec.userConfig ? ['user'] : [],
         ...(spec.tools ? { tools: spec.tools } : {}),
         ...(spec.allowedTools ? { allowedTools: spec.allowedTools } : {}),

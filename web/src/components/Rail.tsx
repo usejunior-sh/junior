@@ -1,7 +1,10 @@
 import { CalendarClock, FileDiff, FileText, Inbox, MessagesSquare, Send, Target, Terminal, type LucideProps } from 'lucide-react'
 import type { ComponentType } from 'react'
+import type { Mood } from '../../../core/junior/mood.js'
+import { MOOD_LABEL } from '../../../core/junior/mood.js'
+import { JuniorFace } from './JuniorFace.js'
 
-export type RailSection = 'inbox' | 'sessions' | 'artifacts' | 'changes' | 'terminals' | 'jobs' | 'actions' | 'goals'
+export type RailSection = 'junior' | 'inbox' | 'sessions' | 'artifacts' | 'changes' | 'terminals' | 'jobs' | 'actions' | 'goals'
 
 type Props = {
   active: RailSection | null
@@ -15,6 +18,9 @@ type Props = {
   actionsCount: number
   /** goals whose turn is yours */
   goalsCount: number
+  /** Junior's entry: the persona's name, and its face's mood (the most urgent state) */
+  juniorName: string
+  juniorMood: Mood
   onGo: (section: RailSection) => void
 }
 
@@ -29,10 +35,25 @@ const ITEMS: Array<{ id: RailSection; label: string; icon: ComponentType<LucideP
   { id: 'jobs', label: 'Jobs', icon: CalendarClock },
 ]
 
-/** The labelled 64px rail — one button per destination, counts as small badges. */
-export function Rail({ active, collapsed, inboxCount, runningCount, terminalCount, changedCount, actionsCount, goalsCount, onGo }: Props) {
+/** The labelled 64px rail — Junior first, then one button per destination, counts as small badges. */
+export function Rail({ active, collapsed, inboxCount, runningCount, terminalCount, changedCount, actionsCount, goalsCount, juniorName, juniorMood, onGo }: Props) {
+  const juniorToggle = collapsed !== undefined && active === 'junior'
   return (
     <nav className="rail" aria-label="Sections">
+      {/* Junior: its face in place of an icon, still, changing only when its state does. */}
+      <button
+        type="button"
+        className={`railBtn junior${active === 'junior' ? ' active' : ''}`}
+        title={`${juniorName} · ${MOOD_LABEL[juniorMood].toLowerCase()}`}
+        aria-current={active === 'junior' ? 'page' : undefined}
+        aria-expanded={juniorToggle ? !collapsed : undefined}
+        onClick={() => onGo('junior')}
+      >
+        <span className="jrRailFace">
+          <JuniorFace mood={juniorMood} size={22} motion="still" decorative />
+        </span>
+        <span className="label">{juniorName}</span>
+      </button>
       {ITEMS.map(({ id, label, icon: Icon }) => {
         const badge =
           id === 'inbox'

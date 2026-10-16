@@ -28,7 +28,9 @@ export const TRIAGE_MCP_INSTRUCTIONS = `Triage is a local work inbox for one eng
 - brief — a model-written artifact about one item, produced by a headless run against a playbook. Read the brief before starting work on an item.
 - playbook / dispatch template — the user's own prose for how a kind of item gets briefed and how its session opens. User-owned files; not yours to rewrite.
 
-list_work_items, get_work_item, get_session_context, list_artifacts and read_artifact are free reads — use them rather than guessing. Every other tool writes, and the user is asked first.`
+- today's plan — one list of work items for the user and Junior for the current local day, each with an owner: "you" (the user) or "junior" (triage's agent, Junior). Done comes from the item's own status; unfinished rows carry over to the next day. get_today reads it; add_to_today and remove_from_today change it.
+
+list_work_items, get_work_item, get_session_context, list_artifacts, read_artifact and get_today are free reads — use them rather than guessing. Every other tool writes, and the user is asked first.`
 
 export type TriageSessionKind = 'chat' | 'job-run' | 'brief' | 'goal'
 
@@ -41,6 +43,8 @@ export type TriageSessionIdentity = {
   artifactsRoot: string
   /** the workspace's own skills and agents — a plugin its chat sessions load as `triage:` */
   libraryRoot?: string
+  /** what the user calls their junior engineer here (the persona's name); absent = Junior */
+  juniorName?: string
 }
 
 /**
@@ -64,7 +68,7 @@ was opened for and which artifacts are attached to it; get_work_item follows any
   return `${head}
 When the user says to write something down, note it, or attach it here, that means write_artifact — with
 \`links\` naming this session ({ kind: "session", id: "${id.sessionId}", role: "context" }) and the work item
-too when there is one, so the note comes back with the work rather than getting lost in the transcript.${kind === 'chat' ? JOBS_SECTION + GOALS_SECTION : ''}${id.libraryRoot ? librarySection(id.libraryRoot) : ''}`
+too when there is one, so the note comes back with the work rather than getting lost in the transcript.${kind === 'chat' ? jobsSection(id.juniorName ?? 'Junior') + GOALS_SECTION : ''}${id.libraryRoot ? librarySection(id.libraryRoot) : ''}`
 }
 
 /**
@@ -73,9 +77,9 @@ too when there is one, so the note comes back with the work rather than getting 
  * takes the assignment the way a good junior engineer would. "New job" in the
  * UI opens a chat whose first message starts "New job:".
  */
-export const JOBS_SECTION = `
+export const jobsSection = (name: string) => `
 
-In triage you are Junior, the user's junior engineer. A job is a standing assignment triage runs for them on
+In triage you are ${name}, the user's junior engineer. A job is a standing assignment triage runs for them on
 a schedule, headless, in one of their projects. When they want one ("every morning…", "keep an eye on…", or a
 message starting "New job:"), take it on the way a good junior engineer would:
 1. Read it back in a line or two: what the job is, what it does, and what it must never do.
@@ -86,6 +90,9 @@ message starting "New job:"), take it on the way a good junior engineer would:
 3. Draft it with draft_job, the don'ts written into the instruction and any skills or agents it should use
    named (only those load in its runs). It is saved off; only the user turns it on.
 4. Offer a trial run with try_job, so they see what it would file before they turn it on.`
+
+/** The jobs section for the default name — what a chat gets when the persona is unchanged. */
+export const JOBS_SECTION = jobsSection('Junior')
 
 /**
  * How a chat starts a goal (.docs/goals/goals-mapping.md, decision 13): small

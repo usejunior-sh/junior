@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, 
 import type { CreateStep,
   DispatchPreviewResponse,
   EffortLevel,
+  ItemDetailResponse,
   ImageAttachment,
   Mention,
   PermissionBehavior,
@@ -33,6 +34,8 @@ import { ArtifactsPanel, InboxTabsPanel, NewTerminalMenu, PanelCollapseContext, 
 import { resolveTab, tabOfItem, useInboxTabs } from './inboxTabs.js'
 import { HelpOverlay } from './components/HelpOverlay.js'
 import { InboxPage } from './components/InboxPage.js'
+import { JuniorPage } from './components/JuniorPage.js'
+import { startJuniorChat, usePersona, useRailMood } from './junior.js'
 import { ItemPage } from './components/ItemPage.js'
 import { NewSessionComposer, type NewSession } from './components/NewSessionComposer.js'
 import { Rail, type RailSection } from './components/Rail.js'
@@ -142,6 +145,7 @@ const PAGE_TABS: Record<'jobs' | 'terminals' | 'artifacts' | 'changes' | 'action
 /** The sections whose list is the panel: on a phone, their bottom-bar tab opens it as a sheet. */
 const MOBILE_SHEETS: readonly RailSection[] = ['inbox', 'sessions', 'terminals', 'changes']
 const SHEET_LABEL: Record<RailSection, string> = {
+  junior: 'Junior',
   inbox: 'Inbox',
   sessions: 'Sessions',
   artifacts: 'Artifacts',
@@ -163,6 +167,8 @@ const draftRoute = (id: string) => `/new/${id}`
  */
 function tabKeyOf(route: Route): string | null {
   switch (route.page) {
+    case 'junior':
+      return 'junior'
     case 'inbox':
       return 'inbox'
     case 'session':
@@ -220,8 +226,8 @@ function routeOfKey(key: string): string {
     case 'page':
       return `/${id}`
     default:
-      // a bare session id, or the pinned inbox
-      return key === 'inbox' ? '/inbox' : key
+      // a bare session id, or the pinned Junior and inbox
+      return key === 'inbox' ? '/inbox' : key === 'junior' ? '/junior' : key
   }
 }
 
@@ -230,8 +236,8 @@ const DOC_KINDS: readonly TabKind[] = ['item', 'artifact', 'job', 'job-form', 'c
 
 function kindOfKey(key: string): TabKind | null {
   const cut = key.indexOf(':')
-  // A session is the one key with no prefix; the pinned inbox is not a kind.
-  if (cut === -1) return key === 'inbox' ? null : 'session'
+  // A session is the one key with no prefix; the pinned Junior and inbox are not kinds.
+  if (cut === -1) return key === 'inbox' || key === 'junior' ? null : 'session'
   const p = key.slice(0, cut)
   if (p === 'term') return 'terminal'
   if (p === 'draft') return 'draft'
@@ -263,6 +269,8 @@ const GENERIC: Record<TabKind, string> = {
  */
 function sectionOf(route: Route): RailSection | null {
   switch (route.page) {
+    case 'junior':
+      return 'junior'
     case 'inbox':
     case 'item':
       return 'inbox'
@@ -348,6 +356,9 @@ export function App() {
   // Queued actions waiting on you — the Actions rail badge.
   const pendingActions = usePendingActions()
   const goals = useGoals()
+  // Junior's name and face, everywhere it shows: the rail, the band, the phone's title.
+  const persona = usePersona()
+  const juniorMood = useRailMood(pendingActions)
   const [sheet, setSheet] = useState<RailSection | null>(null)
   useEffect(() => setSheet(null), [route, mobile])
 
@@ -405,9 +416,9 @@ export function App() {
   useEffect(() => {
     document.title = activeWorkspace ? `triage • ${activeWorkspace.name}` : 'triage'
   }, [activeWorkspace?.name])
-  // The old home route: the inbox is the product's home now.
+  // The bare home route: Junior's page is the product's home.
   useEffect(() => {
-    if (route.page === 'home') navigate('/inbox', { replace: true })
+    if (route.page === 'home') navigate('/junior', { replace: true })
   }, [route.page, navigate])
 
   // Settings is a page: remember its tab for the gear, and every other page
@@ -820,6 +831,15 @@ export function App() {
         openSettings()
         return
       }
+      // ⌘J: a new chat with Junior, from anywhere (no other ⌘J in the app or Triage.app's menus).
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'j') {
+        if (anyDialogOpen()) return
+        e.preventDefault()
+        setHelpOpen(false)
+        setPaletteOpen(false)
+        startJuniorChat()
+        return
+      }
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'b') {
         if (isTypingTarget(e) || anyDialogOpen()) return
         e.preventDefault()
@@ -831,6 +851,7 @@ export function App() {
       if (goPrefix.current !== undefined) {
         clearTimeout(goPrefix.current)
         goPrefix.current = undefined
+        if (e.key === 'h') return goTo('junior')
         if (e.key === 'i') return goTo('inbox')
         if (e.key === 's') return goTo('sessions')
         if (e.key === 't') return goTo('terminals')
@@ -948,6 +969,22 @@ export function App() {
     [navigate],
   )
 
+  // Start on a Junior-owned plan row: the same dispatch as the inbox's, by id —
+  // the row may name an item the open inbox doesn't hold (a to-do made a moment ago).
+  const dispatchById = useCallback(
+    (id: string) => {
+      const ranked = inbox.items.find((i) => i.id === id)
+      if (ranked) return dispatch(ranked)
+      void fetch(`/api/items/detail?id=${encodeURIComponent(id)}`)
+        .then((r) => r.json() as Promise<ItemDetailResponse>)
+        .then((b) => {
+          if (b.ok) dispatch({ ...b.detail.item, score: 0, group: 'cycle', reason: 'on today\u2019s plan', label: 'do' })
+        })
+        .catch(() => {})
+    },
+    [inbox.items, dispatch],
+  )
+
   // A session whose worktree is gone continues as a new session in the project's
   // main folder, with the old one attached as an `@session:` mention for context.
   const continueInMain = useCallback(
@@ -1031,7 +1068,9 @@ export function App() {
   // same thing in a home-screen app, which has no browser back at all.
   const mobileTitle = sheet
     ? SHEET_LABEL[sheet]
-    : route.page === 'inbox'
+    : route.page === 'junior'
+      ? persona.name
+      : route.page === 'inbox'
       ? 'Inbox'
       : route.page === 'settings'
         ? 'Settings'
@@ -1073,7 +1112,8 @@ export function App() {
   const modelName = current ? findModel(models, current.model)?.name ?? current.model : undefined
 
   // The Actions page is a list and a detail side by side: it needs the room, so no panel beside it.
-  const panel = !panelSection || panelSection === 'actions' || panelSection === 'goals' ? null : panelSection === 'terminals' ? (
+  // Junior's page is one centred column: no panel beside it either.
+  const panel = !panelSection || panelSection === 'actions' || panelSection === 'goals' || panelSection === 'junior' ? null : panelSection === 'terminals' ? (
       <TerminalsPanel
         terminals={terminals}
         currentId={currentTerminalId}
@@ -1170,6 +1210,8 @@ export function App() {
           changedCount={changes.projects.reduce((n, p) => n + p.checkouts.reduce((m, c) => m + c.files.length, 0), 0)}
           actionsCount={pendingActions}
           goalsCount={goals.waitingOnYou}
+          juniorName={persona.name}
+          juniorMood={juniorMood}
           onGo={onRailGo}
         />
 
@@ -1198,6 +1240,9 @@ export function App() {
             onPin={pin}
             pageTab={pageTab}
             onInbox={() => navigate('/inbox')}
+            onJunior={() => navigate('/junior')}
+            juniorName={persona.name}
+            juniorMood={juniorMood}
             onShowPanel={panelSize.collapsed && !isDesktop ? () => panelSize.setCollapsed(false) : undefined}
             onSelect={(key) => navigate(routeOfKey(key))}
             onClose={closeOpenTab}
@@ -1209,7 +1254,9 @@ export function App() {
           />}
 
           <div className="content">
-            {route.page === 'inbox' ? (
+            {route.page === 'junior' ? (
+              <JuniorPage onNavigate={navigate} onDispatch={dispatchById} />
+            ) : route.page === 'inbox' ? (
               <InboxPage
                 tab={resolveTab(route.tab, inboxTabs.counts)}
                 tabs={inboxTabs}
