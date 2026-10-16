@@ -6,6 +6,7 @@
  * One main window, which only hides on close so the app lives on in the Dock;
  * opening a workspace "in a new tab" (the switcher's ⌘-click / external icon)
  * opens a second window on that workspace's URL (`/w/<id>/`), which closes for real.
+ * ⌘⇧T from any app opens quick capture (capture.ts).
  */
 import {
   app,
@@ -25,6 +26,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { BrowserHost } from './browser.js'
+import { CAPTURE_HOTKEY, startCapture, stopCapture, toggleCapture } from './capture.js'
 import { PORT, UI_PORT, daemonUrl, ensureDaemon, logFile, probe, restartDaemon, type DaemonHealth } from './daemon.js'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
@@ -78,6 +80,8 @@ function start() {
   ipcMain.handle('nav:state', (e) => navState(windowOf(e.sender)))
   browser = new BrowserHost(app.getVersion())
   browser.start()
+  // Captured items land in the main window's workspace.
+  startCapture(() => (win && !win.isDestroyed() ? workspaceOf(target.get(win) ?? '') : ''))
   win = createWindow(daemonUrl())
   void connect()
   setInterval(watchdog, 5000)
@@ -439,6 +443,8 @@ async function trayMenu(): Promise<Menu> {
   const health = await Promise.race([probe(), new Promise<undefined>((r) => setTimeout(r, 600))])
   return Menu.buildFromTemplate([
     { label: 'Open Triage', click: showWindow },
+    // Shown, not registered: the global shortcut already answers it.
+    { label: 'Quick capture…', accelerator: CAPTURE_HOTKEY, registerAccelerator: false, click: toggleCapture },
     { label: statusLine(health), enabled: false },
     // Never restarted for you: it would stop live sessions.
     ...(isStale(health)
@@ -531,6 +537,7 @@ function saveWindowState() {
 app.on('before-quit', () => {
   quitting = true
 })
+app.on('will-quit', stopCapture)
 app.on('activate', showWindow)
 // Never quit on the last window closing: the window only hides, and the tray stays.
 app.on('window-all-closed', () => {})

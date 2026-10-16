@@ -12,6 +12,7 @@
  *   triage uninstall   remove the LaunchAgent
  *   triage doctor      check the environment jobs depend on
  *   triage goal        create, list and show goals (over the running server)
+ *   triage add         file a to-do in the inbox (over the running server)
  *
  * "Is triage running" is always decided by GET /api/health — a pid file can
  * lie after a crash or reboot; the health check cannot. The state file
@@ -100,6 +101,9 @@ const HELP = `
     ${cyan('triage workspace create <name>')}     create a workspace ${dim('(--color #rrggbb)')}
     ${cyan('triage workspace use <name|id>')}     make a workspace the default
 
+  ${bold('Quick capture')} ${dim('(needs the server running)')}
+    ${cyan('triage add <title>')}                  file a to-do in the inbox, with you ${dim('(--workspace <name|id>)')}
+
   ${bold('Goals')} ${dim('(needs the server running)')}
     ${cyan('triage goal create <title> --done-when <text>')}   start a goal ${dim('(--horizon today|until_done|ongoing)')}
     ${cyan('triage goal list')}                    list goals ${dim('(--state plan_ready,waiting_you)')}
@@ -112,7 +116,7 @@ const HELP = `
   ${bold('Options')}
     ${cyan('--port <n>')}         port to serve on ${dim(`(default ${DEFAULT_PORT}; PORT env works too)`)}
     ${cyan('--color <hex>')}      workspace color for ${cyan('workspace create')}
-    ${cyan('--workspace <id>')}   the workspace ${cyan('goal')} commands act in ${dim('(default: the default workspace)')}
+    ${cyan('--workspace <id>')}   the workspace ${cyan('goal')} and ${cyan('add')} act in ${dim('(default: the default workspace)')}
     ${cyan('--version')}          print the version
     ${cyan('--help')}             show this help
 
@@ -135,7 +139,7 @@ let explicitPort: number | null = null
 let explicitColor: string | null = null
 /** `triage install --defer`: write the agent, never restart a running server. */
 let deferInstall = false
-/** `triage goal …` flags */
+/** `triage goal …` flags (`--workspace` serves `triage add` too) */
 const goalFlags: { doneWhen?: string; horizon?: string; state?: string; workspace?: string } = {}
 const GOAL_FLAGS: Record<string, keyof typeof goalFlags> = { '--done-when': 'doneWhen', '--horizon': 'horizon', '--state': 'state', '--workspace': 'workspace' }
 const positional: string[] = []
@@ -547,6 +551,35 @@ async function goalCmd(sub: string | undefined, rest: string[]) {
   die(`unknown goal command "${sub}" — try ${cyan('triage goal list')}`)
 }
 
+/**
+ * `triage add "…"` — a one-line hand-off without opening the app: a manual
+ * item through the same route the inbox's own add uses (createManualOp).
+ */
+async function addCmd(rest: string[]) {
+  const title = rest.join(' ').trim()
+  if (!title) die(`add needs a title, e.g. ${cyan('triage add "Look at the flaky deploy check"')}`)
+  const port = await serverPort()
+  if (!port) die(`add needs the server running — start it with ${cyan('triage')}`)
+  // The HTTP API falls back to the default workspace for an id it doesn't
+  // know, so a typo would file the item somewhere else — resolve it first.
+  let ws = ''
+  if (goalFlags.workspace) {
+    const ref = goalFlags.workspace
+    const { workspaces } = (await (await fetch(`http://localhost:${port}/api/workspaces`)).json()) as { workspaces: WireWorkspace[] }
+    const match = workspaces.find((w) => w.id === ref || w.name.toLowerCase() === ref.toLowerCase())
+    if (!match) die(`no workspace named "${ref}" — see ${cyan('triage workspace list')}`)
+    ws = `?workspace=${encodeURIComponent(match.id)}`
+  }
+  const res = await fetch(`http://localhost:${port}/api/items/manual${ws}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ title }),
+  })
+  const out = (await res.json().catch(() => ({ ok: false, error: `HTTP ${res.status}` }))) as { ok: boolean; id?: string; error?: string }
+  if (!out.ok) die(out.error ?? 'add failed')
+  console.log(`${green('✓')} added ${bold(title)}${out.id ? ' ' + dim(`(${out.id})`) : ''}`)
+}
+
 // --- macOS desktop app --------------------------------------------------------
 // A dependency-free way to run triage in its own window, Dock icon and Cmd-Tab
 // entry with no browser chrome: a tiny .app bundle whose launcher opens the UI
@@ -846,6 +879,9 @@ switch (command) {
   case 'goal':
   case 'goals':
     await goalCmd(positional[1], positional.slice(2))
+    break
+  case 'add':
+    await addCmd(positional.slice(1))
     break
   case 'app':
     await appCmd(positional[1])

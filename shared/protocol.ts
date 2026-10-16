@@ -1183,7 +1183,8 @@ export type ManualItemInput = {
   images?: ItemImageEdit[]
 }
 
-export type ManualItemResponse = { ok: true } | { ok: false; error: string }
+/** `id` is the new item's on a create (POST). */
+export type ManualItemResponse = { ok: true; id?: string } | { ok: false; error: string }
 
 // ---------------------------------------------------------------------------
 // Ingestion (POST /api/items/upsert, POST /api/items/resolve) — the contract

@@ -9010,9 +9010,10 @@ const server = http.createServer(async (req, res) => {
   if (url.pathname === '/api/items/manual') {
     let body: ManualItemResponse
     let status = 200
+    let id: string | undefined
     try {
       if (req.method === 'POST') {
-        await createManualOp(rt, await readJsonBody(req, MAX_ITEM_BODY_BYTES))
+        id = await createManualOp(rt, await readJsonBody(req, MAX_ITEM_BODY_BYTES))
       } else if (req.method === 'PUT') {
         const id = url.searchParams.get('id')
         if (!id) throw new Error('need a manual item id')
@@ -9028,7 +9029,7 @@ const server = http.createServer(async (req, res) => {
       } else {
         throw new Error('unsupported method')
       }
-      body = { ok: true }
+      body = id ? { ok: true, id } : { ok: true }
     } catch (err) {
       status = 400
       body = { ok: false, error: err instanceof Error ? err.message : String(err) }

@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'" />
+<title>Quick capture</title>
+<style>
+  /* tokens from web/src/styles.css — like the splash, this ships without the SPA's CSS */
+  :root {
+    --card: #0a0a0c;
+    --hair-strong: rgba(255, 255, 255, 0.14);
+    --ink: #fcfdff; --ash: #888e90; --stone: #464a4d;
+    --red-ink: #ff7a92; --green-ink: #6ee7a8;
+    --sans: Geist, Inter, -apple-system, system-ui, sans-serif;
+    --mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  /* The window is transparent; the card is the whole visible thing. */
+  html, body { margin: 0; height: 100%; background: transparent; font: 13px/1.5 var(--sans); -webkit-font-smoothing: antialiased; }
+  form {
+    height: 100%; display: flex; align-items: center; gap: 12px; padding: 0 16px;
+    background: var(--card); border: 1px solid var(--hair-strong); border-radius: 12px;
+    -webkit-app-region: drag;
+  }
+  input {
+    flex: 1; min-width: 0; height: 32px; padding: 0; border: 0; outline: 0; background: transparent;
+    color: var(--ink); font: 400 16px var(--sans); caret-color: var(--ink); -webkit-app-region: no-drag;
+  }
+  input::placeholder { color: var(--stone); }
+  .hint { flex: none; font: 11px var(--mono); color: var(--ash); white-space: nowrap; user-select: none; }
+  .hint kbd { font: inherit; color: var(--ink); }
+  body.error .hint { color: var(--red-ink); }
+  body.added .hint { color: var(--green-ink); }
+</style>
+</head>
+<body>
+<form id="form" autocomplete="off">
+  <input id="title" placeholder="Hand something to Junior…" aria-label="To-do" maxlength="500" spellcheck="true" />
+  <span class="hint" id="hint"><kbd>↵</kbd> add · <kbd>esc</kbd> close</span>
+</form>
+<script>
+  const cap = window.triageCapture
+  const $ = (id) => document.getElementById(id)
+  const input = $('title')
+  const hint = $('hint')
+  const HINT = hint.innerHTML
+  let busy = false
+
+  function setState(state, text) {
+    document.body.className = state
+    if (text) hint.textContent = text
+    else hint.innerHTML = HINT
+  }
+
+  // Each time the window opens: a fresh, focused line.
+  cap.onOpen(() => {
+    busy = false
+    input.value = ''
+    setState('')
+    input.focus()
+  })
+
+  $('form').addEventListener('submit', async (e) => {
+    e.preventDefault()
+    const title = input.value.trim()
+    if (!title || busy) return
+    busy = true
+    setState('', 'adding…')
+    const res = await cap.submit(title)
+    if (res.ok) {
+      setState('added', 'added to your inbox')
+      setTimeout(() => cap.close(), 500)
+    } else {
+      busy = false
+      setState('error', res.error)
+      input.focus()
+    }
+  })
+
+  input.addEventListener('input', () => {
+    if (document.body.className === 'error') setState('')
+  })
+
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') cap.close()
+  })
+</script>
+</body>
+</html>

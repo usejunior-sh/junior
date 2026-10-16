@@ -1,10 +1,19 @@
 // The renderer's door to the main process. CommonJS because sandboxed
 // preloads can't be ES modules. The splash (file:) gets retry/log/status; the
-// web UI gets only what its desktop chrome needs: ← → and their state, and
-// the browser pane's controls.
+// quick-capture window (file:) gets submit/close; the web UI gets only what its
+// desktop chrome needs: ← → and their state, and the browser pane's controls.
 const { contextBridge, ipcRenderer } = require('electron')
 
-if (location.protocol === 'file:') {
+if (location.protocol === 'file:' && location.pathname.endsWith('/capture.html')) {
+  contextBridge.exposeInMainWorld('triageCapture', {
+    // resolves { ok: true } | { ok: false, error }
+    submit: (title) => ipcRenderer.invoke('capture:submit', title),
+    close: () => ipcRenderer.send('capture:close'),
+    onOpen: (cb) => ipcRenderer.on('capture:open', () => cb()),
+  })
+}
+
+else if (location.protocol === 'file:') {
   const arg = process.argv.find((a) => a.startsWith('--triage-version='))
   contextBridge.exposeInMainWorld('triageDesktop', {
     platform: 'darwin',
