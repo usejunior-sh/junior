@@ -82,6 +82,7 @@ import { McpTab } from './McpTab.js'
 import { PhoneTab } from './PhoneTab.js'
 import { ProjectsTab } from './ProjectsTab.js'
 import { TeamsTab } from './TeamsTab.js'
+import { MAX_GOAL_TEAM } from '../../../core/goals/types.js'
 import { LibraryTab } from './LibraryTab.js'
 import { RepoScopeEditor } from './RepoScope.js'
 import { UsageTab } from './UsageTab.js'
@@ -241,6 +242,7 @@ export function SettingsPage({ workspace, tab, onOpenSystem }: Props) {
                     <LibraryTab kind="agent" refreshNonce={nonce} />
                   </Tabs.Content>
                   <Tabs.Content value="teams">
+                    <GoalTeamSection />
                     <TeamsTab />
                   </Tabs.Content>
                   <Tabs.Content value="connectors" className="settingsFill">
@@ -819,6 +821,40 @@ function useWorkspaceSettings() {
     }
   }, [])
   return { settings, error, save }
+}
+
+/** The max team size: the most workers one goal runs side by side (a plan's team section is held to it). */
+function GoalTeamSection() {
+  const { settings, error, save } = useWorkspaceSettings()
+  const [size, setSize] = useState('')
+  useEffect(() => {
+    if (settings) setSize(String(settings.goalsMaxTeam))
+  }, [settings])
+  return (
+    <Section
+      title="Goal teams"
+      hint="Teams became goals: Junior proposes each goal's team in its plan — who, how many, and why — and independent steps run side by side, each on its own branch. The teams below are workflow blocks a plan's steps can use."
+    >
+      <Row label="Max team size" hint="The most workers one goal runs at once. A plan that asks for more is sent back to Junior.">
+        <input
+          className="setNum"
+          type="number"
+          min={1}
+          max={MAX_GOAL_TEAM}
+          value={size}
+          disabled={!settings}
+          aria-label="Max team size"
+          onChange={(e) => setSize(e.target.value)}
+          onBlur={() => {
+            const n = Number(size)
+            if (settings && Number.isInteger(n) && n >= 1 && n <= MAX_GOAL_TEAM && n !== settings.goalsMaxTeam) void save({ goalsMaxTeam: n })
+            else if (settings) setSize(String(settings.goalsMaxTeam))
+          }}
+        />
+      </Row>
+      {error && <div className="msg error">{error}</div>}
+    </Section>
+  )
 }
 
 /** The global jobs switch — off by default in 0.7 (.docs/next-version.md) — and default run limits. */

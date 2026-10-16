@@ -4,7 +4,7 @@
  * why it ranked, what has happened to it, and the sessions working on it.
  * The actions live in the right column so the left reads as a page, not a form.
  */
-import { AlarmClock, Archive, CalendarDays, Check, ChevronDown, ChevronRight, ExternalLink, FileText, Folder, Hash, ImagePlus, Play, Sparkles, X } from 'lucide-react'
+import { AlarmClock, Archive, CalendarDays, Check, ChevronDown, ChevronRight, ExternalLink, FileText, Folder, Hash, ImagePlus, Play, Sparkles, Target, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type {
   BriefJobsResponse,
@@ -43,7 +43,6 @@ import { ItemActions } from './ActionCard.js'
 import { KIND_LABEL, PRIORITY_LABEL, PRIORITY_VALUES, ago, kindIcon, relTime } from '../itemUi.js'
 import { BriefComposerDialog } from './BriefComposer.js'
 import { Markdown } from './Markdown.js'
-import { TeamPicker } from './TeamPicker.js'
 import { Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from '../ui/Menu.js'
 import { DueDialog } from './DueDialog.js'
 import { SECTION_ORDER, dueChip, dueFor, dueOf, parseDue, sectionTitle, type Section } from '../../../core/work/due.js'
@@ -55,6 +54,8 @@ import { STAGE_LABEL, TURN_LABEL, isStage, isTurn } from '../../../core/work/flo
 type Props = {
   id: string
   onDispatch: (item: ScoredItem) => void
+  /** Teams became goals (M6): the item's team entry point opens a goal chat. */
+  onGoal: (item: ScoredItem) => void
   onNavigate: (hash: string) => void
   /** Editing here means the tab must survive: promote it out of the peek slot. */
   onDirty: () => void
@@ -109,7 +110,7 @@ const TEAM_STATE: Record<RunState, string> = {
   done: 'done',
 }
 
-export function ItemPage({ id, onDispatch, onNavigate, onDirty }: Props) {
+export function ItemPage({ id, onDispatch, onGoal, onNavigate, onDirty }: Props) {
   const snap = useInbox()
   const sessions = useSessions()
   const checkouts = useCheckouts()
@@ -770,7 +771,9 @@ export function ItemPage({ id, onDispatch, onNavigate, onDirty }: Props) {
             <Play size={12} aria-hidden="true" />
             {linkedSessions.some((x) => x.role === 'dispatch') ? 'Dispatch another session' : 'Dispatch to a session'}
           </button>
-          <TeamPicker item={item} onStarted={onNavigate} onError={setNotice} />
+          <button type="button" className="btn wide" onClick={() => onGoal(item)} title="Junior plans it — steps, team, budget — and runs it once you approve the plan">
+            <Target size={12} aria-hidden="true" /> Turn into a goal
+          </button>
           {isOpen && settled && (
             <button type="button" className="btn wide" onClick={() => setBriefOpen(true)}>
               <Sparkles size={12} aria-hidden="true" /> {brief?.artifact ? 'Re-brief' : 'Create brief'}

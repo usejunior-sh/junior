@@ -325,7 +325,7 @@ export function GoalPage({ id, onNavigate }: { id: string; onNavigate: (hash: st
       </div>
     )
 
-  const { goal, turn, steps, gates, events, plan, handoff, log, ledgerWarning, comments, leadSessionId, liveSession, ask } = state.data
+  const { goal, turn, steps, gates, events, plan, handoff, log, ledgerWarning, comments, leadSessionId, team, ask } = state.data
   const planSteps = goal.plan?.steps ?? []
 
   return (
@@ -368,12 +368,31 @@ export function GoalPage({ id, onNavigate }: { id: string; onNavigate: (hash: st
             </button>
           </div>
         )}
-        {liveSession && goal.state === 'running' && (
+        {team.length === 1 && goal.state === 'running' && (
           <div className="notice">
-            {liveSession.role === 'lead' ? 'Junior is deciding the next move.' : `A ${liveSession.role} is on ${liveSession.stepId}.`}{' '}
-            <button type="button" className="crumb link" onClick={() => onNavigate(liveSession.sessionId)}>
+            {team[0]!.role === 'lead' ? 'Junior is deciding the next move.' : `A ${team[0]!.role} is on ${team[0]!.stepId}.`}{' '}
+            <button type="button" className="crumb link" onClick={() => onNavigate(team[0]!.sessionId)}>
               Watch the session
             </button>
+          </div>
+        )}
+        {team.length > 1 && goal.state === 'running' && (
+          <div className="notice">
+            {team.length} working side by side, each on its own branch; Junior wakes when the last one ends.
+            <ul className="goalList">
+              {team.map((m) => (
+                <li key={m.sessionId}>
+                  <span className="mono">{m.stepId}</span>
+                  <span className="t">
+                    {m.role} · started {ago(m.startedAt)}
+                    {m.lastActivityAt ? ` · last active ${ago(m.lastActivityAt)}` : ''}
+                  </span>
+                  <button type="button" className="crumb link" onClick={() => onNavigate(m.sessionId)}>
+                    Watch
+                  </button>
+                </li>
+              ))}
+            </ul>
           </div>
         )}
 

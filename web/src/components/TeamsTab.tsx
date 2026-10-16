@@ -2,7 +2,8 @@ import { ArrowRight, FolderOpen } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import type { LibraryStatus, RecipeEntry, TeamLibraryResponse } from '../../../shared/protocol.js'
 import { setSettingsTab } from '../settings.js'
-import { loadTeamLibrary, stepLine, teamsCall, usd, type TeamLibrary } from '../teams.js'
+import { blockFromRecipe } from '../../../core/goals/blocks.js'
+import { loadTeamLibrary, teamsCall, type TeamLibrary } from '../teams.js'
 
 const STATUS: Record<LibraryStatus, { label: string; title: string }> = {
   default: { label: 'default', title: 'Exactly as triage ships it' },
@@ -16,16 +17,13 @@ const asLib = (b: TeamLibraryResponse): TeamLibrary => {
   return { teams: b.teams, agents: b.agents, dir: b.dir }
 }
 
-/** "$3", or "$2.50" when the budget isn't whole dollars. */
-const budget = (n: number): string => (Number.isInteger(n) ? `$${n}` : usd(n))
-
 const openFolder = () => void teamsCall('POST', 'open').catch(() => {})
 
 /**
- * Settings → Teams: the workspace's teams. A team is a recipe file
- * (server/teams.ts) — edited as its file, made from a run with "Save as team".
- * The agents a team is made of are edited under Settings → Agents, with who
- * uses each said out loud.
+ * Settings → Teams: the workspace's teams, read as workflow blocks (M6). A team
+ * is still a recipe file (server/teams.ts), edited as its file; a goal's plan
+ * uses one as a step, expanded into the steps shown here (core/goals/blocks.ts).
+ * The agents a team is made of are edited under Settings → Agents.
  */
 export function TeamsTab() {
   const [lib, setLib] = useState<TeamLibrary | null>(null)
@@ -56,7 +54,7 @@ export function TeamsTab() {
   return (
     <section className="setSection teamsTab">
       <div className="teamsTabBar">
-        <span className="teamsTabCount">{lib ? `${lib.teams.length} team${lib.teams.length === 1 ? '' : 's'}` : ''}</span>
+        <span className="teamsTabCount">{lib ? `${lib.teams.length} workflow block${lib.teams.length === 1 ? '' : 's'}` : ''}</span>
         <span className="sp" />
         <button type="button" className="btn sm ghost" onClick={openFolder} title={lib?.dir}>
           <FolderOpen size={12} aria-hidden="true" /> Open folder
@@ -71,7 +69,7 @@ export function TeamsTab() {
 
       {lib &&
         (lib.teams.length === 0 ? (
-          <div className="projEmpty">No teams — "Save as team" on a run's card makes one, or delete the folder's .seeded.json to get the defaults back.</div>
+          <div className="projEmpty">No workflow blocks — add a recipe file to the teams folder, or delete its .seeded.json to get the defaults back.</div>
         ) : (
           <div className="libList">
             {lib.teams.map((t) => (
@@ -88,7 +86,8 @@ export function TeamsTab() {
           </div>
         ))}
       <div className="libHint">
-        Teams are recipe files in <span className="mono">teams/</span> — edit one in your editor. "Save as team" on a run's card makes a new one.
+        Workflow blocks are the recipe files in <span className="mono">teams/</span> — edit one in your editor. A goal's plan uses one as a step (<span className="mono">type: block</span>), expanded into the steps above
+        when the plan is read; fan-out, task loops and per-step models stay with the old team runs.
       </div>
     </section>
   )
@@ -165,20 +164,20 @@ function TeamRow({
   onCancel: () => void
 }) {
   const r = team.recipe
+  const b = r ? blockFromRecipe(team.name, r) : null
   const file = `teams/${team.name}.md`
   return (
     <div className="libRow team">
       <span className="libName" title={r?.description || file}>
         {r ? r.label : <span className="mono">{team.name}</span>}
       </span>
-      {r ? (
+      {b ? (
         <span className="libSteps">
-          <span className="libStepLine mono" title={r.steps.map((s) => `${s.id}: ${s.agent}${s.fanOut ? ` ×${s.fanOut.max} by ${s.fanOut.by}` : ''}${s.output ? ` → ${s.output}` : ''}${s.gate ? ' · waits for you' : ''}`).join('\n')}>
-            {r.steps.map((s, i) => (
+          <span className="libStepLine mono" title={b.steps.map((s) => `${s.id}: ${s.role ?? 'you'} — ${s.doneWhen}`).join('\n')}>
+            {b.steps.map((s, i) => (
               <span key={s.id}>
                 {i > 0 && <span className="arrow"> → </span>}
-                {stepLine(s)}
-                {s.gate === 'you' && <span className="gate"> · you</span>}
+                {s.type === 'gate' ? <span className="gate">you approve</span> : `${s.id} · ${s.role}`}
               </span>
             ))}
           </span>
@@ -196,8 +195,8 @@ function TeamRow({
           </span>
         </span>
       )}
-      <span className="libBudget mono" title={r ? 'What one run may spend before it pauses' : undefined}>
-        {r ? budget(r.budgetUsd) : ''}
+      <span className="libBudget mono" title={b ? 'The steps it adds to a goal plan' : undefined}>
+        {b ? `${b.steps.length} steps` : ''}
       </span>
       <Status s={team.status} />
       <RowActions status={team.status} confirming={confirming} confirmText={`Delete ${r?.label ?? team.name}?`} onOpen={openFolder} {...acts} />

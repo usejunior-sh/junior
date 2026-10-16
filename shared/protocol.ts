@@ -262,19 +262,6 @@ export type SessionTeamRun = { id: string; role: 'lead' | 'worker'; label: strin
 export type TeamRunView = Omit<TeamRun, 'root' | 'checkCmds' | 'baseTree' | 'nudged'> & { spentUsd: number }
 export type TeamRunResponse = { ok: true; run: TeamRunView } | { ok: false; error: string }
 
-/** One team in the dispatch picker, with what its finished runs really cost (never an estimate). */
-export type TeamPickerOption = {
-  team: string
-  label: string
-  description: string
-  /** step ids, a fan-out shown as "review ×4" */
-  steps: string[]
-  budgetUsd: number
-  runs: number
-  avgUsd?: number
-}
-export type TeamPickerResponse = { ok: true; suggested: string | null; options: TeamPickerOption[] } | { ok: false; error: string }
-export type TeamPlanResponse = { ok: true; sessionId: string } | { ok: false; error: string }
 export type SaveAsTeamResponse = { ok: true; team: string; library: TeamLibraryResponse & { ok: true } } | { ok: false; error: string }
 
 /**
@@ -1494,6 +1481,8 @@ export type WorkspaceSettings = {
   hiddenModels: string[]
   /** model ids typed by hand — for a model the probed catalog does not list (yet) */
   customModels: string[]
+  /** the most workers one goal runs side by side; a plan's team section can't ask for more */
+  goalsMaxTeam: number
 }
 export type SettingsResponse = { ok: true; settings: WorkspaceSettings } | { ok: false; error: string }
 
@@ -1972,10 +1961,15 @@ export type GoalResponse =
       leadSessionId: string | null
       /** M3: the session working the goal right now (a run lead or a worker), if one is */
       liveSession: { sessionId: string; role: StepRole; stepId: string | null } | null
+      /** M6: everyone on the goal right now — the lead alone, or its workers side by side — oldest first */
+      team: GoalTeamMember[]
       /** M3: what the goal waits on the user for — a question with Junior's recommended answer, or a plan change */
       ask: GoalAsk | null
     }
   | { ok: false; error: string }
+
+/** One live session on a goal: who, on which step, since when, and when it last did something. */
+export type GoalTeamMember = { sessionId: string; role: StepRole; stepId: string | null; startedAt: number; lastActivityAt: number | null }
 
 /**
  * What a goal write did. created / existing = goal_create (existing: the key

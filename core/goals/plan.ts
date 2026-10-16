@@ -9,6 +9,7 @@
  * an unknown key, a dangling dependency or a cycle is an error the lead fixes.
  * Pure: no I/O, no clock.
  */
+import { expandBlock, type WorkflowBlock } from './blocks.js'
 import { parseDuration } from './machine.js'
 import { policyLines, SHEPHERD_BLOCK, SHEPHERD_GATE } from './shepherd.js'
 import {
@@ -130,8 +131,37 @@ function stepFrom(v: unknown, i: number): PlanStep {
   if (type !== 'block') return step
   // Blocks expand as the plan is read, so the user reviews what will run.
   if (block === SHEPHERD_BLOCK) return { ...step, type: 'gate', gate: { ...SHEPHERD_GATE }, block: null }
-  return fail(`${where}.block "${block}" isn't a workflow block: the only one is "${SHEPHERD_BLOCK}"`)
+  return step
 }
+
+/**
+ * Every recipe block step → the block's steps (blocks.ts), and whatever
+ * depended on the block step → its last step. Ids stay unique and short, or
+ * the plan is refused.
+ */
+function expandBlocks(steps: PlanStep[], blocks: readonly WorkflowBlock[]): PlanStep[] {
+  const last = new Map<string, string>()
+  const out: PlanStep[] = []
+  for (const s of steps) {
+    if (s.type !== 'block') {
+      out.push(s)
+      continue
+    }
+    const b = blocks.find((x) => x.name === s.block)
+    if (!b) {
+      const names = [SHEPHERD_BLOCK, ...blocks.map((x) => x.name)].map((n) => `"${n}"`).join(', ')
+      fail(`step "${s.id}": "${s.block}" isn't a workflow block (there are ${names})`)
+    }
+    const x = expandBlock(s, b!)
+    for (const e of x.steps) if (e.id.length > 40) fail(`step "${s.id}": block step id "${e.id}" is over 40 characters — give the block step a shorter id`)
+    out.push(...x.steps)
+    last.set(s.id, x.last)
+  }
+  return out.map((s) => (s.dependsOn.some((d) => last.has(d)) ? { ...s, dependsOn: s.dependsOn.map((d) => last.get(d) ?? d) } : s))
+}
+
+/** Workers the team section asks for at once: every seat but the lead's. */
+export const teamSize = (team: readonly TeamSeat[]): number => team.reduce((n, t) => n + (t.role === 'lead' ? 0 : t.count), 0)
 
 function checkGraph(steps: PlanStep[]) {
   const ids = new Set<string>()
@@ -177,14 +207,22 @@ function seatFrom(v: unknown, i: number): TeamSeat {
  * (a `shepherd-pr` block) carries the default policies, so the user approves
  * what the PR watcher may do on its own.
  */
-export function planFrom(raw: unknown, goal: Pick<Goal, 'horizon' | 'budget'>): PlanResult {
+export type PlanOpts = {
+  /** the workflow blocks a block step may name, besides the built-in shepherd-pr */
+  blocks?: readonly WorkflowBlock[]
+  /** the user's max team size (Settings → Teams); a team section over it is refused */
+  maxTeam?: number | null
+}
+
+export function planFrom(raw: unknown, goal: Pick<Goal, 'horizon' | 'budget'>, opts: PlanOpts = {}): PlanResult {
   try {
     if (!isObj(raw)) fail('plan must be an object')
     const p = raw as Record<string, unknown>
     only(p, PLAN_KEYS, 'plan')
     if (!Array.isArray(p.steps) || p.steps.length === 0) fail('plan.steps must list at least one step')
     if ((p.steps as unknown[]).length > MAX_PLAN_STEPS) fail(`plan.steps is over the cap of ${MAX_PLAN_STEPS}`)
-    const steps = (p.steps as unknown[]).map(stepFrom)
+    const steps = expandBlocks((p.steps as unknown[]).map(stepFrom), opts.blocks ?? [])
+    if (steps.length > MAX_PLAN_STEPS) fail(`plan.steps is over the cap of ${MAX_PLAN_STEPS} once its blocks are expanded`)
     checkGraph(steps)
     if (p.horizon !== undefined && !isGoalHorizon(p.horizon)) fail('plan.horizon must be today, until_done or ongoing')
     if (p.team !== undefined && !Array.isArray(p.team)) fail('plan.team must be a list')
@@ -199,6 +237,10 @@ export function planFrom(raw: unknown, goal: Pick<Goal, 'horizon' | 'budget'>): 
         if (v) models[k] = v
       }
     }
+    const team = ((p.team as unknown[] | undefined) ?? []).map(seatFrom)
+    const size = teamSize(team)
+    if (opts.maxTeam && size > opts.maxTeam)
+      fail(`plan.team asks for ${size} workers at once, over the user's max team size of ${opts.maxTeam}: staff fewer seats, or say in the summary why more would help`)
     const usd = positive(p.budgetUsd, 'plan.budgetUsd', MAX_PLAN_BUDGET_USD)
     const minutes = positive(p.budgetMinutes, 'plan.budgetMinutes')
     const budget: GoalBudget = { usd: usd ?? goal.budget.usd, minutes: minutes ?? goal.budget.minutes }
@@ -209,7 +251,7 @@ export function planFrom(raw: unknown, goal: Pick<Goal, 'horizon' | 'budget'>): 
         doneWhen: text(p.doneWhen, 'plan.doneWhen'),
         horizon: (p.horizon as GoalPlan['horizon'] | undefined) ?? goal.horizon,
         steps,
-        team: ((p.team as unknown[] | undefined) ?? []).map(seatFrom),
+        team,
         budget,
         mayDo: textList(p.mayDo, 'plan.mayDo'),
         policies: steps.some((st) => st.gate?.evaluator === 'watcher') ? policyLines() : [],

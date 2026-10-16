@@ -193,12 +193,12 @@ export function worktreeFolder(root: string, project: Project, branch: string): 
 export type MadeWorktree = { path: string; branch: string; base: string | null }
 
 /**
- * `git worktree add` for a project. A new branch is cut from the default
- * branch; a branch that already exists is checked out as it is (continuing
+ * `git worktree add` for a project. A new branch is cut from `from` (a
+ * goal's child worktree, from the goal branch) or else the default branch; a branch that already exists is checked out as it is (continuing
  * that work). A project that is a subfolder of its repo gets the same
  * subfolder of the new worktree.
  */
-export async function createWorktree(project: Project, branch: string, folderRoot: string): Promise<MadeWorktree> {
+export async function createWorktree(project: Project, branch: string, folderRoot: string, from?: string): Promise<MadeWorktree> {
   const root = await repoRoot(project.path)
   if (!root) throw new Error(`${project.name} isn't a git repo — worktrees need one`)
   const name = branch.trim()
@@ -220,7 +220,7 @@ export async function createWorktree(project: Project, branch: string, folderRoo
   if (await hasLocalBranch(root, name)) {
     await git(root, ['worktree', 'add', folder, name])
   } else {
-    base = await defaultBranch(root)
+    base = from ?? (await defaultBranch(root))
     await git(root, ['worktree', 'add', '-b', name, folder, ...(base ? [base] : [])])
   }
   return { path: path.join(await real(folder), rel), branch: name, base }

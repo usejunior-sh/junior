@@ -17,7 +17,7 @@ import { recordFor } from '../core/actions/track.js'
 import { sortCall } from '../core/actions/sort.js'
 import { DEFAULT_RULES } from '../core/actions/rules.js'
 import { shortActionId } from '../core/actions/view.js'
-import { afterSession, budgetCheck, isWake, nextSession, pickGoals, reconcileSteps, reportResult, unreadWakes } from '../core/goals/run.js'
+import { afterSession, budgetCheck, isWake, nextSession, nextWorkers, pickGoals, reconcileSteps, reportResult, unreadWakes, workerCap, workerPrompt, workingSessions } from '../core/goals/run.js'
 import type { Gate, Goal, GoalEvent, GoalStepState } from '../core/goals/types.js'
 import type { GoalSessionRecord } from '../core/store/types.js'
 import {
@@ -187,6 +187,49 @@ test('nextSession: a dispatched agent step gets its worker, with the brief and t
   assert.deepEqual(nextSession(goal, [row('s1', 'runnable')], []), { role: 'lead' })
   // A worker is on it already: the lead decides what's next.
   assert.deepEqual(nextSession(goal, [row('s1', 'running', { sessionId: 'w' })], []), { role: 'lead' })
+})
+
+test('M6 workerCap: the team section sizes a goal\'s workers, never over the max team size; no team runs one at a time', () => {
+  assert.equal(workerCap(null, 3), 1)
+  assert.equal(workerCap({ team: [] }, 3), 1)
+  const two = [{ role: 'builder', count: 2, why: 'w', model: null }, { role: 'lead', count: 1, why: 'w', model: null }] as const
+  assert.equal(workerCap({ team: [...two] }, 3), 2)
+  assert.equal(workerCap({ team: [...two] }, 1), 1)
+})
+
+test('M6 nextWorkers: dispatched steps without a worker, in plan order, up to n', () => {
+  const events = [ev('step_dispatched', { stepId: 's3', brief: 'b3' }), ev('step_dispatched', { stepId: 's1', brief: 'b1' })]
+  const rows = [row('s1', 'running', { attempts: 1 }), row('s2', 'running', { sessionId: 'busy', attempts: 1 }), row('s3', 'running', { attempts: 1 })]
+  assert.deepEqual(nextWorkers(goal, rows, events, 5).map((w) => w.stepId), ['s1', 's3'])
+  assert.deepEqual(nextWorkers(goal, rows, events, 1).map((w) => w.stepId), ['s1'])
+})
+
+test('M6 workingSessions: the workers holding running steps, else the lead if it started last', () => {
+  const started = (sessionId: string, role: string, stepId: string | null, seq: number) => ev('step_started', { sessionId, role, stepId }, seq)
+  const events = [started('lead-1', 'lead', null, 1), started('w-a', 'builder', 's1', 2), started('w-b', 'tester', 's3', 3)]
+  const rows = [row('s1', 'running', { sessionId: 'w-a' }), row('s2', 'done'), row('s3', 'running', { sessionId: 'w-b' })]
+  assert.deepEqual(workingSessions(rows, events), [
+    { sessionId: 'w-a', role: 'builder', stepId: 's1' },
+    { sessionId: 'w-b', role: 'tester', stepId: 's3' },
+  ])
+  // Both settled, the lead woke: it is the one working.
+  assert.deepEqual(workingSessions([row('s1', 'done'), row('s3', 'done')], [...events, started('lead-2', 'lead', null, 4)]), [{ sessionId: 'lead-2', role: 'lead', stepId: null }])
+  // Settled with no lead since: nobody.
+  assert.deepEqual(workingSessions([row('s1', 'done'), row('s3', 'done')], events), [])
+})
+
+test('M6 workerPrompt: a reviewer gets the plan and the diff, never the handoff or the log', () => {
+  const g = { id: 'g', title: 'Fix it', doneWhen: 'D' }
+  const files = { handoff: 'SECRET HANDOFF', log: 'SECRET LOG' }
+  const builder = workerPrompt(g, plan3.steps[0]!, { brief: 'b', attempt: 1 }, files, [])
+  assert.match(builder.context, /SECRET HANDOFF/)
+  const review = workerPrompt(g, plan3.steps[1]!, { brief: 'look hard', attempt: 1 }, { plan: plan3, steps: [row('s1', 'done')], diff: '+fixed line' }, [])
+  assert.doesNotMatch(review.context, /SECRET|## Handoff|## Latest log/)
+  assert.match(review.context, /review independently/)
+  assert.match(review.context, /\+fixed line/)
+  assert.match(review.context, /Fix the test/, 'the plan\'s steps are in it')
+  const big = workerPrompt(g, plan3.steps[1]!, { brief: '', attempt: 1 }, { plan: plan3, steps: [], diff: 'x'.repeat(70_000) }, [])
+  assert.match(big.context, /cut at 60000 characters/)
 })
 
 test('isWake: a message straight to a worker never wakes the lead', () => {
@@ -372,5 +415,97 @@ test(
       assert.match(back.spec.prompt, /renamed the helper/)
       assert.match(back.spec.prompt, /worktree/)
     }
+  }),
+)
+
+// ---------------------------------------------------------------------------
+// M6: side-by-side workers
+// ---------------------------------------------------------------------------
+
+const PARALLEL = {
+  summary: 'Two independent fixes, then a review.',
+  doneWhen: 'both fixes are in and reviewed',
+  steps: [
+    { id: 'a', title: 'Fix the parser', type: 'agent', role: 'builder', doneWhen: 'parser tests pass' },
+    { id: 'b', title: 'Fix the docs', type: 'agent', role: 'builder', doneWhen: 'docs build' },
+    { id: 'r', title: 'Review both', type: 'agent', role: 'reviewer', dependsOn: ['a', 'b'], doneWhen: 'no open findings' },
+  ],
+  team: [{ role: 'builder', count: 2, why: 'two independent workstreams' }],
+}
+
+/** A goal on PARALLEL whose run lead dispatched a and b and ended its turn. */
+async function bothDispatched(h: H): Promise<Goal> {
+  const { goal } = await goalCreateOp(h.d, { title: 'Two fixes', doneWhen: PARALLEL.doneWhen })
+  await h.settle()
+  const created = (await h.store.goals.events(goal.id)).find((e) => e.kind === 'created')!
+  await goalLeadStartedOp(h.d, goal.id, 'draft-p')
+  await goalProposePlanOp(h.d, { goalId: goal.id, plan: PARALLEL, sessionId: 'draft-p' })
+  await goalLeadSettledOp(h.d, { goalId: goal.id, seq: created.seq, sessionId: 'draft-p' })
+  await goalApproveOp(h.d, { goalId: goal.id })
+  await h.settle()
+  const lead = h.last()
+  assert.equal(lead.spec.role, 'lead')
+  await goalDispatchWorkerOp(h.d, { goalId: goal.id, sessionId: lead.sessionId }, { stepId: 'a', brief: 'do a' })
+  await goalDispatchWorkerOp(h.d, { goalId: goal.id, sessionId: lead.sessionId }, { stepId: 'b', brief: 'do b' })
+  await goalSessionEndedOp(h.d, h.eng, { goalId: goal.id, sessionId: lead.sessionId, costUsd: 0.1 })
+  await h.settle()
+  return goal
+}
+
+const finish = async (h: H, goalId: string, w: Started) => {
+  assert.ok(w.spec.role !== 'lead')
+  await goalLogAppendOp(h.d, { goalId, sessionId: w.sessionId, stepId: w.spec.stepId, role: w.spec.role, outcome: 'done', text: 'finished' })
+  await goalSessionEndedOp(h.d, h.eng, { goalId, sessionId: w.sessionId, costUsd: 0.2 })
+  await h.settle()
+}
+
+test(
+  'M6: two independent steps run side by side, each on its own branch, and the lead wakes after both',
+  withDir(async (dir) => {
+    const h = harness(dir)
+    const g = await bothDispatched(h)
+    const workers = h.started.filter((s) => s.goalId === g.id && s.spec.role === 'builder')
+    assert.deepEqual(workers.map((w) => w.spec.role !== 'lead' && w.spec.stepId), ['a', 'b'])
+    assert.ok(workers.every((w) => w.spec.role !== 'lead' && w.spec.worktree === 'child'))
+    const got = await goalGetOp(h.d, g.id)
+    assert.deepEqual(got.team.map((m) => m.stepId).sort(), ['a', 'b'])
+
+    const before = h.started.length
+    await finish(h, g.id, workers[0])
+    assert.equal(h.started.length, before, 'the lead waits for the other worker')
+    assert.equal((await stepOf(h, g.id, 'a')).status, 'done')
+    assert.equal(await stateOf(h, g.id), 'running')
+    await finish(h, g.id, workers[1])
+    assert.equal(h.last().spec.role, 'lead')
+    assert.equal(h.started.length, before + 1)
+  }),
+)
+
+test(
+  'M6: side-by-side workers stop at the session cap; the next starts when a slot frees',
+  withDir(async (dir) => {
+    const h = harness(dir)
+    await h.store.config.set('goals.maxParallel', 1)
+    const g = await bothDispatched(h)
+    const workers = () => h.started.filter((s) => s.goalId === g.id && s.spec.role === 'builder')
+    assert.equal(workers().length, 1)
+    await finish(h, g.id, workers()[0])
+    assert.equal(workers().length, 2, 'the second dispatched step takes the freed slot')
+    await finish(h, g.id, workers()[1])
+    assert.equal(h.last().spec.role, 'lead')
+  }),
+)
+
+test(
+  'M6: a plan without a team section runs one worker at a time',
+  withDir(async (dir) => {
+    const h = harness(dir)
+    const g = await approved(h)
+    const lead = h.last()
+    await goalDispatchWorkerOp(h.d, { goalId: g.id, sessionId: lead.sessionId }, { stepId: 's1', brief: 'do s1' })
+    await goalSessionEndedOp(h.d, h.eng, { goalId: g.id, sessionId: lead.sessionId })
+    await h.settle()
+    const w = h.last().spec
+    assert.deepEqual(w.role !== 'lead' && [w.role, w.worktree], ['builder', 'goal'])
   }),
 )

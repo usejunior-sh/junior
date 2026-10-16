@@ -4,7 +4,10 @@
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { parsePlanMd, planFrom, renderPlanMd, samePlan } from '../core/goals/plan.js'
+import { parsePlanMd, planFrom, renderPlanMd, samePlan, teamSize } from '../core/goals/plan.js'
+import { blockFromRecipe, roleOf } from '../core/goals/blocks.js'
+import { parseRecipe } from '../core/teams/recipe.js'
+import { SHIPPED_RECIPES } from '../server/team-recipes.js'
 
 const goal = { horizon: 'until_done' as const, budget: { usd: 10, minutes: null } }
 const step = (o: Record<string, unknown> = {}) => ({ id: 's1', title: 'Build', type: 'agent', role: 'builder', doneWhen: 'tests pass', ...o })
@@ -72,4 +75,75 @@ test('plan.md renders the same bytes for the same plan and reads back to it', ()
   assert.equal(parsePlanMd('# no block'), null)
   assert.ok(samePlan(parsePlanMd(md), r.plan))
   assert.ok(!samePlan(r.plan, { ...r.plan, summary: 'other' }))
+})
+
+// ---------------------------------------------------------------------------
+// M6: workflow blocks and the team section
+// ---------------------------------------------------------------------------
+
+const BUILD = blockFromRecipe('build', parseRecipe('build', SHIPPED_RECIPES.build!).recipe!)
+
+test('a team recipe reads as a workflow block: who does each step becomes a role', () => {
+  assert.equal(BUILD.name, 'build')
+  assert.deepEqual(
+    BUILD.steps.map((s) => [s.id, s.type, s.role]),
+    [
+      ['build', 'agent', 'builder'],
+      ['checks', 'agent', 'tester'],
+      ['verify', 'agent', 'reviewer'],
+      ['final', 'agent', 'reviewer'],
+      ['report', 'agent', 'lead'],
+    ],
+  )
+  assert.equal(roleOf({ agent: 'lead', output: 'change' }), 'builder')
+  const gated = parseRecipe('g', SHIPPED_RECIPES.build!.replace('output: change', 'output: change\n    gate: you')).recipe!
+  const b = blockFromRecipe('g', gated)
+  assert.deepEqual(b.steps.slice(0, 2).map((s) => [s.id, s.type, s.gate?.evaluator ?? null]), [['build', 'agent', null], ['build-ok', 'gate', 'user']])
+})
+
+test('a block step expands into the block\'s steps in a chain, and its dependents wait on the last', () => {
+  const r = planFrom(
+    plan({
+      steps: [
+        step({ id: 'prep' }),
+        { id: 'fix', title: 'Fix it', type: 'block', block: 'build', dependsOn: ['prep'], doneWhen: 'fixed' },
+        step({ id: 'ship', dependsOn: ['fix'] }),
+      ],
+    }),
+    goal,
+    { blocks: [BUILD] },
+  )
+  assert.ok(r.ok, r.ok ? '' : r.error)
+  if (!r.ok) return
+  assert.deepEqual(
+    r.plan.steps.map((s) => [s.id, s.dependsOn]),
+    [
+      ['prep', []],
+      ['fix.build', ['prep']],
+      ['fix.checks', ['fix.build']],
+      ['fix.verify', ['fix.checks']],
+      ['fix.final', ['fix.verify']],
+      ['fix.report', ['fix.final']],
+      ['ship', ['fix.report']],
+    ],
+  )
+  // plan.md holds the expanded steps, so the user reviews what will run.
+  assert.ok(samePlan(parsePlanMd(renderPlanMd({ id: 'g1', title: 'Goal' }, r.plan, 1)), r.plan))
+  assert.match(err(plan({ steps: [{ id: 'x', title: 'X', type: 'block', block: 'deploy', doneWhen: 'd' }] })), /"deploy" isn't a workflow block \(there are "shepherd-pr"\)/)
+  const long = planFrom(plan({ steps: [{ id: 'a'.repeat(36), title: 'X', type: 'block', block: 'build', doneWhen: 'd' }] }), goal, { blocks: [BUILD] })
+  assert.ok(!long.ok && /over 40 characters/.test(long.error))
+})
+
+test('the team section is capped by the max team size; the lead seat does not count', () => {
+  const team = [
+    { role: 'builder', count: 2, why: 'parser and docs are independent' },
+    { role: 'reviewer', count: 1, why: 'one review at the end' },
+    { role: 'lead', count: 1, why: 'runs it' },
+  ]
+  const ok = planFrom(plan({ team }), goal, { maxTeam: 3 })
+  assert.ok(ok.ok)
+  if (ok.ok) assert.equal(teamSize(ok.plan.team), 3)
+  const over = planFrom(plan({ team }), goal, { maxTeam: 2 })
+  assert.ok(!over.ok && /asks for 3 workers at once, over the user's max team size of 2/.test(over.error))
+  assert.ok(planFrom(plan({ team }), goal).ok, 'no cap given (a stored plan read back) refuses nothing')
 })

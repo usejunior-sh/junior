@@ -53,7 +53,7 @@ import type {
 } from './providers/types.js'
 import { z } from 'zod'
 import { detectEditors, openFolderIn } from './editors.js'
-import { checkRemoval, createWorktree, prepareWorktree, recreateWorktree, removeWorktree, syncProjectCheckouts } from './worktrees.js'
+import { checkRemoval, createWorktree, defaultBranch, prepareWorktree, recreateWorktree, removeWorktree, syncProjectCheckouts } from './worktrees.js'
 import { branchFromTitle } from '../shared/branch.js'
 import { aheadOf, filePatch, repoRoot, snapshotTree, treeDiff, treePatch, treeStat, worktreeChanges, worktreePatch, type TreeChange } from './git.js'
 import type {
@@ -206,14 +206,13 @@ import type {
   LibraryEntry,
   LibraryListResponse,
   LibrarySource,
-  TeamPickerResponse,
   TeamRunResponse,
   TeamRunView,
   AgentCan,
 } from '../shared/protocol.js'
 import { frameAgentRelay } from '../core/agents/relay.js'
 import { TeamLibrary, agentFrom, detectChecks, frameTeamMessage, isCheckCommand, isLibraryName } from './teams.js'
-import { LEAD, parseRecipe, recipeAgents, serializeRecipe, taskLoop, type RecipeStep, type TeamRecipe } from '../core/teams/recipe.js'
+import { LEAD } from '../core/teams/recipe.js'
 import { planTitle, renderPlan } from '../core/teams/plan.js'
 import {
   MAX_RUN_BUDGET_USD,
@@ -223,7 +222,6 @@ import {
   continueGate,
   editTasks,
   normalizeRun,
-  planMessage,
   proposeRevision,
   recipeFromRun,
   resume,
@@ -328,6 +326,7 @@ import {
 } from '../core/job/tools.js'
 import { fenceDecision, fenceFor } from '../core/job/fence.js'
 import { roleFenceDecision, type RoleFence } from '../core/goals/fence.js'
+import { blockFromRecipe } from '../core/goals/blocks.js'
 import { HardStop, settleRunStatus, untilStopped } from '../core/goals/run-guard.js'
 import { power, sleepWatch, startSleepWatch } from './power.js'
 import { buildInfo, clearState, pkgVersion, TRIAGE_DIR, writeState } from './state.js'
@@ -394,6 +393,8 @@ import {
   goalsRoute,
   goalSessionEndedOp,
   goalSessionMcpTools,
+  goalMaxTeam,
+  GOALS_MAX_TEAM_KEY,
   goalWorkerMessageOp,
   loadGoalHeld,
   onGoalEvent,
@@ -407,7 +408,7 @@ import {
 } from './goals.js'
 import { GOAL_SESSION_TIMEOUT_MS, LEAD_RUN_APPEND, ROLE_AGENT, roleWrites, workerAppend as goalWorkerAppend } from '../core/goals/run.js'
 import { leadDraftPrompt, LEAD_DRAFT_APPEND, type LeadWake } from '../core/goals/review.js'
-import { DEFAULT_GOAL_MODELS, GATE_SWEEP_INTERVAL_MS, type GateVerdict, type Goal, type GoalEvent } from '../core/goals/types.js'
+import { DEFAULT_GOAL_MODELS, GATE_SWEEP_INTERVAL_MS, MAX_GOAL_TEAM, goalDir, type GateVerdict, type Goal, type GoalEvent } from '../core/goals/types.js'
 import { WATCH_TICK_MS } from '../core/goals/shepherd.js'
 import { GATE_SERVER, GATE_TOOL_SEARCH, GATE_VERDICT_FULL, GATE_VERDICT_TOOL, gateCheckPrompt, gateFenceDecision, gateReadTools, gateServers, verdictFrom } from '../core/goals/gates.js'
 import { WORKSPACE_PLUGIN, createLibraryEntry, ensureWorkspacePlugin, libraryRoots, locate as locateLibrary, libraryTargets, listLibrary, readLibraryFile, removeLibraryItem, writeLibraryFile, type LibraryRoot } from './library.js'
@@ -520,8 +521,6 @@ const READ_TOOLS = new Set(['Read', 'Grep', 'Glob', 'LS', 'NotebookRead', 'WebFe
 /** Our own MCP tools that only read (the inbox, the artifacts index) — never prompt for these. */
 /** triage's own team tools: they record and route, and the team card is the approval — never a prompt. */
 const TEAM_TOOLS = new Set([
-  'mcp__triage__list_teams',
-  'mcp__triage__propose_team',
   'mcp__triage__split_step',
   'mcp__triage__revise_plan',
   'mcp__triage__submit_step',
@@ -746,6 +745,8 @@ class WorkspaceRuntime {
       // A goal made in chat lives under a new manual item, like a team proposed from one.
       itemFor: (goal) =>
         createManualOp(this, { title: goal.title.slice(0, 120), description: `Goal — done when: ${goal.doneWhen}`, ...(goal.projectId ? { projectId: goal.projectId } : {}) }),
+      // M6: the workspace's team recipes are the workflow blocks a plan may name.
+      blocks: async () => (await this.teamLibrary.list()).teams.flatMap((t) => (t.recipe ? [blockFromRecipe(t.name, t.recipe)] : [])),
     }
     this.playbookDir = path.join(workspaceDir(meta.id), 'playbooks')
     this.shots = new ShotStore(path.join(workspaceDir(meta.id), 'browser'))
@@ -1678,7 +1679,13 @@ const holdsActions = (rt: WorkspaceRuntime, row: StoredSession): boolean =>
 function roleFenceOf(rt: WorkspaceRuntime, row: StoredSession): RoleFence | null {
   if (row.kind === 'brief') return { write: false, role: 'brief' }
   const goalRun = rt.goalRuns.get(row.id)
-  if (goalRun) return { write: roleWrites(goalRun.role), role: goalRun.role }
+  if (goalRun)
+    return {
+      write: roleWrites(goalRun.role),
+      role: goalRun.role,
+      // Reviewer independence (M6): not the builders' handoff, log or transcripts.
+      ...(goalRun.role === 'reviewer' ? { hidden: [path.join(rt.goalLedger.root, goalDir(goalRun.goalId)), `${path.sep}.claude${path.sep}projects${path.sep}`] } : {}),
+    }
   if (row.kind === 'goal') return { write: false, role: 'lead' }
   const run = teamRunOf(rt, row.id)
   const worker = run && run.leadSessionId !== row.id ? [...run.workers].reverse().find((w) => w.sessionId === row.id) : undefined
@@ -2331,9 +2338,10 @@ async function makeWorktree(
   branch: string,
   itemId?: string,
   onStep?: (step: CreateStep) => void,
+  from?: string,
 ): Promise<Checkout> {
   onStep?.('worktree')
-  const made = await createWorktree(project, branch, worktreesRoot(rt))
+  const made = await createWorktree(project, branch, worktreesRoot(rt), from)
   onStep?.('files')
   const notes = await prepareWorktree(project.path, made.path)
   await syncCheckouts(rt)
@@ -5834,6 +5842,7 @@ async function readSettings(rt: WorkspaceRuntime): Promise<WorkspaceSettings> {
     briefsDefaultModel: typeof model === 'string' && model ? model : null,
     hiddenModels: await readIdList(rt, HIDDEN_MODELS_KEY),
     customModels: await readIdList(rt, CUSTOM_MODELS_KEY),
+    goalsMaxTeam: await goalMaxTeam(rt.goalDeps),
   }
 }
 
@@ -5879,6 +5888,11 @@ async function writeSettings(rt: WorkspaceRuntime, raw: unknown): Promise<Worksp
   }
   if (r.hiddenModels !== undefined) await rt.store.config.set(HIDDEN_MODELS_KEY, modelIdList(r.hiddenModels, 'hiddenModels'))
   if (r.customModels !== undefined) await rt.store.config.set(CUSTOM_MODELS_KEY, modelIdList(r.customModels, 'customModels'))
+  if (r.goalsMaxTeam !== undefined) {
+    const n = r.goalsMaxTeam
+    if (typeof n !== 'number' || !Number.isInteger(n) || n < 1 || n > MAX_GOAL_TEAM) throw new Error(`goalsMaxTeam must be a whole number from 1 to ${MAX_GOAL_TEAM}`)
+    await rt.store.config.set(GOALS_MAX_TEAM_KEY, n)
+  }
   invalidateInbox(rt)
   return readSettings(rt)
 }
@@ -6504,8 +6518,54 @@ function goalEngineFor(rt: WorkspaceRuntime): GoalEngine {
       const c = goal.checkoutId ? rt.checkouts.get(goal.checkoutId) : undefined
       if (c) await openInEditor(c.path)
     },
+    mergeBack: (goal, sessionId) => mergeGoalChild(rt, goal, sessionId),
+    worktreeDiff: async (goal) => {
+      const c = goal.checkoutId ? rt.checkouts.get(goal.checkoutId) : undefined
+      if (!c) return ''
+      const base = c.base ?? (await defaultBranch(c.path))
+      if (!base) return ''
+      const range = `${base}...HEAD`
+      const opts = { maxBuffer: 32 * 1024 * 1024 }
+      const [stat, patch] = await Promise.all([pExecFile('git', ['-C', c.path, 'diff', '--stat', range], opts), pExecFile('git', ['-C', c.path, 'diff', range], opts)])
+      return [stat.stdout.trim(), patch.stdout.trim()].filter(Boolean).join('\n\n')
+    },
   }
   return eng
+}
+
+/**
+ * A builder that worked beside others did it in a child worktree (decision 2,
+ * M6): commit what it left, merge its branch into the goal branch, then remove
+ * the child. A conflict aborts the merge and is the step's failure; the child
+ * stays for the lead's next move or the user's look.
+ */
+async function mergeGoalChild(rt: WorkspaceRuntime, goal: Goal, sessionId: string): Promise<string | null> {
+  const childId = rt.rows.get(sessionId)?.checkoutId
+  if (!childId || !goal.checkoutId || childId === goal.checkoutId) return null
+  const child = rt.checkouts.get(childId)
+  const into = rt.checkouts.get(goal.checkoutId)
+  if (!child?.branch || !into) return child ? "the child worktree's branch is gone" : null
+  const git = (cwd: string, args: string[]) => pExecFile('git', ['-C', cwd, ...args])
+  try {
+    await git(child.path, ['add', '-A'])
+    const staged = await git(child.path, ['diff', '--cached', '--quiet']).then(
+      () => false,
+      () => true,
+    )
+    if (staged) await git(child.path, ['commit', '-m', `work left uncommitted on ${child.branch}`])
+    await git(into.path, ['merge', '--no-ff', '--no-edit', child.branch])
+  } catch (err) {
+    await git(into.path, ['merge', '--abort']).catch(() => {})
+    return errText(err).split('\n').find((l) => l.trim())?.slice(0, 300) ?? 'git merge failed'
+  }
+  try {
+    await removeWorktree(child, { force: false, deleteBranch: true, merged: true })
+    await syncCheckouts(rt)
+  } catch (err) {
+    log('warn', 'goals', `merged ${child.branch} but couldn't remove its worktree: ${errText(err)}`, { goalId: goal.id, workspace: rt.meta.id })
+  }
+  log('info', 'goals', `merged ${child.branch} into ${into.branch ?? 'the goal branch'}`, { goalId: goal.id, sessionId, workspace: rt.meta.id })
+  return null
 }
 
 /** The goal's one worktree (decision 2): made on its first session, on a goal/<slug> branch. */
@@ -6525,10 +6585,17 @@ async function goalCheckout(rt: WorkspaceRuntime, goal: Goal, project: Project):
  * keeps going until the step's done-when holds. A throw before `started` is
  * the scheduler's to handle; after, the session ends here.
  */
-async function startGoalSession(rt: WorkspaceRuntime, goal: Goal, spec: StartSpec, started: (sessionId: string) => Promise<void>): Promise<void> {
+async function startGoalSession(rt: WorkspaceRuntime, stale: Goal, spec: StartSpec, started: (sessionId: string) => Promise<void>): Promise<void> {
+  // Read again: a worker started a moment ago in the same batch may have made the goal's worktree.
+  const goal = (await rt.goalDeps.store.goals.get(stale.id)) ?? stale
   const project = goal.projectId ? (await rt.store.projects.list()).find((p) => p.id === goal.projectId) : undefined
   if (!project) throw new Error(goal.projectId ? `its project ${goal.projectId} is gone` : 'it has no project to work in')
-  const checkout = await goalCheckout(rt, goal, project)
+  const main = await goalCheckout(rt, goal, project)
+  // A builder beside others gets its own branch off the goal's, merged back when its step is done (mergeGoalChild).
+  const checkout =
+    spec.role !== 'lead' && spec.worktree === 'child' && main.branch
+      ? await makeWorktree(rt, project, `${main.branch}--${spec.stepId.replace(/[^\w-]+/g, '-')}-${randomUUID().slice(0, 4)}`, goal.sourceItemId ?? undefined, undefined, main.branch)
+      : main
   const agent = spec.role === 'lead' ? null : ROLE_AGENT[spec.role]
   const agentPrompt = agent ? ((await rt.teamLibrary.readAgent(agent))?.prompt ?? null) : null
   const title = spec.role === 'lead' ? `Goal lead · ${goal.title.slice(0, 70)}` : `${spec.role[0]!.toUpperCase()}${spec.role.slice(1)} · ${spec.stepId} · ${goal.title.slice(0, 60)}`
@@ -6616,7 +6683,9 @@ async function startGoalLead(rt: WorkspaceRuntime, goal: Goal, wake: LeadWake, e
     const live = await getOrRevive(rt, row.id)
     if (!live) throw new Error('could not start the lead session')
     const plan = wake.kind === 'revise' ? (await rt.goalLedger.read(goal.id, 0)).plan : ''
-    await live.sendUserMessage(leadDraftPrompt(goal, wake, plan.trim() ? plan : null))
+    const blocks = (await rt.goalDeps.blocks?.()) ?? []
+    const staffing = { blocks: blocks.map((b) => ({ name: b.name, label: b.label, description: b.description, steps: b.steps.length })), maxTeam: await goalMaxTeam(rt.goalDeps) }
+    await live.sendUserMessage(leadDraftPrompt(goal, wake, plan.trim() ? plan : null, staffing))
     log('info', 'goals', `lead ${wake.kind === 'draft' ? 'drafting' : `revising v${wake.version}`}: ${goal.title}`, { goalId: goal.id, sessionId: row.id, workspace: rt.meta.id })
   } catch (err) {
     await settleGoalLead(rt, row.id, errText(err))
@@ -6951,148 +7020,6 @@ async function saveAgentOp(rt: WorkspaceRuntime, raw: unknown): Promise<string> 
   return name
 }
 
-/** What the lead sees when it picks or drafts a team. */
-async function listTeamsOp(rt: WorkspaceRuntime) {
-  const { teams, agents } = await rt.teamLibrary.list()
-  return {
-    teams: teams
-      .filter((t) => t.recipe && !t.missing.length)
-      .map((t) => ({
-        team: t.name,
-        label: t.recipe!.label,
-        description: t.recipe!.description,
-        useFor: t.recipe!.useFor,
-        budgetUsd: t.recipe!.budgetUsd,
-        steps: t.recipe!.steps.map((s) => ({
-          id: s.id,
-          agent: s.agent,
-          output: s.output,
-          ...(s.fanOut ? { fanOut: s.fanOut } : {}),
-          ...(s.onFail ? { onFail: s.onFail } : {}),
-          ...(s.gate ? { gate: s.gate } : {}),
-          ...(s.does ? { does: s.does } : {}),
-        })),
-        advice: t.recipe!.advice,
-      })),
-    agents: agents.map((a) => ({ agent: a.name, label: a.label, description: a.description, can: a.can, model: a.model })),
-  }
-}
-
-/** A recipe the lead drafted for this run: checked by the same parser a team file goes through. */
-function draftedRecipe(raw: unknown, known: Set<string>): TeamRecipe {
-  const r = (raw ?? {}) as Record<string, unknown>
-  const steps = (Array.isArray(r.steps) ? r.steps : []).map((x) => {
-    const s = (x ?? {}) as Record<string, unknown>
-    const fan = (s.fanOut ?? null) as { by?: unknown; max?: unknown } | null
-    const fail = (s.onFail ?? null) as { backTo?: unknown; max?: unknown } | null
-    return {
-      id: String(s.id ?? ''),
-      agent: String(s.agent ?? ''),
-      output: (typeof s.output === 'string' ? s.output : null) as RecipeStep['output'],
-      does: typeof s.does === 'string' ? s.does : '',
-      fanOut: fan ? { by: String(fan.by ?? ''), max: Number(fan.max) } : null,
-      onFail: fail ? { backTo: String(fail.backTo ?? ''), max: Number(fail.max) } : null,
-      gate: s.gate === 'you' ? ('you' as const) : null,
-      model: typeof s.model === 'string' && s.model ? s.model : null,
-      forEach: s.forEach === 'task' ? ('task' as const) : null,
-      context: s.context === 'fresh' || s.context === 'carry' ? (s.context as 'fresh' | 'carry') : null,
-    }
-  })
-  const recipe: TeamRecipe = {
-    label: typeof r.label === 'string' && r.label.trim() ? r.label.trim().slice(0, 60) : 'Custom',
-    description: typeof r.description === 'string' ? r.description.trim().slice(0, 400) : '',
-    useFor: [],
-    budgetUsd: typeof r.budgetUsd === 'number' && r.budgetUsd > 0 ? r.budgetUsd : 5,
-    lead: { model: null, effort: null },
-    done: typeof r.done === 'string' ? r.done.trim() : '',
-    steps,
-    advice: '',
-  }
-  const parsed = parseRecipe('draft', serializeRecipe(recipe, 'draft'))
-  if (!parsed.recipe) throw new Error(`the drafted team doesn't hold together: ${parsed.errors.join('; ')}`)
-  const missing = recipeAgents(parsed.recipe).filter((a) => !known.has(a))
-  if (missing.length) throw new Error(`no agent file named ${missing.join(', ')} — use list_teams to see the agents there are`)
-  return parsed.recipe
-}
-
-/**
- * The lead proposes a team: a saved team or one it drafted, plus the card. The
- * run waits, proposed, until you approve. A session with no work item gets one —
- * the result, "needs you" and the cost all land on an item.
- */
-async function proposeTeamOp(rt: WorkspaceRuntime, sessionId: string, raw: unknown): Promise<TeamRun> {
-  const r = (raw ?? {}) as Record<string, unknown>
-  const lead = rt.rows.get(sessionId)
-  if (!lead) throw new Error('no such session')
-  requireVeto(rt.provider, 'team')
-  const existing = teamRunOf(rt, sessionId)
-  if (existing && existing.leadSessionId !== sessionId) throw new Error('this session is a worker on a team — only a lead proposes one')
-  if (existing && existing.state !== 'proposed' && existing.state !== 'done' && existing.state !== 'stopped') {
-    throw new Error(`this session already leads a ${existing.state} team run — stop it before proposing another`)
-  }
-  const lib = rt.teamLibrary
-  const { teams, agents } = await lib.list()
-  let recipe: TeamRecipe
-  let team: string | null = null
-  if (typeof r.team === 'string' && r.team) {
-    const entry = teams.find((t) => t.name === r.team)
-    if (!entry) throw new Error(`no team named "${r.team}" — call list_teams`)
-    if (!entry.recipe) throw new Error(`teams/${entry.name}.md has errors: ${entry.errors.join('; ')}`)
-    if (entry.missing.length) throw new Error(`teams/${entry.name}.md names agents with no file: ${entry.missing.join(', ')}`)
-    recipe = entry.recipe
-    team = entry.name
-  } else if (r.recipe) recipe = draftedRecipe(r.recipe, new Set(agents.map((a) => a.name)))
-  else throw new Error('give either team (a saved team\'s name) or recipe (a drafted one)')
-  const card = cardFrom(r.card, recipe, existing?.state === 'proposed' ? existing.card : undefined)
-
-  let itemId = rt.sessionItem.get(sessionId) ?? null
-  if (!itemId || !(await rt.store.items.get(itemId))) {
-    const title = (typeof r.title === 'string' && r.title.trim() ? r.title.trim() : card.goal).slice(0, 120)
-    itemId = await createManualOp(rt, { title, description: card.goal })
-    await linkSessionToItem(rt, sessionId, itemId, 'dispatch')
-  }
-  const item = await rt.store.items.get(itemId)
-  const root = (await repoRoot(lead.cwd)) ?? lead.cwd
-  const used = new Set(recipeAgents(recipe))
-  const run: TeamRun = {
-    id: existing?.state === 'proposed' ? existing.id : randomUUID(),
-    itemId,
-    title: (item?.title ?? card.goal).slice(0, 80),
-    createdAt: existing?.state === 'proposed' ? existing.createdAt : Date.now(),
-    team,
-    recipe,
-    card,
-    agents: agents.filter((a) => used.has(a.name)).map((a) => ({ name: a.name, label: a.label, color: a.color, model: a.model, effort: a.effort, prompt: a.prompt, can: a.can })),
-    leadSessionId: sessionId,
-    state: 'proposed',
-    step: 0,
-    splitting: false,
-    round: 0,
-    task: null,
-    tasks: {},
-    workers: [],
-    awaiting: [],
-    submitted: [],
-    outputs: [],
-    notes: [],
-    revision: null,
-    feedback: null,
-    unresolved: null,
-    spend: {},
-    budgetUsd: card.budgetUsd,
-    rev: (existing?.rev ?? 0) + 1,
-    nudged: [],
-    root,
-    ...(existing?.state === 'proposed' && existing.planArtifactId ? { planArtifactId: existing.planArtifactId } : {}),
-  }
-  if (existing && existing.id !== run.id) rt.teamRuns.delete(existing.id)
-  rt.teamRuns.set(run.id, run)
-  indexTeamRun(rt, run)
-  await teamRunChanged(rt, run)
-  log('info', 'teams', `team proposed: ${recipe.label} for ${run.title}`, { teamId: run.id, workspace: rt.meta.id })
-  return run
-}
-
 /** Your edit to a proposed card (before approving). */
 async function editTeamCardOp(rt: WorkspaceRuntime, raw: unknown): Promise<void> {
   const run = teamRunFrom(rt, raw)
@@ -7129,9 +7056,19 @@ async function settleRevisionOp(rt: WorkspaceRuntime, raw: unknown): Promise<voi
   await withTeamRun(rt, run, () => applyTeamActions(rt, run, settleRevision(run, (raw as { accept?: unknown }).accept === true)))
 }
 
+/**
+ * Teams became goals (M6): a goal's plan has a team section and its steps can
+ * be workflow blocks, so no new team run starts — a proposed card can only be
+ * discarded. Runs already going keep their tools and controls until they end,
+ * and every run stays readable.
+ */
+const TEAMS_FROZEN =
+  'Teams became goals: a new team run can\'t start. Make the work a goal instead ("Turn into a goal" on the item): its plan has a team section, and the team recipes are workflow blocks its steps can use.'
+
 async function approveTeamOp(rt: WorkspaceRuntime, raw: unknown): Promise<void> {
   const run = teamRunFrom(rt, raw)
   await withTeamRun(rt, run, async () => {
+    if (run.state === 'proposed') throw new Error(TEAMS_FROZEN)
     requireVeto(rt.provider, 'team')
     const card = (raw as { card?: unknown }).card ? cardFrom((raw as { card?: unknown }).card, run.recipe, run.card) : run.card
     log('info', 'teams', `team approved: ${run.recipe.label}`, { teamId: run.id, workspace: rt.meta.id })
@@ -7198,59 +7135,6 @@ async function saveRunAsTeamOp(rt: WorkspaceRuntime, raw: unknown): Promise<stri
 }
 
 /**
- * The dispatch picker: open a lead session on the item, in its project, told to
- * plan with the chosen team (or to pick/draft one). Nothing runs until you
- * approve the card it proposes.
- */
-async function planTeamOp(rt: WorkspaceRuntime, raw: unknown): Promise<string> {
-  const r = (raw ?? {}) as Record<string, unknown>
-  const item = await rt.store.items.get(typeof r.itemId === 'string' ? r.itemId : '')
-  if (!item) throw new Error('no such work item')
-  const project = await projectFor(rt, item)
-  if (!project) throw new Error('this item has no project — set one on the item so the team knows which folder to work in')
-  const entry = typeof r.team === 'string' && r.team ? (await rt.teamLibrary.list()).teams.find((t) => t.name === r.team) : null
-  if (r.team && !entry?.recipe) throw new Error(entry ? `teams/${entry.name}.md has errors: ${entry.errors.join('; ')}` : `no team named "${r.team}"`)
-  const recipe = entry?.recipe ?? null
-  const row = await createSession(rt, `${recipe?.label ?? 'Team'} · ${item.title}`.slice(0, 80), project.path, recipe?.lead.model ?? null, recipe?.lead.effort ?? null, false, null, { spawn: false, projectId: project.id })
-  await linkSessionToItem(rt, row.id, item.id, 'dispatch')
-  const live = await getOrRevive(rt, row.id)
-  if (!live) throw new Error('could not start the lead session')
-  const brief = await currentBrief(rt, item.id)
-  const mentions: Mention[] = [{ kind: 'item', ref: item.id, label: item.title }]
-  if (brief) mentions.push({ kind: 'artifact', ref: brief.artifact.id, label: brief.artifact.title })
-  const images = await itemImageAttachments(rt.attachmentsDir, item.id, item.images)
-  const text = planMessage({ team: entry && recipe ? { name: entry.name, label: recipe.label, tasks: !!taskLoop(recipe) } : null, itemTitle: item.title })
-  await live.sendUserMessage(`${text}\n\n${mentions.map(mentionToken).join(' ')}`, images, mentions)
-  log('info', 'teams', `team planning: ${recipe?.label ?? 'pick or draft'} for ${item.title}`, { itemId: item.id, workspace: rt.meta.id })
-  return row.id
-}
-
-/** Which team the picker suggests for an item kind, and what each team has really cost. */
-async function teamPickerOp(rt: WorkspaceRuntime, kind: string): Promise<TeamPickerResponse & { ok: true }> {
-  const { teams } = await rt.teamLibrary.list()
-  const usable = teams.filter((t) => t.recipe && !t.missing.length)
-  const costs = new Map<string, number[]>()
-  for (const run of rt.teamRuns.values()) {
-    if (run.state !== 'done' || !run.team) continue
-    costs.set(run.team, [...(costs.get(run.team) ?? []), runSpent(run)])
-  }
-  const options = usable.map((t) => {
-    const c = costs.get(t.name) ?? []
-    return {
-      team: t.name,
-      label: t.recipe!.label,
-      description: t.recipe!.description,
-      steps: t.recipe!.steps.map((s) => (s.fanOut ? `${s.id} ×${s.fanOut.max}` : s.id)),
-      budgetUsd: t.recipe!.budgetUsd,
-      runs: c.length,
-      ...(c.length ? { avgUsd: Math.round((c.reduce((a, b) => a + b, 0) / c.length) * 100) / 100 } : {}),
-    }
-  })
-  const suggested = usable.find((t) => t.recipe!.useFor.includes(kind))?.name ?? (usable.some((t) => t.name === 'solo') ? 'solo' : null)
-  return { ok: true, suggested, options }
-}
-
-/**
  * The `team` MCP server a worker gets: its one job-critical tool, submit_step.
  * Rebuilt per spawn, like the brief server.
  */
@@ -7306,83 +7190,6 @@ function submitStepTool(rt: WorkspaceRuntime, sessionId: string) {
 function teamLeadTools(rt: WorkspaceRuntime) {
   const sid = z.string().describe('your triage session id — it is in your system prompt')
   return [
-    tool(
-      'list_teams',
-      'The saved teams (recipes: steps, fan-out, gates, budget) and the agents they are made of. Call before propose_team; prefer a saved team over drafting one.',
-      {},
-      async () => {
-        try {
-          return okResult(JSON.stringify(await listTeamsOp(rt), null, 2))
-        } catch (err) {
-          return errResult(errText(err))
-        }
-      },
-    ),
-    tool(
-      'propose_team',
-      'Propose a team run for the work this session is on — when the user asks for a team ("get a team to …"), or the session was opened to plan one. Shows the user an editable team card; nothing runs until they approve it. Give `team` (a saved team, from list_teams) or `recipe` (a drafted one, only when no saved team fits). If this session has no work item, one is created from `title`. Proposing again replaces the card. After calling it, END YOUR TURN.',
-      {
-        sessionId: sid,
-        team: z.string().optional().describe('a saved team\'s name, e.g. "solo"'),
-        recipe: z
-          .object({
-            label: z.string(),
-            description: z.string().optional(),
-            done: z.string().optional(),
-            budgetUsd: z.number().optional(),
-            steps: z
-              .array(
-                z.object({
-                  id: z.string().describe('short lowercase name, e.g. "build"'),
-                  agent: z.string().describe('"lead", "checks", or an agent name from list_teams'),
-                  output: z.enum(['change', 'findings', 'verdict', 'notes', 'report']).optional().describe('omit only for agent "checks"'),
-                  does: z.string().optional(),
-                  fanOut: z.object({ by: z.string(), max: z.number() }).optional(),
-                  onFail: z.object({ backTo: z.string(), max: z.number() }).optional(),
-                  gate: z.enum(['you']).optional(),
-                  model: z.string().optional(),
-                  forEach: z.enum(['task']).optional().describe('"task": part of the per-task loop (contiguous steps, run once per task)'),
-                  context: z.enum(['fresh', 'carry']).optional().describe('the change step in a task loop: fresh (default) or carry'),
-                }),
-              )
-              .min(1)
-              .max(8),
-          })
-          .optional()
-          .describe('a drafted recipe — same rules as a team file: one change step, never fanned out; fan-out ≤ 6; only the lead reports'),
-        title: z.string().optional().describe('the work item title, when this session has none yet'),
-        card: z.object({
-          goal: z.string().describe('ONE sentence: what the run achieves — the user reads it at a glance'),
-          criteria: z.array(z.string()).min(1).max(8).describe('3–5 observable behaviours a checker can prove by running something, each ONE short line (~12 words) — no file paths or line numbers'),
-          outOfScope: z.array(z.string()).max(8).optional().describe('a few words each'),
-          tasks: z
-            .array(z.object({ title: z.string().describe('one line'), criteria: z.array(z.string()).max(3).optional().describe('1–3 short checkable lines') }))
-            .max(8)
-            .optional()
-            .describe('teams with a task loop (e.g. Build): 2–6 tasks, in order, each leaving the project working; omit for other teams'),
-          decisions: z.array(z.string()).max(10).optional().describe('decisions already made with the user'),
-          steps: z
-            .array(
-              z.object({
-                id: z.string().describe('a step id of the recipe'),
-                model: z.string().optional().describe('a model for this step if it should differ'),
-                slices: z.array(z.object({ title: z.string(), brief: z.string() })).max(6).optional().describe('fan-out steps: the slices, if you can already tell them apart'),
-              }),
-            )
-            .optional(),
-          budgetUsd: z.number().optional().describe('the run\'s spend cap; defaults to the team\'s budget'),
-          note: z.string().optional().describe('one or two lines to the user: why this team and size'),
-        }),
-      },
-      async (args) => {
-        try {
-          const run = await proposeTeamOp(rt, args.sessionId, args)
-          return okResult(`Team card shown to the user (${run.recipe.label}, ${run.recipe.steps.length} steps, up to ${usd(run.card.budgetUsd)}). END YOUR TURN — they approve or edit it, then triage runs the steps and wakes you when you're needed.`)
-        } catch (err) {
-          return errResult(errText(err))
-        }
-      },
-    ),
     tool(
       'split_step',
       'Split the current fan-out step of your team run into slices — one worker each. Only when triage asks you to. Then END YOUR TURN.',
@@ -7486,7 +7293,7 @@ function makeTriageMcp(rt: WorkspaceRuntime) {
     // transports, one explanation of it.
     instructions: TRIAGE_MCP_INSTRUCTIONS,
     tools: [
-      // Teams v2: any chat can become a lead (list_teams, propose_team, split_step, submit_step).
+      // Teams v2, frozen (M6): runs already going keep split_step, revise_plan and submit_step; new work becomes a goal.
       ...teamLeadTools(rt),
       // Goals (server/goals.ts): goal_create, goal_get, goal_list, goal_propose_plan, goal_log_append, goal_handoff_write.
       ...goalMcpTools(rt.goalDeps),
@@ -9436,10 +9243,6 @@ const server = http.createServer(async (req, res) => {
       const lib = rt.teamLibrary
       if (route === 'GET /api/teams/library') {
         json(200, await teamLibraryOp(rt))
-      } else if (route === 'GET /api/teams/picker') {
-        json(200, await teamPickerOp(rt, url.searchParams.get('kind') ?? ''))
-      } else if (route === 'POST /api/teams/plan') {
-        json(200, { ok: true, sessionId: await planTeamOp(rt, await readJsonBody(req)) })
       } else if (route === 'PUT /api/teams/agent') {
         await saveAgentOp(rt, await readJsonBody(req))
         json(200, await teamLibraryOp(rt))

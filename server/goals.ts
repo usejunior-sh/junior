@@ -21,19 +21,21 @@ import { promisify } from 'node:util'
 import type http from 'node:http'
 import { tool } from '@anthropic-ai/claude-agent-sdk'
 import { z } from 'zod'
-import type { Store } from '../core/store/types.js'
+import type { GoalSessionRecord, Store } from '../core/store/types.js'
 import { isLedgerId, type GoalLedger } from '../core/goals/ledger.js'
 import { parseDuration, transition, turnOf, type GoalTrigger } from '../core/goals/machine.js'
-import { parsePlanMd, planFrom, renderPlanMd, samePlan, MAX_CONFIRMATIONS, MAX_PLAN_BUDGET_USD } from '../core/goals/plan.js'
+import { parsePlanMd, planFrom, renderPlanMd, samePlan, MAX_CONFIRMATIONS, MAX_PLAN_BUDGET_USD, type PlanOpts } from '../core/goals/plan.js'
+import type { WorkflowBlock } from '../core/goals/blocks.js'
 import {
   afterSession,
   armRefusal,
   budgetCheck,
   DEFAULT_MAX_PARALLEL,
+  DEFAULT_MAX_TEAM,
   dispatchRefusal,
   leadRunPrompt,
   minutesUsed,
-  nextSession,
+  nextWorkers,
   openAsk,
   pickGoals,
   planInputOf,
@@ -44,8 +46,12 @@ import {
   unreadWakes,
   workerDue,
   workerOutcome,
+  workerCap,
   workerPrompt,
+  workingSessions,
+  type Working,
   type HeldAction,
+  type WorkerSpec,
 } from '../core/goals/run.js'
 import { applyVerdict, NO_VERDICT, nextCheckDelay, requiredConfirmations } from '../core/goals/gates.js'
 import { commentFrom, MAX_COMMENT, pendingComments, reactTo, REVIEW_EVENTS, type LeadWake } from '../core/goals/review.js'
@@ -89,7 +95,7 @@ import {
   type SessionOutcome,
   type StepRole,
 } from '../core/goals/types.js'
-import type { GoalAsk, GoalAskGate, GoalResponse, GoalSummary, GoalsResponse, GoalWriteOutcome, GoalWriteResponse } from '../shared/protocol.js'
+import type { GoalAsk, GoalAskGate, GoalResponse, GoalTeamMember, GoalSummary, GoalsResponse, GoalWriteOutcome, GoalWriteResponse } from '../shared/protocol.js'
 
 export type GoalDeps = {
   store: Store
@@ -103,6 +109,8 @@ export type GoalDeps = {
   emit: (ev: GoalEvent) => void
   /** the inbox item a goal made from chat lives under (a manual item, like propose_team's); null = none */
   itemFor?: (goal: Goal) => Promise<string | null>
+  /** M6: the workflow blocks a plan may name (the workspace's team recipes); none = only shepherd-pr */
+  blocks?: () => Promise<WorkflowBlock[]>
 }
 
 /** What the engine does for the review events; the server spawns the session. */
@@ -124,12 +132,30 @@ export type GoalEngine = {
   worktreeHead?: (goal: Goal) => Promise<string | null>
   /** take over: open the goal's worktree in the user's editor */
   openWorktree?: (goal: Goal) => Promise<void>
+  /**
+   * M6: a worker that ran in a child worktree finished its step — commit what
+   * it left, merge its branch into the goal's and remove it. Returns why it
+   * couldn't (a conflict), or null when merged or there was no child.
+   */
+  mergeBack?: (goal: Goal, sessionId: string) => Promise<string | null>
+  /** M6: the goal branch against its base, for a reviewer — stat, then the patch */
+  worktreeDiff?: (goal: Goal) => Promise<string>
 }
 
 /** What one goal session is told: the run lead's wake, or a worker's step. */
 export type StartSpec =
   | { role: 'lead'; model: string; prompt: string; upTo: number }
-  | { role: Exclude<StepRole, 'lead'>; model: string; stepId: string; attempt: number; writes: boolean; context: string; first: string }
+  | {
+      role: Exclude<StepRole, 'lead'>
+      model: string
+      stepId: string
+      attempt: number
+      writes: boolean
+      context: string
+      first: string
+      /** where it works: the goal's worktree, or (a builder beside other sessions) a child worktree branched from it */
+      worktree: 'goal' | 'child'
+    }
 
 /** How many log entries the goal page shows; goal_get returns the lead's LEAD_LOG_ENTRIES. */
 export const PAGE_LOG_ENTRIES = 20
@@ -222,8 +248,8 @@ export async function goalGetOp(d: GoalDeps, goalId: string, logEntries = PAGE_L
   ])
   const rows = await d.store.goals.sessions(goal.id)
   const lead = rows.filter((r) => r.role === 'lead' && r.endedAt === null).sort((a, b) => b.startedAt - a.startedAt)[0]
-  const cur = currentSession(events)
-  const live = goal.state === 'running' && cur ? rows.find((r) => r.sessionId === cur.sessionId && r.endedAt === null) : undefined
+  const team = goal.state === 'running' ? workingSessions(steps, events) : []
+  const live = team.at(-1)
   return {
     goal,
     turn: turnOf(goal.state),
@@ -237,8 +263,21 @@ export async function goalGetOp(d: GoalDeps, goalId: string, logEntries = PAGE_L
     comments: goal.state === 'plan_ready' ? pendingComments(events) : [],
     leadSessionId: lead?.sessionId ?? null,
     liveSession: live ? { sessionId: live.sessionId, role: live.role, stepId: live.stepId } : null,
+    team: await teamOf(d, rows, team),
     ask: goal.state === 'waiting_you' ? askOf(goal, events, gates) : null,
   }
+}
+
+/** A running goal's open sessions, for the page's live team. */
+async function teamOf(d: GoalDeps, rows: readonly GoalSessionRecord[], team: readonly Working[]): Promise<GoalTeamMember[]> {
+  const out = await Promise.all(
+    team.map(async (w) => ({
+      ...w,
+      startedAt: rows.find((r) => r.sessionId === w.sessionId)?.startedAt ?? 0,
+      lastActivityAt: (await d.store.sessions.get(w.sessionId))?.updatedAt ?? null,
+    })),
+  )
+  return out.sort((a, b) => a.startedAt - b.startedAt)
 }
 
 /** What a goal waiting on the user waits for, in the page's terms. */
@@ -305,7 +344,7 @@ export async function goalProposePlanOp(d: GoalDeps, raw: unknown): Promise<Writ
   const b = obj(raw)
   const goal = await goalOrThrow(d, id(b.goalId, 'goalId'))
   const sessionId = b.sessionId === undefined ? null : id(b.sessionId, 'sessionId')
-  const parsed = planFrom(b.plan, goal)
+  const parsed = planFrom(b.plan, goal, await planOpts(d, true))
   if (!parsed.ok) throw new Error(`plan rejected: ${parsed.error}`)
   if (goal.state === 'plan_ready' && samePlan(goal.plan, parsed.plan)) return { goal, outcome: 'unchanged' }
   const t = transition(goal.state, 'plan_proposed', 'engine')
@@ -606,6 +645,16 @@ function currentSession(events: readonly GoalEvent[]): { sessionId: string; role
   return null
 }
 
+/** The step_started event of one session: who it was and, for a lead, the last event it was shown. */
+function startedOf(events: readonly GoalEvent[], sessionId: string): { role: StepRole; stepId: string | null; upTo: number; at: number } | null {
+  for (let i = events.length - 1; i >= 0; i--) {
+    const e = events[i]!
+    if (e.kind !== 'step_started' || e.detail?.sessionId !== sessionId) continue
+    return { role: e.detail.role as StepRole, stepId: typeof e.detail.stepId === 'string' ? e.detail.stepId : null, upTo: typeof e.detail.upTo === 'number' ? e.detail.upTo : 0, at: e.at }
+  }
+  return null
+}
+
 /** Move a goal by an engine trigger; false when it had moved already. */
 async function engineMove(d: GoalDeps, goal: Goal, trigger: GoalTrigger, reason: string | null, at: number, detail: Record<string, unknown> = {}): Promise<boolean> {
   const t = transition(goal.state, trigger, 'engine')
@@ -623,10 +672,11 @@ async function youMove(d: GoalDeps, goal: Goal, trigger: GoalTrigger, reason: st
 const pumps = new WeakMap<GoalDeps, Promise<void>>()
 
 /**
- * The scheduler: give queued goals a session, highest priority first, up to
- * `goals.maxParallel` running at once. Serial per workspace, so two pumps
- * never start the same goal. Called on every event that can free or need a
- * slot — no timer.
+ * The scheduler: fill free session slots, up to `goals.maxParallel` goal
+ * sessions at once. Running goals' dispatched workers go first, up to each
+ * goal's worker cap, so a team finishes what it started; then queued goals,
+ * highest priority first. Serial per workspace, so two pumps never start the
+ * same goal or step. Called on every event that can free or need a slot — no timer.
  */
 export function pumpGoals(d: GoalDeps, eng: GoalEngine): Promise<void> {
   const run = (pumps.get(d) ?? Promise.resolve()).then(() => pumpOnce(d, eng))
@@ -642,12 +692,41 @@ export async function goalPumpIdle(d: GoalDeps): Promise<void> {
   for (let p = pumps.get(d); p; p = pumps.get(d) === p ? undefined : pumps.get(d)) await p
 }
 
+export const GOALS_MAX_TEAM_KEY = 'goals.maxTeam'
+
+/** The user's max team size (Settings → Teams): the most workers one goal runs at once. */
+export async function goalMaxTeam(d: GoalDeps): Promise<number> {
+  const v = Number(await d.store.config.get<number>(GOALS_MAX_TEAM_KEY))
+  return Number.isInteger(v) && v > 0 ? v : DEFAULT_MAX_TEAM
+}
+
+/** What a plan is read against: the workflow blocks, and the max team size when the lead is proposing (a user's own edit isn't capped). */
+async function planOpts(d: GoalDeps, capped: boolean): Promise<PlanOpts> {
+  return { blocks: (await d.blocks?.()) ?? [], maxTeam: capped ? await goalMaxTeam(d) : null }
+}
+
+const working = async (d: GoalDeps, goalId: string) => workingSessions(await d.store.goals.steps(goalId), await d.store.goals.events(goalId))
+
 async function pumpOnce(d: GoalDeps, eng: GoalEngine): Promise<void> {
   if (!eng.startSession) return
-  const cap = Number((await d.store.config.get<number>('goals.maxParallel')) ?? DEFAULT_MAX_PARALLEL)
-  const running = (await d.store.goals.list({ states: ['running'] })).length
+  const raw = Number((await d.store.config.get<number>('goals.maxParallel')) ?? DEFAULT_MAX_PARALLEL)
+  const cap = Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_MAX_PARALLEL
+  const maxTeam = await goalMaxTeam(d)
+  const running = await d.store.goals.list({ states: ['running'] })
+  const open = new Map<string, Working[]>()
+  for (const g of running) open.set(g.id, await working(d, g.id))
+  let busy = [...open.values()].reduce((n, rows) => n + rows.length, 0)
+  // Steps the lead dispatched beside a running goal's workers join them as slots free up; never beside its lead.
+  for (const g of running) {
+    const rows = open.get(g.id)!
+    if (!rows.length || rows.some((r) => r.role === 'lead') || busy >= cap) continue
+    busy += await startWorkers(d, eng, g, Math.min(cap - busy, workerCap(g.plan, maxTeam) - rows.length), rows.length)
+  }
   const queued = await d.store.goals.list({ states: ['queued'] })
-  for (const goal of pickGoals(queued, running, Number.isFinite(cap) && cap > 0 ? cap : DEFAULT_MAX_PARALLEL)) await startGoal(d, eng, goal)
+  for (const goal of pickGoals(queued, busy, cap)) {
+    if (busy >= cap) break
+    busy += await startGoal(d, eng, goal, Math.min(cap - busy, workerCap(goal.plan, maxTeam)))
+  }
 }
 
 /** The queued actions a goal's workers filed, for the next worker's prompt. */
@@ -662,49 +741,86 @@ export async function goalHeldActions(d: GoalDeps, goalId: string): Promise<Held
   return out
 }
 
-/** One queued goal into running: budget first, then the lead or a dispatched step's worker. */
-async function startGoal(d: GoalDeps, eng: GoalEngine, goal: Goal): Promise<void> {
+/**
+ * One queued goal into running: budget first, then up to `slots` dispatched
+ * steps' workers, else the lead. Returns how many sessions it started.
+ */
+async function startGoal(d: GoalDeps, eng: GoalEngine, goal: Goal, slots: number): Promise<number> {
   const start = eng.startSession
-  if (!start) return
+  if (!start || slots < 1) return 0
   const [steps, events, sessions] = await Promise.all([d.store.goals.steps(goal.id), d.store.goals.events(goal.id), d.store.goals.sessions(goal.id)])
   // Approval queues the steps a moment after the move: wait for them.
-  if (!goal.plan || !steps.length) return
+  if (!goal.plan || !steps.length) return 0
   const at = d.now()
   const b = budgetCheck(goal, minutesUsed(sessions, at), events.some((e) => e.kind === 'budget'))
   if (b.kind === 'stop') {
     await note(d, { actor: 'engine', sessionId: null, kind: 'budget', from: null, to: null, detail: { level: 'stop', text: b.text } }, goal.id, at)
     if (await engineMove(d, goal, 'ask_you', b.text, at)) d.changed(goal.id)
-    return
+    return 0
   }
   if (b.kind === 'warn') await note(d, { actor: 'engine', sessionId: null, kind: 'budget', from: null, to: null, detail: { level: 'warn', text: b.text } }, goal.id, at)
 
-  const next = nextSession(goal, steps, events)
-  let spec: StartSpec
+  const workers = nextWorkers(goal, steps, events, slots)
+  if (!workers.length) {
+    const files = await d.ledger.read(goal.id, LEAD_LOG_ENTRIES)
+    const spec: StartSpec = { role: 'lead', model: goal.plan.models?.lead ?? DEFAULT_GOAL_MODELS.lead, prompt: leadRunPrompt(goal, steps, files, unreadWakes(events)), upTo: events.at(-1)?.seq ?? 0 }
+    if (!(await engineMove(d, goal, 'start', null, at))) return 0
+    d.changed(goal.id)
+    return (await startOne(d, eng, goal, spec)) ? 1 : 0
+  }
+  if (!(await engineMove(d, goal, 'start', null, at))) return 0
+  d.changed(goal.id)
+  return startWorkers(d, eng, goal, workers.length, 0, workers)
+}
+
+/**
+ * Start workers for a running goal's dispatched steps, beside the `beside`
+ * sessions it already runs. A builder with company works in a child worktree
+ * (merged back when its step is done), so two writers never share a checkout.
+ */
+async function startWorkers(d: GoalDeps, eng: GoalEngine, goal: Goal, slots: number, beside: number, picked?: WorkerSpec[]): Promise<number> {
+  if (slots < 1 || !goal.plan) return 0
+  const [steps, events] = await Promise.all([d.store.goals.steps(goal.id), d.store.goals.events(goal.id)])
+  const workers = picked ?? nextWorkers(goal, steps, events, slots)
+  if (!workers.length) return 0
   const files = await d.ledger.read(goal.id, LEAD_LOG_ENTRIES)
-  if (!('kind' in next)) {
-    spec = { role: 'lead', model: goal.plan.models?.lead ?? DEFAULT_GOAL_MODELS.lead, prompt: leadRunPrompt(goal, steps, files, unreadWakes(events)), upTo: events.at(-1)?.seq ?? 0 }
-  } else {
-    const step = goal.plan.steps.find((s) => s.id === next.stepId)!
-    const p = workerPrompt(goal, step, next, files, await goalHeldActions(d, goal.id))
-    if (next.role === 'lead') return
-    spec = {
-      role: next.role,
-      model: next.model ?? goal.plan.models?.worker ?? DEFAULT_GOAL_MODELS.worker,
-      stepId: next.stepId,
-      attempt: next.attempt,
-      writes: roleWrites(next.role),
+  const held = await goalHeldActions(d, goal.id)
+  const crowd = beside + workers.length > 1
+  let n = 0
+  for (const w of workers) {
+    if (w.role === 'lead') continue
+    const step = goal.plan.steps.find((s) => s.id === w.stepId)!
+    // Reviewer independence (M6): the plan and the change, never the builders' handoff or log.
+    const view = w.role === 'reviewer' ? { plan: goal.plan, steps, diff: (await eng.worktreeDiff?.(goal).catch(() => '')) ?? '' } : files
+    const p = workerPrompt(goal, step, w, view, held)
+    const spec: StartSpec = {
+      role: w.role,
+      model: w.model ?? goal.plan.models?.worker ?? DEFAULT_GOAL_MODELS.worker,
+      stepId: w.stepId,
+      attempt: w.attempt,
+      writes: roleWrites(w.role),
       context: p.context,
       first: p.first,
+      worktree: crowd && roleWrites(w.role) ? 'child' : 'goal',
     }
+    if (await startOne(d, eng, goal, spec)) n++
+    else if ((await d.store.goals.get(goal.id))?.state !== 'running') break
   }
-  if (!(await engineMove(d, goal, 'start', null, at))) return
-  d.changed(goal.id)
+  return n
+}
+
+/**
+ * Start one session and record it once it exists. A session that never
+ * started parks the goal on the user when the goal has no other; beside
+ * others, its step fails and the lead hears of it when they end.
+ */
+async function startOne(d: GoalDeps, eng: GoalEngine, goal: Goal, spec: StartSpec): Promise<boolean> {
   let sessionId: string | null = null
+  const stepId = spec.role === 'lead' ? null : spec.stepId
   try {
-    await start(goal, spec, async (id) => {
+    await eng.startSession!(goal, spec, async (id) => {
       sessionId = id
       const t = d.now()
-      const stepId = spec.role === 'lead' ? null : spec.stepId
       await d.store.goals.putSession({ goalId: goal.id, sessionId: id, role: spec.role, stepId, planVersion: goal.planVersion, startedAt: t, endedAt: null, commits: [], files: [], commands: [], actions: [], outcome: null, costUsd: null })
       await note(d, { actor: 'engine', sessionId: id, kind: 'step_started', from: null, to: null, detail: { sessionId: id, role: spec.role, stepId, upTo: spec.role === 'lead' ? spec.upTo : null, attempt: spec.role === 'lead' ? null : spec.attempt } }, goal.id, t)
       if (stepId) {
@@ -714,15 +830,26 @@ async function startGoal(d: GoalDeps, eng: GoalEngine, goal: Goal): Promise<void
       await d.store.goals.update(goal.id, { currentStep: stepId ?? goal.currentStep, reason: null }, t)
       d.changed(goal.id)
     })
+    return sessionId !== null
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     if (sessionId) {
       await goalSessionEndedOp(d, eng, { goalId: goal.id, sessionId, error: msg })
-    } else {
-      // Never started: park it on the user rather than retry in a loop.
-      const g = await d.store.goals.get(goal.id)
-      if (g && (await engineMove(d, g, 'ask_you', `Couldn't start a session: ${msg}`.slice(0, 500), d.now()))) d.changed(goal.id)
+      return false
     }
+    const g = await d.store.goals.get(goal.id)
+    if (!g) return false
+    if (!(await working(d, goal.id)).length) {
+      // Never started: park it on the user rather than retry in a loop.
+      if (await engineMove(d, g, 'ask_you', `Couldn't start a session: ${msg}`.slice(0, 500), d.now())) d.changed(goal.id)
+    } else if (stepId) {
+      const st = (await d.store.goals.steps(goal.id)).find((s) => s.stepId === stepId)
+      const at = d.now()
+      if (st) await d.store.goals.putStep({ ...st, status: 'failed', endedAt: at, updatedAt: at })
+      await d.store.goals.addEvent({ goalId: goal.id, at, actor: 'engine', sessionId: null, kind: 'step_failed', from: null, to: null, detail: { stepId, outcome: 'failed', error: `couldn't start: ${msg}`.slice(0, 300) } })
+      d.changed(goal.id)
+    }
+    return false
   }
 }
 
@@ -737,40 +864,66 @@ export type SessionEnd = {
   restart?: boolean
 }
 
+/** One session end at a time per goal: two workers ending together must not both move the goal, nor merge into its worktree at once. */
+const ending = new WeakMap<GoalDeps, Map<string, Promise<void>>>()
+
 /**
  * A goal session ended: close its row, book its spend, settle its step (a
- * worker) or the wakes it was shown (the lead), then move the goal on
- * (afterSession) and pump. Safe to call twice: only the goal's current
- * session moves a running goal.
+ * worker — merged back first when it ran in a child worktree) or the wakes it
+ * was shown (the lead). While others of the goal's sessions still run, that's
+ * all, and a freed slot is pumped; the last one to end moves the goal on
+ * (afterSession). Safe to call twice: only a session still open moves anything.
  */
-export async function goalSessionEndedOp(d: GoalDeps, eng: GoalEngine, s: SessionEnd): Promise<void> {
+export function goalSessionEndedOp(d: GoalDeps, eng: GoalEngine, s: SessionEnd): Promise<void> {
+  let m = ending.get(d)
+  if (!m) ending.set(d, (m = new Map()))
+  const run = (m.get(s.goalId) ?? Promise.resolve()).then(() => sessionEnded(d, eng, s))
+  const tail = run.catch(() => {})
+  m.set(s.goalId, tail)
+  void tail.then(() => {
+    if (m.get(s.goalId) === tail) m.delete(s.goalId)
+  })
+  return run
+}
+
+async function sessionEnded(d: GoalDeps, eng: GoalEngine, s: SessionEnd): Promise<void> {
   const goal = await d.store.goals.get(s.goalId)
   if (!goal) return
   const at = d.now()
   const row = (await d.store.goals.sessions(goal.id)).find((r) => r.sessionId === s.sessionId)
   if (!row) return
-  const error = s.error ?? null
-  const cost = s.costUsd && s.costUsd > 0 ? s.costUsd : 0
-  const outcome: SessionOutcome = row.role === 'lead' ? (error ? 'failed' : 'done') : workerOutcome(row, error)
-  if (row.endedAt === null || cost) await d.store.goals.putSession({ ...row, endedAt: row.endedAt ?? at, outcome: row.outcome ?? outcome, costUsd: cost ? (row.costUsd ?? 0) + cost : row.costUsd })
-  if (cost) await d.store.goals.update(goal.id, { spentUsd: goal.spentUsd + cost }, at)
-
   const events = await d.store.goals.events(goal.id)
-  const cur = currentSession(events)
-  const isCurrent = cur?.sessionId === s.sessionId
   let steps = await d.store.goals.steps(goal.id)
   const st = row.stepId ? steps.find((x) => x.stepId === row.stepId) : undefined
   const holds = st && st.status === 'running' && st.sessionId === s.sessionId
+  // Only a session still working the goal moves it: a worker holding its step, or the lead that started last.
+  const live = goal.state === 'running' && (!!holds || currentSession(events)?.sessionId === s.sessionId)
+  let error = s.error ?? null
+  const cost = s.costUsd && s.costUsd > 0 ? s.costUsd : 0
+  let outcome: SessionOutcome = row.role === 'lead' ? (error ? 'failed' : 'done') : workerOutcome(row, error)
+  let unmerged = false
+  // A builder in a child worktree hands its step in by merging into the goal branch; a conflict fails the step.
+  if (live && holds && !s.restart && outcome === 'done' && eng.mergeBack) {
+    const why = await eng.mergeBack(goal, s.sessionId).catch((err) => (err instanceof Error ? err.message : String(err)))
+    if (why) {
+      error = `couldn't merge into the goal branch: ${why}`.slice(0, 500)
+      outcome = 'failed'
+      unmerged = true
+    }
+  }
+  if (row.endedAt === null || cost || unmerged) await d.store.goals.putSession({ ...row, endedAt: row.endedAt ?? at, outcome: unmerged ? outcome : (row.outcome ?? outcome), costUsd: cost ? (row.costUsd ?? 0) + cost : row.costUsd })
+  if (cost) await d.store.goals.update(goal.id, { spentUsd: goal.spentUsd + cost }, at)
 
-  if (goal.state !== 'running' || !isCurrent || (s.restart && row.role !== 'lead' && outcome !== 'done')) {
+  if (!live || (s.restart && row.role !== 'lead' && outcome !== 'done')) {
     // Taken over, cancelled, or the daemon died under it: the step is dispatched again for whoever comes next.
     if (holds && outcome !== 'done') await d.store.goals.putStep({ ...st, sessionId: null, updatedAt: at })
-    if (goal.state !== 'running' || !isCurrent) {
+    if (!live) {
       d.changed(goal.id)
       return
     }
   } else if (row.role === 'lead') {
-    for (const e of unreadWakes(events)) if (e.seq <= cur.upTo) await d.store.goals.markHandled(goal.id, e.seq, at)
+    const upTo = startedOf(events, s.sessionId)?.upTo ?? 0
+    for (const e of unreadWakes(events)) if (e.seq <= upTo) await d.store.goals.markHandled(goal.id, e.seq, at)
   } else if (holds) {
     if (outcome === 'done') {
       await d.store.goals.putStep({ ...st, status: 'done', endedAt: at, updatedAt: at })
@@ -783,6 +936,12 @@ export async function goalSessionEndedOp(d: GoalDeps, eng: GoalEngine, s: Sessio
     }
   }
 
+  // The rest of the team is still at it: the goal waits for its last session; a freed slot may start another.
+  if ((await working(d, goal.id)).some((w) => w.sessionId !== s.sessionId)) {
+    d.changed(goal.id)
+    void pumpGoals(d, eng).catch(() => {})
+    return
+  }
   const [after, gates, evs] = await Promise.all([d.store.goals.steps(goal.id), d.store.goals.gates(goal.id), d.store.goals.events(goal.id)])
   const move = afterSession(goal, after, gates, evs)
   // Every step done: the goal is finished without waking the lead to say so.
@@ -796,18 +955,19 @@ export async function goalSessionEndedOp(d: GoalDeps, eng: GoalEngine, s: Sessio
 }
 
 /**
- * After a restart: every goal still `running` lost its session. Close it as
- * a restart (a worker's step goes back to dispatched, the lead's wakes stay
- * unread), move the goal back to the queue, and pump. The next worker reads
- * the handoff and the list of actions already queued, so nothing is filed twice.
+ * After a restart: every goal still `running` lost its sessions. Close each
+ * as a restart (a worker's step goes back to dispatched, the lead's wakes
+ * stay unread), move the goal back to the queue, and pump. The next worker
+ * reads the handoff and the list of actions already queued, so nothing is filed twice.
  */
 export async function bootGoalRun(d: GoalDeps, eng: GoalEngine): Promise<number> {
   const running = await d.store.goals.list({ states: ['running'] })
+  const quiet: GoalEngine = { ...eng, startSession: undefined, mergeBack: undefined }
   for (const goal of running) {
-    const cur = currentSession(await d.store.goals.events(goal.id))
-    const open = (await d.store.goals.sessions(goal.id)).filter((r) => r.endedAt === null && r.sessionId !== cur?.sessionId)
-    for (const r of open) await d.store.goals.putSession({ ...r, endedAt: d.now(), outcome: r.outcome ?? 'failed' })
-    if (cur) await goalSessionEndedOp(d, { ...eng, startSession: undefined }, { goalId: goal.id, sessionId: cur.sessionId, error: 'triage restarted', restart: true })
+    const lost = await working(d, goal.id)
+    // Rows a restart left open that nobody settles (an earlier session's): closed as failed.
+    for (const r of await d.store.goals.sessions(goal.id)) if (r.endedAt === null && !lost.some((w) => w.sessionId === r.sessionId)) await d.store.goals.putSession({ ...r, endedAt: d.now(), outcome: r.outcome ?? 'failed' })
+    for (const w of lost) await goalSessionEndedOp(d, quiet, { goalId: goal.id, sessionId: w.sessionId, error: 'triage restarted', restart: true })
     const g = await d.store.goals.get(goal.id)
     if (g?.state === 'running') await engineMove(d, g, 'yield', null, d.now(), { restart: true })
     d.changed(goal.id)
@@ -937,7 +1097,7 @@ export async function goalProposePlanChangeOp(d: GoalDeps, c: LeadCall, raw: unk
   const b = obj(raw)
   const { goal, events } = await asLead(d, c.goalId, c.sessionId)
   const why = str(b.why, 'why', 4_000)
-  const parsed = planFrom(b.plan, goal)
+  const parsed = planFrom(b.plan, goal, await planOpts(d, true))
   if (!parsed.ok) throw new Error(`plan rejected: ${parsed.error}`)
   if (samePlan(goal.plan, parsed.plan)) throw new Error("that's the plan already approved")
   if (openAsk(events)) throw new Error('something is already waiting on the user this wake')
@@ -1362,7 +1522,7 @@ export async function goalAnswerOp(d: GoalDeps, eng: GoalEngine, raw: unknown): 
     if (typeof b.accept !== 'boolean') throw new Error('accept or turn down the plan change (accept: true | false)')
     let version: number | null = null
     if (b.accept) {
-      const parsed = planFrom(planInputOf(open.ev.detail!.plan as NonNullable<Goal['plan']>), goal)
+      const parsed = planFrom(planInputOf(open.ev.detail!.plan as NonNullable<Goal['plan']>), goal, await planOpts(d, false))
       if (!parsed.ok) throw new Error(`the proposed plan no longer validates: ${parsed.error}`)
       version = await applyPlan(d, (await d.store.goals.get(goal.id))!, parsed.plan, at)
     }
@@ -1440,7 +1600,7 @@ export async function goalEditOp(d: GoalDeps, eng: GoalEngine, raw: unknown): Pr
   if (b.file === 'plan') {
     const plan = parsePlanMd(text)
     if (!plan) throw new Error('plan.md needs its plan data block (```json goal-plan) to be valid JSON')
-    const parsed = planFrom(planInputOf(plan), goal)
+    const parsed = planFrom(planInputOf(plan), goal, await planOpts(d, false))
     if (!parsed.ok) throw new Error(`plan rejected: ${parsed.error}`)
     if (samePlan(goal.plan, parsed.plan)) return { goal, outcome: 'unchanged' }
     detail = { file: 'plan', version: await applyPlan(d, goal, parsed.plan, at) }
@@ -1627,6 +1787,12 @@ export async function goalsRoute(d: GoalDeps, req: http.IncomingMessage, url: UR
 /** goal_get as an agent reads it: the lead's share of the log, not the page's. */
 export const goalGetForAgent = (d: GoalDeps, goalId: string) => goalGetOp(d, goalId, LEAD_LOG_ENTRIES)
 
+/** A reviewer's goal_get (M6, reviewer independence): the goal, its plan and steps — no events, handoff or log. */
+export async function goalGetForReviewer(d: GoalDeps, goalId: string) {
+  const goal = await goalOrThrow(d, goalId)
+  return { goal, steps: await d.store.goals.steps(goal.id), note: 'You review independently: the change is in the worktree (git diff against the base); the builders\' handoff and log are not yours to read.' }
+}
+
 // ---------------------------------------------------------------------------
 // The in-process triage MCP's goal tools (makeTriageMcp) — the zod mirror of
 // GOAL_TOOLS (core/goals/tools.ts), which the external transports serve.
@@ -1763,7 +1929,7 @@ export function goalSessionMcpTools(d: GoalDeps, tag: GoalSessionTag) {
   }
   const call = { goalId: tag.goalId, sessionId: tag.sessionId }
   const ledger = [
-    tool('goal_get', describe('goal_get'), {}, run(async () => JSON.stringify(await goalGetForAgent(d, tag.goalId), null, 2))),
+    tool('goal_get', describe('goal_get'), {}, run(async () => JSON.stringify(tag.role === 'reviewer' ? await goalGetForReviewer(d, tag.goalId) : await goalGetForAgent(d, tag.goalId), null, 2))),
     tool(
       'goal_log_append',
       describe('goal_log_append'),

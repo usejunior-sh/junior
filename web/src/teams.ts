@@ -9,7 +9,6 @@ import type {
   RecipeEntry,
   SessionSummary,
   TeamLibraryResponse,
-  TeamPickerResponse,
   TeamRunResponse,
   TeamRunView,
 } from '../../shared/protocol.js'
@@ -31,12 +30,6 @@ export async function teamsCall<T = TeamLibraryResponse>(method: string, path: s
   const b = (await res.json()) as { ok: boolean; error?: string }
   if (!b.ok) throw new Error(b.error ?? 'request failed')
   return b as T
-}
-
-export async function loadTeamPicker(kind: string): Promise<Extract<TeamPickerResponse, { ok: true }>> {
-  const b = (await (await fetch(`/api/teams/picker?kind=${encodeURIComponent(kind)}`)).json()) as TeamPickerResponse
-  if (!b.ok) throw new Error(b.error)
-  return b
 }
 
 export async function loadTeamRun(runId: string): Promise<TeamRunView> {

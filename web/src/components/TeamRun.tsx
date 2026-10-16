@@ -13,9 +13,11 @@ import { colorOf, loadTeamRun, teamsCall, usd } from '../teams.js'
  *
  *   TeamStrip  over the transcript — who's on the team, what each is doing and has spent
  *   TeamDock   above the composer, on the lead — the one thing the run needs from you now
- *   TeamSide   a drawer on the right — every detail, editable in place before you approve
+ *   TeamSide   a drawer on the right — every detail of the run
  *
  * All three read one fetch of the run (useTeamRun), refetched whenever its revision moves.
+ * Teams became goals (M6): no new run starts, so a proposed card reads only and can be
+ * discarded; a run already going keeps its controls until it ends; every run stays readable.
  */
 
 const call = (path: string, body: unknown) => teamsCall<{ ok: true }>('POST', path, body)
@@ -250,19 +252,19 @@ export function TeamDock({ run, onDetails, onNavigate }: { run: TeamRunView; onD
   const step = run.recipe.steps[run.step]
   const waiting = run.awaiting.map((id) => run.workers.find((w) => w.id === id)?.label).filter(Boolean)
   const task = run.task !== null && step?.forEach ? run.card.tasks[run.task] : undefined
-  const needsYou = run.state === 'proposed' || run.state === 'gate' || run.state === 'paused' || !!run.revision
+  const needsYou = run.state === 'gate' || run.state === 'paused' || !!run.revision
 
   let dot = 'live'
   let title: ReactNode = null
   let line: ReactNode = null
   let primary: ReactNode = null
   if (run.state === 'proposed') {
-    dot = 'yellow'
-    title = 'Run this team?'
-    line = run.card.goal
+    dot = 'stone'
+    title = 'Teams became goals'
+    line = 'this card can’t run: turn the item into a goal instead'
     primary = (
-      <button type="button" className="btn primary sm" disabled={busy} onClick={() => go('approve', { runId: run.id })}>
-        {busy ? 'Starting…' : 'Approve & run'}
+      <button type="button" className="btn sm" disabled={busy} onClick={() => go('discard', { runId: run.id })}>
+        Discard
       </button>
     )
   } else if (run.revision) {
@@ -465,9 +467,11 @@ export function TeamSide({
   const [pending, setPending] = useState<TeamCard | null>(null)
   useEffect(() => setPending(null), [run.rev])
   const card = pending ?? run.card
-  const editable = lead && run.state === 'proposed'
+  // Teams became goals: a proposed card no longer runs, so nothing on it is edited.
+  const editable = false
+  const proposed = lead && run.state === 'proposed'
   // Running, the plan stays yours to steer: tasks not yet started, and the decisions.
-  const steerable = lead && run.state !== 'done' && run.state !== 'stopped'
+  const steerable = lead && run.state !== 'proposed' && run.state !== 'done' && run.state !== 'stopped'
   const savePlan = (patch: { tasks?: TeamCard['tasks']; decisions?: string[] }) => {
     if (editable) return save(patch)
     setPending({ ...card, ...patch })
@@ -782,15 +786,10 @@ export function TeamSide({
           </span>
         )}
         <span className="sp" />
-        {editable && (
-          <>
-            <button type="button" className="btn sm ghost" disabled={!!busy} onClick={() => act('discard', () => call('discard', { runId: run.id }))}>
-              Discard
-            </button>
-            <button type="button" className="btn primary sm" disabled={!!busy} onClick={() => act('approve', () => call('approve', { runId: run.id }))}>
-              {busy === 'approve' ? 'Starting…' : 'Approve & run'}
-            </button>
-          </>
+        {proposed && (
+          <button type="button" className="btn sm ghost" disabled={!!busy} onClick={() => act('discard', () => call('discard', { runId: run.id }))}>
+            Discard
+          </button>
         )}
       </footer>
     </aside>

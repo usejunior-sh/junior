@@ -126,3 +126,19 @@ test('the role names itself in the refusal', () => {
   const d = roleFenceDecision({ write: false, role: 'brief' }, 'Bash', { command: 'touch x' })
   assert.match(!d.allow ? d.reason : '', /^a read-only brief may not change files or processes: `touch` changes files/)
 })
+
+test('an independent reviewer may not read the goal ledger or session transcripts, by any tool', () => {
+  const f: RoleFence = { write: false, role: 'reviewer', hidden: ['/ws/artifacts/goals/g1', '/.claude/projects/'] }
+  for (const [tool, input] of [
+    ['Read', { file_path: '/ws/artifacts/goals/g1/handoff.md' }],
+    ['Grep', { pattern: 'x', path: '/ws/artifacts/goals/g1' }],
+    ['Bash', { command: 'cat /ws/artifacts/goals/g1/log.md' }],
+    ['Read', { file_path: '/Users/me/.claude/projects/-repo/abc.jsonl' }],
+  ] as const) {
+    const d = roleFenceDecision(f, tool, input)
+    assert.equal(d.allow, false, `${tool} ${JSON.stringify(input)}`)
+    assert.match(!d.allow ? d.reason : '', /reviews independently/)
+  }
+  assert.deepEqual(roleFenceDecision(f, 'Read', { file_path: '/repo/src/parser.ts' }), { allow: true })
+  assert.deepEqual(roleFenceDecision(f, 'Bash', { command: 'git diff main...HEAD' }), { allow: true })
+})

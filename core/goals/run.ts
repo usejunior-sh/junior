@@ -3,10 +3,12 @@
  * Pure — no I/O, no clock — so every decision is unit-tested
  * (test/goal-run.test.ts); server/goals.ts carries each one out.
  *
- * A running goal has exactly one session at a time. The scheduler gives a
- * queued goal a slot and `nextSession` says whose it is: a worker for a step
- * the lead dispatched, else the lead. When that session ends, `afterSession`
- * says where the goal goes:
+ * A running goal runs its lead alone, or up to `workerCap` workers at once
+ * (M6: its team section, capped by the user's max team size). The scheduler
+ * gives a queued goal slots and `nextWorkers` says who fills them: workers for
+ * steps the lead dispatched, in plan order, else the lead. Workers for more
+ * dispatched steps join a running goal as slots free up; the lead never runs
+ * beside them. When the last session ends, `afterSession` says where the goal goes:
  *
  *   an ask or a plan change is open       → ask_you      (waits on the user)
  *   every step is done                    → result       (no lead wake needed)
@@ -22,6 +24,7 @@
 import { shortActionId } from '../actions/view.js'
 import { MAX_FIX_ATTEMPTS, type Gate, type Goal, type GoalEvent, type GoalEventKind, type GoalPlan, type GoalStepState, type PlanStep, type SessionOutcome, type StepRole, type StepStatus } from './types.js'
 import type { GoalSessionRecord } from '../store/types.js'
+import { teamSize } from './plan.js'
 
 /** Events the lead wakes for. A user message to a live worker went to the worker and isn't one. */
 export const WAKE_EVENTS: ReadonlySet<GoalEventKind> = new Set([
@@ -77,15 +80,56 @@ export function dispatchOf(events: readonly GoalEvent[], stepId: string): { brie
   return null
 }
 
-/** Who runs in the slot the scheduler just gave `goal`: a dispatched step's worker, in plan order, else the lead. */
-export function nextSession(goal: Pick<Goal, 'plan'>, steps: readonly GoalStepState[], events: readonly GoalEvent[]): NextSession {
+/** The user's max team size when they set none (Settings → Teams, `goals.maxTeam`). */
+export const DEFAULT_MAX_TEAM = 3
+
+/** Workers a goal runs at once: its team's seats besides the lead, capped by the user's max team size. No team section: one at a time. */
+export function workerCap(plan: Pick<GoalPlan, 'team'> | null, maxTeam: number): number {
+  return Math.max(1, Math.min(teamSize(plan?.team ?? []) || 1, maxTeam))
+}
+
+/** Dispatched agent steps whose worker hasn't started, in plan order, up to `n`. */
+export function nextWorkers(goal: Pick<Goal, 'plan'>, steps: readonly GoalStepState[], events: readonly GoalEvent[], n: number): WorkerSpec[] {
+  const out: WorkerSpec[] = []
   for (const ps of goal.plan?.steps ?? []) {
+    if (out.length >= n) break
     const st = steps.find((s) => s.stepId === ps.id)
     if (!st || !isDispatched(st) || ps.type !== 'agent' || !ps.role || ps.role === 'lead') continue
     const d = dispatchOf(events, ps.id)
-    return { kind: 'worker', role: ps.role, stepId: ps.id, brief: d?.brief ?? '', model: d?.model ?? null, attempt: st.attempts }
+    out.push({ role: ps.role, stepId: ps.id, brief: d?.brief ?? '', model: d?.model ?? null, attempt: st.attempts })
   }
-  return { role: 'lead' }
+  return out
+}
+
+/** One session working a running goal. */
+export type Working = { sessionId: string; role: StepRole; stepId: string | null }
+
+/**
+ * Who is working a running goal now: the workers holding their steps (a
+ * running step with a session), else the lead, when it started last. A
+ * session row's endedAt can't say: a worker's log with an outcome closes it
+ * before the session exits. Settling a session lets go of its step, so a
+ * session counts once.
+ */
+export function workingSessions(steps: readonly GoalStepState[], events: readonly GoalEvent[]): Working[] {
+  const started = new Map<string, Working>()
+  let last: Working | null = null
+  for (const e of events) {
+    if (e.kind !== 'step_started' || typeof e.detail?.sessionId !== 'string') continue
+    last = { sessionId: e.detail.sessionId, role: e.detail.role as StepRole, stepId: typeof e.detail.stepId === 'string' ? e.detail.stepId : null }
+    started.set(last.sessionId, last)
+  }
+  const workers = steps
+    .filter((s) => s.status === 'running' && s.sessionId)
+    .map((s) => started.get(s.sessionId!) ?? { sessionId: s.sessionId!, role: 'builder' as StepRole, stepId: s.stepId })
+  if (workers.length) return workers
+  return last?.role === 'lead' ? [last] : []
+}
+
+/** Who runs in the slot the scheduler just gave `goal`: a dispatched step's worker, in plan order, else the lead. */
+export function nextSession(goal: Pick<Goal, 'plan'>, steps: readonly GoalStepState[], events: readonly GoalEvent[]): NextSession {
+  const w = nextWorkers(goal, steps, events, 1)[0]
+  return w ? { kind: 'worker', ...w } : { role: 'lead' }
 }
 
 // ---------------------------------------------------------------------------
@@ -286,8 +330,10 @@ export const LEAD_RUN_APPEND = `
 You are the LEAD of a triage goal whose plan the user approved. You are woken headless to decide the next move;
 nobody is watching and nobody answers text, so never ask in a reply. You don't do the steps' work yourself: you
 decide through the goal tools, then end your turn, and the engine carries the decision out.
-- dispatch_worker(stepId, brief): a worker does one runnable step in the goal's worktree and exits. You wake
-  again when it ends. Dispatch every runnable step you want done next.
+- dispatch_worker(stepId, brief): a worker does one runnable step in the goal's worktree and exits. Dispatch every
+  runnable step you want done next: independent ones run side by side, up to the plan's team size, and a builder
+  beside others works on its own branch, merged into the goal's when its step is done (a conflict fails the step).
+  You wake again when the last of them ends.
 - arm_gate(stepId): park the goal on a gate step's condition; you wake when it resolves. On a PR watcher gate
   (the shepherd-pr step), put the PR in refs ("owner/repo#12" or its URL): the watcher fixes CI, review threads
   and conflicts with steps of its own (pr-…), and the merge goes to the user. Leave those steps to it.
@@ -371,14 +417,26 @@ export function leadRunPrompt(goal: Pick<Goal, 'id' | 'title' | 'doneWhen' | 'pl
 /** A queued action a worker of the goal already filed, so a new worker doesn't file it again. */
 export type HeldAction = { id: string; summary: string; status: string }
 
+/**
+ * What a reviewer reads instead of the ledger (M6, reviewer independence):
+ * the plan's steps and the change itself, never the builders' handoff, log
+ * or transcript — it judges the diff against the done-when, not the story.
+ */
+export type ReviewView = { plan: GoalPlan | null; steps: readonly GoalStepState[]; diff: string }
+
+/** The diff a reviewer is shown, capped so its prompt stays a prompt. */
+export const REVIEW_DIFF_MAX = 60_000
+
 /** The worker's context (system prompt) and its first message: `/goal` with the step's done-when. */
 export function workerPrompt(
   goal: Pick<Goal, 'id' | 'title' | 'doneWhen'>,
   step: PlanStep,
   spec: Pick<WorkerSpec, 'brief' | 'attempt'>,
-  files: Pick<LedgerText, 'handoff' | 'log'>,
+  files: Pick<LedgerText, 'handoff' | 'log'> | ReviewView,
   held: readonly HeldAction[],
 ): { context: string; first: string } {
+  const review = 'diff' in files
+  const diff = review && files.diff.length > REVIEW_DIFF_MAX ? `${files.diff.slice(0, REVIEW_DIFF_MAX)}\n… (cut at ${REVIEW_DIFF_MAX} characters: read the rest with git in the worktree)` : review ? files.diff : ''
   const context = [
     '',
     `## The goal`,
@@ -387,11 +445,18 @@ export function workerPrompt(
     '',
     `## Your step: ${step.id} · ${step.title}`,
     `Done when: ${step.doneWhen}`,
-    spec.attempt > 1 ? `This is try ${spec.attempt}: an earlier session on this step didn't finish. Start from the handoff, not from scratch.` : '',
+    spec.attempt > 1 ? `This is try ${spec.attempt}: an earlier session on this step didn't finish. ${review ? 'Review the change as it stands now.' : 'Start from the handoff, not from scratch.'}` : '',
     '',
     ...section('Brief from the lead', spec.brief, 'No brief beyond the plan.'),
-    ...section('Handoff', files.handoff, 'No handoff yet.'),
-    ...section('Latest log', files.log, 'No log entries yet.'),
+    ...(review
+      ? [
+          'You review independently: you get the plan, the brief and the change, never the builders\' handoff, log or reasoning.',
+          'Judge the change against the done-when; do not go looking for the goal\'s ledger or other sessions\' transcripts.',
+          '',
+          ...section('The plan', stepTable(files.plan, files.steps), 'No steps.'),
+          ...section('The change (the goal branch against its base)', diff ? `\`\`\`diff\n${diff}\n\`\`\`` : '', 'No change yet: the branch has no commits past its base.'),
+        ]
+      : [...section('Handoff', files.handoff, 'No handoff yet.'), ...section('Latest log', files.log, 'No log entries yet.')]),
     ...(held.length
       ? ['## Already queued for approval — do NOT file these again', '', ...held.map((a) => `- #${shortActionId(a.id)} ${a.summary} (${a.status.replace(/_/g, ' ')})`), '']
       : []),

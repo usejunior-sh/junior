@@ -11,6 +11,7 @@ import {
   approve,
   cardFrom,
   editTasks,
+  normalizeRun,
   proposeRevision,
   settleRevision,
   checksDone,
@@ -352,4 +353,29 @@ test('Save as team keeps the card\'s models and widths', () => {
   assert.deepEqual(r.steps[0].fanOut, { by: 'area', max: 3 })
   assert.equal(r.steps[0].model, 'haiku')
   assert.equal(r.steps[1].model, 'sonnet', 'a step the card left alone keeps the recipe\'s model')
+})
+
+test('M6: a run stored before goals (no tasks, notes or revision) reads back from the config store and still renders', async () => {
+  const { mkdtempSync, rmSync } = await import('node:fs')
+  const { tmpdir } = await import('node:os')
+  const path = await import('node:path')
+  const { openSqliteStore } = await import('../core/store/sqlite.js')
+  const dir = mkdtempSync(path.join(tmpdir(), 'team-runs-'))
+  try {
+    const run = runOf(recipeOf('build'), { tasks: [{ title: 'a' }] })
+    spawn(run, approve(run, run.card))
+    run.state = 'done'
+    // The older shape: fields later releases added are missing.
+    const old = JSON.parse(JSON.stringify(run)) as Partial<TeamRun>
+    delete old.tasks, delete old.notes, delete old.revision, delete old.task
+    for (const s of old.recipe!.steps) delete (s as Partial<typeof s>).forEach
+    const store = openSqliteStore(path.join(dir, 'triage.db'))
+    await store.config.set('team_runs', [old])
+    const [back] = (await store.config.get<TeamRun[]>('team_runs'))!
+    const md = renderPlan(normalizeRun(back!))
+    assert.match(md, /^# Plan · Cart totals\n\nBuild team · done/)
+    assert.match(md, /## Outcome/)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
 })

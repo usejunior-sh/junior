@@ -118,12 +118,26 @@ Your output is ONE call to goal_propose_plan with the whole plan:
   condition. Every step has a doneWhen the engine can check. dependsOn names earlier step ids.
   Once a step opens a PR, add a step of type "block" with block "shepherd-pr" after it: the PR watcher then gets
   the PR to green and merged (fixing CI, review threads and conflicts), and the merge waits for the user.
-- team, budgetUsd, mayDo (what Junior may do without asking, in plain words) when they matter.
+  A step of type "block" naming one of the workflow blocks listed in your first message stands for that block's
+  steps, in order (one block step, many plan steps the user reviews).
+- team: the seats you staff — role, count, and a why each. Staff more than one worker only where the work splits
+  into independent workstreams: name them and the risk in the why. Steps with no dependency between them run side
+  by side up to the team's size (never over the user's max team size); no team section means one at a time. Give
+  review to a reviewer step: it sees the plan and the diff, never the builders' log or reasoning.
+- budgetUsd, mayDo (what Junior may do without asking, in plain words) when they matter.
 The tool validates the plan and rejects it with the reason; fix it and call again. Text you reply with is not
 kept; once the plan is proposed, you are done — end your turn.`
 
+/** What the lead may staff a plan with (M6): the workflow blocks and the user's max team size. */
+export type Staffing = { blocks: readonly { name: string; label: string; description: string; steps: number }[]; maxTeam: number }
+
 /** The lead's first message for one wake. */
-export function leadDraftPrompt(goal: Pick<Goal, 'id' | 'title' | 'doneWhen' | 'horizon' | 'sourceItemId' | 'budget'>, wake: LeadWake, currentPlan: string | null): string {
+export function leadDraftPrompt(
+  goal: Pick<Goal, 'id' | 'title' | 'doneWhen' | 'horizon' | 'sourceItemId' | 'budget'>,
+  wake: LeadWake,
+  currentPlan: string | null,
+  staffing?: Staffing,
+): string {
   const head = [
     `Goal ${goal.id}: ${goal.title}`,
     `Done when: ${goal.doneWhen}`,
@@ -132,6 +146,10 @@ export function leadDraftPrompt(goal: Pick<Goal, 'id' | 'title' | 'doneWhen' | '
       ? `Budget: ${[goal.budget.usd !== null ? `$${goal.budget.usd}` : null, goal.budget.minutes !== null ? `${goal.budget.minutes} min` : null].filter(Boolean).join(' · ')}`
       : null,
     goal.sourceItemId ? `It came from work item ${goal.sourceItemId} — read it with get_work_item (and its brief, if it has one).` : null,
+    staffing ? `Max team size: ${staffing.maxTeam} workers at once.` : null,
+    staffing?.blocks.length
+      ? `Workflow blocks: ${staffing.blocks.map((b) => `"${b.name}" (${b.label}, ${b.steps} steps${b.description ? `: ${b.description}` : ''})`).join('; ')}`
+      : null,
   ].filter(Boolean)
   if (wake.kind === 'draft') {
     return [...head, '', 'Research it, then draft the plan and propose it with goal_propose_plan.'].join('\n')

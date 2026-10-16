@@ -20,6 +20,12 @@ export type RoleFence = {
   write: boolean
   /** who, for the refusal: "reviewer", "brief" */
   role: string
+  /**
+   * Paths this session may not read (M6, reviewer independence: the goal's
+   * ledger and session transcripts). Any tool input naming one is refused —
+   * a guard against looking, not a sandbox.
+   */
+  hidden?: readonly string[]
 }
 
 /** The built-in tools that change files. */
@@ -210,6 +216,9 @@ export function bashWrites(command: string): string | null {
  * next); a read-only role is refused file tools and any Bash that writes.
  */
 export function roleFenceDecision(f: RoleFence, toolName: string, input: unknown): FenceDecision {
+  const seen = f.hidden?.length ? JSON.stringify(input ?? null) : ''
+  const hid = f.hidden?.find((h) => seen.includes(h))
+  if (hid) return { allow: false, reason: `a ${f.role} reviews independently and may not read ${hid}: judge the change itself` }
   if (f.write) return { allow: true }
   if (FILE_WRITE_TOOLS.has(toolName)) return { allow: false, reason: `a read-only ${f.role} may not change files (${toolName})` }
   if (toolName === 'Bash') {

@@ -153,6 +153,9 @@ export type PlanStep = {
   block: string | null
 }
 
+/** The highest max team size a user can set (Settings → Teams): a team's widest fan-out. */
+export const MAX_GOAL_TEAM = 6
+
 /** One role on the team: how many, and why the lead wants them. */
 export type TeamSeat = { role: StepRole; count: number; why: string; model: string | null }
 

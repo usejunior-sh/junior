@@ -1222,7 +1222,7 @@ export function App() {
                 onNavigate={navigate}
               />
             ) : route.page === 'item' ? (
-              <ItemPage key={route.id} id={route.id} onDispatch={dispatch} onNavigate={navigate} onDirty={pinCurrent} />
+              <ItemPage key={route.id} id={route.id} onDispatch={dispatch} onGoal={goalFrom} onNavigate={navigate} onDirty={pinCurrent} />
             ) : route.page === 'terminal' ? (
               currentTerminal ? (
                 <TerminalPage
