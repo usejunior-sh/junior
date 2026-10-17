@@ -307,8 +307,8 @@ test('create_session checks its uploads before it makes a worktree or a session'
     // The check itself: a stale id refuses, and nothing is moved or made.
     await assert.rejects(resolveUploads(root, [UNKNOWN], MAX_FILES_PER_MESSAGE), /no longer available/)
     assert.ok(!existsSync(path.join(root, 'sessions')))
-    // The order: index.ts is not importable (it boots the daemon), so pin where the check sits in the case.
-    const src = readFileSync(path.join(import.meta.dirname, '..', 'server', 'index.ts'), 'utf8')
+    // The order: the socket handler is not importable (it needs a live daemon), so pin where the check sits in the case.
+    const src = readFileSync(path.join(import.meta.dirname, '..', 'server', 'ws', 'connection.ts'), 'utf8')
     const body = src.slice(src.indexOf("case 'create_session': {\n          if (msg.provider"))
     const check = body.indexOf('resolveUploads(rt.attachmentsDir, msg.files')
     assert.ok(check > 0)

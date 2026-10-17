@@ -1,0 +1,64 @@
+import { startSleepWatch } from './power.js'
+import { log } from './log.js'
+import { GATE_SWEEP_INTERVAL_MS } from '../core/goals/types.js'
+import { WATCH_TICK_MS } from '../core/goals/shepherd.js'
+import { runtimes } from './workspace/runtime.js'
+import { runDueJobs } from './jobs/queue.js'
+import { tickActions } from './session/actions-send.js'
+import { errText } from './errors.js'
+import { wakeTeamGoals } from './team-run/mcp.js'
+import { invalidateInbox } from './ws/send.js'
+import { SCHEDULER_TICK_MS } from './jobs/scheduler.js'
+import { sweepGates, watchPrs } from './goal-glue.js'
+import { INBOX_KEEP_WARM_MS, syncInbox } from './inbox/sync.js'
+
+/** when the scheduler last ticked — daemon-wide, surfaced in the System status. */
+export let lastSchedulerTickAt: number | null = null
+
+export function startTicks() {
+  // The sleep watch's heartbeat: a long silence between beats was sleep, so a
+  // run the Mac slept through is recorded `slept` (server/power.ts).
+  startSleepWatch()
+
+  // The minute tick (.docs/jobs.md): due jobs run, elapsed snoozes wake — in
+  // every workspace. No cron — the server is the long-running process; missed
+  // runs are simply due on the first tick after wake.
+  setInterval(() => {
+    lastSchedulerTickAt = Date.now()
+    for (const rt of runtimes.values()) {
+      runDueJobs(rt).catch((err) => log('error', 'scheduler', `tick failed: ${err}`, { workspace: rt.meta.id }))
+      // Queued actions: expire the stale, send what a lost timer left due.
+      tickActions(rt).catch((err) => log('error', 'actions', `tick failed: ${errText(err)}`, { workspace: rt.meta.id }))
+      // Goals asleep on the world: time's up, Junior looks again.
+      wakeTeamGoals(rt).catch((err) => log('error', 'teams', `goal wake failed: ${errText(err)}`, { workspace: rt.meta.id }))
+      rt.store.items
+        .wakeSnoozed(Date.now())
+        .then((woken) => {
+          if (woken.length > 0) {
+            invalidateInbox(rt)
+            log('info', 'scheduler', `woke ${woken.length} snoozed item(s)`, { ids: woken, workspace: rt.meta.id })
+          }
+        })
+        .catch((err) => log('error', 'scheduler', `snooze wake failed: ${err}`, { workspace: rt.meta.id }))
+    }
+  }, SCHEDULER_TICK_MS).unref()
+
+  // The gate sweep (decision 6): every 5 minutes, in every workspace. Nothing
+  // due = no session started.
+  setInterval(() => {
+    for (const rt of runtimes.values()) sweepGates(rt).catch((err) => log('error', 'goals', `gate sweep failed: ${errText(err)}`, { workspace: rt.meta.id }))
+  }, GATE_SWEEP_INTERVAL_MS).unref()
+
+  // The PR watcher (M5): a cheap tick; each watched PR is polled on its own back-off.
+  setInterval(() => {
+    for (const rt of runtimes.values()) watchPrs(rt).catch((err) => log('error', 'goals', `PR watcher failed: ${errText(err)}`, { workspace: rt.meta.id }))
+  }, WATCH_TICK_MS).unref()
+
+  // Keep the caches warm while the server runs, so page loads are instant. A
+  // failed background sync keeps the previous snapshot; the next view retries.
+  setInterval(() => {
+    for (const rt of runtimes.values()) {
+      syncInbox(rt).catch((err) => log('error', 'inbox', `background sync failed: ${err}`, { workspace: rt.meta.id }))
+    }
+  }, INBOX_KEEP_WARM_MS).unref()
+}
