@@ -17,6 +17,7 @@
 import * as Collapsible from '@radix-ui/react-collapsible'
 import { Check, ChevronRight, ExternalLink, RotateCcw, X } from 'lucide-react'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { JuniorLabel } from './JuniorLabel.js'
 import type { ActionView } from '../../../shared/protocol.js'
 import { countdownText, payloadOf, quickApprovable } from '../../../core/actions/view.js'
 import {
@@ -517,8 +518,15 @@ export function ActionNotes({
     }
   }
   if (!list.length) return null
+  const waiting = list.filter((a) => a.status === 'needs_you').length
   return (
     <div className="astubs">
+      {/* In a chat, a send held for you is Junior asking: say so above the stubs. */}
+      {waiting > 0 && (
+        <div className="astubsWho">
+          <JuniorLabel mood="needs" say="Nothing goes out until you approve it"> needs your OK to send {waiting === 1 ? 'this' : `these ${waiting}`}</JuniorLabel>
+        </div>
+      )}
       {list.map((a) => (
         <ActionCard key={a.id} a={a} onNavigate={onNavigate} />
       ))}

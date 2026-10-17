@@ -2,6 +2,7 @@ import { memo, useState } from 'react'
 import type { PermissionBehavior, QuestionAnswers } from '../../../shared/protocol.js'
 import { OTHER, type AskQuestion } from '../askQuestions.js'
 import type { TranscriptItem } from '../transcript.js'
+import { JuniorLabel } from './JuniorLabel.js'
 
 type Permission = Extract<TranscriptItem, { kind: 'permission' }>
 
@@ -9,6 +10,8 @@ type Props = {
   item: Permission
   questions: AskQuestion[]
   onRespond: (requestId: string, behavior: PermissionBehavior, answers?: QuestionAnswers) => void
+  /** Junior is the one asking (false: a subagent, named by the wrapper around the card) */
+  junior?: boolean
 }
 
 /**
@@ -16,7 +19,7 @@ type Props = {
  * question, options as clickable rows, and a single submit that hands the
  * picked labels back as the tool's answer.
  */
-export const AskCard = memo(function AskCard({ item, questions, onRespond }: Props) {
+export const AskCard = memo(function AskCard({ item, questions, onRespond, junior = true }: Props) {
   // Keyed by question index — the tool allows two questions with the same text.
   const [picked, setPicked] = useState<Record<number, string[]>>({})
   const [other, setOther] = useState<Record<number, string>>({})
@@ -43,11 +46,11 @@ export const AskCard = memo(function AskCard({ item, questions, onRespond }: Pro
     onRespond(item.id, 'allow', answers)
   }
 
-  if (item.resolved) return <ResolvedAsk item={item} questions={questions} />
+  if (item.resolved) return <ResolvedAsk item={item} questions={questions} junior={junior} />
 
   return (
     <div className="perm ask">
-      <div className="q">Claude is asking</div>
+      <div className="q">{junior ? <JuniorLabel mood="needs" say="I’ll wait for your answer"> has a question</JuniorLabel> : 'Asking'}</div>
       {questions.map((q, qi) => {
         const sel = picked[qi] ?? []
         return (
@@ -93,10 +96,10 @@ export const AskCard = memo(function AskCard({ item, questions, onRespond }: Pro
   )
 })
 
-function ResolvedAsk({ item, questions }: { item: Permission; questions: AskQuestion[] }) {
+function ResolvedAsk({ item, questions, junior }: { item: Permission; questions: AskQuestion[]; junior: boolean }) {
   return (
     <div className="perm ask">
-      <div className="q">Claude is asking</div>
+      <div className="q">{junior ? <JuniorLabel mood="done" say={item.resolved === 'deny' ? 'You left this unanswered' : item.resolved === 'expired' ? 'This expired before you answered' : 'You answered this'}> asked</JuniorLabel> : 'Asked'}</div>
       {questions.map((q, qi) => (
         <div className="askQ" key={qi}>
           <div className="askText">{q.question}</div>

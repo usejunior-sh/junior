@@ -1530,6 +1530,7 @@ export function App() {
                   lead={openAgent && <AgentBrief run={openAgent} from={spawnerOf(agents, openAgent)} />}
                   tail={openAgent && <AgentOutcome run={openAgent} to={spawnerOf(agents, openAgent)} />}
                   marks={openAgent ? undefined : teamMarks}
+                  speaker={!openAgent && (current.provider ?? 'claude') === 'claude' ? { status: current.status } : undefined}
                 />
                 {!openAgent && <AgentDock agents={agents} onOpen={showAgent} onStop={stopAgent} />}
                 {!openAgent && <ShellDock sessionId={current.id} shells={shells} onStop={stopShell} />}

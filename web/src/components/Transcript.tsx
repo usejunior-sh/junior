@@ -6,8 +6,10 @@ import {
   type QuestionAnswers,
   type ResolvedMention,
   type SessionEvent,
+  type SessionStatus,
   type SessionTurnSummary,
 } from '../../../shared/protocol.js'
+import type { Mood } from '../../../core/junior/mood.js'
 import { parseQuestions } from '../askQuestions.js'
 import { useLiveText } from '../hooks.js'
 import { openSettings } from '../settings.js'
@@ -16,13 +18,15 @@ import { artifactStore, useArtifacts } from '../artifactStore.js'
 import { mentionHash, useRefIndex, type RefIndex } from '../refs.js'
 import { agentLabel, type AgentRun } from '../agents.js'
 import type { ShellRun } from '../../../core/shells/fold.js'
-import { buildTranscript, eventIndexOf, type TranscriptItem } from '../transcript.js'
+import { buildTranscript, eventIndexOf, formatDuration, toolLine, type TranscriptItem } from '../transcript.js'
 import { AgentCard } from './Agents.js'
 import { AskCard } from './AskCard.js'
 import { InitCard } from './InitCard.js'
+import { ChatFace, type Say } from './JuniorLabel.js'
+import { usePersona } from '../junior.js'
 import { MentionChip, MentionIcon } from './MentionPicker.js'
 import { Markdown } from './Markdown.js'
-import { PermissionCard } from './PermissionCard.js'
+import { PermissionCard, PlanCard } from './PermissionCard.js'
 import { ToolCard } from './ToolCard.js'
 import { BrowserShots } from './BrowserShots.js'
 import { ToolGroup } from './ToolGroup.js'
@@ -51,12 +55,138 @@ type Props = {
   tail?: ReactNode
   /** Drawn before the first item folded from event `at` (0-based) or later — a team run's dividers. */
   marks?: readonly TranscriptMark[]
+  /** Junior is the one talking (a Claude session's main view): each of its turns opens with its face and name. */
+  speaker?: { status: SessionStatus }
 }
 
 export type TranscriptMark = { at: number; key: string; node: ReactNode }
 const NO_MARKS: readonly TranscriptMark[] = []
 
 const NO_AGENTS: readonly AgentRun[] = []
+
+/** What Junior says or does in a turn — anything else (your messages, markers, CLI output) isn't its. */
+const JUNIOR_KINDS = new Set<TranscriptItem['kind']>(['assistant', 'thinking', 'tool', 'toolGroup', 'agent', 'permission', 'error'])
+
+/** A word for what a call is doing, for the working face's bubble ("Editing Transcript.tsx…"). */
+const DOING: Record<string, string> = {
+  Read: 'Reading',
+  Edit: 'Editing',
+  MultiEdit: 'Editing',
+  Write: 'Writing',
+  NotebookEdit: 'Editing',
+  Bash: 'Running',
+  Grep: 'Searching for',
+  Glob: 'Looking for',
+  WebFetch: 'Reading',
+  WebSearch: 'Searching the web for',
+  Agent: 'Handing off',
+  Task: 'Handing off',
+}
+
+type Turn = { mood: Mood; say: Say }
+
+const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? '' : 's'}`
+
+/**
+ * Which items open a Junior turn, the mood each turn's face shows, and what
+ * its speech bubble says. A turn is the run of Junior's items between your
+ * messages and turn markers. Needs you while a prompt in it waits, working
+ * while it is the live one, stuck when it errored, done otherwise.
+ * `thinking` = live with nothing from Junior yet.
+ */
+function speakerTurns(
+  items: readonly TranscriptItem[],
+  live: boolean,
+  turns: readonly SessionTurnSummary[] | undefined,
+): { at: Map<string, Turn>; thinking: boolean } {
+  type Seg = { first?: string; items: TranscriptItem[]; end?: Extract<TranscriptItem, { kind: 'meta' }> }
+  const segs: Seg[] = []
+  let seg: Seg = { items: [] }
+  for (const it of items) {
+    if (it.kind === 'user' || it.kind === 'relay' || (it.kind === 'meta' && it.turn)) {
+      if (it.kind === 'meta') seg.end = it
+      if (seg.first) segs.push(seg)
+      seg = { items: [] }
+      continue
+    }
+    if (!JUNIOR_KINDS.has(it.kind)) continue
+    seg.first ??= it.key
+    seg.items.push(it)
+  }
+  const open = seg.first ? seg : null
+  if (open) segs.push(open)
+
+  const at = new Map<string, Turn>()
+  for (const s of segs) {
+    const pending = s.items.findLast((it) => it.kind === 'permission' && !it.resolved && !it.agentId)
+    const tools = s.items.flatMap((it) => (it.kind === 'tool' ? [it] : it.kind === 'toolGroup' ? it.members.filter((m) => m.kind === 'tool') : []))
+    let turn: Turn
+    if (pending && pending.kind === 'permission') {
+      const what = pending.toolName === 'AskUserQuestion' ? 'your answer' : pending.toolName === 'ExitPlanMode' ? 'you to review the plan' : 'your OK'
+      turn = { mood: 'needs', say: { line: `Waiting on ${what}`, sub: 'click me to jump to it ↓' } }
+    } else if (live && s === open) {
+      const last = s.items[s.items.length - 1]
+      const call = tools[tools.length - 1]
+      if (last?.kind === 'assistant') turn = { mood: 'working', say: { line: 'On it', sub: 'writing to you…' } }
+      else if (call && call.kind === 'tool') {
+        const { verb, target } = toolLine(call.name, call.input)
+        turn = { mood: 'working', say: { line: 'On it', sub: `${DOING[call.name] ?? verb}${target ? ` ${target}` : ''}…` } }
+      } else turn = { mood: 'working', say: { line: 'On it', sub: 'working…' } }
+    } else if (s.items.some((it) => it.kind === 'error')) {
+      turn = { mood: 'stuck', say: { line: 'That failed', sub: 'the error’s below' } }
+    } else {
+      const files = s.end?.turn ? (turns?.find((t) => t.seq === s.end!.turn)?.files ?? 0) : 0
+      const facts: string[] = []
+      if (tools.length) facts.push(plural(tools.length, 'step'))
+      if (files) facts.push(`${plural(files, 'file')} changed`)
+      turn = { mood: 'done', say: { line: s.end?.ms != null ? `Done in ${formatDuration(s.end.ms)}` : 'Done', sub: facts.join(' · ') || undefined } }
+    }
+    at.set(s.first!, turn)
+  }
+  return { at, thinking: live && !open }
+}
+
+/** Scroll to the newest card still waiting on you — where the needs-you face points. */
+function jumpToWaiting(from: Element | null) {
+  const cards = from?.closest('#transcript')?.querySelectorAll('.perm:has(.actions), .perm.ask:has(.askOptions)')
+  cards?.[cards.length - 1]?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+}
+
+const clock = (ms: number) => new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+
+/**
+ * A Junior turn's first line: its face in the turn's mood out in the margin
+ * left of the column (inline, smaller, where the column has no margin), then
+ * its name and what it's doing or when it spoke.
+ */
+function Speaker({ mood, say, at }: { mood: Mood; say: Say; at?: number }) {
+  const persona = usePersona()
+  const self = useRef<HTMLDivElement>(null)
+  const note = mood === 'needs' ? 'needs you' : mood === 'working' ? 'is working' : mood === 'think' ? 'is thinking' : mood === 'stuck' ? 'got stuck' : null
+  return (
+    <div className="speaker" ref={self}>
+      <span className="spFace">
+        <ChatFace mood={mood} size={38} say={say} onClick={mood === 'needs' ? () => jumpToWaiting(self.current) : undefined} />
+      </span>
+      <span className="spWho">{persona.name}</span>
+      {note && <span className={`spNote ${mood}`}>{note}</span>}
+      {at !== undefined && <time className="spAt">{clock(at)}</time>}
+    </div>
+  )
+}
+
+/** A turn's end as Junior's sign-off: "done · 32.2s · 9 turns · $0.80", the word in Junior's colour. */
+function SignOff({ stats }: { stats: string }) {
+  const persona = usePersona()
+  return (
+    <span className="metaText">
+      <span className="soDone" style={{ color: persona.colour }}>
+        done
+      </span>{' '}
+      · {stats}
+    </span>
+  )
+}
 
 /**
  * Who else was touching the repo during this turn, in the width a one-line
@@ -85,6 +215,7 @@ export function Transcript({
   lead,
   tail,
   marks = NO_MARKS,
+  speaker,
 }: Props) {
   const items = useMemo(() => buildTranscript(events, store.eventTime, { scope, agents, shells }), [events, scope, agents, shells])
   const byCall = useMemo(() => new Map(agents.map((a) => [a.toolUseId, a])), [agents])
@@ -111,6 +242,13 @@ export function Transcript({
   // re-renders separately (see LiveLine), so it calls back in here to scroll.
   useLayoutEffect(scrollToBottom, [items, scrollToBottom])
 
+  const live = speaker?.status === 'running' || speaker?.status === 'starting'
+  const moods = useMemo(() => (speaker ? speakerTurns(items, live, turns) : null), [items, live, turns, !!speaker])
+  const timeAt = (item: TranscriptItem) => {
+    const ev = events[eventIndexOf(item)]
+    return ev ? store.eventTime(ev) : undefined
+  }
+
   // Each mark goes before the first item at or past its event; one past every item goes last.
   const marksBefore = useMemo(() => {
     const m = new Map<string, TranscriptMark[]>()
@@ -130,6 +268,7 @@ export function Transcript({
         {items.map((item) => (
           <Fragment key={item.key}>
           {marksBefore.m.get(item.key)?.map((x) => <Fragment key={x.key}>{x.node}</Fragment>)}
+          {moods?.at.has(item.key) && <Speaker {...moods.at.get(item.key)!} at={timeAt(item)} />}
           <Item
             item={item}
             turn={item.kind === 'meta' && item.turn ? turns?.find((t) => t.seq === item.turn) : undefined}
@@ -148,11 +287,13 @@ export function Transcript({
             onRef={onNavigate}
             sessionId={sessionId}
             actionByCall={actionByCall}
+            signoff={!!speaker}
           />
           </Fragment>
         ))}
         {marksBefore.tailMarks.map((x) => <Fragment key={x.key}>{x.node}</Fragment>)}
         {/* The streaming line is the main agent's; an agent's view shows its messages as they commit. */}
+        {moods?.thinking && <Speaker mood="think" say={{ line: 'Thinking…', sub: 'reading your message' }} />}
         {!scope && <LiveLine sessionId={sessionId} onGrow={scrollToBottom} />}
         {tail}
       </div>
@@ -268,6 +409,7 @@ const Item = memo(function Item({
   onRef,
   sessionId,
   actionByCall,
+  signoff,
 }: {
   item: TranscriptItem
   turn?: SessionTurnSummary
@@ -280,6 +422,8 @@ const Item = memo(function Item({
   sessionId: string
   /** this session's outbound actions, by tool_use id */
   actionByCall: ReadonlyMap<string, ActionView>
+  /** a turn's end reads as Junior's sign-off ("done · 32s · …") rather than "turn done" */
+  signoff?: boolean
 }) {
   switch (item.kind) {
     case 'agent':
@@ -312,6 +456,11 @@ const Item = memo(function Item({
         )
       return (
         <div className="msg user">
+          {item.mode === 'goal' && (
+            <div className="msgMode" title="Sent in Goal mode: Junior proposes a team with a done-when">
+              Goal
+            </div>
+          )}
           {item.images && item.images.length > 0 && (
             <div className="msgImages">
               {item.images.map((img, i) => (
@@ -360,8 +509,12 @@ const Item = memo(function Item({
       // A turn that changed files says so here, where it happened — the drawer
       // below answers "in total", this answers "in this turn".
       return (
-        <div className="meta">
-          <span className="metaText">{item.text}</span>
+        <div className={`meta${signoff && item.stats ? ' signoff' : ''}`}>
+          {signoff && item.stats ? (
+            <SignOff stats={item.stats} />
+          ) : (
+            <span className="metaText">{item.text}</span>
+          )}
           {turn && turn.files > 0 && (
             <span className="turnChange">
               {turn.files} {turn.files === 1 ? 'file' : 'files'} <span className="pl">+{turn.insertions}</span>{' '}
@@ -404,10 +557,16 @@ const Item = memo(function Item({
       // AskUserQuestion arrives as a permission prompt, but it is a question
       // for the reader — render it as choices, not as JSON to approve.
       const questions = item.toolName === 'AskUserQuestion' ? parseQuestions(item.input) : null
+      // Plan mode's plan, to approve like a PR — read as the document it is.
+      const plan = item.toolName === 'ExitPlanMode' && typeof item.input?.plan === 'string' ? item.input.plan : null
+      // Junior is asking unless a subagent is — then the wrapper below names it.
+      const junior = !item.agentId
       const card = questions ? (
-        <AskCard item={item} questions={questions} onRespond={onRespond} />
+        <AskCard item={item} questions={questions} onRespond={onRespond} junior={junior} />
+      ) : plan !== null ? (
+        <PlanCard item={item} plan={plan} refs={refs} onRef={onRef} onRespond={onRespond} junior={junior} />
       ) : (
-        <PermissionCard item={item} onRespond={onRespond} />
+        <PermissionCard item={item} onRespond={onRespond} junior={junior} />
       )
       // A subagent's prompt says who is asking — answering it here or in its view is the same answer.
       if (!item.agentId) return card

@@ -59,6 +59,8 @@ export type TranscriptItem =
       images?: ImageAttachment[]
       mentions?: ResolvedMention[]
       from?: string
+      /** sent in Goal mode */
+      mode?: 'goal'
       /** In an agent's view: this was written to the agent and relayed through main. */
       relayed?: { delivery?: RelayDelivery; sent?: string }
     }
@@ -69,7 +71,17 @@ export type TranscriptItem =
   | { key: string; kind: 'assistant'; text: string }
   | ThinkingItem
   | { key: string; kind: 'error'; text: string }
-  | { key: string; kind: 'meta'; text: string; /** 1-based turn this marker ends, for the changeset line */ turn?: number }
+  | {
+      key: string
+      kind: 'meta'
+      text: string
+      /** 1-based turn this marker ends, for the changeset line */
+      turn?: number
+      /** a turn's end, without the frame: "32.2s · 9 turns · $0.8007" — for Junior's sign-off */
+      stats?: string
+      /** how long the turn took, for Junior's "Done in 32s" */
+      ms?: number
+    }
   | { key: string; kind: 'init'; model?: string; toolCount: number; servers: McpServerInfo[]; mcpTools: string[] }
   /** What a local command (`/usage`, `/context`) printed — not the model talking. */
   | { key: string; kind: 'command'; text: string }
@@ -149,7 +161,7 @@ export function buildTranscript(
           relays.push({ agentId: ev.relay.agentId, text: ev.text, mark })
           break
         }
-        if (!scope) items.push({ key: `u${i}`, kind: 'user', text: ev.text, images: ev.images, mentions: ev.mentions, from: ev.from })
+        if (!scope) items.push({ key: `u${i}`, kind: 'user', text: ev.text, images: ev.images, mentions: ev.mentions, from: ev.from, ...(ev.mode ? { mode: ev.mode } : {}) })
         break
       }
       case 'error':
@@ -269,11 +281,14 @@ export function buildTranscript(
           const cost = turnCost != null ? ` · $${turnCost.toFixed(4)}` : ''
           const secs = ((m.duration_ms ?? 0) / 1000).toFixed(1)
           turnSeq += 1
+          const stats = `${secs}s · ${m.num_turns ?? 0} turns${cost}`
           items.push({
             key: `r${i}`,
             kind: 'meta',
             turn: turnSeq,
-            text: `— turn done · ${secs}s · ${m.num_turns ?? 0} turns${cost} —`,
+            text: `— turn done · ${stats} —`,
+            stats,
+            ms: m.duration_ms ?? undefined,
           })
         }
         break

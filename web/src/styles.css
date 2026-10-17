@@ -1061,6 +1061,7 @@ kbd { font-family: var(--mono); font-size: 0.8462rem; color: var(--ash); border:
   padding: 11px 15px; font-size: 1.0769rem; color: var(--body); line-height: 1.55;
 }
 .msg.user .msgImages { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.msg.user .msgMode { font-family: var(--mono); font-size: 0.7692rem; color: var(--yellow); margin-bottom: 4px; white-space: normal; }
 .msg.user .msgImages img { max-width: 200px; max-height: 200px; border-radius: var(--r); border: 1px solid var(--hair-strong); display: block; }
 
 /* a teammate agent's message (teams): left-aligned like the agent it came from,
@@ -1914,6 +1915,54 @@ button.edText:focus-visible { outline: none; border-color: var(--hair-bright); }
   .lbHeadActs .btn { display: none; }
 }
 
+/* Junior's name with its face — on the cards triage draws (questions, approvals, plans). */
+/* Inline, not flex: the words after the name keep their leading space ("Junior wants to use…", "Junior’s plan"). */
+.jrLabel .jrFace { display: inline-block; vertical-align: middle; margin: -6px 9px -4px 0; }
+.jrLabel .jrWho { color: var(--ink); font-family: var(--sans); font-weight: 500; }
+/* A Junior turn's first line. The face sits out in the margin left of the column, level with the name,
+   so the text keeps its full width; where the column has no margin (narrow panes, phones) it comes
+   inline and smaller. */
+#transcript { container-type: inline-size; container-name: transcript; }
+.speaker { position: relative; display: flex; align-items: center; min-height: 24px; margin-bottom: -8px; font-size: 0.9231rem; }
+.speaker .spFace { position: absolute; left: -54px; top: 50%; transform: translateY(-50%); line-height: 0; }
+.speaker .spWho { color: var(--ink); font-weight: 500; }
+.speaker .spNote { margin-left: 8px; color: var(--ash); }
+.speaker .spNote.needs { color: var(--yellow); }
+.speaker .spNote.stuck { color: var(--red-ink); }
+.speaker .spAt { margin-left: 8px; font-family: var(--mono); font-size: 0.7692rem; color: var(--stone); }
+@container transcript (max-width: 810px) {
+  .speaker .spFace { position: static; transform: none; margin-right: 8px; }
+  .speaker .spFace svg { width: 29px; height: 29px; }
+}
+/* Junior's chat face notices you: hover it and it lifts (a finished one also smiles, in ChatFace). */
+.chatFace { display: inline-block; line-height: 0; cursor: default; }
+.chatFace svg { transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1); transform-origin: 50% 80%; }
+.chatFace:hover svg { transform: translateY(-2px) scale(1.08) rotate(-4deg); }
+@media (prefers-reduced-motion: reduce) { .chatFace svg { transition: none; } .chatFace:hover svg { transform: none; } }
+/* The needs-you face is a button: it jumps to the card it's waiting on. */
+.chatFace.go { cursor: pointer; border-radius: var(--r-sm); }
+.chatFace.go:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+/* Junior's speech bubble (ui/Tooltip.tsx): a small card with a tail pointing at the face. */
+.uiTip {
+  z-index: 96; max-width: 280px; padding: 6px 10px; border-radius: var(--r);
+  background: var(--elev); border: 1px solid var(--hair-strong); box-shadow: 0 0 0 1px var(--ring), 0 6px 18px var(--drop);
+  font-family: var(--sans); font-size: 0.9231rem; line-height: 1.4; color: var(--ink);
+  transform-origin: var(--radix-tooltip-content-transform-origin);
+  animation: tipIn 0.12s ease;
+}
+.uiTipArrow { fill: var(--elev); }
+@keyframes tipIn { from { opacity: 0; transform: translateY(3px) scale(0.97); } to { opacity: 1; transform: none; } }
+/* Junior's bubble: the plain tip, with one sharp corner by the face so it reads as Junior speaking —
+   its words, then the facts under them, quieter. */
+.uiTip.junior { display: flex; flex-direction: column; gap: 1px; padding: 7px 11px 8px; border-radius: 10px 10px 10px 3px; }
+.uiTip.junior[data-side="bottom"] { border-radius: 3px 10px 10px 10px; }
+.uiTip.junior .tipLine { font-weight: 500; color: var(--ink); }
+.uiTip.junior .tipSub { font-size: 0.8462rem; color: var(--ash); }
+@media (prefers-reduced-motion: reduce) { .uiTip { animation: none; } }
+/* The turn marker as Junior's sign-off: "done · 32.2s · 9 turns · $0.80". */
+.meta.signoff .soDone { font-weight: 500; }
+/* Held sends in a chat: Junior asking, above the stubs. */
+.astubsWho { font-size: 0.9231rem; color: var(--body); margin-bottom: 4px; }
 .msg.assistant { align-self: stretch; font-size: 1.1538rem; line-height: 1.7; color: var(--body); }
 .msg.assistant.live .md > :last-child::after { content: "▍"; color: var(--ink); margin-left: 1px; animation: caret 1s steps(1) infinite; }
 .msg.thinking { color: var(--mute); font-style: italic; font-size: 1rem; white-space: pre-wrap; padding-left: 12px; border-left: 1px solid var(--hair-strong); }
@@ -1985,6 +2034,12 @@ button.edText:focus-visible { outline: none; border-color: var(--hair-bright); }
 .perm .q .effect.external-write { color: var(--red); border-color: var(--edge-red); }
 .perm .q .effect.local-write { color: var(--yellow); border-color: var(--edge-yellow); }
 .perm .well { max-height: 160px; margin-bottom: 12px; }
+/* Plan mode's plan: the document first, the two answers under it. */
+.perm.planCard { border-color: var(--edge-blue); }
+.planCard .q { display: flex; align-items: center; gap: 6px; color: var(--ink); }
+.planCard .q svg { color: var(--blue); }
+.planCard .planHint { margin-left: auto; font-family: var(--mono); font-size: 0.7692rem; color: var(--ash); }
+.planCard .planBody { max-height: 480px; overflow: auto; margin-bottom: 12px; padding: 4px 2px; border-top: 1px solid var(--hair); border-bottom: 1px solid var(--hair); }
 .perm .actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .perm .verdict { font-size: 0.9231rem; font-family: var(--mono); color: var(--ash); }
 .perm .verdict.allow, .perm .verdict.allow_always { color: var(--green); }
