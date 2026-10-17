@@ -1,5 +1,5 @@
 import * as RadioGroup from '@radix-ui/react-radio-group'
-import { Check, Folder, GitBranch, LoaderCircle, Plus, X } from 'lucide-react'
+import { CalendarCheck, Check, Folder, GitBranch, ListChecks, LoaderCircle, Plus, Repeat, Target, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import {
   MAX_MENTIONS_PER_MESSAGE,
@@ -13,11 +13,13 @@ import {
   type Project,
   type ProjectsResponse,
   type ProviderId,
+  type SessionMode,
 } from '../../../shared/protocol.js'
 import { branchFromTitle, plausibleBranch } from '../../../shared/branch.js'
 import type { Draft } from '../drafts.js'
 import { useCheckouts, useSessions } from '../hooks.js'
 import { readSessionDefaults, writeSessionDefaults } from '../sessionDefaults.js'
+import { DEFAULT_MODE } from '../permissionModes.js'
 import { PromptBox } from './PromptBox.js'
 import { defaultProjectOf } from './ProjectPicker.js'
 import { CheckoutPicker } from './CheckoutPicker.js'
@@ -120,6 +122,8 @@ export type NewSession = {
   effort?: EffortLevel
   fastMode?: boolean
   permissionMode?: PermissionMode
+  /** What Junior does before it starts; absent = normal */
+  mode?: SessionMode
   /** The agent the session runs on for life; absent = Claude. */
   provider?: ProviderId
   images?: ImageAttachment[]
@@ -204,9 +208,13 @@ export function NewSessionComposer({ draft, onChange, onCreate, error, step }: P
   // server picks it: an empty cwd on send means "the default project".
   const fallback = defaultProjectOf(projects)
   // "New job" / "New goal": a chat with Junior that sets one up — no checkout to pick, it names its own project.
-  const job = draft.intent === 'job'
-  const goal = draft.intent === 'goal'
-  const prefix = job ? 'New job: ' : goal ? 'New goal: ' : ''
+  // Opened as one, or picked from the starters under the box.
+  const [job, setJob] = useState(draft.intent === 'job')
+  // Mode (Normal / Plan / Goal): "Turn into a goal" opens on Goal. A goal's first message goes out marked
+  // as one (the server says so to the model), so it carries no "New goal:" prefix of its own.
+  const [mode, setMode] = useState<SessionMode>(draft.intent === 'goal' ? 'goal' : 'normal')
+  const goal = mode === 'goal'
+  const prefix = job ? 'New job: ' : ''
   const cwd = draft.cwd ?? fallback?.path ?? '~'
   // The project's live checkouts; the picker shows for git projects only (main has a branch, or worktrees exist).
   const project = projects.find((p) => p.path === cwd)
@@ -239,7 +247,7 @@ export function NewSessionComposer({ draft, onChange, onCreate, error, step }: P
   const [model, setModel] = useState<string | undefined>(defaults.model)
   const [effort, setEffort] = useState<EffortLevel | undefined>(defaults.effort)
   const [fastMode, setFastMode] = useState(defaults.fastMode)
-  const [permissionMode, setPermissionMode] = useState<PermissionMode | undefined>(defaults.permissionMode)
+  const [permissionMode, setPermissionMode] = useState<PermissionMode | undefined>(defaults.permissionMode ?? DEFAULT_MODE)
   // Every draft starts on Claude. The saved defaults are Claude's (its model
   // ids, its fast mode), so they are neither carried into another agent nor
   // overwritten by a pick made there.
@@ -411,7 +419,9 @@ export function NewSessionComposer({ draft, onChange, onCreate, error, step }: P
             ? 'What should it do, how often, and what must it never do? e.g. “Every weekday at 9, find PRs waiting on my review”'
             : goal
               ? 'What is the outcome, and how will we know it’s done? e.g. “CI green on main, the flaky test fixed”'
-              : onClaude
+              : mode === 'plan'
+                ? 'What should Junior plan? It reads and plans, and edits nothing until you approve the plan.'
+                : onClaude
                 ? draft.label
                   ? `Tell ${persona.name} what to work on — a bug, a feature, a question…`
                   : `Try: ${example}`
@@ -447,13 +457,14 @@ export function NewSessionComposer({ draft, onChange, onCreate, error, step }: P
           const go = () => {
             if (isNew && !existing) setMaking(newBranch)
             onCreate({
-              title: prefix ? `${prefix}${titleFrom(text, mentions)}` : (draft.label ?? titleFrom(text, mentions)),
+              title: prefix ? `${prefix}${titleFrom(text, mentions)}` : goal ? `Goal: ${draft.label ?? titleFrom(text, mentions)}` : (draft.label ?? titleFrom(text, mentions)),
               cwd: draft.cwd ?? fallback?.path ?? '',
               firstMessage: `${prefix}${text}`,
               model,
               effort,
               fastMode: onClaude && fastMode,
               permissionMode,
+              ...(onClaude && !job && mode !== 'normal' ? { mode } : {}),
               ...(onClaude ? {} : { provider }),
               images,
               mentions,
@@ -498,7 +509,35 @@ export function NewSessionComposer({ draft, onChange, onCreate, error, step }: P
           setPermissionMode(m)
           writeSessionDefaults({ permissionMode: m })
         }}
+        {...(job ? {} : { mode, onModeChange: setMode })}
       />
+      {onClaude && !draft.itemId && !hasText && !handoff && !making && (
+        // Starters, not modes: each only sets up the box (a job chat, Plan first, a goal) or fills it in.
+        // Any session can still become any of these from what you say.
+        <div className="nsStarters">
+          <button type="button" className={job ? 'on job' : undefined} aria-pressed={job} onClick={() => {
+            setJob(!job)
+            setMode('normal')
+          }}>
+            <Repeat size={12} aria-hidden="true" /> Set up a job
+          </button>
+          <button type="button" className={goal ? 'on goal' : undefined} aria-pressed={goal} onClick={() => {
+            setJob(false)
+            setMode(goal ? 'normal' : 'goal')
+          }}>
+            <Target size={12} aria-hidden="true" /> Start a goal
+          </button>
+          <button type="button" className={mode === 'plan' ? 'on plan' : undefined} aria-pressed={mode === 'plan'} onClick={() => {
+            setJob(false)
+            setMode(mode === 'plan' ? 'normal' : 'plan')
+          }}>
+            <ListChecks size={12} aria-hidden="true" /> Plan something
+          </button>
+          <button type="button" onClick={() => onChange({ text: 'Pick up the next item on today’s plan' })}>
+            <CalendarCheck size={12} aria-hidden="true" /> Pick up today’s next item
+          </button>
+        </div>
+      )}
       {pulled.length > 0 && (
         <div className="nsPull" aria-live="polite">
           <span className="nsPullLb">{onClaude ? "I'll pull in" : 'Attaching'}</span>
@@ -525,9 +564,6 @@ export function NewSessionComposer({ draft, onChange, onCreate, error, step }: P
         </p>
       )}
       {making && <MakingWorktree branch={making} step={step ?? null} />}
-      <div className="keysHint">
-        <kbd>Enter</kbd> starts · <kbd>Shift+Enter</kbd> newline · <kbd>Shift+Tab</kbd> changes what gets asked
-      </div>
 
     </div>
   )

@@ -59,7 +59,7 @@ import { SHORTCUTS } from '../keys.js'
 import { findModel, reloadModels, saveModelPrefs, useModelStore, useModels, usePickableModels } from '../models.js'
 import { playbookLabel } from '../itemUi.js'
 import { Select, SelectItem } from '../ui/Select.js'
-import { readSessionDefaults, writeSessionDefaults, type SessionDefaults } from '../sessionDefaults.js'
+import { readAllowNever, readSessionDefaults, writeAllowNever, writeSessionDefaults, type SessionDefaults } from '../sessionDefaults.js'
 import {
   APPEARANCE_DEFAULTS,
   chooseTheme,
@@ -76,7 +76,8 @@ import { closeSettings, SETTINGS_TABS, setSettingsTab, type SettingsTab } from '
 import { anyDialogOpen, isTypingTarget } from '../keys.js'
 import { store } from '../store.js'
 import { ModelPopover } from './ModelPopover.js'
-import { PermissionModePicker } from './PermissionModePicker.js'
+import { AutonomyPicker } from './AutonomyPicker.js'
+import { DEFAULT_MODE } from '../permissionModes.js'
 import { ConnectorsPanel } from './Connectors.js'
 import { McpTab } from './McpTab.js'
 import { PhoneTab } from './PhoneTab.js'
@@ -1354,6 +1355,7 @@ function ThemePreview({ theme }: { theme: Theme }) {
 
 function SessionsTab() {
   const [d, setD] = useState<SessionDefaults>(() => readSessionDefaults())
+  const [allowNever, setAllowNever] = useState(readAllowNever)
   const models = useModels()
   const fastOk = modelSupportsFastMode(models, d.model)
 
@@ -1385,12 +1387,25 @@ function SessionsTab() {
             <Switch.Thumb className="uiSwitchThumb" />
           </Switch.Root>
         </Row>
-        <Row label="Permissions" hint="How much a new session asks before acting. Shift+Tab cycles it in the prompt box.">
-          <PermissionModePicker mode={d.permissionMode} onChange={(permissionMode) => update({ permissionMode })} />
+        <Row label="Autonomy" hint="When Junior checks in with you in a new session.">
+          <AutonomyPicker mode={d.permissionMode ?? DEFAULT_MODE} onChange={(permissionMode) => update({ permissionMode })} />
+        </Row>
+        <Row label="Allow “Never asks”" hint="Offers the level where Junior runs and sends anything without asking. Off keeps it out of every Autonomy menu.">
+          <Switch.Root
+            className="uiSwitch"
+            checked={allowNever}
+            onCheckedChange={(on) => {
+              writeAllowNever(on)
+              setAllowNever(on)
+            }}
+            aria-label="Allow Never asks"
+          >
+            <Switch.Thumb className="uiSwitchThumb" />
+          </Switch.Root>
         </Row>
       </Section>
       <Section title="Reset">
-        <Row label="Forget these defaults" hint="New sessions go back to Claude Code’s defaults and ask every time.">
+        <Row label="Forget these defaults" hint="New sessions go back to Claude Code’s defaults and ask before commands.">
           <button
             type="button"
             className="btn"

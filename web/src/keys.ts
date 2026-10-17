@@ -54,7 +54,7 @@ export const SHORTCUTS: ReadonlyArray<[keys: string, what: string]> = [
   [`${MOD_LABEL}B`, 'Hide / show the side panel'],
   [`${MOD_LABEL}J`, 'New chat with Junior'],
   ['n', 'New session (in the inbox: new work item)'],
-  ['Shift+Tab', 'Composer: cycle how much the session asks before acting'],
+  ['Shift+Tab', 'Composer: cycle the mode — Normal, Plan, Goal'],
   ['g h', 'Go to Junior (home)'],
   ['g i', 'Go to Inbox'],
   ['g s', 'Go to Sessions'],

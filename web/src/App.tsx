@@ -653,8 +653,15 @@ export function App() {
   )
 
   const sendMessage = useCallback(
-    (text: string, images?: ImageAttachment[], mentions?: Mention[]) => {
-      if (currentId) store.send({ type: 'user_message', sessionId: currentId, text, images, mentions })
+    (text: string, images?: ImageAttachment[], mentions?: Mention[], mode?: 'goal') => {
+      if (currentId) store.send({ type: 'user_message', sessionId: currentId, text, images, mentions, ...(mode ? { mode } : {}) })
+    },
+    [currentId],
+  )
+
+  const setPlanning = useCallback(
+    (planning: boolean) => {
+      if (currentId) store.send({ type: 'set_session_mode', sessionId: currentId, mode: planning ? 'plan' : 'normal' })
     },
     [currentId],
   )
@@ -953,6 +960,7 @@ export function App() {
       effort: s.effort,
       fastMode: s.fastMode,
       permissionMode: s.permissionMode,
+      ...(s.mode && s.mode !== 'normal' ? { mode: s.mode } : {}),
       provider: s.provider,
       images: s.images,
       mentions: s.mentions,
@@ -1544,8 +1552,10 @@ export function App() {
                   fastModeState={current.fastModeState}
                   fastModeDisabledReason={current.fastModeDisabledReason}
                   permissionMode={current.permissionMode}
+                  planning={current.planning}
                   provider={current.provider ?? 'claude'}
                   onSend={sendMessage}
+                  onPlanningChange={setPlanning}
                   onInterrupt={interrupt}
                   onModelChange={setModel}
                   onFastModeChange={setFastMode}

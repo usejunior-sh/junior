@@ -1,27 +1,44 @@
-import { Check, ChevronDown, ShieldCheck } from 'lucide-react'
+import { Check, ChevronDown } from 'lucide-react'
 import { useState } from 'react'
 import type { PermissionMode } from '../../../shared/protocol.js'
-import { findMode, PERMISSION_MODES } from '../permissionModes.js'
+import { findMode, levelsFor } from '../permissionModes.js'
+import { readAllowNever } from '../sessionDefaults.js'
 import { Menu, MenuContent, MenuItem, MenuTrigger } from '../ui/Menu.js'
 
 type Props = {
   mode?: PermissionMode
   onChange: (mode: PermissionMode) => void
   disabled?: boolean
+  /** The provider can hold sends and catch destructive commands (Claude); without it "Asks before sending" isn't offered. */
+  hooks?: boolean
 }
 
-/** How much a session asks before acting. Same chip idiom as the model picker. */
-export function PermissionModePicker({ mode, onChange, disabled }: Props) {
+/** Four bars, one per level, lit up to this one; neutral until "Never asks", which is all red. */
+export function Meter({ bars }: { bars: number }) {
+  return (
+    <span className="meter" data-bars={bars} aria-hidden="true">
+      <i />
+      <i />
+      <i />
+      <i />
+    </span>
+  )
+}
+
+/** Autonomy: when Junior checks in with you. The meter and the level's short name; "Never asks" in red. */
+export function AutonomyPicker({ mode, onChange, disabled, hooks = true }: Props) {
   const [open, setOpen] = useState(false)
   const [confirming, setConfirming] = useState<PermissionMode | null>(null)
 
   const selected = findMode(mode)
+  // Read on every render: Settings may have turned "Never asks" on since the last one.
+  const levels = levelsFor({ hooks, allowNever: readAllowNever(), current: mode })
 
   function pick(id: PermissionMode, e: Event) {
-    // Turning off every check is the one choice that gets a second question:
-    // it is the only mode where a mis-click has no later chance to be caught.
+    // Never asking is the one choice that gets a second question: it is the
+    // only level where a mis-click has no later chance to be caught.
     // preventDefault keeps the menu open so the confirm can render in place.
-    if (id === 'bypassPermissions' && mode !== id) {
+    if (id === 'bypassPermissions' && selected.id !== id) {
       e.preventDefault()
       setConfirming(id)
       return
@@ -44,21 +61,22 @@ export function PermissionModePicker({ mode, onChange, disabled }: Props) {
             className={`chip perm risk-${selected.risk}`}
             disabled={disabled}
             title={`${selected.name} — ${selected.description}`}
-            aria-label={`Permissions: ${selected.name}`}
+            aria-label={`Autonomy: ${selected.name}`}
           >
-            <ShieldCheck size={14} aria-hidden="true" />
-            <span className="name">{selected.name}</span>
+            <Meter bars={selected.bars} />
+            <span className="name">{selected.short}</span>
             <ChevronDown size={12} aria-hidden="true" />
           </button>
         </MenuTrigger>
 
         <MenuContent className="perm" side="top" align="start">
-          {PERMISSION_MODES.map((m) => (
+          {levels.map((m) => (
             <MenuItem
               key={m.id}
               className={`wrap risk-${m.risk}${m.id === selected.id ? ' on' : ''}`}
               onSelect={(e) => pick(m.id, e)}
             >
+              <Meter bars={m.bars} />
               <span className="text">
                 <span className="name">{m.name}</span>
                 <span className="desc">{m.description}</span>
@@ -70,8 +88,8 @@ export function PermissionModePicker({ mode, onChange, disabled }: Props) {
           {confirming ? (
             <div className="uiMenuConfirm">
               <p>
-                Bypass runs every command and edit without asking — including ones that delete work
-                or reach the network. Turn it on only where you can afford the worst case.
+                Junior will run every command and send every push, comment and message without asking — including
+                ones that delete work. Turn it on only where you can afford the worst case.
               </p>
               <button
                 type="button"
@@ -81,16 +99,14 @@ export function PermissionModePicker({ mode, onChange, disabled }: Props) {
                   setOpen(false)
                 }}
               >
-                Turn off all checks
+                Never ask
               </button>
               <button type="button" className="cancel" onClick={() => setConfirming(null)}>
                 Cancel
               </button>
             </div>
           ) : (
-            <p className="uiMenuBlurb">
-              Applies to this session, from the next tool call on.<span className="kbdHint"> <kbd>Shift+Tab</kbd> cycles.</span>
-            </p>
+            <p className="uiMenuBlurb">When Junior checks in with you. Applies from the next tool call.</p>
           )}
         </MenuContent>
       </Menu>

@@ -38,9 +38,10 @@ export function tabOfItem(tabs: Tabs, id: string): OpenTab | null {
   return null
 }
 
-/** "Permission: Bash" or "Question" — what a blocked session is waiting on. */
+/** "Permission: Bash", "Question" or "Plan to approve" — what a blocked session is waiting on. */
 export function waitingText(s: Pick<SessionSummary, 'waitingOn'>): string {
   if (!s.waitingOn) return 'Waiting on you'
   if (s.waitingOn === 'AskUserQuestion') return 'Question'
+  if (s.waitingOn === 'ExitPlanMode') return 'Plan to approve'
   return `Permission: ${s.waitingOn.replace(/^mcp__.+?__/, '')}`
 }

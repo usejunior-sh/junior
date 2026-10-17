@@ -75,7 +75,7 @@ export const STATUS_TONE: Record<ActionView['status'], 'green' | 'red' | 'yellow
   expired: 'mute',
 }
 
-/** Who let it run, as a short phrase ("you", "bypass permissions", "the job’s grants"). */
+/** Who let it run, as a short phrase ("you", "autonomy: never asks", "the job’s grants"). */
 export function allowedText(a: ActionView): string {
   switch (a.allowedBy) {
     case 'prompt':

@@ -2069,7 +2069,35 @@ button.chip:hover:not(:disabled), .chip[data-state="open"] { color: var(--ink); 
 .chip.perm.risk-high { color: var(--red); border-color: var(--edge-red); }
 .chip.perm.risk-high svg { color: var(--red); }
 .chip.cwd.pick { cursor: pointer; }
-.modelPicker, .permPicker { position: relative; flex: none; display: flex; }
+.modelPicker, .permPicker, .modePicker { position: relative; flex: none; display: flex; }
+/* Session mode (ModePicker): "Junior decides" is quiet; a forced Plan first or Goal says it changes what happens next. */
+.chip.sessionMode.normal { color: var(--ash); }
+.chip.sessionMode.plan { color: var(--blue); border-color: var(--edge-blue); }
+.chip.sessionMode.goal { color: var(--yellow); border-color: var(--edge-yellow); }
+.chip.sessionMode.plan svg { color: var(--blue); }
+.chip.sessionMode.goal svg { color: var(--yellow); }
+/* a running session's Planning chip: status with a way out, not a picker */
+.chip.sessionMode.planning { cursor: pointer; background: var(--tint-blue); }
+.chip.sessionMode.planning:hover { color: var(--blue); border-color: var(--edge-blue-hi); }
+/* icons sit on the name's line, not centred on the two-line row */
+.uiMenu .modeIcon { flex: none; align-self: flex-start; margin-top: 3px; color: var(--ash); }
+.uiMenuItem.mode-plan .modeIcon { color: var(--blue); }
+.uiMenuItem.mode-goal .modeIcon { color: var(--yellow); }
+/* Autonomy's meter: four rising bars, lit up to the level; neutral until "Never asks", which is all red. */
+.meter { display: inline-flex; align-items: flex-end; gap: 2px; height: 11px; flex: none; }
+.meter i { width: 3px; border-radius: 1px; background: var(--hair-strong); }
+.meter i:nth-child(1) { height: 5px; }
+.meter i:nth-child(2) { height: 7px; }
+.meter i:nth-child(3) { height: 9px; }
+.meter i:nth-child(4) { height: 11px; }
+.meter[data-bars="1"] i:nth-child(-n+1),
+.meter[data-bars="2"] i:nth-child(-n+2),
+.meter[data-bars="3"] i:nth-child(-n+3) { background: var(--charcoal); }
+.meter[data-bars="4"] i { background: var(--red); }
+.chip.perm:hover .meter[data-bars="1"] i:nth-child(-n+1),
+.chip.perm:hover .meter[data-bars="2"] i:nth-child(-n+2),
+.chip.perm:hover .meter[data-bars="3"] i:nth-child(-n+3) { background: var(--ink); }
+.uiMenuItem .meter { margin-top: 3px; align-self: flex-start; }
 #sendBtn, #stopBtn {
   display: inline-flex; align-items: center; justify-content: center; flex: none;
   width: 30px; height: 30px; padding: 0; border-radius: var(--r); border: 1px solid transparent;
@@ -2124,6 +2152,18 @@ button.chip:hover:not(:disabled), .chip[data-state="open"] { color: var(--ink); 
 #sendBtn.face kbd { font-family: var(--mono); font-size: 0.8462rem; color: inherit; opacity: 0.55; background: none; border: 0; padding: 0; }
 @keyframes sendPillIn { from { transform: scale(0.85); opacity: 0; } to { transform: none; opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { #sendBtn.face { animation: none; } }
+/* Starters under the new-session box: shortcuts that set it up, not modes. */
+#newSessionHome .nsStarters { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; width: 100%; max-width: 760px; margin-top: -8px; }
+#newSessionHome .nsStarters button {
+  display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px; border-radius: var(--r-full);
+  border: 1px solid var(--hair); background: transparent; color: var(--ash); font: inherit; font-size: 0.8846rem; cursor: pointer;
+  transition: border-color 0.1s ease, color 0.1s ease;
+}
+#newSessionHome .nsStarters button:hover { color: var(--ink); border-color: var(--hair-bright); }
+#newSessionHome .nsStarters button.on { color: var(--ink); border-color: var(--hair-bright); background: var(--wash-2); }
+#newSessionHome .nsStarters button.on.job svg { color: var(--green); }
+#newSessionHome .nsStarters button.on.goal svg { color: var(--yellow); }
+#newSessionHome .nsStarters button.on.plan svg { color: var(--blue); }
 #newSessionHome .nsPull { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; width: 100%; max-width: 760px; margin-top: -10px; font-size: 0.9231rem; color: var(--ash); }
 #newSessionHome .nsPullLb { margin-right: 2px; }
 #newSessionHome .nsPull .chip { display: inline-flex; align-items: center; gap: 6px; max-width: 280px; padding: 2px 4px 2px 10px; border: 1px solid color-mix(in srgb, var(--junior) 35%, var(--hair-strong)); border-radius: 999px; color: var(--body); }
@@ -2156,7 +2196,7 @@ button.chip:hover:not(:disabled), .chip[data-state="open"] { color: var(--ink); 
 }
 .uiMenu:focus, .uiMenu:focus-visible { outline: none; }
 .uiMenu.models { min-width: 300px; }
-.uiMenu.perm { min-width: 330px; }
+.uiMenu.perm { min-width: 300px; max-width: 340px; }
 .uiMenu.wide { min-width: 300px; }
 .uiMenu[data-state="open"] { animation: menuIn 0.12s ease; }
 @keyframes menuIn { from { opacity: 0; transform: scale(0.97); } to { opacity: 1; transform: scale(1); } }
@@ -4156,7 +4196,7 @@ html.kbOpen .shell.mobile .panel { bottom: 0; }
   .statusline .chip svg { width: 17px; height: 17px; }
   .statusline .chip .name, .statusline .chip .eff, .statusline .chip > svg.lucide-chevron-down { display: none; }
   .statusline .chip[data-state="open"] { background: var(--elev); border-color: var(--hair-strong); }
-  .statusline .chip.fast.on, .statusline .chip.perm.risk-high { border-color: transparent; }
+  .statusline .chip.fast.on, .statusline .chip.perm.risk-high, .statusline .chip.sessionMode { border-color: transparent; }
   .statusline #sendBtn { margin-left: auto; }
   #sendBtn, #stopBtn { width: 36px; height: 36px; border-radius: var(--r-full); }
   #composer .hint { display: none; }
@@ -4221,7 +4261,6 @@ html.kbOpen .shell.mobile .panel { bottom: 0; }
   #newSessionHome { padding: 16px 12px; justify-content: flex-start; padding-top: 12vh; overflow-y: auto; overflow-x: hidden; }
   html.kbOpen #newSessionHome { padding-top: 12px; }
   #newSessionHome h2 { font-size: 2.2rem; align-self: flex-start; padding: 0 4px; }
-  #newSessionHome .keysHint { display: none; }
   #newSessionHome #box { min-height: 72px; }
 }
 

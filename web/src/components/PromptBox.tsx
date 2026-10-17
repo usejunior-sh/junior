@@ -9,6 +9,7 @@ import {
   type Mention,
   type MentionKind,
   type PermissionMode,
+  type SessionMode,
   type ProviderId,
 } from '../../../shared/protocol.js'
 import { useAttachments } from '../attachments.js'
@@ -29,7 +30,9 @@ import { MentionPicker, flatHits } from './MentionPicker.js'
 import { CommandPill } from './CommandPill.js'
 import { SlashPicker } from './SlashPicker.js'
 import { ModelPopover } from './ModelPopover.js'
-import { PermissionModePicker } from './PermissionModePicker.js'
+import { AutonomyPicker } from './AutonomyPicker.js'
+import { ModePicker } from './ModePicker.js'
+import { nextSessionMode } from '../sessionModes.js'
 
 type Props = {
   /** The header row: which project, which branch, which folder. */
@@ -57,6 +60,11 @@ type Props = {
   onProviderChange?: (provider: ProviderId) => void
   onFastModeChange: (fastMode: boolean) => void
   onPermissionModeChange: (mode: PermissionMode) => void
+  /** What Junior does before it starts (Junior decides / Plan first / Goal) — new sessions only; with it, Shift+Tab cycles this instead of the permission mode. */
+  mode?: SessionMode
+  onModeChange?: (mode: SessionMode) => void
+  /** A read-only chip where the mode picker would be — a running session's "Planning". */
+  status?: ReactNode
   /** A turn is in flight — offer the interrupt button. */
   running?: boolean
   onInterrupt?: () => void
@@ -107,6 +115,9 @@ export function PromptBox({
   onProviderChange,
   onFastModeChange,
   onPermissionModeChange,
+  mode,
+  onModeChange,
+  status,
   running,
   onInterrupt,
   initialMentions,
@@ -116,6 +127,8 @@ export function PromptBox({
 }: Props) {
   const box = useRef<HTMLTextAreaElement>(null)
   const filePicker = useRef<HTMLInputElement>(null)
+  // Modes are Claude's (plan mode is the SDK's); another agent shows only its permission chip.
+  const modeOn = !!onModeChange && (provider ?? 'claude') === 'claude'
   const [dragging, setDragging] = useState(false)
   const attach = useAttachments(draftKey)
   const canSend = !!text.trim() || attach.images.length > 0
@@ -393,7 +406,8 @@ export function PromptBox({
                     // hands already are — so it lives here rather than in the
                     // global map, which ignores keys typed into a text field.
                     e.preventDefault()
-                    onPermissionModeChange(nextMode(permissionMode))
+                    if (modeOn) onModeChange!(nextSessionMode(mode))
+                    else onPermissionModeChange(nextMode(permissionMode, (provider ?? 'claude') === 'claude'))
                   }
                 }}
               />
@@ -429,7 +443,9 @@ export function PromptBox({
             provider={provider}
             onProviderChange={onProviderChange}
           />
-          <PermissionModePicker mode={permissionMode} onChange={onPermissionModeChange} />
+          {modeOn && <ModePicker mode={mode} onChange={onModeChange!} />}
+          {status}
+          <AutonomyPicker mode={permissionMode} onChange={onPermissionModeChange} hooks={(provider ?? 'claude') === 'claude'} />
           <span className="spacer" />
           {/* Fast mode is a Claude serving tier; other agents have no such switch. */}
           {(provider ?? 'claude') === 'claude' && (

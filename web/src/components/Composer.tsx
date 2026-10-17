@@ -1,3 +1,4 @@
+import { ListChecks, X } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import type {
   EffortLevel,
@@ -28,9 +29,14 @@ type Props = {
   fastModeState?: FastModeState
   fastModeDisabledReason?: FastModeDisabledReason
   permissionMode?: PermissionMode
+  /** Plan mode is on: Junior plans, edits nothing, until you approve the plan. */
+  planning?: boolean
   /** The agent the session runs on — shown, never changed: a session keeps its agent. */
   provider: ProviderId
-  onSend: (text: string, images?: ImageAttachment[], mentions?: Mention[]) => void
+  /** `mode: 'goal'` — sent in Goal mode */
+  onSend: (text: string, images?: ImageAttachment[], mentions?: Mention[], mode?: 'goal') => void
+  /** Plan mode on or off — here only off: the Planning chip's way out */
+  onPlanningChange: (planning: boolean) => void
   onInterrupt: () => void
   onModelChange: (model: string | undefined, effort: EffortLevel | undefined) => void
   onFastModeChange: (fastMode: boolean) => void
@@ -53,8 +59,10 @@ export function Composer({
   fastModeState,
   fastModeDisabledReason,
   permissionMode,
+  planning,
   provider,
   onSend,
+  onPlanningChange,
   onInterrupt,
   onModelChange,
   onFastModeChange,
@@ -84,12 +92,25 @@ export function Composer({
       cwd={cwd}
       text={text}
       onTextChange={setText}
-      placeholder={running ? 'Steer the session… (queued until this turn ends)' : 'Steer the session…'}
+      placeholder={
+        planning ? 'What should Junior plan? It edits nothing until you approve the plan.' : running ? 'Steer the session… (queued until this turn ends)' : 'Steer the session…'
+      }
       sendTitle="Send (Enter)"
       onSubmit={(trimmed, images, mentions) => {
         onSend(trimmed, images, mentions)
         setText('')
       }}
+      // No mode picker once a session has started: Junior can plan, start a goal or set up a job from
+      // what you say. Plan mode still shows while it holds, with a way out.
+      status={
+        planning && (provider ?? 'claude') === 'claude' ? (
+          <button type="button" className="chip sessionMode plan planning" onClick={() => onPlanningChange(false)} title="Junior is planning: it edits nothing until you approve the plan. Click to stop planning." aria-label="Stop planning">
+            <ListChecks size={13} aria-hidden="true" />
+            <span className="name">Planning</span>
+            <X size={12} aria-hidden="true" />
+          </button>
+        ) : undefined
+      }
       model={model}
       effort={effort}
       fastMode={fastMode}
