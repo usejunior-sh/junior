@@ -94,6 +94,7 @@ import type {
   SessionStatus,
   SessionSummary,
   ImageAttachment,
+  FileRef,
   ToolEffect,
   Workspace,
   Artifact,
@@ -115,6 +116,7 @@ import type {
   DispatchPreviewResponse,
   ItemImage,
   ItemImageEdit,
+  ItemFilesResponse,
   ItemImagesResponse,
   UploadResponse,
   PlaybookResponse,
@@ -146,6 +148,8 @@ import type {
 } from '../shared/protocol.js'
 import {
   MAX_IMAGES_PER_ITEM,
+  MAX_FILES_PER_ITEM,
+  MAX_FILES_PER_MESSAGE,
   MAX_IMAGES_PER_MESSAGE,
   MAX_IMAGE_BYTES,
   MAX_INLINE_FILE_BYTES,
@@ -406,7 +410,17 @@ import {
   type Access,
 } from './remote.js'
 import { launchAgentInstalled } from './launchd.js'
-import { handleUpload } from './attachments.js'
+import {
+  applyItemFileEdits,
+  attachedFilesNote,
+  claimSessionFiles,
+  copyItemFilesToSession,
+  handleUpload,
+  itemFileEdits,
+  readItemFile,
+  removeSessionFiles,
+  resolveUploads,
+} from './attachments.js'
 import { applyImageEdits, itemImageAttachments, readItemImage } from './itemImages.js'
 import { BrowserHub, describePicked, makeBrowserMcp, renderVerification, ShotStore } from './browser.js'
 import { browserCallAllowed } from '../core/browser/policy.js'
@@ -1188,15 +1202,17 @@ class LiveSession {
     return this.pendingPermissions.values().next().value?.toolName
   }
 
-  async sendUserMessage(text: string, images?: ImageAttachment[], mentions?: Mention[], opts: { from?: string; mode?: 'goal' } = {}) {
+  /** `opts.files` are already claimed into this session's folder (claimSessionFiles). */
+  async sendUserMessage(text: string, images?: ImageAttachment[], mentions?: Mention[], opts: { from?: string; mode?: 'goal'; files?: FileRef[] } = {}) {
     // Mentions are resolved now, against this session's folder, so the event
     // log records what the model was actually given (and why a file wasn't).
     const attached = mentions?.length ? await resolveMentions(this.rt, this.row.cwd, mentions) : null
     // Before the agent can touch anything: the tree this turn starts from.
     await this.beginTurn()
-    this.emit({ kind: 'local_user', text, images, mentions: attached?.resolved, ...(opts.from ? { from: opts.from } : {}), ...(opts.mode ? { mode: opts.mode } : {}) }, true)
+    this.emit({ kind: 'local_user', text, images, ...(opts.files?.length ? { files: opts.files } : {}), mentions: attached?.resolved, ...(opts.from ? { from: opts.from } : {}), ...(opts.mode ? { mode: opts.mode } : {}) }, true)
     // A message from triage or a teammate is framed for the model; the transcript keeps the raw text and a badge.
     // One sent in Goal mode says so, so Junior goes straight to a goal card.
+    const filesNote = attachedFilesNote(this.rt.attachmentsDir, this.row.id, opts.files ?? [])
     const modelText = opts.from && text ? frameTeamMessage(opts.from, text) : opts.mode === 'goal' ? `${GOAL_MODE_MARK}${text}` : text
     this.setStatus('running')
     void this.rt.store.sessions.touch(this.row.id)
@@ -1209,6 +1225,8 @@ class LiveSession {
       })),
       ...(modelText ? [{ type: 'text' as const, text: modelText }] : []),
       ...(attached?.blocks ?? []).map((t) => ({ type: 'text' as const, text: t })),
+      // Files go in as a path: Read opens them (pdf, csv, notebook, image) without a prompt.
+      ...(filesNote ? [{ type: 'text' as const, text: filesNote }] : []),
     ]
     this.input.push({ content })
   }
@@ -2413,6 +2431,8 @@ async function recoverActions(rt: WorkspaceRuntime): Promise<void> {
 
 async function deleteSession(rt: WorkspaceRuntime, sessionId: string): Promise<void> {
   rt.live.get(sessionId)?.stop()
+  // Files attached to its messages go with it.
+  await removeSessionFiles(rt.attachmentsDir, sessionId)
   // Its actions stay on record — they happened; only the tracker goes.
   rt.actionTrackers.delete(sessionId)
   // Its tab closes; its evidence stays on disk — the Verification note points at it.
@@ -5672,6 +5692,24 @@ async function setItemImagesOp(rt: WorkspaceRuntime, id: string, edits: ItemImag
   return images
 }
 
+/**
+ * Check an item save's `files` against what the item holds, before anything is
+ * written: a bad id or a vanished upload refuses the whole save. `undefined` =
+ * the key is absent, files untouched.
+ */
+const itemFilePlan = (rt: WorkspaceRuntime, raw: unknown, held: readonly FileRef[]) =>
+  itemFileEdits(rt.attachmentsDir, (raw ?? {}) as Record<string, unknown>, held, MAX_FILES_PER_ITEM)
+
+/** Move the planned files into the item's folder, drop the ones left out, record the refs. Any item, like images. */
+async function setItemFilesOp(rt: WorkspaceRuntime, id: string, plan: NonNullable<Awaited<ReturnType<typeof itemFilePlan>>>): Promise<FileRef[]> {
+  const item = await rt.store.items.get(id)
+  if (!item) throw new Error('no such work item')
+  const files = await applyItemFileEdits(rt.attachmentsDir, id, item.files ?? [], plan)
+  await rt.store.items.setFiles(id, files)
+  invalidateInbox(rt)
+  return files
+}
+
 // ---------------------------------------------------------------------------
 // Work-item operations — one core, three callers: the HTTP routes below, the
 // in-process MCP server that web chats get (rt.triageMcp(), one per session), and the
@@ -5823,6 +5861,7 @@ async function resolveItemOp(rt: WorkspaceRuntime, rawId: unknown): Promise<void
 
 async function createManualOp(rt: WorkspaceRuntime, raw: unknown): Promise<string> {
   const { images, ...input } = await manualItemFrom(rt, raw)
+  const filePlan = await itemFilePlan(rt, raw, [])
   const due = dueInput((raw as Record<string, unknown>).due, Date.now())
   const id = `manual:${randomUUID()}`
   await rt.store.items.createManual({ id, ...input, projectId: input.projectId ?? (await defaultProject(rt))?.id })
@@ -5830,6 +5869,7 @@ async function createManualOp(rt: WorkspaceRuntime, raw: unknown): Promise<strin
   // The item has to exist before its images can hang off it — the folder is
   // named after the id the line above minted.
   if (images?.length) await setItemImagesOp(rt, id, images)
+  if (filePlan?.order.length) await setItemFilesOp(rt, id, filePlan)
   invalidateInbox(rt)
   log('info', 'inbox', `manual item created: ${input.title ?? id}`, { id, workspace: rt.meta.id })
   return id
@@ -5842,10 +5882,12 @@ async function editManualOp(rt: WorkspaceRuntime, id: string, raw: unknown): Pro
   if (!id || !id.startsWith('manual:'))
     throw new Error('edit_work_item only edits manual items (id must start with "manual:")')
   const { images, ...patch } = await manualItemFrom(rt, raw, { partial: true })
+  const filePlan = await itemFilePlan(rt, raw, (await rt.store.items.get(id))?.files ?? [])
   const due = dueInput((raw as Record<string, unknown>).due, Date.now())
   await rt.store.items.updateManual(id, patch)
   if (due !== undefined) await rt.store.items.setDue(id, due)
   if (images) await setItemImagesOp(rt, id, images)
+  if (filePlan) await setItemFilesOp(rt, id, filePlan)
   invalidateInbox(rt)
 }
 
@@ -6475,6 +6517,8 @@ async function startBriefRun(rt: WorkspaceRuntime, job: BriefJob): Promise<void>
   // Screenshots the human put on the item ride the first message as real
   // image blocks — a brief about a broken UI needs to see it.
   const images = await itemImageAttachments(rt.attachmentsDir, item.id, item.images)
+  // Files of any type go in as paths the session can Read.
+  const files = await copyItemFilesToSession(rt.attachmentsDir, row.id, item.id, item.files)
   await live.sendUserMessage(
     composeBriefPrompt({
       item,
@@ -6487,6 +6531,8 @@ async function startBriefRun(rt: WorkspaceRuntime, job: BriefJob): Promise<void>
       imageCount: images?.length ?? 0,
     }),
     images,
+    undefined,
+    files.length ? { files } : {},
   )
   log('info', 'briefs', `run started: ${item.title}${iteration ? ' (iteration)' : ''}`, {
     jobId: job.id,
@@ -7743,7 +7789,8 @@ async function planTeamOp(rt: WorkspaceRuntime, raw: unknown): Promise<string> {
   if (brief) mentions.push({ kind: 'artifact', ref: brief.artifact.id, label: brief.artifact.title })
   const images = await itemImageAttachments(rt.attachmentsDir, item.id, item.images)
   const text = planMessage({ team: entry && recipe ? { name: entry.name, label: recipe.label, tasks: !!taskLoop(recipe) } : null, itemTitle: item.title })
-  await live.sendUserMessage(`${text}\n\n${mentions.map(mentionToken).join(' ')}`, images, mentions)
+  const files = await copyItemFilesToSession(rt.attachmentsDir, row.id, item.id, item.files)
+  await live.sendUserMessage(`${text}\n\n${mentions.map(mentionToken).join(' ')}`, images, mentions, files.length ? { files } : {})
   log('info', 'teams', `team planning: ${recipe?.label ?? 'pick or draft'} for ${item.title}`, { itemId: item.id, workspace: rt.meta.id })
   return row.id
 }
@@ -10808,6 +10855,49 @@ const server = http.createServer(async (req, res) => {
     json(body.ok ? 200 : 400, body)
     return
   }
+  // Files of any type on an item: the complete desired set, as ids — ones the
+  // item holds stay, pending uploads are claimed, anything left out is deleted.
+  if (url.pathname === '/api/items/files' && req.method === 'POST') {
+    let body: ItemFilesResponse
+    try {
+      const parsed = (await readJsonBody(req, 64 * 1024)) as Record<string, unknown> | null
+      const id = typeof parsed?.id === 'string' ? parsed.id : ''
+      if (!ANY_ITEM_ID_RE.test(id)) throw new Error('need an item id')
+      const held = (await rt.store.items.get(id))?.files ?? []
+      const plan = (await itemFilePlan(rt, { files: parsed?.files ?? [] }, held))!
+      body = { ok: true, files: await setItemFilesOp(rt, id, plan) }
+    } catch (err) {
+      body = { ok: false, error: errText(err) }
+    }
+    json(body.ok ? 200 : 400, body)
+    return
+  }
+  // One item file as a download (`itemFileUrl`). Always an attachment of an
+  // opaque type: a user's html or svg must never run on triage's origin.
+  if (url.pathname === '/api/items/file' && req.method === 'GET') {
+    const itemId = url.searchParams.get('item') ?? ''
+    const fileId = url.searchParams.get('file') ?? ''
+    const item = ANY_ITEM_ID_RE.test(itemId) ? await rt.store.items.get(itemId).catch(() => null) : null
+    const file = item?.files?.find((f) => f.id === fileId)
+    if (!file) {
+      json(404, { ok: false, error: 'no such file' })
+      return
+    }
+    try {
+      const bytes = await readItemFile(rt.attachmentsDir, itemId, file)
+      res.writeHead(200, {
+        'content-type': 'application/octet-stream',
+        'content-disposition': `attachment; filename="${file.name.replace(/[^\x20-\x7e]|["\\]/g, '_')}"; filename*=UTF-8''${encodeURIComponent(file.name)}`,
+        'content-length': String(bytes.length),
+        'x-content-type-options': 'nosniff',
+        'cache-control': 'private, max-age=31536000, immutable',
+      })
+      res.end(bytes)
+    } catch {
+      json(404, { ok: false, error: 'the file is missing' })
+    }
+    return
+  }
   // The bytes behind one ref (`itemImageUrl`). Ids are uuids and files are
   // never rewritten in place, so this is safe to cache hard.
   if (url.pathname === '/api/items/image' && req.method === 'GET') {
@@ -11262,6 +11352,7 @@ function parseClientMessage(raw: unknown): ClientMessage | null {
             : undefined,
         firstMessage: typeof m.firstMessage === 'string' ? m.firstMessage : undefined,
         images: imageAttachments(m.images),
+        files: Array.isArray(m.files) ? (m.files as unknown[]).map((f) => (typeof f === 'string' ? f : '')) : undefined,
         mentions: mentionList(m.mentions),
         model: model(m.model),
         effort: effort(m.effort),
@@ -11311,6 +11402,7 @@ function parseClientMessage(raw: unknown): ClientMessage | null {
             sessionId: m.sessionId,
             text: str(m.text),
             images: imageAttachments(m.images),
+            files: Array.isArray(m.files) ? (m.files as unknown[]).map((f) => (typeof f === 'string' ? f : '')) : undefined,
             mentions: mentionList(m.mentions),
             ...(m.mode === 'goal' ? { mode: 'goal' as const } : {}),
           }
@@ -11424,6 +11516,8 @@ wss.on('connection', (ws, req) => {
             checkout = await makeWorktree(rt, target, msg.worktree.branch, msg.itemId, (step) => send(ws, { type: 'create_progress', step }))
             send(ws, { type: 'create_progress', step: 'session' })
           }
+          // Named uploads must still be there; checked before anything is created, so a stale one sends nothing.
+          if (msg.files) await resolveUploads(rt.attachmentsDir, msg.files, MAX_FILES_PER_MESSAGE)
           const fallback = msg.cwd || checkout ? null : await defaultProject(rt)
           const cwd = checkout?.path ?? expandHome(msg.cwd || fallback?.path || '~')
           const project = await projectForSession(rt, cwd, checkout?.projectId ?? msg.projectId ?? fallback?.id)
@@ -11450,10 +11544,19 @@ wss.on('connection', (ws, req) => {
             ? await itemImageAttachments(rt.attachmentsDir, dispatched.id, dispatched.images)
             : undefined
           const images = [...(fromItem ?? []), ...(msg.images ?? [])].slice(0, MAX_IMAGES_PER_MESSAGE)
-          if (msg.firstMessage?.trim() || images.length || msg.mentions?.length)
+          // The item's files are copied into this session's folder, so it reads its own copy by path.
+          const itemFiles = dispatched ? await copyItemFilesToSession(rt.attachmentsDir, row.id, dispatched.id, dispatched.files) : []
+          const files = [
+            ...itemFiles,
+            ...(msg.files?.length ? await claimSessionFiles(rt.attachmentsDir, row.id, msg.files, MAX_FILES_PER_MESSAGE) : []),
+          ]
+          if (msg.firstMessage?.trim() || images.length || files.length || msg.mentions?.length)
             void rt.live
               .get(row.id)
-              ?.sendUserMessage(msg.firstMessage?.trim() ?? '', images.length ? images : undefined, msg.mentions, msg.mode === 'goal' ? { mode: 'goal' } : {})
+              ?.sendUserMessage(msg.firstMessage?.trim() ?? '', images.length ? images : undefined, msg.mentions, {
+                ...(msg.mode === 'goal' ? { mode: 'goal' as const } : {}),
+                ...(files.length ? { files } : {}),
+              })
           break
         }
         case 'set_model': {
@@ -11560,7 +11663,7 @@ wss.on('connection', (ws, req) => {
           break
         }
         case 'user_message': {
-          if (!msg.text.trim() && !msg.images?.length && !msg.mentions?.length) break
+          if (!msg.text.trim() && !msg.images?.length && !msg.files?.length && !msg.mentions?.length) break
           // A goal's session: a live one takes the message (its goal keeps a copy);
           // one that has ended is gone for good, so the message goes to the goal's lead.
           const row = rt.rows.get(msg.sessionId)
@@ -11578,7 +11681,19 @@ wss.on('connection', (ws, req) => {
             }
           }
           const session = await getOrRevive(rt, msg.sessionId)
-          void session?.sendUserMessage(msg.text.trim(), msg.images, msg.mentions, msg.mode ? { mode: msg.mode } : {})
+          let files: FileRef[] = []
+          if (session && msg.files?.length) {
+            try {
+              files = await claimSessionFiles(rt.attachmentsDir, msg.sessionId, msg.files, MAX_FILES_PER_MESSAGE)
+            } catch (err) {
+              await sessionNotice(rt, msg.sessionId, `Not sent: ${errText(err)}`)
+              break
+            }
+          }
+          void session?.sendUserMessage(msg.text.trim(), msg.images, msg.mentions, {
+            ...(msg.mode ? { mode: msg.mode } : {}),
+            ...(files.length ? { files } : {}),
+          })
           break
         }
         case 'permission_response': {

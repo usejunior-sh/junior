@@ -7,9 +7,13 @@
  * in `files`. The real filename is kept on disk: Claude Code's Read chooses
  * pdf / notebook / image handling from the extension. Pending uploads are
  * pruned after a day, each time a new one arrives, so no timer is needed.
+ *
+ * Sending a message claims its uploads: each folder moves to
+ * `<workspace>/attachments/sessions/<session>/<uuid>/<name>`, so deleting the
+ * session removes its files, and the model is given the absolute path.
  */
 import { randomUUID } from 'node:crypto'
-import { mkdir, readdir, rm, stat, writeFile } from 'node:fs/promises'
+import { copyFile, mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises'
 import type http from 'node:http'
 import path from 'node:path'
 
@@ -198,4 +202,104 @@ export async function itemFileEdits(
     fresh.push(ref)
   }
   return { kept, fresh, order: ids }
+}
+
+/** `root` is the workspace's `attachments` folder. A session's files, one `<uuid>/<name>` folder each. */
+export const sessionFilesDir = (root: string, sessionId: string): string =>
+  path.join(root, 'sessions', sessionId.replace(/[^A-Za-z0-9_-]+/g, '_'))
+
+/**
+ * Move the uploads a message names into its session's folder and return their
+ * refs, in order. All are checked first, so an unknown id sends nothing. The
+ * event log keeps these refs (id, name, bytes) — never the bytes.
+ */
+export async function claimSessionFiles(root: string, sessionId: string, ids: readonly string[], max: number): Promise<FileRef[]> {
+  const refs = await resolveUploads(root, ids, max)
+  if (refs.length === 0) return []
+  const dest = sessionFilesDir(root, sessionId)
+  await mkdir(dest, { recursive: true })
+  for (const ref of refs) await rename(path.join(uploadsDir(root), ref.id), path.join(dest, ref.id))
+  return refs
+}
+
+/** Where a claimed file sits on disk — the path Claude is given. */
+export const sessionFilePath = (root: string, sessionId: string, ref: FileRef): string =>
+  path.join(sessionFilesDir(root, sessionId), ref.id, ref.name)
+
+/** Remove a session's files folder (when the session is deleted). Best-effort. */
+export async function removeSessionFiles(root: string, sessionId: string): Promise<void> {
+  await rm(sessionFilesDir(root, sessionId), { recursive: true, force: true }).catch(() => {})
+}
+
+/**
+ * `root` is the workspace's `attachments` folder. An item's files, one
+ * `<uuid>/<name>` folder each — under `items/`, apart from the item images'
+ * `<slug>/` folders, and inside the already-listed attachments dir.
+ */
+export const itemFilesDir = (root: string, itemId: string): string =>
+  path.join(root, 'items', itemId.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80) || 'item')
+
+/** Where an item's file sits on disk. */
+export const itemFilePath = (root: string, itemId: string, ref: FileRef): string => path.join(itemFilesDir(root, itemId), ref.id, ref.name)
+
+/**
+ * Reconcile an item's files against a save: kept files stay, fresh uploads move
+ * into the item's folder, and every held file the list omits is deleted with
+ * its folder. `edits` is `itemFileEdits`' result; returns the refs to persist,
+ * in the order given.
+ */
+export async function applyItemFileEdits(
+  root: string,
+  itemId: string,
+  held: readonly FileRef[],
+  edits: { kept: readonly FileRef[]; fresh: readonly FileRef[]; order: readonly string[] },
+): Promise<FileRef[]> {
+  if (edits.fresh.length > 0) await mkdir(itemFilesDir(root, itemId), { recursive: true })
+  for (const ref of edits.fresh) await rename(path.join(uploadsDir(root), ref.id), path.join(itemFilesDir(root, itemId), ref.id))
+  const byId = new Map([...edits.kept, ...edits.fresh].map((f) => [f.id, f]))
+  const keeping = new Set(byId.keys())
+  for (const old of held) {
+    if (keeping.has(old.id)) continue
+    await rm(path.join(itemFilesDir(root, itemId), old.id), { recursive: true, force: true }).catch(() => {})
+  }
+  return edits.order.map((id) => byId.get(id)!)
+}
+
+/** The bytes of one item file, for the download route. Throws when the file is gone. */
+export const readItemFile = (root: string, itemId: string, ref: FileRef): Promise<Buffer> => readFile(itemFilePath(root, itemId, ref))
+
+/**
+ * Copy an item's files into a session's folder, each under a fresh uuid, so the
+ * session owns its copy (deleting the session never touches the item, and the
+ * other way round). A file that has gone missing is skipped — the prompt is
+ * worth more than the attachment. Returns the session's refs, in order.
+ */
+export async function copyItemFilesToSession(
+  root: string,
+  sessionId: string,
+  itemId: string,
+  files: readonly FileRef[] | undefined,
+): Promise<FileRef[]> {
+  const out: FileRef[] = []
+  for (const f of files ?? []) {
+    const id = randomUUID()
+    try {
+      await mkdir(path.join(sessionFilesDir(root, sessionId), id), { recursive: true })
+      await copyFile(itemFilePath(root, itemId, f), sessionFilePath(root, sessionId, { ...f, id }))
+      out.push({ ...f, id })
+    } catch {
+      // the file is gone — the ref outlived it
+      await rm(path.join(sessionFilesDir(root, sessionId), id), { recursive: true, force: true }).catch(() => {})
+    }
+  }
+  return out
+}
+
+const kb = (n: number): string => (n < 1024 * 1024 ? `${Math.max(1, Math.round(n / 1024))} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`)
+
+/** The text block that tells the model where the user's files are. Empty list = no block. */
+export function attachedFilesNote(root: string, sessionId: string, files: readonly FileRef[]): string | null {
+  if (files.length === 0) return null
+  const lines = files.map((f) => `- ${sessionFilePath(root, sessionId, f)} (${f.name}, ${kb(f.bytes)})`)
+  return `The user attached ${files.length === 1 ? 'a file' : 'files'}. Read ${files.length === 1 ? 'it' : 'them'} from disk:\n${lines.join('\n')}`
 }

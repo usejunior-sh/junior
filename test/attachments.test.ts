@@ -6,20 +6,31 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { Readable } from 'node:stream'
-import { existsSync, mkdtempSync, rmSync, utimesSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, utimesSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import type http from 'node:http'
+import { openSqliteStore } from '../core/store/sqlite.js'
 import {
+  applyItemFileEdits,
+  attachedFilesNote,
+  claimSessionFiles,
+  copyItemFilesToSession,
   fileIdList,
   handleUpload,
   itemFileEdits,
+  itemFilePath,
+  itemFilesDir,
   pruneUploads,
+  readItemFile,
   readRawBody,
   readUpload,
+  removeSessionFiles,
   resolveUploads,
   sanitizeFileName,
   saveUpload,
+  sessionFilePath,
+  sessionFilesDir,
   uploadsDir,
 } from '../server/attachments.js'
 import { MAX_FILE_BYTES, MAX_FILES_PER_ITEM, MAX_FILES_PER_MESSAGE } from '../shared/protocol.js'
@@ -173,5 +184,131 @@ test('item file edits: absent = untouched, held ids are kept, upload ids are cla
     await assert.rejects(itemFileEdits(root, { files: [held.id, held.id] }, [held], 5), /listed twice/)
   } finally {
     rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('claiming moves uploads into the session folder and the note names the real path', async () => {
+  const root = tmp()
+  try {
+    const up = await saveUpload(root, 'sales.csv', Buffer.from('a,b\n1,2\n'))
+    const [ref] = await claimSessionFiles(root, 'sess-1', [up.id], 5)
+    assert.deepEqual(ref, up)
+    assert.ok(!existsSync(path.join(uploadsDir(root), up.id)), 'no longer pending')
+    const file = sessionFilePath(root, 'sess-1', ref)
+    assert.equal(file, path.join(root, 'sessions', 'sess-1', up.id, 'sales.csv'))
+    assert.equal(readFileSync(file, 'utf8'), 'a,b\n1,2\n')
+    const note = attachedFilesNote(root, 'sess-1', [ref])
+    assert.ok(note?.includes(file), 'the model is given an absolute path')
+    assert.equal(attachedFilesNote(root, 'sess-1', []), null)
+    // the event log's shape: id, name, bytes — nothing else
+    assert.deepEqual(Object.keys(JSON.parse(JSON.stringify(ref))).sort(), ['bytes', 'id', 'name'])
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('claiming checks every id first: one unknown upload leaves the others pending', async () => {
+  const root = tmp()
+  try {
+    const up = await saveUpload(root, 'a.txt', Buffer.from('x'))
+    await assert.rejects(claimSessionFiles(root, 's', [up.id, UNKNOWN], 5), /no longer available/)
+    assert.ok(existsSync(path.join(uploadsDir(root), up.id)))
+    assert.ok(!existsSync(sessionFilesDir(root, 's')))
+    assert.deepEqual(await claimSessionFiles(root, 's', [], 5), [])
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('removing a session deletes its files folder and nothing else', async () => {
+  const root = tmp()
+  try {
+    const a = await saveUpload(root, 'a.pdf', Buffer.from('x'))
+    const b = await saveUpload(root, 'b.pdf', Buffer.from('y'))
+    await claimSessionFiles(root, 's1', [a.id], 5)
+    await claimSessionFiles(root, 's2', [b.id], 5)
+    await removeSessionFiles(root, 's1')
+    assert.ok(!existsSync(sessionFilesDir(root, 's1')))
+    assert.ok(existsSync(sessionFilesDir(root, 's2')))
+    await removeSessionFiles(root, 'never-had-files') // a no-op, not an error
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('a session id cannot climb out of the sessions folder', () => {
+  const dir = sessionFilesDir('/ws/attachments', '../../etc')
+  assert.ok(dir.startsWith(path.join('/ws/attachments', 'sessions') + path.sep))
+})
+
+test('an item save keeps, adds and removes files, in the order given', async () => {
+  const root = tmp()
+  const item = 'manual:abc-123'
+  try {
+    // add two
+    const a = await saveUpload(root, 'a.csv', Buffer.from('a'))
+    const b = await saveUpload(root, 'b.pdf', Buffer.from('bb'))
+    let edits = (await itemFileEdits(root, { files: [a.id, b.id] }, [], 5))!
+    let held = await applyItemFileEdits(root, item, [], edits)
+    assert.deepEqual(held, [a, b])
+    assert.equal(readFileSync(itemFilePath(root, item, a), 'utf8'), 'a')
+    assert.ok(!existsSync(path.join(uploadsDir(root), a.id)), 'claimed, no longer pending')
+    assert.equal((await readItemFile(root, item, b)).toString(), 'bb')
+
+    // keep b, drop a, add c — and reorder
+    const c = await saveUpload(root, 'c.txt', Buffer.from('ccc'))
+    edits = (await itemFileEdits(root, { files: [c.id, b.id] }, held, 5))!
+    held = await applyItemFileEdits(root, item, held, edits)
+    assert.deepEqual(held, [c, b])
+    assert.ok(!existsSync(path.join(itemFilesDir(root, item), a.id)), 'the dropped file is deleted with its folder')
+    assert.ok(existsSync(itemFilePath(root, item, b)))
+
+    // absent key = untouched; [] clears
+    assert.equal(await itemFileEdits(root, {}, held, 5), undefined)
+    edits = (await itemFileEdits(root, { files: [] }, held, 5))!
+    assert.deepEqual(await applyItemFileEdits(root, item, held, edits), [])
+    assert.ok(!existsSync(itemFilePath(root, item, c)) && !existsSync(itemFilePath(root, item, b)))
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('copying an item\'s files gives the session its own copy under fresh ids', async () => {
+  const root = tmp()
+  const item = 'github:acme/api#7'
+  try {
+    const up = await saveUpload(root, 'spec.pdf', Buffer.from('pdf-bytes'))
+    const held = await applyItemFileEdits(root, item, [], (await itemFileEdits(root, { files: [up.id] }, [], 5))!)
+    const copies = await copyItemFilesToSession(root, 'sess-9', item, held)
+    assert.equal(copies.length, 1)
+    assert.notEqual(copies[0].id, up.id)
+    assert.equal(copies[0].name, 'spec.pdf')
+    assert.equal(readFileSync(sessionFilePath(root, 'sess-9', copies[0]), 'utf8'), 'pdf-bytes')
+    // deleting the session leaves the item's file alone
+    await removeSessionFiles(root, 'sess-9')
+    assert.ok(existsSync(itemFilePath(root, item, held[0])))
+    // a file that went missing is skipped, not fatal; no item files = nothing
+    assert.deepEqual(await copyItemFilesToSession(root, 'sess-9', item, [{ id: UNKNOWN, name: 'gone.txt', bytes: 1 }]), [])
+    assert.ok(!existsSync(sessionFilesDir(root, 'sess-9')) || !existsSync(path.join(sessionFilesDir(root, 'sess-9'), UNKNOWN)))
+    assert.deepEqual(await copyItemFilesToSession(root, 'sess-9', item, undefined), [])
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('the store records an item\'s file refs and clears them', async () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'triage-attach-store-'))
+  const store = openSqliteStore(path.join(dir, 'triage.db'))
+  try {
+    const id = 'manual:11111111-1111-4111-8111-111111111111'
+    await store.items.createManual({ id, title: 'with a file' })
+    const refs = [{ id: UNKNOWN, name: 'a.csv', bytes: 3 }]
+    await store.items.setFiles(id, refs)
+    assert.deepEqual((await store.items.get(id))?.files, refs)
+    await store.items.setFiles(id, [])
+    assert.equal((await store.items.get(id))?.files, undefined)
+  } finally {
+    await store.close()
+    rmSync(dir, { recursive: true, force: true })
   }
 })

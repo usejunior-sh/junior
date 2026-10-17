@@ -1464,6 +1464,14 @@ export type UploadResponse = { ok: true; file: FileRef } | { ok: false; error: s
 export const itemImageUrl = (itemId: string, imageId: string): string =>
   `/api/items/image?item=${encodeURIComponent(itemId)}&image=${encodeURIComponent(imageId)}`
 
+/** Where an item file's bytes are served, as a download (the `triage_ws` cookie scopes it). */
+export const itemFileUrl = (itemId: string, fileId: string): string =>
+  `/api/items/file?item=${encodeURIComponent(itemId)}&file=${encodeURIComponent(fileId)}`
+
+/** POST /api/items/files — replace the file set on any item: ids the item holds are kept, upload ids are claimed, the rest go. */
+export type ItemFilesInput = { id: string; files: string[] }
+export type ItemFilesResponse = { ok: true; files: FileRef[] } | { ok: false; error: string }
+
 /** POST /api/items/images — replace the image set on any item (manual or scanned). */
 export type ItemImagesInput = { id: string; images: ItemImageEdit[] }
 export type ItemImagesResponse = { ok: true; images: ItemImage[] } | { ok: false; error: string }
