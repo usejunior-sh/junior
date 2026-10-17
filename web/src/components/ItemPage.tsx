@@ -107,6 +107,7 @@ const TEAM_STATE: Record<RunState, string> = {
   proposed: 'needs you · approve the card',
   running: 'running',
   gate: 'needs you · a step is done',
+  waiting: 'waiting on the world',
   paused: 'paused',
   stopped: 'stopped',
   done: 'done',

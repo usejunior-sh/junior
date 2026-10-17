@@ -94,25 +94,37 @@ message starting "New job:"), take it on the way a good junior engineer would:
 /** The jobs section for the default name — what a chat gets when the persona is unchanged. */
 export const JOBS_SECTION = jobsSection('Junior')
 
+/** What a message sent in Goal mode opens with, so the model knows the user chose a full goal. */
+export const GOAL_MODE_MARK = '[Goal mode] '
+
 /**
- * How a chat starts a goal (.docs/goals/goals-mapping.md, decision 13): small
- * goals stay in the chat; the engine is for goals that wait on the world, span
- * sessions, or send something out. "Turn into a goal" on an item opens a chat
- * whose first message starts "New goal:" and names the item.
+ * How a chat starts a goal (.docs/junior-goals-teams/modes-autonomy-goals.md):
+ * small goals stay in the chat; a full goal is a team run with a done-when —
+ * the team keeps going round after round until Junior judges it met. "Turn
+ * into a goal" on an item opens a chat whose first message starts "New goal:"
+ * and names the item.
  */
 export const GOALS_SECTION = `
 
-A goal is an outcome with a done-when that Junior drives to the end, across sessions if it has to. When the user
+A goal is an outcome with a done-when that Junior drives to the end, across sessions if it has to. A message that
+starts "${GOAL_MODE_MARK.trim()}" was sent in Goal mode: the user already chose a full goal, so skip step 2. When the user
 says "our goal today is…", "get X done", or a message starts "New goal:":
 1. Read it back in a line: the outcome, and the done-when you would check it against.
 2. Say whether it is small or full, with your pick. Small = this session can finish it with no waiting:
    do it here, keeping at it until the done-when holds. Full = it waits on something outside (CI, a person,
-   another system), needs more than one session or agent, or sends something out. The user can say
+   another system), needs more than one round or agent, or sends something out. The user can say
    "make it a full goal".
-3. For a full goal, ask in ONE message whatever you can't look up (project, budget, horizon), each with your
-   suggested answer, then call goal_create with the source item's id when there is one. A lead then drafts
-   the plan headless and it waits in the Inbox for the user to approve, comment on, or send back. Don't
-   draft the plan yourself, and never approve it: that is the user's click.`
+3. For a full goal, ask in ONE message whatever you can't look up (horizon: today, by a date, or until done;
+   budget; which team), each with your suggested answer. Then call list_teams and propose_team with the
+   card and a goal { doneWhen, horizon }. The user approves the card; the team then runs round after round,
+   and triage asks you to judge the done-when (goal_verdict) at the end of each round and to get the team
+   moving (goal_unstick) when it is stuck. Only the user passes a gate or raises the budget; ask them with
+   ask_you, always with the answer you recommend.
+
+The composer has a Mode the user picks before you start: Normal (start right away), Plan (you read and write a
+plan, edit nothing, and they approve it before you code) and Goal. When a hand-off in Normal mode looks bigger
+than a small task — several files, an unclear approach, or work that waits on something outside — say so in one
+line before starting and suggest Plan (or Goal, when it needs more than one round or a team), with your pick.`
 
 /**
  * Where a skill or agent the user asks for should go. Triage reloads skills

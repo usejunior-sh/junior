@@ -218,6 +218,8 @@ import type {
   TeamRunFileResponse,
   TeamRunFilesResponse,
   TeamRunFolderFile,
+  TeamGoalSummary,
+  TeamGoalsResponse,
   TeamRunFolderResponse,
   TeamRunResponse,
   TeamRunView,
@@ -229,7 +231,18 @@ import { LEAD, parseRecipe, recipeAgents, serializeRecipe, taskLoop, type Recipe
 import { runFiles } from '../core/teams/files.js'
 import {
   MAX_RUN_BUDGET_USD,
+  acceptGoal,
+  answerQuestion,
   approve,
+  askYou,
+  goalFrom,
+  goalOverdue,
+  goalVerdict,
+  pause as pauseRun,
+  reopenGoal,
+  unstick,
+  wake,
+  wakeDue,
   cardFrom,
   checksDone,
   continueGate,
@@ -403,7 +416,6 @@ import {
   GoalHeldIndex,
   goalLeadStartedOp,
   goalLeadSettledOp,
-  goalMcpTools,
   goalMessageOp,
   goalOfSession,
   goalGateSweepOp,
@@ -552,6 +564,9 @@ const TEAM_TOOLS = new Set([
   'mcp__triage__split_step',
   'mcp__triage__revise_plan',
   'mcp__triage__submit_step',
+  'mcp__triage__goal_verdict',
+  'mcp__triage__goal_unstick',
+  'mcp__triage__ask_you',
   'mcp__team__submit_step',
 ])
 const TRIAGE_READ_TOOLS = new Set([
@@ -717,6 +732,8 @@ class WorkspaceRuntime {
   readonly sessionTeam = new Map<string, string>()
   /** run id → the tail of its action chain (withTeamRun) */
   readonly teamLocks = new Map<string, Promise<unknown>>()
+  /** a goal lead's verdict or unstick, checked when it called the tool and carried out when its turn ends */
+  readonly goalDecisions = new Map<string, (run: TeamRun) => TeamAction[]>()
   /** sessions whose next spawn starts a fresh Claude session (a checker's clean context) */
   readonly freshNext = new Set<string>()
 
@@ -862,7 +879,7 @@ const BRIEF_DISALLOWED_TOOLS = [
   'Write', 'Edit', 'MultiEdit', 'NotebookEdit', 'AskUserQuestion',
   ...['create_work_item', 'edit_work_item', 'upsert_work_item', 'resolve_work_item', 'draft_job', 'try_job',
     'write_artifact', 'update_artifact', 'link_artifact',
-    'propose_team', 'split_step', 'revise_plan', 'submit_step',
+    'propose_team', 'split_step', 'revise_plan', 'submit_step', 'goal_verdict', 'goal_unstick', 'ask_you',
     'add_to_today', 'remove_from_today', 'set_reply_style'].map((t) => `mcp__triage__${t}`),
 ]
 /** The only shell a brief may run: `gh`/`git` read verbs, no chaining or redirection. */
@@ -3229,7 +3246,8 @@ async function flowSignals(rt: WorkspaceRuntime): Promise<Map<string, FlowSignal
     const lead = rt.rows.get(run.leadSessionId)
     const at = Math.max(run.createdAt, lead?.updatedAt ?? 0)
     const s = of(run.itemId)
-    if (!s.team || at > s.team.at) s.team = { state: run.state, at }
+    const asks = run.goal?.questions.filter((q) => q.answer === null).length ?? 0
+    if (!s.team || at > s.team.at) s.team = { state: run.state, at, ...(asks ? { asks } : {}), ...(run.goal && run.state === 'done' && !run.goal.acceptedAt ? { toAccept: true } : {}) }
   }
   // Goals with an item: the newest live one per item (done and cancelled hand the item back to the rules).
   for (const g of await rt.store.goals.list({ states: ['draft_plan', 'plan_ready', 'queued', 'running', 'waiting_world', 'waiting_you', 'result_ready', 'paused'] })) {
@@ -3317,7 +3335,7 @@ async function inboxAlerts(rt: WorkspaceRuntime): Promise<InboxAlert[]> {
     alerts.push({
       id: `team:${run.id}`,
       kind: 'team',
-      title: `Team run paused: ${run.title}`,
+      title: `${run.goal ? 'Goal' : 'Team run'} paused: ${run.title}`,
       ...(run.reason ? { detail: run.reason } : {}),
       sessionId: run.leadSessionId,
       at: rt.rows.get(run.leadSessionId)?.updatedAt ?? run.createdAt,
@@ -4736,6 +4754,8 @@ setInterval(() => {
     runDueJobs(rt).catch((err) => log('error', 'scheduler', `tick failed: ${err}`, { workspace: rt.meta.id }))
     // Queued actions: expire the stale, send what a lost timer left due.
     tickActions(rt).catch((err) => log('error', 'actions', `tick failed: ${errText(err)}`, { workspace: rt.meta.id }))
+    // Goals asleep on the world: time's up, Junior looks again.
+    wakeTeamGoals(rt).catch((err) => log('error', 'teams', `goal wake failed: ${errText(err)}`, { workspace: rt.meta.id }))
     rt.store.items
       .wakeSnoozed(Date.now())
       .then((woken) => {
@@ -6860,7 +6880,7 @@ function teamRunLink(rt: WorkspaceRuntime, sessionId: string): SessionTeamRun | 
   if (!run) return undefined
   const lead = run.leadSessionId === sessionId
   const w = [...run.workers].reverse().find((x) => x.sessionId === sessionId && x.agent !== LEAD)
-  return { id: run.id, role: lead ? 'lead' : 'worker', label: lead ? 'Lead' : w?.label ?? 'Worker', state: run.state, rev: run.rev }
+  return { id: run.id, role: lead ? 'lead' : 'worker', label: lead ? 'Lead' : w?.label ?? 'Worker', state: run.state, rev: run.rev, ...(run.goal ? { goal: true } : {}) }
 }
 
 /** The run as the client reads it: everything but the server's own bookkeeping. */
@@ -7212,7 +7232,7 @@ async function runProjectChecks(run: TeamRun): Promise<CheckResult[]> {
 async function finishTeamRun(rt: WorkspaceRuntime, run: TeamRun): Promise<void> {
   if (run.root) run.endTree = (await snapshotTree(run.root)) ?? undefined
   await schedulePlanSync(rt, run, true)
-  await sessionNotice(rt, run.leadSessionId, `Team done${run.unresolved ? ' — with something unresolved' : ''} · ${usd(runSpent(run))}. The outcome is in the run folder's plan.md.`)
+  await sessionNotice(rt, run.leadSessionId, run.goal ? `Goal done · ${usd(runSpent(run))}. Accept the result, or say what's missing.` : `Team done${run.unresolved ? ' — with something unresolved' : ''} · ${usd(runSpent(run))}. The outcome is in the run folder's plan.md.`)
   log('info', 'teams', `run done at ${usd(runSpent(run))}`, { teamId: run.id, workspace: rt.meta.id })
 }
 
@@ -7228,7 +7248,20 @@ async function noteTeamSpend(rt: WorkspaceRuntime, sessionId: string, delta: num
     run.spend[sessionId] = (run.spend[sessionId] ?? 0) + delta
     run.rev += 1
     const spent = runSpent(run)
-    if (run.state === 'running' && (spent >= run.budgetUsd || overBudget)) {
+    // The lead's verdict or unstick waits for its turn to end, like a handoff: triage never messages a
+    // session mid-turn. Paused meanwhile (by you, or the budget), it waits for your resume instead.
+    const decided = sessionId === run.leadSessionId ? rt.goalDecisions.get(run.id) : undefined
+    const over = run.state === 'running' && (spent >= run.budgetUsd || overBudget)
+    // Past the budget a "met" still closes the goal — it spends nothing more.
+    if (decided && run.state === 'running' && (!over || closes(run, decided))) {
+      rt.goalDecisions.delete(run.id)
+      try {
+        return await applyTeamActions(rt, run, decided(run))
+      } catch (err) {
+        log('warn', 'teams', `goal decision no longer applies: ${errText(err)}`, { teamId: run.id, workspace: rt.meta.id })
+      }
+    }
+    if (over) {
       await pauseTeamRunNow(rt, run, `budget reached — ${usd(spent)} of ${usd(run.budgetUsd)}`)
       return
     }
@@ -7236,11 +7269,20 @@ async function noteTeamSpend(rt: WorkspaceRuntime, sessionId: string, delta: num
   })
 }
 
+/** Would this goal decision close the goal? Tried on a copy. */
+function closes(run: TeamRun, decide: (r: TeamRun) => TeamAction[]): boolean {
+  const probe = structuredClone(run)
+  try {
+    decide(probe)
+  } catch {
+    return false
+  }
+  return probe.state === 'done'
+}
+
 /** Stop every worker mid-turn and hold the run until it's resumed. The lead's chat is left alone. */
 async function pauseTeamRunNow(rt: WorkspaceRuntime, run: TeamRun, reason: string): Promise<void> {
-  run.state = 'paused'
-  run.reason = reason
-  run.rev += 1
+  pauseRun(run, reason)
   for (const w of run.workers) {
     if (!w.sessionId || w.sessionId === run.leadSessionId) continue
     const live = rt.live.get(w.sessionId)
@@ -7249,7 +7291,7 @@ async function pauseTeamRunNow(rt: WorkspaceRuntime, run: TeamRun, reason: strin
     live.stop()
   }
   await teamRunChanged(rt, run)
-  await sessionNotice(rt, run.leadSessionId, `Team paused: ${reason}. Resume to raise the budget, or stop the run.`)
+  await sessionNotice(rt, run.leadSessionId, `${run.goal ? 'Goal' : 'Team'} paused: ${reason}.${reason.startsWith('budget') ? ' Only you can raise the budget and resume it.' : ''}`)
   log('info', 'teams', `run paused: ${reason}`, { teamId: run.id, workspace: rt.meta.id })
 }
 
@@ -7372,6 +7414,9 @@ async function proposeTeamOp(rt: WorkspaceRuntime, sessionId: string, raw: unkno
   else throw new Error('give either team (a saved team\'s name) or recipe (a drafted one)')
   // How much the team may do unasked is yours to pick on the card, never the lead's.
   const card = cardFrom({ ...((r.card ?? {}) as object), permissions: undefined, fast: undefined }, recipe, existing?.state === 'proposed' ? existing.card : undefined)
+  const kept = existing?.state === 'proposed' ? existing.goal ?? null : null
+  // A goal: the lead's, or the one already on the card (proposing again keeps it).
+  const goal = r.goal ? goalFrom(r.goal, Date.now(), kept) : kept
 
   let itemId = rt.sessionItem.get(sessionId) ?? null
   if (!itemId || !(await rt.store.items.get(itemId))) {
@@ -7416,21 +7461,31 @@ async function proposeTeamOp(rt: WorkspaceRuntime, sessionId: string, raw: unkno
     nudged: [],
     root,
     dir: teamRunDir(rt, id, root),
+    goal,
+    resumes: [],
     ...(existing?.state === 'proposed' && existing.planArtifactId ? { planArtifactId: existing.planArtifactId } : {}),
   }
   if (existing && existing.id !== run.id) rt.teamRuns.delete(existing.id)
   rt.teamRuns.set(run.id, run)
   indexTeamRun(rt, run)
   await teamRunChanged(rt, run)
-  log('info', 'teams', `team proposed: ${recipe.label} for ${run.title}`, { teamId: run.id, workspace: rt.meta.id })
+  log('info', 'teams', `${goal ? 'goal' : 'team'} proposed: ${recipe.label} for ${run.title}`, { teamId: run.id, workspace: rt.meta.id })
   return run
+}
+
+/** A proposed card's goal, from your edit: an object sets it, null makes it a plain team run. */
+function goalEdit(run: TeamRun, raw: unknown): void {
+  if (!raw || typeof raw !== 'object' || !('goal' in raw)) return
+  const g = (raw as { goal?: unknown }).goal
+  run.goal = g === null ? null : goalFrom(g, Date.now(), run.goal)
 }
 
 /** Your edit to a proposed card (before approving). */
 async function editTeamCardOp(rt: WorkspaceRuntime, raw: unknown): Promise<void> {
   const run = teamRunFrom(rt, raw)
   if (run.state !== 'proposed') throw new Error('only a proposed card can be edited')
-  run.card = cardFrom((raw as { card?: unknown }).card, run.recipe, run.card)
+  if ((raw as { card?: unknown }).card) run.card = cardFrom((raw as { card?: unknown }).card, run.recipe, run.card)
+  goalEdit(run, raw)
   run.budgetUsd = run.card.budgetUsd
   run.rev += 1
   await teamRunChanged(rt, run)
@@ -7492,7 +7547,8 @@ async function approveTeamOp(rt: WorkspaceRuntime, raw: unknown): Promise<void> 
     const card = (raw as { card?: unknown }).card ? cardFrom((raw as { card?: unknown }).card, run.recipe, run.card) : run.card
     if (run.state !== 'proposed') throw new Error(`the run is ${run.state}, not waiting for approval`)
     if (!card.permissions) throw new Error('pick what the team may do without asking before it runs')
-    log('info', 'teams', `team approved: ${run.recipe.label}`, { teamId: run.id, workspace: rt.meta.id })
+    goalEdit(run, raw)
+    log('info', 'teams', `${run.goal ? 'goal' : 'team'} approved: ${run.recipe.label}`, { teamId: run.id, workspace: rt.meta.id })
     // The checks as they stand before anyone touches the code: a failure already there is nobody's regression.
     if (run.root) {
       await sessionNotice(rt, run.leadSessionId, 'Running the project’s checks before the team starts…')
@@ -7519,16 +7575,30 @@ async function resumeTeamOp(rt: WorkspaceRuntime, raw: unknown): Promise<void> {
   const run = teamRunFrom(rt, raw)
   await withTeamRun(rt, run, async () => {
     requireVeto(rt.provider, 'team')
-    if (run.state === 'gate') return applyTeamActions(rt, run, continueGate(run))
+    if (run.state === 'gate') return applyTeamActions(rt, run, continueGate(run, Date.now()))
     const spent = runSpent(run)
     const addUsd = Number((raw as { addUsd?: unknown }).addUsd)
     // Resume always leaves room to work: at least the requested amount above what's spent.
     const add = Number.isFinite(addUsd) && addUsd > 0 ? Math.min(addUsd, MAX_RUN_BUDGET_USD) : Math.max(2, Math.round(run.budgetUsd * 0.5))
-    if (spent >= run.budgetUsd) run.budgetUsd = Math.round((spent + add) * 100) / 100
+    const before = run.budgetUsd
+    // You named an amount: it goes on top. Otherwise only a spent budget grows, by the default step.
+    if (spent >= run.budgetUsd || (Number.isFinite(addUsd) && addUsd > 0)) run.budgetUsd = Math.round((Math.max(spent, run.budgetUsd) + add) * 100) / 100
     // Workers respawn on their next message, with the new remaining budget as their backstop.
     for (const w of run.workers) if (w.sessionId && w.sessionId !== run.leadSessionId) rt.live.get(w.sessionId)?.stop()
-    await sessionNotice(rt, run.leadSessionId, `Team resumed — budget ${usd(run.budgetUsd)} (${usd(spent)} spent).`)
-    await applyTeamActions(rt, run, resume(run))
+    const raised = run.budgetUsd > before
+    await sessionNotice(rt, run.leadSessionId, `${run.goal ? 'Goal' : 'Team'} resumed by you — budget ${usd(run.budgetUsd)} (${usd(spent)} spent).`)
+    const actions = resume(run, Date.now(), raised ? `raised the budget from ${usd(before)} to ${usd(run.budgetUsd)} and resumed` : 'resumed after a pause')
+    // A verdict or unstick the lead gave just before the pause: carry it out now, instead of asking again.
+    const decided = rt.goalDecisions.get(run.id)
+    if (decided && run.state === 'running') {
+      rt.goalDecisions.delete(run.id)
+      try {
+        return await applyTeamActions(rt, run, decided(run))
+      } catch (err) {
+        log('warn', 'teams', `goal decision no longer applies: ${errText(err)}`, { teamId: run.id, workspace: rt.meta.id })
+      }
+    }
+    await applyTeamActions(rt, run, actions)
   })
 }
 
@@ -7544,6 +7614,7 @@ async function stopTeamOp(rt: WorkspaceRuntime, raw: unknown): Promise<void> {
       live.stop()
     }
     run.state = 'stopped'
+    rt.goalDecisions.delete(run.id)
     if (run.root) run.endTree = (await snapshotTree(run.root)) ?? undefined
     run.awaiting = []
     run.rev += 1
@@ -7769,11 +7840,19 @@ function teamLeadTools(rt: WorkspaceRuntime) {
           budgetUsd: z.number().optional().describe('the run\'s spend cap; defaults to the team\'s budget'),
           note: z.string().optional().describe('one or two lines to the user: why this team and size'),
         }),
+        goal: z
+          .object({
+            doneWhen: z.string().describe('ONE sentence: the outcome you will judge when the team finishes a round, e.g. "the PR is merged with checks green" — not a task list'),
+            horizon: z.enum(['today', 'by', 'until_done']).describe('finish today, by a date, or keep going until done'),
+            by: z.string().optional().describe('horizon "by": the date, YYYY-MM-DD'),
+          })
+          .optional()
+          .describe('only when the user wants a goal: the team keeps going, round after round, until the done-when holds'),
       },
       async (args) => {
         try {
           const run = await proposeTeamOp(rt, args.sessionId, args)
-          return okResult(`Team card shown to the user (${run.recipe.label}, ${run.recipe.steps.length} steps, up to ${usd(run.card.budgetUsd)}). END YOUR TURN — they approve or edit it, then triage runs the steps and wakes you when you're needed.`)
+          return okResult(`${run.goal ? 'Goal' : 'Team'} card shown to the user (${run.recipe.label}, ${run.recipe.steps.length} steps, up to ${usd(run.card.budgetUsd)}). END YOUR TURN — they approve or edit it, then triage runs the steps and wakes you when you're needed.`)
         } catch (err) {
           return errResult(errText(err))
         }
@@ -7814,7 +7893,150 @@ function teamLeadTools(rt: WorkspaceRuntime) {
       },
     ),
     tool('submit_step', `${SUBMIT_DESCRIPTION} Only when triage hands you a step.`, { sessionId: sid, ...SUBMIT_SHAPE }, ({ sessionId, ...args }) => submitStepOp(rt, sessionId, args)),
+    tool(
+      'goal_verdict',
+      'Judge your goal\'s done-when — only when triage asks you to (the team finished a round, or a wait is over). Look for yourself first: run the checks, read the diff, query the connectors you can see. met: true closes the goal for the user to accept; met: false starts another round with the gap (and, for a team with a task loop, the next round\'s tasks); met: false with waitFor + waitMinutes sleeps until the world has moved (CI, a reviewer, a deploy) and wakes you then. Then END YOUR TURN.',
+      {
+        sessionId: sid,
+        met: z.boolean(),
+        evidence: z.string().describe('what you ran or looked at, and what it showed'),
+        gap: z.string().optional().describe('not met: what is still missing, in a line or two — every worker in the next round reads it'),
+        tasks: z.array(z.object({ title: z.string(), criteria: z.array(z.string()).max(3).optional() })).max(4).optional().describe('not met, a team with a task loop: the next round\'s tasks, in order'),
+        waitFor: z.string().optional().describe('not met yet because the world has to move first: what for, e.g. "CI on PR #42"'),
+        waitMinutes: z.number().optional().describe('with waitFor: when to look again, in minutes'),
+      },
+      async ({ sessionId, ...v }) => {
+        const run = teamRunOf(rt, sessionId)
+        if (!run || run.leadSessionId !== sessionId) return errResult('you are not leading a team run')
+        try {
+          const at = Date.now()
+          const decide = (r: TeamRun) => goalVerdict(r, v, at)
+          // Checked now on a copy, so a mistake comes back to you; carried out when your turn ends.
+          const probe = structuredClone(run)
+          decide(probe)
+          rt.goalDecisions.set(run.id, decide)
+          const said = probe.state === 'done' ? 'met — the user accepts the result' : probe.state === 'waiting' ? 'waiting — triage wakes you then' : 'not met — the next round starts when your turn ends'
+          return okResult(`Recorded: ${said}. END YOUR TURN now.`)
+        } catch (err) {
+          return errResult(errText(err))
+        }
+      },
+    ),
+    tool(
+      'goal_unstick',
+      'Get your goal\'s team moving again — only when triage tells you the team is stuck (its fix rounds ran out on a failing review or failing checks). "retry" goes back to the change step with your guidance for the builder and a fresh set of fix rounds; "skip" leaves it unresolved and moves on. Every resume is logged with your why. Then END YOUR TURN.',
+      {
+        sessionId: sid,
+        action: z.enum(['retry', 'skip']),
+        why: z.string().describe('one line for the ledger: why this is the way past it'),
+        guidance: z.string().optional().describe('retry: what the builder should do differently this time'),
+      },
+      async ({ sessionId, ...u }) => {
+        const run = teamRunOf(rt, sessionId)
+        if (!run || run.leadSessionId !== sessionId) return errResult('you are not leading a team run')
+        try {
+          const at = Date.now()
+          const decide = (r: TeamRun) => unstick(r, u, at)
+          decide(structuredClone(run))
+          rt.goalDecisions.set(run.id, decide)
+          return okResult(`Recorded: ${u.action === 'retry' ? 'retry' : 'skip'} — the team moves when your turn ends, logged as resumed by Junior. END YOUR TURN now.`)
+        } catch (err) {
+          return errResult(errText(err))
+        }
+      },
+    ),
+    tool(
+      'ask_you',
+      'Ask the user a question about your goal — something only they can decide, or help you need. Always give the answer you recommend; they can take it with one click. The run carries on meanwhile (a gate or a budget pause still waits for them). Their answer comes back to you as a message. Ask once, everything in one question.',
+      {
+        sessionId: sid,
+        question: z.string(),
+        recommended: z.string().describe('the answer you recommend, and why in a few words'),
+      },
+      async ({ sessionId, question, recommended }) => {
+        const run = teamRunOf(rt, sessionId)
+        if (!run || run.leadSessionId !== sessionId) return errResult('you are not leading a team run')
+        try {
+          const id = await withTeamRun(rt, run, async () => {
+            const q = askYou(run, question, recommended, Date.now())
+            await applyTeamActions(rt, run, q.actions)
+            return q.id
+          })
+          invalidateInbox(rt)
+          return okResult(`Asked (${id}). Their answer comes back to you as a message. If nothing else needs you now, END YOUR TURN.`)
+        } catch (err) {
+          return errResult(errText(err))
+        }
+      },
+    ),
   ]
+}
+
+/** Your answers on a goal: a question, accepting the result, "not done yet", waking a wait early. */
+async function goalActionOp(rt: WorkspaceRuntime, verb: 'answer' | 'accept' | 'reopen' | 'wake', raw: unknown): Promise<void> {
+  const run = teamRunFrom(rt, raw)
+  const r = (raw ?? {}) as Record<string, unknown>
+  await withTeamRun(rt, run, async () => {
+    const now = Date.now()
+    if (verb === 'answer') await applyTeamActions(rt, run, answerQuestion(run, String(r.questionId ?? ''), String(r.answer ?? ''), now))
+    else if (verb === 'accept') {
+      await applyTeamActions(rt, run, acceptGoal(run, now))
+      // Accepting the result is accepting the report: the item is done.
+      if (await rt.store.items.get(run.itemId)) await rt.store.items.transition(run.itemId, { status: 'done', actor: 'user', detail: { reason: 'goal accepted' } })
+    } else if (verb === 'reopen') await applyTeamActions(rt, run, reopenGoal(run, String(r.why ?? ''), now))
+    else await applyTeamActions(rt, run, wake(run, now, true))
+  })
+  invalidateInbox(rt)
+}
+
+/** The Goals tab: every team run that is a goal, newest first. */
+function teamGoalsOp(rt: WorkspaceRuntime): TeamGoalSummary[] {
+  const now = Date.now()
+  return [...rt.teamRuns.values()]
+    .filter((run) => run.goal && run.state !== 'proposed')
+    .map((run) => {
+      const g = run.goal!
+      const asks = g.questions.filter((q) => q.answer === null).length
+      const lead = rt.rows.get(run.leadSessionId)
+      const turn: TeamGoalSummary['turn'] =
+        asks || run.state === 'gate' || run.state === 'paused' || (run.state === 'done' && !g.acceptedAt) ? 'you' : run.state === 'waiting' ? 'world' : run.state === 'running' ? 'junior' : 'none'
+      return {
+        runId: run.id,
+        itemId: run.itemId,
+        leadSessionId: run.leadSessionId,
+        title: run.title,
+        team: run.recipe.label,
+        doneWhen: g.doneWhen,
+        horizon: g.horizon,
+        state: run.state,
+        reason: run.reason ?? null,
+        round: g.round,
+        owes: g.owes,
+        asks,
+        wait: g.wait,
+        acceptedAt: g.acceptedAt,
+        lastVerdict: g.verdicts.at(-1) ?? null,
+        resumes: run.resumes?.length ?? 0,
+        overdue: goalOverdue(run, now),
+        spentUsd: runSpent(run),
+        budgetUsd: run.budgetUsd,
+        turn,
+        updatedAt: Math.max(run.createdAt, lead?.updatedAt ?? 0, run.resumes?.at(-1)?.at ?? 0),
+      }
+    })
+    .sort((a, b) => b.updatedAt - a.updatedAt)
+}
+
+/** The minute tick: goals asleep on the world whose time is up look again. */
+async function wakeTeamGoals(rt: WorkspaceRuntime): Promise<void> {
+  const now = Date.now()
+  for (const run of rt.teamRuns.values()) {
+    if (!wakeDue(run, now)) continue
+    await withTeamRun(rt, run, async () => {
+      if (wakeDue(run, Date.now())) await applyTeamActions(rt, run, wake(run, Date.now()))
+    })
+    log('info', 'teams', `goal woke: ${run.title}`, { teamId: run.id, workspace: rt.meta.id })
+  }
 }
 
 /** What a dispatched session opens with: the kind's template, the item, and the brief as a mention. */
@@ -8246,8 +8468,8 @@ function makeTriageMcp(rt: WorkspaceRuntime) {
     tools: [
       // Teams v2: any chat can become a lead (list_teams, propose_team, split_step, submit_step).
       ...teamLeadTools(rt),
-      // Goals (server/goals.ts): goal_create, goal_get, goal_list, goal_propose_plan, goal_log_append, goal_handoff_write.
-      ...goalMcpTools(rt.goalDeps),
+      // Goals are team runs with a done-when now (propose_team's `goal`); the old goals engine's
+      // goal_* tools stay in server/goals.ts but no chat is offered them.
       tool(
         'list_work_items',
         'Read the ranked triage queue: work items with their score, group, and reason. Open items by default — pass status to read the done, snoozed or archived lists instead. Optional filters narrow by source or kind.',
@@ -10356,9 +10578,15 @@ const server = http.createServer(async (req, res) => {
       } else if (route === 'POST /api/teams/pause') {
         const run = teamRunFrom(rt, await readJsonBody(req))
         await withTeamRun(rt, run, async () => {
-          if (run.state !== 'running' && run.state !== 'gate') throw new Error(`the run is ${run.state}`)
+          if (run.state !== 'running' && run.state !== 'gate' && run.state !== 'waiting') throw new Error(`the run is ${run.state}`)
           await pauseTeamRunNow(rt, run, 'paused by you')
         })
+        json(200, { ok: true })
+      } else if (route === 'GET /api/teams/goals') {
+        const body: TeamGoalsResponse = { ok: true, goals: teamGoalsOp(rt) }
+        json(200, body)
+      } else if (route === 'POST /api/teams/goal/answer' || route === 'POST /api/teams/goal/accept' || route === 'POST /api/teams/goal/reopen' || route === 'POST /api/teams/goal/wake') {
+        await goalActionOp(rt, url.pathname.split('/').pop() as 'answer' | 'accept' | 'reopen' | 'wake', await readJsonBody(req))
         json(200, { ok: true })
       } else if (route === 'POST /api/teams/resume') {
         await resumeTeamOp(rt, await readJsonBody(req))

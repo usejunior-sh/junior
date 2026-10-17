@@ -6,15 +6,17 @@
  * that isn't, and you change it through the drawer, never by editing the file.
  * Pure, so the rendering is tested without a server.
  */
-import { outputsOf, renderHandoff, runSpent, type TeamRun } from './engine.js'
+import { horizonText, outputsOf, renderHandoff, runSpent, type TeamRun } from './engine.js'
 
 const usd = (n: number) => `$${n.toFixed(2)}`
+const when = (at: number) => new Date(at).toISOString().replace('T', ' ').slice(0, 16)
 const bullet = (xs: string[]) => xs.map((x) => `- ${x}`).join('\n')
 
 const STATE: Record<TeamRun['state'], string> = {
   proposed: 'proposed — waiting for your approval',
   running: 'running',
   gate: 'waiting for you',
+  waiting: 'waiting on the world',
   paused: 'paused',
   stopped: 'stopped',
   done: 'done',
@@ -27,7 +29,7 @@ export function planStatus(run: TeamRun): string {
   const n = run.card.tasks.length
   const done = run.card.tasks.filter((t) => run.tasks[t.id]?.status === 'done' || run.tasks[t.id]?.status === 'unresolved').length
   const where =
-    run.state === 'running' || run.state === 'gate' || run.state === 'paused'
+    run.state === 'running' || run.state === 'gate' || run.state === 'waiting' || run.state === 'paused'
       ? n && run.task !== null
         ? ` · task ${run.task + 1} of ${n}`
         : ` · step ${run.step + 1} of ${run.recipe.steps.length}`
@@ -35,14 +37,31 @@ export function planStatus(run: TeamRun): string {
         ? ` · ${done} of ${n} tasks`
         : ''
   const money = run.state === 'proposed' ? `cap ${usd(run.card.budgetUsd)}` : `${usd(runSpent(run))} of ${usd(run.budgetUsd)}`
-  return `${run.recipe.label} team · ${STATE[run.state]}${where} · ${money}`
+  const goal = run.goal ? `goal${run.goal.round ? `, round ${run.goal.round + 1}` : ''} · ` : ''
+  return `${goal}${run.recipe.label} team · ${STATE[run.state]}${where} · ${money}`
 }
 
 export function renderPlan(run: TeamRun): string {
   const c = run.card
   const out: string[] = [`# ${planTitle(run)}`, planStatus(run)]
   if (c.note) out.push(`> ${c.note.replace(/\n/g, '\n> ')}`)
-  out.push(`## Goal\n${c.goal}`, `## Done when\n${bullet(c.criteria)}`)
+  out.push(`## Goal\n${c.goal}`)
+  const g = run.goal
+  if (g) {
+    const lines = [g.doneWhen, `Horizon: ${horizonText(g.horizon)}${g.round ? ` · round ${g.round + 1}` : ''}`]
+    if (g.wait) lines.push(`Waiting for ${g.wait.for} — Junior looks again at ${when(g.wait.until)}.`)
+    if (g.round && g.gap) lines.push(`Still missing (round ${g.round + 1}): ${g.gap}`)
+    out.push(`## The goal is done when\n${lines.join('\n\n')}`)
+    if (g.verdicts.length) out.push(`## Junior's verdicts\n${g.verdicts.map((v) => `- ${when(v.at)} · round ${v.round + 1} · ${v.met ? '**met**' : 'not met'} — ${v.evidence}`).join('\n')}`)
+    if (g.questions.length) {
+      out.push(
+        `## Questions for you\n${g.questions
+          .map((q) => `- **${q.id}** ${q.text}\n  Recommended: ${q.recommended}\n  ${q.answer === null ? '_Waiting for your answer._' : `You: ${q.answer}`}`)
+          .join('\n')}`,
+      )
+    }
+  }
+  out.push(`## ${g ? 'Acceptance criteria' : 'Done when'}\n${bullet(c.criteria)}`)
   if (c.outOfScope.length) out.push(`## Out of scope\n${bullet(c.outOfScope)}`)
 
   if (c.tasks.length) {
@@ -89,7 +108,9 @@ export function renderPlan(run: TeamRun): string {
       : run.state === 'stopped'
         ? 'Stopped before the end.'
         : run.recipe.steps.flatMap((s) => outputsOf(run, s.id)).slice(-3).map(renderHandoff).join('\n\n') || 'No handoffs.'
-    out.push(`## Outcome\n${outcome}${run.unresolved ? `\n\n**Unresolved:** ${run.unresolved}` : ''}\n\n${usd(runSpent(run))} spent of ${usd(run.budgetUsd)}.`)
+    const verdict = run.goal?.verdicts.at(-1)
+    const judged = run.goal && run.state === 'done' && verdict?.met ? `\n\n**Junior judged the done-when met:** ${verdict.evidence}${run.goal.acceptedAt ? `\n\nAccepted by you ${when(run.goal.acceptedAt)}.` : '\n\n_Waiting for you to accept the result._'}` : ''
+    out.push(`## Outcome\n${outcome}${judged}${run.unresolved ? `\n\n**Unresolved:** ${run.unresolved}` : ''}\n\n${usd(runSpent(run))} spent of ${usd(run.budgetUsd)}.`)
   }
   return out.join('\n\n') + '\n'
 }

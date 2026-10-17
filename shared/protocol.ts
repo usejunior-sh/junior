@@ -13,7 +13,7 @@
 
 import type { JobRunStatus, JobRunTrigger } from '../core/job/types.js'
 import type { TeamRecipe } from '../core/teams/recipe.js'
-import type { RunState, TeamRun } from '../core/teams/engine.js'
+import type { GoalVerdict, RunGoal, RunGoalHorizon, RunState, TeamRun } from '../core/teams/engine.js'
 import type { ActionHistoryEntry, ActionRecord } from '../core/actions/types.js'
 import type { KindCount } from '../core/actions/count.js'
 import type { Gate, Goal, GoalEvent, GoalPlan, GoalStepState, GoalTurn, StepRole } from '../core/goals/types.js'
@@ -253,10 +253,62 @@ export type LibraryFileResponse =
   | { ok: true; path: string; text: string; editable: boolean; binary: boolean; files: string[]; dir: string }
   | { ok: false; error: string }
 
-export type { CardStep, CriterionReport, Finding, Handoff, LedgerEntry, PlanNote, PlanTask, RunState, Slice, TaskState, TeamCard, TeamRun, Worker, WorkerRun } from '../core/teams/engine.js'
+export type {
+  CardStep,
+  CriterionReport,
+  Finding,
+  GoalHorizonKind,
+  GoalQuestion,
+  GoalVerdict,
+  Handoff,
+  LedgerEntry,
+  PlanNote,
+  PlanTask,
+  ResumeBy,
+  RunGoal,
+  RunGoalHorizon,
+  RunResume,
+  RunState,
+  Slice,
+  TaskState,
+  TeamCard,
+  TeamRun,
+  Worker,
+  WorkerRun,
+} from '../core/teams/engine.js'
 
-/** A session's place on a team run: the lead (the chat that proposed it) or one of its workers. */
-export type SessionTeamRun = { id: string; role: 'lead' | 'worker'; label: string; state: RunState; rev: number }
+/** A session's place on a team run: the lead (the chat that proposed it) or one of its workers. `goal`: the run is a goal. */
+export type SessionTeamRun = { id: string; role: 'lead' | 'worker'; label: string; state: RunState; rev: number; goal?: boolean }
+
+/** One row of the Goals tab (GET /api/teams/goals): a team run that is a goal. */
+export type TeamGoalSummary = {
+  runId: string
+  itemId: string
+  leadSessionId: string
+  title: string
+  team: string
+  doneWhen: string
+  horizon: RunGoalHorizon
+  state: RunState
+  reason: string | null
+  /** rounds after the first */
+  round: number
+  /** what Junior is working out before the team moves */
+  owes: RunGoal['owes']
+  /** questions waiting on your answer */
+  asks: number
+  wait: RunGoal['wait']
+  acceptedAt: number | null
+  lastVerdict: GoalVerdict | null
+  resumes: number
+  overdue: boolean
+  spentUsd: number
+  budgetUsd: number
+  /** whose move it is */
+  turn: 'you' | 'junior' | 'world' | 'none'
+  updatedAt: number
+}
+export type TeamGoalsResponse = { ok: true; goals: TeamGoalSummary[] } | { ok: false; error: string }
 
 /** A run as the client reads it (GET /api/teams/run): everything but the server's bookkeeping. */
 export type TeamRunView = Omit<TeamRun, 'root' | 'checkCmds' | 'baseTree' | 'nudged'> & { spentUsd: number }

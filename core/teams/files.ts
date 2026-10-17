@@ -16,7 +16,7 @@ import { renderHandoff, type Handoff, type LedgerEntry, type LedgerKind, type Te
 import { renderPlan } from './plan.js'
 
 const when = (at: number) => (at ? new Date(at).toISOString().replace('T', ' ').slice(0, 16) : '')
-const entry = (e: LedgerEntry) => `- ${e.task ? `**${e.task}** · ` : ''}${e.text}${e.why ? ` — because ${e.why}` : ''} _(${e.by})_`
+const entry = (e: LedgerEntry) => `- ${e.at ? `${when(e.at)} · ` : ''}${e.task ? `**${e.task}** · ` : ''}${e.text}${e.why ? ` — because ${e.why}` : ''} _(${e.by})_`
 
 const SECTIONS: { kind: LedgerKind; title: string }[] = [
   { kind: 'decision', title: 'Decisions' },
@@ -25,6 +25,7 @@ const SECTIONS: { kind: LedgerKind; title: string }[] = [
   { kind: 'failed', title: 'Tried, didn’t work' },
   { kind: 'verify', title: 'How to check' },
   { kind: 'note', title: 'Notes' },
+  { kind: 'resume', title: 'Resumes — who got the team moving again, and why' },
 ]
 
 export function renderLedger(run: TeamRun): string {

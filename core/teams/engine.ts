@@ -20,6 +20,13 @@
  * step says `context: carry`) — what earlier tasks learned travels as the plan's
  * notes, not as transcript. A task still failing past its fix rounds is marked
  * unresolved and the run moves on to the next one.
+ *
+ * A goal (.docs/junior-goals-teams/modes-autonomy-goals.md) is a run with a
+ * done-when: where a run would end, Junior judges the done-when instead, and
+ * starts another round when it isn't met, or sleeps on the world and looks
+ * again. Where a run would give up (fix rounds used up), Junior decides how to
+ * get the team moving. A gate and a budget pause still wait for you; Junior
+ * may ask you questions meanwhile. Every resume is recorded with who did it.
  */
 import { CHECKS, isTeamPermissions, LEAD, taskLoop, type RecipeStep, type TeamPermissions, type TeamRecipe } from './recipe.js'
 
@@ -41,8 +48,8 @@ export type CriterionReport = { id: string; status: CriterionStatus; evidence: s
  * `where` maps the code for whoever comes next; `failed` keeps a fix round from
  * repeating an earlier one; `verify` says how to check this project.
  */
-export type LedgerKind = 'decision' | 'surprise' | 'failed' | 'where' | 'verify' | 'note'
-export type LedgerEntry = { kind: LedgerKind; task: string | null; by: string; text: string; why?: string }
+export type LedgerKind = 'decision' | 'surprise' | 'failed' | 'where' | 'verify' | 'note' | 'resume'
+export type LedgerEntry = { kind: LedgerKind; task: string | null; by: string; text: string; why?: string; at?: number }
 
 /** The lead's sizing of one step: a model override, and the slices of a fan-out step it chose upfront. */
 export type CardStep = { id: string; model: string | null; slices: Slice[] | null }
@@ -140,13 +147,52 @@ export type WorkerRun = {
   patch?: string
   /** the handoff it ended with; null while it works, or if it never submitted */
   handoffId: string | null
+  /** this run started (or carried on) because someone resumed the team */
+  resumedBy?: ResumeBy
+}
+
+/** Who got a stopped team moving again. */
+export type ResumeBy = 'junior' | 'you'
+/** One resume, as the runs panel and the ledger show it. */
+export type RunResume = { at: number; by: ResumeBy; what: string; why: string }
+
+/** A goal's horizon: finish today, by a date (`at` = the deadline), or keep going until done. */
+export type GoalHorizonKind = 'today' | 'by' | 'until_done'
+export type RunGoalHorizon = { kind: GoalHorizonKind; at: number | null }
+/** A question Junior asked you, with the answer it recommends. */
+export type GoalQuestion = { id: string; text: string; recommended: string; at: number; answer: string | null; answeredAt: number | null }
+/** Junior's judgement of the done-when, each time it looked. */
+export type GoalVerdict = { at: number; met: boolean; evidence: string; round: number }
+
+/** What makes a run a goal. */
+export type RunGoal = {
+  /** the outcome, in words — Junior judges it when the team finishes a round */
+  doneWhen: string
+  horizon: RunGoalHorizon
+  /** rounds after the first: each starts when Junior judged the done-when not met */
+  round: number
+  /** what's still missing, from the last verdict — every worker in the round reads it */
+  gap: string | null
+  /** what the lead owes before the team can move: a verdict on the done-when, or a way past what stopped the team */
+  owes: 'verdict' | 'unstick' | null
+  /** what stopped the team, and the step a retry goes back to */
+  stuck: { why: string; backTo: number } | null
+  /** asleep on the world until a time */
+  wait: { until: number; for: string } | null
+  /** Junior's guidance for the builder, for the fix round it retried with */
+  guidance?: { text: string; round: number } | null
+  verdicts: GoalVerdict[]
+  questions: GoalQuestion[]
+  /** you accepted the result */
+  acceptedAt: number | null
 }
 
 export type TaskStatus = 'todo' | 'running' | 'done' | 'unresolved'
 export type TaskState = { status: TaskStatus; round: number; why?: string }
 export type PlanNote = { task: string | null; by: string; text: string }
 
-export type RunState = 'proposed' | 'running' | 'gate' | 'paused' | 'stopped' | 'done'
+/** `waiting`: a goal asleep on the world (CI, a reviewer, a date) until `goal.wait.until`. */
+export type RunState = 'proposed' | 'running' | 'gate' | 'waiting' | 'paused' | 'stopped' | 'done'
 
 export type TeamRun = {
   id: string
@@ -213,6 +259,16 @@ export type TeamRun = {
   baseTree?: string
   /** the tree when the run ended — what it changed stays what it changed, whatever happens to the checkout after */
   endTree?: string
+  /** set when the run is a goal */
+  goal?: RunGoal | null
+  /** every resume, oldest first — by Junior or by you */
+  resumes?: RunResume[]
+  /** fix rounds before this one don't count against the cap: Junior got the team moving again here */
+  roundFloor?: number
+  /** the state a pause interrupted, so a resume goes back to it */
+  pausedFrom?: { state: 'running' | 'gate' | 'waiting'; reason?: string } | null
+  /** who the next worker runs are marked as resumed by */
+  resumeMark?: ResumeBy | null
 }
 
 export type DiffScope = 'task' | 'run'
@@ -239,6 +295,14 @@ const bump = (run: TeamRun) => {
   run.rev += 1
 }
 
+/** A resume goes on the run's list and on the ledger, with who did it and why. */
+function recordResume(run: TeamRun, by: ResumeBy, what: string, why: string, at: number): void {
+  const task = run.task !== null ? currentTask(run)?.id ?? null : null
+  ;(run.resumes ??= []).push({ at, by, what, why })
+  run.ledger.push({ kind: 'resume', task, by: by === 'junior' ? 'Junior' : 'you', text: what, ...(why ? { why } : {}), at })
+  bump(run)
+}
+
 /** Runs stored before tasks and plans existed get today's empty defaults. */
 export function normalizeRun(run: TeamRun): TeamRun {
   run.card.tasks ??= []
@@ -255,6 +319,13 @@ export function normalizeRun(run: TeamRun): TeamRun {
   run.workerRuns ??= []
   run.ledger ??= run.notes.map((n) => ({ kind: 'note' as const, task: n.task, by: n.by, text: n.text }))
   run.findingState ??= {}
+  run.goal ??= null
+  run.resumes ??= []
+  if (run.goal) {
+    run.goal.verdicts ??= []
+    run.goal.questions ??= []
+    run.goal.acceptedAt ??= null
+  }
   for (const s of run.recipe.steps) {
     s.forEach ??= null
     s.context ??= null
@@ -351,6 +422,62 @@ export function cardFrom(raw: unknown, recipe: TeamRecipe, prev?: TeamCard): Tea
     note: typeof r.note === 'string' ? r.note.trim().slice(0, 2000) : '',
   }
 }
+
+/** The last moment of the local day `at` falls in. */
+export function endOfDay(at: number): number {
+  const d = new Date(at)
+  d.setHours(23, 59, 59, 999)
+  return d.getTime()
+}
+
+/** A date from the lead or the card: `YYYY-MM-DD` is that local day; anything else Date.parse reads. */
+function dateFrom(v: unknown): number {
+  if (typeof v === 'number') return v
+  if (typeof v !== 'string') return NaN
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v.trim())
+  return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])).getTime() : Date.parse(v)
+}
+
+/**
+ * The goal part of a card — from the lead's propose_team or your edit. `now`
+ * pins "today" to the day it was set. Throws a message the lead can act on.
+ */
+export function goalFrom(raw: unknown, now: number, prev?: RunGoal | null): RunGoal {
+  const r = (raw ?? {}) as Record<string, unknown>
+  const doneWhen = typeof r.doneWhen === 'string' ? r.doneWhen.trim().slice(0, 1000) : prev?.doneWhen ?? ''
+  if (!doneWhen) throw new Error('a goal needs a done-when: the outcome that says it is finished, in a sentence')
+  const kind: GoalHorizonKind = r.horizon === 'today' || r.horizon === 'by' || r.horizon === 'until_done' ? r.horizon : prev?.horizon.kind ?? 'until_done'
+  let at: number | null = null
+  if (kind === 'today') at = prev?.horizon.kind === 'today' && r.horizon === undefined ? prev.horizon.at : endOfDay(now)
+  if (kind === 'by') {
+    const given = r.by !== undefined ? dateFrom(r.by) : prev?.horizon.at ?? NaN
+    if (!Number.isFinite(given)) throw new Error('a "by" horizon needs a date, e.g. "2026-10-24"')
+    at = endOfDay(given)
+  }
+  return {
+    doneWhen,
+    horizon: { kind, at },
+    round: 0,
+    gap: null,
+    owes: null,
+    stuck: null,
+    wait: null,
+    verdicts: [],
+    questions: [],
+    acceptedAt: null,
+  }
+}
+
+/** The horizon in words: "today", "by Fri 24 Oct", "until done". */
+export function horizonText(h: RunGoalHorizon): string {
+  if (h.kind === 'until_done' || h.at === null) return 'until done'
+  if (h.kind === 'today') return 'today'
+  return `by ${new Date(h.at).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}`
+}
+
+/** Past its horizon and not done. */
+export const goalOverdue = (run: Pick<TeamRun, 'goal' | 'state'>, now: number): boolean =>
+  !!run.goal && run.goal.horizon.at !== null && now > run.goal.horizon.at && run.state !== 'done' && run.state !== 'stopped'
 
 /**
  * A new task list for a running plan — your drawer edit, or the lead's revision
@@ -565,7 +692,7 @@ function tellAll(run: TeamRun, i: number, workers: Worker[]): Action[] {
   // Which diff a reader gets: this task's, in the loop; the whole run's, after it (or without one).
   const scope: DiffScope = s.forEach && run.recipe.steps[ci]?.forEach ? 'task' : 'run'
   const firstOfTask = run.round === 0 && !!s.forEach
-  return workers.map((w) => {
+  const told = workers.map((w): Action => {
     const fresh =
       w.agent !== LEAD &&
       // A checker re-reads from scratch every round: never its own earlier verdict.
@@ -581,12 +708,27 @@ function tellAll(run: TeamRun, i: number, workers: Worker[]): Action[] {
       diff: afterChange && s.output !== 'change' && s.agent !== LEAD ? scope : false,
     }
   })
+  // Only the runs a resume started carry its mark.
+  run.resumeMark = null
+  return told
 }
 
 function startRun(run: TeamRun, w: Worker, fresh: boolean) {
   const id = `${w.id}#${run.round}`
   if (run.workerRuns.some((r) => r.id === id)) return
-  run.workerRuns.push({ id, workerId: w.id, stepId: w.stepId, ...(w.task ? { task: w.task } : {}), round: run.round, fresh, startSeq: null, at: null, spendAtStart: null, handoffId: null })
+  run.workerRuns.push({
+    id,
+    workerId: w.id,
+    stepId: w.stepId,
+    ...(w.task ? { task: w.task } : {}),
+    round: run.round,
+    fresh,
+    startSeq: null,
+    at: null,
+    spendAtStart: null,
+    handoffId: null,
+    ...(run.resumeMark ? { resumedBy: run.resumeMark } : {}),
+  })
 }
 
 /** The server sent a worker its step: where in the session the run starts, when, and what the session had spent. A nudge finds nothing to stamp. */
@@ -791,6 +933,17 @@ export function turnEnded(run: TeamRun, sessionId: string): Action[] {
     if (!run.awaiting.length && !run.splitting) return endStep(run)
     return []
   }
+  const g = run.goal
+  if (g?.owes && sessionId === run.leadSessionId) {
+    // Waiting on your answer is not a dropped ball.
+    if (g.questions.some((q) => q.answer === null)) return []
+    const key = `goal:${g.owes}:${g.round}:${g.verdicts.length}:${run.resumes?.length ?? 0}`
+    const text =
+      g.owes === 'verdict'
+        ? 'You ended your turn without calling goal_verdict. Judge the done-when now (met, not met, or wait on the world) — or, if only the user can say, ask them with ask_you.'
+        : 'You ended your turn without calling goal_unstick. Decide now: retry with guidance, or skip past it — or, if only the user can decide, ask them with ask_you.'
+    return nudge(run, key, { kind: 'tellLead', text })
+  }
   const s = currentStep(run)
   if (!s) return []
   if (run.splitting && sessionId === run.leadSessionId) return nudge(run, `${s.id}:${run.round}:split`, { kind: 'tellLead', text: 'You ended your turn without calling split_step. Split the step now, or tell the user why you can\'t.' })
@@ -856,10 +1009,13 @@ function finishTask(run: TeamRun, status: 'done' | 'unresolved', why?: string): 
 }
 
 /** You looked at a gated step's result: go on. */
-export function continueGate(run: TeamRun): Action[] {
+export function continueGate(run: TeamRun, at = 0): Action[] {
   if (run.state !== 'gate') throw new Error('the run is not waiting at a gate')
+  const step = currentStep(run)?.id ?? ''
   run.state = 'running'
   delete run.reason
+  recordResume(run, 'you', `continued past the gate after "${step}"`, '', at)
+  run.resumeMark = 'you'
   return advance(run)
 }
 
@@ -887,8 +1043,11 @@ export function checksDone(run: TeamRun, results: CheckResult[], at: number): Ac
 /** Another fix round on the change step, or — past the cap — move on (in the loop) or straight to the report. */
 function fixOrGiveUp(run: TeamRun, s: RecipeStep, feedback: string, unresolved: string): Action[] {
   const back = run.recipe.steps.findIndex((x) => x.id === s.onFail!.backTo)
-  if (run.round >= s.onFail!.max) {
-    const why = `${unresolved} after ${run.round} fix round${run.round === 1 ? '' : 's'}`
+  const used = run.round - (run.roundFloor ?? 0)
+  if (used >= s.onFail!.max) {
+    const why = `${unresolved} after ${used} fix round${used === 1 ? '' : 's'}`
+    // A goal doesn't give up here: Junior decides how to get the team moving.
+    if (run.goal) return stuckGoal(run, why, back, feedback)
     if (s.forEach && run.task !== null) return finishTask(run, 'unresolved', why)
     run.unresolved = why
     bump(run)
@@ -901,10 +1060,16 @@ function fixOrGiveUp(run: TeamRun, s: RecipeStep, feedback: string, unresolved: 
   const t = currentTask(run)
   if (t && s.forEach) run.tasks[t.id] = { ...run.tasks[t.id], round: run.round }
   run.feedback = feedback
-  return [{ kind: 'notice', text: `Fix round ${run.round} of ${s.onFail!.max}${t && s.forEach ? ` on ${t.id}` : ''}: ${unresolved}` }, ...beginStep(run, back)]
+  return [{ kind: 'notice', text: `Fix round ${used + 1} of ${s.onFail!.max}${t && s.forEach ? ` on ${t.id}` : ''}: ${unresolved}` }, ...beginStep(run, back)]
 }
 
+/** Where a run would end. A goal's run asks Junior whether the done-when holds instead. */
 function finish(run: TeamRun): Action[] {
+  if (run.goal && run.state === 'running') return judge(run, null)
+  return close(run)
+}
+
+function close(run: TeamRun): Action[] {
   run.state = 'done'
   run.awaiting = []
   run.splitting = false
@@ -912,12 +1077,37 @@ function finish(run: TeamRun): Action[] {
   return [{ kind: 'finish' }]
 }
 
-/** After a pause: re-send the step to whoever still owes it. */
-export function resume(run: TeamRun): Action[] {
+/** Pause the run, remembering what it was doing so a resume goes back to it. */
+export function pause(run: TeamRun, reason: string): void {
+  if (run.state !== 'running' && run.state !== 'gate' && run.state !== 'waiting') throw new Error(`the run is ${run.state}`)
+  run.pausedFrom = { state: run.state, ...(run.reason ? { reason: run.reason } : {}) }
+  run.state = 'paused'
+  run.reason = reason
+  bump(run)
+}
+
+/** After a pause (yours, or the budget's): back to what it was doing, and re-send the step to whoever still owes it. */
+export function resume(run: TeamRun, at = 0, what = 'resumed after a pause'): Action[] {
   if (run.state !== 'paused') throw new Error('the run is not paused')
+  const from = run.pausedFrom
+  run.pausedFrom = null
+  recordResume(run, 'you', what, run.reason ?? '', at)
+  if (from?.state === 'gate' || from?.state === 'waiting') {
+    run.state = from.state
+    if (from.reason) run.reason = from.reason
+    else delete run.reason
+    bump(run)
+    return []
+  }
   run.state = 'running'
   delete run.reason
   bump(run)
+  // The workers still on their step carry on: their run is resumed, not a new one.
+  for (const id of run.awaiting) {
+    const r = run.workerRuns.findLast((x) => x.workerId === id)
+    if (r && !r.handoffId) r.resumedBy = 'you'
+  }
+  if (run.goal?.owes) return [{ kind: 'tellLead', text: run.goal.owes === 'verdict' ? verdictMessage(run, null) : unstickMessage(run) }]
   const s = currentStep(run)
   if (!s) return finish(run)
   if (s.agent === CHECKS) return [{ kind: 'checks' }]
@@ -956,6 +1146,278 @@ export function settleRevision(run: TeamRun, accept: boolean): Action[] {
     { kind: 'notice', text: accept ? 'Plan change accepted — it applies from the next task.' : 'Plan change turned down.' },
     { kind: 'tellLead', text: accept ? 'The user accepted your plan change.' : 'The user turned down your plan change. Carry on with the plan as it is.' },
   ]
+}
+
+// ---------------------------------------------------------------------------
+// Goals: the done-when, getting unstuck, waiting on the world, your questions
+// ---------------------------------------------------------------------------
+
+export const MAX_GOAL_WAIT_MINUTES = 7 * 24 * 60
+export const MAX_GOAL_QUESTIONS = 40
+
+const goalOf = (run: TeamRun): RunGoal => {
+  if (!run.goal) throw new Error('this team run is not a goal')
+  return run.goal
+}
+
+/** The team finished a round (or woke): the lead judges the done-when. Nothing else moves until it does. */
+function judge(run: TeamRun, woke: string | null): Action[] {
+  const g = goalOf(run)
+  g.owes = 'verdict'
+  run.awaiting = []
+  run.splitting = false
+  bump(run)
+  return [
+    { kind: 'notice', text: woke ? `Junior is looking at the done-when again — ${woke}.` : `The team finished round ${g.round + 1}. Junior is checking the done-when.` },
+    { kind: 'tellLead', text: verdictMessage(run, woke) },
+  ]
+}
+
+/** Fix rounds ran out (a failing review or failing checks): the lead decides how to get the team moving. */
+function stuckGoal(run: TeamRun, why: string, backTo: number, feedback: string): Action[] {
+  const g = goalOf(run)
+  g.owes = 'unstick'
+  g.stuck = { why, backTo }
+  run.feedback = feedback
+  run.awaiting = []
+  bump(run)
+  return [
+    { kind: 'notice', text: `The team is stuck: ${why}. Junior is working out how to get it moving.` },
+    { kind: 'tellLead', text: unstickMessage(run) },
+  ]
+}
+
+export type GoalVerdictInput = {
+  met: boolean
+  evidence: string
+  /** not met: what's still missing — every worker in the next round reads it */
+  gap?: string
+  /** not met, a team with a task loop: the tasks the next round works */
+  tasks?: unknown
+  /** the world has to move first: what for, and when to look again */
+  waitFor?: string
+  waitMinutes?: number
+}
+
+/** The lead's verdict on the done-when: done, another round, or sleep and look again. */
+export function goalVerdict(run: TeamRun, v: GoalVerdictInput, at: number): Action[] {
+  const g = goalOf(run)
+  if (run.state !== 'running') throw new Error(`the run is ${run.state} — stop; the user resumes it`)
+  if (g.owes !== 'verdict') throw new Error('triage has not asked you to judge the done-when — the team is still working')
+  const evidence = (v.evidence ?? '').trim().slice(0, 2000)
+  if (!evidence) throw new Error('give the evidence: what you ran or looked at, and what it showed')
+  const waitFor = v.waitFor?.trim().slice(0, 200)
+  if (v.met && waitFor) throw new Error('a met goal has nothing to wait for — give met: true, or waitFor without it')
+  if (waitFor && !(typeof v.waitMinutes === 'number' && v.waitMinutes > 0)) throw new Error('say when to look again: waitMinutes')
+  g.verdicts.push({ at, met: v.met, evidence, round: g.round })
+  g.owes = null
+  if (v.met) {
+    bump(run)
+    return [{ kind: 'notice', text: `Junior says the goal is done: ${clip(evidence, 300)} Accept the result, or say what's missing.` }, ...close(run)]
+  }
+  if (waitFor) {
+    const minutes = Math.min(Math.max(1, Math.round(v.waitMinutes!)), MAX_GOAL_WAIT_MINUTES)
+    g.wait = { until: at + minutes * 60_000, for: waitFor }
+    run.state = 'waiting'
+    run.reason = `waiting for ${waitFor}`
+    bump(run)
+    return [{ kind: 'notice', text: `Waiting for ${waitFor} — Junior looks again in ${minutes < 120 ? `${minutes} min` : `${Math.round(minutes / 60)} h`}.` }]
+  }
+  const gap = (v.gap ?? '').trim() || evidence
+  return nextRound(run, 'junior', gap, v.tasks, at)
+}
+
+/** Another round on the goal: new tasks for a task loop, else the change step again with what's missing. */
+function nextRound(run: TeamRun, by: ResumeBy, gap: string, rawTasks: unknown, at: number): Action[] {
+  const g = goalOf(run)
+  g.round += 1
+  g.gap = gap.slice(0, 1500)
+  g.owes = null
+  g.stuck = null
+  run.state = 'running'
+  delete run.reason
+  recordResume(run, by, `started goal round ${g.round + 1}`, g.gap, at)
+  run.resumeMark = by
+  const notice: Action = { kind: 'notice', text: `Goal round ${g.round + 1}${by === 'you' ? ' (you reopened it)' : ''}: ${clip(g.gap, 300)}` }
+  const loop = taskLoop(run.recipe)
+  if (loop) {
+    const given = (Array.isArray(rawTasks) ? rawTasks : []).map((x) => (x ?? {}) as Record<string, unknown>)
+    const list = given.length ? given : [{ title: g.gap }]
+    let n = Math.max(0, ...run.card.tasks.map((t) => Number(t.id.slice(1)) || 0))
+    const added: PlanTask[] = list
+      .map((x) => ({ title: typeof x.title === 'string' ? x.title.trim().slice(0, 160) : '', criteria: strList(x.criteria, 6) }))
+      .filter((x) => x.title)
+      .slice(0, MAX_TASKS)
+      .map((x) => ({ id: `T${++n}`, ...x }))
+    if (!added.length) throw new Error('give the next round at least one task with a title')
+    run.card.tasks.push(...added)
+    for (const t of added) run.tasks[t.id] = { status: 'todo', round: 0 }
+    run.task = null
+    bump(run)
+    return [notice, ...beginStep(run, loop.from)]
+  }
+  // Fix rounds start fresh for the round (ids keep counting, so every run stays its own).
+  run.round += 1
+  run.roundFloor = run.round
+  run.feedback = `The goal's done-when isn't met yet: ${g.gap}`
+  const ci = changeIndex(run.recipe)
+  return [notice, ...beginStep(run, ci >= 0 ? ci : 0)]
+}
+
+/** The lead's way past what stopped the team: retry with guidance, or skip past it. */
+export function unstick(run: TeamRun, u: { action: 'retry' | 'skip'; why: string; guidance?: string }, at: number): Action[] {
+  const g = goalOf(run)
+  if (run.state !== 'running') throw new Error(`the run is ${run.state} — stop; the user resumes it`)
+  if (g.owes !== 'unstick' || !g.stuck) throw new Error('the team is not stuck — nothing to unstick')
+  const why = (u.why ?? '').trim().slice(0, 600)
+  if (!why) throw new Error('say why, in a line — it goes on the ledger')
+  const { backTo, why: what } = g.stuck
+  g.owes = null
+  g.stuck = null
+  const s = currentStep(run)
+  const t = currentTask(run)
+  if (u.action === 'skip') {
+    recordResume(run, 'junior', `skipped past: ${what}`, why, at)
+    run.resumeMark = 'junior'
+    if (s?.forEach && t) return finishTask(run, 'unresolved', `${what} — skipped: ${why}`)
+    run.unresolved = `${what} — skipped: ${why}`
+    const last = run.recipe.steps.length - 1
+    const report = run.recipe.steps[last]
+    if (report.agent === LEAD && report.output === 'report' && run.step < last) return beginStep(run, last)
+    return finish(run)
+  }
+  recordResume(run, 'junior', `retried after: ${what}`, why, at)
+  run.resumeMark = 'junior'
+  // The retry is a fresh start against the cap: its own attempt, then the recipe's fix rounds.
+  run.round += 1
+  run.roundFloor = run.round
+  if (t && s?.forEach) run.tasks[t.id] = { ...run.tasks[t.id], round: run.round }
+  const guidance = u.guidance?.trim().slice(0, 2000)
+  g.guidance = guidance ? { text: guidance, round: run.round } : null
+  return [{ kind: 'notice', text: `Junior resumed the team: ${why}` }, ...beginStep(run, backTo)]
+}
+
+/** A waiting goal is due a look. */
+export const wakeDue = (run: Pick<TeamRun, 'state' | 'goal'>, now: number): boolean => run.state === 'waiting' && !!run.goal?.wait && now >= run.goal.wait.until
+
+/** Time's up on a wait (or you woke it early): the lead judges the done-when again. */
+export function wake(run: TeamRun, at: number, early = false): Action[] {
+  const g = goalOf(run)
+  if (run.state !== 'waiting' || !g.wait) throw new Error('the goal is not waiting')
+  if (!early && at < g.wait.until) return []
+  const w = g.wait
+  g.wait = null
+  run.state = 'running'
+  delete run.reason
+  return judge(run, early ? `you woke it early; it was waiting for ${w.for}` : `it was waiting for ${w.for}`)
+}
+
+/** Junior asks you something, with the answer it recommends. The run carries on meanwhile. */
+export function askYou(run: TeamRun, text: string, recommended: string, at: number): { id: string; actions: Action[] } {
+  const g = goalOf(run)
+  if (run.state === 'proposed' || run.state === 'done' || run.state === 'stopped') throw new Error(`the run is ${run.state} — ask in the chat instead`)
+  const q = text.trim().slice(0, 1000)
+  const rec = recommended.trim().slice(0, 1000)
+  if (!q) throw new Error('ask a question')
+  if (!rec) throw new Error('every question comes with the answer you recommend')
+  if (g.questions.length >= MAX_GOAL_QUESTIONS) throw new Error('too many questions on this goal — put the rest in one message')
+  const id = `Q${g.questions.length + 1}`
+  g.questions.push({ id, text: q, recommended: rec, at, answer: null, answeredAt: null })
+  bump(run)
+  return { id, actions: [{ kind: 'notice', text: `Needs you: Junior asks — ${clip(q, 300)}` }] }
+}
+
+/** You answered one of Junior's questions: it goes to the lead, verbatim. */
+export function answerQuestion(run: TeamRun, id: string, answer: string, at: number): Action[] {
+  const g = goalOf(run)
+  const q = g.questions.find((x) => x.id === id)
+  if (!q) throw new Error('no such question')
+  if (q.answer !== null) throw new Error('that question is already answered')
+  const a = answer.trim().slice(0, 4000)
+  if (!a) throw new Error('the answer is empty')
+  q.answer = a
+  q.answeredAt = at
+  bump(run)
+  const then =
+    run.state === 'running' && g.owes === 'verdict'
+      ? ' Then judge the done-when with goal_verdict.'
+      : run.state === 'running' && g.owes === 'unstick'
+        ? ' Then get the team moving with goal_unstick.'
+        : run.state === 'paused'
+          ? ' The run is paused — nothing moves until the user resumes it.'
+          : ''
+  return [{ kind: 'tellLead', text: `The user answered your question ${id} ("${clip(q.text, 200)}"):\n\n${a}${then}` }]
+}
+
+/** You accepted the result Junior judged done. */
+export function acceptGoal(run: TeamRun, at: number): Action[] {
+  const g = goalOf(run)
+  if (run.state !== 'done') throw new Error('the goal is not done yet')
+  if (g.acceptedAt) throw new Error('already accepted')
+  g.acceptedAt = at
+  bump(run)
+  return [{ kind: 'notice', text: 'Result accepted. The goal is closed.' }]
+}
+
+/** Not done yet, you say: another round, with what you said is missing. */
+export function reopenGoal(run: TeamRun, why: string, at: number): Action[] {
+  const g = goalOf(run)
+  if (run.state !== 'done') throw new Error('only a done goal can be reopened')
+  if (g.acceptedAt) throw new Error('an accepted goal is closed — start a new one')
+  const gap = why.trim().slice(0, 1500)
+  if (!gap) throw new Error("say what's missing")
+  g.verdicts.push({ at, met: false, evidence: `You: ${gap}`, round: g.round })
+  return nextRound(run, 'you', gap, undefined, at)
+}
+
+/** The goal as every worker reads it: the done-when, the horizon, and what this round still has to close. */
+function goalSection(run: TeamRun): string {
+  const g = run.goal
+  if (!g) return ''
+  const lines = [`## The goal's done-when (${horizonText(g.horizon)})\n${g.doneWhen}`]
+  if (g.round > 0 && g.gap) lines.push(`## Goal round ${g.round + 1} — what's still missing\n${g.gap}`)
+  return lines.join('\n\n')
+}
+
+function verdictMessage(run: TeamRun, woke: string | null): string {
+  const g = goalOf(run)
+  const loop = !!taskLoop(run.recipe)
+  return [
+    woke ? `Look at the goal again — ${woke}.` : `The team finished round ${g.round + 1} of the goal "${run.title}".`,
+    `## Done when (${horizonText(g.horizon)})\n${g.doneWhen}`,
+    g.verdicts.length ? `## Your earlier verdicts\n${g.verdicts.slice(-5).map((v) => `- round ${v.round + 1}: ${v.met ? 'met' : 'not met'} — ${clip(v.evidence, 300)}`).join('\n')}` : '',
+    run.dir ? `The run folder ${run.dir} has the plan, the ledger and every handoff.` : '',
+    [
+      'Judge it yourself — run the checks, read the diff, look at what the connectors you can see say. Do not take the handoffs\' word for it.',
+      'Then call goal_verdict:',
+      '- met: true, with the evidence — the user accepts the result',
+      `- met: false, with the evidence and the gap (what's still missing)${loop ? ' and the tasks the next round works (1–4, each with criteria)' : ''} — triage starts another round`,
+      '- met: false with waitFor and waitMinutes, when the world has to move first (CI to finish, a reviewer, a deploy, a date) — triage wakes you then',
+      'If only the user can say, ask them with ask_you (a question and the answer you recommend) and end your turn; their answer comes back to you.',
+      'Then END YOUR TURN.',
+    ].join('\n'),
+  ]
+    .filter(Boolean)
+    .join('\n\n')
+}
+
+function unstickMessage(run: TeamRun): string {
+  const g = goalOf(run)
+  const t = currentTask(run)
+  return [
+    `The team on the goal "${run.title}" is stuck${t ? ` on ${t.id} ${t.title}` : ''}: ${g.stuck?.why ?? 'its fix rounds ran out'}.`,
+    run.feedback ? `## What the last round left failing\n${clip(run.feedback, 4000)}` : '',
+    run.dir ? `The run folder ${run.dir} has the ledger (what was tried and failed) and every handoff.` : '',
+    [
+      'Work out why the fix rounds did not close it — read the failing output and the ledger\'s "tried, didn\'t work". Then call goal_unstick:',
+      '- action "retry", with why (one line, for the ledger) and guidance for the builder: what to do differently this time',
+      `- action "skip", with why — ${t ? 'the task is marked unresolved and the team moves on' : 'the run goes on with this unresolved'}`,
+      'If only the user can decide, ask them with ask_you (a question and the answer you recommend) and end your turn; their answer comes back to you.',
+      'Then END YOUR TURN.',
+    ].join('\n'),
+  ]
+    .filter(Boolean)
+    .join('\n\n')
 }
 
 // ---------------------------------------------------------------------------
@@ -1053,6 +1515,8 @@ function stepMessage(run: TeamRun, i: number, w: Worker): string {
       : `Step "${s.id}" (${i + 1} of ${n}) of the ${run.recipe.label} team on "${run.title}".`,
     `## The goal\n${run.card.goal}`,
   ]
+  const goal = goalSection(run)
+  if (goal) parts.push(goal)
   // In the loop the card's criteria are for the final review; outside it they're yours, by id.
   if (!t) parts.push(`## Done when\n${(crit.length ? crit : run.card.criteria.map((text, k) => ({ id: `C${k + 1}`, text }))).map((c) => `- ${c.id} ${c.text}`).join('\n')}`)
   if (run.card.outOfScope.length) parts.push(`## Out of scope\n${bullet(run.card.outOfScope)}`)
@@ -1098,6 +1562,8 @@ function fixRound(run: TeamRun, i: number, t: PlanTask | undefined): string {
   if (earlier.length) {
     out.push(`### Earlier rounds\n${earlier.map((id) => `- ${id} ${run.findingState[id].status}${run.findingState[id].note ? ` — ${run.findingState[id].note}` : ''}: ${findingText(id).split('\n')[0]}`).join('\n')}`)
   }
+  const guide = run.goal?.guidance
+  if (guide && guide.round === run.round) out.push(`### Junior's guidance for this round\n${guide.text}`)
   const failed = ledgerOf(run, ['failed'], (e) => e.task === (t?.id ?? null))
   if (failed.length) out.push(`### Already tried, didn't work\n${failed.map(entryLine).join('\n')}`)
   if (open.length && run.feedback && /Failed check/.test(run.feedback)) out.push(run.feedback)

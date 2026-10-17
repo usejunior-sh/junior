@@ -73,9 +73,13 @@ export interface SessionSignal {
 
 /** A team run on the item (core/teams/engine.ts), reduced to what the rule reads. */
 export interface TeamSignal {
-  state: 'proposed' | 'running' | 'gate' | 'paused' | 'stopped' | 'done'
+  state: 'proposed' | 'running' | 'gate' | 'waiting' | 'paused' | 'stopped' | 'done'
   /** epoch ms of its last activity */
   at: number
+  /** a goal run: questions Junior asked you that are still unanswered */
+  asks?: number
+  /** a goal run: done, waiting on your accept */
+  toAccept?: boolean
 }
 
 /** The newest live goal on the item (core/goals), reduced to what the rule reads. */
@@ -193,7 +197,11 @@ function deriveFlow(item: FlowItem, s: FlowSignals): ItemFlow {
   // A team run is the dispatch, step by step; a stopped one hands back to the session rules.
   const team = s.team && s.team.state !== 'stopped' ? s.team : undefined
   if (team && (!brief || team.at >= brief.at)) {
+    // Junior asked you something: whatever the team is doing, it's your turn to answer.
+    if (team.asks && team.state !== 'done') return { stage: 'working', turn: 'me', ask: 'answer Junior', since: team.at }
     switch (team.state) {
+      case 'waiting':
+        return { stage: 'working', turn: 'others', since: team.at }
       case 'proposed':
         return { stage: 'ready', turn: 'me', ask: 'approve the team', since: team.at }
       case 'gate':
@@ -203,7 +211,7 @@ function deriveFlow(item: FlowItem, s: FlowSignals): ItemFlow {
       case 'running':
         return { stage: 'working', turn: 'ai', since: team.at }
       case 'done':
-        return withOwnPr(item, { stage: 'review', turn: 'me', ask: 'review result', since: team.at })
+        return withOwnPr(item, { stage: 'review', turn: 'me', ask: team.toAccept ? 'accept the result' : 'review result', since: team.at })
     }
   }
   // A session dispatched after the latest brief is the item's newest step.
