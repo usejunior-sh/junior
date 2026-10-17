@@ -112,6 +112,10 @@ class FaceCtl {
   aim = { x: 0, y: 0 }
   /** where to look instead of the pointer (-1…1 each way), or null */
   look: { x: number; y: number } | null = null
+  /** how far the eyes travel when they look somewhere (1 = the Junior page's) */
+  reach = 1
+  /** eyes and brows scaled about the face's centre (1 = the Junior page's); small faces read better bigger */
+  features = 1
   nextGlance = performance.now() + 800 + Math.random() * 2000
   blinkAt = performance.now() + 1500 + Math.random() * 3000
   blinkP = -1
@@ -191,7 +195,10 @@ class FaceCtl {
     const { els } = this
     const gx = this.gaze.x
     const gy = this.gaze.y
-    els.face.setAttribute('transform', `translate(${gx * 10} ${gy * 7})`)
+    const k = this.features
+    // Scaled about (50, 52), between the eyes and the brows, so the features grow in place.
+    const grow = k === 1 ? '' : ` translate(50 52) scale(${k}) translate(-50 -52)`
+    els.face.setAttribute('transform', `translate(${gx * 10 * this.reach} ${gy * 7 * this.reach})${grow}`)
     els.front.setAttribute('transform', `translate(${gx * 3} ${gy * 2})`)
     els.back.setAttribute('transform', `translate(${-gx * 4} ${-gy * 3})`)
     const blink = this.blinkP >= 0 ? 1 - 0.88 * Math.sin(Math.PI * this.blinkP) : 1
@@ -251,11 +258,15 @@ type Props = {
   decorative?: boolean
   /** look here instead of at the pointer: x, y in -1…1 (down = +y); null = back to the pointer */
   look?: { x: number; y: number } | null
+  /** how far the eyes travel when they look somewhere; 1 = the Junior page's, more for small faces */
+  reach?: number
+  /** eyes and brows scaled about the face's centre; 1 = the Junior page's, more for small faces */
+  features?: number
   className?: string
 }
 
 /** Junior's face at any size. Colour and name come from the workspace's persona. */
-export const JuniorFace = memo(function JuniorFace({ mood = 'hello', size = 40, motion = 'wander', colour, decorative, className, look = null }: Props) {
+export const JuniorFace = memo(function JuniorFace({ mood = 'hello', size = 40, motion = 'wander', colour, decorative, className, look = null, reach = 1, features = 1 }: Props) {
   const persona = usePersona()
   const svg = useRef<SVGSVGElement>(null)
   const ctl = useRef<FaceCtl | null>(null)
@@ -296,6 +307,14 @@ export const JuniorFace = memo(function JuniorFace({ mood = 'hello', size = 40, 
   useEffect(() => {
     ctl.current?.setMood(mood)
   }, [mood])
+
+  useEffect(() => {
+    const c = ctl.current
+    if (!c) return
+    c.reach = reach
+    c.features = features
+    c.render()
+  }, [reach, features, motion])
 
   const lx = look?.x
   const ly = look?.y
