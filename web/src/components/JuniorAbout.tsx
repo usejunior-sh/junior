@@ -1,15 +1,17 @@
 /**
  * About me: how Junior looks and talks (saved per workspace, fed to its
  * chats' and jobs' system prompts), the rules nothing can change, and the
- * parts that don't exist yet, said honestly. Name, colour and voice repaint
+ * parts that don't exist yet, said honestly. Name, colour, shape and voice repaint
  * the whole app as soon as they are saved.
  */
 import * as RadioGroup from '@radix-ui/react-radio-group'
 import { Lock } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { DEFAULT_NAME, NAME_MAX, RULES_SHORT, SWATCHES, VOICE_HINT, VOICE_LABEL, VOICES, cleanName, type Voice } from '../../../core/junior/persona.js'
+import { DEFAULT_SHAPE, SHAPES, type Shape } from '../../../core/junior/shapes.js'
 import type { JuniorDay } from '../../../shared/protocol.js'
 import { savePersona, startJuniorChat, usePersona } from '../junior.js'
+import { JuniorFace } from './JuniorFace.js'
 import type { JuniorView } from './JuniorPage.js'
 
 type Props = {
@@ -20,6 +22,8 @@ type Props = {
 
 export function JuniorAbout({ routines, onNavigate, onView }: Props) {
   const persona = usePersona()
+  // a persona from before shapes (or a server not yet restarted) has none: it is the slab it always was
+  const current: Shape = persona.shape ?? DEFAULT_SHAPE
   const [name, setName] = useState(persona.name)
   const [error, setError] = useState<string | null>(null)
   useEffect(() => setName(persona.name), [persona.name])
@@ -78,6 +82,21 @@ export function JuniorAbout({ routines, onNavigate, onView }: Props) {
             <RadioGroup.Root className="jrSwatches" aria-labelledby="jrColourL" value={persona.colour} onValueChange={(c) => void save({ colour: c })} orientation="horizontal">
               {SWATCHES.map(([label, hex]) => (
                 <RadioGroup.Item key={hex} value={hex} className="sw" title={label} aria-label={label} style={{ background: hex }} />
+              ))}
+            </RadioGroup.Root>
+          </span>
+        </div>
+        <div className="mrow">
+          <span className="ml" id="jrShapeL">
+            Shape
+          </span>
+          <span className="mv">
+            {/* Each choice is the face itself, in your colour, so you pick by how it looks. */}
+            <RadioGroup.Root className="jrShapes" aria-labelledby="jrShapeL" value={current} onValueChange={(s) => void save({ shape: s as Shape })} orientation="horizontal">
+              {SHAPES.map(([shape, label]) => (
+                <RadioGroup.Item key={shape} value={shape} className="shp" title={label} aria-label={label}>
+                  <JuniorFace shape={shape} size={34} mood={current === shape ? 'done' : 'hello'} motion="still" decorative />
+                </RadioGroup.Item>
               ))}
             </RadioGroup.Root>
           </span>

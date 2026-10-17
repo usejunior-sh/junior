@@ -6,6 +6,8 @@
  * the rules, which nothing here can switch off. Pure and browser-safe.
  */
 
+import { DEFAULT_SHAPE, isShape, type Shape } from './shapes.js'
+
 export type Voice = 'plain' | 'warm' | 'terse'
 export const VOICES: readonly Voice[] = ['plain', 'warm', 'terse']
 export const isVoice = (v: unknown): v is Voice => VOICES.includes(v as Voice)
@@ -22,6 +24,8 @@ export type Persona = {
   name: string
   /** the face's body colour, `#rrggbb`; underside and brows are derived from it */
   colour: string
+  /** the face's body outline (core/junior/shapes.ts) */
+  shape: Shape
   voice: Voice
   /** how the user wants replies, in their words; '' = not said */
   replyStyle: string
@@ -43,7 +47,7 @@ export const SWATCHES: ReadonlyArray<readonly [label: string, hex: string]> = [
   ['Graphite', '#b8bcc4'],
 ]
 
-export const DEFAULT_PERSONA: Persona = { name: DEFAULT_NAME, colour: SWATCHES[0][1], voice: 'plain', replyStyle: '' }
+export const DEFAULT_PERSONA: Persona = { name: DEFAULT_NAME, colour: SWATCHES[0][1], shape: DEFAULT_SHAPE, voice: 'plain', replyStyle: '' }
 
 /** The rules, as the About me tab shows them. Locked: no persona field reaches them. */
 export const RULES_SHORT = ['I read back what you ask', 'I ask everything in one message', 'nothing leaves without your OK'] as const
@@ -77,6 +81,8 @@ export function personaFrom(raw: unknown, base: Persona = DEFAULT_PERSONA): Pers
   return {
     name: 'name' in r ? cleanName(r.name) : base.name,
     colour: typeof r.colour === 'string' && HEX.test(r.colour) ? r.colour.toLowerCase() : base.colour,
+    // a persona saved before shapes has none: it keeps the slab it always had
+    shape: isShape(r.shape) ? r.shape : isShape(base.shape) ? base.shape : DEFAULT_SHAPE,
     voice: isVoice(r.voice) ? r.voice : base.voice,
     replyStyle: 'replyStyle' in r ? cleanReplyStyle(r.replyStyle) : base.replyStyle,
   }

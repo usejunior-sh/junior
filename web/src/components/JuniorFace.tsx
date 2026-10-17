@@ -15,10 +15,9 @@
  */
 import { memo, useEffect, useLayoutEffect, useRef } from 'react'
 import { MOOD_LABEL, type Mood } from '../../../core/junior/mood.js'
+import { shapePaths, type Shape } from '../../../core/junior/shapes.js'
 import { usePersona } from '../junior.js'
 
-const BACK = 'M22 15 C44 11 70 11 88 17 C97 20 99 30 99 46 C99 64 98 80 92 89 C88 96 78 97 58 97 C38 97 24 97 17 91 C11 85 10 69 10 51 C10 33 12 19 22 15 Z'
-const FRONT = 'M17 9 C39 5 65 5 83 11 C92 14 94 23 94 39 C94 57 93 73 87 82 C83 89 73 90 53 90 C33 90 19 90 12 84 C6 78 5 62 5 44 C5 26 7 13 17 9 Z'
 
 type Eye = { x: number; y: number; w: number; h: number; rot: number }
 type Brow = { x1: number; y1: number; x2: number; y2: number; bend: number }
@@ -254,6 +253,8 @@ type Props = {
   motion?: FaceMotion
   /** override the persona's colour (the About me swatches preview) */
   colour?: string
+  /** override the persona's shape (the About me shape picker) */
+  shape?: Shape
   /** decorative = hidden from assistive tech (a label beside it already names it) */
   decorative?: boolean
   /** look here instead of at the pointer: x, y in -1…1 (down = +y); null = back to the pointer */
@@ -266,11 +267,12 @@ type Props = {
 }
 
 /** Junior's face at any size. Colour and name come from the workspace's persona. */
-export const JuniorFace = memo(function JuniorFace({ mood = 'hello', size = 40, motion = 'wander', colour, decorative, className, look = null, reach = 1, features = 1 }: Props) {
+export const JuniorFace = memo(function JuniorFace({ mood = 'hello', size = 40, motion = 'wander', colour, shape, decorative, className, look = null, reach = 1, features = 1 }: Props) {
   const persona = usePersona()
   const svg = useRef<SVGSVGElement>(null)
   const ctl = useRef<FaceCtl | null>(null)
   const p = facePalette(colour ?? persona.colour)
+  const body = shapePaths(shape ?? persona.shape)
   // Lines in viewBox units, never thinner than about one screen pixel.
   const line = Math.max(4.4, 112 / size)
 
@@ -338,8 +340,8 @@ export const JuniorFace = memo(function JuniorFace({ mood = 'hello', size = 40, 
       aria-hidden={decorative ? true : undefined}
       style={{ overflow: 'visible', display: 'block', flex: 'none' }}
     >
-      <path data-part="back" d={BACK} fill={p.edge} />
-      <path data-part="front" d={FRONT} fill={p.body} />
+      <path data-part="back" d={body.back} fill={p.edge} />
+      <path data-part="front" d={body.front} fill={p.body} />
       <g data-part="face">
         {[0, 1].map((i) => <path key={`b${i}`} data-part="brow" fill="none" strokeWidth={line} strokeLinecap="round" stroke={p.brow} />)}
         {[0, 1].map((i) => <rect key={`e${i}`} data-part="eye" fill={p.eye} />)}
