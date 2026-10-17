@@ -653,8 +653,8 @@ export function App() {
   )
 
   const sendMessage = useCallback(
-    (text: string, images?: ImageAttachment[], mentions?: Mention[], mode?: 'goal') => {
-      if (currentId) store.send({ type: 'user_message', sessionId: currentId, text, images, mentions, ...(mode ? { mode } : {}) })
+    (text: string, images?: ImageAttachment[], mentions?: Mention[], mode?: 'goal', files?: string[]) => {
+      if (currentId) store.send({ type: 'user_message', sessionId: currentId, text, images, ...(files ? { files } : {}), mentions, ...(mode ? { mode } : {}) })
     },
     [currentId],
   )
@@ -963,6 +963,7 @@ export function App() {
       ...(s.mode && s.mode !== 'normal' ? { mode: s.mode } : {}),
       provider: s.provider,
       images: s.images,
+      ...(s.files ? { files: s.files } : {}),
       mentions: s.mentions,
       itemId: s.itemId,
       checkoutId: s.checkoutId,

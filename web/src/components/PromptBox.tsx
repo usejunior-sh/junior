@@ -1,4 +1,4 @@
-import { ArrowUp, ImagePlus, LoaderCircle, Square } from 'lucide-react'
+import { ArrowUp, LoaderCircle, Paperclip, Square } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
   mentionToken,
@@ -44,8 +44,8 @@ type Props = {
   placeholder: string
   /** When this changes the box is refocused with the caret at the end. */
   focusKey?: string
-  /** Called with the trimmed text and whatever is attached: images, `@` mentions. */
-  onSubmit: (text: string, images?: ImageAttachment[], mentions?: Mention[]) => void
+  /** Called with the trimmed text and whatever is attached: images, `@` mentions, uploaded file ids. */
+  onSubmit: (text: string, images?: ImageAttachment[], mentions?: Mention[], files?: string[]) => void
   sendTitle: string
   model?: string
   effort?: EffortLevel
@@ -131,7 +131,7 @@ export function PromptBox({
   const modeOn = !!onModeChange && (provider ?? 'claude') === 'claude'
   const [dragging, setDragging] = useState(false)
   const attach = useAttachments(draftKey)
-  const canSend = !!text.trim() || attach.images.length > 0
+  const canSend = (!!text.trim() || attach.images.length > 0 || attach.files.length > 0) && !attach.uploading
   const faceOn = !!sendFace && canSend
   const [sendHover, setSendHover] = useState(false)
   const mentions = useMentions(text, initialMentions)
@@ -270,9 +270,10 @@ export function PromptBox({
     if (busy) return
     const trimmed = text.trim()
     const images = attach.payload()
+    const files = attach.fileIds()
     const picked = mentions.payload()
-    if (!trimmed && !images) return
-    onSubmit(trimmed, images, picked)
+    if ((!trimmed && !images && !files) || attach.uploading) return
+    onSubmit(trimmed, images, picked, files)
     attach.clear()
     mentions.clear()
     requestAnimationFrame(autosize)
@@ -301,6 +302,7 @@ export function PromptBox({
 
         <AttachmentStrip
           images={attach.images}
+          files={attach.files.map((f) => ({ id: f.id, name: f.name, bytes: f.bytes, uploading: !f.uploadId }))}
           mentions={mentions.mentions}
           error={attach.error}
           onRemove={attach.remove}
@@ -419,7 +421,6 @@ export function PromptBox({
           <input
             ref={filePicker}
             type="file"
-            accept="image/png,image/jpeg,image/gif,image/webp"
             multiple
             hidden
             onChange={(e) => {
@@ -431,10 +432,10 @@ export function PromptBox({
           <button
             className="chip attachBtn"
             onClick={() => filePicker.current?.click()}
-            title="Attach images (or paste / drop them) · type @ to attach files, work items, sessions · type / for commands"
-            aria-label="Attach images"
+            title="Attach file (or paste / drop it) · type @ to mention project files, work items, sessions · type / for commands"
+            aria-label="Attach file"
           >
-            <ImagePlus aria-hidden="true" />
+            <Paperclip aria-hidden="true" />
           </button>
           <ModelPopover
             model={model}
@@ -466,7 +467,7 @@ export function PromptBox({
             id="sendBtn"
             onClick={submit}
             disabled={busy || !canSend}
-            title={busy ? 'Starting…' : sendTitle}
+            title={busy ? 'Starting…' : attach.uploading ? 'Uploading…' : sendTitle}
             aria-busy={busy || undefined}
             className={busy ? 'busy' : faceOn ? 'face' : undefined}
             onPointerEnter={() => setSendHover(true)}

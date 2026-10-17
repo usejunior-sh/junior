@@ -18,6 +18,7 @@ import {
   isThinkingBlock,
   isToolResultBlock,
   isToolUseBlock,
+  type FileRef,
   type ImageAttachment,
   type AgentRelay,
   type ResolvedMention,
@@ -57,6 +58,7 @@ export type TranscriptItem =
       kind: 'user'
       text: string
       images?: ImageAttachment[]
+      files?: FileRef[]
       mentions?: ResolvedMention[]
       from?: string
       /** sent in Goal mode */
@@ -161,7 +163,7 @@ export function buildTranscript(
           relays.push({ agentId: ev.relay.agentId, text: ev.text, mark })
           break
         }
-        if (!scope) items.push({ key: `u${i}`, kind: 'user', text: ev.text, images: ev.images, mentions: ev.mentions, from: ev.from, ...(ev.mode ? { mode: ev.mode } : {}) })
+        if (!scope) items.push({ key: `u${i}`, kind: 'user', text: ev.text, images: ev.images, ...(ev.files?.length ? { files: ev.files } : {}), mentions: ev.mentions, from: ev.from, ...(ev.mode ? { mode: ev.mode } : {}) })
         break
       }
       case 'error':

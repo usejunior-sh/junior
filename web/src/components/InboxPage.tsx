@@ -7,10 +7,10 @@ import {
   CheckSquare,
   ChevronRight,
   ExternalLink,
-  ImagePlus,
   Link2,
   MessageCircleQuestion,
   MoreHorizontal,
+  Paperclip,
   Play,
   ShieldQuestion,
   Sparkles,
@@ -31,6 +31,7 @@ import { RepoScopeEditor } from './RepoScope.js'
 import type {
   BriefJob,
   BriefJobsResponse,
+  FileRef,
   InboxAlert,
   ItemImage,
   ItemImageEdit,
@@ -1194,6 +1195,8 @@ function ItemComposer({
   const [linkOpen, setLinkOpen] = useState(false)
   /** images the item already holds (edit only) — dropping one here deletes it on save */
   const [kept, setKept] = useState<ItemImage[]>([])
+  /** files the item already holds (edit only), dropped here the same way */
+  const [keptFiles, setKeptFiles] = useState<FileRef[]>([])
   const [dragging, setDragging] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -1213,6 +1216,7 @@ function ItemComposer({
       setUrl(editing?.url ?? '')
       setLinkOpen(!!editing?.url)
       setKept(editing?.images ?? [])
+      setKeptFiles(editing?.files ?? [])
       attach.clear()
       setError(null)
     }
@@ -1225,8 +1229,14 @@ function ItemComposer({
     ...kept.map((i) => ({ id: i.id, url: editing ? withWorkspace(itemImageUrl(editing.id, i.id)) : '', name: i.name })),
     ...attach.images,
   ]
+  const stripFiles = [
+    ...keptFiles.map((f) => ({ id: f.id, name: f.name, bytes: f.bytes })),
+    ...attach.files.map((f) => ({ id: f.id, name: f.name, bytes: f.bytes, uploading: !f.uploadId })),
+  ]
+  const attached = thumbs.length + stripFiles.length
   const removeThumb = (id: string) => {
     if (kept.some((i) => i.id === id)) setKept((prev) => prev.filter((i) => i.id !== id))
+    else if (keptFiles.some((f) => f.id === id)) setKeptFiles((prev) => prev.filter((f) => f.id !== id))
     else attach.remove(id)
   }
 
@@ -1239,6 +1249,8 @@ function ItemComposer({
         ...kept.map((i) => ({ id: i.id })),
         ...(attach.payload() ?? []),
       ]
+      // Files go by id: the ones the item holds, then this sitting's uploads. Always the full set on an edit.
+      const files = [...keptFiles.map((f) => f.id), ...(attach.fileIds() ?? [])]
       const payload = {
         title,
         projectId: projectId || undefined,
@@ -1248,6 +1260,7 @@ function ItemComposer({
         // An edit sends the day only when it changed: null clears it.
         ...(editing ? (due !== dayInput(editing) ? { due: due || null } : {}) : due ? { due } : {}),
         images,
+        ...(editing || files.length > 0 ? { files } : {}),
       }
       const path = editing ? `/api/items/manual?id=${encodeURIComponent(editing.id)}` : '/api/items/manual'
       const res = await fetch(path, {
@@ -1291,7 +1304,7 @@ function ItemComposer({
         // ⌘↵ saves from any field — the description is where you live, and
         // reaching for the button to save a two-line to-do is a tax.
         onKeyDown={(e) => {
-          if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && title.trim() && !saving) {
+          if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && title.trim() && !saving && !attach.uploading) {
             e.preventDefault()
             void save()
           }
@@ -1353,11 +1366,11 @@ function ItemComposer({
         )}
 
         <div className="composerAttachments">
-          <AttachmentStrip images={thumbs} error={attach.error} onRemove={removeThumb} />
-          {thumbs.length === 0 && !attach.error && (
+          <AttachmentStrip images={thumbs} files={stripFiles} error={attach.error} onRemove={removeThumb} />
+          {attached === 0 && !attach.error && (
             <button type="button" className="dropHint" onClick={() => filePicker.current?.click()}>
-              <ImagePlus size={12} aria-hidden="true" />
-              Paste, drop, or click to attach a screenshot
+              <Paperclip size={12} aria-hidden="true" />
+              Paste, drop, or click to attach a file or screenshot
             </button>
           )}
         </div>
@@ -1365,7 +1378,6 @@ function ItemComposer({
         <input
           ref={filePicker}
           type="file"
-          accept="image/png,image/jpeg,image/gif,image/webp"
           multiple
           hidden
           onChange={(e) => {
@@ -1412,12 +1424,13 @@ function ItemComposer({
           )}
           <button
             type="button"
-            className={`pill add${thumbs.length ? ' set' : ''}`}
+            className={`pill add${attached ? ' set' : ''}`}
             onClick={() => filePicker.current?.click()}
-            title="Attach screenshots — or just paste them"
+            title="Attach a file or screenshot — or just paste or drop it"
+            aria-label="Attach file"
           >
-            <ImagePlus size={12} aria-hidden="true" />
-            {thumbs.length > 0 ? `${thumbs.length} image${thumbs.length === 1 ? '' : 's'}` : 'Image'}
+            <Paperclip size={12} aria-hidden="true" />
+            {attached > 0 ? `${attached} file${attached === 1 ? '' : 's'}` : 'File'}
           </button>
           {!linkOpen && (
             <button type="button" className="pill add" onClick={() => setLinkOpen(true)} title="Add a link">
@@ -1442,8 +1455,8 @@ function ItemComposer({
             <button type="button" className="cancel" onClick={onClose}>
               Cancel
             </button>
-            <button type="submit" className="go" disabled={saving || !title.trim()}>
-              {saving ? 'Saving…' : editing ? 'Save changes' : 'Add item'}
+            <button type="submit" className="go" disabled={saving || attach.uploading || !title.trim()}>
+              {saving ? 'Saving…' : attach.uploading ? 'Uploading…' : editing ? 'Save changes' : 'Add item'}
             </button>
           </div>
         </div>

@@ -29,6 +29,7 @@ import { Markdown } from './Markdown.js'
 import { PermissionCard, PlanCard } from './PermissionCard.js'
 import { ToolCard } from './ToolCard.js'
 import { BrowserShots } from './BrowserShots.js'
+import { FileChip } from './AttachmentStrip.js'
 import { ToolGroup } from './ToolGroup.js'
 import { ActionNotes } from './ActionCard.js'
 import { useActions } from '../actions.js'
@@ -470,6 +471,13 @@ const Item = memo(function Item({
                   alt={img.name ?? 'Attached image'}
                   title={img.name}
                 />
+              ))}
+            </div>
+          )}
+          {item.files && item.files.length > 0 && (
+            <div className="msgFiles">
+              {item.files.map((f) => (
+                <FileChip key={f.id} file={f} />
               ))}
             </div>
           )}

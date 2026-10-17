@@ -5,14 +5,16 @@
  * The actions live in the right column so the left reads as a page, not a form.
  */
 import { runFileHash } from './RunFolderPage.js'
-import { AlarmClock, Archive, CalendarDays, Check, ChevronDown, ChevronRight, ExternalLink, FileText, Folder, Hash, ImagePlus, Play, Sparkles, Target, X } from 'lucide-react'
+import { AlarmClock, Archive, CalendarDays, Check, ChevronDown, ChevronRight, ExternalLink, FileText, Folder, Hash, Paperclip, Play, Sparkles, Target, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type {
   BriefJobsResponse,
   BriefResponse,
   BriefView,
+  FileRef,
   ItemEvent,
   ItemEventsResponse,
+  ItemFilesResponse,
   ItemImage,
   ItemImageEdit,
   ItemImagesResponse,
@@ -28,12 +30,12 @@ import type {
   SessionsUsageResponse,
   JobsResponse,
 } from '../../../shared/protocol.js'
-import { itemImageUrl } from '../../../shared/protocol.js'
+import { itemFileUrl, itemImageUrl } from '../../../shared/protocol.js'
 import { withWorkspace } from '../workspaceUrl.js'
 import { projectColor } from '../tabs.js'
 import { MAX_SERIES, OTHER, OTHER_KEY, SERIES, modelLabel, money, tokens } from '../usageFormat.js'
 import { useAttachments } from '../attachments.js'
-import { AttachmentStrip } from './AttachmentStrip.js'
+import { AttachmentStrip, FileChip } from './AttachmentStrip.js'
 import { useCheckouts, useSessions } from '../hooks.js'
 import { checkoutOf } from '../checkouts.js'
 import { inboxStore, useInbox } from '../inboxStore.js'
@@ -136,6 +138,8 @@ export function ItemPage({ id, onDispatch, onGoal, onNavigate, onDirty }: Props)
   const [descDraft, setDescDraft] = useState<string | null>(null)
   /** the images the editor is holding — parallel to `descDraft`, null when not editing */
   const [imgDraft, setImgDraft] = useState<ItemImage[] | null>(null)
+  /** the files the editor is holding, the same way */
+  const [fileDraft, setFileDraft] = useState<FileRef[] | null>(null)
   const attach = useAttachments()
   const filePicker = useRef<HTMLInputElement>(null)
   const [feedback, setFeedback] = useState('')
@@ -147,7 +151,7 @@ export function ItemPage({ id, onDispatch, onGoal, onNavigate, onDirty }: Props)
 
   // Anything unsaved on this page would be lost if the peek slot handed the
   // tab to the next document — so the first keystroke keeps it.
-  const dirty = descDraft !== null || imgDraft !== null || feedback.trim() !== ''
+  const dirty = descDraft !== null || imgDraft !== null || fileDraft !== null || feedback.trim() !== ''
   useEffect(() => {
     if (dirty) onDirty()
   }, [dirty, onDirty])
@@ -358,12 +362,14 @@ export function ItemPage({ id, onDispatch, onGoal, onNavigate, onDirty }: Props)
     if (!item) return
     setDescDraft(item.description ?? '')
     setImgDraft(item.images ?? [])
+    setFileDraft(item.files ?? [])
     attach.clear()
   }
 
   function cancelDescription() {
     setDescDraft(null)
     setImgDraft(null)
+    setFileDraft(null)
     attach.clear()
   }
 
@@ -371,8 +377,11 @@ export function ItemPage({ id, onDispatch, onGoal, onNavigate, onDirty }: Props)
     if (!item || descDraft === null) return
     const description = descDraft.trim()
     const held = imgDraft ?? []
+    const heldFiles = fileDraft ?? []
+    if (attach.uploading) return
     // Two endpoints, one save: the text, then the images when they moved.
     const imagesChanged = attach.images.length > 0 || held.length !== (item.images ?? []).length
+    const filesChanged = !!attach.fileIds() || heldFiles.length !== (item.files ?? []).length
     setBusy('desc')
     try {
       const res = await fetch('/api/items/description', {
@@ -400,8 +409,22 @@ export function ItemPage({ id, onDispatch, onGoal, onNavigate, onDirty }: Props)
         }
         images = ib.images.length > 0 ? ib.images : undefined
       }
+      let files = item.files
+      if (filesChanged) {
+        const r = await fetch('/api/items/files', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ id: item.id, files: [...heldFiles.map((f) => f.id), ...(attach.fileIds() ?? [])] }),
+        })
+        const fb = (await r.json()) as ItemFilesResponse
+        if (!fb.ok) {
+          setNotice(fb.error)
+          return
+        }
+        files = fb.files.length > 0 ? fb.files : undefined
+      }
       const patch = (i: ScoredItem) =>
-        i.id === item.id ? { ...i, description: description || undefined, images } : i
+        i.id === item.id ? { ...i, description: description || undefined, images, files } : i
       inboxStore.patch((items) => items.map(patch))
       setOther((o) => (o?.item ? { ...o, item: patch(o.item) } : o))
       cancelDescription()
@@ -524,7 +547,7 @@ export function ItemPage({ id, onDispatch, onGoal, onNavigate, onDirty }: Props)
                 autoFocus
                 value={descDraft}
                 onChange={(e) => setDescDraft(e.target.value)}
-                placeholder="Your intent, in your words — paste a screenshot and it goes with it. The brief and any dispatched session read both."
+                placeholder="Your intent, in your words — paste a screenshot or attach a file and it goes with it. The brief and any dispatched session read all of it."
                 onPaste={attach.onPaste}
                 onKeyDown={(e) => {
                   if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') void saveDescription()
@@ -536,9 +559,14 @@ export function ItemPage({ id, onDispatch, onGoal, onNavigate, onDirty }: Props)
                   ...(imgDraft ?? []).map((i) => ({ id: i.id, url: withWorkspace(itemImageUrl(item.id, i.id)), name: i.name })),
                   ...attach.images,
                 ]}
+                files={[
+                  ...(fileDraft ?? []).map((f) => ({ id: f.id, name: f.name, bytes: f.bytes })),
+                  ...attach.files.map((f) => ({ id: f.id, name: f.name, bytes: f.bytes, uploading: !f.uploadId })),
+                ]}
                 error={attach.error}
                 onRemove={(imgId) => {
                   if ((imgDraft ?? []).some((i) => i.id === imgId)) setImgDraft((prev) => (prev ?? []).filter((i) => i.id !== imgId))
+                  else if ((fileDraft ?? []).some((f) => f.id === imgId)) setFileDraft((prev) => (prev ?? []).filter((f) => f.id !== imgId))
                   else attach.remove(imgId)
                 }}
               />
@@ -546,7 +574,6 @@ export function ItemPage({ id, onDispatch, onGoal, onNavigate, onDirty }: Props)
                 <input
                   ref={filePicker}
                   type="file"
-                  accept="image/png,image/jpeg,image/gif,image/webp"
                   multiple
                   hidden
                   onChange={(e) => {
@@ -558,16 +585,17 @@ export function ItemPage({ id, onDispatch, onGoal, onNavigate, onDirty }: Props)
                   type="button"
                   className="btn xs ghost"
                   onClick={() => filePicker.current?.click()}
-                  title="Attach screenshots — or paste them into the box"
+                  title="Attach a file or screenshot — or paste it into the box"
+                  aria-label="Attach file"
                 >
-                  <ImagePlus size={12} aria-hidden="true" /> Image
+                  <Paperclip size={12} aria-hidden="true" /> File
                 </button>
                 <span className="spacer" />
                 <button type="button" className="btn xs ghost" onClick={cancelDescription}>
                   Cancel
                 </button>
-                <button type="button" className="btn xs primary" disabled={busy === 'desc'} onClick={() => void saveDescription()}>
-                  Save
+                <button type="button" className="btn xs primary" disabled={busy === 'desc' || attach.uploading} onClick={() => void saveDescription()}>
+                  {attach.uploading ? 'Uploading…' : 'Save'}
                 </button>
               </div>
             </>
@@ -596,6 +624,13 @@ export function ItemPage({ id, onDispatch, onGoal, onNavigate, onDirty }: Props)
                     >
                       <img src={withWorkspace(itemImageUrl(item.id, img.id))} alt={img.name ?? 'Attached screenshot'} />
                     </a>
+                  ))}
+                </div>
+              )}
+              {item.files && item.files.length > 0 && (
+                <div className="descFiles">
+                  {item.files.map((f) => (
+                    <FileChip key={f.id} file={f} href={withWorkspace(itemFileUrl(item.id, f.id))} />
                   ))}
                 </div>
               )}

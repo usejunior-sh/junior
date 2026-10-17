@@ -34,7 +34,7 @@ type Props = {
   /** The agent the session runs on — shown, never changed: a session keeps its agent. */
   provider: ProviderId
   /** `mode: 'goal'` — sent in Goal mode */
-  onSend: (text: string, images?: ImageAttachment[], mentions?: Mention[], mode?: 'goal') => void
+  onSend: (text: string, images?: ImageAttachment[], mentions?: Mention[], mode?: 'goal', files?: string[]) => void
   /** Plan mode on or off — here only off: the Planning chip's way out */
   onPlanningChange: (planning: boolean) => void
   onInterrupt: () => void
@@ -96,8 +96,8 @@ export function Composer({
         planning ? 'What should Junior plan? It edits nothing until you approve the plan.' : running ? 'Steer the session… (queued until this turn ends)' : 'Steer the session…'
       }
       sendTitle="Send (Enter)"
-      onSubmit={(trimmed, images, mentions) => {
-        onSend(trimmed, images, mentions)
+      onSubmit={(trimmed, images, mentions, files) => {
+        onSend(trimmed, images, mentions, undefined, files)
         setText('')
       }}
       // No mode picker once a session has started: Junior can plan, start a goal or set up a job from

@@ -127,6 +127,8 @@ export type NewSession = {
   /** The agent the session runs on for life; absent = Claude. */
   provider?: ProviderId
   images?: ImageAttachment[]
+  /** upload ids of files attached to the first message */
+  files?: string[]
   mentions?: Mention[]
   /** the work item this session is dispatched for (recorded as a link) */
   itemId?: string
@@ -444,7 +446,7 @@ export function NewSessionComposer({ draft, onChange, onCreate, error, step }: P
             : undefined
         }
         initialMentions={draft.mentions}
-        onSubmit={(text, images, picked) => {
+        onSubmit={(text, images, picked, files) => {
           const typedIn = pulled.filter((p) => !picked?.some((m) => m.kind === 'item' && m.ref === p.id)).map((p) => ({ kind: 'item' as const, ref: p.id, label: p.title }))
           const mentions = [...(picked ?? []), ...typedIn].slice(0, MAX_MENTIONS_PER_MESSAGE)
           const newBranch = isNew ? (draft.newBranch?.trim() || branchFromTitle(text)) : ''
@@ -467,6 +469,7 @@ export function NewSessionComposer({ draft, onChange, onCreate, error, step }: P
               ...(onClaude && !job && mode !== 'normal' ? { mode } : {}),
               ...(onClaude ? {} : { provider }),
               images,
+              ...(files ? { files } : {}),
               mentions,
               ...(draft.itemId ? { itemId: draft.itemId } : {}),
               ...(existing
