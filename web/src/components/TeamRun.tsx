@@ -1,12 +1,16 @@
 import * as Collapsible from '@radix-ui/react-collapsible'
+import * as RadioGroup from '@radix-ui/react-radio-group'
 import * as Tabs from '@radix-ui/react-tabs'
-import { ChevronRight, PanelRight, Plus, X } from 'lucide-react'
+import { ChevronRight, PanelRight, Plus, X, Zap } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import type { Handoff, ModelOption, SessionSummary, SessionTeamRun, Slice, TeamCard, TeamRun, TeamRunView } from '../../../shared/protocol.js'
+import type { Handoff, LedgerEntry, ModelOption, SessionSummary, SessionTeamRun, Slice, TeamCard, TeamRun, TeamRunView } from '../../../shared/protocol.js'
 import { leadSlices, normalizeRun } from '../../../core/teams/engine.js'
+import { TEAM_PERMISSIONS, type TeamPermissions } from '../../../core/teams/recipe.js'
+import { FAST_MODE_BLURB } from '../fastMode.js'
+import { runFileHash } from './RunFolderPage.js'
 import { findModel } from '../models.js'
 import { Select, SelectItem } from '../ui/Select.js'
-import { colorOf, loadTeamRun, teamsCall, usd } from '../teams.js'
+import { colorOf, loadTeamRun, PERMISSION_META, teamsCall, usd } from '../teams.js'
 
 /**
  * A team run in a session (Teams v2), in three places so none of them is big:
@@ -48,6 +52,8 @@ const wireCard = (c: TeamCard) => ({
   tasks: c.tasks,
   decisions: c.decisions,
   budgetUsd: c.budgetUsd,
+  permissions: c.permissions ?? undefined,
+  fast: c.fast,
   note: c.note,
   steps: c.steps.map((s) => ({ id: s.id, model: s.model ?? undefined, slices: s.slices ?? undefined })),
 })
@@ -261,9 +267,19 @@ export function TeamDock({ run, onDetails, onNavigate }: { run: TeamRunView; onD
     title = 'Run this team?'
     line = run.card.goal
     primary = (
-      <button type="button" className="btn primary sm" disabled={busy} onClick={() => go('approve', { runId: run.id })}>
-        {busy ? 'Starting…' : 'Approve & run'}
-      </button>
+      <>
+        <PermissionSelect run={run} disabled={busy} onError={setError} />
+        <TeamFastToggle run={run} onError={setError} />
+        <button
+          type="button"
+          className="btn primary sm"
+          disabled={busy || !run.card.permissions}
+          title={run.card.permissions ? undefined : 'Pick what the team may do without asking first'}
+          onClick={() => go('approve', { runId: run.id })}
+        >
+          {busy ? 'Starting…' : 'Approve & run'}
+        </button>
+      </>
     )
   } else if (run.revision) {
     dot = 'yellow'
@@ -311,7 +327,7 @@ export function TeamDock({ run, onDetails, onNavigate }: { run: TeamRunView; onD
   } else if (run.state === 'done') {
     dot = run.unresolved ? 'yellow' : 'green'
     title = `Team done · ${usd(run.spentUsd)}`
-    line = run.unresolved ? `unresolved: ${run.unresolved}` : run.planArtifactId ? 'the outcome is on the plan' : 'the result is saved on the work item'
+    line = run.unresolved ? `unresolved: ${run.unresolved}` : 'the outcome is in the run’s plan.md'
     // Runs from before plans saved their result as its own artifact.
     primary =
       !run.planArtifactId && run.resultArtifactId ? (
@@ -331,11 +347,9 @@ export function TeamDock({ run, onDetails, onNavigate }: { run: TeamRunView; onD
         <span className="tdTitle">{title}</span>
         {line && <span className="tdLine">{line}</span>}
         <span className="sp" />
-        {run.planArtifactId && (
-          <button type="button" className="btn sm ghost" onClick={() => onNavigate(`/artifact/${run.planArtifactId}`)} title="The plan — tasks, notes, decisions, progress; the outcome when it's done">
-            Open plan
-          </button>
-        )}
+        <button type="button" className="btn sm ghost" onClick={() => onNavigate(runFileHash(run.id))} title="The run folder: plan, ledger, reviews and every handoff — the outcome when it's done">
+          Open plan
+        </button>
         <button type="button" className="btn sm ghost" onClick={onDetails}>
           Details
         </button>
@@ -443,12 +457,19 @@ function EditList({ items, onChange, disabled, add }: { items: string[]; onChang
   )
 }
 
+export type TeamSideTab = 'runs' | 'files' | 'run'
+
 export function TeamSide({
   run,
   lead,
   models,
   onClose,
   onNavigate,
+  runs,
+  runsTools,
+  files,
+  tab: tabIn,
+  onTab,
 }: {
   run: TeamRunView
   /** only the lead's session edits and approves */
@@ -456,7 +477,16 @@ export function TeamSide({
   models: ModelOption[]
   onClose: () => void
   onNavigate: (to: string) => void
+  /** the team's runs (TeamRuns) and Files panel (TeamFiles): with them, the drawer has tabs */
+  runs?: ReactNode
+  /** shown at the end of the tab row while Runs is open (RunsViewToggle) */
+  runsTools?: ReactNode
+  files?: ReactNode
+  tab: TeamSideTab
+  onTab: (tab: TeamSideTab) => void
 }) {
+  const tabbed = !!(runs && files)
+  const tab = tabbed ? tabIn : 'run'
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const [saveName, setSaveName] = useState<string | null>(null)
@@ -508,16 +538,40 @@ export function TeamSide({
         <span className="t">Team · {run.recipe.label}</span>
         <span className="k">{run.team ? `teams/${run.team}.md` : 'drafted for this run'}</span>
         <span className="sp" />
-        {run.planArtifactId && (
-          <button type="button" className="btn xs ghost" onClick={() => onNavigate(`/artifact/${run.planArtifactId}`)}>
-            Open plan
-          </button>
-        )}
+        <button type="button" className="btn xs ghost" onClick={() => onNavigate(runFileHash(run.id))} title="The run folder: plan, ledger, reviews and every handoff">
+          Open plan
+        </button>
         <button type="button" className="iconBtn" aria-label="Close details" title="Close (the card stays above the composer)" onClick={onClose}>
           <X size={14} aria-hidden="true" />
         </button>
       </header>
 
+      {tabbed && (
+        <Tabs.Root value={tab} onValueChange={(v) => onTab(v as TeamSideTab)} className="tsTabs">
+          <Tabs.List className="tsTabList" aria-label="Run details">
+            <Tabs.Trigger value="runs" className="tsTab">
+              Runs
+            </Tabs.Trigger>
+            <Tabs.Trigger value="files" className="tsTab">
+              Files
+            </Tabs.Trigger>
+            <Tabs.Trigger value="run" className="tsTab">
+              Plan & steps
+            </Tabs.Trigger>
+          </Tabs.List>
+          {tab === 'runs' && runsTools && (
+            <>
+              <span className="sp" />
+              {runsTools}
+            </>
+          )}
+        </Tabs.Root>
+      )}
+      {tab === 'runs' ? (
+        <div className="tsBody">{runs}</div>
+      ) : tab === 'files' ? (
+        <div className="tsBody">{files}</div>
+      ) : (
       <div className="tsBody">
         {card.note && <p className="tsNote">{card.note}</p>}
 
@@ -616,16 +670,26 @@ export function TeamSide({
           </section>
         )}
 
-        {run.notes.length > 0 && (
+        {run.ledger.length > 0 && (
           <section className="tsSec">
-            <div className="tsK">notes for whoever builds next</div>
-            <ul className="tsNotes">
-              {run.notes.map((n, i) => (
-                <li key={i}>
-                  {n.task && <span className="tsId mono">{n.task}</span>} {n.text}
-                </li>
-              ))}
-            </ul>
+            <div className="tsK">ledger · what the team learned</div>
+            {LEDGER_GROUPS.map(({ kind, label }) => {
+              const xs = run.ledger.filter((e) => e.kind === kind)
+              if (!xs.length) return null
+              return (
+                <div key={kind} className="tsLedger">
+                  <div className="tsMeta">{label}</div>
+                  <ul className="tsNotes">
+                    {xs.slice(-12).map((n, i) => (
+                      <li key={i}>
+                        {n.task && <span className="tsId mono">{n.task}</span>} {n.text}
+                        {n.why && <span className="muted"> — because {n.why}</span>}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )
+            })}
           </section>
         )}
 
@@ -732,6 +796,34 @@ export function TeamSide({
           )}
         </section>
 
+        <section className="tsSec">
+          <div className="tsK">without asking</div>
+          {editable ? (
+            <RadioGroup.Root className="tsPerms" aria-label="What the team may do without asking" value={card.permissions ?? ''} onValueChange={(v) => save({ permissions: v as TeamPermissions })}>
+              {TEAM_PERMISSIONS.map((p) => (
+                <RadioGroup.Item key={p} value={p} className="tsPerm">
+                  <span className="tsPermDot" aria-hidden="true" />
+                  <span className="tsPermText">
+                    <span className="l">{PERMISSION_META[p].label}</span>
+                    <span className="h">{PERMISSION_META[p].hint}</span>
+                  </span>
+                </RadioGroup.Item>
+              ))}
+            </RadioGroup.Root>
+          ) : (
+            <div className="edText">{card.permissions ? PERMISSION_META[card.permissions].label : <span className="muted">not picked</span>}</div>
+          )}
+          {editable && !card.permissions && <div className="tsMeta warn">Pick one — the team can’t start until you do.</div>}
+        </section>
+
+        <section className="tsSec">
+          <div className="tsK">speed</div>
+          <div className="tsFast">
+            <TeamFastToggle run={run} onError={setError} />
+            <span className="muted">{run.card.fast ? 'every agent runs in fast mode — premium price' : 'standard speed for every agent'}</span>
+          </div>
+        </section>
+
         {run.unresolved && <div className="teamUnresolved">Unresolved: {run.unresolved}</div>}
 
         {run.outputs.length > 0 && (
@@ -752,6 +844,7 @@ export function TeamSide({
           </section>
         )}
       </div>
+      )}
 
       {error && (
         <div className="tdErr tsErr" role="alert">
@@ -787,7 +880,7 @@ export function TeamSide({
             <button type="button" className="btn sm ghost" disabled={!!busy} onClick={() => act('discard', () => call('discard', { runId: run.id }))}>
               Discard
             </button>
-            <button type="button" className="btn primary sm" disabled={!!busy} onClick={() => act('approve', () => call('approve', { runId: run.id }))}>
+            <button type="button" className="btn primary sm" disabled={!!busy || !card.permissions} title={card.permissions ? undefined : 'Pick what the team may do without asking first'} onClick={() => act('approve', () => call('approve', { runId: run.id }))}>
               {busy === 'approve' ? 'Starting…' : 'Approve & run'}
             </button>
           </>
@@ -797,10 +890,81 @@ export function TeamSide({
   )
 }
 
+/**
+ * Fast mode for every agent on the team — premium speed, premium price. Before approval it's
+ * on the card; while the run goes, it switches every worker session at once.
+ */
+export function TeamFastToggle({ run, onError }: { run: TeamRunView; onError?: (e: string | null) => void }) {
+  const [want, setWant] = useState<boolean | null>(null)
+  useEffect(() => setWant(null), [run.rev])
+  const on = want ?? run.card.fast
+  const ended = run.state === 'done' || run.state === 'stopped'
+  return (
+    <button
+      type="button"
+      className={`chip fast${on ? ' on' : ''}`}
+      aria-pressed={on}
+      disabled={ended}
+      title={on ? 'Fast mode is on for every agent on the team — premium price. Click to turn it off.' : `Fast mode for every agent on the team — ${FAST_MODE_BLURB}`}
+      onClick={() => {
+        setWant(!on)
+        onError?.(null)
+        teamsCall('PUT', 'fast', { runId: run.id, fast: !on }).catch((err) => {
+          setWant(null)
+          onError?.(errText(err))
+        })
+      }}
+    >
+      <Zap size={12} aria-hidden="true" />
+      <span className="name">Fast</span>
+    </button>
+  )
+}
+
+/** The dock's pick: what the workers may do without asking. Saved on the card as you choose. */
+function PermissionSelect({ run, disabled, onError }: { run: TeamRunView; disabled: boolean; onError: (e: string | null) => void }) {
+  const [picked, setPicked] = useState<TeamPermissions | null>(null)
+  useEffect(() => setPicked(null), [run.rev])
+  const value = picked ?? run.card.permissions
+  return (
+    <Select
+      className="teamSel tdPerms"
+      aria-label="What the team may do without asking"
+      placeholder="Permissions…"
+      value={value ?? undefined}
+      disabled={disabled}
+      onValueChange={(v) => {
+        const p = v as TeamPermissions
+        setPicked(p)
+        onError(null)
+        teamsCall('PUT', 'card', { runId: run.id, card: wireCard({ ...run.card, permissions: p }) }).catch((err) => {
+          setPicked(null)
+          onError(errText(err))
+        })
+      }}
+    >
+      {TEAM_PERMISSIONS.map((p) => (
+        <SelectItem key={p} value={p} description={PERMISSION_META[p].hint}>
+          {PERMISSION_META[p].label}
+        </SelectItem>
+      ))}
+    </Select>
+  )
+}
+
+const LEDGER_GROUPS: { kind: LedgerEntry['kind']; label: string }[] = [
+  { kind: 'decision', label: 'decisions' },
+  { kind: 'where', label: 'where things are' },
+  { kind: 'surprise', label: 'surprises' },
+  { kind: 'failed', label: 'tried, didn’t work' },
+  { kind: 'verify', label: 'how to check' },
+  { kind: 'note', label: 'notes' },
+]
+
 /** One handoff as one line; open it for the full text. */
 function HandoffRow({ h }: { h: Handoff }) {
   const [open, setOpen] = useState(false)
-  const full = h.body || h.findings?.length || h.files?.length
+  const full = h.body || h.findings?.length || h.files?.length || h.criteria?.length || h.unsure
   return (
     <li className="hoRow">
       <Collapsible.Root open={open} onOpenChange={setOpen}>
@@ -815,12 +979,33 @@ function HandoffRow({ h }: { h: Handoff }) {
           <span className="hoSum">{h.summary}</span>
         </Collapsible.Trigger>
         <Collapsible.Content className="hoBody">
+          {h.criteria?.length ? (
+            <ul className="hoCriteria">
+              {h.criteria.map((c) => (
+                <li key={c.id} className={c.status.replace(' ', '-')}>
+                  <span className="mono">{c.id}</span> <span className="st">{c.status}</span>
+                  {c.evidence && <span className="ev"> — {c.evidence}</span>}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {h.resolutions?.length ? (
+            <ul className="hoCriteria">
+              {h.resolutions.map((r) => (
+                <li key={r.id} className={r.status}>
+                  <span className="mono">{r.id}</span> <span className="st">{r.status}</span>
+                  {r.note && <span className="ev"> — {r.note}</span>}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {h.unsure && <div className="hoUnsure">Unsure: {h.unsure}</div>}
           {h.body && <pre className="hoText">{h.body}</pre>}
           {h.findings?.length ? (
             <ol className="hoFindings">
               {h.findings.map((f, i) => (
                 <li key={i}>
-                  <span className={`hoSev ${f.severity}`}>{f.severity}</span> <span className="mono">{f.where}</span> — {f.problem}
+                  {f.id && <span className="mono hoFid">{f.id}</span>} <span className={`hoSev ${f.severity}`}>{f.severity}</span> <span className="mono">{f.where}</span> — {f.problem}
                   <div className="hoFix">Fix: {f.fix}</div>
                 </li>
               ))}

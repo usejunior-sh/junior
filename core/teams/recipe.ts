@@ -81,6 +81,10 @@ export type TeamRecipe = {
   useFor: string[]
   /** spend ceiling for one run, USD — reaching it pauses the run */
   budgetUsd: number
+  /** what the team may do without asking; null = you pick on the card, every run */
+  permissions: TeamPermissions | null
+  /** every worker in fast mode (premium speed and price); null = off unless you turn it on */
+  fast: boolean | null
   lead: { model: string | null; effort: Effort | null }
   /** when the run counts as finished, in words — shown on the team card and judged in the report */
   done: string
@@ -88,6 +92,18 @@ export type TeamRecipe = {
   /** the file's body: advice to the lead on sizing and briefing */
   advice: string
 }
+
+/**
+ * How much a team's workers do without asking, chosen per run on the card:
+ * - `ask` — the builder's file edits run; every shell command asks you
+ * - `local` — edits and shell commands run; anything that leaves this machine is held for you
+ * - `everything` — nothing asks and nothing is held
+ * In every mode a worker's push, PR or comment from the shell is refused (`everything` aside):
+ * the team hands work in, it never sends it.
+ */
+export type TeamPermissions = 'ask' | 'local' | 'everything'
+export const TEAM_PERMISSIONS: TeamPermissions[] = ['ask', 'local', 'everything']
+export const isTeamPermissions = (v: unknown): v is TeamPermissions => TEAM_PERMISSIONS.includes(v as TeamPermissions)
 
 export type Effort = 'low' | 'medium' | 'high' | 'xhigh' | 'max'
 const EFFORTS: Effort[] = ['low', 'medium', 'high', 'xhigh', 'max']
@@ -260,7 +276,7 @@ function splitFile(text: string): { yaml: string; body: string } | null {
   return m ? { yaml: m[1], body: text.slice(m[0].length) } : null
 }
 
-const TOP_KEYS = new Set(['name', 'label', 'description', 'use-for', 'budget', 'lead', 'done', 'steps', 'source'])
+const TOP_KEYS = new Set(['name', 'label', 'description', 'use-for', 'budget', 'permissions', 'fast', 'lead', 'done', 'steps', 'source'])
 const STEP_KEYS = new Set(['id', 'agent', 'output', 'does', 'fan-out', 'on-fail', 'gate', 'model', 'for-each', 'context'])
 
 const isMap = (v: YamlValue | undefined): v is { [key: string]: YamlValue } => !!v && typeof v === 'object' && !Array.isArray(v)
@@ -300,6 +316,20 @@ export function parseRecipe(name: string, file: string): ParsedRecipe {
     else budgetUsd = Math.round(n * 100) / 100
   }
 
+  let permissions: TeamPermissions | null = null
+  if (data.permissions !== undefined) {
+    const p = text(data.permissions)
+    if (!isTeamPermissions(p)) errors.push(`permissions must be one of ${TEAM_PERMISSIONS.join(', ')}`)
+    else permissions = p
+  }
+
+  let fast: boolean | null = null
+  if (data.fast !== undefined) {
+    const f = text(data.fast)
+    if (f !== 'true' && f !== 'false') errors.push('fast must be true or false')
+    else fast = f === 'true'
+  }
+
   const lead: TeamRecipe['lead'] = { model: null, effort: null }
   if (data.lead !== undefined) {
     if (!isMap(data.lead)) errors.push('lead must be { model: …, effort: … }')
@@ -326,6 +356,8 @@ export function parseRecipe(name: string, file: string): ParsedRecipe {
       description: text(data.description),
       useFor,
       budgetUsd,
+      permissions,
+      fast,
       lead,
       done: text(data.done),
       steps,
@@ -455,6 +487,8 @@ export function serializeRecipe(r: TeamRecipe, source: string): string {
   if (r.description) out.push(`description: ${q(r.description)}`)
   if (r.useFor.length) out.push(`use-for: [${r.useFor.join(', ')}]`)
   out.push(`budget: ${r.budgetUsd}`)
+  if (r.permissions) out.push(`permissions: ${r.permissions}`)
+  if (r.fast !== null) out.push(`fast: ${r.fast}`)
   const lead = [r.lead.model && `model: ${q(r.lead.model)}`, r.lead.effort && `effort: ${r.lead.effort}`].filter(Boolean)
   if (lead.length) out.push(`lead: { ${lead.join(', ')} }`)
   if (r.done) out.push(`done: ${q(r.done)}`)

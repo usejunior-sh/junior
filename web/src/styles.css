@@ -81,6 +81,8 @@
   --panel-w: 280px;
   --rail-w: 64px;
   --bar-h: 44px;
+  /* the second bar under it: a team session's run header, and the drawer's tabs beside it */
+  --sub-bar-h: 42px;
 
   /* semantic layer — the seam a light theme overrides (see [data-theme="light"]).
      on-primary: ink/text sitting on the one bright surface (the primary button,
@@ -1342,7 +1344,7 @@ kbd { font-family: var(--mono); font-size: 0.8462rem; color: var(--ash); border:
   width: 468px; max-width: 50%; flex: none; min-height: 0; display: flex; flex-direction: column;
   border-left: 1px solid var(--hair); background: var(--deep);
 }
-.tsHead { display: flex; align-items: center; gap: 8px; padding: 10px 10px 10px 16px; border-bottom: 1px solid var(--hair); flex: none; }
+.tsHead { display: flex; align-items: center; gap: 8px; height: var(--bar-h); padding: 0 10px 0 16px; border-bottom: 1px solid var(--hair); flex: none; }
 .tsHead .t { font-size: 0.9615rem; color: var(--ink); white-space: nowrap; }
 .tsHead .k { font-family: var(--mono); font-size: 0.7308rem; color: var(--stone); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .tsHead .sp { flex: 1; }
@@ -1403,6 +1405,192 @@ kbd { font-family: var(--mono); font-size: 0.8462rem; color: var(--ash); border:
 .tsNotes { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; font-size: 0.8846rem; color: var(--body); line-height: 1.5; }
 .tsNotes .tsId { margin-right: 4px; }
 .teamSide .hoBody { padding-left: 6px; }
+
+/* The run rail (.docs/team-session-storybook.html, layout A), now in the drawer's Runs tab: the
+   team by person (each member's runs nested under it) or by task (the map); a header that says
+   which run you're reading; a sticky divider at the start of each run. */
+.trViews { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid var(--hair-strong); border-radius: var(--r); }
+.trView { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 22px; padding: 0; border: 0; border-radius: var(--r-sm); background: none; color: var(--ash); cursor: pointer; }
+.trView:hover { color: var(--ink); }
+.trView[data-state="active"] { background: var(--elev); color: var(--ink); }
+.teamRail { margin: 0 -6px; }
+.teamRail .sp, .runHeader .sp, .runDiv .sp { flex: 1; }
+.teamRail .k, .runHeader .k, .runDiv .k, .teamFiles .k { font-family: var(--mono); font-size: 0.7692rem; color: var(--stone); white-space: nowrap; }
+.teamRail .money, .runHeader .money, .runDiv .money, .rhMenu .money, .teamMap .money { font-family: var(--mono); font-size: 0.8077rem; color: var(--charcoal); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.trMember { margin-top: 2px; }
+.trRow {
+  display: flex; align-items: center; gap: 8px; width: 100%; min-height: 32px; padding: 5px 10px;
+  border: 0; border-radius: var(--r); background: none; color: var(--mute); font: inherit; text-align: left; cursor: pointer;
+}
+.trRow:hover { background: var(--wash-2); color: var(--ink); }
+/* the session you're in reads in ink; the run you're reading carries the one highlight */
+.trRow.on { color: var(--ink); }
+.trRow.on .nm { font-weight: 500; }
+.trRow.static { cursor: default; }
+.trRow.static:hover { background: none; color: var(--mute); }
+.trRow.planned { cursor: default; color: var(--ash); border: 1px dashed var(--hair-strong); margin-top: 6px; }
+.trRow.planned:hover { background: none; color: var(--ash); }
+.trRow.planned .swatch { opacity: 0.5; }
+.trRow .nm { font-size: 0.9615rem; white-space: nowrap; }
+.trRow .md { font-family: var(--mono); font-size: 0.7692rem; color: var(--ash); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.trRuns { list-style: none; margin: 2px 0 6px; padding: 0 0 0 18px; position: relative; }
+.trRuns::before { content: ""; position: absolute; left: 14px; top: 2px; bottom: 8px; width: 1px; background: var(--hair-strong); }
+.trRun {
+  display: flex; align-items: center; gap: 7px; width: 100%; height: 26px; padding: 0 8px 0 10px;
+  border: 0; border-radius: var(--r-sm); background: none; color: var(--ash); font: inherit; font-size: 0.9231rem; text-align: left; cursor: pointer;
+}
+.trRun:hover { background: var(--wash-2); color: var(--ink); }
+.trRun.on { background: var(--elev); color: var(--ink); box-shadow: inset 0 0 0 1px var(--hair-strong); }
+.trRun.static { cursor: default; }
+.trRun.static:hover { background: none; color: var(--ash); }
+.trRun .tag { font-family: var(--mono); font-size: 0.7692rem; color: var(--charcoal); width: 36px; flex: none; white-space: nowrap; }
+.trRun .tag:empty { display: none; }
+.trRun .tt { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.trRun .dur { font-family: var(--mono); font-size: 0.7692rem; color: var(--charcoal); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.trRun.on .dur { color: var(--body); }
+.trGlyph { width: 11px; flex: none; text-align: center; font-family: var(--mono); font-size: 0.7692rem; color: var(--stone); }
+.trGlyph.pass, .trGlyph.done { color: var(--green); }
+.trGlyph.fail { color: var(--red); }
+.trGlyph.working { color: var(--ink); }
+
+.runHeader { display: flex; align-items: center; gap: 10px; height: var(--sub-bar-h); padding: 0 12px 0 20px; flex: none; border-bottom: 1px solid var(--hair); min-width: 0; container-type: inline-size; }
+/* With the drawer open the header gets narrow: shed the extras first, never the jump or Details. */
+@container (max-width: 760px) {
+  .runHeader .rhMeta, .runHeader .teamMeter, .rhJumpLbl .k { display: none; }
+  .rhJumpLbl { min-width: 0; }
+}
+@container (max-width: 560px) {
+  .runHeader .teamRunSpend .of, .runHeader .teamSideBtn .lbl { display: none; }
+}
+.rhWho { display: inline-flex; align-items: center; gap: 8px; font-size: 0.9615rem; color: var(--ink); white-space: nowrap; }
+.rhCrumb {
+  display: inline-flex; align-items: center; gap: 8px; height: 24px; margin-left: -6px; padding: 0 6px; border: 0; border-radius: var(--r-sm);
+  background: none; color: var(--mute); font: inherit; font-size: 0.9615rem; cursor: pointer;
+}
+.rhCrumb:hover { background: var(--wash-2); color: var(--ink); }
+.rhSep { color: var(--stone); margin: 0 -2px; }
+.rhMeta { font-family: var(--mono); font-size: 0.8077rem; color: var(--ash); white-space: nowrap; }
+.rhJump { display: inline-flex; align-items: center; height: 28px; border: 1px solid var(--hair-strong); border-radius: var(--r); }
+.rhJump .iconBtn { width: 26px; height: 26px; border-radius: 0; }
+.rhJump .iconBtn:disabled { opacity: 0.35; cursor: default; background: none; }
+.rhJumpLbl {
+  display: inline-flex; align-items: center; gap: 7px; height: 26px; padding: 0 10px; min-width: 150px; justify-content: space-between;
+  border: 0; border-left: 1px solid var(--hair); border-right: 1px solid var(--hair); background: none;
+  color: var(--body); font: inherit; font-size: 0.9231rem; cursor: pointer; white-space: nowrap;
+}
+.rhJumpLbl:hover, .rhJumpLbl[data-state="open"] { color: var(--ink); background: var(--wash-2); }
+.rhMenu { min-width: 300px; }
+.rhItem { gap: 8px; }
+.rhItem .k { margin-left: 0; padding-left: 0; }
+.rhItem .tt { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rhItem.cur { color: var(--ink); background: var(--wash-2); }
+
+/* One per run, at the event its step arrived. Sticky: the run you're in stays named at the top;
+   the next one slides over it. */
+.runDiv { position: sticky; top: -20px; z-index: 2; padding: 12px 0 10px; margin: 6px 0 -6px; background: linear-gradient(var(--canvas) 78%, transparent); }
+.runDiv .in { display: flex; align-items: center; gap: 10px; border: 1px solid var(--hair-strong); border-radius: var(--r); padding: 7px 12px; background: var(--card); min-width: 0; }
+.runDiv .n { font-family: var(--mono); font-size: 0.7692rem; color: var(--stone); white-space: nowrap; }
+.runDiv .tag { font-family: var(--mono); font-size: 0.8077rem; color: var(--charcoal); white-space: nowrap; }
+.runDiv .t { font-size: 0.9615rem; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.runDiv .ctx { font-family: var(--mono); font-size: 0.7308rem; color: var(--ash); border: 1px dashed var(--hair-strong); border-radius: var(--r-full); padding: 0 7px; white-space: nowrap; }
+.runDiv .ctx.carry { border-style: solid; }
+.runDiv .st { display: inline-flex; align-items: center; gap: 4px; font-family: var(--mono); font-size: 0.8077rem; color: var(--charcoal); white-space: nowrap; }
+.runDiv .st.pass, .runDiv .st.done { color: var(--green); }
+.runDiv .st.fail { color: var(--red); }
+.runDiv .st.stopped { color: var(--stone); }
+.runDiv.fail .in { border-color: color-mix(in srgb, var(--red) 35%, transparent); }
+.runDiv.working .in { border-color: var(--hair-bright); }
+.runDiv.flash .in { animation: runFlash 0.9s ease-out; }
+@keyframes runFlash { 0% { box-shadow: 0 0 0 1px var(--ink); } 100% { box-shadow: 0 0 0 1px transparent; } }
+@media (prefers-reduced-motion: reduce) { .runDiv.flash .in { animation: none; } }
+
+.teamMap { display: flex; flex-direction: column; gap: 12px; }
+.tmSub { color: var(--mute); font-size: 0.8846rem; margin: 0; }
+.tmGrid { display: grid; border: 1px solid var(--hair); border-bottom: 0; border-radius: var(--r-lg); overflow: hidden; }
+.tmGrid > div { border-bottom: 1px solid var(--hair); padding: 8px 10px; min-height: 40px; display: flex; align-items: center; min-width: 0; }
+.tmH { font-family: var(--mono); font-size: 0.7308rem; color: var(--stone); text-transform: uppercase; letter-spacing: 0.06em; background: var(--card); gap: 6px; min-height: 30px !important; }
+.tmH .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tmTask { flex-direction: column; align-items: flex-start !important; justify-content: center; gap: 1px; }
+.tmTask .tag { font-family: var(--mono); font-size: 0.7308rem; color: var(--ash); }
+.tmTask .tt { font-size: 0.8846rem; color: var(--body); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.tmTask.done .tt { color: var(--mute); }
+.tmTask .why { font-size: 0.8077rem; color: var(--yellow); }
+.tmCells { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.tmCell {
+  height: 22px; min-width: 22px; justify-content: center; display: inline-flex; align-items: center; gap: 4px; padding: 0 6px; border-radius: var(--r-sm);
+  border: 1px solid var(--hair-strong); background: var(--card); color: var(--body); font-family: var(--mono); font-size: 0.7692rem; cursor: pointer; white-space: nowrap;
+}
+.tmCell:hover { border-color: var(--hair-bright); color: var(--ink); }
+.tmCell:disabled { cursor: default; }
+.tmCell.static { cursor: default; }
+.tmCell.fail { border-color: color-mix(in srgb, var(--red) 35%, transparent); }
+.tmCell.working { border-color: var(--hair-bright); }
+.tmCell.cur { border-color: var(--ink); color: var(--ink); }
+.tmCell.todo { border-style: dashed; background: none; cursor: default; }
+.tmSteps { display: flex; flex-direction: column; gap: 6px; }
+.tmStep { display: flex; align-items: center; gap: 10px; }
+.tmStep .lbl { width: 96px; flex: none; display: inline-flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 0.8077rem; color: var(--ash); overflow: hidden; white-space: nowrap; }
+
+.tsTabs { display: flex; align-items: center; gap: 2px; height: var(--sub-bar-h); padding: 0 10px; border-bottom: 1px solid var(--hair); flex: none; }
+.tsTabs .sp { flex: 1; }
+.tsTabs .tsTabList { display: flex; align-items: center; gap: 2px; }
+.tsTabs .tsTab { height: 26px; padding: 0 10px; border: 0; border-radius: var(--r); background: none; color: var(--mute); font: inherit; font-size: 0.9231rem; cursor: pointer; }
+.tsTabs .tsTab:hover { color: var(--ink); }
+.tsTabs .tsTab[data-state="active"] { background: var(--elev); color: var(--ink); box-shadow: inset 0 0 0 1px var(--hair-strong); }
+.teamFiles { display: flex; flex-direction: column; gap: 14px; }
+.tsPerms { display: flex; flex-direction: column; gap: 4px; }
+.tsPerm {
+  display: flex; align-items: flex-start; gap: 10px; width: 100%; padding: 8px 10px; text-align: left;
+  border: 1px solid var(--hair); border-radius: var(--r); background: none; color: var(--body); font: inherit; cursor: pointer;
+}
+.tsPerm:hover { border-color: var(--hair-strong); }
+.tsPerm[data-state="checked"] { border-color: var(--hair-bright); background: var(--elev); }
+.tsPermDot { width: 12px; height: 12px; margin-top: 3px; flex: none; border-radius: 50%; border: 1px solid var(--hair-bright); }
+.tsPerm[data-state="checked"] .tsPermDot { border: 4px solid var(--ink); }
+.tsPermText { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.tsPermText .l { font-size: 0.9615rem; color: var(--ink); }
+.tsPermText .h { font-size: 0.8462rem; color: var(--ash); line-height: 1.45; }
+.tdPerms { max-width: 220px; }
+/* the run folder page: its files beside the one you're reading */
+.rfList { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 1px; }
+.rfFile { display: flex; align-items: center; gap: 8px; width: 100%; padding: 5px 8px; border: 0; border-radius: var(--r-sm); background: none; color: var(--mute); font: inherit; font-size: 0.9231rem; text-align: left; cursor: pointer; }
+.rfFile:hover { background: var(--wash-2); color: var(--ink); }
+.rfFile.on { background: var(--elev); color: var(--ink); box-shadow: inset 0 0 0 1px var(--hair-strong); }
+.rfFile > svg { flex: none; color: var(--ash); }
+.rfFile .nm { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rfBadge { font-family: var(--mono); font-size: 0.7308rem; color: var(--ash); }
+.rfBadge.pass { color: var(--green); }
+.rfBadge.fail { color: var(--red); }
+.rfDir { font-size: 0.7692rem; color: var(--stone); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tsFast { display: flex; align-items: center; gap: 10px; font-size: 0.8846rem; }
+.tfGroup { display: flex; flex-direction: column; gap: 2px; }
+.tfGroup .tsK .c { color: var(--stone); margin-left: 4px; }
+.tfRow { border-radius: var(--r-sm); padding: 2px 0; }
+.tfMain {
+  display: flex; align-items: center; gap: 8px; width: 100%; padding: 4px 8px; border: 0; border-radius: var(--r-sm);
+  background: none; color: var(--body); font: inherit; font-size: 0.9615rem; text-align: left; cursor: pointer;
+}
+.tfMain:hover:not(:disabled) { background: var(--wash-2); color: var(--ink); }
+.tfMain:disabled { cursor: default; }
+.tfMain .nm { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tfMain .r { display: inline-flex; align-items: center; gap: 6px; flex: none; }
+.tfMain .add { font-family: var(--mono); font-size: 0.7692rem; color: var(--green); }
+.tfMain .del { font-family: var(--mono); font-size: 0.7692rem; color: var(--red); }
+.tfMeta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding: 0 8px 2px; font-size: 0.8462rem; color: var(--ash); }
+.tfMeta .tag { font-family: var(--mono); font-size: 0.7308rem; color: var(--charcoal); border: 1px solid var(--hair-strong); border-radius: var(--r-xs); padding: 0 4px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tfLink { border: 0; background: none; padding: 0; font: inherit; color: var(--ash); text-decoration: underline; text-decoration-color: var(--hair-strong); text-underline-offset: 2px; cursor: pointer; }
+.tfLink:hover:not(:disabled) { color: var(--ink); }
+.tfHandoff { margin: 4px 8px 6px; }
+.tfEmpty { color: var(--stone); font-size: 0.9231rem; }
+.tsLedger + .tsLedger { margin-top: 8px; }
+.hoCriteria { list-style: none; margin: 4px 0 8px; padding: 0; display: flex; flex-direction: column; gap: 3px; font-size: 0.8846rem; color: var(--body); }
+.hoCriteria .st { font-family: var(--mono); font-size: 0.7692rem; color: var(--ash); }
+.hoCriteria li.met .st, .hoCriteria li.fixed .st { color: var(--green); }
+.hoCriteria li.not-met .st { color: var(--red); }
+.hoCriteria li.partly .st, .hoCriteria li.unreported .st { color: var(--yellow); }
+.hoCriteria .ev { color: var(--mute); }
+.hoUnsure { font-size: 0.8846rem; color: var(--yellow); margin: 4px 0 8px; }
+.hoFid { color: var(--ash); font-size: 0.7692rem; }
 .tsErr { padding: 6px 16px; border-top: 1px solid var(--hair); }
 .tsFoot { display: flex; align-items: center; gap: 6px; padding: 10px 12px 12px 16px; border-top: 1px solid var(--hair); flex: none; }
 .tsFoot .sp { flex: 1; }

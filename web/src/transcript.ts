@@ -101,6 +101,9 @@ export type TranscriptScope = {
   shells?: readonly ShellRun[]
 }
 
+/** The event an item was folded from: every key carries its event's index (`u12`, `a12.0`, `ga12.0`). */
+export const eventIndexOf = (item: TranscriptItem): number => Number(/\d+/.exec(item.key)?.[0] ?? 0)
+
 export function buildTranscript(
   events: readonly SessionEvent[],
   timeOf: (ev: SessionEvent) => number | undefined = () => undefined,

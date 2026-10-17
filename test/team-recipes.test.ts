@@ -110,6 +110,8 @@ test('a recipe survives the round trip through its file', () => {
     description: 'ends with a comma,',
     useFor: [],
     budgetUsd: 2.5,
+    permissions: 'local',
+    fast: true,
     lead: { model: 'claude-opus-5-5', effort: null },
     done: '',
     steps: [{ id: 'notes', agent: 'researcher', output: 'notes', does: 'a: b', fanOut: null, onFail: null, gate: null, model: null, forEach: null, context: null }],
