@@ -288,7 +288,7 @@ test('fold: a PR via Bash — attempted, then succeeded with its link; reads are
     link: 'https://github.com/acme/app/pull/42',
     error: null,
     allowedBy: 'mode',
-    allowedDetail: 'bypass permissions',
+    allowedDetail: 'autonomy: never asks',
     settledAt: 20,
   })
 })

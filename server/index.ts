@@ -276,6 +276,7 @@ import { openSqliteStore } from '../core/store/sqlite.js'
 import { ActionTracker, applyActionOps, joinHeldCall, recordFor, type ActionOp, type TrackContext } from '../core/actions/track.js'
 import { READ_VERBS, WRITE_VERBS, overrideEntries, overriddenOff, serverOf, sortCall, withRowOverride, wordsOf, type ToolHints } from '../core/actions/sort.js'
 import { countLine, countSince } from '../core/actions/count.js'
+import { destructiveCommand, gitReadCommand, readOnlyCommand } from '../core/actions/commands.js'
 import { isActionKind, type ActionRecord } from '../core/actions/types.js'
 import {
   DispatchFence,
@@ -883,12 +884,7 @@ const BRIEF_DISALLOWED_TOOLS = [
     'add_to_today', 'remove_from_today', 'set_reply_style'].map((t) => `mcp__triage__${t}`),
 ]
 /** The only shell a brief may run: `gh`/`git` read verbs, no chaining or redirection. */
-const BRIEF_BASH_RE = /^\s*(gh\s+(pr|issue|api|search|run|repo)\s+(view|diff|checks|list|status|comments)\b|git\s+(log|show|diff|blame|status|branch|ls-files)\b)/
-const SHELL_META_RE = /[;&|<>`$\\]|\$\(/
-function briefBashAllowed(input: Record<string, unknown>): boolean {
-  const cmd = typeof input.command === 'string' ? input.command : ''
-  return BRIEF_BASH_RE.test(cmd) && !SHELL_META_RE.test(cmd)
-}
+const briefBashAllowed = (input: Record<string, unknown>): boolean => gitReadCommand(typeof input.command === 'string' ? input.command : '')
 
 // ---------------------------------------------------------------------------
 // Live session: one running Claude subprocess bound to a stored session row.
@@ -1288,12 +1284,26 @@ class LiveSession {
             },
       )
     }
-    // 'gated': reads and lookups run unattended; anything that writes — a file,
-    // the shell, or an outward connector call — still surfaces a prompt. The
-    // subprocess runs at the SDK default, so this is the one gate it can't skip.
-    if (this.row.permissionMode === 'gated' && effect === 'read') {
+    // Autonomy (.docs/junior-goals-teams/modes-autonomy-goals.md). Reads and
+    // lookups never ask: 'gated' is "Asks before any change", and the old
+    // 'default' (or no mode) reads the same. The subprocess runs at the SDK
+    // default there, so this is the one gate it can't skip. "Asks before
+    // commands" ('acceptEdits') adds read-only shell; the SDK lets edits through.
+    if (effect === 'read') return Promise.resolve({ behavior: 'allow', updatedInput: toolInput })
+    const mode = this.row.permissionMode ?? 'default'
+    if ((mode === 'acceptEdits' || mode === 'auto') && toolName === 'Bash' && readOnlyCommand(String(toolInput.command ?? ''))) {
       return Promise.resolve({ behavior: 'allow', updatedInput: toolInput })
     }
+    return this.askUser(toolName, toolInput, opts, effect)
+  }
+
+  /** Put the call in front of the user as a prompt in the transcript; resolved by resolvePermission. */
+  private askUser(
+    toolName: string,
+    toolInput: Record<string, unknown>,
+    opts: { title?: string; description?: string; suggestions?: PermissionUpdate[]; agentID?: string; toolUseID?: string },
+    effect: ReturnType<typeof classifyEffect>,
+  ): Promise<PermissionResult> {
     const id = randomUUID()
     const suggestions = opts.suggestions ?? []
     return new Promise<PermissionResult>((resolve) => {
@@ -1730,12 +1740,20 @@ const isTeamWorker = (rt: WorkspaceRuntime, sessionId: string): boolean => {
   return !!run && run.leadSessionId !== sessionId
 }
 
-/** Does this session hold its outbound calls for approval? Job runs and team workers do; chats ask now. */
+/**
+ * A chat at "Asks before sending" ('auto'): local work runs, sends are held.
+ * Read off the live row each call, so switching the level mid-session holds the very next send.
+ */
+const chatHoldsSends = (rt: WorkspaceRuntime, row: StoredSession): boolean =>
+  row.provider === 'claude' && row.kind === 'chat' && !teamRunOf(rt, row.id) && (rt.rows.get(row.id) ?? row).permissionMode === 'auto'
+
+/** Does this session hold its outbound calls for approval? Job runs, team workers, and chats at "Asks before sending" do. */
 const holdsActions = (rt: WorkspaceRuntime, row: StoredSession): boolean =>
   row.provider === 'claude' &&
   (row.kind === 'job-run' ||
     (isTeamWorker(rt, row.id) && teamRunOf(rt, row.id)?.card.permissions !== 'everything') ||
-    (rt.goalRuns.get(row.id)?.role ?? 'lead') !== 'lead')
+    (rt.goalRuns.get(row.id)?.role ?? 'lead') !== 'lead' ||
+    chatHoldsSends(rt, row))
 
 /**
  * The role fence a session runs under (core/goals/fence.ts), or null: a team
@@ -1759,16 +1777,27 @@ function roleFenceOf(rt: WorkspaceRuntime, row: StoredSession): RoleFence | null
   return { write: writes, role: (worker.agent || 'worker').toLowerCase() }
 }
 
-/** A session's PreToolUse veto: its role fence first, then the hold. None for a session with neither. */
+/**
+ * A session's PreToolUse veto: its role fence first, then the hold. None for a
+ * session with neither — except a chat, which always gets one: its Autonomy
+ * level can change mid-session and the hook is only installed at spawn.
+ */
 function sessionVeto(rt: WorkspaceRuntime, row: StoredSession): { veto?: ToolVeto } {
   const fence = roleFenceOf(rt, row)
-  if (!fence && !holdsActions(rt, row)) return {}
+  const chat = row.kind === 'chat' && row.provider === 'claude'
+  if (!fence && !chat && !holdsActions(rt, row)) return {}
   return {
     veto: (toolName, input, ctx) => {
       const d = fence ? roleFenceDecision(fence, toolName, input) : { allow: true as const }
       if (!d.allow) {
         log('info', 'fence', `refused ${toolName} in a read-only session: ${d.reason}`, { session: row.id, workspace: rt.meta.id })
         return d
+      }
+      // "Asks before sending" lets Claude's auto mode run local work; a command
+      // that destroys work still comes to you.
+      if (toolName === 'Bash' && chatHoldsSends(rt, row) && isArgsObject(input)) {
+        const why = destructiveCommand(String(input.command ?? ''))
+        if (why) return { allow: false, ask: true, reason: `This command ${why}, so it needs your OK.` }
       }
       return holdIfAction(rt, row, toolName, input, ctx)
     },
@@ -1793,7 +1822,8 @@ function holdIfAction(
   const args = isArgsObject(input) ? input : {}
   // A team worker's push, PR or comment from the shell: refused, not filed — a team hands
   // work in and you send it. (A job's Bash isn't held in this phase: sending needs its folder.)
-  if (toolName === 'Bash') {
+  // A chat's is held like any send, and sent from the chat's folder.
+  if (toolName === 'Bash' && !chatHoldsSends(rt, row)) {
     if (!isTeamWorker(rt, row.id)) return { allow: true }
     let out
     try {
@@ -1805,7 +1835,7 @@ function holdIfAction(
       ? { allow: false, reason: `\`${out.summary}\` leaves this machine, and a team never sends anything. Finish your step without it and say in your handoff what should be sent — the user sends it.` }
       : { allow: true }
   }
-  if (!toolName.startsWith('mcp__')) return { allow: true }
+  if (!toolName.startsWith('mcp__') && toolName !== 'Bash') return { allow: true }
   let sorted
   try {
     sorted = sortForWorkspace(rt)(toolName, args)

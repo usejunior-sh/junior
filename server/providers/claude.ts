@@ -44,7 +44,7 @@ function vetoHook(veto: ToolVeto): HookCallback {
     if (input.hook_event_name !== 'PreToolUse') return {}
     const d = veto(input.tool_name, input.tool_input, { toolUseId: input.tool_use_id ?? toolUseID })
     if (d.allow) return {}
-    return { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: d.reason } }
+    return { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: d.ask ? 'ask' : 'deny', permissionDecisionReason: d.reason } }
   }
 }
 

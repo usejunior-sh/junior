@@ -244,7 +244,8 @@ export class ActionTracker {
     if (this.ctx.sessionKind === 'job-run') return ['rule', 'the job’s grants']
     if (this.ctx.sessionKind === 'brief') return ['policy', 'brief sessions']
     const mode = this.ctx.permissionMode
-    if (mode === 'bypassPermissions' || mode === 'auto') return ['mode', mode === 'auto' ? 'auto mode' : 'bypass permissions']
+    // Named as the Autonomy chip names the level.
+    if (mode === 'bypassPermissions' || mode === 'auto') return ['mode', mode === 'auto' ? 'autonomy: asks before sending' : 'autonomy: never asks']
     return ['rule', mode === 'acceptEdits' ? 'an allow rule (accept-edits mode)' : 'an allow rule']
   }
 }

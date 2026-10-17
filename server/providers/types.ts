@@ -130,8 +130,11 @@ export type ToolApproval = (
   ctx: ToolApprovalContext,
 ) => Promise<PermissionResult>
 
-/** A veto on every tool call, run before the call and before any allow rule. `toolUseId` = the call's id, when the agent says. */
-export type ToolVeto = (toolName: string, input: unknown, ctx?: { toolUseId?: string }) => { allow: true } | { allow: false; reason: string }
+/**
+ * A veto on every tool call, run before the call and before any allow rule. `toolUseId` = the call's id, when the agent says.
+ * `ask: true` sends the call to the user's permission prompt instead of refusing it, whatever the mode would do.
+ */
+export type ToolVeto = (toolName: string, input: unknown, ctx?: { toolUseId?: string }) => { allow: true } | { allow: false; reason: string; ask?: boolean }
 
 /** An interactive session: fed turn by turn, steered while it runs. */
 export type SessionSpec = {
