@@ -892,7 +892,7 @@ export function ItemPage({ id, onDispatch, onGoal, onNavigate, onDirty }: Props)
                 <button key={lead.id} type="button" className="line planLine" onClick={() => onNavigate(runFileHash(lead.teamRun!.id))}>
                   <span className="dash">—</span>
                   <span>
-                    Plan{leads.length > 1 ? ` ${i + 1}` : ''}
+                    {lead.teamRun!.goal ? 'Goal plan' : 'Plan'}{leads.length > 1 ? ` ${i + 1}` : ''}
                     <span className={`k${lead.teamRun!.state === 'proposed' || lead.teamRun!.state === 'gate' ? ' needsYou' : ''}`}> · {TEAM_STATE[lead.teamRun!.state]}</span>
                   </span>
                 </button>

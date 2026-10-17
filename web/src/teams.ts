@@ -2,12 +2,15 @@
  * Teams v2 on the client (.docs/teams.md): the library fetch, the API calls a
  * run's card and strip make, and the display helpers both share.
  */
+import { useEffect, useState } from 'react'
 import type {
   AgentCan,
   AgentColor,
   AgentEntry,
   RecipeEntry,
   SessionSummary,
+  TeamGoalSummary,
+  TeamGoalsResponse,
   TeamLibraryResponse,
   TeamPickerResponse,
   TeamRunResponse,
@@ -93,4 +96,34 @@ export const PERMISSION_META: Record<'ask' | 'local' | 'everything', { label: st
   ask: { label: 'Commands ask', hint: 'The builder’s edits run; every shell command asks you. You stay at the desk.' },
   local: { label: 'Local free, outbound held', hint: 'Edits and commands run unasked; anything that leaves this Mac waits for you. Start it and walk away.' },
   everything: { label: 'Everything runs', hint: 'Nothing asks and nothing is held — pushes and posts included. Only for work you’d let go out unseen.' },
+}
+
+type TeamGoalsState = { goals: TeamGoalSummary[]; waitingOnYou: number; loaded: boolean; error: string | null }
+
+/**
+ * The Goals tab's list (GET /api/teams/goals): every team run that is a goal.
+ * Refetched when any goal's lead moves on the session list (its run's state or
+ * revision) — the same cue the team strip and dock refetch on.
+ */
+export function useTeamGoals(sessions: readonly SessionSummary[]): TeamGoalsState {
+  const [state, setState] = useState<TeamGoalsState>({ goals: [], waitingOnYou: 0, loaded: false, error: null })
+  const cue = sessions
+    .filter((s) => s.teamRun?.role === 'lead' && s.teamRun.goal)
+    .map((s) => `${s.teamRun!.id}:${s.teamRun!.state}:${s.teamRun!.rev}`)
+    .sort()
+    .join(',')
+  useEffect(() => {
+    let live = true
+    fetch('/api/teams/goals')
+      .then((r) => r.json() as Promise<TeamGoalsResponse>)
+      .then((b) => {
+        if (!live) return
+        setState(b.ok ? { goals: b.goals, waitingOnYou: b.goals.filter((g) => g.turn === 'you').length, loaded: true, error: null } : (s) => ({ ...s, loaded: true, error: b.error }))
+      })
+      .catch((err) => live && setState((s) => ({ ...s, loaded: true, error: String(err) })))
+    return () => {
+      live = false
+    }
+  }, [cue])
+  return state
 }

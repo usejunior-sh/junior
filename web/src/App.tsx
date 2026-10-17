@@ -64,7 +64,8 @@ import { ArtifactsPage } from './components/ArtifactsPage.js'
 import { ActionsPage } from './components/ActionsPage.js'
 import { GoalPage } from './components/GoalPage.js'
 import { GoalsPage } from './components/GoalsPage.js'
-import { goalHash, useGoals } from './goals.js'
+import { goalHash } from './goals.js'
+import { useTeamGoals } from './teams.js'
 import { usePendingActions } from './actions.js'
 import { ArtifactPage } from './components/ArtifactPage.js'
 import { DefaultProjectGate } from './components/DefaultProjectGate.js'
@@ -363,7 +364,7 @@ export function App() {
   const mobile = useIsMobile()
   // Queued actions waiting on you — the Actions rail badge.
   const pendingActions = usePendingActions()
-  const goals = useGoals()
+  const goals = useTeamGoals(sessions)
   // Junior's name and face, everywhere it shows: the rail and the phone's title.
   const persona = usePersona()
   const juniorMood = useRailMood(pendingActions)
@@ -497,7 +498,8 @@ export function App() {
       }
       if (key.startsWith('job:')) return jobTitles.get(id) ?? null
       if (key.startsWith('job-form:')) return id === 'new' ? 'New job' : jobTitles.get(id) ?? null
-      if (key.startsWith('goal:')) return goals.goals.find((g) => g.id === id)?.title ?? null
+      // Old goals-engine pages keep the title they were opened with.
+      if (key.startsWith('goal:')) return null
       if (key.startsWith('change:')) {
         // A file is named by its basename; the path lives in the page header.
         const file = decodeURIComponent(id.slice(id.indexOf('/') + 1))
@@ -505,7 +507,7 @@ export function App() {
       }
       return null
     },
-    [inbox.items, artifacts.artifacts, jobTitles, goals.goals, sessions],
+    [inbox.items, artifacts.artifacts, jobTitles, sessions],
   )
 
   /** A document tab: its best known name, no project dot, nothing running. */
@@ -1384,7 +1386,7 @@ export function App() {
             ) : route.page === 'actions' ? (
               <ActionsPage onNavigate={navigate} />
             ) : route.page === 'goals' ? (
-              <GoalsPage onNavigate={navigate} onPin={(id, title) => pin(`goal:${id}`, title)} />
+              <GoalsPage sessions={sessions} onNavigate={navigate} onPin={(key, title) => pin(key, title)} />
             ) : route.page === 'goal' ? (
               <GoalPage key={route.id} id={route.id} onNavigate={navigate} />
             ) : route.page === 'job' ? (

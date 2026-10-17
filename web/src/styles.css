@@ -1203,6 +1203,43 @@ kbd { font-family: var(--mono); font-size: 0.8462rem; color: var(--ash); border:
 .tdLoop { font-family: var(--mono); font-size: 0.7308rem; color: var(--ash); }
 .tdCap { font-size: 0.7692rem; color: var(--ash); white-space: nowrap; }
 
+/* Goals on team runs (TeamGoal.tsx): Junior's questions under the dock, each with its
+   recommended answer; the budget raise; who resumed a run. */
+.goalAsks { display: flex; flex-direction: column; gap: 8px; padding-top: 8px; border-top: 1px solid var(--hair); }
+.goalAsk { display: flex; flex-direction: column; gap: 4px; }
+.gaQ { display: flex; align-items: baseline; gap: 8px; }
+.gaQ .dot { flex: none; transform: translateY(-1px); }
+.gaText { font-size: 0.9615rem; color: var(--ink); line-height: 1.45; }
+.gaRec { font-size: 0.8846rem; color: var(--body); line-height: 1.45; padding-left: 16px; }
+.gaRec .k { font-family: var(--mono); font-size: 0.7692rem; color: var(--stone); margin-right: 4px; }
+.gaForm { display: flex; align-items: center; gap: 6px; min-width: 0; padding-left: 16px; }
+.teamDock .tdRow .gaForm { padding-left: 0; }
+.gaForm .teamInp { flex: 1; min-width: 0; height: 28px; }
+.raiseBudget { display: inline-flex; align-items: center; gap: 4px; color: var(--ash); }
+.raiseBudget .rbAmt { width: 64px; height: 28px; text-align: right; }
+.resumedTag {
+  display: inline-flex; align-items: center; gap: 3px; flex: none; height: 18px; padding: 0 6px; border: 1px solid var(--hair-strong);
+  border-radius: var(--r-full); font-family: var(--mono); font-size: 0.7308rem; color: var(--charcoal); white-space: nowrap;
+}
+.resumedTag.junior { border-color: var(--edge-blue); color: var(--blue); }
+.resumedTag.you { border-color: var(--edge-yellow); color: var(--yellow); }
+.goalHorizon { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.goalHz {
+  height: 26px; padding: 0 10px; border: 1px solid var(--hair-strong); border-radius: var(--r-full);
+  background: none; color: var(--ash); font: inherit; font-size: 0.8462rem; cursor: pointer;
+}
+.goalHz:hover { color: var(--ink); }
+.goalHz[data-state="checked"] { color: var(--ink); border-color: var(--hair-bright); background: var(--elev); }
+.goalHorizon .ghDate { width: auto; height: 26px; }
+.goalHist { display: inline-flex; align-items: center; gap: 4px; padding: 0; border: 0; background: none; color: var(--ash); font: inherit; font-size: 0.8077rem; cursor: pointer; }
+.goalHist:hover { color: var(--ink); }
+.goalLog { margin-top: 4px; }
+.goalLog .hoVerdict { margin-right: 4px; }
+.goalsTbl td.nm .sub { font-size: 0.8462rem; color: var(--ash); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 520px; }
+.goalsTbl td.nm { padding-top: 6px; padding-bottom: 6px; }
+.goalsTbl .pill { margin-left: 6px; }
+.goalsTbl .of { color: var(--stone); }
+
 /* Subagents in a chat (Agents.tsx, .docs/subagents-ux.html): a card per Agent
    call in the transcript, a dock above the composer while any run, a menu of
    all of them, and an agent's own view (header, brief, hand-back, composer). */

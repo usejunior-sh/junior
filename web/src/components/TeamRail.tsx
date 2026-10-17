@@ -9,6 +9,7 @@ import { colorOf, teamsCall, usd } from '../teams.js'
 import { Menu, MenuContent, MenuItem, MenuTrigger } from '../ui/Menu.js'
 import { runFileHash } from './RunFolderPage.js'
 import { TeamFastToggle } from './TeamRun.js'
+import { ResumedTag } from './TeamGoal.js'
 import type { TranscriptMark } from './Transcript.js'
 
 /**
@@ -187,10 +188,11 @@ export function TeamRail({
                   const took = runDuration(r, now)
                   return (
                   <li key={r.run.id}>
-                    <button type="button" className={`trRun${r.run.id === current ? ' on' : ''}`} aria-current={r.run.id === current ? 'true' : undefined} data-run={r.run.id} onClick={(e) => onOpenRun(m.sessionId, r.run.id, newTab(e))} title={`${r.tag} · ${r.title} — ${STATUS_TEXT[r.status]}${took !== null ? ` · ${fmtDuration(took)}` : ''}${r.cost ? ` · ${usd(r.cost)}` : ''}${r.run.at ? ` · started ${clock(r.run.at)}` : ''}`}>
+                    <button type="button" className={`trRun${r.run.id === current ? ' on' : ''}`} aria-current={r.run.id === current ? 'true' : undefined} data-run={r.run.id} onClick={(e) => onOpenRun(m.sessionId, r.run.id, newTab(e))} title={`${r.tag} · ${r.title} — ${STATUS_TEXT[r.status]}${r.run.resumedBy ? ` · resumed by ${r.run.resumedBy === 'junior' ? 'Junior' : 'you'}` : ''}${took !== null ? ` · ${fmtDuration(took)}` : ''}${r.cost ? ` · ${usd(r.cost)}` : ''}${r.run.at ? ` · started ${clock(r.run.at)}` : ''}`}>
                       <span className={`trGlyph ${r.status}`} aria-hidden="true">{GLYPH[r.status]}</span>
                       <span className="tag">{r.run.task ? r.tag : ''}</span>
                       <span className="tt">{r.run.task ? r.title : r.tag}</span>
+                      <ResumedTag by={r.run.resumedBy} />
                       {took !== null && <span className="dur">{fmtDuration(took)}</span>}
                       <span className="k">{clock(r.run.at)}</span>
                     </button>
@@ -202,6 +204,25 @@ export function TeamRail({
           </div>
         )
       })}
+      {(run.resumes?.length ?? 0) > 0 && (
+        <div className="trMember">
+          <div className="trRow static">
+            <span className="nm">Resumes</span>
+            <span className="md">who got the team moving again</span>
+          </div>
+          <ol className="trRuns">
+            {run.resumes!.map((r, n) => (
+              <li key={n}>
+                <div className="trRun static" title={r.why ? `${r.what} — because ${r.why}` : r.what}>
+                  <ResumedTag by={r.by} />
+                  <span className="tt">{r.what}</span>
+                  <span className="k">{clock(r.at)}</span>
+                </div>
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
       {checks.length > 0 && (
         <div className="trMember">
           <div className="trRow static">
@@ -307,7 +328,7 @@ export function RunHeader({
   const cur = runs[i]
   const s = sessions.find((x) => x.id === sessionId)
   const model = s?.model ? findModel(models, s.model)?.name ?? s.model : null
-  const going = run.state === 'running' || run.state === 'gate'
+  const going = run.state === 'running' || run.state === 'gate' || run.state === 'waiting'
   const pct = Math.min(100, (run.spentUsd / Math.max(0.01, run.budgetUsd)) * 100)
   const act = (path: 'pause' | 'stop') => {
     setBusy(true)
@@ -401,6 +422,7 @@ function RunDivider({ row, n, of }: { row: RunRow; n: number; of: number }) {
         {row.run.task && <span className="tag">{row.tag}</span>}
         <span className="t">{row.run.task ? row.title : row.tag}</span>
         <span className="sp" />
+        <ResumedTag by={row.run.resumedBy} long />
         {!first && <span className={`ctx${row.run.fresh ? '' : ' carry'}`}>{row.run.fresh ? 'fresh context' : 'same context'}</span>}
         <span className={`st ${row.status}`}>
           {row.status === 'working' ? <span className="dot live" aria-hidden="true" /> : GLYPH[row.status]} {STATUS_TEXT[row.status]}

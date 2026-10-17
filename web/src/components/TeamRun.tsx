@@ -4,10 +4,11 @@ import * as Tabs from '@radix-ui/react-tabs'
 import { ChevronRight, PanelRight, Plus, X, Zap } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { Handoff, LedgerEntry, ModelOption, SessionSummary, SessionTeamRun, Slice, TeamCard, TeamRun, TeamRunView } from '../../../shared/protocol.js'
-import { leadSlices, normalizeRun } from '../../../core/teams/engine.js'
+import { goalOverdue, horizonText, leadSlices, normalizeRun } from '../../../core/teams/engine.js'
 import { TEAM_PERMISSIONS, type TeamPermissions } from '../../../core/teams/recipe.js'
 import { FAST_MODE_BLURB } from '../fastMode.js'
 import { runFileHash } from './RunFolderPage.js'
+import { GoalAsks, GoalSide, RaiseBudget, ResultActions, WakeNow, wakeText } from './TeamGoal.js'
 import { findModel } from '../models.js'
 import { Select, SelectItem } from '../ui/Select.js'
 import { colorOf, loadTeamRun, PERMISSION_META, teamsCall, usd } from '../teams.js'
@@ -135,7 +136,7 @@ export function TeamStrip({
     return out
   }, [run])
   const ended = run.state === 'done' || run.state === 'stopped'
-  const going = run.state === 'running' || run.state === 'gate'
+  const going = run.state === 'running' || run.state === 'gate' || run.state === 'waiting'
   const act = (path: 'pause' | 'resume' | 'stop') => {
     setBusy(true)
     call(path, { runId: run.id })
@@ -147,11 +148,12 @@ export function TeamStrip({
   return (
     <Tabs.Root value={sessionId} onValueChange={onNavigate} activationMode="manual">
       <Tabs.List id="teamStrip" aria-label="Team members">
-        <span className="teamLabel">{run.recipe.label}</span>
+        <span className="teamLabel">{run.goal ? `Goal · ${run.recipe.label}` : run.recipe.label}</span>
         {members.map((m) => {
           const s = sessions.find((x) => x.id === m.sessionId)
           const working = s?.status === 'running' || s?.status === 'starting'
-          const needsYou = s?.waiting || (m.sessionId === run.leadSessionId && (run.state === 'proposed' || run.state === 'gate'))
+          const asks = run.goal?.questions.some((q) => q.answer === null)
+          const needsYou = s?.waiting || (m.sessionId === run.leadSessionId && (run.state === 'proposed' || run.state === 'gate' || asks))
           const state = needsYou ? 'needs you' : working ? 'working' : s?.status === 'error' ? 'error' : 'idle'
           const model = modelName(s?.model)
           const spent = run.spend[m.sessionId] ?? 0
@@ -256,7 +258,11 @@ export function TeamDock({ run, onDetails, onNavigate }: { run: TeamRunView; onD
   const step = run.recipe.steps[run.step]
   const waiting = run.awaiting.map((id) => run.workers.find((w) => w.id === id)?.label).filter(Boolean)
   const task = run.task !== null && step?.forEach ? run.card.tasks[run.task] : undefined
-  const needsYou = run.state === 'proposed' || run.state === 'gate' || run.state === 'paused' || !!run.revision
+  const g = run.goal ?? null
+  const asks = g?.questions.some((q) => q.answer === null) ?? false
+  const toAccept = !!g && run.state === 'done' && !g.acceptedAt
+  const needsYou = run.state === 'proposed' || run.state === 'gate' || run.state === 'paused' || !!run.revision || asks || toAccept
+  const overdue = goalOverdue(run, Date.now())
 
   let dot = 'live'
   let title: ReactNode = null
@@ -264,8 +270,8 @@ export function TeamDock({ run, onDetails, onNavigate }: { run: TeamRunView; onD
   let primary: ReactNode = null
   if (run.state === 'proposed') {
     dot = 'yellow'
-    title = 'Run this team?'
-    line = run.card.goal
+    title = g ? 'Run this goal?' : 'Run this team?'
+    line = g ? `done when ${g.doneWhen} · ${horizonText(g.horizon)}` : run.card.goal
     primary = (
       <>
         <PermissionSelect run={run} disabled={busy} onError={setError} />
@@ -295,6 +301,13 @@ export function TeamDock({ run, onDetails, onNavigate }: { run: TeamRunView; onD
         </button>
       </>
     )
+  } else if (run.state === 'running' && g?.owes === 'verdict') {
+    title = 'Junior is checking the done-when'
+    line = g.doneWhen
+  } else if (run.state === 'running' && g?.owes === 'unstick') {
+    dot = 'yellow'
+    title = 'The team is stuck'
+    line = `${g.stuck?.why ?? 'its fix rounds ran out'} — Junior is working out how to get it moving`
   } else if (run.state === 'running') {
     title = task
       ? `Task ${run.task! + 1} of ${run.card.tasks.length} · ${step?.id ?? ''}`
@@ -315,15 +328,32 @@ export function TeamDock({ run, onDetails, onNavigate }: { run: TeamRunView; onD
         Continue
       </button>
     )
+  } else if (run.state === 'waiting' && g?.wait) {
+    dot = 'blue'
+    title = 'Waiting on the world'
+    line = `for ${g.wait.for} · ${wakeText(g.wait.until)}`
+    primary = <WakeNow run={run} onError={setError} />
   } else if (run.state === 'paused') {
     dot = 'yellow'
     title = 'Paused'
     line = run.reason
-    primary = (
-      <button type="button" className="btn sm" disabled={busy} onClick={() => go('resume', { runId: run.id })} title="Carry on — past the budget, it rises by half">
+    // Only you lift a budget pause: say how much more, then it resumes.
+    primary = run.reason?.startsWith('budget') ? (
+      <RaiseBudget run={run} onError={setError} />
+    ) : (
+      <button type="button" className="btn sm" disabled={busy} onClick={() => go('resume', { runId: run.id })} title="Carry on where it stopped">
         Resume
       </button>
     )
+  } else if (toAccept) {
+    dot = 'yellow'
+    title = 'Junior says it’s done'
+    line = g!.verdicts.at(-1)?.evidence ?? g!.doneWhen
+    primary = <ResultActions run={run} onError={setError} />
+  } else if (run.state === 'done' && g) {
+    dot = 'green'
+    title = `Goal done · ${usd(run.spentUsd)}`
+    line = `accepted · ${g.doneWhen}`
   } else if (run.state === 'done') {
     dot = run.unresolved ? 'yellow' : 'green'
     title = `Team done · ${usd(run.spentUsd)}`
@@ -346,6 +376,7 @@ export function TeamDock({ run, onDetails, onNavigate }: { run: TeamRunView; onD
         <span className={`dot ${dot}`} aria-hidden="true" />
         <span className="tdTitle">{title}</span>
         {line && <span className="tdLine">{line}</span>}
+        {overdue && <span className="pill yellow" title={`The goal was due ${horizonText(g!.horizon)}`}>overdue</span>}
         <span className="sp" />
         <button type="button" className="btn sm ghost" onClick={() => onNavigate(runFileHash(run.id))} title="The run folder: plan, ledger, reviews and every handoff — the outcome when it's done">
           Open plan
@@ -360,6 +391,7 @@ export function TeamDock({ run, onDetails, onNavigate }: { run: TeamRunView; onD
         <span className="sp" />
         <span className="tdCap mono">{run.state === 'proposed' ? `cap ${usd(run.card.budgetUsd)}` : `${usd(run.spentUsd)} / ${usd(run.budgetUsd)}`}</span>
       </div>
+      <GoalAsks run={run} />
       {error && <div className="tdErr" role="alert">{error}</div>}
     </div>
   )
@@ -535,7 +567,7 @@ export function TeamSide({
   return (
     <aside className="teamSide" aria-label="Team run details">
       <header className="tsHead">
-        <span className="t">Team · {run.recipe.label}</span>
+        <span className="t">{run.goal ? 'Goal' : 'Team'} · {run.recipe.label}</span>
         <span className="k">{run.team ? `teams/${run.team}.md` : 'drafted for this run'}</span>
         <span className="sp" />
         <button type="button" className="btn xs ghost" onClick={() => onNavigate(runFileHash(run.id))} title="The run folder: plan, ledger, reviews and every handoff">
@@ -575,12 +607,14 @@ export function TeamSide({
       <div className="tsBody">
         {card.note && <p className="tsNote">{card.note}</p>}
 
+        <GoalSide run={run} editable={editable} onError={setError} />
+
         <section className="tsSec">
-          <div className="tsK">goal</div>
+          <div className="tsK">{run.goal ? 'what the team does' : 'goal'}</div>
           <Editable value={card.goal} disabled={!editable} multiline onCommit={(v) => v && save({ goal: v })} />
         </section>
         <section className="tsSec">
-          <div className="tsK">done when</div>
+          <div className="tsK">{run.goal ? 'acceptance criteria' : 'done when'}</div>
           <EditList items={card.criteria} disabled={!editable} add="add a check" onChange={(criteria) => criteria.length && save({ criteria })} />
         </section>
         <section className="tsSec">
@@ -959,6 +993,7 @@ const LEDGER_GROUPS: { kind: LedgerEntry['kind']; label: string }[] = [
   { kind: 'failed', label: 'tried, didn’t work' },
   { kind: 'verify', label: 'how to check' },
   { kind: 'note', label: 'notes' },
+  { kind: 'resume', label: 'resumes' },
 ]
 
 /** One handoff as one line; open it for the full text. */

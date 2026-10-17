@@ -4,7 +4,7 @@ import type { TeamRunFileResponse, TeamRunFolderFile, TeamRunFolderResponse } fr
 import { teamsCall } from '../teams.js'
 import { Markdown } from './Markdown.js'
 
-const STATE: Record<string, string> = { proposed: 'proposed', running: 'running', gate: 'waiting for you', paused: 'paused', stopped: 'stopped', done: 'done' }
+const STATE: Record<string, string> = { proposed: 'proposed', running: 'running', gate: 'waiting for you', waiting: 'waiting on the world', paused: 'paused', stopped: 'stopped', done: 'done' }
 const GROUPS: { id: TeamRunFolderFile['group']; label: string }[] = [
   { id: 'run', label: 'The run' },
   { id: 'handoffs', label: 'Handoffs' },

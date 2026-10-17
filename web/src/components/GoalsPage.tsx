@@ -1,17 +1,19 @@
 /**
- * Goals (.docs/goals/goals-engine.md): outcomes Junior drives across many
- * sessions. A dense table — title, state, whose turn, last touched, spend —
- * with Active / Finished tabs. Goals are made by talking to Junior (or
- * `triage goal create`), never from a form here.
+ * Goals (.docs/junior-goals-teams/modes-autonomy-goals.md): team runs with a
+ * done-when, which Junior keeps going round after round until it judges the
+ * done-when met. A dense table — goal, where it stands, due, last touched,
+ * spend — with Active / Finished tabs. Goals are made by talking to Junior
+ * ("Turn into a goal", or "New goal:" in any chat), never from a form here.
+ *
+ * goalDot / spendText / money still serve the old goals engine's page (GoalPage).
  */
 import { useMemo, useState } from 'react'
-import { isTerminal } from '../../../core/goals/machine.js'
-import { GOAL_STATE_LABEL } from '../../../core/goals/types.js'
-import { TURN_LABEL } from '../../../core/work/flow.js'
-import type { GoalSummary } from '../../../shared/protocol.js'
-import { goalHash, useGoals } from '../goals.js'
+import { horizonText } from '../../../core/teams/engine.js'
+import type { GoalSummary, SessionSummary, TeamGoalSummary } from '../../../shared/protocol.js'
 import { ago } from '../itemUi.js'
 import { rowOpen } from '../tabs.js'
+import { useTeamGoals, usd } from '../teams.js'
+import { wakeText } from './TeamGoal.js'
 
 type Tab = 'active' | 'finished'
 const TABS: { id: Tab; label: string }[] = [
@@ -32,18 +34,49 @@ export function spendText(g: Pick<GoalSummary, 'spentUsd' | 'budget'>): string {
   return g.budget.usd != null ? `${money(g.spentUsd)} / ${money(g.budget.usd)}` : money(g.spentUsd)
 }
 
-export function GoalsPage({ onNavigate, onPin }: { onNavigate: (hash: string) => void; onPin: (id: string, title: string) => void }) {
-  const { goals, loaded, error } = useGoals()
+const finished = (g: TeamGoalSummary) => g.state === 'stopped' || (g.state === 'done' && !!g.acceptedAt)
+
+/** Where a goal stands, in a few words — the one thing to know about it now. */
+function standing(g: TeamGoalSummary): string {
+  const round = g.round ? ` · round ${g.round + 1}` : ''
+  if (g.asks) return `Junior asks you ${g.asks === 1 ? 'a question' : `${g.asks} questions`}`
+  switch (g.state) {
+    case 'running':
+      return g.owes === 'verdict' ? `Junior is checking the done-when${round}` : g.owes === 'unstick' ? `Stuck — Junior is getting it moving${round}` : `Working${round}`
+    case 'gate':
+      return 'A step waits for you'
+    case 'waiting':
+      return g.wait ? `Waiting for ${g.wait.for} · ${wakeText(g.wait.until)}` : 'Waiting on the world'
+    case 'paused':
+      return g.reason?.startsWith('budget') ? 'Budget reached — raise it to resume' : 'Paused'
+    case 'done':
+      return g.acceptedAt ? `Done${round}` : 'Junior says it’s done — accept it'
+    case 'stopped':
+      return 'Stopped'
+    default:
+      return g.state
+  }
+}
+
+/** A goal's one colour: yours is yellow, Junior's pulses, the world's is blue. */
+function teamGoalDot(g: TeamGoalSummary): string {
+  if (g.state === 'done' && g.acceptedAt) return 'green'
+  if (g.state === 'stopped') return 'stone'
+  return g.turn === 'you' ? 'yellow' : g.turn === 'junior' ? 'live' : g.turn === 'world' ? 'blue' : 'stone'
+}
+
+export function GoalsPage({ sessions, onNavigate, onPin }: { sessions: readonly SessionSummary[]; onNavigate: (hash: string) => void; onPin: (key: string, title: string) => void }) {
+  const { goals, loaded, error } = useTeamGoals(sessions)
   const [tab, setTab] = useState<Tab>('active')
   const [filter, setFilter] = useState('')
   const counts = useMemo(() => {
-    const finished = goals.filter((g) => isTerminal(g.state)).length
-    return { active: goals.length - finished, finished }
+    const done = goals.filter(finished).length
+    return { active: goals.length - done, finished: done }
   }, [goals])
   const q = filter.trim().toLowerCase()
   const rows = goals
-    .filter((g) => (tab === 'finished') === isTerminal(g.state))
-    .filter((g) => !q || g.title.toLowerCase().includes(q) || (g.reason ?? '').toLowerCase().includes(q))
+    .filter((g) => (tab === 'finished') === finished(g))
+    .filter((g) => !q || g.title.toLowerCase().includes(q) || g.doneWhen.toLowerCase().includes(q))
 
   return (
     <div id="goalsPage" className="page full">
@@ -74,50 +107,47 @@ export function GoalsPage({ onNavigate, onPin }: { onNavigate: (hash: string) =>
             {rows.length === 0 ? (
               <div className="wtblEmpty">
                 {goals.length === 0 ? (
-                  <span>No goals yet. Tell Junior the outcome you want in any chat — it plans the work and keeps at it until it's done.</span>
+                  <span>No goals yet. Tell Junior the outcome you want in any chat, or turn an item into a goal — a team keeps at it, round after round, until it's done.</span>
                 ) : (
                   <span>Nothing {q ? 'matches' : tab} here.</span>
                 )}
               </div>
             ) : (
-              <table className="wtbl">
+              <table className="wtbl goalsTbl">
                 <thead>
                   <tr>
-                    <th aria-label="State" />
+                    <th aria-label="Whose turn" />
                     <th>Goal</th>
-                    <th>State</th>
-                    <th>Turn</th>
+                    <th>Where it stands</th>
+                    <th>Due</th>
                     <th>Updated</th>
                     <th className="r">Spent</th>
                   </tr>
                 </thead>
                 <tbody>
                   {rows.map((g) => (
-                    <tr key={g.id} className={isTerminal(g.state) ? 'off' : undefined}>
+                    <tr key={g.runId} className={finished(g) ? 'off' : undefined}>
                       <td className="sw">
-                        <span className={`dot ${goalDot(g)}`} aria-hidden="true" />
+                        <span className={`dot ${teamGoalDot(g)}`} aria-hidden="true" />
                       </td>
                       <td className="nm">
-                        <button
-                          type="button"
-                          className="t"
-                          title={g.reason ?? undefined}
-                          {...rowOpen(
-                            () => onNavigate(goalHash(g.id)),
-                            () => onPin(g.id, g.title),
-                          )}
-                        >
+                        <button type="button" className="t" title={`Done when ${g.doneWhen}`} {...rowOpen(() => onNavigate(g.leadSessionId), () => onPin(g.leadSessionId, g.title))}>
                           {g.title}
                         </button>
+                        <div className="sub">done when {g.doneWhen}</div>
                       </td>
                       <td>
-                        {GOAL_STATE_LABEL[g.state]}
-                        {g.currentStep && <span className="mono"> · {g.currentStep}</span>}
-                        {g.openGates > 0 && <span className="mono"> · {g.openGates} gate{g.openGates === 1 ? '' : 's'}</span>}
+                        {standing(g)}
+                        {g.resumes > 0 && <span className="mono"> · {g.resumes} resume{g.resumes === 1 ? '' : 's'}</span>}
                       </td>
-                      <td>{TURN_LABEL[g.turn]}</td>
+                      <td>
+                        {horizonText(g.horizon)}
+                        {g.overdue && <span className="pill yellow">overdue</span>}
+                      </td>
                       <td className="mono">{ago(g.updatedAt)}</td>
-                      <td className="r mono">{spendText(g)}</td>
+                      <td className="r mono">
+                        {usd(g.spentUsd)} <span className="of">/ {usd(g.budgetUsd)}</span>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
