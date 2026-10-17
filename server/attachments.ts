@@ -272,15 +272,17 @@ export const readItemFile = (root: string, itemId: string, ref: FileRef): Promis
  * Copy an item's files into a session's folder, each under a fresh uuid, so the
  * session owns its copy (deleting the session never touches the item, and the
  * other way round). A file that has gone missing is skipped — the prompt is
- * worth more than the attachment. Returns the session's refs, in order.
+ * worth more than the attachment — and named in `missing`, so the caller can
+ * log it and tell the model. `files` is the session's refs, in order.
  */
 export async function copyItemFilesToSession(
   root: string,
   sessionId: string,
   itemId: string,
   files: readonly FileRef[] | undefined,
-): Promise<FileRef[]> {
+): Promise<{ files: FileRef[]; missing: FileRef[] }> {
   const out: FileRef[] = []
+  const missing: FileRef[] = []
   for (const f of files ?? []) {
     const id = randomUUID()
     try {
@@ -289,11 +291,18 @@ export async function copyItemFilesToSession(
       out.push({ ...f, id })
     } catch {
       // the file is gone — the ref outlived it
+      missing.push(f)
       await rm(path.join(sessionFilesDir(root, sessionId), id), { recursive: true, force: true }).catch(() => {})
     }
   }
-  return out
+  return { files: out, missing }
 }
+
+/** A line for the first message when item files could not be copied; null when none were missing. */
+export const missingFilesNote = (missing: readonly FileRef[]): string | null =>
+  missing.length === 0
+    ? null
+    : `${missing.length === 1 ? 'One file' : `${missing.length} files`} attached to the item could not be attached (missing on disk): ${missing.map((f) => f.name).join(', ')}`
 
 const kb = (n: number): string => (n < 1024 * 1024 ? `${Math.max(1, Math.round(n / 1024))} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`)
 

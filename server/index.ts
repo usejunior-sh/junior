@@ -415,6 +415,7 @@ import {
   attachedFilesNote,
   claimSessionFiles,
   copyItemFilesToSession,
+  missingFilesNote,
   handleUpload,
   itemFileEdits,
   readItemFile,
@@ -5700,6 +5701,16 @@ async function setItemImagesOp(rt: WorkspaceRuntime, id: string, edits: ItemImag
 const itemFilePlan = (rt: WorkspaceRuntime, raw: unknown, held: readonly FileRef[]) =>
   itemFileEdits(rt.attachmentsDir, (raw ?? {}) as Record<string, unknown>, held, MAX_FILES_PER_ITEM)
 
+/**
+ * An item's files, copied into a session about to start. A file gone from disk
+ * is logged with the item and file, and named in `note` for the first message.
+ */
+async function itemFilesForSession(rt: WorkspaceRuntime, sessionId: string, item: { id: string; files?: readonly FileRef[] }) {
+  const { files, missing } = await copyItemFilesToSession(rt.attachmentsDir, sessionId, item.id, item.files)
+  for (const f of missing) log('warn', 'attachments', `item file missing on disk, not attached: ${f.name}`, { itemId: item.id, session: sessionId, workspace: rt.meta.id })
+  return { files, note: missingFilesNote(missing) }
+}
+
 /** Move the planned files into the item's folder, drop the ones left out, record the refs. Any item, like images. */
 async function setItemFilesOp(rt: WorkspaceRuntime, id: string, plan: NonNullable<Awaited<ReturnType<typeof itemFilePlan>>>): Promise<FileRef[]> {
   const item = await rt.store.items.get(id)
@@ -5868,8 +5879,15 @@ async function createManualOp(rt: WorkspaceRuntime, raw: unknown): Promise<strin
   if (due) await rt.store.items.setDue(id, due)
   // The item has to exist before its images can hang off it — the folder is
   // named after the id the line above minted.
-  if (images?.length) await setItemImagesOp(rt, id, images)
-  if (filePlan?.order.length) await setItemFilesOp(rt, id, filePlan)
+  try {
+    if (images?.length) await setItemImagesOp(rt, id, images)
+    if (filePlan?.order.length) await setItemFilesOp(rt, id, filePlan)
+  } catch (err) {
+    // The caller is told the create failed and will try again: don't leave this half-made item behind to be duplicated.
+    await rt.store.items.transition(id, { status: 'archived', actor: 'user', detail: { reason: 'deleted by user', cause: 'attachments failed on create' } }).catch(() => {})
+    invalidateInbox(rt)
+    throw err
+  }
   invalidateInbox(rt)
   log('info', 'inbox', `manual item created: ${input.title ?? id}`, { id, workspace: rt.meta.id })
   return id
@@ -6518,9 +6536,8 @@ async function startBriefRun(rt: WorkspaceRuntime, job: BriefJob): Promise<void>
   // image blocks — a brief about a broken UI needs to see it.
   const images = await itemImageAttachments(rt.attachmentsDir, item.id, item.images)
   // Files of any type go in as paths the session can Read.
-  const files = await copyItemFilesToSession(rt.attachmentsDir, row.id, item.id, item.files)
-  await live.sendUserMessage(
-    composeBriefPrompt({
+  const { files, note: missingNote } = await itemFilesForSession(rt, row.id, item)
+  const briefPrompt = composeBriefPrompt({
       item,
       reason: scored?.reason,
       playbookName: job.playbook,
@@ -6529,11 +6546,8 @@ async function startBriefRun(rt: WorkspaceRuntime, job: BriefJob): Promise<void>
       existing: existing?.body ?? null,
       iteration,
       imageCount: images?.length ?? 0,
-    }),
-    images,
-    undefined,
-    files.length ? { files } : {},
-  )
+    })
+  await live.sendUserMessage(missingNote ? `${briefPrompt}\n\n${missingNote}` : briefPrompt, images, undefined, files.length ? { files } : {})
   log('info', 'briefs', `run started: ${item.title}${iteration ? ' (iteration)' : ''}`, {
     jobId: job.id,
     itemId: item.id,
@@ -7789,8 +7803,8 @@ async function planTeamOp(rt: WorkspaceRuntime, raw: unknown): Promise<string> {
   if (brief) mentions.push({ kind: 'artifact', ref: brief.artifact.id, label: brief.artifact.title })
   const images = await itemImageAttachments(rt.attachmentsDir, item.id, item.images)
   const text = planMessage({ team: entry && recipe ? { name: entry.name, label: recipe.label, tasks: !!taskLoop(recipe) } : null, itemTitle: item.title })
-  const files = await copyItemFilesToSession(rt.attachmentsDir, row.id, item.id, item.files)
-  await live.sendUserMessage(`${text}\n\n${mentions.map(mentionToken).join(' ')}`, images, mentions, files.length ? { files } : {})
+  const { files, note: missingNote } = await itemFilesForSession(rt, row.id, item)
+  await live.sendUserMessage(`${text}\n\n${mentions.map(mentionToken).join(' ')}${missingNote ? `\n\n${missingNote}` : ''}`, images, mentions, files.length ? { files } : {})
   log('info', 'teams', `team planning: ${recipe?.label ?? 'pick or draft'} for ${item.title}`, { itemId: item.id, workspace: rt.meta.id })
   return row.id
 }
@@ -11504,6 +11518,8 @@ wss.on('connection', (ws, req) => {
         case 'create_session': {
           if (msg.provider && !isConnected(rt.meta, msg.provider))
             throw new Error(`${providerFor(msg.provider).label} isn't connected in this workspace — connect it in Settings → Providers`)
+          // Named uploads must still be there. Checked first — before a worktree or a session exists — so a stale one creates nothing.
+          if (msg.files) await resolveUploads(rt.attachmentsDir, msg.files, MAX_FILES_PER_MESSAGE)
           // A checkout names both the folder and the project; it must still be there.
           let checkout = msg.checkoutId ? rt.checkouts.get(msg.checkoutId) : undefined
           if (msg.checkoutId && checkout?.state !== 'active') throw new Error('that checkout is gone — pick another folder')
@@ -11516,8 +11532,6 @@ wss.on('connection', (ws, req) => {
             checkout = await makeWorktree(rt, target, msg.worktree.branch, msg.itemId, (step) => send(ws, { type: 'create_progress', step }))
             send(ws, { type: 'create_progress', step: 'session' })
           }
-          // Named uploads must still be there; checked before anything is created, so a stale one sends nothing.
-          if (msg.files) await resolveUploads(rt.attachmentsDir, msg.files, MAX_FILES_PER_MESSAGE)
           const fallback = msg.cwd || checkout ? null : await defaultProject(rt)
           const cwd = checkout?.path ?? expandHome(msg.cwd || fallback?.path || '~')
           const project = await projectForSession(rt, cwd, checkout?.projectId ?? msg.projectId ?? fallback?.id)
@@ -11545,15 +11559,20 @@ wss.on('connection', (ws, req) => {
             : undefined
           const images = [...(fromItem ?? []), ...(msg.images ?? [])].slice(0, MAX_IMAGES_PER_MESSAGE)
           // The item's files are copied into this session's folder, so it reads its own copy by path.
-          const itemFiles = dispatched ? await copyItemFilesToSession(rt.attachmentsDir, row.id, dispatched.id, dispatched.files) : []
-          const files = [
-            ...itemFiles,
-            ...(msg.files?.length ? await claimSessionFiles(rt.attachmentsDir, row.id, msg.files, MAX_FILES_PER_MESSAGE) : []),
-          ]
-          if (msg.firstMessage?.trim() || images.length || files.length || msg.mentions?.length)
+          const itemFiles = dispatched ? await itemFilesForSession(rt, row.id, dispatched) : { files: [], note: null }
+          // The session exists by now; if an upload vanished since the check above, say so in it instead of leaving it silent.
+          let files: FileRef[] = itemFiles.files
+          try {
+            if (msg.files?.length) files = [...files, ...(await claimSessionFiles(rt.attachmentsDir, row.id, msg.files, MAX_FILES_PER_MESSAGE))]
+          } catch (err) {
+            await sessionNotice(rt, row.id, `Not sent: ${errText(err)}`)
+            break
+          }
+          const firstMessage = [msg.firstMessage?.trim(), itemFiles.note].filter(Boolean).join('\n\n')
+          if (firstMessage || images.length || files.length || msg.mentions?.length)
             void rt.live
               .get(row.id)
-              ?.sendUserMessage(msg.firstMessage?.trim() ?? '', images.length ? images : undefined, msg.mentions, {
+              ?.sendUserMessage(firstMessage, images.length ? images : undefined, msg.mentions, {
                 ...(msg.mode === 'goal' ? { mode: 'goal' as const } : {}),
                 ...(files.length ? { files } : {}),
               })
@@ -11674,8 +11693,14 @@ wss.on('connection', (ws, req) => {
               const goal = await goalOfSession(rt.goalDeps, row.id).catch(() => null)
               // Plan review keeps M2's behaviour: the drafting lead's session is revived as before.
               if (goal && goal.state !== 'draft_plan' && goal.state !== 'plan_ready') {
+                // The lead gets text only, so attached files stay behind — and the user is told.
+                const dropped = msg.files?.length ? ` ${msg.files.length === 1 ? 'The attached file was' : 'The attached files were'} not sent — files can't go to the goal's lead.` : ''
+                if (!msg.text.trim()) {
+                  await sessionNotice(rt, row.id, `Not sent: this session has ended.${dropped}`)
+                  break
+                }
                 const r = await goalMessageOp(rt.goalDeps, goalEngineFor(rt), { goalId: goal.id, text: msg.text.trim() }).catch((err: unknown) => err)
-                await sessionNotice(rt, row.id, r instanceof Error ? `Not sent: ${r.message}` : "This session has ended; your message went to the goal's lead.")
+                await sessionNotice(rt, row.id, r instanceof Error ? `Not sent: ${r.message}` : `This session has ended; your message went to the goal's lead.${dropped}`)
                 break
               }
             }

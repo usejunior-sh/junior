@@ -16,6 +16,7 @@ import {
   attachedFilesNote,
   claimSessionFiles,
   copyItemFilesToSession,
+  missingFilesNote,
   fileIdList,
   handleUpload,
   itemFileEdits,
@@ -279,7 +280,8 @@ test('copying an item\'s files gives the session its own copy under fresh ids', 
   try {
     const up = await saveUpload(root, 'spec.pdf', Buffer.from('pdf-bytes'))
     const held = await applyItemFileEdits(root, item, [], (await itemFileEdits(root, { files: [up.id] }, [], 5))!)
-    const copies = await copyItemFilesToSession(root, 'sess-9', item, held)
+    const { files: copies, missing: none } = await copyItemFilesToSession(root, 'sess-9', item, held)
+    assert.deepEqual(none, [])
     assert.equal(copies.length, 1)
     assert.notEqual(copies[0].id, up.id)
     assert.equal(copies[0].name, 'spec.pdf')
@@ -288,9 +290,29 @@ test('copying an item\'s files gives the session its own copy under fresh ids', 
     await removeSessionFiles(root, 'sess-9')
     assert.ok(existsSync(itemFilePath(root, item, held[0])))
     // a file that went missing is skipped, not fatal; no item files = nothing
-    assert.deepEqual(await copyItemFilesToSession(root, 'sess-9', item, [{ id: UNKNOWN, name: 'gone.txt', bytes: 1 }]), [])
+    const gone = { id: UNKNOWN, name: 'gone.txt', bytes: 1 }
+    assert.deepEqual(await copyItemFilesToSession(root, 'sess-9', item, [gone]), { files: [], missing: [gone] })
+    assert.match(missingFilesNote([gone]) ?? '', /could not be attached.*gone\.txt/)
+    assert.equal(missingFilesNote([]), null)
     assert.ok(!existsSync(sessionFilesDir(root, 'sess-9')) || !existsSync(path.join(sessionFilesDir(root, 'sess-9'), UNKNOWN)))
-    assert.deepEqual(await copyItemFilesToSession(root, 'sess-9', item, undefined), [])
+    assert.deepEqual(await copyItemFilesToSession(root, 'sess-9', item, undefined), { files: [], missing: [] })
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('create_session checks its uploads before it makes a worktree or a session', async () => {
+  const root = tmp()
+  try {
+    // The check itself: a stale id refuses, and nothing is moved or made.
+    await assert.rejects(resolveUploads(root, [UNKNOWN], MAX_FILES_PER_MESSAGE), /no longer available/)
+    assert.ok(!existsSync(path.join(root, 'sessions')))
+    // The order: index.ts is not importable (it boots the daemon), so pin where the check sits in the case.
+    const src = readFileSync(path.join(import.meta.dirname, '..', 'server', 'index.ts'), 'utf8')
+    const body = src.slice(src.indexOf("case 'create_session': {\n          if (msg.provider"))
+    const check = body.indexOf('resolveUploads(rt.attachmentsDir, msg.files')
+    assert.ok(check > 0)
+    for (const makes of ['makeWorktree(rt,', 'await createSession(']) assert.ok(check < body.indexOf(makes), `resolveUploads must come before ${makes}`)
   } finally {
     rmSync(root, { recursive: true, force: true })
   }
