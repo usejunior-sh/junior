@@ -69,6 +69,8 @@ export type Route =
   | { page: 'job'; id: string }
   | { page: 'artifacts' }
   | { page: 'artifact'; id: string }
+  /** `#/run/<runId>/<path>` — one file in a team run's folder (plan.md, ledger.md, a handoff…) */
+  | { page: 'run'; runId: string; path: string }
   | { page: 'changes' }
   /** `#/change/<checkoutId>/<encoded path>` — one changed file: its diff, and an editor (a project id = its main checkout) */
   | { page: 'change'; checkoutId: string; path: string }
@@ -130,6 +132,16 @@ function parseRoute(hash: string): Route {
   }
   if (hash === '/artifacts') return { page: 'artifacts' }
   if (hash.startsWith('/artifact/')) return { page: 'artifact', id: hash.slice('/artifact/'.length) }
+  {
+    const m = /^\/run\/([^/]+)(?:\/(.+))?$/.exec(hash)
+    if (m) {
+      try {
+        return { page: 'run', runId: m[1], path: m[2] ? m[2].split('/').map(decodeURIComponent).join('/') : 'plan.md' }
+      } catch {
+        return { page: 'run', runId: m[1], path: 'plan.md' }
+      }
+    }
+  }
   if (hash === '/changes') return { page: 'changes' }
   {
     const m = /^\/change\/([^/]+)\/(.+)$/.exec(hash)

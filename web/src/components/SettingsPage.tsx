@@ -833,7 +833,7 @@ function GoalTeamSection() {
   return (
     <Section
       title="Goal teams"
-      hint="Teams became goals: Junior proposes each goal's team in its plan — who, how many, and why — and independent steps run side by side, each on its own branch. The teams below are workflow blocks a plan's steps can use."
+      hint="Junior proposes each goal's team in its plan — who, how many, and why — and independent steps run side by side, each on its own branch."
     >
       <Row label="Max team size" hint="The most workers one goal runs at once. A plan that asks for more is sent back to Junior.">
         <input

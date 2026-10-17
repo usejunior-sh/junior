@@ -23,10 +23,10 @@
  * The wire format lives in shared/protocol.ts and is shared with the frontend.
  */
 import http from 'node:http'
-import { mkdir, mkdtemp, readFile, rmdir, stat, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, rmdir, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import os from 'node:os'
-import { readFileSync } from 'node:fs'
+import { readFileSync, statSync } from 'node:fs'
 import { exec, execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { fileURLToPath } from 'node:url'
@@ -213,14 +213,20 @@ import type {
   LibraryEntry,
   LibraryListResponse,
   LibrarySource,
+  TeamPickerResponse,
+  TeamRunFile,
+  TeamRunFileResponse,
+  TeamRunFilesResponse,
+  TeamRunFolderFile,
+  TeamRunFolderResponse,
   TeamRunResponse,
   TeamRunView,
   AgentCan,
 } from '../shared/protocol.js'
 import { frameAgentRelay } from '../core/agents/relay.js'
 import { TeamLibrary, agentFrom, detectChecks, frameTeamMessage, isCheckCommand, isLibraryName } from './teams.js'
-import { LEAD } from '../core/teams/recipe.js'
-import { planTitle, renderPlan } from '../core/teams/plan.js'
+import { LEAD, parseRecipe, recipeAgents, serializeRecipe, taskLoop, type RecipeStep, type TeamRecipe } from '../core/teams/recipe.js'
+import { runFiles } from '../core/teams/files.js'
 import {
   MAX_RUN_BUDGET_USD,
   approve,
@@ -229,12 +235,17 @@ import {
   continueGate,
   editTasks,
   normalizeRun,
+  planMessage,
   proposeRevision,
   recipeFromRun,
   resume,
   runSpent,
   settleRevision,
   split,
+  backfillRuns,
+  runStatus,
+  STEP_MESSAGE,
+  stampRun,
   submit,
   turnEnded,
   workerAppend,
@@ -245,6 +256,7 @@ import {
   type Submission,
   type TeamRun,
   type Worker,
+  type WorkerRun,
 } from '../core/teams/engine.js'
 import type { StoredTurn } from '../core/store/types.js'
 import { openSqliteStore } from '../core/store/sqlite.js'
@@ -535,6 +547,8 @@ const READ_TOOLS = new Set(['Read', 'Grep', 'Glob', 'LS', 'NotebookRead', 'WebFe
 /** Our own MCP tools that only read (the inbox, the artifacts index) — never prompt for these. */
 /** triage's own team tools: they record and route, and the team card is the approval — never a prompt. */
 const TEAM_TOOLS = new Set([
+  'mcp__triage__list_teams',
+  'mcp__triage__propose_team',
   'mcp__triage__split_step',
   'mcp__triage__revise_plan',
   'mcp__triage__submit_step',
@@ -869,6 +883,10 @@ class LiveSession {
   fastModeState?: FastModeState
   fastModeDisabledReason?: FastModeDisabledReason
   private seq: number
+  /** the last event written to this transcript (its persist may still be in flight) */
+  get lastSeq(): number {
+    return this.seq
+  }
   private readonly input = new AsyncQueue<UserTurn>()
   private readonly pendingPermissions = new Map<
     string,
@@ -1197,6 +1215,15 @@ class LiveSession {
       const writes = ws.some((w) => run.recipe.steps.find((s) => s.id === w.stepId)?.output === 'change')
       if (!writes && briefBashAllowed(toolInput)) return Promise.resolve({ behavior: 'allow', updatedInput: toolInput })
       if (run.checkCmds?.length && isCheckCommand(String(toolInput.command ?? ''), run.checkCmds)) {
+        return Promise.resolve({ behavior: 'allow', updatedInput: toolInput })
+      }
+    }
+    // The level you picked on the team card. Outbound calls have already met the veto
+    // (held, or refused from the shell), so under `local` what reaches here stays on this
+    // machine — except a connector write nothing recognised as an action, which still asks.
+    if (run && run.leadSessionId !== this.row.id) {
+      const level = run.card.permissions ?? 'ask'
+      if (level === 'everything' || (level === 'local' && (toolName === 'Bash' || effect !== 'external-write'))) {
         return Promise.resolve({ behavior: 'allow', updatedInput: toolInput })
       }
     }
@@ -1688,7 +1715,10 @@ const isTeamWorker = (rt: WorkspaceRuntime, sessionId: string): boolean => {
 
 /** Does this session hold its outbound calls for approval? Job runs and team workers do; chats ask now. */
 const holdsActions = (rt: WorkspaceRuntime, row: StoredSession): boolean =>
-  row.provider === 'claude' && (row.kind === 'job-run' || isTeamWorker(rt, row.id) || (rt.goalRuns.get(row.id)?.role ?? 'lead') !== 'lead')
+  row.provider === 'claude' &&
+  (row.kind === 'job-run' ||
+    (isTeamWorker(rt, row.id) && teamRunOf(rt, row.id)?.card.permissions !== 'everything') ||
+    (rt.goalRuns.get(row.id)?.role ?? 'lead') !== 'lead')
 
 /**
  * The role fence a session runs under (core/goals/fence.ts), or null: a team
@@ -1731,7 +1761,9 @@ function sessionVeto(rt: WorkspaceRuntime, row: StoredSession): { veto?: ToolVet
 /**
  * The veto a holding session gets: an MCP call or a Bash command that sorts
  * as an action is refused with "queued as #…" and filed for approval;
- * everything else passes. A held command is sent from the session's folder.
+ * except a team worker's outbound shell command, which is refused outright (a
+ * team hands work in and you send it); everything else passes. A held command
+ * is sent from the session's folder.
  */
 function holdIfAction(
   rt: WorkspaceRuntime,
@@ -1742,6 +1774,21 @@ function holdIfAction(
 ): { allow: true } | { allow: false; reason: string } {
   if (!holdable(toolName) || !holdsActions(rt, row)) return { allow: true }
   const args = isArgsObject(input) ? input : {}
+  // A team worker's push, PR or comment from the shell: refused, not filed — a team hands
+  // work in and you send it. (A job's Bash isn't held in this phase: sending needs its folder.)
+  if (toolName === 'Bash') {
+    if (!isTeamWorker(rt, row.id)) return { allow: true }
+    let out
+    try {
+      out = sortForWorkspace(rt)(toolName, args)
+    } catch {
+      return { allow: true }
+    }
+    return out
+      ? { allow: false, reason: `\`${out.summary}\` leaves this machine, and a team never sends anything. Finish your step without it and say in your handoff what should be sent — the user sends it.` }
+      : { allow: true }
+  }
+  if (!toolName.startsWith('mcp__')) return { allow: true }
   let sorted
   try {
     sorted = sortForWorkspace(rt)(toolName, args)
@@ -6763,12 +6810,37 @@ async function saveTeamRuns(rt: WorkspaceRuntime): Promise<void> {
 
 /** Boot: mirror stored runs into memory. Runs from before recipes (no `recipe`) are dropped. */
 async function loadTeamRuns(rt: WorkspaceRuntime): Promise<void> {
+  let backfilled = false
   for (const run of (await rt.store.config.get<TeamRun[]>(TEAM_RUNS_KEY)) ?? []) {
     if (!run || !(run as Partial<TeamRun>).recipe || !rt.rows.has(run.leadSessionId)) continue
     for (const w of run.workers) if (w.sessionId && !rt.rows.has(w.sessionId)) w.sessionId = null
+    const unrecorded = !(run as Partial<TeamRun>).workerRuns
     rt.teamRuns.set(run.id, normalizeRun(run))
     indexTeamRun(rt, run)
+    if (unrecorded && run.outputs.length) {
+      await backfillTeamRuns(rt, run).catch((err) => log('warn', 'teams', `could not backfill runs: ${err}`, { teamId: run.id, workspace: rt.meta.id }))
+      backfilled = true
+    }
   }
+  if (backfilled) await saveTeamRuns(rt)
+}
+
+/** A run from before runs were recorded: find where each step arrived in its session's log. */
+async function backfillTeamRuns(rt: WorkspaceRuntime, run: TeamRun): Promise<void> {
+  const starts: Record<string, { seq: number; at: number; fresh: boolean }[]> = {}
+  for (const sid of new Set(run.workers.map((w) => w.sessionId).filter((x): x is string => !!x))) {
+    const events = await rt.store.events.read(sid)
+    starts[sid] = []
+    events.forEach((e, i) => {
+      const ev = e.event
+      if (ev.kind !== 'local_user' || ev.from !== 'triage' || !STEP_MESSAGE.test(ev.text)) return
+      // A fresh context announces itself just before the step that starts it.
+      const prev = events[i - 1]?.event
+      const fresh = prev?.kind === 'notice' && prev.text.startsWith('fresh context')
+      starts[sid].push({ seq: fresh ? events[i - 1].seq : e.seq, at: e.createdAt, fresh })
+    })
+  }
+  backfillRuns(run, starts)
 }
 
 /** session id → run id, for the lead and every worker session. */
@@ -6827,11 +6899,12 @@ async function teamRunChanged(rt: WorkspaceRuntime, run: TeamRun): Promise<void>
 }
 
 /**
- * The Plan artifact, rendered from the run (core/teams/plan.ts) — triage's code
- * is its only writer. Coalesced: a burst of changes is one write (each write is
- * a git commit in the artifacts folder), and an unchanged body is no write.
+ * The run folder — plan, ledger, verify, reviews, handoffs — rendered from the
+ * run (core/teams/files.ts); triage's code is its only writer. Coalesced: a
+ * burst of changes is one write, and an unchanged file is no write. Runs from
+ * before the folder kept their Plan artifact; it is left as it was.
  */
-const PLAN_SYNC_MS = 1500
+const FOLDER_SYNC_MS = 1500
 function schedulePlanSync(rt: WorkspaceRuntime, run: TeamRun, now = false): Promise<void> | void {
   const key = `${rt.meta.id}:${run.id}`
   clearTimeout(planTimers.get(key))
@@ -6842,35 +6915,88 @@ function schedulePlanSync(rt: WorkspaceRuntime, run: TeamRun, now = false): Prom
     setTimeout(() => {
       planTimers.delete(key)
       void syncPlan(rt, run)
-    }, PLAN_SYNC_MS),
+    }, FOLDER_SYNC_MS),
   )
 }
 const planTimers = new Map<string, ReturnType<typeof setTimeout>>()
 
 async function syncPlan(rt: WorkspaceRuntime, run: TeamRun): Promise<void> {
-  if (!rt.teamRuns.has(run.id)) return
+  if (rt.teamRuns.has(run.id)) await syncRunFolder(rt, run)
+}
+
+/**
+ * Where a run's folder lives (.docs/team-handoffs.md): in the project's own
+ * `.triage/` when it has one, so the run sits beside the code it changed; else
+ * in the workspace folder under ~/.triage.
+ */
+function teamRunDir(rt: WorkspaceRuntime, runId: string, root: string | undefined): string {
+  const local = root ? path.join(root, '.triage') : null
+  if (local) {
+    try {
+      if (statSync(local).isDirectory()) return path.join(local, 'team-runs', runId)
+    } catch {
+      /* no project folder: the workspace's */
+    }
+  }
+  return path.join(workspaceDir(rt.meta.id), 'team-runs', runId)
+}
+
+/** A run's folder; runs from before folders get one now. */
+function runDirOf(rt: WorkspaceRuntime, run: TeamRun): string {
+  run.dir ??= teamRunDir(rt, run.id, run.root)
+  return run.dir
+}
+
+/** What each run-folder file last held, so an unchanged file is never rewritten. */
+const runFolderSeen = new Map<string, string>()
+
+/** Write the run folder (core/teams/files.ts): every file that changed since the last write. */
+async function syncRunFolder(rt: WorkspaceRuntime, run: TeamRun): Promise<void> {
+  const dir = runDirOf(rt, run)
   try {
-    const body = renderPlan(run)
-    if (run.planArtifactId) {
-      const cur = await rt.store.artifacts.get(run.planArtifactId)
-      if (cur) {
-        const onDisk = await readFile(path.join(rt.artifacts.root, cur.path), 'utf8').catch(() => '')
-        if (onDisk.includes(body.trim())) return
-        await rt.artifacts.update(run.planArtifactId, { title: planTitle(run), body })
-        return
+    // Inside the project, the runs folder ignores itself: the team's own notes must never show up
+    // in the diff a reviewer reads, or in a handoff's changed files.
+    if (run.root && dir.startsWith(path.join(run.root, '.triage') + path.sep)) {
+      const ignore = path.join(path.dirname(dir), '.gitignore')
+      if (!runFolderSeen.has(ignore)) {
+        await mkdir(path.dirname(ignore), { recursive: true })
+        await writeFile(ignore, '# triage team runs — local working notes, never committed\n*\n', { flag: 'wx' }).catch(() => {})
+        runFolderSeen.set(ignore, '')
       }
     }
-    const artifact = await rt.artifacts.create({ title: planTitle(run), body, author: 'model' }, 'plans')
-    run.planArtifactId = artifact.id
-    await rt.store.links.add({ fromKind: 'artifact', fromId: artifact.id, toKind: 'item', toId: run.itemId, role: 'plan' })
-    await rt.store.links.add({ fromKind: 'artifact', fromId: artifact.id, toKind: 'session', toId: run.leadSessionId, role: 'plan' })
-    // The client refetches on a new revision — without this it never learns the plan exists.
-    run.rev += 1
-    await saveTeamRuns(rt)
-    broadcastSessionList(rt)
+    for (const [rel, text] of Object.entries(runFiles(run))) {
+      const key = `${dir}\u0000${rel}`
+      if (runFolderSeen.get(key) === text) continue
+      const file = path.join(dir, rel)
+      await mkdir(path.dirname(file), { recursive: true })
+      await writeFile(file, text, 'utf8')
+      runFolderSeen.set(key, text)
+    }
   } catch (err) {
-    log('error', 'teams', `could not write the plan: ${err}`, { teamId: run.id, workspace: rt.meta.id })
+    log('error', 'teams', `could not write the run folder: ${err}`, { teamId: run.id, workspace: rt.meta.id })
   }
+}
+
+/** The run folder's files, in reading order: plan, ledger, verify, reviews, then each handoff and patch. */
+function runFolderList(rt: WorkspaceRuntime, run: TeamRun): TeamRunFolderFile[] {
+  const dir = runDirOf(rt, run)
+  const names = Object.keys(runFiles(run))
+  const top = ['plan.md', 'ledger.md', 'verify.md', 'reviews.md'].filter((p) => names.includes(p))
+  const out: TeamRunFolderFile[] = top.map((p) => ({ path: p, label: p.replace(/\.md$/, '').replace(/^\w/, (c) => c.toUpperCase()), group: 'run' }))
+  for (const h of run.outputs) if (h.file) out.push({ path: h.file, label: `${h.label}${h.task ? ` · ${h.task}` : ''} · ${h.stepId}${h.round ? ` r${h.round}` : ''}`, group: 'handoffs', ...(h.verdict ? { badge: h.verdict } : {}) })
+  for (const r of run.workerRuns) {
+    if (!r.patch) continue
+    const rel = path.relative(dir, r.patch)
+    if (!rel.startsWith('..') && !path.isAbsolute(rel)) out.push({ path: rel, label: path.basename(rel), group: 'patches' })
+  }
+  return out
+}
+
+/** A path inside a run's folder, or null when it reaches outside it. */
+function runFileOf(rt: WorkspaceRuntime, run: TeamRun, rel: string): string | null {
+  const dir = runDirOf(rt, run)
+  const file = path.resolve(dir, rel)
+  return file.startsWith(dir + path.sep) ? file : null
 }
 
 /** The spawn-time settings a worker's session gets for the step it is on. */
@@ -6905,14 +7031,18 @@ async function applyTeamActions(rt: WorkspaceRuntime, run: TeamRun, actions: Tea
         const lead = rt.rows.get(run.leadSessionId)
         const { writes, model, agent } = workerSpec(run, w)
         const effort = (agent?.effort ?? null) as EffortLevel | null
-        const row = await createSession(rt, `${w.label} · ${run.title}`, lead?.cwd ?? run.root ?? os.homedir(), model, effort, false, writes ? 'acceptEdits' : 'gated', { spawn: false, projectId: lead?.projectId ?? null })
+        const row = await createSession(rt, `${w.label} · ${run.title}`, lead?.cwd ?? run.root ?? os.homedir(), model, effort, run.card.fast, writes ? 'acceptEdits' : 'gated', { spawn: false, projectId: lead?.projectId ?? null })
         w.sessionId = row.id
         rt.sessionTeam.set(row.id, run.id)
         await linkSessionToItem(rt, row.id, run.itemId, 'dispatch').catch(() => {})
       }
       let text = a.text
-      if (a.diff) text += `\n\n${await handoffDiff(rt, run, a.diff)}`
+      const diff = a.diff ? await handoffDiff(rt, run, a.diff) : null
+      if (diff) text += `\n\n${diff.text}`
       if (a.fresh) rt.freshNext.add(w.sessionId)
+      // The run starts at the next event: a fresh context's notice, else triage's message.
+      const seen = rt.live.get(w.sessionId)?.lastSeq ?? (await rt.store.events.lastSeq(w.sessionId))
+      stampRun(run, w.id, { startSeq: seen + 1, at: Date.now(), spendAtStart: run.spend[w.sessionId] ?? 0, ...(diff?.file ? { patch: diff.file } : {}) })
       await tellSession(rt, w.sessionId, text)
     }
   }
@@ -6934,30 +7064,128 @@ const INLINE_DIFF_CHARS = 8000
  * patch rides inline; a big one is written to the run's folder and the reader
  * pulls what it needs, file by file — it only pays for what it reads.
  */
-async function handoffDiff(rt: WorkspaceRuntime, run: TeamRun, scope: DiffScope): Promise<string> {
+async function handoffDiff(rt: WorkspaceRuntime, run: TeamRun, scope: DiffScope): Promise<{ text: string; file?: string }> {
   const base = scope === 'task' ? run.baseTree : run.runBase ?? run.baseTree
   const what = scope === 'task' ? `this task's changes` : `the whole run's changes`
-  if (!run.root || !base) return '## Diff\n(no baseline — read the files the handoffs list)'
+  if (!run.root || !base) return { text: '## Diff\n(no baseline — read the files the handoffs list)' }
   const now = await snapshotTree(run.root)
-  if (!now) return '## Diff\n(could not read the working tree)'
+  if (!now) return { text: '## Diff\n(could not read the working tree)' }
   const [stat, { patch }] = await Promise.all([
     treeStat(run.root, base, now).catch(() => ''),
     treePatch(run.root, base, now, 20_000_000).catch(() => ({ patch: '', truncated: false })),
   ])
-  if (!patch) return `## Diff — ${what}\n(no file changes were detected)`
-  if (patch.length <= INLINE_DIFF_CHARS) return `## Diff — ${what}\n\`\`\`\n${stat}\n\`\`\`\n\`\`\`diff\n${patch}\n\`\`\``
+  if (!patch) return { text: `## Diff — ${what}\n(no file changes were detected)` }
+  if (patch.length <= INLINE_DIFF_CHARS) return { text: `## Diff — ${what}\n\`\`\`\n${stat}\n\`\`\`\n\`\`\`diff\n${patch}\n\`\`\`` }
   const task = run.task !== null ? run.card.tasks[run.task]?.id : null
-  const file = path.join(workspaceDir(rt.meta.id), 'team-runs', run.id, `${scope}${task && scope === 'task' ? `-${task}` : ''}-round${run.round}.patch`)
+  const file = path.join(runDirOf(rt, run), 'patches', `${scope}${task && scope === 'task' ? `-${task}` : ''}-round${run.round}.patch`)
   await mkdir(path.dirname(file), { recursive: true })
   await writeFile(file, patch, 'utf8')
   const lines = patch.split('\n').length
-  return [
+  const text = [
     `## Diff — ${what}: ${lines} lines, too long to inline`,
     `\`\`\`\n${stat}\n\`\`\``,
     `The full patch is at ${file} — Read it in parts (offset/limit), or read one file's changes at a time:`,
     `\`git diff ${base} -- <file>\` (edits to files git already tracks; a brand-new file is only in the patch).`,
     'Start from the files that matter most for the criteria; you don\'t need to read every line.',
   ].join('\n')
+  return { text, file }
+}
+
+/** A run label for a file row: "T2", "T2 r1", or the step. */
+function runTag(run: TeamRun, r: WorkerRun): string {
+  return r.task ? `${r.task}${r.round ? ` r${r.round}` : ''}` : r.stepId
+}
+
+const kb = (n: number) => (n < 1000 ? `${n}` : `${(n / 1000).toFixed(1)}k`)
+
+/**
+ * The run's Files panel: what the team works from (the Plan, the item's brief and
+ * notes), what the team is (the recipe and agent files), what it changed since it
+ * started (with who changed it), and what it left as proof (patches, checks, findings).
+ */
+async function teamRunFilesOp(rt: WorkspaceRuntime, run: TeamRun): Promise<TeamRunFile[]> {
+  const out: TeamRunFile[] = []
+  const labelOf = (workerId: string | null) => (workerId ? workerById(run, workerId)?.label ?? workerId : 'triage')
+  const everyone = [...new Set(run.workers.map((w) => w.label))]
+
+  // Ledger: the Plan (triage writes it, every agent reads it), the run folder's own files, then the item's brief and notes.
+  await syncRunFolder(rt, run)
+  out.push({ group: 'ledger', name: 'plan.md', detail: 'goal, criteria, tasks, progress — and the outcome', writer: 'triage', readers: everyone, open: { kind: 'runfile', path: 'plan.md' }, runs: [], live: run.state !== 'done' && run.state !== 'stopped' })
+  const notFixed = Object.values(run.findingState).filter((v) => v.status !== 'fixed').length
+  out.push(
+    { group: 'ledger', name: 'ledger.md', detail: 'decisions, where things are, surprises, what failed', writer: [...new Set(run.ledger.map((e) => e.by))].join(', ') || 'triage', readers: everyone, open: { kind: 'runfile', path: 'ledger.md' }, runs: [], badge: `${run.ledger.length}` },
+    { group: 'ledger', name: 'verify.md', detail: 'how to check this project', writer: 'triage', readers: everyone, open: { kind: 'runfile', path: 'verify.md' }, runs: [], ...(run.baseline ? { badge: run.baseline.results.every((r) => r.ok) ? 'baseline ok' : 'baseline failing' } : {}) },
+  )
+  if (Object.keys(run.findingState).length) out.push({ group: 'ledger', name: 'reviews.md', detail: 'every finding by id', writer: 'triage', readers: [], open: { kind: 'runfile', path: 'reviews.md' }, runs: [], badge: notFixed ? `${notFixed} open` : 'all fixed' })
+  const links = (await rt.store.links.list()).filter((l) => l.fromKind === 'artifact' && l.toKind === 'item' && l.toId === run.itemId && (l.role === 'brief' || l.role === 'context'))
+  for (const l of links) {
+    const a = await rt.store.artifacts.get(l.fromId)
+    if (!a) continue
+    out.push({ group: 'ledger', name: `${l.role === 'brief' ? 'Brief' : 'Notes'} · ${a.title}`, detail: a.path, writer: a.author === 'human' ? 'you' : 'Junior', readers: ['Lead'], open: { kind: 'artifact', id: a.id }, runs: [] })
+  }
+
+  // Team: the recipe it was copied from, and each agent file a step names.
+  out.push({ group: 'team', name: run.team ? `teams/${run.team}.md` : 'Recipe drafted for this run', detail: `${run.recipe.label} · ${run.recipe.steps.length} steps · copied at approval`, writer: run.team ? 'you' : 'Lead', readers: [], open: run.team ? { kind: 'library', library: 'team', name: run.team } : null, runs: [] })
+  for (const agent of run.agents) {
+    if (!run.recipe.steps.some((s) => s.agent === agent.name)) continue
+    out.push({ group: 'team', name: `agents/${agent.name}.md`, detail: agent.can.length ? agent.can.join(' · ') : 'reads only what it is sent', writer: 'you', readers: [agent.label], open: { kind: 'library', library: 'agent', name: agent.name }, runs: [] })
+  }
+
+  // Changed: the tree now against the tree the run started from. A file belongs to the
+  // runs whose handoff lists it; one no handoff claims yet is the working run's.
+  // A team that never edits (Research, Review) changed nothing; a finished run changed what it had when it ended.
+  const edits = run.recipe.steps.some((s) => s.output === 'change')
+  const ended = run.state === 'done' || run.state === 'stopped'
+  if (edits && run.root && run.runBase && (!ended || run.endTree)) {
+    const now = ended ? run.endTree! : await snapshotTree(run.root)
+    const changes = now ? await treeDiff(run.root, run.runBase, now).catch(() => [] as TreeChange[]) : []
+    const handed = run.workerRuns.filter((r) => r.handoffId)
+    const working = run.workerRuns.findLast((r) => runStatus(run, r) === 'working' && run.recipe.steps.find((s) => s.id === r.stepId)?.output === 'change')
+    for (const c of changes) {
+      const claims = (files: string[] | undefined) => (files ?? []).some((f) => f === c.path || f.endsWith(`/${c.path}`) || c.path.endsWith(`/${f.replace(/^\.\//, '')}`))
+      const by = handed.filter((r) => claims(run.outputs.find((o) => o.id === r.handoffId)?.files)).map((r) => r.id)
+      const live = !by.length && !!working
+      out.push({
+        group: 'changed',
+        name: c.path,
+        detail: by.map((id) => runTag(run, run.workerRuns.find((r) => r.id === id)!)).join(', ') || (live ? `${runTag(run, working!)} · in progress` : ''),
+        writer: by.length ? labelOf(run.workerRuns.find((r) => r.id === by[0])!.workerId) : live ? labelOf(working!.workerId) : '',
+        readers: [],
+        open: { kind: 'project', path: c.path },
+        runs: by.length ? by : live ? [working!.id] : [],
+        ...(live ? { live: true } : {}),
+        added: c.insertions,
+        removed: c.deletions,
+        status: c.status,
+      })
+    }
+  }
+
+  // Evidence: every handoff as its file, and the patches readers were sent.
+  const dir = runDirOf(rt, run)
+  for (const h of run.outputs) {
+    if (!h.file) continue
+    const from = run.workerRuns.find((r) => r.handoffId === h.id)
+    const ok = h.checks ? h.checks.filter((c) => c.ok).length : 0
+    out.push({
+      group: 'evidence',
+      name: path.basename(h.file),
+      detail: h.summary,
+      writer: h.label,
+      readers: [],
+      open: { kind: 'runfile', path: h.file },
+      runs: from ? [from.id] : [],
+      ...(h.checks ? { badge: h.checks.length ? `${ok}/${h.checks.length}` : '—' } : h.verdict ? { badge: h.verdict } : h.findings?.length ? { badge: `${h.findings.length}` } : {}),
+    })
+  }
+  for (const r of run.workerRuns) {
+    if (!r.patch) continue
+    const size = (await stat(r.patch).catch(() => null))?.size
+    const rel = path.relative(dir, r.patch)
+    const inside = !rel.startsWith('..') && !path.isAbsolute(rel)
+    out.push({ group: 'evidence', name: path.basename(r.patch), detail: inside ? rel : r.patch, writer: 'triage', readers: [labelOf(r.workerId)], open: inside ? { kind: 'runfile', path: rel } : { kind: 'file', path: r.patch }, runs: [r.id], ...(size != null ? { badge: kb(size) } : {}) })
+  }
+  return out
 }
 
 const CHECK_TIMEOUT_MS = 240_000
@@ -6982,9 +7210,9 @@ async function runProjectChecks(run: TeamRun): Promise<CheckResult[]> {
 
 /** The run is over: the plan gets its Outcome — it is the result on the item — and the lead says so. */
 async function finishTeamRun(rt: WorkspaceRuntime, run: TeamRun): Promise<void> {
+  if (run.root) run.endTree = (await snapshotTree(run.root)) ?? undefined
   await schedulePlanSync(rt, run, true)
-  run.resultArtifactId = run.planArtifactId
-  await sessionNotice(rt, run.leadSessionId, `Team done${run.unresolved ? ' — with something unresolved' : ''} · ${usd(runSpent(run))}. The outcome is on the plan.`)
+  await sessionNotice(rt, run.leadSessionId, `Team done${run.unresolved ? ' — with something unresolved' : ''} · ${usd(runSpent(run))}. The outcome is in the run folder's plan.md.`)
   log('info', 'teams', `run done at ${usd(runSpent(run))}`, { teamId: run.id, workspace: rt.meta.id })
 }
 
@@ -7047,6 +7275,157 @@ async function saveAgentOp(rt: WorkspaceRuntime, raw: unknown): Promise<string> 
   return name
 }
 
+/** What the lead sees when it picks or drafts a team. */
+async function listTeamsOp(rt: WorkspaceRuntime) {
+  const { teams, agents } = await rt.teamLibrary.list()
+  return {
+    teams: teams
+      .filter((t) => t.recipe && !t.missing.length)
+      .map((t) => ({
+        team: t.name,
+        label: t.recipe!.label,
+        description: t.recipe!.description,
+        useFor: t.recipe!.useFor,
+        budgetUsd: t.recipe!.budgetUsd,
+        steps: t.recipe!.steps.map((s) => ({
+          id: s.id,
+          agent: s.agent,
+          output: s.output,
+          ...(s.fanOut ? { fanOut: s.fanOut } : {}),
+          ...(s.onFail ? { onFail: s.onFail } : {}),
+          ...(s.gate ? { gate: s.gate } : {}),
+          ...(s.does ? { does: s.does } : {}),
+        })),
+        advice: t.recipe!.advice,
+      })),
+    agents: agents.map((a) => ({ agent: a.name, label: a.label, description: a.description, can: a.can, model: a.model })),
+  }
+}
+
+/** A recipe the lead drafted for this run: checked by the same parser a team file goes through. */
+function draftedRecipe(raw: unknown, known: Set<string>): TeamRecipe {
+  const r = (raw ?? {}) as Record<string, unknown>
+  const steps = (Array.isArray(r.steps) ? r.steps : []).map((x) => {
+    const s = (x ?? {}) as Record<string, unknown>
+    const fan = (s.fanOut ?? null) as { by?: unknown; max?: unknown } | null
+    const fail = (s.onFail ?? null) as { backTo?: unknown; max?: unknown } | null
+    return {
+      id: String(s.id ?? ''),
+      agent: String(s.agent ?? ''),
+      output: (typeof s.output === 'string' ? s.output : null) as RecipeStep['output'],
+      does: typeof s.does === 'string' ? s.does : '',
+      fanOut: fan ? { by: String(fan.by ?? ''), max: Number(fan.max) } : null,
+      onFail: fail ? { backTo: String(fail.backTo ?? ''), max: Number(fail.max) } : null,
+      gate: s.gate === 'you' ? ('you' as const) : null,
+      model: typeof s.model === 'string' && s.model ? s.model : null,
+      forEach: s.forEach === 'task' ? ('task' as const) : null,
+      context: s.context === 'fresh' || s.context === 'carry' ? (s.context as 'fresh' | 'carry') : null,
+    }
+  })
+  const recipe: TeamRecipe = {
+    label: typeof r.label === 'string' && r.label.trim() ? r.label.trim().slice(0, 60) : 'Custom',
+    description: typeof r.description === 'string' ? r.description.trim().slice(0, 400) : '',
+    useFor: [],
+    budgetUsd: typeof r.budgetUsd === 'number' && r.budgetUsd > 0 ? r.budgetUsd : 5,
+    // A drafted team never decides how much it may do unasked, or what speed you pay for: you pick on the card.
+    permissions: null,
+    fast: null,
+    lead: { model: null, effort: null },
+    done: typeof r.done === 'string' ? r.done.trim() : '',
+    steps,
+    advice: '',
+  }
+  const parsed = parseRecipe('draft', serializeRecipe(recipe, 'draft'))
+  if (!parsed.recipe) throw new Error(`the drafted team doesn't hold together: ${parsed.errors.join('; ')}`)
+  const missing = recipeAgents(parsed.recipe).filter((a) => !known.has(a))
+  if (missing.length) throw new Error(`no agent file named ${missing.join(', ')} — use list_teams to see the agents there are`)
+  return parsed.recipe
+}
+
+/**
+ * The lead proposes a team: a saved team or one it drafted, plus the card. The
+ * run waits, proposed, until you approve. A session with no work item gets one —
+ * the result, "needs you" and the cost all land on an item.
+ */
+async function proposeTeamOp(rt: WorkspaceRuntime, sessionId: string, raw: unknown): Promise<TeamRun> {
+  const r = (raw ?? {}) as Record<string, unknown>
+  const lead = rt.rows.get(sessionId)
+  if (!lead) throw new Error('no such session')
+  requireVeto(rt.provider, 'team')
+  const existing = teamRunOf(rt, sessionId)
+  if (existing && existing.leadSessionId !== sessionId) throw new Error('this session is a worker on a team — only a lead proposes one')
+  if (existing && existing.state !== 'proposed' && existing.state !== 'done' && existing.state !== 'stopped') {
+    throw new Error(`this session already leads a ${existing.state} team run — stop it before proposing another`)
+  }
+  const lib = rt.teamLibrary
+  const { teams, agents } = await lib.list()
+  let recipe: TeamRecipe
+  let team: string | null = null
+  if (typeof r.team === 'string' && r.team) {
+    const entry = teams.find((t) => t.name === r.team)
+    if (!entry) throw new Error(`no team named "${r.team}" — call list_teams`)
+    if (!entry.recipe) throw new Error(`teams/${entry.name}.md has errors: ${entry.errors.join('; ')}`)
+    if (entry.missing.length) throw new Error(`teams/${entry.name}.md names agents with no file: ${entry.missing.join(', ')}`)
+    recipe = entry.recipe
+    team = entry.name
+  } else if (r.recipe) recipe = draftedRecipe(r.recipe, new Set(agents.map((a) => a.name)))
+  else throw new Error('give either team (a saved team\'s name) or recipe (a drafted one)')
+  // How much the team may do unasked is yours to pick on the card, never the lead's.
+  const card = cardFrom({ ...((r.card ?? {}) as object), permissions: undefined, fast: undefined }, recipe, existing?.state === 'proposed' ? existing.card : undefined)
+
+  let itemId = rt.sessionItem.get(sessionId) ?? null
+  if (!itemId || !(await rt.store.items.get(itemId))) {
+    const title = (typeof r.title === 'string' && r.title.trim() ? r.title.trim() : card.goal).slice(0, 120)
+    itemId = await createManualOp(rt, { title, description: card.goal })
+    await linkSessionToItem(rt, sessionId, itemId, 'dispatch')
+  }
+  const item = await rt.store.items.get(itemId)
+  const root = (await repoRoot(lead.cwd)) ?? lead.cwd
+  const used = new Set(recipeAgents(recipe))
+  const id = existing?.state === 'proposed' ? existing.id : randomUUID()
+  const run: TeamRun = {
+    id,
+    itemId,
+    title: (item?.title ?? card.goal).slice(0, 80),
+    createdAt: existing?.state === 'proposed' ? existing.createdAt : Date.now(),
+    team,
+    recipe,
+    card,
+    agents: agents.filter((a) => used.has(a.name)).map((a) => ({ name: a.name, label: a.label, color: a.color, model: a.model, effort: a.effort, prompt: a.prompt, can: a.can })),
+    leadSessionId: sessionId,
+    state: 'proposed',
+    step: 0,
+    splitting: false,
+    round: 0,
+    task: null,
+    tasks: {},
+    workers: [],
+    workerRuns: [],
+    ledger: [],
+    findingState: {},
+    awaiting: [],
+    submitted: [],
+    outputs: [],
+    notes: [],
+    revision: null,
+    feedback: null,
+    unresolved: null,
+    spend: {},
+    budgetUsd: card.budgetUsd,
+    rev: (existing?.rev ?? 0) + 1,
+    nudged: [],
+    root,
+    dir: teamRunDir(rt, id, root),
+    ...(existing?.state === 'proposed' && existing.planArtifactId ? { planArtifactId: existing.planArtifactId } : {}),
+  }
+  if (existing && existing.id !== run.id) rt.teamRuns.delete(existing.id)
+  rt.teamRuns.set(run.id, run)
+  indexTeamRun(rt, run)
+  await teamRunChanged(rt, run)
+  log('info', 'teams', `team proposed: ${recipe.label} for ${run.title}`, { teamId: run.id, workspace: rt.meta.id })
+  return run
+}
+
 /** Your edit to a proposed card (before approving). */
 async function editTeamCardOp(rt: WorkspaceRuntime, raw: unknown): Promise<void> {
   const run = teamRunFrom(rt, raw)
@@ -7084,21 +7463,41 @@ async function settleRevisionOp(rt: WorkspaceRuntime, raw: unknown): Promise<voi
 }
 
 /**
- * Teams became goals (M6): a goal's plan has a team section and its steps can
- * be workflow blocks, so no new team run starts — a proposed card can only be
- * discarded. Runs already going keep their tools and controls until they end,
- * and every run stays readable.
+ * Fast mode for the whole team, any time: the card says it for workers still to
+ * come, and every worker session already running switches now.
  */
-const TEAMS_FROZEN =
-  'Teams became goals: a new team run can\'t start. Make the work a goal instead ("Turn into a goal" on the item): its plan has a team section, and the team recipes are workflow blocks its steps can use.'
+async function setTeamFastOp(rt: WorkspaceRuntime, raw: unknown): Promise<void> {
+  const run = teamRunFrom(rt, raw)
+  const fast = (raw as { fast?: unknown }).fast === true
+  await withTeamRun(rt, run, async () => {
+    if (run.state === 'done' || run.state === 'stopped') throw new Error(`the run is ${run.state}`)
+    run.card.fast = fast
+    run.rev += 1
+    for (const sid of new Set(run.workers.map((w) => w.sessionId))) {
+      if (!sid || sid === run.leadSessionId) continue
+      const row = rt.rows.get(sid)
+      if (!row || row.fastMode === fast) continue
+      row.fastMode = fast
+      await rt.store.sessions.setFastMode(sid, fast)
+      await rt.live.get(sid)?.setFastMode(fast)
+    }
+    await teamRunChanged(rt, run)
+  })
+}
 
 async function approveTeamOp(rt: WorkspaceRuntime, raw: unknown): Promise<void> {
   const run = teamRunFrom(rt, raw)
   await withTeamRun(rt, run, async () => {
-    if (run.state === 'proposed') throw new Error(TEAMS_FROZEN)
     requireVeto(rt.provider, 'team')
     const card = (raw as { card?: unknown }).card ? cardFrom((raw as { card?: unknown }).card, run.recipe, run.card) : run.card
+    if (run.state !== 'proposed') throw new Error(`the run is ${run.state}, not waiting for approval`)
+    if (!card.permissions) throw new Error('pick what the team may do without asking before it runs')
     log('info', 'teams', `team approved: ${run.recipe.label}`, { teamId: run.id, workspace: rt.meta.id })
+    // The checks as they stand before anyone touches the code: a failure already there is nobody's regression.
+    if (run.root) {
+      await sessionNotice(rt, run.leadSessionId, 'Running the project’s checks before the team starts…')
+      run.baseline = { results: await runProjectChecks(run), at: Date.now() }
+    }
     await applyTeamActions(rt, run, approve(run, card))
   })
 }
@@ -7109,6 +7508,8 @@ async function discardTeamOp(rt: WorkspaceRuntime, raw: unknown): Promise<void> 
   rt.teamRuns.delete(run.id)
   rt.sessionTeam.delete(run.leadSessionId)
   if (run.planArtifactId) await rt.artifacts.remove(run.planArtifactId).catch(() => {})
+  // A card never approved leaves nothing behind: its folder only ever held the proposed plan.
+  await rm(runDirOf(rt, run), { recursive: true, force: true }).catch(() => {})
   await saveTeamRuns(rt)
   broadcastSessionList(rt)
   await sessionNotice(rt, run.leadSessionId, 'Team card discarded.')
@@ -7143,6 +7544,7 @@ async function stopTeamOp(rt: WorkspaceRuntime, raw: unknown): Promise<void> {
       live.stop()
     }
     run.state = 'stopped'
+    if (run.root) run.endTree = (await snapshotTree(run.root)) ?? undefined
     run.awaiting = []
     run.rev += 1
     await teamRunChanged(rt, run)
@@ -7162,6 +7564,59 @@ async function saveRunAsTeamOp(rt: WorkspaceRuntime, raw: unknown): Promise<stri
 }
 
 /**
+ * The dispatch picker: open a lead session on the item, in its project, told to
+ * plan with the chosen team (or to pick/draft one). Nothing runs until you
+ * approve the card it proposes.
+ */
+async function planTeamOp(rt: WorkspaceRuntime, raw: unknown): Promise<string> {
+  const r = (raw ?? {}) as Record<string, unknown>
+  const item = await rt.store.items.get(typeof r.itemId === 'string' ? r.itemId : '')
+  if (!item) throw new Error('no such work item')
+  const project = await projectFor(rt, item)
+  if (!project) throw new Error('this item has no project — set one on the item so the team knows which folder to work in')
+  const entry = typeof r.team === 'string' && r.team ? (await rt.teamLibrary.list()).teams.find((t) => t.name === r.team) : null
+  if (r.team && !entry?.recipe) throw new Error(entry ? `teams/${entry.name}.md has errors: ${entry.errors.join('; ')}` : `no team named "${r.team}"`)
+  const recipe = entry?.recipe ?? null
+  const row = await createSession(rt, `${recipe?.label ?? 'Team'} · ${item.title}`.slice(0, 80), project.path, recipe?.lead.model ?? null, recipe?.lead.effort ?? null, false, null, { spawn: false, projectId: project.id })
+  await linkSessionToItem(rt, row.id, item.id, 'dispatch')
+  const live = await getOrRevive(rt, row.id)
+  if (!live) throw new Error('could not start the lead session')
+  const brief = await currentBrief(rt, item.id)
+  const mentions: Mention[] = [{ kind: 'item', ref: item.id, label: item.title }]
+  if (brief) mentions.push({ kind: 'artifact', ref: brief.artifact.id, label: brief.artifact.title })
+  const images = await itemImageAttachments(rt.attachmentsDir, item.id, item.images)
+  const text = planMessage({ team: entry && recipe ? { name: entry.name, label: recipe.label, tasks: !!taskLoop(recipe) } : null, itemTitle: item.title })
+  await live.sendUserMessage(`${text}\n\n${mentions.map(mentionToken).join(' ')}`, images, mentions)
+  log('info', 'teams', `team planning: ${recipe?.label ?? 'pick or draft'} for ${item.title}`, { itemId: item.id, workspace: rt.meta.id })
+  return row.id
+}
+
+/** Which team the picker suggests for an item kind, and what each team has really cost. */
+async function teamPickerOp(rt: WorkspaceRuntime, kind: string): Promise<TeamPickerResponse & { ok: true }> {
+  const { teams } = await rt.teamLibrary.list()
+  const usable = teams.filter((t) => t.recipe && !t.missing.length)
+  const costs = new Map<string, number[]>()
+  for (const run of rt.teamRuns.values()) {
+    if (run.state !== 'done' || !run.team) continue
+    costs.set(run.team, [...(costs.get(run.team) ?? []), runSpent(run)])
+  }
+  const options = usable.map((t) => {
+    const c = costs.get(t.name) ?? []
+    return {
+      team: t.name,
+      label: t.recipe!.label,
+      description: t.recipe!.description,
+      steps: t.recipe!.steps.map((s) => (s.fanOut ? `${s.id} ×${s.fanOut.max}` : s.id)),
+      budgetUsd: t.recipe!.budgetUsd,
+      runs: c.length,
+      ...(c.length ? { avgUsd: Math.round((c.reduce((a, b) => a + b, 0) / c.length) * 100) / 100 } : {}),
+    }
+  })
+  const suggested = usable.find((t) => t.recipe!.useFor.includes(kind))?.name ?? (usable.some((t) => t.name === 'solo') ? 'solo' : null)
+  return { ok: true, suggested, options }
+}
+
+/**
  * The `team` MCP server a worker gets: its one job-critical tool, submit_step.
  * Rebuilt per spawn, like the brief server.
  */
@@ -7176,6 +7631,7 @@ function makeTeamMcp(rt: WorkspaceRuntime, sessionId: string) {
 }
 
 const FINDING_SHAPE = z.object({
+  id: z.string().optional().describe('only to say an earlier finding is still not fixed: its id (e.g. "T2-F1"); triage numbers new ones'),
   severity: z.enum(['P0', 'P1', 'P2']).describe('P0 = a criterion unmet or something broken; P1 = a real defect likely to bite; P2 = worth fixing, not blocking'),
   where: z.string().describe('file:line, or the behaviour'),
   problem: z.string(),
@@ -7184,15 +7640,27 @@ const FINDING_SHAPE = z.object({
 
 const SUBMIT_SHAPE = {
   summary: z.string().describe('one line: what you did or found'),
-  body: z.string().describe('the full handoff, markdown'),
+  body: z.string().describe('change: what you changed and how you verified it; verdict: what you ran or looked at — markdown, short'),
   verdict: z.enum(['pass', 'fail']).optional().describe('verdict steps only'),
-  findings: z.array(FINDING_SHAPE).max(20).optional().describe('findings and verdict steps: real defects only'),
-  files: z.array(z.string()).max(50).optional().describe('change steps: files created or modified'),
-  notes: z
-    .array(z.string())
-    .max(10)
+  criteria: z
+    .array(z.object({ id: z.string().describe('the criterion id, e.g. "T2.1" or "C1"'), status: z.enum(['met', 'not met', 'partly']), evidence: z.string().describe('what you ran or saw') }))
+    .max(20)
     .optional()
-    .describe('change steps: one-liners for whoever builds next — decisions made, conventions followed, traps hit (not what you did)'),
+    .describe('change and verdict steps: every acceptance criterion the step lists, by id'),
+  findings: z.array(FINDING_SHAPE).max(20).optional().describe('findings and verdict steps: real defects only'),
+  resolutions: z
+    .array(z.object({ id: z.string(), status: z.enum(['fixed', 'disputed', 'deferred']), note: z.string() }))
+    .max(30)
+    .optional()
+    .describe('a fix round: every open finding id, answered'),
+  unsure: z.string().optional().describe('change steps: what a reviewer should look at hardest'),
+  decisions: z.array(z.object({ what: z.string(), why: z.string() })).max(10).optional().describe('choices you made that whoever comes next must keep, each with why'),
+  where: z.array(z.string()).max(10).optional().describe('"path — what it is": the files and symbols that matter for this area, so the next worker needn\'t search'),
+  surprises: z.array(z.string()).max(10).optional().describe('what was not as expected'),
+  failed: z.array(z.string()).max(10).optional().describe('approaches you tried that did not work, and why'),
+  verify: z.array(z.string()).max(10).optional().describe('how to check this project or this change: commands, URLs, what to look at'),
+  files: z.array(z.string()).max(50).optional().describe('change steps: files you changed (triage replaces this with what git says)'),
+  notes: z.array(z.string()).max(10).optional().describe('anything else for whoever comes next (prefer the typed fields above)'),
 }
 const SUBMIT_DESCRIPTION = 'Hand in your step of the team run. triage forwards it verbatim to whoever needs it next and moves the run on. Then END YOUR TURN.'
 
@@ -7200,12 +7668,29 @@ async function submitStepOp(rt: WorkspaceRuntime, sessionId: string, args: Submi
   const run = teamRunOf(rt, sessionId)
   if (!run) return errResult('this session is not on a team run')
   try {
-    return okResult(submit(run, sessionId, args, Date.now()))
+    const said = submit(run, sessionId, args, Date.now())
+    await filesFromGit(run)
+    return okResult(said)
   } catch (err) {
     return errResult(errText(err))
   } finally {
     await teamRunChanged(rt, run)
   }
+}
+
+/**
+ * A builder's handoff lists the files git says changed since its task (or the
+ * run) began — not the ones it remembers changing, which is the part of a
+ * handoff every summary gets wrong.
+ */
+async function filesFromGit(run: TeamRun): Promise<void> {
+  const h = run.outputs.at(-1)
+  const step = h && run.recipe.steps.find((x) => x.id === h.stepId)
+  const base = step?.forEach ? run.baseTree : run.runBase ?? run.baseTree
+  if (!h || step?.output !== 'change' || !run.root || !base) return
+  const now = await snapshotTree(run.root)
+  const changes = now ? await treeDiff(run.root, base, now).catch(() => null) : null
+  if (changes) h.files = changes.map((c) => c.path)
 }
 
 /** A worker's submit_step: its session is known at spawn. */
@@ -7217,6 +7702,83 @@ function submitStepTool(rt: WorkspaceRuntime, sessionId: string) {
 function teamLeadTools(rt: WorkspaceRuntime) {
   const sid = z.string().describe('your triage session id — it is in your system prompt')
   return [
+    tool(
+      'list_teams',
+      'The saved teams (recipes: steps, fan-out, gates, budget) and the agents they are made of. Call before propose_team; prefer a saved team over drafting one.',
+      {},
+      async () => {
+        try {
+          return okResult(JSON.stringify(await listTeamsOp(rt), null, 2))
+        } catch (err) {
+          return errResult(errText(err))
+        }
+      },
+    ),
+    tool(
+      'propose_team',
+      'Propose a team run for the work this session is on — when the user asks for a team ("get a team to …"), or the session was opened to plan one. Shows the user an editable team card; nothing runs until they approve it. Give `team` (a saved team, from list_teams) or `recipe` (a drafted one, only when no saved team fits). If this session has no work item, one is created from `title`. Proposing again replaces the card. After calling it, END YOUR TURN.',
+      {
+        sessionId: sid,
+        team: z.string().optional().describe('a saved team\'s name, e.g. "solo"'),
+        recipe: z
+          .object({
+            label: z.string(),
+            description: z.string().optional(),
+            done: z.string().optional(),
+            budgetUsd: z.number().optional(),
+            steps: z
+              .array(
+                z.object({
+                  id: z.string().describe('short lowercase name, e.g. "build"'),
+                  agent: z.string().describe('"lead", "checks", or an agent name from list_teams'),
+                  output: z.enum(['change', 'findings', 'verdict', 'notes', 'report']).optional().describe('omit only for agent "checks"'),
+                  does: z.string().optional(),
+                  fanOut: z.object({ by: z.string(), max: z.number() }).optional(),
+                  onFail: z.object({ backTo: z.string(), max: z.number() }).optional(),
+                  gate: z.enum(['you']).optional(),
+                  model: z.string().optional(),
+                  forEach: z.enum(['task']).optional().describe('"task": part of the per-task loop (contiguous steps, run once per task)'),
+                  context: z.enum(['fresh', 'carry']).optional().describe('the change step in a task loop: fresh (default) or carry'),
+                }),
+              )
+              .min(1)
+              .max(8),
+          })
+          .optional()
+          .describe('a drafted recipe — same rules as a team file: one change step, never fanned out; fan-out ≤ 6; only the lead reports'),
+        title: z.string().optional().describe('the work item title, when this session has none yet'),
+        card: z.object({
+          goal: z.string().describe('ONE sentence: what the run achieves — the user reads it at a glance'),
+          criteria: z.array(z.string()).min(1).max(8).describe('3–5 observable behaviours a checker can prove by running something, each ONE short line (~12 words) — no file paths or line numbers'),
+          outOfScope: z.array(z.string()).max(8).optional().describe('a few words each'),
+          tasks: z
+            .array(z.object({ title: z.string().describe('one line'), criteria: z.array(z.string()).max(3).optional().describe('1–3 short checkable lines') }))
+            .max(8)
+            .optional()
+            .describe('teams with a task loop (e.g. Build): 2–6 tasks, in order, each leaving the project working; omit for other teams'),
+          decisions: z.array(z.string()).max(10).optional().describe('decisions already made with the user'),
+          steps: z
+            .array(
+              z.object({
+                id: z.string().describe('a step id of the recipe'),
+                model: z.string().optional().describe('a model for this step if it should differ'),
+                slices: z.array(z.object({ title: z.string(), brief: z.string() })).max(6).optional().describe('fan-out steps: the slices, if you can already tell them apart'),
+              }),
+            )
+            .optional(),
+          budgetUsd: z.number().optional().describe('the run\'s spend cap; defaults to the team\'s budget'),
+          note: z.string().optional().describe('one or two lines to the user: why this team and size'),
+        }),
+      },
+      async (args) => {
+        try {
+          const run = await proposeTeamOp(rt, args.sessionId, args)
+          return okResult(`Team card shown to the user (${run.recipe.label}, ${run.recipe.steps.length} steps, up to ${usd(run.card.budgetUsd)}). END YOUR TURN — they approve or edit it, then triage runs the steps and wakes you when you're needed.`)
+        } catch (err) {
+          return errResult(errText(err))
+        }
+      },
+    ),
     tool(
       'split_step',
       'Split the current fan-out step of your team run into slices — one worker each. Only when triage asks you to. Then END YOUR TURN.',
@@ -7682,7 +8244,7 @@ function makeTriageMcp(rt: WorkspaceRuntime) {
     // transports, one explanation of it.
     instructions: TRIAGE_MCP_INSTRUCTIONS,
     tools: [
-      // Teams v2, frozen (M6): runs already going keep split_step, revise_plan and submit_step; new work becomes a goal.
+      // Teams v2: any chat can become a lead (list_teams, propose_team, split_step, submit_step).
       ...teamLeadTools(rt),
       // Goals (server/goals.ts): goal_create, goal_get, goal_list, goal_propose_plan, goal_log_append, goal_handoff_write.
       ...goalMcpTools(rt.goalDeps),
@@ -9740,6 +10302,10 @@ const server = http.createServer(async (req, res) => {
       const lib = rt.teamLibrary
       if (route === 'GET /api/teams/library') {
         json(200, await teamLibraryOp(rt))
+      } else if (route === 'GET /api/teams/picker') {
+        json(200, await teamPickerOp(rt, url.searchParams.get('kind') ?? ''))
+      } else if (route === 'POST /api/teams/plan') {
+        json(200, { ok: true, sessionId: await planTeamOp(rt, await readJsonBody(req)) })
       } else if (route === 'PUT /api/teams/agent') {
         await saveAgentOp(rt, await readJsonBody(req))
         json(200, await teamLibraryOp(rt))
@@ -9754,8 +10320,26 @@ const server = http.createServer(async (req, res) => {
       } else if (route === 'GET /api/teams/run') {
         const body: TeamRunResponse = { ok: true, run: teamRunView(teamRunFrom(rt, { runId: url.searchParams.get('runId') })) }
         json(200, body)
+      } else if (route === 'GET /api/teams/file') {
+        const run = teamRunFrom(rt, { runId: url.searchParams.get('runId') })
+        await syncRunFolder(rt, run)
+        const file = runFileOf(rt, run, url.searchParams.get('path') ?? '')
+        if (!file) throw new Error('not a file in this run’s folder')
+        const body: TeamRunFileResponse = { ok: true, text: (await readFile(file, 'utf8')).slice(0, 400_000) }
+        json(200, body)
+      } else if (route === 'GET /api/teams/folder') {
+        const run = teamRunFrom(rt, { runId: url.searchParams.get('runId') })
+        await syncRunFolder(rt, run)
+        const body: TeamRunFolderResponse = { ok: true, title: run.title, team: run.recipe.label, state: run.state, leadSessionId: run.leadSessionId, dir: runDirOf(rt, run), files: runFolderList(rt, run) }
+        json(200, body)
+      } else if (route === 'GET /api/teams/files') {
+        const body: TeamRunFilesResponse = { ok: true, files: await teamRunFilesOp(rt, teamRunFrom(rt, { runId: url.searchParams.get('runId') })) }
+        json(200, body)
       } else if (route === 'PUT /api/teams/card') {
         await editTeamCardOp(rt, await readJsonBody(req))
+        json(200, { ok: true })
+      } else if (route === 'PUT /api/teams/fast') {
+        await setTeamFastOp(rt, await readJsonBody(req))
         json(200, { ok: true })
       } else if (route === 'PUT /api/teams/plan') {
         await editPlanOp(rt, await readJsonBody(req))

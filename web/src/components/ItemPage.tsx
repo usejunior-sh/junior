@@ -4,6 +4,7 @@
  * why it ranked, what has happened to it, and the sessions working on it.
  * The actions live in the right column so the left reads as a page, not a form.
  */
+import { runFileHash } from './RunFolderPage.js'
 import { AlarmClock, Archive, CalendarDays, Check, ChevronDown, ChevronRight, ExternalLink, FileText, Folder, Hash, ImagePlus, Play, Sparkles, Target, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type {
@@ -43,6 +44,7 @@ import { ItemActions } from './ActionCard.js'
 import { KIND_LABEL, PRIORITY_LABEL, PRIORITY_VALUES, ago, kindIcon, relTime } from '../itemUi.js'
 import { BriefComposerDialog } from './BriefComposer.js'
 import { Markdown } from './Markdown.js'
+import { TeamPicker } from './TeamPicker.js'
 import { Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from '../ui/Menu.js'
 import { DueDialog } from './DueDialog.js'
 import { SECTION_ORDER, dueChip, dueFor, dueOf, parseDue, sectionTitle, type Section } from '../../../core/work/due.js'
@@ -54,7 +56,7 @@ import { STAGE_LABEL, TURN_LABEL, isStage, isTurn } from '../../../core/work/flo
 type Props = {
   id: string
   onDispatch: (item: ScoredItem) => void
-  /** Teams became goals (M6): the item's team entry point opens a goal chat. */
+  /** "Turn into a goal": opens a goal chat on the item. */
   onGoal: (item: ScoredItem) => void
   onNavigate: (hash: string) => void
   /** Editing here means the tab must survive: promote it out of the peek slot. */
@@ -771,6 +773,7 @@ export function ItemPage({ id, onDispatch, onGoal, onNavigate, onDirty }: Props)
             <Play size={12} aria-hidden="true" />
             {linkedSessions.some((x) => x.role === 'dispatch') ? 'Dispatch another session' : 'Dispatch to a session'}
           </button>
+          <TeamPicker item={item} onStarted={onNavigate} onError={setNotice} />
           <button type="button" className="btn wide" onClick={() => onGoal(item)} title="Junior plans it — steps, team, budget — and runs it once you approve the plan">
             <Target size={12} aria-hidden="true" /> Turn into a goal
           </button>
@@ -875,27 +878,33 @@ export function ItemPage({ id, onDispatch, onGoal, onNavigate, onDirty }: Props)
           )}
         </div>
 
-        {/* Team runs: each has one Plan — tasks, notes, progress, and the outcome when it's done. */}
-        {links.some((l) => l.fromKind === 'artifact' && l.role === 'plan') && (
-          <>
-            <div className="secLabel mute">Plans</div>
-            {links
-              .filter((l) => l.fromKind === 'artifact' && l.role === 'plan')
-              .map((l, i, all) => {
-                // The newest plan belongs to the run the lead session is on now; older ones are finished runs.
-                const lead = i === all.length - 1 ? linkedSessions.find(({ s: x }) => x.teamRun?.role === 'lead')?.s : undefined
-                return (
-                  <button key={l.fromId} type="button" className="line planLine" onClick={() => onNavigate(`/artifact/${l.fromId}`)}>
-                    <span className="dash">—</span>
-                    <span>
-                      Plan{all.length > 1 ? ` ${i + 1}` : ''}
-                      {lead?.teamRun ? <span className={`k${lead.teamRun.state === 'proposed' || lead.teamRun.state === 'gate' ? ' needsYou' : ''}`}> · {TEAM_STATE[lead.teamRun.state]}</span> : null}
-                    </span>
-                  </button>
-                )
-              })}
-          </>
-        )}
+        {/* Team runs: each has a run folder — plan, ledger, reviews, every handoff — read on its page. */}
+        {(() => {
+          const leads = linkedSessions.filter(({ s: x }) => x.teamRun?.role === 'lead').map(({ s: x }) => x)
+          // Runs from before the folder, whose state is gone, still have their Plan artifact.
+          const old = leads.length ? [] : links.filter((l) => l.fromKind === 'artifact' && l.role === 'plan')
+          if (!leads.length && !old.length) return null
+          return (
+            <>
+              <div className="secLabel mute">Plans</div>
+              {leads.map((lead, i) => (
+                <button key={lead.id} type="button" className="line planLine" onClick={() => onNavigate(runFileHash(lead.teamRun!.id))}>
+                  <span className="dash">—</span>
+                  <span>
+                    Plan{leads.length > 1 ? ` ${i + 1}` : ''}
+                    <span className={`k${lead.teamRun!.state === 'proposed' || lead.teamRun!.state === 'gate' ? ' needsYou' : ''}`}> · {TEAM_STATE[lead.teamRun!.state]}</span>
+                  </span>
+                </button>
+              ))}
+              {old.map((l, i) => (
+                <button key={l.fromId} type="button" className="line planLine" onClick={() => onNavigate(`/artifact/${l.fromId}`)}>
+                  <span className="dash">—</span>
+                  <span>Plan{old.length > 1 ? ` ${i + 1}` : ''}</span>
+                </button>
+              ))}
+            </>
+          )
+        })()}
 
         <div className="secLabel mute">
           Sessions <span className="n">{linkedSessions.length}</span>

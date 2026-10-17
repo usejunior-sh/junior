@@ -7,6 +7,7 @@ import {
   FileDiff,
   FileText,
   Folder,
+  FolderOpen,
   GitBranch,
   Home,
   Inbox,
@@ -57,7 +58,7 @@ const homely = (p: string) => p.replace(/^\/(?:Users|home)\/[^/]+/, '~')
  * would be lost; the rest are *documents*, which is why only they are ever
  * peeked at rather than pinned.
  */
-export type TabKind = 'session' | 'terminal' | 'draft' | 'item' | 'artifact' | 'job' | 'job-form' | 'change' | 'goal'
+export type TabKind = 'session' | 'terminal' | 'draft' | 'item' | 'artifact' | 'job' | 'job-form' | 'change' | 'goal' | 'run'
 
 const ICON: Record<TabKind, ComponentType<LucideProps>> = {
   session: MessageSquare,
@@ -69,6 +70,7 @@ const ICON: Record<TabKind, ComponentType<LucideProps>> = {
   'job-form': CalendarClock,
   change: FileDiff,
   goal: Target,
+  run: FolderOpen,
 }
 
 export type OpenTab = {

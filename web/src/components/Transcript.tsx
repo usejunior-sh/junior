@@ -1,5 +1,5 @@
 import { KeyRound } from 'lucide-react'
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, type ReactNode } from 'react'
+import { Fragment, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, type ReactNode } from 'react'
 import {
   mentionToken,
   type PermissionBehavior,
@@ -16,7 +16,7 @@ import { artifactStore, useArtifacts } from '../artifactStore.js'
 import { mentionHash, useRefIndex, type RefIndex } from '../refs.js'
 import { agentLabel, type AgentRun } from '../agents.js'
 import type { ShellRun } from '../../../core/shells/fold.js'
-import { buildTranscript, type TranscriptItem } from '../transcript.js'
+import { buildTranscript, eventIndexOf, type TranscriptItem } from '../transcript.js'
 import { AgentCard } from './Agents.js'
 import { AskCard } from './AskCard.js'
 import { InitCard } from './InitCard.js'
@@ -49,7 +49,12 @@ type Props = {
   /** Drawn before the first item and after the last — an agent's brief and how it ended. */
   lead?: ReactNode
   tail?: ReactNode
+  /** Drawn before the first item folded from event `at` (0-based) or later — a team run's dividers. */
+  marks?: readonly TranscriptMark[]
 }
+
+export type TranscriptMark = { at: number; key: string; node: ReactNode }
+const NO_MARKS: readonly TranscriptMark[] = []
 
 const NO_AGENTS: readonly AgentRun[] = []
 
@@ -79,6 +84,7 @@ export function Transcript({
   onOpenAgent,
   lead,
   tail,
+  marks = NO_MARKS,
 }: Props) {
   const items = useMemo(() => buildTranscript(events, store.eventTime, { scope, agents, shells }), [events, scope, agents, shells])
   const byCall = useMemo(() => new Map(agents.map((a) => [a.toolUseId, a])), [agents])
@@ -105,13 +111,26 @@ export function Transcript({
   // re-renders separately (see LiveLine), so it calls back in here to scroll.
   useLayoutEffect(scrollToBottom, [items, scrollToBottom])
 
+  // Each mark goes before the first item at or past its event; one past every item goes last.
+  const marksBefore = useMemo(() => {
+    const m = new Map<string, TranscriptMark[]>()
+    const tailMarks: TranscriptMark[] = []
+    for (const mark of [...marks].sort((x, y) => x.at - y.at)) {
+      const item = items.find((it) => eventIndexOf(it) >= mark.at)
+      if (!item) tailMarks.push(mark)
+      else m.set(item.key, [...(m.get(item.key) ?? []), mark])
+    }
+    return { m, tailMarks }
+  }, [items, marks])
+
   return (
     <div id="transcript" ref={ref}>
       <div className="inner">
         {lead}
         {items.map((item) => (
+          <Fragment key={item.key}>
+          {marksBefore.m.get(item.key)?.map((x) => <Fragment key={x.key}>{x.node}</Fragment>)}
           <Item
-            key={item.key}
             item={item}
             turn={item.kind === 'meta' && item.turn ? turns?.find((t) => t.seq === item.turn) : undefined}
             agent={
@@ -130,7 +149,9 @@ export function Transcript({
             sessionId={sessionId}
             actionByCall={actionByCall}
           />
+          </Fragment>
         ))}
+        {marksBefore.tailMarks.map((x) => <Fragment key={x.key}>{x.node}</Fragment>)}
         {/* The streaming line is the main agent's; an agent's view shows its messages as they commit. */}
         {!scope && <LiveLine sessionId={sessionId} onGrow={scrollToBottom} />}
         {tail}

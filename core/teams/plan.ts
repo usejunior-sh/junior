@@ -68,7 +68,11 @@ export function renderPlan(run: TeamRun): string {
     out.push(`## Proposed change — waiting for you\n${run.revision.why}\n\n${run.revision.tasks.map((t) => `- ${t.id} ${t.title}`).join('\n')}`)
   }
   if (c.decisions.length) out.push(`## Decisions\n${bullet(c.decisions)}`)
-  if (run.notes.length) out.push(`## Notes for whoever builds next\n${run.notes.map((n) => `- ${n.task ? `${n.task} · ` : ''}${n.text}`).join('\n')}`)
+  const learned = run.ledger.filter((e) => e.kind === 'decision' || e.kind === 'note')
+  if (learned.length) out.push(`## Decided along the way\n${learned.map((n) => `- ${n.task ? `${n.task} · ` : ''}${n.text}${n.why ? ` — because ${n.why}` : ''}`).join('\n')}`)
+  const open = Object.entries(run.findingState).filter(([, v]) => v.status !== 'fixed')
+  if (open.length) out.push(`## Findings not fixed\n${open.map(([id, v]) => `- ${id} ${v.status}${v.note ? ` — ${v.note}` : ''}`).join('\n')}`)
+  if (run.ledger.length || run.outputs.length) out.push(`Everything the team learned is in the run folder's ledger.md; every handoff is under handoffs/.`)
 
   const steps = run.recipe.steps.map((s) => {
     const who = s.agent === 'lead' ? 'lead' : s.agent === 'checks' ? 'checks' : run.agents.find((a) => a.name === s.agent)?.label ?? s.agent

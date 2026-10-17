@@ -54,7 +54,9 @@ import { AgentBrief, AgentComposer, AgentDock, AgentHeader, AgentOutcome, Agents
 import { agentLabel, buildAgents, spawnerOf, type AgentRun } from './agents.js'
 import { buildShells, type ShellRun } from '../../core/shells/fold.js'
 import { ShellDock } from './components/Shells.js'
-import { TeamDock, TeamSide, TeamStrip, useTeamRun } from './components/TeamRun.js'
+import { TeamDock, TeamSide, TeamStrip, useTeamRun, type TeamSideTab } from './components/TeamRun.js'
+import { RunHeader, runMarks, RunsViewToggle, TeamFiles, TeamRuns, useRunScroll, type RunsView } from './components/TeamRail.js'
+import { RunFolderPage, runFileHash } from './components/RunFolderPage.js'
 import { JobsPage } from './components/JobsPage.js'
 import { REFINE_JOB_KEY, JobFormPage } from './components/JobFormPage.js'
 import { JobPage } from './components/JobPage.js'
@@ -181,6 +183,8 @@ function tabKeyOf(route: Route): string | null {
       return `item:${route.id}`
     case 'artifact':
       return `artifact:${route.id}`
+    case 'run':
+      return `run:${route.runId}`
     case 'job':
       return `job:${route.id}`
     case 'job-form':
@@ -215,6 +219,8 @@ function routeOfKey(key: string): string {
       return itemHash(id)
     case 'artifact':
       return `/artifact/${id}`
+    case 'run':
+      return runFileHash(id)
     case 'job':
       return `/jobs/${encodeURIComponent(id)}`
     case 'job-form':
@@ -232,7 +238,7 @@ function routeOfKey(key: string): string {
 }
 
 /** Documents are peeked at; processes are pinned. */
-const DOC_KINDS: readonly TabKind[] = ['item', 'artifact', 'job', 'job-form', 'change', 'goal']
+const DOC_KINDS: readonly TabKind[] = ['item', 'artifact', 'job', 'job-form', 'change', 'goal', 'run']
 
 function kindOfKey(key: string): TabKind | null {
   const cut = key.indexOf(':')
@@ -261,6 +267,7 @@ const GENERIC: Record<TabKind, string> = {
   'job-form': 'Job',
   change: 'File',
   goal: 'Goal',
+  run: 'Team run',
 }
 
 /**
@@ -277,6 +284,7 @@ function sectionOf(route: Route): RailSection | null {
     case 'home':
     case 'session':
     case 'draft':
+    case 'run':
       return 'sessions'
     case 'terminal':
     case 'terminals':
@@ -384,6 +392,41 @@ export function App() {
   // A team run in this session: one fetch shared by the strip, the dock and the details drawer.
   const teamRun = useTeamRun(current?.teamRun)
   const [teamSide, setTeamSide] = useState(false)
+  const [teamTab, setTeamTab] = useState<TeamSideTab>('runs')
+  const [runsView, setRunsView] = useState<RunsView>('person')
+  // The run rail (desktop): the team's runs in the drawer beside the transcript, and a run to scroll to once its session is up.
+  const railOn = !!teamRun && !mobile
+  const [teamJump, setTeamJump] = useState<{ sessionId: string; runId: string } | null>(null)
+  // Arriving at a session of a team under way opens the drawer on its runs, unless it's already open.
+  // Once per session, and only once the session has loaded: a drawer you close stays closed.
+  const inRun = !!current?.teamRun && current.teamRun.state !== 'proposed'
+  const sideOpenedFor = useRef<string | null>(null)
+  useEffect(() => {
+    if (!inRun || mobile || !currentId || sideOpenedFor.current === currentId) return
+    sideOpenedFor.current = currentId
+    if (teamSide) return
+    setTeamTab('runs')
+    setTeamSide(true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentId, inRun])
+  const runScroll = useRunScroll(currentId ?? '', railOn, `${events.length}:${teamRun?.rev ?? 0}`)
+  useEffect(() => {
+    if (!teamJump || teamJump.sessionId !== currentId) return
+    // The divider is there once the history has loaded and the transcript has drawn it.
+    const t = requestAnimationFrame(() => runScroll.jump(teamJump.runId) && setTeamJump(null))
+    return () => cancelAnimationFrame(t)
+  }, [teamJump, currentId, events.length, teamRun?.rev]) // eslint-disable-line react-hooks/exhaustive-deps
+  const openTeamRun = useCallback(
+    (sessionId: string, runId: string | null, newTab?: boolean) => {
+      // ⌘-click: its own tab, behind this one; you stay where you are.
+      if (newTab) return openTab(sessionId)
+      setTeamJump(runId ? { sessionId, runId } : null)
+      if (sessionId !== currentId) navigate(sessionId)
+    },
+    [currentId, openTab], // eslint-disable-line react-hooks/exhaustive-deps
+  )
+  const teamMarks = useMemo(() => (railOn && teamRun && currentId ? runMarks(teamRun, currentId) : undefined), [railOn, teamRun, currentId])
+  const teamCheckoutId = (teamRun && sessions.find((s) => s.id === teamRun.leadSessionId)?.checkoutId) ?? current?.checkoutId ?? null
   // Subagents: folded from the same events as the transcript. Opening one swaps
   // the transcript for its slice — remembered per session, so leaving and coming
   // back finds main again rather than an agent picked long ago.
@@ -448,6 +491,10 @@ export function App() {
       const id = key.slice(key.indexOf(':') + 1)
       if (key.startsWith('item:')) return inbox.items.find((i) => i.id === id)?.title ?? null
       if (key.startsWith('artifact:')) return artifacts.artifacts.find((a) => a.id === id)?.title ?? null
+      if (key.startsWith('run:')) {
+        const lead = sessions.find((s) => s.teamRun?.id === id && s.teamRun.role === 'lead')
+        return lead ? `Run · ${lead.title}` : null
+      }
       if (key.startsWith('job:')) return jobTitles.get(id) ?? null
       if (key.startsWith('job-form:')) return id === 'new' ? 'New job' : jobTitles.get(id) ?? null
       if (key.startsWith('goal:')) return goals.goals.find((g) => g.id === id)?.title ?? null
@@ -458,7 +505,7 @@ export function App() {
       }
       return null
     },
-    [inbox.items, artifacts.artifacts, jobTitles, goals.goals],
+    [inbox.items, artifacts.artifacts, jobTitles, goals.goals, sessions],
   )
 
   /** A document tab: its best known name, no project dot, nothing running. */
@@ -577,12 +624,22 @@ export function App() {
   }, [currentDraftId, openTab])
 
   // Replay the log whenever the selection changes (and after a reconnect);
-  // a visited session gets a tab.
+  // a visited session gets a tab. A team run is one tab: walking from one of
+  // its members to another (the drawer, the breadcrumb, back/forward) swaps
+  // the session in the tab you're in, unless the member already has its own.
+  const tabsNow = useRef(tabs)
+  tabsNow.current = tabs
+  const lastSession = useRef<string | null>(null)
   useEffect(() => {
-    if (currentId) {
-      store.subscribeSession(currentId)
-      openTab(currentId)
-    }
+    if (!currentId) return
+    store.subscribeSession(currentId)
+    const from = lastSession.current
+    lastSession.current = currentId
+    const runOf = (id: string) => sessions.find((s) => s.id === id)?.teamRun?.id
+    const sameTeam = from && from !== currentId && runOf(from) && runOf(from) === runOf(currentId)
+    if (sameTeam && tabsNow.current.includes(from) && !tabsNow.current.includes(currentId)) replaceTab(from, currentId)
+    else openTab(currentId)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentId, conn, openTab])
 
   const respond = useCallback(
@@ -1085,6 +1142,8 @@ export function App() {
         return () => navigate('/inbox')
       case 'artifact':
         return () => navigate('/artifacts')
+      case 'run':
+        return () => history.back()
       case 'job':
         return () => navigate('/jobs')
       case 'goal':
@@ -1107,7 +1166,8 @@ export function App() {
 
   // Brief runs and goal leads are sessions too, but they belong to their item
   // or goal: the Sessions panel and the palette list only chats.
-  const chatSessions = useMemo(() => sessions.filter((s) => s.kind !== 'brief' && s.kind !== 'goal'), [sessions])
+  // A team's workers live under their lead (the run rail), not in the list: one row per team, not one per member.
+  const chatSessions = useMemo(() => sessions.filter((s) => s.kind !== 'brief' && s.kind !== 'goal' && s.teamRun?.role !== 'worker'), [sessions])
   const runningCount = chatSessions.filter((s) => s.status === 'running' || s.status === 'starting').length
   const modelName = current ? findModel(models, current.model)?.name ?? current.model : undefined
 
@@ -1163,7 +1223,7 @@ export function App() {
     ) : (
       <SessionsPanel
         sessions={chatSessions}
-        currentId={currentId}
+        currentId={current?.teamRun?.role === 'worker' && teamRun ? teamRun.leadSessionId : currentId}
         drafts={drafts}
         currentDraftId={currentDraftId}
         onSelectDraft={(id) => navigate(draftRoute(id))}
@@ -1295,6 +1355,14 @@ export function App() {
               <ArtifactsPage onOpen={(id) => navigate(`/artifact/${id}`)} onPin={(id, title) => pin(`artifact:${id}`, title)} />
             ) : route.page === 'artifact' ? (
               <ArtifactPage key={route.id} id={route.id} onNavigate={navigate} onDirty={pinCurrent} />
+            ) : route.page === 'run' ? (
+              <RunFolderPage
+                key={route.runId}
+                runId={route.runId}
+                path={route.path}
+                rev={sessions.find((s) => s.teamRun?.id === route.runId)?.teamRun?.rev ?? 0}
+                onNavigate={navigate}
+              />
             ) : route.page === 'changes' ? (
               <div className="termHome">
                 <div className="glow green" aria-hidden="true" />
@@ -1412,7 +1480,19 @@ export function App() {
                     {STATUS_LABEL[current.status]}
                   </span>
                 </div>
-                {teamRun && (
+                {railOn && teamRun ? (
+                  <RunHeader
+                    run={teamRun}
+                    sessionId={current.id}
+                    sessions={sessions}
+                    models={models}
+                    current={runScroll.current}
+                    onJump={runScroll.jump}
+                    sideOpen={teamSide}
+                    onToggleSide={() => setTeamSide((o) => !o)}
+                    onOpenRun={openTeamRun}
+                  />
+                ) : teamRun && (
                   <TeamStrip
                     run={teamRun}
                     sessionId={current.id}
@@ -1439,6 +1519,7 @@ export function App() {
                   onOpenAgent={showAgent}
                   lead={openAgent && <AgentBrief run={openAgent} from={spawnerOf(agents, openAgent)} />}
                   tail={openAgent && <AgentOutcome run={openAgent} to={spawnerOf(agents, openAgent)} />}
+                  marks={openAgent ? undefined : teamMarks}
                 />
                 {!openAgent && <AgentDock agents={agents} onOpen={showAgent} onStop={stopAgent} />}
                 {!openAgent && <ShellDock sessionId={current.id} shells={shells} onStop={stopShell} />}
@@ -1472,7 +1553,18 @@ export function App() {
               </div>
               {browserOpen && <BrowserPane key={current.id} sessionId={current.id} />}
               {teamRun && teamSide && (
-                <TeamSide run={teamRun} lead={current.teamRun?.role === 'lead'} models={models} onClose={() => setTeamSide(false)} onNavigate={navigate} />
+                <TeamSide
+                  run={teamRun}
+                  lead={current.teamRun?.role === 'lead'}
+                  models={models}
+                  onClose={() => setTeamSide(false)}
+                  onNavigate={navigate}
+                  tab={teamTab}
+                  onTab={setTeamTab}
+                  runsTools={<RunsViewToggle view={runsView} onView={setRunsView} />}
+                  runs={railOn ? <TeamRuns view={runsView} run={teamRun} sessionId={current.id} sessions={sessions} models={models} current={runScroll.current} onOpenRun={openTeamRun} /> : undefined}
+                  files={railOn ? <TeamFiles run={teamRun} checkoutId={teamCheckoutId} onNavigate={navigate} onOpenRun={openTeamRun} /> : undefined}
+                />
               )}
               </div>
             ) : (
