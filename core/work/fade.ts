@@ -1,9 +1,9 @@
 /**
- * Old FYI fades — pure, time is an argument. Read items (labels.ts) stop
+ * Old FYI fades: pure, time is an argument. Read items (labels.ts) stop
  * earning a row after a few days: they fold into one "N older FYI" line, and
  * the ones you never touched archive themselves after a week. Anything you
- * gave a due, a priority, a note or links to — or that a brief or session
- * hangs off — is yours, and stays.
+ * gave a due, a priority, a note or links to, or that a brief or session
+ * hangs off, is yours, and stays.
  */
 import { labelOf } from './labels.js'
 import type { WorkItem } from './types.js'

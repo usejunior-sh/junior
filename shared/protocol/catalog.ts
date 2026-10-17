@@ -1,16 +1,14 @@
 import type { EffortLevel } from './session.js'
 
-// ---------------------------------------------------------------------------
 // Connectors (GET /api/connectors)
 //
 // The claude.ai connectors + local MCP servers a session will load, probed by
 // spawning a throwaway SDK query with the same options real sessions use and
 // reading its init message. HTTP rather than WS: it is request/response data.
-// ---------------------------------------------------------------------------
 
 export type ConnectorSource = 'claude.ai' | 'local'
 
-/** Where Claude Code found the server (job-spec.md, item 1). */
+/** Where Claude Code found the server. */
 export type ConnectorScope = 'claudeai' | 'user' | 'local' | 'project' | 'plugin' | 'managed' | 'unknown'
 
 export type ConnectorTool = {
@@ -27,9 +25,9 @@ export type ConnectorTool = {
 }
 
 export type Connector = {
-  /** Display name — "claude.ai " prefix already stripped for claude.ai ones. */
+  /** Display name: "claude.ai " prefix already stripped for claude.ai ones. */
   name: string
-  /** the server name as Claude Code reports it ("claude.ai Slack") — what grants key on */
+  /** the server name as Claude Code reports it ("claude.ai Slack"), what grants key on */
   server: string
   status: string
   source: ConnectorSource
@@ -45,21 +43,19 @@ export type ConnectorsResponse =
       probedAt: number
       connectors: Connector[]
       cwd?: string
-      /** local-scope servers configured for OTHER folders — usable once the job runs there */
+      /** local-scope servers configured for OTHER folders: usable once the job runs there */
       elsewhere?: Array<{ name: string; folder: string }>
     }
   | { ok: false; error: string }
 
-// ---------------------------------------------------------------------------
 // Models (GET /api/models)
 //
 // What this machine's Claude Code will actually run, asked of the SDK itself
-// (supportedModels()) rather than hardcoded — the catalog changes under us,
+// (supportedModels()) rather than hardcoded: the catalog changes under us,
 // and an org policy can shrink it. Same shape of probe as the connectors one.
-// ---------------------------------------------------------------------------
 
 export type ModelOption = {
-  /** What to pass as `model` — an alias ('sonnet') or a wire id. */
+  /** What to pass as `model`: an alias ('sonnet') or a wire id. */
   id: string
   /** The wire id `id` resolves to; lets a reported model match its alias row. */
   resolvedModel?: string
@@ -77,18 +73,16 @@ export type ModelsResponse =
   | { ok: true; probedAt: number; models: ModelOption[] }
   | { ok: false; error: string }
 
-// ---------------------------------------------------------------------------
 // Slash commands (GET /api/commands?cwd=…)
 //
 // What `/` offers in a composer: Claude Code's own commands plus whatever the
 // user, the project and its plugins define. Asked of the SDK
-// (supportedCommands()) for the same reason the model catalog is — it moves
-// under us — but keyed by *folder* rather than by workspace, because a
+// (supportedCommands()) for the same reason the model catalog is, it moves
+// under us, but keyed by *folder* rather than by workspace, because a
 // project's .claude/commands and .claude/skills only exist under that project.
-// ---------------------------------------------------------------------------
 
 export type SlashCommandInfo = {
-  /** the name without the leading slash — `review`, or `novus:ux-review` */
+  /** the name without the leading slash: `review`, or `novus:ux-review` */
   name: string
   /** the one line under the name in the picker */
   description: string
@@ -99,7 +93,7 @@ export type SlashCommandInfo = {
 }
 
 export type CommandsResponse =
-  /** `cwd` is the folder the server resolved the query to — `~` expanded, path
+  /** `cwd` is the folder the server resolved the query to, `~` expanded, path
    *  made absolute. It is what `commands_changed` frames are keyed by, so a
    *  client holds on to it rather than to the folder it asked about. */
   | { ok: true; cwd: string; probedAt: number; commands: SlashCommandInfo[] }

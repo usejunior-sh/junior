@@ -5,7 +5,7 @@
  * "Plan"); the step JSON rides in a fenced block so a person reads the prose
  * and the engine reads the block.
  *
- * Rejected, never repaired — the way core/teams/recipe.ts treats a recipe:
+ * Rejected, never repaired, the way core/teams/recipe.ts treats a recipe:
  * an unknown key, a dangling dependency or a cycle is an error the lead fixes.
  * Pure: no I/O, no clock.
  */
@@ -264,7 +264,7 @@ export function planFrom(raw: unknown, goal: Pick<Goal, 'horizon' | 'budget'>, o
   }
 }
 
-/** Same plan, ignoring key order — what makes a repeat proposal a no-op. */
+/** Same plan, ignoring key order, what makes a repeat proposal a no-op. */
 export function samePlan(a: GoalPlan | null, b: GoalPlan | null): boolean {
   return canonical(a) === canonical(b)
 }
@@ -278,10 +278,6 @@ function canonical(v: unknown): string {
       .join(',')}}`
   return JSON.stringify(v ?? null)
 }
-
-// ---------------------------------------------------------------------------
-// plan.md
-// ---------------------------------------------------------------------------
 
 /** The fence the engine reads; everything else in plan.md is for people. */
 const FENCE_OPEN = '```json goal-plan'

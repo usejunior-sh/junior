@@ -3,22 +3,22 @@ import type { ProviderId, SessionKind, SessionStatus } from './workspace.js'
 
 /**
  * What the user did with one prompt. `allow_always` is `allow` plus the SDK's
- * own "don't ask again" suggestions, scoped to this session — the narrow way
+ * own "don't ask again" suggestions, scoped to this session. The narrow way
  * to stop being asked, as against turning the whole session permissive.
  */
 export type PermissionBehavior = 'allow' | 'allow_always' | 'deny'
 
 /**
  * How much the session asks before acting. Mostly a subset of the SDK's own
- * `PermissionMode` — the ones that answer "how often am I interrupted" — plus
+ * `PermissionMode`, the ones that answer "how often am I interrupted", plus
  * one triage-native mode:
  *
  * - `'default' | 'acceptEdits' | 'auto' | 'bypassPermissions'` are the SDK's,
- *   passed straight through. ('plan' and 'dontAsk' are the SDK's other two —
+ *   passed straight through. ('plan' and 'dontAsk' are the SDK's other two,
  *   deliberately not offered, they change what the agent does, not how much it
  *   asks.)
  * - `'gated'` is ours: reads and lookups run without asking; anything that
- *   writes — a file, the shell, or an outward connector call — still prompts.
+ *   writes, a file, the shell, or an outward connector call, still prompts.
  *   The SDK has no equivalent, so the server runs at its `'default'` and
  *   enforces the gate itself in `canUseTool` (see `ToolEffect`), which a
  *   subprocess cannot opt out of.
@@ -26,12 +26,12 @@ export type PermissionBehavior = 'allow' | 'allow_always' | 'deny'
 export type PermissionMode = 'default' | 'acceptEdits' | 'auto' | 'bypassPermissions' | 'gated'
 
 /**
- * What Junior does before it starts (.docs/junior-goals-teams/modes-autonomy-goals.md) —
+ * What Junior does before it starts (.docs/junior-goals-teams/modes-autonomy-goals.md),
  * separate from PermissionMode, which is how much it asks while it works:
  * - `normal`: starts right away
  * - `plan`: reads and writes a plan, edits nothing, until you approve the plan (the SDK's `plan`
  *   mode); then it codes in the same session at its permission mode. Stored on the session.
- * - `goal`: the message is a goal — Junior proposes a team run with a done-when. One message at a time.
+ * - `goal`: the message is a goal, Junior proposes a team run with a done-when. One message at a time.
  */
 export type SessionMode = 'normal' | 'plan' | 'goal'
 export const SESSION_MODES: readonly SessionMode[] = ['normal', 'plan', 'goal']
@@ -41,11 +41,11 @@ export const isSessionMode = (v: unknown): v is SessionMode => SESSION_MODES.inc
  * A tool's blast radius, as the server classifies it before deciding whether
  * `'gated'` mode lets it run unattended:
  *
- * - `read` — reads/lookups only (file reads, greps, `list_work_items`, and
+ * - `read`, reads/lookups only (file reads, greps, `list_work_items`, and
  *   connector calls whose name is clearly a read). Auto-allowed under `gated`.
- * - `local-write` — side effects confined to this machine (file edits, shell,
+ * - `local-write`, side effects confined to this machine (file edits, shell,
  *   the triage inbox's own writes).
- * - `external-write` — a call that reaches outside this machine (post to
+ * - `external-write`, a call that reaches outside this machine (post to
  *   Slack, open a Jira/Linear/GitHub item, …).
  *
  * Under `gated`, only `read` runs unattended; the other two prompt. Surfaced
@@ -60,11 +60,11 @@ export const isEffortLevel = (v: unknown): v is EffortLevel => EFFORT_LEVELS.inc
 
 /**
  * Fast mode: the same model served at up to ~2.5x the output tokens/second,
- * at premium pricing. Off by default and chosen per session — speed you opt
+ * at premium pricing. Off by default and chosen per session, speed you opt
  * into for a turn you are waiting on, not a setting to forget you left on.
  *
  * Two facts, deliberately kept apart: what the user asked for (`fastMode` on
- * the session) and what the subprocess reports it can actually do — the SDK
+ * the session) and what the subprocess reports it can actually do. The SDK
  * only serves fast mode on some models, some plans and some auth backends,
  * and says why when it cannot. Mirrors the SDK's own `FastModeState` /
  * `FastModeDisabledReason`, so a stale reason we no longer know renders as
@@ -109,7 +109,7 @@ export type SessionSummary = {
   provider?: ProviderId
   /** Pinned to the top of the sidebar. Absent = not pinned. */
   pinned?: boolean
-  /** The checkout (folder of the project) the session runs in — stored, never derived from `cwd`. Look it up in `checkouts`. */
+  /** The checkout (folder of the project) the session runs in, stored, never derived from `cwd`. Look it up in `checkouts`. */
   checkoutId?: string
   /** chat (default, absent), job-run, or brief (a headless run that writes an item's brief). */
   kind?: SessionKind

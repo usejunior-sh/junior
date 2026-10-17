@@ -51,7 +51,7 @@ export type NeedsSources = {
   // TODO(junior): goal plans waiting on you join here once goals land (feat/goals-and-teams).
 }
 
-/** "Permission: Bash" or "Question" — what a held session is waiting on. */
+/** "Permission: Bash" or "Question": what a held session is waiting on. */
 export function waitingOnText(waitingOn: string | undefined): string {
   if (!waitingOn) return 'Waiting on you'
   if (waitingOn === 'AskUserQuestion') return 'Question'

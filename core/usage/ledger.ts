@@ -1,8 +1,8 @@
 /**
  * What Claude Code has actually spent, read from its own transcripts.
  *
- * Every Claude Code session — one started from this workbench, one started
- * from a terminal, one started by anything else on this machine — appends
+ * Every Claude Code session, one started from this workbench, one started
+ * from a terminal, one started by anything else on this machine, appends
  * JSONL to `~/.claude/projects/<slug>/<session>.jsonl`, and every assistant
  * line carries the API's `usage` block. That log is the ledger; we never
  * write our own, so the numbers can't drift from reality.
@@ -12,15 +12,15 @@
  *  - Only lines that mention `usage` are parsed; the rest are skipped on a
  *    substring test, which is most of a transcript.
  *  - Parsed files are cached by (size, mtime). A rescan re-reads only what
- *    changed — in practice the one session you are talking to right now.
+ *    changed, in practice the one session you are talking to right now.
  *  - The same message can appear in several files (a resumed session replays
  *    its parent's transcript) and on several lines of one (Claude Code writes
  *    a line per content block, and the earlier ones can carry an output count
  *    that isn't final yet), so entries are de-duplicated on the API's own
  *    `message.id` + `requestId`, keeping the line that counts the most output.
  *
- * Subagents write their own transcripts, a level down —
- * `<slug>/<session>/subagents/agent-<id>.jsonl` — with the parent's
+ * Subagents write their own transcripts, a level down,
+ * `<slug>/<session>/subagents/agent-<id>.jsonl`, with the parent's
  * `sessionId` on every line, so they fold into the session that spawned them.
  */
 import { createReadStream } from 'node:fs'
@@ -35,7 +35,7 @@ export type UsageEntry = TokenCounts & {
   /** Epoch ms of the message. */
   ts: number
   model: string
-  /** `message.id:requestId` — the de-duplication key. */
+  /** `message.id:requestId`: the de-duplication key. */
   key: string
   /** The folder the session ran in. */
   cwd: string
@@ -47,7 +47,7 @@ export type UsageEntry = TokenCounts & {
 
 type FileCache = { size: number; mtimeMs: number; entries: UsageEntry[] }
 
-/** Parsed transcripts, keyed by path — survives between requests. */
+/** Parsed transcripts, keyed by path, survives between requests. */
 const cache = new Map<string, FileCache>()
 
 /** A runaway corpus shouldn't be able to exhaust memory. */
@@ -166,7 +166,7 @@ export type ScanResult = {
 
 /**
  * Every usage entry under these roots, de-duplicated. `since` drops whole
- * files by mtime before they are opened — a 30-day window never touches a
+ * files by mtime before they are opened. A 30-day window never touches a
  * transcript last written months ago.
  */
 export async function scanUsage(roots: string[], since: number): Promise<ScanResult> {
@@ -198,7 +198,7 @@ export async function scanUsage(roots: string[], since: number): Promise<ScanRes
   for (const list of perFile) {
     for (const e of list) {
       if (e.ts < since) continue
-      // An empty key means the line carried neither id — count it rather than
+      // An empty key means the line carried neither id, count it rather than
       // collapse every such line into one.
       if (e.key !== ':') {
         const at = seen.get(e.key)
@@ -217,7 +217,7 @@ export async function scanUsage(roots: string[], since: number): Promise<ScanRes
 /** Dollars for one entry, or `undefined` when its model has no price row. */
 export const entryCost = (e: UsageEntry): number | undefined => costOf(e.model, e, e.fast)
 
-/** Drop the cache — used by tests and by an explicit "rescan from scratch". */
+/** Drop the cache: used by tests and by an explicit "rescan from scratch". */
 export function resetUsageCache() {
   cache.clear()
 }

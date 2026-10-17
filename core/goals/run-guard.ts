@@ -1,10 +1,10 @@
 /**
- * What keeps a headless run honest about time (goals-mapping.md, M0 findings
- * and decision 10): a sleep watch, so a run the Mac slept through is recorded
- * `slept` rather than failed or interrupted, and a hard stop, so a run past
- * its timeout ends and is recorded even when its stream never closes.
+ * What keeps a headless run honest about time (.docs/goals/goals-mapping.md):
+ * a sleep watch, so a run the Mac slept through is recorded `slept` rather
+ * than failed or interrupted, and a hard stop, so a run past its timeout ends
+ * and is recorded even when its stream never closes.
  *
- * Pure: no timers and no clock of its own — the caller ticks the watch and
+ * Pure: no timers and no clock of its own. The caller ticks the watch and
  * passes `now`. Node's monotonic clock counts sleep on macOS, so it can't
  * tell a slept span from a slow one; a gap between heartbeats can, because
  * timers don't fire while the machine sleeps.
@@ -37,8 +37,8 @@ export class SleepWatch {
 
   /**
    * How long the machine slept between `from` and `now`. Counts the silence
-   * still open since the last tick, so a run ending right at wake — before
-   * the first heartbeat after it — still sees the sleep it ended in.
+   * still open since the last tick, so a run ending right at wake, before
+   * the first heartbeat after it, still sees the sleep it ended in.
    */
   sleptBetween(from: number, now: number): number {
     const spans = [...this.gaps]

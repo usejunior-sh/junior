@@ -1,5 +1,5 @@
 /**
- * Gates (M4, decision 6): the pure half. What a verdict does to a gate (the
+ * Gates, the pure half. What a verdict does to a gate (the
  * back-off, the two-met rule for high-stakes gates), when a gate is past its
  * deadline, which tools the read-only checker gets, the fence that holds it to
  * them, its prompt, and the verdict it must hand back. No clock, no I/O: the
@@ -19,9 +19,7 @@ export const GATE_VERDICT_FULL = mcpToolName(GATE_SERVER, GATE_VERDICT_TOOL)
 /** Connector tools are deferred; the checker loads the read tools it needs with this. */
 export const GATE_TOOL_SEARCH = 'ToolSearch'
 
-// ---------------------------------------------------------------------------
 // High stakes: two "met" in a row
-// ---------------------------------------------------------------------------
 
 const HIGH_STAKES = /\b(merg(e|ed|es|ing)|deploy(s|ed|ing|ment)?|release[sd]?|prod|production|live traffic|go[- ]live|rollout|roll out)\b/i
 
@@ -34,15 +32,11 @@ export function requiredConfirmations(asked: number, ...about: string[]): number
   return about.some(isHighStakes) ? Math.max(n, 2) : n
 }
 
-// ---------------------------------------------------------------------------
-// The back-off and a verdict's effect
-// ---------------------------------------------------------------------------
-
 /**
  * How long until the next check, after `checks` checks: the gate's own
  * interval, else the schedule (5, 5, 10, … 40 minutes, then hourly). A
  * checker that says "check again in 2h" is heard up to the hourly tail, never
- * sooner than the schedule — it can slow a gate down, not speed it up.
+ * sooner than the schedule. It can slow a gate down, not speed it up.
  */
 export function nextCheckDelay(checks: number, checkEveryMs: number | null, hint: string | null = null): number {
   if (checkEveryMs) return checkEveryMs
@@ -77,9 +71,7 @@ export function applyVerdict(gate: Gate, v: GateVerdict, now: number): { gate: G
 
 export const pastDeadline = (gate: Pick<Gate, 'status' | 'deadlineAt'>, now: number): boolean => gate.status === 'open' && gate.deadlineAt <= now
 
-// ---------------------------------------------------------------------------
 // The checker's tools and its fence
-// ---------------------------------------------------------------------------
 
 export type ProbedServer = { server: string; name?: string; tools: ProbedTool[] }
 
@@ -89,7 +81,7 @@ const norm = (s: string) => s.trim().toLowerCase().replace(/^claude\.ai\s+/, '')
  * The read tools of the connectors a gate names, by server ("claude.ai
  * Linear") or display name ("Linear"), case-blind: the server's curated read
  * preset, else the tools it marks read-only and not destructive. A connector
- * nobody probed gives nothing — the checker then says it can't tell.
+ * nobody probed gives nothing: the checker then says it can't tell.
  */
 export function gateReadTools(connectors: readonly string[], probes: readonly ProbedServer[]): string[] {
   const want = new Set(connectors.map(norm))
@@ -101,7 +93,7 @@ export function gateReadTools(connectors: readonly string[], probes: readonly Pr
   return [...out].sort()
 }
 
-/** The servers a gate's connectors resolved to — the rest are dropped from the run. */
+/** The servers a gate's connectors resolved to. The rest are dropped from the run. */
 export function gateServers(connectors: readonly string[], probes: readonly ProbedServer[]): string[] {
   const want = new Set(connectors.map(norm))
   return [...new Set(probes.filter((p) => want.has(norm(p.server)) || (p.name && want.has(norm(p.name)))).map((p) => p.server))].sort()
@@ -110,16 +102,12 @@ export function gateServers(connectors: readonly string[], probes: readonly Prob
 /**
  * The checker's fence, a PreToolUse veto that runs before any allow rule: the
  * named read tools, ToolSearch to load them, and the verdict tool. Nothing
- * else — no shell, no file tool (not even Read), no connector write.
+ * else: no shell, no file tool (not even Read), no connector write.
  */
 export function gateFenceDecision(readTools: ReadonlySet<string>, toolName: string): FenceDecision {
   if (toolName === GATE_VERDICT_FULL || toolName === GATE_TOOL_SEARCH || readTools.has(toolName)) return { allow: true }
   return { allow: false, reason: `a gate checker only reads: ${toolName} isn't one of the read tools of the connectors this gate names` }
 }
-
-// ---------------------------------------------------------------------------
-// Prompt and verdicts
-// ---------------------------------------------------------------------------
 
 /** The condition and the ids, nothing else: no plan, no ledger, no goal. */
 export function gateCheckPrompt(gates: readonly Pick<Gate, 'id' | 'condition' | 'refs' | 'connectors'>[]): string {

@@ -1,13 +1,13 @@
 /**
- * Worktrees, phase 1: see them (decision 549a251e, .docs/worktrees-ux.html).
+ * Worktrees (.docs/worktrees-ux.html).
  *
  * A project's checkouts are its main folder plus every `git worktree` of the
  * same repo. They are *discovered* with `git worktree list`, so worktrees made
- * outside triage — by you, by an agent mid-session — show up too. Rows are
+ * outside triage, by you, by an agent mid-session, show up too. Rows are
  * stored so sessions and terminals can name one.
  *
- * Phase 2, make them: triage creates a worktree *before* the session starts,
- * so the session's folder is the worktree — never the agent mid-session. New
+ * Triage also makes them: it creates a worktree *before* the session starts,
+ * so the session's folder is the worktree, never the agent mid-session. New
  * ones live outside the repo, under the workspace folder, so nothing needs
  * ignoring and nothing scans them. Triage never runs `git switch` in the main
  * folder; that one is the user's.
@@ -27,7 +27,7 @@ const pExecFile = promisify(execFile)
 /** What git says about one project's folders, mapped onto the project's own subfolder. */
 export type SeenCheckouts = {
   mainBranch: string | null
-  /** null = git couldn't say (not a repo, or it failed) — worktree rows are left alone */
+  /** null = git couldn't say (not a repo, or it failed), worktree rows are left alone */
   worktrees: { path: string; branch: string | null }[] | null
 }
 
@@ -150,9 +150,7 @@ export async function syncProjectCheckouts(
   return { checkouts: changed ? await store.list() : existing, changed }
 }
 
-// ---------------------------------------------------------------------------
-// Phase 2: make them, prepare them, remove them
-// ---------------------------------------------------------------------------
+// Make them, prepare them, remove them
 
 async function git(dir: string, args: string[]): Promise<string> {
   try {
@@ -175,7 +173,7 @@ async function hasLocalBranch(dir: string, branch: string): Promise<boolean> {
 /**
  * The branch new work starts from: origin's HEAD when there's a local branch
  * of that name, else `main` or `master`, else whatever the main folder has
- * checked out. A local branch, never `origin/…` — the base is a name the user
+ * checked out. A local branch, never `origin/…`, the base is a name the user
  * recognises in `git branch`.
  */
 export async function defaultBranch(dir: string): Promise<string | null> {
@@ -227,7 +225,7 @@ export async function createWorktree(project: Project, branch: string, folderRoo
 }
 
 /**
- * Clone a whole folder tree in one `clonefile(2)` call — APFS copies the tree
+ * Clone a whole folder tree in one `clonefile(2)` call, APFS copies the tree
  * in the kernel, ~1s for a 60k-file node_modules where `cp -c` (one clone per
  * file) takes ~25s. Reached through JavaScript for Automation, which ships
  * with macOS, so there's nothing to install. Fails across volumes or off
@@ -244,7 +242,7 @@ async function cloneTree(src: string, dest: string): Promise<void> {
 
 /**
  * What a fresh worktree lacks that the main folder has: untracked `.env*`
- * files, and `node_modules`. node_modules is an APFS clone — as fast as a
+ * files, and `node_modules`. node_modules is an APFS clone, as fast as a
  * symlink and no extra disk until a file changes, yet its own copy, so an
  * install on this branch can't rewrite main's. Never fatal: returns what it
  * couldn't do, and the agent can install itself.
@@ -281,7 +279,7 @@ export async function prepareWorktree(from: string, to: string): Promise<string[
 }
 
 /**
- * Bring back a removed worktree at the *same* folder — Claude Code keys a
+ * Bring back a removed worktree at the *same* folder, Claude Code keys a
  * session's transcript by its folder, so only the same path lets the session
  * resume. Its branch is checked out again if it still exists, else re-cut
  * from the default branch under the same name. Stale registrations (a folder
@@ -305,7 +303,7 @@ export async function recreateWorktree(checkout: Checkout, project: Project): Pr
   }
 }
 
-/** What removing a worktree would lose. `running` is the caller's to count — sessions aren't git's. */
+/** What removing a worktree would lose. `running` is the caller's to count: sessions aren't git's. */
 export async function checkRemoval(checkout: Checkout, mainPath: string, running: number): Promise<RemovalCheck> {
   const base = checkout.base ?? (await defaultBranch(mainPath))
   const [files, unmerged] = await Promise.all([

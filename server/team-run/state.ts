@@ -16,11 +16,9 @@ import { createSession, getOrRevive } from '../session/sessions.js'
 import { linkSessionToItem } from '../settings-ops.js'
 import { handoffDiff } from './files.js'
 
-// ---------------------------------------------------------------------------
 // Teams v2 (server/teams.ts, core/teams/engine.ts): a recipe run by triage. The
 // lead is the chat session that proposed it; workers are sessions triage spawns
 // per step. The engine decides; this section carries its actions out.
-// ---------------------------------------------------------------------------
 const TEAM_RUNS_KEY = 'team_runs'
 
 export async function saveTeamRuns(rt: WorkspaceRuntime): Promise<void> {
@@ -118,7 +116,7 @@ export async function teamRunChanged(rt: WorkspaceRuntime, run: TeamRun): Promis
 }
 
 /**
- * The run folder — plan, ledger, verify, reviews, handoffs — rendered from the
+ * The run folder, plan, ledger, verify, reviews, handoffs, rendered from the
  * run (core/teams/files.ts); triage's code is its only writer. Coalesced: a
  * burst of changes is one write, and an unchanged file is no write. Runs from
  * before the folder kept their Plan artifact; it is left as it was.
@@ -268,7 +266,7 @@ export async function applyTeamActions(rt: WorkspaceRuntime, run: TeamRun, actio
   await teamRunChanged(rt, run)
 }
 
-/** A message from triage itself — badged "from triage" in the transcript, framed as not-the-user for the model. */
+/** A message from triage itself: badged "from triage" in the transcript, framed as not-the-user for the model. */
 async function tellSession(rt: WorkspaceRuntime, sessionId: string, text: string): Promise<void> {
   const live = await getOrRevive(rt, sessionId)
   await live?.sendUserMessage(text, undefined, undefined, { from: 'triage' })

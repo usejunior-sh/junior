@@ -2,9 +2,8 @@ import { goalFlags } from './args.js'
 import { bold, cyan, die, dim, green, yellow } from './ui.js'
 import { type WireWorkspace, serverPort } from './workspace.js'
 
-// --- goals ---------------------------------------------------------------------
 // Goals live in the running server's database, so these always go over its
-// HTTP API (server/goals.ts) — there is no offline fallback.
+// HTTP API (server/goals.ts): there is no offline fallback.
 
 type WireGoal = {
   id: string
@@ -95,7 +94,7 @@ export async function goalCmd(sub: string | undefined, rest: string[]) {
 }
 
 /**
- * `triage add "…"` — a one-line hand-off without opening the app: a manual
+ * `triage add "…"`, a one-line hand-off without opening the app: a manual
  * item through the same route the inbox's own add uses (createManualOp).
  */
 export async function addCmd(rest: string[]) {
@@ -104,7 +103,7 @@ export async function addCmd(rest: string[]) {
   const port = await serverPort()
   if (!port) die(`add needs the server running — start it with ${cyan('triage')}`)
   // The HTTP API falls back to the default workspace for an id it doesn't
-  // know, so a typo would file the item somewhere else — resolve it first.
+  // know, so a typo would file the item somewhere else, resolve it first.
   let ws = ''
   if (goalFlags.workspace) {
     const ref = goalFlags.workspace

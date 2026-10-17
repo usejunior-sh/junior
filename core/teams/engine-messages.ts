@@ -3,10 +3,6 @@ import { goalSection } from './engine-judge.js'
 import { bullet, changeIndex, criteriaFor, currentTask, findingScope, latestOf, openFindings, renderTaskList, stepOutputs, workerById } from './engine-plan.js'
 import type { CriterionReport, Finding, Handoff, LedgerEntry, LedgerKind, PlanTask, RunAgent, TeamRun, Worker } from './engine-types.js'
 
-// ---------------------------------------------------------------------------
-// What each agent reads
-// ---------------------------------------------------------------------------
-
 export const renderFindings = (fs: Finding[]) => fs.map((f, n) => `${f.id ?? n + 1}. [${f.severity}] ${f.where} — ${f.problem}\n   Fix: ${f.fix}`).join('\n')
 const renderCriteria = (cs: CriterionReport[]) => cs.map((c) => `- ${c.id}: ${c.status}${c.evidence ? ` — ${c.evidence}` : ''}`).join('\n')
 const entryLine = (e: LedgerEntry) => `- ${e.task ? `${e.task} · ` : ''}${e.text}${e.why ? ` — because ${e.why}` : ''}`
@@ -14,7 +10,7 @@ const ledgerOf = (run: TeamRun, kinds: LedgerKind[], keep: (e: LedgerEntry) => b
 /** A path in the run folder, absolute when the server has set one. */
 export const runPath = (run: TeamRun, rel: string): string => (run.dir ? `${run.dir}/${rel}` : rel)
 
-/** A handoff in full — its file in the run folder, the Plan's outcome, and readers who should see everything. */
+/** A handoff in full: its file in the run folder, the Plan's outcome, and readers who should see everything. */
 export function renderHandoff(h: Handoff): string {
   return [
     `### ${h.label}${h.task ? ` (${h.task})` : ''}${h.round ? ` · fix round ${h.round}` : ''} — ${h.summary}`,
@@ -32,7 +28,7 @@ export function renderHandoff(h: Handoff): string {
 
 /**
  * A builder's handoff as its reviewer reads it: what to look at hardest, what it
- * says it fixed, and the files — not its own account of how well it did. The
+ * says it fixed, and the files, not its own account of how well it did. The
  * reviewer forms a view from the diff, the criteria and the checks.
  */
 function renderForReviewer(run: TeamRun, h: Handoff): string {
@@ -53,7 +49,7 @@ function renderChecks(h: Handoff): string {
   return `### checks${h.task ? ` (${h.task})` : ''} — ${h.summary}\n${lines.join('\n') || '(none configured)'}\nThese ran on the tree you're reading. Don't run them again unless you change something.`
 }
 
-/** One line per handoff, and where the whole thing is — for readers who need the shape, not every word. */
+/** One line per handoff, and where the whole thing is, for readers who need the shape, not every word. */
 function handoffLine(run: TeamRun, h: Handoff): string {
   const crit = h.criteria?.length ? ` · criteria ${h.criteria.filter((c) => c.status === 'met').length}/${h.criteria.length} met` : ''
   return `- ${h.label}${h.task ? ` (${h.task}${h.round ? ` r${h.round}` : ''})` : ''}${h.verdict ? ` — ${h.verdict.toUpperCase()}` : ''} — ${h.summary}${crit}${h.file ? ` → ${runPath(run, h.file)}` : ''}`
@@ -129,7 +125,7 @@ export function stepMessage(run: TeamRun, i: number, w: Worker): string {
   return parts.join('\n\n')
 }
 
-/** A fix round: what to close, by id, and everything the rounds before tried — so this one doesn't repeat them. */
+/** A fix round: what to close, by id, and everything the rounds before tried, so this one doesn't repeat them. */
 function fixRound(run: TeamRun, i: number, t: PlanTask | undefined): string {
   const scope = findingScope(run, i)
   const open = openFindings(run, scope)
@@ -218,7 +214,7 @@ The user may step into your session and speak to you directly — those messages
 ${agent?.prompt.trim() ?? ''}`
 }
 
-/** The kickoff for a lead planning a run — from the dispatch picker. */
+/** The kickoff for a lead planning a run, from the dispatch picker. */
 export function planMessage(opts: { team: { name: string; label: string; tasks: boolean } | null; itemTitle: string }): string {
   const how = opts.team
     ? `Use the ${opts.team.label} team (team: "${opts.team.name}").`

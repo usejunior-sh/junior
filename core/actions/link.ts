@@ -4,7 +4,7 @@
  * `git push` updated. The first URL in the text is the fallback. Pure.
  */
 
-/** A tool_result's content as text — a string, or the text of its blocks. */
+/** A tool_result's content as text: a string, or the text of its blocks. */
 export function resultText(content: unknown): string {
   if (typeof content === 'string') return content
   if (Array.isArray(content)) {
@@ -17,7 +17,7 @@ export function resultText(content: unknown): string {
 }
 
 const URL_RE = /https?:\/\/[^\s"'<>()[\]{}`\\]+/g
-/** A GitHub PR, issue, comment, review or release — what `gh` prints when it made one. */
+/** A GitHub PR, issue, comment, review or release, what `gh` prints when it made one. */
 const GITHUB_THING_RE = /https:\/\/github\.com\/[^/\s]+\/[^/\s]+\/(?:pull|issues|releases\/tag)\/[^\s"'<>)]+/g
 /** JSON keys a connector puts its object's address under, most specific first. */
 const LINK_KEYS = ['permalink', 'html_url', 'htmlUrl', 'web_url', 'webUrl', 'url', 'link', 'href']
@@ -59,15 +59,15 @@ export function pushedBranch(text: string): string | null {
   return m ? m[1].replace(/^refs\/heads\//, '') : null
 }
 
-/** A push's "open a PR" hint (`remote: https://github.com/o/r/pull/new/feat`) — the one remote: URL worth keeping. */
+/** A push's "open a PR" hint (`remote: https://github.com/o/r/pull/new/feat`), the one remote: URL worth keeping. */
 const PULL_NEW_RE = /https:\/\/github\.com\/[^/\s]+\/[^/\s]+\/pull\/new\/\S+/
 
 /**
  * Where an action landed.
  * - push: the branch on GitHub, else the remote's "open a PR" link, else
- *   nothing — the other `remote:` lines are the server's chatter (a
+ *   nothing, the other `remote:` lines are the server's chatter (a
  *   dependabot notice), not where the push went.
- * - JSON (a connector's response): its own url-like field, and nothing else —
+ * - JSON (a connector's response): its own url-like field, and nothing else,
  *   a description quoting some PR is not where the ticket is.
  * - `bash` output (gh): the PR / issue / comment URL it printed.
  * - anything else: a quoted url field, then the first URL in the text.

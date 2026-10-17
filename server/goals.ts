@@ -1,8 +1,8 @@
 /**
  * Goals (.docs/goals/goals-engine.md), the server half of M1: the `goal*Op`
- * functions every door funnels through — the in-process triage MCP
+ * functions every door funnels through, the in-process triage MCP
  * (makeTriageMcp), the external MCP (core/mcp/tools.ts → these routes), the
- * HTTP API and the `triage goal` CLI — so a goal created one way reads the
+ * HTTP API and the `triage goal` CLI, so a goal created one way reads the
  * same every other way. Input is validated here once and rejected, never
  * repaired.
  *
@@ -11,7 +11,7 @@
  *
  * M2, plan review: an op writes its event to goal_events and then hands it to
  * `emit`, which reacts at once (`onGoalEvent`: wake the drafting lead, queue
- * the first step) — no polling. An event not yet handled is replayed at boot
+ * the first step), no polling. An event not yet handled is replayed at boot
  * (`replayGoalEvents`). Approve, comment and send back are the user's clicks
  * (HTTP only); agents never approve a plan.
  */
@@ -103,7 +103,7 @@ export type GoalDeps = {
   now: () => number
   /** the project a goal works in when the caller names none */
   defaultProjectId: () => Promise<string | null>
-  /** a goal was created or written — broadcast goals_changed */
+  /** a goal was created or written: broadcast goals_changed */
   changed: (goalId: string) => void
   /** an event was written: react to it now (onGoalEvent). Never throws; errors are the reactor's to log. */
   emit: (ev: GoalEvent) => void
@@ -117,7 +117,7 @@ export type GoalDeps = {
 export type GoalEngine = {
   /** start the drafting lead for `ev`; it calls goalLeadSettledOp when it ends, which marks `ev` handled */
   wakeLead: (goal: Goal, wake: LeadWake, ev: GoalEvent) => Promise<void>
-  /** steps became runnable — the scheduler pumps */
+  /** steps became runnable: the scheduler pumps */
   stepsQueued?: (goal: Goal, stepIds: string[]) => void
   /**
    * M3: start the session the scheduler picked for a running goal. Call
@@ -133,12 +133,12 @@ export type GoalEngine = {
   /** take over: open the goal's worktree in the user's editor */
   openWorktree?: (goal: Goal) => Promise<void>
   /**
-   * M6: a worker that ran in a child worktree finished its step — commit what
+   * M6: a worker that ran in a child worktree finished its step, commit what
    * it left, merge its branch into the goal's and remove it. Returns why it
    * couldn't (a conflict), or null when merged or there was no child.
    */
   mergeBack?: (goal: Goal, sessionId: string) => Promise<string | null>
-  /** M6: the goal branch against its base, for a reviewer — stat, then the patch */
+  /** M6: the goal branch against its base, for a reviewer, stat, then the patch */
   worktreeDiff?: (goal: Goal) => Promise<string>
 }
 
@@ -541,7 +541,7 @@ export async function goalLeadStartedOp(d: GoalDeps, goalId: string, sessionId: 
 
 /**
  * The drafting lead ended (its turn finished, it timed out, or it never
- * started — sessionId null): close its row and mark the event that woke it
+ * started, sessionId null): close its row and mark the event that woke it
  * handled. A lead that ended without proposing leaves the goal in draft_plan
  * with the reason on it; the user re-wakes it by sending back or asking Junior.
  */
@@ -563,7 +563,7 @@ export async function goalLeadSettledOp(d: GoalDeps, s: { goalId: string; seq: n
 }
 
 /**
- * React to one event — called by `emit` right after the op that wrote it, and
+ * React to one event: called by `emit` right after the op that wrote it, and
  * by the boot replay. Waking the lead hands off to the engine, and the event is
  * marked handled when that lead settles; everything else is handled here.
  */
@@ -676,7 +676,7 @@ const pumps = new WeakMap<GoalDeps, Promise<void>>()
  * sessions at once. Running goals' dispatched workers go first, up to each
  * goal's worker cap, so a team finishes what it started; then queued goals,
  * highest priority first. Serial per workspace, so two pumps never start the
- * same goal or step. Called on every event that can free or need a slot — no timer.
+ * same goal or step. Called on every event that can free or need a slot, no timer.
  */
 export function pumpGoals(d: GoalDeps, eng: GoalEngine): Promise<void> {
   const run = (pumps.get(d) ?? Promise.resolve()).then(() => pumpOnce(d, eng))
@@ -687,7 +687,7 @@ export function pumpGoals(d: GoalDeps, eng: GoalEngine): Promise<void> {
   return run
 }
 
-/** Resolves once no pump is queued — for tests and for boot logs. */
+/** Resolves once no pump is queued, for tests and for boot logs. */
 export async function goalPumpIdle(d: GoalDeps): Promise<void> {
   for (let p = pumps.get(d); p; p = pumps.get(d) === p ? undefined : pumps.get(d)) await p
 }
@@ -869,7 +869,7 @@ const ending = new WeakMap<GoalDeps, Map<string, Promise<void>>>()
 
 /**
  * A goal session ended: close its row, book its spend, settle its step (a
- * worker — merged back first when it ran in a child worktree) or the wakes it
+ * worker, merged back first when it ran in a child worktree) or the wakes it
  * was shown (the lead). While others of the goal's sessions still run, that's
  * all, and a freed slot is pumped; the last one to end moves the goal on
  * (afterSession). Safe to call twice: only a session still open moves anything.
@@ -978,7 +978,7 @@ export async function bootGoalRun(d: GoalDeps, eng: GoalEngine): Promise<number>
 
 // --- the lead's engine tools ------------------------------------------------
 
-/** The goal a lead tool call acts on — only while that lead is the goal's live session. */
+/** The goal a lead tool call acts on, only while that lead is the goal's live session. */
 async function asLead(d: GoalDeps, goalId: string, sessionId: string): Promise<{ goal: Goal; steps: GoalStepState[]; events: GoalEvent[] }> {
   const goal = await goalOrThrow(d, goalId)
   const events = await d.store.goals.events(goal.id)
@@ -1048,7 +1048,7 @@ export async function goalArmGateOp(d: GoalDeps, c: LeadCall, raw: unknown): Pro
     checks: 0,
     checkEveryMs,
     deadlineAt: at + deadlineMs,
-    // High stakes (a merge, a deploy, production): never on one "met" — unless code read it (the watcher).
+    // High stakes (a merge, a deploy, production): never on one "met", unless code read it (the watcher).
     confirmationsNeeded: evaluator === 'watcher' ? 1 : requiredConfirmations(confirmations, condition, step.title),
     confirmationsSeen: 0,
     lastVerdict: null,
@@ -1132,7 +1132,7 @@ export async function goalReportStepResultOp(d: GoalDeps, c: LeadCall, raw: unkn
 const SWEPT: ReadonlySet<GoalState> = new Set(['queued', 'running', 'waiting_world', 'waiting_you'])
 
 /**
- * Check a batch of due AI gates — the one short read-only session (server
+ * Check a batch of due AI gates. The one short read-only session (server
  * side: index.ts runGateCheck). Returns a verdict per gate id it decided and
  * what the session cost; a gate it left out counts as an error.
  */
@@ -1144,7 +1144,7 @@ const span = (ms: number) => (ms >= 86_400_000 ? `${Math.round(ms / 86_400_000)}
 
 /**
  * The gate sweep: every gate past its deadline goes to the user; every due AI
- * gate is checked in one session per gate model, and its verdict applied —
+ * gate is checked in one session per gate model, and its verdict applied,
  * met (confirmed) wakes the lead, not met backs off, needs the user goes to
  * the Inbox. Nothing due = nothing started.
  */
@@ -1198,7 +1198,7 @@ export async function goalGateSweepOp(d: GoalDeps, eng: GoalEngine, check: GateC
   return out
 }
 
-/** A gate met — by its checker or the user's approval: the step is done and the lead wakes. */
+/** A gate met, by its checker or the user's approval: the step is done and the lead wakes. */
 async function resolveGate(d: GoalDeps, eng: GoalEngine, gate: Gate, by: 'gate' | 'you' | 'watcher', evidence: string | null): Promise<void> {
   const at = d.now()
   await d.store.goals.putGate({ ...gate, status: 'met', nextCheckAt: null, settledAt: at })
@@ -1215,7 +1215,7 @@ async function resolveGate(d: GoalDeps, eng: GoalEngine, gate: Gate, by: 'gate' 
 }
 
 /**
- * A gate the user must settle — past its deadline, or its checker couldn't
+ * A gate the user must settle: past its deadline, or its checker couldn't
  * tell: an approval on the goal's Inbox item, with the evidence and Junior's
  * recommended answer. Waits (false) while the user already has a question on
  * this goal: one at a time.
@@ -1239,7 +1239,7 @@ async function gateToUser(d: GoalDeps, _eng: GoalEngine, gate: Gate, why: 'deadl
 
 // --- the PR shepherd (M5) --------------------------------------------------
 
-/** How the watcher reads and pokes a PR — `gh` in production (ghPrSource), a fake in tests. */
+/** How the watcher reads and pokes a PR, `gh` in production (ghPrSource), a fake in tests. */
 export type PrSource = {
   /** the PR the gate watches: one named in its refs, else the PR open on the goal's branch; null = none yet */
   find: (goal: Goal, gate: Gate) => Promise<PrRef | null>
@@ -1247,7 +1247,7 @@ export type PrSource = {
   /** the failing check's log (`gh run view --log-failed`); '' when there is none */
   failedLog: (pr: PrRef, check: PrCheck) => Promise<string>
   diff: (pr: PrRef) => Promise<string>
-  /** run a failed check again — one per check and head commit, a policy in the approved plan */
+  /** run a failed check again: one per check and head commit, a policy in the approved plan */
   rerun: (pr: PrRef, check: PrCheck) => Promise<void>
 }
 
@@ -1259,7 +1259,7 @@ const watchKey = (goalId: string) => `goals.prWatch.${goalId}`
 /**
  * The watcher's tick: every open watcher gate whose poll is due reads its PR
  * and acts on what's new through the default policies (core/goals/shepherd.ts)
- * — a step dispatched to a worker, a flaky check rerun, a question to the
+ *. A step dispatched to a worker, a flaky check rerun, a question to the
  * user, or the gate met when the PR merges. No model runs here; nothing due =
  * no `gh` call. An event that can't be acted on yet (its step is running, the
  * user has a question open) stays unseen and is read again next poll.
@@ -1510,7 +1510,7 @@ export async function goalAnswerOp(d: GoalDeps, eng: GoalEngine, raw: unknown): 
   const gateId = open?.kind === 'ask' && typeof open.ev.detail?.gateId === 'string' ? open.ev.detail.gateId : null
   const gate = gateId ? await d.store.goals.gate(gateId) : null
   if (gate && gate.status === 'needs_user') {
-    // A gate asked about: approve, keep waiting or reject — or words alone, which close it and wake the lead.
+    // A gate asked about: approve, keep waiting or reject, or words alone, which close it and wake the lead.
     const answer = b.gate === undefined && text ? 'words' : (b.gate as GateAnswer)
     if (answer !== 'words' && !GATE_ANSWERS.includes(answer)) throw new Error('settle the gate: gate is approve, wait or reject')
     await answerGate(d, eng, goal, gate, answer, text, at)
@@ -1657,7 +1657,7 @@ export async function goalAcceptOp(d: GoalDeps, raw: unknown): Promise<WriteResu
 
 // --- held actions across a goal's sessions ---------------------------------
 
-/** What makes two calls the same action: the tool and its args — for Bash, the command alone (T2). */
+/** What makes two calls the same action: the tool and its args, for Bash, the command alone (T2). */
 export function goalActionKey(goalId: string, tool: string, args: Record<string, unknown>): string {
   const body = tool === 'Bash' ? String(args.command ?? '').trim() : canon(args)
   return `${goalId}\u0000${tool}\u0000${body}`
@@ -1674,7 +1674,7 @@ function canon(v: unknown): string {
 }
 
 /**
- * The actions a goal's sessions have queued, by goalActionKey — held across
+ * The actions a goal's sessions have queued, by goalActionKey, held across
  * workers and restarts, so a worker that redoes a step after a crash is told
  * "queued as #…" for a call an earlier worker already filed instead of filing
  * it again. Synchronous, because the hold that reads it is a PreToolUse veto.
@@ -1787,14 +1787,14 @@ export async function goalsRoute(d: GoalDeps, req: http.IncomingMessage, url: UR
 /** goal_get as an agent reads it: the lead's share of the log, not the page's. */
 export const goalGetForAgent = (d: GoalDeps, goalId: string) => goalGetOp(d, goalId, LEAD_LOG_ENTRIES)
 
-/** A reviewer's goal_get (M6, reviewer independence): the goal, its plan and steps — no events, handoff or log. */
+/** A reviewer's goal_get (M6, reviewer independence): the goal, its plan and steps. No events, handoff or log. */
 export async function goalGetForReviewer(d: GoalDeps, goalId: string) {
   const goal = await goalOrThrow(d, goalId)
   return { goal, steps: await d.store.goals.steps(goal.id), note: 'You review independently: the change is in the worktree (git diff against the base); the builders\' handoff and log are not yours to read.' }
 }
 
 // ---------------------------------------------------------------------------
-// The in-process triage MCP's goal tools (makeTriageMcp) — the zod mirror of
+// The in-process triage MCP's goal tools (makeTriageMcp), the zod mirror of
 // GOAL_TOOLS (core/goals/tools.ts), which the external transports serve.
 // Objects are loose so planFrom sees, and rejects, a key it doesn't know.
 // ---------------------------------------------------------------------------

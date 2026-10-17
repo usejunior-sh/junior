@@ -5,7 +5,7 @@
  * with the workspace's spawn env, so `claude` inside it uses that workspace's
  * auth backend, the same way a dispatched session does. Output is fanned out
  * to every WS client of the workspace and kept in a bounded scrollback buffer
- * so a tab opened later — or a reconnecting socket — sees what happened.
+ * so a tab opened later, or a reconnecting socket, sees what happened.
  *
  * Terminals are deliberately ephemeral: a daemon restart kills the processes,
  * so there is nothing truthful to persist.
@@ -81,7 +81,7 @@ export class TerminalManager {
     const id = randomUUID()
     // A daemon started via `npm run` carries npm's own variables; a shell that
     // inherits them misbehaves (nvm complains about npm_config_prefix, npm
-    // scripts see a phantom lifecycle). Drop them — they describe the daemon's
+    // scripts see a phantom lifecycle). Drop them: they describe the daemon's
     // launch, not the user's shell.
     const env: Record<string, string> = {}
     for (const [k, v] of Object.entries(opts.env ?? (process.env as Record<string, string>))) {
@@ -143,7 +143,7 @@ export class TerminalManager {
     try {
       t.proc.resize(c, r)
     } catch {
-      // a race with exit — nothing to resize
+      // a race with exit: nothing to resize
     }
   }
 

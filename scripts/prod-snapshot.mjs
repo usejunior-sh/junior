@@ -1,7 +1,7 @@
 // Installs the current checkout as the global `triage`, without releasing it.
 //
-// The tarball is labelled with a prerelease version — 1.0.4-dev.gabc1234, plus
-// `.dirty` if the tree has uncommitted changes — so `triage status` never shows
+// The tarball is labelled with a prerelease version, 1.0.4-dev.gabc1234, plus
+// `.dirty` if the tree has uncommitted changes, so `triage status` never shows
 // unreleased code under a release number. package.json is restored byte for byte
 // afterwards, even if the build fails. Nothing is committed, tagged or published,
 // and the daemon is not restarted: run `triage restart` yourself.

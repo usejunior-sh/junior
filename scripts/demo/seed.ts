@@ -29,10 +29,8 @@ const MARKER = '.demo-home'
 
 export const DEFAULT_HOME = path.join(os.homedir(), '.triage-demo')
 
-// ---------------------------------------------------------------------------
 // A settable clock: every store write stamps Date.now(), so pointing it at the
 // past is how rows get believable times without patching SQL afterwards.
-// ---------------------------------------------------------------------------
 
 const realNow = Date.now.bind(Date)
 let clock: number | null = null
@@ -143,10 +141,6 @@ function makeRepo(dir: string, now: number): void {
   for (const [rel, text] of Object.entries(W.REPO_EDITS)) writeFileSync(path.join(dir, rel), text)
 }
 
-// ---------------------------------------------------------------------------
-// Items
-// ---------------------------------------------------------------------------
-
 async function seedItems(
   store: Store,
   now: number,
@@ -204,10 +198,6 @@ async function settle(
     ...(s.reason ? { detail: { reason: s.reason } } : {}),
   })
 }
-
-// ---------------------------------------------------------------------------
-// Sessions
-// ---------------------------------------------------------------------------
 
 /** Expand a transcript, appending events with times that advance like a real run. */
 async function writeTranscript(store: Store, sessionId: string, model: string, steps: W.Step[], start: number, cwd: string): Promise<number> {
@@ -275,9 +265,7 @@ async function seedSessions(store: Store, cwd: string, now: number): Promise<voi
   }
 }
 
-// ---------------------------------------------------------------------------
 // Jobs: files + rows + a week of run history (sessions and ledger rows)
-// ---------------------------------------------------------------------------
 
 /** The last `n` slots of a cron schedule before `now`, oldest first. */
 function pastSlots(schedule: string, now: number, n: number): number[] {
@@ -380,9 +368,7 @@ async function seedJobs(store: Store, ws: string, cwd: string, now: number): Pro
   return lastRun
 }
 
-// ---------------------------------------------------------------------------
 // Artifacts: the file is the truth; rows and links make them show at once
-// ---------------------------------------------------------------------------
 
 async function seedArtifacts(store: Store, ws: string, now: number): Promise<void> {
   for (const a of W.artifacts()) {
@@ -410,9 +396,7 @@ async function seedArtifacts(store: Store, ws: string, now: number): Promise<voi
   }
 }
 
-// ---------------------------------------------------------------------------
 // Actions: what the agents did (or want to do) out in the world
-// ---------------------------------------------------------------------------
 
 async function seedActions(store: Store, now: number): Promise<void> {
   const base = {
@@ -554,8 +538,6 @@ async function seedActions(store: Store, now: number): Promise<void> {
     }
   }
 }
-
-// ---------------------------------------------------------------------------
 
 const isMain = process.argv[1] && path.resolve(process.argv[1]) === path.resolve(new URL(import.meta.url).pathname)
 if (isMain) {

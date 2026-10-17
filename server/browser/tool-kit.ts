@@ -4,9 +4,7 @@ import { ShotStore, viewportLabel } from './evidence.js'
 import { BrowserHub } from './hub.js'
 import { PageDriver, sleep } from './page-driver.js'
 
-// ---------------------------------------------------------------------------
 // The `browser` MCP server: one per session, bound to that session's tab.
-// ---------------------------------------------------------------------------
 
 export type BrowserToolContext = {
   hub: BrowserHub

@@ -115,7 +115,7 @@ const toJob = (r: JobRow): Job => ({
   scope: r.scope,
   instruction: r.instruction,
   tools: toGrants(r.tools, r.connectors),
-  // Required since job-spec item 2; a legacy NULL is migrated to the scratch
+  // Required; a legacy NULL is migrated to the scratch
   // project at boot, and reads as '' (no project) until then.
   projectId: r.project_id ?? '',
   ...(r.config_error ? { configError: r.config_error } : {}),

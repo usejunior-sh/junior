@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * `triage` — lifecycle wrapper around the server (server/index.ts).
+ * `triage`, lifecycle wrapper around the server (server/index.ts).
  *
  *   triage             start the server in the background if it isn't running
  *   triage serve       run the server in the foreground (debugging, launchd)
@@ -14,7 +14,7 @@
  *   triage goal        create, list and show goals (over the running server)
  *   triage add         file a to-do in the inbox (over the running server)
  *
- * "Is triage running" is always decided by GET /api/health — a pid file can
+ * "Is triage running" is always decided by GET /api/health, a pid file can
  * lie after a crash or reboot; the health check cannot. The state file
  * (~/.triage/server.json) only records the port so stop/status/restart can
  * find a server started with --port.
@@ -97,7 +97,7 @@ async function start(port: number) {
   die(`server did not come up on port ${port} within 15s — check ${cyan('triage logs')}`)
 }
 
-// --- keep it running (LaunchAgent) ---------------------------------------------
+// keep it running (LaunchAgent)
 
 async function install(port: number) {
   if (process.platform !== 'darwin') die(`${cyan('triage install')} is macOS only — run ${cyan('triage serve')} under your own service manager`)
@@ -113,7 +113,7 @@ async function install(port: number) {
   // a daemon (and every live session in it) to take ownership now.
   if (!deferInstall && running && !(await launchAgentLoaded())) await stop(port)
   await mkdir(TRIAGE_DIR, { recursive: true })
-  // An explicit install is consent — clear any earlier `triage uninstall`.
+  // An explicit install is consent: clear any earlier `triage uninstall`.
   rmSync(OPT_OUT_FILE, { force: true })
   const env: Record<string, string> = { PATH: process.env.PATH ?? '/usr/bin:/bin', HOME: os.homedir() }
   for (const k of ['TRIAGE_HOME', 'TRIAGE_DB', 'CLAUDE_CONFIG_DIR', 'LANG']) if (process.env[k]) env[k] = process.env[k]!
@@ -151,7 +151,7 @@ async function install(port: number) {
   ])
 }
 
-// --- dispatch ----------------------------------------------------------------
+// dispatch
 
 switch (command) {
   case 'start':

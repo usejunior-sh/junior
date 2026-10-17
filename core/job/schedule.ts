@@ -1,7 +1,7 @@
 /**
- * The due rule (job-spec.md, item 3). A due-checker, not a cron daemon: on
- * each scheduler tick, `decide` asks one question per job — has a scheduled
- * slot passed since the last run STARTED? — and layers wakecron's refinements
+ * The due rule. A due-checker, not a cron daemon: on
+ * each scheduler tick, `decide` asks one question per job, has a scheduled
+ * slot passed since the last run STARTED?, and layers wakecron's refinements
  * on top: overlap, connector readiness, and the catch-up window. Missed slots
  * coalesce by construction: the next slot after the last start is one slot, no
  * matter how many were slept through.
@@ -100,7 +100,7 @@ export function pickToRun<T extends { slot: number }>(due: T[], capacity: number
   return [...due].sort((a, b) => a.slot - b.slot).slice(0, Math.max(0, capacity))
 }
 
-/** The most missed slots a catch-up run records — an every-minute job asleep for a week stops here. */
+/** The most missed slots a catch-up run records. An every-minute job asleep for a week stops here. */
 export const MISSED_CAP = 50
 
 /**
@@ -120,14 +120,14 @@ export function missedSlots(schedule: string, slot: number, now: number, cap = M
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
-/** "08:00" today, "Wed 21:00" any other day — local, as cron is. */
+/** "08:00" today, "Wed 21:00" any other day, local, as cron is. */
 function slotTime(ms: number, now: number): string {
   const d = new Date(ms)
   const hm = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
   return d.toDateString() === new Date(now).toDateString() ? hm : `${DAYS[d.getDay()]} ${hm}`
 }
 
-/** A catch-up run this close to its slot is on time — the prompt says nothing. */
+/** A catch-up run this close to its slot is on time, the prompt says nothing. */
 const ON_TIME_MS = 2 * 60_000
 
 /**
@@ -149,7 +149,7 @@ export function describeLateness(slot: number, missed: number[], now: number): s
   return parts.join('. ')
 }
 
-/** Local midnight at the start of `now`'s day — when a daily budget resets. */
+/** Local midnight at the start of `now`'s day, when a daily budget resets. */
 export function localMidnight(now: number): number {
   const d = new Date(now)
   d.setHours(0, 0, 0, 0)
@@ -173,7 +173,7 @@ export function budgetFor(perRunUsd: number | undefined, dailyUsd: number | unde
 
 /**
  * A job is overdue when no run has ended `ok` within a grace window of two
- * schedule intervals plus an hour. Skips and failures never count — they used
+ * schedule intervals plus an hour. Skips and failures never count: they used
  * to, by moving lastRunAt. `lastOkAt` is the ledger's latest ok row; without
  * one, a job whose last receipt was ok counts from it, else from creation.
  */
@@ -188,12 +188,10 @@ export function isOverdue(
   return now - since > grace
 }
 
-// ---------------------------------------------------------------------------
-// The default look-back window (item 4): runs are stateless, so a run whose
+// The default look-back window: runs are stateless, so a run whose
 // instructions name no window is told to look back about two schedule periods.
 // Computed from the schedule, never stored. Twice the interval means one failed
 // or skipped run leaves no gap; link-based identity merges what is found twice.
-// ---------------------------------------------------------------------------
 
 const MAX_WINDOW_MS = 14 * 86_400_000
 

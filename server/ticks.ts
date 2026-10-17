@@ -12,7 +12,7 @@ import { SCHEDULER_TICK_MS } from './jobs/scheduler.js'
 import { sweepGates, watchPrs } from './goal-glue.js'
 import { INBOX_KEEP_WARM_MS, syncInbox } from './inbox/sync.js'
 
-/** when the scheduler last ticked — daemon-wide, surfaced in the System status. */
+/** when the scheduler last ticked: daemon-wide, surfaced in the System status. */
 export let lastSchedulerTickAt: number | null = null
 
 export function startTicks() {
@@ -20,8 +20,8 @@ export function startTicks() {
   // run the Mac slept through is recorded `slept` (server/power.ts).
   startSleepWatch()
 
-  // The minute tick (.docs/jobs.md): due jobs run, elapsed snoozes wake — in
-  // every workspace. No cron — the server is the long-running process; missed
+  // The minute tick (.docs/jobs.md): due jobs run, elapsed snoozes wake, in
+  // every workspace. No cron: the server is the long-running process; missed
   // runs are simply due on the first tick after wake.
   setInterval(() => {
     lastSchedulerTickAt = Date.now()
@@ -43,13 +43,13 @@ export function startTicks() {
     }
   }, SCHEDULER_TICK_MS).unref()
 
-  // The gate sweep (decision 6): every 5 minutes, in every workspace. Nothing
+  // The gate sweep: every 5 minutes, in every workspace. Nothing
   // due = no session started.
   setInterval(() => {
     for (const rt of runtimes.values()) sweepGates(rt).catch((err) => log('error', 'goals', `gate sweep failed: ${errText(err)}`, { workspace: rt.meta.id }))
   }, GATE_SWEEP_INTERVAL_MS).unref()
 
-  // The PR watcher (M5): a cheap tick; each watched PR is polled on its own back-off.
+  // The PR watcher: a cheap tick; each watched PR is polled on its own back-off.
   setInterval(() => {
     for (const rt of runtimes.values()) watchPrs(rt).catch((err) => log('error', 'goals', `PR watcher failed: ${errText(err)}`, { workspace: rt.meta.id }))
   }, WATCH_TICK_MS).unref()

@@ -19,7 +19,7 @@ export async function resolvePort(forStart: boolean): Promise<number> {
   return DEFAULT_PORT
 }
 
-// --- commands ---------------------------------------------------------------
+// commands
 
 /** The build, coloured by how far it is from what everyone else has. */
 function buildLine(b: NonNullable<Health['build']>): string {
@@ -38,7 +38,7 @@ export function printRunning(health: Health, verb: string, showDb = false) {
     '',
     row('version', health.version),
     // Which copy answered. Several can be installed at once, so a bare version
-    // is not an answer — name the channel, and the path when it isn't a release.
+    // is not an answer: name the channel, and the path when it isn't a release.
     ...(health.build ? [row('build', buildLine(health.build)), row('from', tilde(health.build.root))] : []),
     row('pid', String(health.pid)),
   ]

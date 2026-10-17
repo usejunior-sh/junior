@@ -12,14 +12,12 @@ import { jobsEnabled, upsertItem } from '../settings-ops.js'
 import { overdueJobs } from '../jobs/scheduler.js'
 import { inboxAlerts, withFlows } from './flow.js'
 
-// ---------------------------------------------------------------------------
-// Inbox: ranked work items from deterministic sources (core/work). No cron —
+// Inbox: ranked work items from deterministic sources (core/work). No cron:
 // the server IS the long-running process. Sync happens when the page is
 // viewed and the cache is stale (stale-while-revalidate, the cache living in
 // SQLite so a fresh server start still renders instantly), on explicit
 // Refresh, and on a keep-warm interval while the server runs. A laptop that
 // slept through the interval simply syncs on the next view.
-// ---------------------------------------------------------------------------
 const INBOX_TTL_MS = 5 * 60_000
 export const INBOX_KEEP_WARM_MS = 15 * 60_000
 
@@ -42,11 +40,11 @@ export function slackConnected(rt: WorkspaceRuntime): boolean | null {
 
 /**
  * GitHub reconciliation (.docs/jobs-v2.md). GitHub is a deterministic source,
- * not an LLM scan, so it stays plain code — but it now writes into the SAME
+ * not an LLM scan, so it stays plain code, but it now writes into the SAME
  * durable store as everything else instead of being refetched-and-discarded
  * every view. Open PRs/issues are upserted (idempotent, newer-wins); a tracked
  * open item whose PR has since merged or closed is auto-done with actor:system
- * and evidence — recorded and reversible, never a silent vanish. Throttled; a
+ * and evidence, recorded and reversible, never a silent vanish. Throttled; a
  * failure degrades to a notice and keeps whatever is already stored.
  */
 export async function reconcileGitHub(rt: WorkspaceRuntime, force = false): Promise<void> {
@@ -56,7 +54,7 @@ export async function reconcileGitHub(rt: WorkspaceRuntime, force = false): Prom
     try {
       const repos = await connectedRepos(rt)
       // Workspace isolation (.docs/workspaces.md): repo scope is per-workspace,
-      // and an empty scope means NO GitHub items — not the whole account. An
+      // and an empty scope means NO GitHub items, not the whole account. An
       // account-wide search would mirror the same PRs into every workspace's
       // inbox, which is exactly the cross-workspace bleed workspaces exist to
       // prevent. You opt each workspace into the repos it should track.
@@ -105,7 +103,7 @@ export async function reconcileGitHub(rt: WorkspaceRuntime, force = false): Prom
 /**
  * Rebuild the open-inbox snapshot from the durable store: wake elapsed snoozes,
  * reconcile GitHub (throttled), then rank + link the open items. There is no
- * user-state overlay any more — status lives on each row, so this is a pure
+ * user-state overlay any more, status lives on each row, so this is a pure
  * fold over what the store already holds.
  */
 export function syncInbox(rt: WorkspaceRuntime): Promise<InboxSnapshot> {
@@ -120,8 +118,8 @@ export function syncInbox(rt: WorkspaceRuntime): Promise<InboxSnapshot> {
       const items = scopeGitHub(await rt.store.items.list('open'), scoped)
       const notices: string[] = []
       if (rt.githubNotice) notices.push(rt.githubNotice)
-      // Honest empty state: a workspace with no repos scoped pulls no GitHub —
-      // say so, so "nothing here" is never mistaken for "the source is broken".
+      // Honest empty state: a workspace with no repos scoped pulls no GitHub.
+      // Say so, so "nothing here" is never mistaken for "the source is broken".
       if (scoped.size === 0) {
         notices.push('github: no repos scoped to this workspace — pick repos in the inbox’s repo filter to pull PRs and issues here')
       }
@@ -178,7 +176,7 @@ async function fadeOldFyi(rt: WorkspaceRuntime, now: number): Promise<void> {
 /**
  * Drop GitHub items outside this workspace's repo scope (.docs/workspaces.md).
  * Repo scope is per-workspace and empty = none, so a workspace only ever shows
- * PRs/issues from the repos it opted into — even for rows ingested earlier under
+ * PRs/issues from the repos it opted into, even for rows ingested earlier under
  * a wider (or account-wide) scope. Non-destructive: nothing is mutated, so
  * re-scoping a repo makes its items reappear at once. Other sources pass through.
  */
@@ -197,7 +195,7 @@ export async function listItemsByStatus(rt: WorkspaceRuntime, status: ItemStatus
   return withFlows(rt, linkByRefs(rank(items, now)), false)
 }
 
-/** How many rows each status tab holds — the same scoping and folding its list gets. */
+/** How many rows each status tab holds. The same scoping and folding its list gets. */
 async function statusCounts(rt: WorkspaceRuntime, now: number): Promise<NonNullable<InboxSnapshot['counts']>> {
   const scoped = new Set(await connectedRepos(rt))
   const rows = async (s: ItemStatus) => linkByRefs(rank(scopeGitHub(await rt.store.items.list(s), scoped), now)).length

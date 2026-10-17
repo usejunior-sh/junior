@@ -1,11 +1,11 @@
 /**
- * Power (goals-mapping.md, M0 findings and decision 10): a job run that
- * starts on a macOS DarkWake froze when the Mac went back to sleep seconds
- * later, and ended only at a later wake. Two answers, both daemon-wide:
+ * Power (.docs/goals/goals-mapping.md): a job run that starts on a macOS
+ * DarkWake froze when the Mac went back to sleep seconds later, and ended only
+ * at a later wake. Two answers, both daemon-wide:
  *
  * - a power assertion, held while any job run (or, later, goal) is active:
- *   `caffeinate -i -s -w <daemon pid>` — no idle sleep, no system sleep on
- *   AC — killed when the last holder lets go, and gone with the daemon.
+ *   `caffeinate -i -s -w <daemon pid>`, no idle sleep, no system sleep on
+ *   AC, killed when the last holder lets go, and gone with the daemon.
  *   A no-op off macOS.
  * - a sleep watch, ticked every few seconds: a long silence between ticks
  *   was sleep, so a run can be recorded `slept` (core/goals/run-guard.ts).
@@ -13,7 +13,7 @@
 import { spawn } from 'node:child_process'
 import { SLEEP_TICK_MS, SleepWatch } from '../core/goals/run-guard.js'
 
-/** What the assertion needs of a child process — `ChildProcess` fits; tests pass a fake. */
+/** What the assertion needs of a child process, `ChildProcess` fits; tests pass a fake. */
 export type Assertion = { kill(): void; once(event: 'exit', cb: () => void): void }
 export type SpawnAssertion = () => Assertion | null
 
@@ -38,7 +38,7 @@ export class PowerAssertion {
 
   constructor(private readonly spawnOne: SpawnAssertion = caffeinate) {}
 
-  /** Who is keeping the Mac awake now — for status and logs. */
+  /** Who is keeping the Mac awake now, for status and logs. */
   get reasons(): string[] {
     return [...this.holders.values()]
   }

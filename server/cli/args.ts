@@ -1,8 +1,6 @@
 import { pkgVersion } from '../state.js'
 import { HELP, cyan, die } from './ui.js'
 
-// --- argv ------------------------------------------------------------------
-
 const args = process.argv.slice(2)
 export let explicitPort: number | null = null
 export let explicitColor: string | null = null

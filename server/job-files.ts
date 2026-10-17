@@ -8,7 +8,7 @@
  *
  * The schema is strict: an unknown key is an error, never ignored, so a typo
  * can't silently drop a limit. A file that doesn't validate never crashes
- * anything — its job is held with a visible config error. The `id` is the
+ * anything. Its job is held with a visible config error. The `id` is the
  * job's stable identity: SQLite keeps only state (the slot ledger, the
  * failure streak, config errors) on a row with that id.
  *
@@ -59,7 +59,7 @@ export type JobFileSpec = {
   enabled: boolean
   /** brief every item this job files (`brief: true`, `brief_model`, `brief_template`) */
   brief?: JobBrief
-  /** drafted by a chat, not yet reviewed — stays off until you enable it */
+  /** drafted by a chat, not yet reviewed, stays off until you enable it */
   draft?: boolean
   /** skills a run may load, as Claude calls them (`triage:<name>` for the workspace library's) */
   skills?: string[]
@@ -87,7 +87,7 @@ const MIN_TIMEOUT_MS = 60_000
 const MAX_TIMEOUT_MS = 3_600_000
 
 export type ParsedJobFile = {
-  /** best effort, defaults filled in — usable even when `errors` is not empty */
+  /** best effort, defaults filled in, usable even when `errors` is not empty */
   spec: JobFileSpec
   errors: string[]
   /** false when the file carries no id (a fresh id was minted into `spec.id`) */
@@ -304,7 +304,7 @@ export type JobLibrary = {
 /**
  * Check a spec's `skills:` and `agents:` against what is on this machine.
  * A job run loads the workspace library, your personal ones and your
- * plugins' — never a project's `.claude` folder, which would bring the
+ * plugins', never a project's `.claude` folder, which would bring the
  * project's settings and hooks with it. Pure.
  */
 export function checkLibrary(spec: Pick<JobFileSpec, 'skills' | 'agents'>, lib: JobLibrary): string[] {
@@ -420,7 +420,7 @@ export function renameLegacyFolders(root: string): void {
   }
 }
 
-/** What triage wrote, per file — the difference between "untouched" and "yours". */
+/** What triage wrote, per file, the difference between "untouched" and "yours". */
 type Manifest = { version: 1; files: Record<string, { hash: string | null; removed?: boolean }> }
 
 const hash = (s: string) => createHash('sha256').update(s).digest('hex').slice(0, 16)
@@ -467,7 +467,7 @@ export class JobFiles {
 
   /**
    * Put `id: <id>` into a file's frontmatter, replacing any id it has, and
-   * touching nothing else — the file stays the user's.
+   * touching nothing else. The file stays the user's.
    */
   async stampId(name: string, id: string): Promise<void> {
     const file = this.pathOf(name)
@@ -475,7 +475,7 @@ export class JobFiles {
   }
 
   /**
-   * Turn a job on or off by its `enabled:` line alone — comments and layout
+   * Turn a job on or off by its `enabled:` line alone, comments and layout
    * stay. Turning a drafted job on is the review: its `draft:` line goes.
    */
   async setEnabled(name: string, on: boolean): Promise<void> {

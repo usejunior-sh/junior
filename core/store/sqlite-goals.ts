@@ -1,7 +1,7 @@
 /**
  * The goals adapter (GoalStore in core/store/types.ts) over the tables in
- * GOALS_SCHEMA (core/store/sqlite.ts). Its own file because sqlite.ts is
- * already long; openSqliteStore wires it in like every other store.
+ * GOALS_SCHEMA (core/store/sqlite-migrations.ts). openSqliteStore wires it in
+ * like every other store.
  *
  * Every method is synchronous underneath (node:sqlite), so a check-then-write
  * inside one method can't interleave with another caller. Transitions are

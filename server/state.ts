@@ -4,7 +4,7 @@
  * the CLI uses to tell "triage is already running" apart from "something
  * else owns the port".
  *
- * The state file is never the source of truth for "is triage running" —
+ * The state file is never the source of truth for "is triage running",
  * GET /api/health is. The state file only records which port (and pid) the
  * last server started on, so stop/status can find a non-default port after
  * the shell that started it is gone.
@@ -17,7 +17,7 @@ import { fileURLToPath } from 'node:url'
 import type { Build } from '../shared/protocol.js'
 
 export const DEFAULT_PORT = 5178
-/** TRIAGE_HOME relocates the whole state root (registry, workspaces, logs) — used by tests. */
+/** TRIAGE_HOME relocates the whole state root (registry, workspaces, logs), used by tests. */
 export const TRIAGE_DIR = process.env.TRIAGE_HOME || path.join(os.homedir(), '.triage')
 export const STATE_FILE = path.join(TRIAGE_DIR, 'server.json')
 export const LOG_FILE = path.join(TRIAGE_DIR, 'server.log')
@@ -32,7 +32,7 @@ export interface ServerState {
 export interface Health {
   app: 'triage'
   version: string
-  /** absent from a daemon older than build identity — treat as unknown */
+  /** absent from a daemon older than build identity, treat as unknown */
   build?: Build
   pid: number
   port: number
@@ -64,7 +64,7 @@ export function pkgVersion(): string {
 
 /**
  * Which copy of triage this is, from where its code sits on disk and how its
- * version is labelled — never a flag someone has to remember to set, because
+ * version is labelled, never a flag someone has to remember to set, because
  * the flag is wrong exactly when it matters. Pure, so test/build.test.ts can
  * walk every combination without installing three copies.
  */
@@ -97,7 +97,7 @@ export function classifyBuild(dir: string, version: string, home: string): Build
 /**
  * This process's build. Several copies exist on one machine (a checkout, the
  * one inside Triage.app, a global install), and telling them apart by port or
- * version alone is how an afternoon gets lost — so it rides on /api/health,
+ * version alone is how an afternoon gets lost, so it rides on /api/health,
  * /api/system and the WS hello, and the terminal, the CLI and the UI all name
  * the same build.
  */
@@ -142,8 +142,8 @@ export async function checkHealth(port: number): Promise<Health | 'other' | null
     const body: unknown = await res.json().catch(() => null)
     return isHealth(body) ? body : 'other'
   } catch (err) {
-    // A timeout means something holds the port but won't answer HTTP —
-    // that is "other", not "free". Connection refused means nothing listens.
+    // A timeout means something holds the port but won't answer HTTP.
+    // That is "other", not "free". Connection refused means nothing listens.
     return (err as { name?: string })?.name === 'TimeoutError' ? 'other' : null
   }
 }

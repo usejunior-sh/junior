@@ -5,7 +5,7 @@
  *
  * The path comes only from the session's own event log, through the same fold
  * the UI uses (core/shells/fold.ts), which believes a path only when it names
- * the task the CLI started for that call — never from the request. Found paths
+ * the task the CLI started for that call, never from the request. Found paths
  * are kept, so polling doesn't re-read the log.
  */
 import { open } from 'node:fs/promises'

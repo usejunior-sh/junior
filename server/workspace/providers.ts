@@ -8,7 +8,7 @@ import { log } from '../log.js'
 import { WorkspaceRuntime } from './runtime.js'
 import { claudeProjectRoots } from '../jobs/scheduler.js'
 
-/** Every agent this build knows, as the workspace has it set up — the primary first. */
+/** Every agent this build knows, as the workspace has it set up, the primary first. */
 export function wireProviders(meta: WorkspaceMeta): WorkspaceProvider[] {
   const ids = [meta.provider, ...PROVIDER_IDS.filter((id) => id !== meta.provider)]
   return ids.map((id) => {
@@ -29,7 +29,7 @@ const PROVIDER_STATUS_TTL_MS = 2 * 60_000
 
 /**
  * Each connected agent's account, plan windows and recent use, read from the
- * agent itself — a throwaway subprocess apiece, so cached for a couple of
+ * agent itself. A throwaway subprocess apiece, so cached for a couple of
  * minutes and shared by concurrent askers. Claude's recent spend is the Usage
  * tab's ledger (this machine's transcripts); Codex reports its own.
  */
@@ -68,8 +68,8 @@ async function claudeRecent(days: number): Promise<ProviderStatus['recent']> {
 }
 
 /**
- * Keep a provider's API key: in the workspace's .env always, and — for an
- * agent that reads it from a login file (Codex) — signed into its own home.
+ * Keep a provider's API key: in the workspace's .env always, and, for an
+ * agent that reads it from a login file (Codex), signed into its own home.
  * A key the agent refuses fails the save rather than being stored half-done.
  */
 export async function saveProviderKey(meta: WorkspaceMeta, provider: ProviderId, key: string): Promise<void> {

@@ -1,15 +1,15 @@
 /**
  * The run folder (.docs/team-handoffs.md): the run's state and its ledger as
- * files, so any worker — or you — can pick the run up from the folder alone.
+ * files, so any worker, or you, can pick the run up from the folder alone.
  *
- *   plan.md         the plan, rendered from the run — goal, criteria, tasks, progress, the outcome
+ *   plan.md         the plan, rendered from the run, goal, criteria, tasks, progress, the outcome
  *   ledger.md       what workers learned: decisions, where things are, surprises, what failed
  *   verify.md       how to check this project: the checks at the start, and what workers found
  *   reviews.md      every finding by id, with its state
  *   handoffs/NN-…   each handoff, written once
  *
  * triage's code is the only writer: workers hand in through submit_step and
- * the engine appends; nothing here is ever edited by an agent. Pure — the
+ * the engine appends; nothing here is ever edited by an agent. Pure: the
  * server decides where the folder is and writes what changed.
  */
 import { renderHandoff, type Handoff, type LedgerEntry, type LedgerKind, type TeamRun } from './engine.js'

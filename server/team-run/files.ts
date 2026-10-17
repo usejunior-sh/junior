@@ -10,10 +10,10 @@ import { runDirOf, syncRunFolder } from './state.js'
 const INLINE_DIFF_CHARS = 8000
 
 /**
- * The diff a checker reads instead of anyone's transcript — this task's, or the
+ * The diff a checker reads instead of anyone's transcript. This task's, or the
  * whole run's. Always the stat first (the map: which files, how much). A small
  * patch rides inline; a big one is written to the run's folder and the reader
- * pulls what it needs, file by file — it only pays for what it reads.
+ * pulls what it needs, file by file. It only pays for what it reads.
  */
 export async function handoffDiff(rt: WorkspaceRuntime, run: TeamRun, scope: DiffScope): Promise<{ text: string; file?: string }> {
   const base = scope === 'task' ? run.baseTree : run.runBase ?? run.baseTree

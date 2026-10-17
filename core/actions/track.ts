@@ -1,7 +1,7 @@
 /**
  * Capture: a session's event log, folded into action records. One fold for
- * both paths — the live stream (one event at a time, as it is persisted) and
- * the backfill (a stored log replayed) — so a record reads the same however
+ * both paths, the live stream (one event at a time, as it is persisted) and
+ * the backfill (a stored log replayed), so a record reads the same however
  * it was made.
  *
  *   tool_use (sorted as an action)  → attempt
@@ -47,7 +47,7 @@ type Prompt = { id: string; behavior?: string }
 type Pending = { name: string; input: Record<string, unknown>; sorted: SortedAction; prompt?: Prompt }
 type LoosePrompt = { id: string; toolName: string; input: Record<string, unknown>; toolUseId?: string }
 
-/** A Bash command is kept whole up to this — it is what the record is about. */
+/** A Bash command is kept whole up to this. It is what the record is about. */
 export const COMMAND_CAP = 20_000
 
 /**
@@ -93,7 +93,7 @@ function canon(v: unknown): string {
 const pushKey = (sessionId: string, branch: string) => `push:${sessionId}:${branch || '?'}`
 
 /**
- * The record for one call just made — the tracker's attempt, and the base a
+ * The record for one call just made. The tracker's attempt, and the base a
  * held (queued) call is built on, so both read the same.
  */
 export function recordFor(
@@ -250,9 +250,7 @@ export class ActionTracker {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Applying ops to stored records — pure, so collapse and merge are testable.
-// ---------------------------------------------------------------------------
+// Applying ops to stored records: pure, so collapse and merge are testable.
 
 /**
  * A new attempt against what the store already has. Its call already folded

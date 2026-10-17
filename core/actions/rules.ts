@@ -1,11 +1,11 @@
 /**
- * The actions file — `<workspace>/actions.md`: which Bash commands count as
+ * The actions file: `<workspace>/actions.md`: which Bash commands count as
  * leaving this machine, and the per-tool overrides the Actions page writes.
  * One file, so the whole claim "this is what counts" is readable at once.
  *
  * The frontmatter is the same small YAML subset team recipes use, read
  * strictly: an unknown key or kind, or a pattern that doesn't parse, is an
- * error. A bad file never crashes anything — the defaults stand in and the
+ * error. A bad file never crashes anything: the defaults stand in and the
  * page says why.
  */
 import { parseYaml, YamlError, type YamlValue } from '../teams/recipe.js'
@@ -17,7 +17,7 @@ export type ActionRules = {
   bash: Array<{ kind: ActionKind; pattern: BashPattern }>
   /** always an action: a tool's full name, `mcp__<server>__*`, or `Bash(<pattern>)` */
   action: string[]
-  /** never an action — same forms */
+  /** never an action: same forms */
   notAction: string[]
 }
 
@@ -156,7 +156,7 @@ export function parseActionsFile(text: string): ParsedActionsFile {
   return { rules: { bash, action, notAction }, errors }
 }
 
-/** The shipped defaults, parsed (they always parse — a test holds them to it). */
+/** The shipped defaults, parsed (they always parse. A test holds them to it). */
 export const DEFAULT_RULES: ActionRules = parseActionsFile(DEFAULT_ACTIONS_FILE).rules
 
 /**

@@ -7,9 +7,9 @@ import { pExecFile } from './config.js'
 // The same tool surface every session gets in-process, matching the stdio
 // shim's names/schemas one-for-one (server/mcp.ts) so a web chat and a local
 // Claude Code session drive the inbox identically. Handlers call the ops above
-// directly — no HTTP round-trip — against THIS workspace's store. Reads are
+// directly, no HTTP round-trip, against THIS workspace's store. Reads are
 // auto-allowed in requestPermission; writes surface a permission prompt.
-// --- artifacts + links (.docs/next-version.md, phase 1) ----------------------
+// artifacts + links
 //
 // Same shape as the item ops: validation once, three callers (HTTP, the
 // in-process MCP server, the stdio shim over HTTP). The index does the file
@@ -53,7 +53,7 @@ function linkTargetFrom(raw: unknown): { kind: LinkKind; id: string; role: LinkR
   return { kind: l.kind, id: l.id, role: l.role }
 }
 
-/** Rejects, never repairs — like workItemFrom. */
+/** Rejects, never repairs, like workItemFrom. */
 function artifactInputFrom(raw: unknown, opts: { partial: boolean }): ArtifactInput {
   const r = (raw ?? {}) as Record<string, unknown>
   const title = typeof r.title === 'string' ? r.title.trim() : undefined
@@ -76,7 +76,7 @@ function artifactInputFrom(raw: unknown, opts: { partial: boolean }): ArtifactIn
   }
 }
 
-/** A link's endpoints must exist in this workspace — a dangling link is a bug, not data. */
+/** A link's endpoints must exist in this workspace. A dangling link is a bug, not data. */
 async function assertLinkable(rt: WorkspaceRuntime, kind: LinkKind, id: string): Promise<void> {
   if (kind === 'item') {
     if (!(await rt.store.items.get(id))) throw new Error(`no work item ${id}`)
@@ -103,7 +103,7 @@ export async function createArtifactOp(rt: WorkspaceRuntime, raw: unknown, defau
 
 /**
  * Edit in place. `by` is who is asking: a human may edit anything; the model
- * may only rewrite what the model wrote — a human's note it can propose to,
+ * may only rewrite what the model wrote. A human's note it can propose to,
  * never overwrite (.docs/next-version.md).
  */
 export async function updateArtifactOp(rt: WorkspaceRuntime, id: string, raw: unknown, by: ArtifactAuthor): Promise<Artifact> {
@@ -140,7 +140,7 @@ export async function linksFor(rt: WorkspaceRuntime, kind: LinkKind, id: string)
   return [...to, ...from].filter((l) => (seen.has(l.id) ? false : (seen.add(l.id), true)))
 }
 
-/** Open a file in whatever the OS opens .md with — the server runs on the user's own machine. */
+/** Open a file in whatever the OS opens .md with. The server runs on the user's own machine. */
 export async function openInEditor(abs: string): Promise<void> {
   if (process.platform === 'darwin') await pExecFile('open', [abs])
   else if (process.platform === 'win32') await pExecFile('cmd', ['/c', 'start', '', abs])

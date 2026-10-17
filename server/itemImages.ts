@@ -3,7 +3,7 @@
  *
  * Chat attachments ride inline as base64 (they land in the event log and the
  * model wants the bytes anyway), but an item's payload is rebroadcast to every
- * WebSocket client on every inbox sync — megabytes of base64 in it would be
+ * WebSocket client on every inbox sync, megabytes of base64 in it would be
  * re-sent on every refresh. So the bytes live here, one folder per item under
  * the workspace's `attachments/`, and the item payload carries only `ItemImage`
  * refs. The web UI fetches them by URL; a brief or dispatched session gets them
@@ -23,7 +23,7 @@ const EXT: Record<ImageMediaType, string> = {
 }
 
 /**
- * One folder per item, named by the same slug briefs use — item ids carry `:`,
+ * One folder per item, named by the same slug briefs use, item ids carry `:`,
  * `/` and `#`, none of which may reach the filesystem. Two different ids can in
  * principle slug the same; the files inside are uuid-named, so they coexist.
  */
@@ -84,7 +84,7 @@ export const readItemImage = (root: string, itemId: string, image: ItemImage): P
   readFile(fileFor(root, itemId, image))
 
 /**
- * An item's images as message attachments — what a brief run or a dispatched
+ * An item's images as message attachments: what a brief run or a dispatched
  * session is handed. A file that has gone missing is skipped rather than
  * failing the run: the prompt is worth more than the screenshot.
  */
@@ -100,7 +100,7 @@ export async function itemImageAttachments(
       const buf = await readItemImage(root, itemId, image)
       out.push({ mediaType: image.mediaType, data: buf.toString('base64'), ...(image.name ? { name: image.name } : {}) })
     } catch {
-      // the file is gone — the ref outlived it
+      // the file is gone: the ref outlived it
     }
   }
   return out.length > 0 ? out : undefined

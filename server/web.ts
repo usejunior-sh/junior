@@ -5,7 +5,7 @@ import { readFile } from 'node:fs/promises'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 /**
- * Vite build output — see vite.config.ts. Absent until `npm run build`.
+ * Vite build output: see vite.config.ts. Absent until `npm run build`.
  * Two layouts: from source this file is <repo>/server/index.ts and the build
  * is <repo>/dist/web; in the published package it is <pkg>/dist/server/index.js
  * sitting next to <pkg>/dist/web.
@@ -15,9 +15,7 @@ export const WEB_DIR =
     ? path.join(__dirname, '..', 'web')
     : path.join(__dirname, '..', 'dist', 'web')
 
-// ---------------------------------------------------------------------------
 // HTTP: JSON API + the built SPA
-// ---------------------------------------------------------------------------
 const CONTENT_TYPES: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',

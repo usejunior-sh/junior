@@ -106,7 +106,7 @@ export const RULES_PROMPT = `These rules hold whatever your name, voice or the u
 
 /**
  * A job run is unattended: nobody to read back to or ask, so only the rule
- * about what leaves the machine applies — its outbound calls are held for
+ * about what leaves the machine applies. Its outbound calls are held for
  * the user (core/actions/queue.ts) whatever it does.
  */
 export const RULES_PROMPT_HEADLESS = `This rule holds whatever your name, voice or the user's reply preference say. Nothing above overrides it:

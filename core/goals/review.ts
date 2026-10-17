@@ -1,6 +1,6 @@
 /**
- * Plan review (M2): the lead drafts, the user approves, comments on a step,
- * or sends the plan back. Pure — no I/O, no clock — so the reaction to every
+ * Plan review: the lead drafts, the user approves, comments on a step,
+ * or sends the plan back. Pure, no I/O, no clock, so the reaction to every
  * event is unit-tested (test/goal-review.test.ts):
  *
  *   created         → wake the lead to draft the plan
@@ -35,7 +35,7 @@ export function commentFrom(v: unknown, at: number): PlanComment | null {
   return { stepId, text: v.text.trim().slice(0, MAX_COMMENT), at: typeof v.at === 'number' ? v.at : at }
 }
 
-/** The comments made since the latest plan proposal, oldest first — what send-back hands the lead. */
+/** The comments made since the latest plan proposal, oldest first, what send-back hands the lead. */
 export function pendingComments(events: readonly GoalEvent[]): PlanComment[] {
   let start = 0
   for (let i = events.length - 1; i >= 0; i--) {
@@ -94,12 +94,8 @@ export function reactTo(goal: Goal, ev: GoalEvent, existing: readonly GoalStepSt
   }
 }
 
-/** The events the review engine acts on — the ones replayed after a restart. */
+/** The events the review engine acts on. The ones replayed after a restart. */
 export const REVIEW_EVENTS: ReadonlySet<GoalEvent['kind']> = new Set(['created', 'plan_sent_back', 'plan_approved'])
-
-// ---------------------------------------------------------------------------
-// The drafting lead
-// ---------------------------------------------------------------------------
 
 /**
  * The drafting lead's contract, in its system prompt so it survives `resume`.
@@ -128,7 +124,7 @@ Your output is ONE call to goal_propose_plan with the whole plan:
 The tool validates the plan and rejects it with the reason; fix it and call again. Text you reply with is not
 kept; once the plan is proposed, you are done — end your turn.`
 
-/** What the lead may staff a plan with (M6): the workflow blocks and the user's max team size. */
+/** What the lead may staff a plan with: the workflow blocks and the user's max team size. */
 export type Staffing = { blocks: readonly { name: string; label: string; description: string; steps: number }[]; maxTeam: number }
 
 /** The lead's first message for one wake. */

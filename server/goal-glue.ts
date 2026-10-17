@@ -22,16 +22,14 @@ import { makeWorktree, syncCheckouts } from './session/checkouts.js'
 import { createSession, getOrRevive } from './session/sessions.js'
 import { linkSessionToItem } from './settings-ops.js'
 
-// ---------------------------------------------------------------------------
 // Goals: the drafting lead (server/goals.ts reacts, this spawns). One headless,
 // read-only session per wake whose one write is goal_propose_plan; its turn's
 // end settles it, which marks the waking event handled.
-// ---------------------------------------------------------------------------
 
 const GOAL_LEAD_TIMEOUT_MS = 20 * 60_000
 /** What a drafting lead may call beyond reads: the goal reads and its plan. */
 export const GOAL_LEAD_TOOLS = new Set(['mcp__triage__goal_get', 'mcp__triage__goal_list', 'mcp__triage__goal_propose_plan'])
-/** A brief's hidden tools, plus the goal writes that aren't the lead's in M2. */
+/** A brief's hidden tools, plus the goal writes that aren't the lead's. */
 export const GOAL_LEAD_DISALLOWED_TOOLS = [...BRIEF_DISALLOWED_TOOLS, ...['goal_create', 'goal_log_append', 'goal_handoff_write'].map((t) => `mcp__triage__${t}`)]
 
 export type GoalLead = { goalId: string; sessionId: string; seq: number; timer: ReturnType<typeof setTimeout>; release: () => void }
@@ -54,10 +52,10 @@ export type GoalRun = GoalSessionTag & { spec: StartSpec; agentPrompt: string | 
 const GATE_CHECK_TIMEOUT_MS = 5 * 60_000
 
 /**
- * The gate checker (decision 6): one short, headless, read-only session over
+ * The gate checker: one short, headless, read-only session over
  * every due AI gate in a batch. It gets the condition and the ids, the read
  * tools of the connectors those gates name (ToolSearch loads them), and one
- * write — its verdicts, on its own `gate` server. The fence refuses anything
+ * write. Its verdicts, on its own `gate` server. The fence refuses anything
  * else before any allow rule runs: no shell, no file tool, no connector write.
  */
 const runGateCheck = (rt: WorkspaceRuntime): GateChecker => async (gates, model) => {
@@ -200,8 +198,7 @@ export function goalEngineFor(rt: WorkspaceRuntime): GoalEngine {
 }
 
 /**
- * A builder that worked beside others did it in a child worktree (decision 2,
- * M6): commit what it left, merge its branch into the goal branch, then remove
+ * A builder that worked beside others did it in a child worktree commit what it left, merge its branch into the goal branch, then remove
  * the child. A conflict aborts the merge and is the step's failure; the child
  * stays for the lead's next move or the user's look.
  */
@@ -234,7 +231,7 @@ async function mergeGoalChild(rt: WorkspaceRuntime, goal: Goal, sessionId: strin
   return null
 }
 
-/** The goal's one worktree (decision 2): made on its first session, on a goal/<slug> branch. */
+/** The goal's one worktree: made on its first session, on a goal/<slug> branch. */
 async function goalCheckout(rt: WorkspaceRuntime, goal: Goal, project: Project): Promise<Checkout> {
   const have = goal.checkoutId ? rt.checkouts.get(goal.checkoutId) : undefined
   if (have) return have
@@ -273,7 +270,7 @@ async function startGoalSession(rt: WorkspaceRuntime, stale: Goal, spec: StartSp
     stepId: spec.role === 'lead' ? null : spec.stepId,
     spec,
     agentPrompt,
-    // The Mac stays awake while a goal session runs: a sleeping Mac hangs a headless run (M0).
+    // The Mac stays awake while a goal session runs: a sleeping Mac hangs a headless run.
     release: power.hold(`goal ${goal.id}`),
     timer: setTimeout(() => void endGoalSession(rt, row.id, `timed out after ${GOAL_SESSION_TIMEOUT_MS / 60_000} minutes`), GOAL_SESSION_TIMEOUT_MS),
   })
@@ -334,7 +331,7 @@ async function startGoalLead(rt: WorkspaceRuntime, goal: Goal, wake: LeadWake, e
     'gated',
     { kind: 'goal', projectId: project.id, spawn: false },
   )
-  // The Mac stays awake while the lead drafts: a sleeping Mac hangs a headless run (M0).
+  // The Mac stays awake while the lead drafts: a sleeping Mac hangs a headless run.
   const lead: GoalLead = {
     goalId: goal.id,
     sessionId: row.id,

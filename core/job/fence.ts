@@ -1,6 +1,6 @@
 /**
- * The run fence (job-spec.md, items 1 and 2): one decision per tool call,
- * wired in as a PreToolUse hook on every job run. It is the real fence —
+ * The run fence: one decision per tool call,
+ * wired in as a PreToolUse hook on every job run. It is the real fence:
  * the allowlist keeps granted tools from prompting, this denies everything
  * else, including tools the user's own global allow rules would let through.
  * Server-only (node:path).
@@ -17,9 +17,9 @@ export type Fence = {
   root: string
   /** Write/Edit allowed (inside root) */
   write: boolean
-  /** the skills the job names — the only ones the Skill tool may load */
+  /** the skills the job names: the only ones the Skill tool may load */
   skills: Set<string>
-  /** the subagents the job names — the only ones the Agent tool may start */
+  /** the subagents the job names: the only ones the Agent tool may start */
   agents: Set<string>
 }
 
@@ -92,7 +92,7 @@ export function fenceDecision(f: Fence, toolName: string, input: unknown): Fence
     return { allow: true }
   }
 
-  // Exact names only: allowing `triage:x` must not let a bare `x` through — that can be another skill.
+  // Exact names only: allowing `triage:x` must not let a bare `x` through. That can be another skill.
   if (toolName === 'Skill') {
     const name = (str('skill') ?? str('command') ?? '').trim().replace(/^\//, '')
     if (f.skills.has(name)) return { allow: true }

@@ -62,7 +62,7 @@ export function handleConnection(ws: WebSocket, req: http.IncomingMessage): void
         case 'create_session': {
           if (msg.provider && !isConnected(rt.meta, msg.provider))
             throw new Error(`${providerFor(msg.provider).label} isn't connected in this workspace — connect it in Settings → Providers`)
-          // Named uploads must still be there. Checked first — before a worktree or a session exists — so a stale one creates nothing.
+          // Named uploads must still be there. Checked first, before a worktree or a session exists, so a stale one creates nothing.
           if (msg.files) await resolveUploads(rt.attachmentsDir, msg.files, MAX_FILES_PER_MESSAGE)
           // A checkout names both the folder and the project; it must still be there.
           let checkout = msg.checkoutId ? rt.checkouts.get(msg.checkoutId) : undefined
@@ -95,7 +95,7 @@ export function handleConnection(ws: WebSocket, req: http.IncomingMessage): void
           if (msg.itemId) await linkSessionToItem(rt, row.id, msg.itemId, 'dispatch').catch(() => {})
           send(ws, { type: 'session_created', session: summarize(rt, row) })
           broadcastSessionList(rt)
-          // A dispatch opens with the item's screenshots attached — the draft
+          // A dispatch opens with the item's screenshots attached, the draft
           // composer never carries the bytes, the server reads them off disk.
           const dispatched = msg.itemId ? await rt.store.items.get(msg.itemId).catch(() => null) : null
           const fromItem = dispatched
@@ -164,7 +164,7 @@ export function handleConnection(ws: WebSocket, req: http.IncomingMessage): void
           // be. Where it cannot (arming a bypass needs a spawn-time flag), the
           // subprocess is retired so the next turn brings up one that can.
           const session = rt.live.get(row.id)
-          // Planning, the new level waits for the plan's approval — switching the subprocess now would end plan mode.
+          // Planning, the new level waits for the plan's approval, switching the subprocess now would end plan mode.
           // (Arming a bypass still needs a fresh subprocess; it comes back up in plan mode.)
           if (row.planning) {
             if (session && msg.mode === 'bypassPermissions') session.stop()
@@ -235,9 +235,9 @@ export function handleConnection(ws: WebSocket, req: http.IncomingMessage): void
             if (run) void goalWorkerMessageOp(rt.goalDeps, run.goalId, row.id, msg.text.trim()).catch(() => {})
             else {
               const goal = await goalOfSession(rt.goalDeps, row.id).catch(() => null)
-              // Plan review keeps M2's behaviour: the drafting lead's session is revived as before.
+              // Plan review: the drafting lead's session is revived as before.
               if (goal && goal.state !== 'draft_plan' && goal.state !== 'plan_ready') {
-                // The lead gets text only, so attached files stay behind — and the user is told.
+                // The lead gets text only, so attached files stay behind, and the user is told.
                 const dropped = msg.files?.length ? ` ${msg.files.length === 1 ? 'The attached file was' : 'The attached files were'} not sent — files can't go to the goal's lead.` : ''
                 if (!msg.text.trim()) {
                   await sessionNotice(rt, row.id, `Not sent: this session has ended.${dropped}`)

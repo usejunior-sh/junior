@@ -118,7 +118,7 @@ export async function briefRoutes({ req, res, url, json, rt }: ScopedCtx): Promi
     json(body.ok ? 200 : 400, body)
     return true
   }
-  // Files of any type on an item: the complete desired set, as ids — ones the
+  // Files of any type on an item: the complete desired set, as ids, ones the
   // item holds stay, pending uploads are claimed, anything left out is deleted.
   if (url.pathname === '/api/items/files' && req.method === 'POST') {
     let body: ItemFilesResponse
@@ -198,7 +198,7 @@ export async function briefRoutes({ req, res, url, json, rt }: ScopedCtx): Promi
     json(body.ok ? 200 : 400, body)
     return true
   }
-  // --- artifacts + links (.docs/next-version.md, phase 1) ---------------------
+  // artifacts + links
   if (url.pathname === '/api/artifacts' && req.method === 'GET') {
     let body: ArtifactsResponse
     try {
@@ -265,7 +265,7 @@ export async function briefRoutes({ req, res, url, json, rt }: ScopedCtx): Promi
     json(body.ok ? 200 : 500, body)
     return true
   }
-  // Open the file in the user's own editor — the server runs on their machine.
+  // Open the file in the user's own editor. The server runs on their machine.
   if (url.pathname === '/api/artifacts/open' && req.method === 'POST') {
     let body: OkBody
     try {

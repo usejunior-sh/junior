@@ -3,7 +3,7 @@ import { defaultRuntime, runtimes, WorkspaceRuntime } from '../workspace/runtime
 
 /**
  * A form's worth of JSON. Routes that carry base64 screenshots pass a bigger
- * `limit` — a single macOS screenshot blows past 1MB once base64'd, and a
+ * `limit`. A single macOS screenshot blows past 1MB once base64'd, and a
  * body that dies mid-upload reads to the user as "the network broke".
  */
 export function readJsonBody(req: http.IncomingMessage, limit = 1_000_000): Promise<unknown> {
@@ -25,11 +25,11 @@ export function readJsonBody(req: http.IncomingMessage, limit = 1_000_000): Prom
 }
 
 /**
- * Which workspace a request belongs to: the ?workspace= param wins (explicit —
+ * Which workspace a request belongs to: the ?workspace= param wins (explicit,
  * the MCP shim and scripts use it), then the triage_ws cookie (how the SPA
  * rides: cookies travel on every fetch and on the WS upgrade with zero
  * call-site churn), then the default. A stale id falls back to the default
- * rather than erroring — a deleted workspace must not brick the UI.
+ * rather than erroring. A deleted workspace must not brick the UI.
  */
 function cookieWorkspace(req: http.IncomingMessage): string | undefined {
   const header = req.headers.cookie

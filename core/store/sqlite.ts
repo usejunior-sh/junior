@@ -1,9 +1,9 @@
 /**
- * SQLite adapter for the Store interface, on node:sqlite (stdlib — keeps the
+ * SQLite adapter for the Store interface, on node:sqlite (stdlib, keeps the
  * global install dependency-free; vision principle 5).
  *
  * Single-writer by design: SQLite has one writer and this process is it.
- * Nothing here may leak into the interface — a Postgres adapter for the hosted
+ * Nothing here may leak into the interface. A Postgres adapter for the hosted
  * version implements core/store/types.ts, not this file.
  */
 import { DatabaseSync } from 'node:sqlite'

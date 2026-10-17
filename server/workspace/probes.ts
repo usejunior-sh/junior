@@ -11,20 +11,18 @@ import { broadcast } from '../ws/send.js'
 
 export const FOLDER_PROBE_TTL_MS = 10 * 60_000
 
-// ---------------------------------------------------------------------------
-// Connectors: what a session will actually load, learned the honest way — by
+// Connectors: what a session will actually load, learned the honest way, by
 // spawning a throwaway query with the SAME options real sessions use and
 // asking it via the mcpServerStatus() control request (no user message, no
 // API turn). `claude mcp list` has no machine output, and the config files
 // under ~/.claude are private formats; this is the SDK's own structured
 // answer to "which servers connected". Per-workspace: two auth backends
 // genuinely have different connectors, so each runtime probes with its own env.
-// ---------------------------------------------------------------------------
 const CLAUDE_AI_PREFIX = 'claude.ai '
 
 const SCOPES: ConnectorScope[] = ['claudeai', 'user', 'local', 'project', 'plugin', 'managed']
 
-/** One server as the SDK reports it → our Connector, tools and all (job-spec.md, item 1). */
+/** One server as the SDK reports it → our Connector, tools and all. */
 function toConnector(srv: McpStatus, scopeOverride?: ConnectorScope): Connector {
   const claudeAi = srv.name.startsWith(CLAUDE_AI_PREFIX)
   const scope: ConnectorScope =
@@ -53,11 +51,11 @@ function toConnector(srv: McpStatus, scopeOverride?: ConnectorScope): Connector 
 /**
  * Probe which MCP servers connect. With no folder: the user-level view
  * (Settings), from the home folder. With a folder: exactly what a job run in
- * that folder loads — the user's servers plus the folder's project and local
+ * that folder loads. The user's servers plus the folder's project and local
  * servers, passed explicitly (never by loading the project's settings/hooks).
  */
 export function probeConnectors(rt: WorkspaceRuntime, cwd?: string): Promise<ConnectorProbe> {
-  // Concurrent requests share one probe — a probe is a whole subprocess.
+  // Concurrent requests share one probe: a probe is a whole subprocess.
   const inFlight = cwd ? rt.folderProbeInFlight.get(cwd) : rt.connectorInFlight
   if (inFlight) return inFlight
   const run = (async () => {
@@ -86,14 +84,12 @@ export function probeConnectors(rt: WorkspaceRuntime, cwd?: string): Promise<Con
   return run
 }
 
-// ---------------------------------------------------------------------------
 // Models: which models this workspace's Claude Code will actually run. Asked of
-// the SDK (supportedModels()) rather than hardcoded — the catalog moves, an
+// the SDK (supportedModels()) rather than hardcoded: the catalog moves, an
 // org policy can shrink it, and an api-key workspace may see a different list
 // than a subscription one. Same throwaway-subprocess shape as the connector
 // probe, and the answer is stable enough to cache for the process. Cached per
 // agent: a chat can run on another one (Codex), whose list is its own.
-// ---------------------------------------------------------------------------
 export function probeModels(rt: WorkspaceRuntime, provider: ProviderId = rt.meta.provider): Promise<ModelProbe> {
   const inFlight = rt.modelInFlight.get(provider)
   if (inFlight) return inFlight
@@ -115,8 +111,8 @@ export function probeModels(rt: WorkspaceRuntime, provider: ProviderId = rt.meta
 /**
  * A session's model choice, checked against its agent's list where that list
  * is the whole truth. Claude also takes aliases and ids it doesn't list, so its
- * choice passes as sent. For Codex, an id it doesn't list is refused (null) —
- * `turn/start` would fail on it — and an effort the model doesn't take is
+ * choice passes as sent. For Codex, an id it doesn't list is refused (null),
+ * `turn/start` would fail on it, and an effort the model doesn't take is
  * dropped to the model's default.
  */
 export async function checkModelChoice(
@@ -132,23 +128,21 @@ export async function checkModelChoice(
   return { model, effort: effort && option.efforts.includes(effort) ? effort : null }
 }
 
-// ---------------------------------------------------------------------------
 // Slash commands: what `/` offers in the composer. Asked of the SDK
 // (supportedCommands()) like the model catalog, but keyed by *folder* rather
-// than by workspace — a project's .claude/commands, .claude/skills and its
+// than by workspace: a project's .claude/commands, .claude/skills and its
 // plugins' skills only exist under that project.
 //
 // Two fill paths, and the cheap one covers the common case: a live session's
 // subprocess already knows the list, so it hands it over at init for free and
-// pushes a fresh one when skills are discovered mid-run. Only a draft tab —
-// which has no subprocess yet — pays for a throwaway probe, and only on the
+// pushes a fresh one when skills are discovered mid-run. Only a draft tab,
+// which has no subprocess yet, pays for a throwaway probe, and only on the
 // first `/` typed against that folder.
-// ---------------------------------------------------------------------------
 
 /**
  * Commands whose UX is bound to a real terminal. The SDK tags these per
  * session (`terminal_slash_commands` on the init message) and tells remote
- * hosts to hide them — but the tag rides the message stream, so a probe with
+ * hosts to hide them, but the tag rides the message stream, so a probe with
  * no turn never sees it. Until this workspace has run one session, this list
  * stands in; the first init replaces it wholesale rather than merging, so a
  * stale guess here can only ever be wrong until a session starts.
@@ -204,7 +198,7 @@ export function noteCommands(rt: WorkspaceRuntime, cwd: string, commands: SlashC
 }
 
 /**
- * The list for a folder with no live session — one throwaway subprocess, the
+ * The list for a folder with no live session. One throwaway subprocess, the
  * same shape as the model probe, cached for the life of the process. Shared
  * per folder while in flight so a fast typist can't spawn two.
  */

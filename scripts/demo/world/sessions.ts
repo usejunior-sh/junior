@@ -1,8 +1,6 @@
 import { HOUR, ID, MIN } from './base.js'
 
-// ---------------------------------------------------------------------------
 // Sessions: a compact transcript DSL, expanded to SDK events by seed.ts
-// ---------------------------------------------------------------------------
 
 export type Step =
   | { user: string }

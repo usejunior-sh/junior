@@ -12,10 +12,8 @@ import { canonicalizeRefs } from '../core/work/link.js'
 import { WorkspaceRuntime } from './workspace/runtime.js'
 import { itemImageEdits, itemUrls } from './items-ops.js'
 
-// ---------------------------------------------------------------------------
-// Input validation — the HTTP surface is untrusted (vision principle 6):
+// Input validation: the HTTP surface is untrusted:
 // bodies are validated into domain shapes, and rejected rather than repaired.
-// ---------------------------------------------------------------------------
 
 const CADENCES = new Set<JobCadence>(['hourly', 'daily', 'weekly'])
 export const ITEM_STATUSES = new Set<ItemStatus>(['open', 'done', 'snoozed', 'archived'])
@@ -57,7 +55,7 @@ export function jobPatchFrom(raw: unknown): { patch: JobPatch } | { error: strin
     patch.tools = grantsFromLegacy([...new Set(r.connectors as LegacyConnector[])])
   }
   if (r.projectId !== undefined) {
-    // required: every job runs in a project folder (job-spec.md, item 2)
+    // required: every job runs in a project folder
     if (typeof r.projectId !== 'string' || !r.projectId) return { error: 'projectId is required — pick the project this job runs in' }
     patch.projectId = r.projectId
   }

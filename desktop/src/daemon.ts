@@ -2,10 +2,10 @@
  * Find, start and restart the local triage daemon from the Electron main
  * process (ARCHITECTURE.md). The app attaches, it does not own: the daemon runs
  * under the same LaunchAgent `triage install` writes, so it survives the app
- * quitting — and a reboot, a logout and a crash, which is what jobs need.
+ * quitting, and a reboot, a logout and a crash, which is what jobs need.
  *
- * Deliberately free of an `electron` import — packaging is detected from the
- * bundled runtime on disk — so this module also loads under plain node.
+ * Deliberately free of an `electron` import, packaging is detected from the
+ * bundled runtime on disk, so this module also loads under plain node.
  */
 import { execFile, spawn } from 'node:child_process'
 import { accessSync, constants, existsSync, readFileSync } from 'node:fs'
@@ -21,8 +21,8 @@ export type DaemonHealth = { app: 'triage'; version: string; pid: number; port: 
 export const PORT: number = Number(process.env.TRIAGE_APP_PORT) || 5178
 
 /**
- * TRIAGE_APP_URL loads the UI from somewhere else — the Vite dev server, for
- * HMR — while health checks and the browser host still talk to PORT.
+ * TRIAGE_APP_URL loads the UI from somewhere else, the Vite dev server, for
+ * HMR, while health checks and the browser host still talk to PORT.
  */
 const UI_URL = process.env.TRIAGE_APP_URL?.trim() || ''
 export const UI_PORT: number = UI_URL ? Number(new URL(UI_URL).port || 80) : PORT
@@ -55,8 +55,8 @@ async function probeHost(host: string): Promise<DaemonHealth | 'other' | null> {
     const body: unknown = await res.json().catch(() => null)
     return isHealth(body) ? body : 'other'
   } catch (err) {
-    // A timeout means something holds the port but won't answer HTTP —
-    // that is "other", not "free". Connection refused means nothing listens.
+    // A timeout means something holds the port but won't answer HTTP.
+    // That is "other", not "free". Connection refused means nothing listens.
     return (err as { name?: string })?.name === 'TimeoutError' ? 'other' : null
   }
 }
@@ -108,7 +108,7 @@ let cachedEnv: NodeJS.ProcessEnv | null = null
  * The environment the daemon runs with. A Finder-launched app gets only
  * /usr/bin:/bin:/usr/sbin:/sbin, so `claude`, `gh` and `git` would not resolve:
  * PATH comes from the user's login shell, read once. Electron's own variables
- * are dropped — ELECTRON_RUN_AS_NODE leaking into the daemon would change how
+ * are dropped: ELECTRON_RUN_AS_NODE leaking into the daemon would change how
  * every node it spawns behaves.
  */
 export async function loginShellEnv(): Promise<NodeJS.ProcessEnv> {
@@ -168,8 +168,8 @@ function dedupe(dirs: string[]): string[] {
 /**
  * Find a running triage, or start one; resolves once /api/health answers.
  *
- * Installing the app is the only step anyone takes, so the app — not the
- * installer, which a drag-from-DMG user never runs — is what guarantees the
+ * Installing the app is the only step anyone takes, so the app, not the
+ * installer, which a drag-from-DMG user never runs, is what guarantees the
  * LaunchAgent exists. Jobs are a background promise, and a daemon this
  * process merely detached dies at the next reboot.
  */
@@ -186,7 +186,7 @@ export async function ensureDaemon(onStatus?: (msg: string) => void): Promise<Da
   }
   onStatus?.('Starting triage…')
   // `install` writes the agent and lets launchd start the server, so the daemon
-  // is launchd-owned from birth — no second restart to adopt it later. `start`
+  // is launchd-owned from birth: no second restart to adopt it later. `start`
   // already prefers an installed agent, so it is the fallback when we must not
   // install one (an unpackaged dev app, or a plist that is already correct).
   const out = await runCli(agentNeedsWriting() ? 'install' : 'start')
@@ -195,12 +195,12 @@ export async function ensureDaemon(onStatus?: (msg: string) => void): Promise<Da
 
 /** Mirrors LAUNCH_AGENT_LABEL in server/launchd.ts. */
 const AGENT_PLIST = path.join(os.homedir(), 'Library', 'LaunchAgents', 'sh.usetriage.triage.plist')
-/** Written by `triage uninstall` — mirrors OPT_OUT_FILE in server/cli.ts. */
+/** Written by `triage uninstall`: mirrors OPT_OUT_FILE in server/cli.ts. */
 const agentOptOut = (): string =>
   path.join(process.env.TRIAGE_HOME || path.join(os.homedir(), '.triage'), 'no-launch-agent')
 
 /**
- * Should we write the LaunchAgent? Only for a packaged app — an unpackaged dev
+ * Should we write the LaunchAgent? Only for a packaged app: an unpackaged dev
  * run would point launchd at a repo build that moves under it. A plist that
  * names some other copy (an app that moved, or the npm install it replaced) is
  * worse than none: it looks installed and restarts nothing, so it is rewritten.
@@ -209,7 +209,7 @@ function agentNeedsWriting(): boolean {
   if (process.platform !== 'darwin') return false
   const { node, cli, bundled } = runtime()
   if (!bundled) return false
-  // `triage uninstall` is a decision, not an accident — don't overrule it.
+  // `triage uninstall` is a decision, not an accident, don't overrule it.
   if (existsSync(agentOptOut())) return false
   try {
     const xml = readFileSync(AGENT_PLIST, 'utf8')
@@ -220,7 +220,7 @@ function agentNeedsWriting(): boolean {
 }
 
 /**
- * `cli.js restart` — through the LaunchAgent when it's loaded, else stop +
+ * `cli.js restart`: through the LaunchAgent when it's loaded, else stop +
  * start. Done means a *different* pid answers health, not the old one
  * still on its way down.
  */

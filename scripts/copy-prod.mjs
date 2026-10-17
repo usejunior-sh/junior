@@ -1,12 +1,12 @@
-// `npm run dev:copy-prod` — seed the dev data root (~/.triage-dev, see
+// `npm run dev:copy-prod`: seed the dev data root (~/.triage-dev, see
 // dev-home.mjs) from prod's ~/.triage, so dev runs against real workspaces
 // without its migrations, jobs or phone pairing ever touching prod.
 //
 // Copied: the workspace registry and every workspace folder (artifacts, agents,
 // teams, playbooks, dispatch, attachments, claude/, .env kept at 0600). Each
-// triage.db is snapshotted with VACUUM INTO — a consistent copy that includes
-// rows still in the WAL, safe while prod is running — never cp'd.
-// Not copied: server.json, server.log, remote.json, ngrok.pid, logs/ — those
+// triage.db is snapshotted with VACUUM INTO: a consistent copy that includes
+// rows still in the WAL, safe while prod is running, never cp'd.
+// Not copied: server.json, server.log, remote.json, ngrok.pid, logs/, those
 // belong to the process that writes them.
 //
 //   npm run dev:copy-prod              refuses if the dev root already has data

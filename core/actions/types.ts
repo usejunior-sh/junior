@@ -1,11 +1,10 @@
 /**
- * Actions (.docs spec "Actions: record every outbound action", phase 1): an
- * effect a session had that left this machine — a PR opened, a comment
- * posted, a ticket filed, a push. Phase 1 only records them; nothing about
- * approval changes. Browser-safe: the web imports these types and labels.
+ * Actions: an effect a session had that left this machine. A PR opened, a
+ * comment posted, a ticket filed, a push. Browser-safe: the web imports these
+ * types and labels.
  */
 
-/** What kind of thing went out — what the daily count line counts. */
+/** What kind of thing went out: what the daily count line counts. */
 export type ActionKind = 'pr' | 'comment' | 'ticket' | 'post' | 'message' | 'email' | 'push' | 'merge' | 'release' | 'update' | 'other'
 
 export const ACTION_KINDS: readonly ActionKind[] = ['pr', 'comment', 'ticket', 'post', 'message', 'email', 'push', 'merge', 'release', 'update', 'other']
@@ -27,15 +26,15 @@ export const KIND_LABEL: Record<ActionKind, [string, string]> = {
 }
 
 /**
- * Where an action is. Phase 1 (recorded as it ran):
+ * Where an action is. Recorded as it ran:
  *   attempted  the call was made and nothing has come back yet
  *   succeeded / failed / denied
- * Phase 2 (queued, core/actions/queue.ts — a job run's or a team worker's
- * connector call held for you instead of run):
+ * Queued (core/actions/queue.ts: a job run's or a team worker's connector
+ * call held for you instead of run):
  *   needs_you  waiting on your approve / edit / send back / reject
  *   scheduled  approved; goes out at `queue.sendAt` (undo until then)
  *   sending    claimed by the dispatcher; the one-tool run is out
- *   unknown    the dispatch run died after the tool may have run — check before retrying
+ *   unknown    the dispatch run died after the tool may have run, check before retrying
  *   sent_back  returned to the session that drafted it, with your notes
  *   rejected   you said no
  *   expired    nobody answered in time
@@ -68,11 +67,11 @@ export const ACTION_STATUSES: readonly ActionStatus[] = [
 export const isActionStatus = (v: unknown): v is ActionStatus => ACTION_STATUSES.includes(v as ActionStatus)
 
 /**
- * A queued action's approval state (phase 2). Absent on an action recorded
- * as it ran — only a held call has one.
+ * A queued action's approval state. Absent on an action recorded
+ * as it ran, only a held call has one.
  */
 export type ActionQueue = {
-  /** the call's input in full, never trimmed — what goes out, word for word (your edit, once edited) */
+  /** the call's input in full, never trimmed, what goes out, word for word (your edit, once edited) */
   args: Record<string, unknown>
   queuedAt: number
   /** past this, a waiting action expires */
@@ -92,7 +91,7 @@ export type ActionQueue = {
 /** Who moved an action. */
 export type ActionActor = 'agent' | 'you' | 'triage'
 
-/** One step in a queued action's life — append-only, newest last. */
+/** One step in a queued action's life, append-only, newest last. */
 export type ActionHistoryEntry = {
   actionId: string
   at: number
@@ -108,10 +107,10 @@ export type ActionHistoryEntry = {
 }
 
 /**
- * Why a call counted as an action — every record says.
+ * Why a call counted as an action, every record says.
  * annotation: the MCP server's own tool annotations said it writes.
  * name verb: the tool's name has a write verb (create, send, comment…).
- * unknown: an MCP tool with neither a read nor a write verb — counted, to be safe.
+ * unknown: an MCP tool with neither a read nor a write verb, counted, to be safe.
  * bash pattern: a Bash command matched the outbound list.
  * override: the actions file names this tool as an action.
  */
@@ -123,7 +122,7 @@ export const isActionWhy = (v: unknown): v is ActionWhy => ACTION_WHYS.includes(
  * Who let it run.
  * prompt: you, by answering a permission prompt.
  * mode: the session's permission mode (bypass or auto) let it through.
- * rule: an allow rule — your settings, an "always allow" earlier in the
+ * rule: an allow rule, your settings, an "always allow" earlier in the
  *       session, or a job's grants.
  * policy: triage's own fixed policy for that kind of session (a brief).
  */
@@ -132,10 +131,10 @@ export const ACTION_ALLOWED_BY: readonly ActionAllowedBy[] = ['prompt', 'mode', 
 export const isActionAllowedBy = (v: unknown): v is ActionAllowedBy => ACTION_ALLOWED_BY.includes(v as ActionAllowedBy)
 
 export type ActionRecord = {
-  /** `<sessionId>:<first tool_use id>` — deterministic, so a backfill can't duplicate */
+  /** `<sessionId>:<first tool_use id>`: deterministic, so a backfill can't duplicate */
   id: string
   sessionId: string
-  /** chat, job-run or brief — a team worker is a chat with `teamRunId` */
+  /** chat, job-run or brief, a team worker is a chat with `teamRunId` */
   sessionKind: string
   tool: string
   kind: ActionKind
@@ -144,7 +143,7 @@ export type ActionRecord = {
   /** the call's input, long strings trimmed */
   args: Record<string, unknown>
   status: ActionStatus
-  /** where it landed — the PR, the comment, the ticket */
+  /** where it landed: the PR, the comment, the ticket */
   link: string | null
   /** what came back when it failed or was denied, trimmed */
   error: string | null
@@ -167,6 +166,6 @@ export type ActionRecord = {
   attemptedAt: number
   settledAt: number | null
   updatedAt: number
-  /** a held call's approval state (phase 2); absent on one recorded as it ran */
+  /** a held call's approval state; absent on one recorded as it ran */
   queue?: ActionQueue | null
 }

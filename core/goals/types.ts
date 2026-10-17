@@ -5,18 +5,14 @@
  * on events, a team, gates and a ledger (plan/log/handoff files in the
  * artifacts repo; state in the database).
  *
- * This file is the shared vocabulary — browser-safe, no I/O. The web imports
+ * This file is the shared vocabulary: browser-safe, no I/O. The web imports
  * these types through shared/protocol.ts. The state machine is
  * core/goals/machine.ts; the tool signatures core/goals/tools.ts.
  */
 import type { Turn } from '../work/flow.js'
 
-// ---------------------------------------------------------------------------
-// Goal
-// ---------------------------------------------------------------------------
-
 /**
- * Where a goal is (the lifecycle diagram's 8 states, plus decision 3's two):
+ * Where a goal is (the lifecycle diagram's 8 states, plus two more):
  *   draft_plan     the lead is researching and writing the plan
  *   plan_ready     the plan waits on the user's review
  *   queued         runnable, waiting for a session slot
@@ -88,7 +84,7 @@ export type Goal = {
   sourceItemId: string | null
   /** the caller-stable key goal_create dedupes on (a source item id, a client id) */
   key: string | null
-  /** the project it works in, and the goal's one worktree (decision 2) once made */
+  /** the project it works in, and the goal's one worktree once made */
   projectId: string | null
   checkoutId: string | null
   /** the approved plan; null until one is proposed. While plan_ready, the proposal. */
@@ -106,10 +102,6 @@ export type Goal = {
   updatedAt: number
 }
 
-// ---------------------------------------------------------------------------
-// Plan
-// ---------------------------------------------------------------------------
-
 /** agent = a session does it; gate = a pause the goal can't pass until it resolves; block = a workflow block expanded at approval. */
 export type StepType = 'agent' | 'gate' | 'block'
 export const STEP_TYPES: readonly StepType[] = ['agent', 'gate', 'block']
@@ -119,7 +111,7 @@ export const STEP_ROLES: readonly StepRole[] = ['lead', 'builder', 'reviewer', '
 
 /**
  * ai = a read-only checker session judges the condition; user = an approval in
- * the Inbox; watcher = plain code decides it (the PR watcher, M5) — never swept.
+ * the Inbox; watcher = plain code decides it (the PR watcher), never swept.
  */
 export type GateEvaluator = 'ai' | 'user' | 'watcher'
 export const GATE_EVALUATORS: readonly GateEvaluator[] = ['ai', 'user', 'watcher']
@@ -176,12 +168,10 @@ export type GoalPlan = {
   models: Partial<Record<'lead' | 'worker' | 'gate', string>> | null
 }
 
-/** Default models (decision 5): lead Opus, workers Sonnet, gate checker Haiku. */
+/** Default models: lead Opus, workers Sonnet, gate checker Haiku. */
 export const DEFAULT_GOAL_MODELS = { lead: 'opus', worker: 'sonnet', gate: 'haiku' } as const
 
-// ---------------------------------------------------------------------------
 // Steps at run time
-// ---------------------------------------------------------------------------
 
 /**
  * Where one plan step is:
@@ -208,12 +198,8 @@ export type GoalStepState = {
   updatedAt: number
 }
 
-/** 3 fix attempts per failing check, then the user (M5); same cap as recipes' MAX_FIX_ROUNDS. */
+/** 3 fix attempts per failing check, then the user; same cap as recipes' MAX_FIX_ROUNDS. */
 export const MAX_FIX_ATTEMPTS = 3
-
-// ---------------------------------------------------------------------------
-// Gates
-// ---------------------------------------------------------------------------
 
 /** open = waiting; met / expired / cancelled = settled. needs_user = handed to the Inbox as an approval. */
 export type GateStatus = 'open' | 'met' | 'needs_user' | 'expired' | 'cancelled'
@@ -228,7 +214,7 @@ export type Gate = {
   condition: string
   connectors: string[]
   status: GateStatus
-  /** ids the checker gets as input (a PR number, a ticket key) — never the transcript */
+  /** ids the checker gets as input (a PR number, a ticket key), never the transcript */
   refs: string[]
   armedAt: number
   /** when the sweep should look next; null for a user gate */
@@ -252,17 +238,15 @@ export type GateVerdictKind = 'met' | 'not_met' | 'needs_user' | 'error'
 export const GATE_VERDICT_KINDS: readonly GateVerdictKind[] = ['met', 'not_met', 'needs_user', 'error']
 export type GateVerdict = { verdict: GateVerdictKind; evidence: string; checkAgainIn: string | null }
 
-/** Decision 6: minutes between checks after arming — then every 60, unless the gate sets check_every. */
+/** minutes between checks after arming, then every 60, unless the gate sets check_every. */
 export const GATE_CHECK_SCHEDULE_MIN: readonly number[] = [5, 5, 10, 10, 20, 20, 30, 30, 40, 40]
 export const GATE_CHECK_TAIL_MIN = 60
-/** Decision 6: the sweep timer. */
+/** the sweep timer. */
 export const GATE_SWEEP_INTERVAL_MS = 5 * 60_000
-/** Decision 6: past this a gate becomes an approval in the Inbox. */
+/** past this a gate becomes an approval in the Inbox. */
 export const GATE_DEFAULT_DEADLINE = '24h'
 
-// ---------------------------------------------------------------------------
-// Events — the bus (M3) and the transition log, one table
-// ---------------------------------------------------------------------------
+// Events: the bus and the transition log, one table
 
 /** Who caused an event. `engine` is triage itself; a session is named by its id. */
 export type GoalActor = 'you' | 'engine' | 'lead' | 'worker' | 'gate' | 'watcher'
@@ -322,7 +306,7 @@ export const GOAL_EVENT_KINDS: readonly GoalEventKind[] = [
 /** One row of `goal_events`. `from`/`to` are set on a transition, else null. */
 export type GoalEvent = {
   goalId: string
-  /** per goal, from 1 — the order the lead reads them in */
+  /** per goal, from 1, the order the lead reads them in */
   seq: number
   at: number
   actor: GoalActor
@@ -336,10 +320,6 @@ export type GoalEvent = {
   /** when the engine finished acting on it; null = replay after a restart */
   handledAt: number | null
 }
-
-// ---------------------------------------------------------------------------
-// Ledger
-// ---------------------------------------------------------------------------
 
 /** How a session's step ended. */
 export type SessionOutcome = 'done' | 'failed' | 'blocked'
@@ -365,13 +345,13 @@ export type GoalLogEntry = {
   text: string
 }
 
-/** The ledger's files, relative to the artifacts folder (decision 9: log rolls over past LOG_ROLLOVER_BYTES). */
+/** The ledger's files, relative to the artifacts folder (the log rolls over past LOG_ROLLOVER_BYTES). */
 export const goalDir = (goalId: string) => `goals/${goalId}`
 export const LEDGER_FILES = ['plan.md', 'log.md', 'handoff.md'] as const
 export const LOG_ROLLOVER_BYTES = 200 * 1024
-/** Decision 9: the lead reads handoff.md plus this many latest log entries. */
+/** the lead reads handoff.md plus this many latest log entries. */
 export const LEAD_LOG_ENTRIES = 5
-/** Decision 7: warn on the goal page after this many failed ledger commits in a row. */
+/** warn on the goal page after this many failed ledger commits in a row. */
 export const LEDGER_COMMIT_WARN_AFTER = 3
 
 /** Whose turn a goal is, in the inbox's own words (core/work/flow.ts). */

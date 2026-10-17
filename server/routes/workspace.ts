@@ -11,7 +11,7 @@ import { applyProviderChange, readProviderStatus, saveProviderKey } from '../wor
 import type { ScopedCtx } from './ctx.js'
 
 export async function workspaceRoutes({ req, res, url, json, rt }: ScopedCtx): Promise<boolean> {
-  // The workspace this request resolved to, singular and scoped — unlike the
+  // The workspace this request resolved to, singular and scoped, unlike the
   // daemon-wide /api/workspaces list. Backs get_workspace so a chat or the stdio
   // shim can answer "which workspace am I in?" (and the shim can tell whether its
   // TRIAGE_WORKSPACE matched or silently fell back to the default).
@@ -20,7 +20,7 @@ export async function workspaceRoutes({ req, res, url, json, rt }: ScopedCtx): P
     return true
   }
 
-  // --- the browser pane (.docs/browser.md): host status, evidence, the picker ---
+  // the browser pane (.docs/browser.md): host status, evidence, the picker
   if (url.pathname === '/api/browser/status' && req.method === 'GET') {
     json(200, { ok: true, ...browserHub.status })
     return true
@@ -59,7 +59,7 @@ export async function workspaceRoutes({ req, res, url, json, rt }: ScopedCtx): P
     return true
   }
 
-  // --- providers: the agents this workspace is connected to ------------------
+  // providers: the agents this workspace is connected to
   if (url.pathname === '/api/providers' && req.method === 'GET') {
     let body: ProvidersStatusResponse
     try {
@@ -109,7 +109,7 @@ export async function workspaceRoutes({ req, res, url, json, rt }: ScopedCtx): P
     json(body.ok ? 200 : 400, body)
     return true
   }
-  // One real round-trip with a provider's auth here — the account read can't
+  // One real round-trip with a provider's auth here, the account read can't
   // tell a revoked key from a good one for every backend; a turn can.
   if (url.pathname === '/api/providers/verify' && req.method === 'POST') {
     let body: ProviderVerifyResponse

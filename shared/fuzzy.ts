@@ -19,7 +19,7 @@ function isBoundary(hay: string, i: number): boolean {
 
 /**
  * Score `needle` against `hay`; `null` when it is not a subsequence. Higher is
- * better. Greedy left-to-right with a boundary preference — not the full
+ * better. Greedy left-to-right with a boundary preference, not the full
  * dynamic-programming optimum, but stable and fast enough for 50k paths a
  * keystroke.
  */
@@ -59,7 +59,7 @@ function walk(n: string, h: string, hay: string, preferBoundary: boolean): numbe
     score += 1
     if (isBoundary(hay, at)) score += 8
     if (at === prevMatch + 1) score += 4
-    // gap penalty — long jumps read as coincidence
+    // gap penalty: long jumps read as coincidence
     score -= Math.min(at - hi, 10) * 0.5
     prevMatch = at
     hi = at + 1
@@ -74,7 +74,7 @@ function walk(n: string, h: string, hay: string, preferBoundary: boolean): numbe
 
 /**
  * Rank `items` by `fuzzyScore(needle, key(item))`, dropping non-matches, best
- * first. `minPerChar` drops weak matches — a six-letter needle scattered across
+ * first. `minPerChar` drops weak matches: a six-letter needle scattered across
  * a long sentence is a subsequence of almost anything, so prose keys (titles)
  * want a floor around 2.5 while paths can stay lenient at 0.
  */

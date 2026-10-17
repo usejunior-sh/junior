@@ -1,19 +1,19 @@
 /**
- * Skills and agents — every one a Claude Code session can see, as the files
+ * Skills and agents, every one a Claude Code session can see, as the files
  * Claude Code itself reads:
  *
  *   workspace  <workspace>/library/{skills/<name>/SKILL.md, agents/<name>.md}
  *              a local plugin named "triage", loaded into this workspace's chat
- *              sessions — so its skills are `/triage:<name>`, its agents
+ *              sessions, so its skills are `/triage:<name>`, its agents
  *              `triage:<name>`
  *   personal   <claude config dir>/{skills,agents}    (~/.claude unless the
  *              workspace's auth points elsewhere)
  *   project    <project>/.claude/{skills,agents}, for each registered project
- *   plugin     installed plugins' skills/ and agents/ — listed and readable,
+ *   plugin     installed plugins' skills/ and agents/, listed and readable,
  *              never written: the plugin manager replaces those folders
  *
- * Team agents (<workspace>/agents) are a different thing — a team run's cast,
- * not a chat's subagents — and stay with server/teams.ts.
+ * Team agents (<workspace>/agents) are a different thing, a team run's cast,
+ * not a chat's subagents, and stay with server/teams.ts.
  *
  * Every path the API takes is checked against these roots, so the editor can
  * only ever touch a skill or agent file.
@@ -25,10 +25,10 @@ import path from 'node:path'
 import type { LibraryEntry, LibraryKind, LibrarySource, LibraryTarget } from '../shared/protocol.js'
 import { readFields, slugName } from '../shared/skillFile.js'
 
-/** The plugin name the workspace library loads under — the `triage:` in `/triage:<skill>`. */
+/** The plugin name the workspace library loads under, the `triage:` in `/triage:<skill>`. */
 export const WORKSPACE_PLUGIN = 'triage'
 
-/** A folder holding skills/ and agents/ — editable unless it's a plugin's. */
+/** A folder holding skills/ and agents/: editable unless it's a plugin's. */
 export type LibraryRoot = {
   id: string
   source: LibrarySource
@@ -132,7 +132,7 @@ async function entriesIn(dir: string): Promise<string[]> {
   }
 }
 
-/** A skill folder's files, relative to it — SKILL.md first. Skips dotfiles and dependency folders. */
+/** A skill folder's files, relative to it, SKILL.md first. Skips dotfiles and dependency folders. */
 export async function skillFiles(dir: string): Promise<string[]> {
   const out: string[] = []
   async function walk(rel: string, depth: number) {
@@ -214,9 +214,7 @@ export async function listLibrary(kind: LibraryKind, roots: LibraryRoot[]): Prom
   return lists.flat()
 }
 
-// ---------------------------------------------------------------------------
 // Files: every path is resolved against the roots before anything is read or written
-// ---------------------------------------------------------------------------
 
 export type Located = {
   root: LibraryRoot
@@ -230,7 +228,7 @@ export type Located = {
 const inside = (child: string, parent: string) => child === parent || child.startsWith(parent + path.sep)
 
 /**
- * Which root, kind and skill/agent a path belongs to — or an error. A skill's
+ * Which root, kind and skill/agent a path belongs to, or an error. A skill's
  * path may be any file in its folder; an agent's must be its .md.
  */
 export function locate(p: unknown, roots: LibraryRoot[]): Located {
@@ -252,7 +250,7 @@ export function locate(p: unknown, roots: LibraryRoot[]): Located {
 /**
  * Refuse a path that escapes through a symlink planted inside the folder. A
  * skill folder may itself be a link (people keep skills in a repo and link
- * them in) — what counts is staying inside wherever that folder really is.
+ * them in), what counts is staying inside wherever that folder really is.
  */
 async function realInside(loc: Located): Promise<void> {
   let probe = loc.file
@@ -355,7 +353,7 @@ export async function removeLibraryItem(p: unknown, roots: LibraryRoot[], trashD
   return loc
 }
 
-/** A path a session's tool touched that is a skill or agent file — the cue to hot-reload. */
+/** A path a session's tool touched that is a skill or agent file, the cue to hot-reload. */
 export const touchesLibrary = (file: string, roots: LibraryRoot[]): boolean => {
   try {
     locate(file, roots.filter((r) => r.editable))

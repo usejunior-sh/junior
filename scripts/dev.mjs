@@ -1,7 +1,7 @@
 // Runs the two dev processes as one command: the node server (API + WebSocket,
 // :5188) and the Vite dev server (:5189, proxying /ws and /api back to it).
 //
-// Deliberately not `tsx watch` for the server — a restart drops every live
+// Deliberately not `tsx watch` for the server. A restart drops every live
 // Claude subprocess. Restart it by hand when you change server code.
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'

@@ -1,5 +1,5 @@
 /**
- * Claude's message stream as `ProviderEvent`s — the one place that knows which
+ * Claude's message stream as `ProviderEvent`s: the one place that knows which
  * SDK message means what. Pure: no SDK import, so a recorded stream can be
  * replayed through it in a test.
  */
@@ -28,7 +28,7 @@ function sumTokens(usage: Record<string, unknown> | undefined): number {
 export function claudeEvent(msg: unknown): ProviderEvent {
   const m = msg as ClaudeMessage
   const record = m as SdkMessage
-  // init and result both carry it — including why fast mode is not serving.
+  // init and result both carry it, including why fast mode is not serving.
   const base =
     m.fast_mode_state !== undefined
       ? { record, fastMode: { state: m.fast_mode_state, reason: m.fast_mode_disabled_reason } }

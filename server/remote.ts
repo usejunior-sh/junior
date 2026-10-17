@@ -2,7 +2,7 @@
  * Phone access: letting a device on the same network use this daemon.
  *
  * The daemon listens on every interface, but a connection that does not come
- * from this machine is dropped at accept unless phone access is switched on —
+ * from this machine is dropped at accept unless phone access is switched on,
  * so "off" behaves exactly like a loopback-only bind, and switching it on or
  * off never means restarting the server (which would kill every live Claude
  * subprocess).
@@ -10,14 +10,14 @@
  * With it on, a non-local request needs the pairing token: once from the QR
  * code's `/api/pair?token=` link, which trades it for an HttpOnly cookie, and
  * from then on as that cookie (or an `Authorization: Bearer` header). Local
- * means the socket is loopback *and* the Host header names loopback — a DNS
+ * means the socket is loopback *and* the Host header names loopback. A DNS
  * rebinding page reaches 127.0.0.1 under its own hostname, so it is treated
  * as remote and has no token. A loopback proxy in front of us (Vite in dev,
  * `tailscale serve`) is seen through via X-Forwarded-For.
  *
  * The token lives in ~/.triage/remote.json at 0600. Rotating it unpairs every
  * device at once. Typing it on a phone is no fun, so Settings shows a 6-digit
- * pairing code instead: single use, ten minutes, burned after five misses —
+ * pairing code instead: single use, ten minutes, burned after five misses,
  * short enough to type, too short-lived to guess (5 tries in a million).
  */
 import { execFileSync } from 'node:child_process'
@@ -93,8 +93,8 @@ export function isPrivateAddress(addr: string | undefined): boolean {
 
 /**
  * Whether this request may pair with the 6-digit code: only a device talking
- * to us directly from the local network. Anything proxied — the ngrok tunnel
- * above all — needs the QR code's long token; six digits are no defence
+ * to us directly from the local network. Anything proxied, the ngrok tunnel
+ * above all, needs the QR code's long token; six digits are no defence
  * against the whole internet. Read off the socket, so no header can fake it.
  */
 export function codesAllowed(req: http.IncomingMessage): boolean {
@@ -155,7 +155,7 @@ export function livePairCode(pc: PairCode | null, now: number): PairCode {
 
 /**
  * Spend a typed code. Right: paired, and the code is used up. Wrong: one more
- * miss, and enough misses burn it — Settings then shows a new one.
+ * miss, and enough misses burn it, Settings then shows a new one.
  */
 export function tryPairCode(pc: PairCode | null, typed: string, now: number): { ok: boolean; next: PairCode | null } {
   if (!pc || now >= pc.expiresAt || pc.misses >= PAIR_CODE_MAX_MISSES) return { ok: false, next: null }
@@ -213,7 +213,7 @@ export function lanAddresses(): LanAddress[] {
 }
 
 let bonjour: string | null | undefined
-/** `Your-Mac.local` — survives the router handing out a new IP. macOS only; null elsewhere. */
+/** `Your-Mac.local`: survives the router handing out a new IP. macOS only; null elsewhere. */
 export function bonjourName(): string | null {
   if (bonjour !== undefined) return bonjour
   try {
@@ -225,7 +225,7 @@ export function bonjourName(): string | null {
   return bonjour
 }
 
-/** The typed-code half of the pairing page — offered only where codes are accepted (codesAllowed). */
+/** The typed-code half of the pairing page, offered only where codes are accepted (codesAllowed). */
 const CODE_FORM = `<p>Or type the 6-digit code shown there:</p>
 <form method="get" action="/api/pair"><input name="code" inputmode="numeric" pattern="[0-9 ]*" maxlength="7" autocomplete="one-time-code" placeholder="000 000" aria-label="Pairing code" autofocus><button>Pair</button></form>`
 

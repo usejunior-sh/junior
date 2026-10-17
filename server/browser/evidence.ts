@@ -10,9 +10,7 @@ export const viewportLabel = (v: Viewport | null): string => {
   return `${v.width}×${v.height}${name ? ` ${name}` : v.mobile ? ' mobile' : ''}`
 }
 
-// ---------------------------------------------------------------------------
 // Evidence: what the agent saw, kept per session on disk.
-// ---------------------------------------------------------------------------
 
 export class ShotStore {
   constructor(readonly root: string) {}
@@ -78,7 +76,7 @@ const KIND_LABEL: Record<ShotKind, string> = { screenshot: 'Screenshot', checkpo
 
 /**
  * The Verification note (.docs/browser.md, Proof): every turn that used the
- * browser, newest first — what the agent said it did, and the screenshots,
+ * browser, newest first, what the agent said it did, and the screenshots,
  * checkpoints and diffs it took to see it. Rewritten after each such turn.
  */
 export function renderVerification(o: { title: string; workspaceId: string; sessionId: string; turns: VerifiedTurn[]; shots: Shot[] }): string {

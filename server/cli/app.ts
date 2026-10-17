@@ -6,7 +6,7 @@ import { pkgVersion, DEFAULT_PORT } from '../state.js'
 import { explicitPort } from './args.js'
 import { bold, box, cyan, die, dim, execFileP, green, row, tilde } from './ui.js'
 
-// --- macOS desktop app --------------------------------------------------------
+// macOS desktop app
 // A dependency-free way to run triage in its own window, Dock icon and Cmd-Tab
 // entry with no browser chrome: a tiny .app bundle whose launcher opens the UI
 // in a dedicated, chromeless Chrome profile (Chrome's --app mode). macOS only;
@@ -119,10 +119,10 @@ async function appInstall(port: number) {
     try {
       await buildIcns(master, path.join(resources, 'triage.icns'))
     } catch {
-      // The icon is cosmetic — a bad sips/iconutil shouldn't fail the install.
+      // The icon is cosmetic: a bad sips/iconutil shouldn't fail the install.
     }
   }
-  // Reclaim the dedicated Chrome profile older versions created — the launcher
+  // Reclaim the dedicated Chrome profile older versions created, the launcher
   // now reuses the default profile, so this directory is dead weight.
   rmSync(path.join(os.homedir(), '.triage', 'app-chrome'), { recursive: true, force: true })
   // Nudge LaunchServices to register the new bundle so the icon appears.

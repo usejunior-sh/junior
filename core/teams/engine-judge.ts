@@ -2,10 +2,6 @@ import { taskLoop } from './recipe.js'
 import { bump, clip, currentTask, horizonText } from './engine-plan.js'
 import type { Action, RunGoal, TeamRun } from './engine-types.js'
 
-// ---------------------------------------------------------------------------
-// Goals: the done-when, getting unstuck, waiting on the world, your questions
-// ---------------------------------------------------------------------------
-
 export const MAX_GOAL_WAIT_MINUTES = 7 * 24 * 60
 export const MAX_GOAL_QUESTIONS = 40
 

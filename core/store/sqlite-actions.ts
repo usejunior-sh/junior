@@ -2,10 +2,6 @@ import { DatabaseSync } from 'node:sqlite'
 import { type ActionRecord, isActionKind, isActionStatus, isActionWhy, isActionAllowedBy, type ActionActor, type ActionStatus, type ActionHistoryEntry } from '../actions/types.js'
 import type { ActionStore, ActionQuery } from './types.js'
 
-// ---------------------------------------------------------------------------
-// Outbound actions (core/actions)
-// ---------------------------------------------------------------------------
-
 type ActionRow = {
   id: string
   session_id: string
@@ -106,7 +102,7 @@ const isActor = (v: string): v is ActionActor => v === 'agent' || v === 'you' ||
 export class SqliteActions implements ActionStore {
   constructor(private db: DatabaseSync) {}
 
-  /** Rows → records, each with its calls in the order they were folded in — one calls query per 500 rows. */
+  /** Rows → records, each with its calls in the order they were folded in. One calls query per 500 rows. */
   private hydrate(rows: ActionRow[]): ActionRecord[] {
     if (!rows.length) return []
     const calls = new Map<string, string[]>()

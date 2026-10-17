@@ -1,7 +1,6 @@
 /**
- * GitHub source — ported from hey-triage (src/sources/github.ts). Shells out
- * to `gh` (vision principle 5: prefer the CLI the user already has and has
- * already authenticated over an SDK + token management). One GraphQL round
+ * GitHub source. Shells out to `gh`: prefer the CLI the user already has and
+ * has already authenticated over an SDK + token management. One GraphQL round
  * trip covers all three searches. Deterministic: no LLM anywhere.
  */
 import { execFile } from 'node:child_process'
@@ -79,7 +78,7 @@ interface RawNode {
  * @param repos owner/name repos to scope to; empty = all repos. GitHub caps
  * search queries at 256 chars: qualify the query when the repo list fits,
  * otherwise fetch wider and filter client-side (may miss items beyond the
- * first page in very noisy accounts — acceptable for now).
+ * first page in very noisy accounts, acceptable for now).
  */
 export async function fetchGitHub(repos: string[] = [], now = Date.now()): Promise<WorkItem[]> {
   const login = await ghLogin()
@@ -124,7 +123,7 @@ export async function fetchGitHub(repos: string[] = [], now = Date.now()): Promi
 // Closed/merged PRs the user is involved in, for source-side completion
 // (.docs/jobs-v2.md): a tracked open item whose PR merged/closed is
 // auto-done with evidence, never silently removed. `involves:` covers authored,
-// mentioned, review-requested, and commented — broad enough to catch anything
+// mentioned, review-requested, and commented, broad enough to catch anything
 // the open searches surfaced.
 const closedQuery = (first: number) => `
 query($closedQ: String!) {
@@ -134,7 +133,7 @@ query($closedQ: String!) {
 }`
 
 export interface ClosedPr {
-  /** the work-item id this PR would have — "github:owner/repo#123" */
+  /** the work-item id this PR would have, "github:owner/repo#123" */
   id: string
   state: 'closed' | 'merged'
   url: string

@@ -1,5 +1,5 @@
 /**
- * Labels — what an item asks of you, in one word. Six, hardcoded: the inbox
+ * Labels: what an item asks of you, in one word. Six, hardcoded: the inbox
  * reads by label ("3 replies · 2 reviews"), not by where an item came from.
  *
  * Scanner kinds map to a label and keep their own BASE weight and group
@@ -19,7 +19,7 @@ export interface LabelDef {
   name: string
   /** the header's count noun, one and many: "1 reply", "3 replies" */
   noun: [string, string]
-  /** fed to the job prompt — how the model picks this label */
+  /** fed to the job prompt: how the model picks this label */
   meaning: string
   group: Group
   /** BASE weight for a job hit with this label */

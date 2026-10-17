@@ -1,15 +1,14 @@
 /**
- * Goal tool signatures, locked before the engine is built.
+ * Goal tool signatures.
  *
- * GOAL_TOOLS join the triage MCP contract (core/mcp/tools.ts `TOOLS`, and the
- * zod copy `goalMcpTools` in server/goals.ts) in M1 — every transport, idempotent like the
- * upserts. ENGINE_TOOLS are served only to a goal's lead, on its per-wake SDK
- * server (M3): the lead decides through them, and the engine carries each
- * decision out. GOAL_TOOLS are registered (M1); ENGINE_TOOLS not yet.
+ * GOAL_TOOLS are part of the triage MCP contract (core/mcp/tools.ts `TOOLS`,
+ * and the zod copy `goalMcpTools` in server/goals.ts), served by every
+ * transport and idempotent like the upserts. ENGINE_TOOLS are served only to a
+ * goal's lead, on its per-wake SDK server: the lead decides through them, and
+ * the engine carries each decision out.
  *
  * Field names are camelCase, as the rest of the MCP surface is (`updatedAt`,
- * `budgetUsd`) — including the plan-step JSON in plan.md, which the brief
- * sketched in snake_case.
+ * `budgetUsd`), including the plan-step JSON in plan.md.
  */
 import { GOAL_STATES, STEP_ROLES, type GateEvaluator, type GoalHorizon, type GoalPlan, type GoalState, type SessionOutcome, type StepRole } from './types.js'
 
@@ -237,7 +236,7 @@ export const ENGINE_TOOLS: readonly ToolDef[] = [
   },
 ]
 
-// --- the inputs, as the handlers will receive them after validation ---------
+// the inputs, as the handlers will receive them after validation
 
 /** A plan as tools carry it: GoalPlan with the budget flattened, and the defaults the engine fills (policies) left out. */
 export type PlanInput = Omit<GoalPlan, 'budget' | 'policies' | 'horizon' | 'team' | 'mayDo' | 'models'> &

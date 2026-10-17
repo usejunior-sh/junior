@@ -20,7 +20,7 @@ export function makeTriageMcp(rt: WorkspaceRuntime) {
   return createSdkMcpServer({
     name: 'triage',
     version: VERSION,
-    // Always load triage's tools, never defer them behind tool search — and,
+    // Always load triage's tools, never defer them behind tool search, and,
     // as a documented side effect, block session startup until this server is
     // connected (capped at the SDK's 5s connect timeout). Without it, when the
     // user has many ~/.claude connectors, triage loses the init connection race
@@ -31,7 +31,7 @@ export function makeTriageMcp(rt: WorkspaceRuntime) {
     alwaysLoad: true,
     // What triage is, in the one place the SDK will show a model before it
     // picks a tool. Static by construction (shared/triageContext.ts) so it
-    // caches, and shared verbatim with the stdio shim — one contract, two
+    // caches, and shared verbatim with the stdio shim, one contract, two
     // transports, one explanation of it.
     instructions: TRIAGE_MCP_INSTRUCTIONS,
     tools: [

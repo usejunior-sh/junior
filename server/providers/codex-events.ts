@@ -1,5 +1,5 @@
 /**
- * Codex's app-server notifications as `ProviderEvent`s — the one place that
+ * Codex's app-server notifications as `ProviderEvent`s: the one place that
  * knows which notification means what. Pure: no process, no I/O, so a
  * recorded turn can be replayed through it in a test.
  *
@@ -25,7 +25,7 @@ const str = (v: unknown): string => (typeof v === 'string' ? v : '')
 /**
  * `model/list`'s answer as the picker's rows. Hidden models are dropped. Codex
  * names its efforts with the same strings triage does (low…max), plus a few of
- * its own (`ultra`) that triage has no slot for, so those are left out — a
+ * its own (`ultra`) that triage has no slot for, so those are left out. A
  * chosen effort then goes back to `turn/start` as the string Codex gave.
  */
 export function codexModels(data: unknown): ModelOption[] {
@@ -206,7 +206,7 @@ export function createCodexMapper(threadId: string) {
   }
 
   return {
-    /** The thread is up — its id is the resume key. */
+    /** The thread is up: its id is the resume key. */
     started(model?: string): ProviderEvent {
       return {
         kind: 'started',

@@ -1,12 +1,12 @@
 /**
- * Stage and turn — where a work item is in its life, and whose move it is
+ * Stage and turn, where a work item is in its life, and whose move it is
  * (.docs/work-item-model.md). Pure, browser-safe; time is an argument.
  *
  *   stage  new → briefing → ready → working → review → done
  *   turn   me | ai | others | none
  *
- * Both are derived from what triage can already see — the item's status and
- * kind, its newest brief job, its newest dispatched session — never from model
+ * Both are derived from what triage can already see, the item's status and
+ * kind, its newest brief job, its newest dispatched session, never from model
  * output. Where the rules can't see the truth ("waiting on Niraj"), the user
  * sets an override; it holds until something newer happens to the item (a
  * brief starts, a session ends), then the derived flow takes over again.
@@ -109,7 +109,7 @@ export interface FlowSignals {
 export interface ItemFlow {
   stage: Stage
   turn: Turn
-  /** on my turn: the specific ask — "read brief", "dispatch", "review result", "merge" */
+  /** on my turn, the specific ask: "read brief", "dispatch", "review result", "merge" */
   ask?: string
   /** something broke on this item: "CI failing", "brief failed", "session failed" */
   broken?: string

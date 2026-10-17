@@ -18,13 +18,13 @@ const clip = (s: string, n: number): string => {
 }
 const str = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? v : null)
 
-/** The part of a summary after "Create issue: " / "gh pr create: " — what it named. */
+/** The part of a summary after "Create issue: " / "gh pr create: ": what it named. */
 function named(summary: string): string | null {
   const i = summary.indexOf(': ')
   return i > 0 && i < 60 ? summary.slice(i + 2).trim() || null : null
 }
 
-/** "PR #2", "issue #14", "PX-197" — what a link (or a gh command) points at. */
+/** "PR #2", "issue #14", "PX-197", what a link (or a gh command) points at. */
 function refOf(link: string | null, summary: string): { pr?: string; issue?: string; key?: string } {
   const out: { pr?: string; issue?: string; key?: string } = {}
   const pr = link && /\/pull\/(\d+)/.exec(link)
@@ -116,8 +116,8 @@ export function actionTitle(r: Rec): string {
 }
 
 /**
- * The leading words of the command part a pattern matched — "git push", "gh
- * pr create" — or, without the command, the pattern's own words (first of
+ * The leading words of the command part a pattern matched, "git push", "gh
+ * pr create", or, without the command, the pattern's own words (first of
  * each alternative, flags left out).
  */
 function matchedWords(command: string | null, patternText: string): string {
@@ -126,7 +126,7 @@ function matchedWords(command: string | null, patternText: string): string {
   if (command) {
     for (const part of splitCommand(command)) {
       const at = matchPart(part, p)
-      // The pattern's own words as the command spelled them — `git -C dir push` reads "git push".
+      // The pattern's own words as the command spelled them, `git -C dir push` reads "git push".
       if (at >= 0) return unwrap(part).slice(0, Math.max(at, 1)).filter((w) => p.words.some((alts) => alts.includes(w))).join(' ')
     }
   }

@@ -30,7 +30,7 @@ export async function inboxRoutes({ req, url, json, access, rt }: ScopedCtx): Pr
           ? parsed.repos.filter((r): r is string => typeof r === 'string' && /^[\w.-]+\/[\w.-]+$/.test(r))
           : []
         await rt.store.config.set(REPOS_KEY, repos)
-        invalidateInbox(rt) // scope changed — force a resync on the next view
+        invalidateInbox(rt) // scope changed: force a resync on the next view
       }
       body = { ok: true, connected: await connectedRepos(rt), available: await affiliatedRepos(rt) }
     } catch (err) {
@@ -70,7 +70,7 @@ export async function inboxRoutes({ req, url, json, access, rt }: ScopedCtx): Pr
           await rt.store.checkouts.removeForProject(id)
           for (const c of checkoutList(rt)) if (c.projectId === id) rt.checkouts.delete(c.id)
           broadcast(rt, { type: 'checkouts', checkouts: checkoutList(rt) })
-          // Its jobs pause with a visible reason — never run somewhere else (job-spec.md, item 2).
+          // Its jobs pause with a visible reason, never run somewhere else.
           for (const w of await rt.store.jobs.list()) {
             if (w.projectId !== id) continue
             await rt.store.jobs.patchState(w.id, { enabled: false, configError: 'project removed — pick another project for this job' })

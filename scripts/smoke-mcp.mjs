@@ -3,9 +3,9 @@
 // Two halves, because triage speaks MCP through two doors and both have
 // broken silently before:
 //
-//   1. POST /mcp — the streamable-HTTP endpoint external clients (Claude
+//   1. POST /mcp: the streamable-HTTP endpoint external clients (Claude
 //      Code, Codex) point a URL at. Free: no model, no subprocess.
-//   2. Two *concurrent* chat sessions — the in-process server every web chat
+//   2. Two *concurrent* chat sessions: the in-process server every web chat
 //      gets. Regression test for the bug where one server instance was shared
 //      across a workspace, so the second live session got `status: "failed"`
 //      and a chat with no mcp__triage__* tools. One cheap turn each.

@@ -1,10 +1,10 @@
 /**
- * The macOS LaunchAgent that keeps triage running (job-spec.md, item 3.7).
+ * The macOS LaunchAgent that keeps triage running.
  * Jobs only run while the server runs; a detached `triage start` dies on
  * reboot or crash. A user LaunchAgent with KeepAlive restarts it, and runs as
  * the user, so it can reach the login keychain where Claude's credentials live.
- * Ported from wakecron's launchd.ts. Shared by the CLI (install/uninstall/
- * start/stop) and the server (System status shows whether it is installed).
+ * Shared by the CLI (install/uninstall/start/stop) and the server (System
+ * status shows whether it is installed).
  */
 import { execFile } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -88,7 +88,7 @@ ${envXml}
 /**
  * Write the plist and load it. Replaces an existing agent.
  *
- * `load: false` writes the plist and stops there — launchd reads the folder at
+ * `load: false` writes the plist and stops there, launchd reads the folder at
  * login, so the agent takes effect from the next one. That is the only safe
  * option while a server is already on the port: bootstrapping now would start a
  * second one that can't bind and crash-loops against KeepAlive.
@@ -108,7 +108,7 @@ export async function installLaunchAgent(spec: LaunchAgentSpec, opts: { load?: b
 /**
  * Does the installed plist run exactly this node + script? An app that moved,
  * or a plist left by an install that has since been removed, points somewhere
- * that no longer exists — so it is worse than no agent at all: it looks healthy
+ * that no longer exists, so it is worse than no agent at all: it looks healthy
  * and restarts nothing.
  */
 export function launchAgentPointsAt(node: string, script: string): boolean {

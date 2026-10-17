@@ -28,7 +28,7 @@ import { sortForWorkspace } from '../session/actions-record.js'
 export type JobPreview = {
   id: string
   status: 'running' | 'ready' | 'failed'
-  /** the transcript, minus stream deltas — replayed to late subscribers like a session's log */
+  /** the transcript, minus stream deltas, replayed to late subscribers like a session's log */
   events: SessionEvent[]
   result?: JobPreviewResult
   error?: string
@@ -53,13 +53,11 @@ type RunSpec = {
 
 type PreviewSpec = Omit<RunSpec, 'project'> & { projectId: string }
 
-// ---------------------------------------------------------------------------
-// Folder MCP servers (job-spec.md, item 1): the `project` servers in a
+// Folder MCP servers: the `project` servers in a
 // folder's .mcp.json and the user's private `local` servers for that folder
-// (in Claude's own config). Read by triage and passed explicitly — never by
+// (in Claude's own config). Read by triage and passed explicitly, never by
 // loading the project's settings, which would also load its hooks, and hooks
 // are shell commands that would run unattended.
-// ---------------------------------------------------------------------------
 
 type FolderMcp = { servers: McpServers; scopes: Map<string, 'project' | 'local'> }
 
@@ -92,7 +90,7 @@ export async function folderMcpServers(rt: WorkspaceRuntime, cwd: string): Promi
 /**
  * Local-scope MCP servers the user configured for other folders (names only,
  * never their config). A job runs in one folder, so these aren't usable
- * here — but listing them tells the user which project to pick instead.
+ * here, but listing them tells the user which project to pick instead.
  */
 export async function localServersElsewhere(rt: WorkspaceRuntime, cwd: string, here: Connector[]): Promise<Array<{ name: string; folder: string }>> {
   const { local } = await rt.provider.discovery.configuredMcp({ cwd, env: rt.env })
@@ -116,7 +114,7 @@ export async function jobLimits(rt: WorkspaceRuntime, w: { timeoutMs?: number; m
  * The run spec every job run shares, real or dry. Same prompt, same fence:
  * built-in tools limited to what the grants need, the allowlist so granted
  * tools never prompt, unattended so nothing else ever does, and the fence as a
- * veto so nothing else ever runs — whatever the user's own global allow rules
+ * veto so nothing else ever runs, whatever the user's own global allow rules
  * say. Runs work in the project folder and nowhere else.
  */
 export async function jobQuery(
@@ -153,7 +151,7 @@ export async function jobQuery(
     ...(spec.agents?.length ? { agents: spec.agents } : {}),
   })
   // A job's skills and agents: only the ones it names load, checked again
-  // here — the library may have changed since the file was. The workspace
+  // here: the library may have changed since the file was. The workspace
   // library comes in as its plugin only when the job names something in it.
   const skills = spec.skills ?? []
   const agents = spec.agents ?? []
@@ -202,7 +200,7 @@ export const noConnectorError = (tools: JobToolGrant[]) =>
  * Start a dry run of a job as the form currently describes it. Same prompt,
  * tools and fences as a real run; the write tool only collects. The run is
  * streamed over the WebSocket under an ephemeral session id so the form can
- * show the transcript live, but nothing is persisted — no session row, no
+ * show the transcript live, but nothing is persisted. No session row, no
  * events, no items, no artifact. The caller polls for the outcome.
  */
 export function startJobPreview(rt: WorkspaceRuntime, spec: PreviewSpec): string {

@@ -4,7 +4,7 @@
  *
  *   <workspace>/agents/<name>.md   a Claude Code agent file (name, description,
  *                                  model, effort, color, tools + the prompt body)
- *   <workspace>/teams/<name>.md    a recipe — steps, fan-out, gates, budget
+ *   <workspace>/teams/<name>.md    a recipe, steps, fan-out, gates, budget
  *                                  (core/teams/recipe.ts)
  *   <workspace>/teams/.seeded.json what triage wrote, so edits are never clobbered
  *
@@ -32,9 +32,7 @@ import { SHIPPED_RECIPES } from './team-recipes.js'
 // Agent files are Claude Code's own format, so their `tools` line is in its tool names.
 import { CAN_TOOLS, toolsFor } from './providers/claude-config.js'
 
-// ---------------------------------------------------------------------------
-// Defaults — seeded into every workspace (see seed())
-// ---------------------------------------------------------------------------
+// Defaults: seeded into every workspace (see seed())
 
 const DEFAULT_AGENTS: AgentSpec[] = [
   {
@@ -140,10 +138,6 @@ const DEFAULT_AGENTS: AgentSpec[] = [
   },
 ]
 
-// ---------------------------------------------------------------------------
-// Files
-// ---------------------------------------------------------------------------
-
 export const slugify = (s: string): string =>
   s
     .toLowerCase()
@@ -193,7 +187,7 @@ export function serializeAgent(a: AgentSpec, source: string): string {
   return serializeFrontmatter(data, `\n${a.prompt.trim()}\n`)
 }
 
-/** What triage wrote, per file — the difference between "untouched" and "yours". */
+/** What triage wrote, per file, the difference between "untouched" and "yours". */
 type Manifest = { version: 1; files: Record<string, { hash: string | null; removed?: boolean }> }
 
 const SHIPPED: Record<string, string> = Object.fromEntries([
@@ -375,7 +369,7 @@ export class TeamLibrary {
     await atomicWrite(file, serializeRecipe(r, 'local'))
   }
 
-  /** Delete a file. A deleted default stays deleted — the manifest remembers it. Teams that used a deleted agent list it as missing. */
+  /** Delete a file. A deleted default stays deleted: the manifest remembers it. Teams that used a deleted agent list it as missing. */
   async remove(kind: 'agent' | 'team', name: string): Promise<void> {
     if (!isLibraryName(name)) throw new Error('no such file')
     const rel = `${kind === 'agent' ? 'agents' : 'teams'}/${name}.md`
@@ -406,9 +400,7 @@ async function atomicWrite(file: string, content: string): Promise<void> {
   await rename(tmp, file)
 }
 
-// ---------------------------------------------------------------------------
-// Validation — one place, for Settings and the API
-// ---------------------------------------------------------------------------
+// Validation: one place, for Settings and the API
 
 const EFFORT_SET = new Set<string>(EFFORTS)
 
@@ -436,7 +428,7 @@ export function agentFrom(raw: unknown): AgentSpec {
 }
 
 /**
- * What the model reads for another agent's message — the transcript shows the
+ * What the model reads for another agent's message. The transcript shows the
  * raw text with a badge instead. It is framed so it can't pass for the user.
  */
 export function frameTeamMessage(fromLabel: string, text: string): string {
@@ -470,7 +462,7 @@ function isOneCheck(cmd: string, checks: string[]): boolean {
 }
 
 /**
- * The project's own checks, from its package.json: typecheck, lint, test — the
+ * The project's own checks, from its package.json: typecheck, lint, test. The
  * free verification that runs before any checker is paid (Kiro, Copilot). Job
  * modes and npm's placeholder test script are skipped.
  */

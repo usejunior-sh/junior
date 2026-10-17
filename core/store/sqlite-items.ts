@@ -68,7 +68,7 @@ function toWorkItem(r: WorkItemRow): WorkItem {
   }
 }
 
-/** Lifecycle fields live in columns, not the payload — strip before storing. */
+/** Lifecycle fields live in columns, not the payload, strip before storing. */
 function payloadOf(item: WorkItem): string {
   const { status, returned, priority, ingestedAt, dueAt, dueSource, ...rest } = item
   void status; void returned; void priority; void ingestedAt; void dueAt; void dueSource

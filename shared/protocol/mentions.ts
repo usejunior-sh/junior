@@ -1,13 +1,11 @@
 
 
-// ---------------------------------------------------------------------------
-// Mentions — `@` references typed into a composer. Claude Code's own `@file`
+// Mentions: `@` references typed into a composer. Claude Code's own `@file`
 // is a feature of its terminal UI, not of the agent: the SDK passes text
 // through verbatim. So the composer picks, the server resolves at send time,
 // and the model gets the content as extra blocks on the same message. One
-// shape for every kind so the picker, the chips and the wire grow together —
-// adding a kind (an artifact, say) is a new `MentionKind` plus a resolver.
-// ---------------------------------------------------------------------------
+// shape for every kind so the picker, the chips and the wire grow together.
+// Adding a kind (an artifact, say) is a new `MentionKind` plus a resolver.
 
 export const MENTION_KINDS = ['file', 'item', 'session', 'artifact'] as const
 export type MentionKind = (typeof MENTION_KINDS)[number]
@@ -23,11 +21,11 @@ export type Mention = {
    * artifact id (the markdown body rides the message, like a small file).
    */
   ref: string
-  /** what the chip shows — the basename, the item title, the session title */
+  /** what the chip shows: the basename, the item title, the session title */
   label: string
 }
 
-/** A mention after the server resolved it — what the model actually received. */
+/** A mention after the server resolved it, what the model actually received. */
 export type ResolvedMention = Mention & {
   /** file: size on disk */
   bytes?: number
@@ -49,7 +47,7 @@ export const MAX_INLINE_FILE_BYTES = 64 * 1024
 /** Ceiling for everything inlined on one message, files and listings together. */
 export const MAX_INLINE_TOTAL_BYTES = 200 * 1024
 
-/** `GET /api/files/search?root=&q=&limit=` — fuzzy matches under one folder. */
+/** `GET /api/files/search?root=&q=&limit=`: fuzzy matches under one folder. */
 export type FileHit = { path: string; dir: boolean }
 export type FileSearchResponse =
   | { ok: true; root: string; hits: FileHit[]; total: number; truncated: boolean }

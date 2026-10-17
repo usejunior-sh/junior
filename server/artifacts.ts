@@ -1,14 +1,14 @@
 /**
- * Artifacts (.docs/next-version.md, phase 1): markdown files with frontmatter
- * under one folder per workspace, indexed into SQLite so the UI, the `@`
- * picker and the MCP tools can list and link them without scanning disk.
+ * Artifacts: markdown files with frontmatter under one folder per workspace,
+ * indexed into SQLite so the UI, the `@` picker and the MCP tools can list and
+ * link them without scanning disk.
  *
  *   ~/.triage/workspaces/<id>/artifacts/
- *     .git/          every server-side write is a commit — the history of a
+ *     .git/          every server-side write is a commit, the history of a
  *                    brief's rewrites without a versions table
  *     notes/         human notes (and model notes written via the MCP tool)
- *     briefs/        phase 2: one brief per work item
- *     goals/         each goal's ledger (core/goals/ledger.ts) — not indexed here
+ *     briefs/        one brief per work item
+ *     goals/         each goal's ledger (core/goals/ledger.ts), not indexed here
  *
  * The file is the truth and this module never edits a file it did not write
  * except when asked to (PUT). Re-indexing is poll-on-demand: a listing older
@@ -17,7 +17,7 @@
  *
  * Nothing here reads outside `root`: paths are server-chosen, relative, `.md`,
  * free of `..`, and the realpath of every file touched must sit under the
- * realpath of the root — the same containment rule as files.ts.
+ * realpath of the root. The same containment rule as files.ts.
  */
 import { execFile } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
@@ -34,28 +34,24 @@ const pExecFile = promisify(execFile)
 /** How long an index is trusted before the next read walks the folder again. */
 const INDEX_TTL_MS = 15_000
 
-// ---------------------------------------------------------------------------
-// Frontmatter — a deliberately small YAML subset, no dependency
+// Frontmatter: a deliberately small YAML subset, no dependency
 //
-//   ---
 //   key: bare scalar
 //   key: "quoted, with \" escapes"
 //   key: [a, b, "c d"]
 //   key:
 //     - a
 //     - b
-//   ---
 //   body…
 //
 // Unknown keys are kept and written back verbatim (as strings), so a file
 // carrying its own metadata survives a round trip through PUT.
-// ---------------------------------------------------------------------------
 
 export type FrontmatterValue = string | string[]
 export type Frontmatter = {
   data: Record<string, FrontmatterValue>
   body: string
-  /** false when a `---` block was present but did not parse — defaults were used */
+  /** false when a `---` block was present but did not parse, defaults were used */
   ok: boolean
   /** true when the file had any frontmatter block at all */
   present: boolean
@@ -161,9 +157,7 @@ export function serializeFrontmatter(data: Record<string, FrontmatterValue>, bod
   return lines.join('\n') + '\n' + body.replace(/^\n+/, '')
 }
 
-// ---------------------------------------------------------------------------
 // From a file to an index row
-// ---------------------------------------------------------------------------
 
 const asStrings = (v: FrontmatterValue | undefined): string[] =>
   Array.isArray(v) ? v : typeof v === 'string' && v ? [v] : []
@@ -215,10 +209,6 @@ function fromFile(rel: string, text: string, st: { mtimeMs: number; birthtimeMs:
   return { artifact, body: fm.body, data: d }
 }
 
-// ---------------------------------------------------------------------------
-// The index
-// ---------------------------------------------------------------------------
-
 export type WriteInput = {
   title: string
   body: string
@@ -234,7 +224,7 @@ export class ArtifactIndex {
   constructor(
     readonly root: string,
     private readonly store: Store,
-    /** called after any change to the index — the server broadcasts it */
+    /** called after any change to the index, the server broadcasts it */
     private readonly onChange: () => void,
   ) {}
 
@@ -248,7 +238,7 @@ export class ArtifactIndex {
           try {
             await pExecFile('git', ['init', '-q'], { cwd: this.root })
           } catch {
-            // no git — files still work, there is just no history
+            // no git: files still work, there is just no history
           }
         }
       })().catch(() => {
@@ -257,8 +247,6 @@ export class ArtifactIndex {
     }
     return this.ensured
   }
-
-  // -- paths ----------------------------------------------------------------
 
   /** A relative path this index is allowed to touch, or throw. */
   private rel(p: string): string {
@@ -272,7 +260,7 @@ export class ArtifactIndex {
   private async abs(rel: string): Promise<string> {
     const target = path.join(this.root, ...this.rel(rel).split('/'))
     const realRoot = await realpath(this.root)
-    // The file may not exist yet (a create) — check the deepest existing ancestor.
+    // The file may not exist yet (a create), check the deepest existing ancestor.
     let probe = target
     while (!existsSync(probe)) probe = path.dirname(probe)
     const real = await realpath(probe)
@@ -280,7 +268,7 @@ export class ArtifactIndex {
     return target
   }
 
-  // -- indexing -------------------------------------------------------------
+  // indexing
 
   private async walk(): Promise<string[]> {
     const out: string[] = []
@@ -351,7 +339,7 @@ export class ArtifactIndex {
         await this.indexFile(rel)
         changed = true
       } catch {
-        // unreadable file — leave whatever row exists
+        // unreadable file: leave whatever row exists
       }
     }
     for (const row of rows) {
@@ -363,7 +351,7 @@ export class ArtifactIndex {
     return changed
   }
 
-  // -- reads ----------------------------------------------------------------
+  // reads
 
   /** The row plus the file's body and raw frontmatter, or null when unknown. */
   async read(id: string): Promise<(ArtifactFile & { abs: string }) | null> {
@@ -381,7 +369,7 @@ export class ArtifactIndex {
     }
   }
 
-  // -- writes ---------------------------------------------------------------
+  // writes
 
   private async writeText(rel: string, text: string): Promise<void> {
     const abs = await this.abs(rel)
@@ -400,7 +388,7 @@ export class ArtifactIndex {
       await git(['add', '-A'])
       await git(['commit', '-q', '-m', message])
     } catch {
-      // nothing to commit, or git unavailable — the file is written either way
+      // nothing to commit, or git unavailable, the file is written either way
     }
   }
 
@@ -413,7 +401,7 @@ export class ArtifactIndex {
   }
 
   /**
-   * Write a file at a known path (phase 2's briefs: one fixed path per item),
+   * Write a file at a known path (a brief: one fixed path per item),
    * preserving `id` and `created` when a file is already there.
    */
   async writeAt(rel: string, input: WriteInput): Promise<Artifact> {

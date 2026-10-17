@@ -1,5 +1,5 @@
 /**
- * Folds a session's event log into the shell commands it ran — the Bash pill's
+ * Folds a session's event log into the shell commands it ran. The Bash pill's
  * clock and the dock's background rows read this. Pure and memoisable, like
  * `buildAgents`.
  *
@@ -7,7 +7,7 @@
  * with task_type 'local_bash' and the call's tool_use id, then `task_updated` /
  * `task_notification` until it settles. A background one (`run_in_background`,
  * a timeout, or moved there mid-run) answers its tool_use straight away with a
- * receipt — so the call looks finished while the shell keeps going, and only
+ * receipt, so the call looks finished while the shell keeps going, and only
  * the notification says how it ended. The CLI doesn't stream a shell's output
  * to us; a background shell writes it to `outputFile`.
  */
@@ -35,7 +35,7 @@ export type ShellRun = {
 }
 
 /**
- * The tool_result a background shell answers its call with — a receipt, not
+ * The tool_result a background shell answers its call with. A receipt, not
  * its output. Only believed when its ID is the task the CLI started for that
  * call: a foreground command can print this text too.
  */

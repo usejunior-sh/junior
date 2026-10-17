@@ -18,7 +18,7 @@ import { invalidateInbox } from '../ws/send.js'
 import { briefFiledItem } from '../brief-run.js'
 
 /**
- * Identity for a filed item, derived from the link the scanner saw — never from
+ * Identity for a filed item, derived from the link the scanner saw, never from
  * the job. A Slack permalink → slack:<tail>; a GitHub PR/issue URL →
  * github:owner/repo#n; a Linear URL or key → linear:KEY-n. Anything else is
  * rejected: an id we cannot canonicalize cannot dedupe.
@@ -51,7 +51,7 @@ function webHost(url: string): string {
   }
 }
 
-/** The upsert tool's arguments — shared by the real run and the dry run so the prompt fits both. */
+/** The upsert tool's arguments: shared by the real run and the dry run so the prompt fits both. */
 export const UPSERT_SHAPE = {
   url: z.string().describe('the canonical link: Slack permalink, Linear issue URL or key, GitHub PR/issue URL, or the web page URL'),
   title: z.string().describe('a one-line summary'),
@@ -73,7 +73,7 @@ export const DIGEST_SHAPE = {
  * The per-run ingestion tool. Upsert-only, link-shaped: the scanner passes
  * what it can see (a link, title, why, timestamp, refs); the server derives
  * identity from the link and stamps kind and provenance (this job + run). So
- * the model only ADDS candidates and annotates why — lifecycle stays in code.
+ * the model only ADDS candidates and annotates why, lifecycle stays in code.
  */
 export function makeScanMcp(rt: WorkspaceRuntime, job: Job, runId: string, onUpsert: (outcome: UpsertOutcome) => void) {
   let count = 0
@@ -127,7 +127,7 @@ export function makeScanMcp(rt: WorkspaceRuntime, job: Job, runId: string, onUps
               outcome,
               workspace: rt.meta.id,
             })
-            // Stateless runs need to hear about repeats (job-spec.md, item 4).
+            // Stateless runs need to hear about repeats.
             if (outcome === 'inserted') return okResult(`new: filed ${item.id}`)
             if (reopened) return okResult(`already filed; it was done and has returned to the inbox: ${item.id}`)
             const status = (await rt.store.items.get(item.id))?.status ?? 'open'
@@ -151,8 +151,8 @@ const digestRelPath = (job: Job): string => `reports/${slug(job.title) || 'diges
 /**
  * The digest job's write tool. One call per run: the server rewrites the
  * job's report artifact in place, upserts the job's single rolling item
- * (id `job:<id>`) with a fresh timestamp — so a done item returns with the
- * "returned" marker — and links report → item. The model writes prose; code
+ * (id `job:<id>`) with a fresh timestamp, so a done item returns with the
+ * "returned" marker, and links report → item. The model writes prose; code
  * owns identity, lifecycle and the link, as everywhere else.
  */
 function makeDigestMcp(rt: WorkspaceRuntime, job: Job, runId: string, onWrite: (outcome: UpsertOutcome) => void) {

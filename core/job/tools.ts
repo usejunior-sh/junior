@@ -1,5 +1,5 @@
 /**
- * What a job run may call (job-spec.md, items 1 and 2). A job stores an
+ * What a job run may call. A job stores an
  * explicit list of tool grants, resolved to full tool names when the user
  * saves it, so the fence never grows silently. Two kinds of source:
  *
@@ -9,7 +9,7 @@
  *   global, local, project, plugins), discovered by the connector probe.
  *
  * Every run also gets its project's read-only code tools, scoped to the
- * project folder by `fenceDecision` (fence.ts) — a PreToolUse check that is
+ * project folder by `fenceDecision` (fence.ts). A PreToolUse check that is
  * the real fence, independent of whatever allow rules the user's settings carry.
  *
  * Pure and browser-safe: shared by server and web.
@@ -51,14 +51,10 @@ export function leafOf(fullName: string): string {
 /** The display name of a server, without the "claude.ai " prefix the SDK reports. */
 export const serverLabel = (server: string): string => server.replace(/^claude\.ai /, '')
 
-// ---------------------------------------------------------------------------
-// Built-in grants
-// ---------------------------------------------------------------------------
-
 export const WEB_TOOLS = ['WebSearch', 'WebFetch']
 export const MAX_WEB_FETCHES = 10
 
-// `gh` read verbs only — no `gh api` (it can mutate), no pr merge/close/comment.
+// `gh` read verbs only: no `gh api` (it can mutate), no pr merge/close/comment.
 export const GITHUB_TOOLS = [
   'Bash(gh pr list:*)', 'Bash(gh pr view:*)', 'Bash(gh pr diff:*)', 'Bash(gh pr checks:*)', 'Bash(gh pr status:*)',
   'Bash(gh issue list:*)', 'Bash(gh issue view:*)', 'Bash(gh issue status:*)',
@@ -82,10 +78,8 @@ export const BUILTIN_TOOLS: Record<BuiltinToolId, string[]> = {
 
 export const builtinGrant = (id: BuiltinToolId): JobToolGrant => ({ source: { kind: 'builtin', id }, tools: [...BUILTIN_TOOLS[id]] })
 
-// ---------------------------------------------------------------------------
-// Curated presets for MCP servers — they win over the server's own read-only
+// Curated presets for MCP servers: they win over the server's own read-only
 // annotations, because some servers don't annotate.
-// ---------------------------------------------------------------------------
 
 const SLACK_READ = [
   'slack_search_public_and_private', 'slack_search_channels', 'slack_read_thread',
@@ -114,7 +108,7 @@ export type ProbedTool = { name: string; fullName: string; readOnly?: boolean; d
 const READ_NAME = /(^|[_-])(list|get|search|read|fetch|query|find|view|lookup|describe|show)([_-]|$)/i
 const WRITE_NAME = /(^|[_-])(create|update|delete|remove|send|post|add|set|write|upload|move|duplicate|convert|spawn|stop|edit|merge|close|archive|schedule|assign|comment)([_-]|$)/i
 
-/** The name suggests a read (and no write verb). A hint only — never a pre-check. */
+/** The name suggests a read (and no write verb). A hint only, never a pre-check. */
 export const looksReadOnly = (name: string): boolean => READ_NAME.test(name) && !WRITE_NAME.test(name)
 
 /**
@@ -133,9 +127,7 @@ export function defaultToolsFor(server: string, tools: ProbedTool[]): string[] {
   return tools.filter((t) => t.readOnly === true && t.destructive !== true).map((t) => t.fullName)
 }
 
-// ---------------------------------------------------------------------------
 // Legacy connectors → grants (jobs saved before grants existed)
-// ---------------------------------------------------------------------------
 
 export type LegacyConnector = 'slack' | 'linear' | 'github' | 'web'
 
@@ -166,7 +158,7 @@ export function grantsFrom(raw: unknown): { grants: JobToolGrant[] } | { error: 
     if (s.kind === 'builtin') {
       if (s.id !== 'web' && s.id !== 'github' && s.id !== 'files-write') return { error: `unknown built-in "${String(s.id)}"` }
       source = { kind: 'builtin', id: s.id }
-      // A built-in grant is exactly its fixed list — never whatever the client sent.
+      // A built-in grant is exactly its fixed list, never whatever the client sent.
       out.push({ source, tools: [...BUILTIN_TOOLS[s.id]] })
     } else if (s.kind === 'mcp') {
       if (typeof s.server !== 'string' || !s.server.trim()) return { error: 'an MCP grant needs a server name' }
@@ -200,9 +192,7 @@ export const hasBuiltin = (grants: JobToolGrant[], id: BuiltinToolId): boolean =
 export const mcpGrants = (grants: JobToolGrant[]) =>
   grants.filter((g): g is JobToolGrant & { source: Extract<JobToolSource, { kind: 'mcp' }> } => g.source.kind === 'mcp')
 
-// ---------------------------------------------------------------------------
 // Composition: what the SDK is handed
-// ---------------------------------------------------------------------------
 
 export type RunOutput = 'items' | 'digest'
 

@@ -1,5 +1,5 @@
 /**
- * "Open in…" — the editors installed on this Mac, found by bundle id, never
+ * "Open in…": the editors installed on this Mac, found by bundle id, never
  * configured. Spotlight (`mdfind`) answers first; the usual Applications
  * folders back it up when indexing is off. macOS only: elsewhere the list is
  * empty and only "Reveal" is offered.
@@ -41,7 +41,7 @@ async function installed(e: Known): Promise<boolean> {
     const { stdout } = await pExecFile('mdfind', [`kMDItemCFBundleIdentifier == '${e.bundleId}'`], { timeout: 4000 })
     if (stdout.trim()) return true
   } catch {
-    // Spotlight off or slow — fall through to the folders
+    // Spotlight off or slow: fall through to the folders
   }
   for (const dir of ['/Applications', path.join(os.homedir(), 'Applications')]) {
     if (await stat(path.join(dir, e.app)).then(() => true, () => false)) return true

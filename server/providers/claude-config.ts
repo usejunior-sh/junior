@@ -13,15 +13,11 @@ import path from 'node:path'
 import type { AgentCan } from '../../shared/protocol.js'
 import type { AgentTools, ConfiguredMcp, ProviderAuth, SpawnEnv } from './types.js'
 
-// ---------------------------------------------------------------------------
-// Auth
-// ---------------------------------------------------------------------------
-
 export const CLAUDE_API_KEY_VAR = 'ANTHROPIC_API_KEY'
 
 /**
  * The env overrides a workspace's auth spawns with. `undefined` for `inherit`
- * — the SDK resolves ~/.claude on its own — and for an api-key workspace with
+ * (the SDK resolves ~/.claude on its own), and for an api-key workspace with
  * no key stored yet.
  */
 export function claudeAuthEnv(auth: ProviderAuth): Record<string, string> | undefined {
@@ -31,10 +27,6 @@ export function claudeAuthEnv(auth: ProviderAuth): Record<string, string> | unde
 }
 
 export const claudeLoginCommand = (dir: string) => `CLAUDE_CONFIG_DIR=${dir} claude /login`
-
-// ---------------------------------------------------------------------------
-// Discovery
-// ---------------------------------------------------------------------------
 
 /** The config dir a spawn with `env` uses, when one is set; unset = the defaults. */
 const configDirOf = (env: SpawnEnv): string | undefined => env?.CLAUDE_CONFIG_DIR || process.env.CLAUDE_CONFIG_DIR || undefined
@@ -87,9 +79,7 @@ export function claudeUserMcpServer(name: string): Record<string, unknown> | nul
   }
 }
 
-// ---------------------------------------------------------------------------
-// Agent files — Claude Code's tool names behind each "can"
-// ---------------------------------------------------------------------------
+// Agent files: Claude Code's tool names behind each "can"
 
 /** What each "can" grants. Anything in this table an agent doesn't get is disallowed at spawn. */
 export const CAN_TOOLS: Record<AgentCan, string[]> = {
@@ -98,8 +88,8 @@ export const CAN_TOOLS: Record<AgentCan, string[]> = {
   run: ['Bash'],
   web: ['WebSearch', 'WebFetch'],
   // Not a built-in: the browser pane's own tools while Triage.app hosts them,
-  // else the user's chrome-devtools MCP server — loaded only for agents allowed
-  // it (every other connector is left out — see strictMcpConfig at spawn).
+  // else the user's chrome-devtools MCP server: loaded only for agents allowed
+  // it (every other connector is left out, see strictMcpConfig at spawn).
   browser: ['mcp__browser', 'mcp__chrome-devtools'],
 }
 /** Built-in tools a "can" governs; browser is an MCP server, handled by loading it or not. */
@@ -108,7 +98,7 @@ const GATED_TOOLS = (['read', 'edit', 'run', 'web'] as const).flatMap((c) => CAN
 /**
  * The only built-in tools a team member's subprocess is given at all. Everything
  * else Claude Code ships (subagents, skills, notebooks, …) stays out of the tool
- * list — each schema is re-read on every call (.docs/teams-cost.md).
+ * list. Each schema is re-read on every call (.docs/teams-cost.md).
  */
 export function builtinToolsFor(can: AgentCan[], opts: { ask?: boolean } = {}): string[] {
   return [...new Set(['TodoWrite', ...(opts.ask ? ['AskUserQuestion'] : []), ...GATED_TOOLS.filter((t) => toolsFor(can).includes(t))])]

@@ -1,6 +1,6 @@
 /**
  * Before/after for the browser's checkpoints: just enough PNG to read Chrome's
- * screenshots and write a diff image, and the diff itself. Zero dependencies —
+ * screenshots and write a diff image, and the diff itself. Zero dependencies:
  * Chrome writes plain 8-bit, non-interlaced RGB(A), so that is all this reads.
  */
 import zlib from 'node:zlib'

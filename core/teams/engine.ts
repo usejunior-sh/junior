@@ -1,5 +1,5 @@
 /**
- * The team run engine (Teams v2): triage — not an agent — moves a run through
+ * The team run engine (Teams v2): triage, not an agent, moves a run through
  * its recipe's steps. Pure: every function takes the run, changes it in place
  * and returns the actions the server must carry out (tell a worker, run the
  * project's checks, post a notice, finish). No clock reads, no I/O, so the whole
@@ -17,7 +17,7 @@
  *
  * The task loop: a recipe's contiguous `for-each: task` steps run once per task
  * on the plan, in order. Each task starts in a clean context (unless the change
- * step says `context: carry`) — what earlier tasks learned travels as the plan's
+ * step says `context: carry`), what earlier tasks learned travels as the plan's
  * notes, not as transcript. A task still failing past its fix rounds is marked
  * unresolved and the run moves on to the next one.
  *
@@ -40,10 +40,6 @@ export { MAX_GOAL_WAIT_MINUTES, MAX_GOAL_QUESTIONS } from './engine-judge.js'
 export { goalVerdict, unstick, wakeDue, wake, askYou, answerQuestion, acceptGoal, reopenGoal } from './engine-goal.js'
 export type { GoalVerdictInput } from './engine-goal.js'
 export { runPath, renderHandoff, workerAppend, planMessage } from './engine-messages.js'
-
-// ---------------------------------------------------------------------------
-// Transitions
-// ---------------------------------------------------------------------------
 
 /** You approved the card (perhaps edited): photograph the tree and start step 1. */
 export function approve(run: TeamRun, card: TeamCard): Action[] {
@@ -179,7 +175,7 @@ export function stampRun(run: TeamRun, workerId: string, stamp: { startSeq: numb
   Object.assign(r, stamp)
 }
 
-/** How a step message from triage begins — not a nudge, a resume, or a request to split. */
+/** How a step message from triage begins, not a nudge, a resume, or a request to split. */
 export const STEP_MESSAGE = /^(Task T\d+ \(\d+ of \d+\) — step "|Step "[^"]+" \(\d+ of \d+\))/
 
 /**
@@ -234,7 +230,7 @@ export type Submission = {
   surprises?: string[]
   /** approaches tried that didn't work, and why */
   failed?: string[]
-  /** files and symbols that matter here: "path — what it is" */
+  /** files and symbols that matter here: "path: what it is" */
   where?: string[]
   /** how to check this project: commands, URLs, what to look at */
   verify?: string[]
@@ -329,7 +325,7 @@ export function submit(run: TeamRun, sessionId: string, sub: Submission, at: num
   const mine = run.workerRuns.findLast((r) => r.workerId === w.id)
   if (mine && !mine.handoffId) mine.handoffId = h.id
 
-  // What the worker learned goes on the ledger — appended, never rewritten.
+  // What the worker learned goes on the ledger, appended, never rewritten.
   const task = s.forEach ? currentTask(run)?.id ?? null : null
   const line = (x: string) => clip(x.trim().split('\n')[0], 400)
   const add = (kind: LedgerKind, xs: string[] | undefined) => {
@@ -420,7 +416,7 @@ function advance(run: TeamRun): Action[] {
   return beginStep(run, run.step + 1)
 }
 
-/** The current task is over — done, or unresolved past its fix rounds. Start the next, or leave the loop. */
+/** The current task is over: done, or unresolved past its fix rounds. Start the next, or leave the loop. */
 export function finishTask(run: TeamRun, status: 'done' | 'unresolved', why?: string): Action[] {
   const loop = taskLoop(run.recipe)!
   const t = currentTask(run)!
@@ -467,7 +463,7 @@ export function checksDone(run: TeamRun, results: CheckResult[], at: number): Ac
   return next(run)
 }
 
-/** Another fix round on the change step, or — past the cap — move on (in the loop) or straight to the report. */
+/** Another fix round on the change step, or, past the cap, move on (in the loop) or straight to the report. */
 function fixOrGiveUp(run: TeamRun, s: RecipeStep, feedback: string, unresolved: string): Action[] {
   const back = run.recipe.steps.findIndex((x) => x.id === s.onFail!.backTo)
   const used = run.round - (run.roundFloor ?? 0)

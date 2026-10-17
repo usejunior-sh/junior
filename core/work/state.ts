@@ -2,7 +2,7 @@
  * Item lifecycle (.docs/jobs-v2.md). A work item is a durable fact: once
  * created it is never hard-deleted and never silently removed. It moves between
  * four states only via recorded transitions, and every transition is appended
- * to a per-item event log — the item's `status` is just a materialization of
+ * to a per-item event log. The item's `status` is just a materialization of
  * the latest event. Current state is always derivable from the log; any
  * mismatch is a visible bug.
  *
@@ -46,7 +46,7 @@ export interface ItemEvent {
   at: number
   actor: ItemActor
   event: ItemEventKind
-  /** evidence ref, archive reason, snoozeUntil, provenance — event-specific */
+  /** evidence ref, archive reason, snoozeUntil, provenance, event-specific */
   detail?: Record<string, unknown>
 }
 
@@ -81,7 +81,7 @@ export function eventForStatus(status: ItemStatus): ItemEventKind {
  * `done` and the source has a message newer than the moment it was marked done
  * → the item returns to `open`, marked `returned`. Archived items never reopen.
  * Snoozed items are woken by the snooze timer, not this rule. Never decided from
- * an LLM-reported timestamp — the caller passes the stored `done` time.
+ * an LLM-reported timestamp: the caller passes the stored `done` time.
  */
 export function shouldReopen(
   status: ItemStatus,

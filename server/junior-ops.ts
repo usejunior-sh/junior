@@ -23,11 +23,9 @@ import { actionViews } from './session/actions-record.js'
 import { libraryRootsFor } from './session/changes.js'
 import { inboxAlerts } from './inbox/flow.js'
 
-// ---------------------------------------------------------------------------
 // Junior (.docs/junior-goals-teams): the persona, the Junior page's day, and
 // today's plan. The rules are pure and tested in core/junior/; everything
 // here only gathers their inputs from the runtime and the store.
-// ---------------------------------------------------------------------------
 
 const PERSONA_KEY = 'junior.persona'
 
@@ -57,7 +55,7 @@ export function userFirstName(): Promise<string | null> {
   return youName
 }
 
-/** "the Mentions job", "the Build team", or the session's title — where a send came from. */
+/** "the Mentions job", "the Build team", or the session's title, where a send came from. */
 function sendOrigin(v: ActionView): string {
   if (v.sessionKind === 'job-run') return v.jobTitle ? `the ${v.jobTitle} job` : 'a job'
   if (v.teamRunId) return v.teamLabel ? `the ${v.teamLabel} team` : 'a team'
@@ -93,7 +91,7 @@ export async function ensureToday(rt: WorkspaceRuntime, now = Date.now()): Promi
 }
 
 /**
- * The page opened: the first open of a day drafts the plan, once — unless
+ * The page opened: the first open of a day drafts the plan, once, unless
  * this is the first open ever, where Junior introduces itself instead.
  * `force` = the user asked for a draft ("draft one from my inbox").
  */
@@ -113,7 +111,7 @@ export async function openTodayOp(rt: WorkspaceRuntime, opts: { force?: boolean 
   return todayView(rt, date)
 }
 
-/** Read a running session's todo list for "step 2 of 3" — the last few hundred events are plenty. */
+/** Read a running session's todo list for "step 2 of 3". The last few hundred events are plenty. */
 async function sessionProgress(rt: WorkspaceRuntime, sessionId: string): Promise<TodoProgress | null> {
   const last = await rt.store.events.lastSeq(sessionId)
   const events = await rt.store.events.read(sessionId, Math.max(0, last - 400))

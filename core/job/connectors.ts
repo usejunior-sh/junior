@@ -1,5 +1,5 @@
 /**
- * The job run prompt (.docs/jobs-v2.md, job-spec.md items 1 and 4). The
+ * The job run prompt. The
  * tool fence lives in tools.ts / fence.ts; this file only tells the model how
  * to use what it was granted. Where to look inside a connector is the
  * instruction's job; the model finds channels, teams and labels itself.
@@ -46,15 +46,15 @@ export function composeRunPrompt(w: {
   output?: JobOutput
   /** default look-back when the instructions name none, from the schedule */
   lookbackMs: number
-  /** now, ISO — the run has no other clock */
+  /** now, ISO, the run has no other clock */
   nowIso: string
   /** legacy place hint from pre-connector jobs */
   scope?: string
   /** a catch-up run's lateness line (describeLateness) */
   lateness?: string
-  /** skills the job names — the only ones the Skill tool will load */
+  /** skills the job names: the only ones the Skill tool will load */
   skills?: string[]
-  /** subagents the job names — the only ones the Agent tool will start */
+  /** subagents the job names: the only ones the Agent tool will start */
   agents?: string[]
 }): string {
   const deferred = runDeferredTools(w.tools)

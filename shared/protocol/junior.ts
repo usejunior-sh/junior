@@ -1,9 +1,7 @@
 
 
-// ---------------------------------------------------------------------------
 // Junior (.docs/junior-goals-teams): the persona, the Junior page's day, and
 // today's plan. Domain types and the pure rules live in core/junior/.
-// ---------------------------------------------------------------------------
 
 export type { Persona, Voice } from '../../core/junior/persona.js'
 export type { Mood } from '../../core/junior/mood.js'
@@ -13,7 +11,7 @@ export type { AddedBy, Owner, PlanRow, PlanStatus, PlanView, TodayEntry } from '
 export type { CanDoFill, Offer } from '../../core/junior/offers.js'
 export type { MorningBrief, MorningRow } from '../../core/junior/morning.js'
 
-/** GET/PUT /api/persona — the workspace's persona; PUT takes a partial patch. */
+/** GET/PUT /api/persona: the workspace's persona; PUT takes a partial patch. */
 export type PersonaResponse =
   | {
       ok: true
@@ -45,7 +43,7 @@ export type JuniorSeen = {
   projects: string[]
 }
 
-/** GET /api/junior?since=&away= — everything the Junior page shows, in one read. */
+/** GET /api/junior?since=&away=: everything the Junior page shows, in one read. */
 export type JuniorDay = {
   /** what the user is called: a first name for the greeting, an initial for the "You" chip */
   you: { name: string | null; initial: string }
@@ -72,7 +70,7 @@ export type JuniorDay = {
 }
 export type JuniorDayResponse = { ok: true; day: JuniorDay } | { ok: false; error: string }
 
-/** GET /api/today, POST /api/today/open|add|remove — today's plan. */
+/** GET /api/today, POST /api/today/open|add|remove, today's plan. */
 export type TodayResponse = { ok: true; plan: import('../../core/junior/today.js').PlanView } | { ok: false; error: string }
 
 /**
@@ -81,7 +79,7 @@ export type TodayResponse = { ok: true; plan: import('../../core/junior/today.js
  */
 export type TodayAddRequest = { itemId?: string; title?: string; owner: import('../../core/junior/today.js').Owner }
 
-/** GET /api/today/match?q= — the open item a few typed words mean, if any. */
+/** GET /api/today/match?q=: the open item a few typed words mean, if any. */
 export type TodayMatchResponse =
   | { ok: true; match: { id: string; title: string; ref: string; onToday: boolean } | null }
   | { ok: false; error: string }

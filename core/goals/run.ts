@@ -1,10 +1,10 @@
 /**
- * The run loop (M3): what a goal does between plan approval and its result.
- * Pure — no I/O, no clock — so every decision is unit-tested
+ * The run loop: what a goal does between plan approval and its result.
+ * Pure, no I/O, no clock, so every decision is unit-tested
  * (test/goal-run.test.ts); server/goals.ts carries each one out.
  *
  * A running goal runs its lead alone, or up to `workerCap` workers at once
- * (M6: its team section, capped by the user's max team size). The scheduler
+ * (its team section, capped by the user's max team size). The scheduler
  * gives a queued goal slots and `nextWorkers` says who fills them: workers for
  * steps the lead dispatched, in plan order, else the lead. Workers for more
  * dispatched steps join a running goal as slots free up; the lead never runs
@@ -54,10 +54,6 @@ export const GOAL_SESSION_TIMEOUT_MS = 45 * 60_000
 export const BUDGET_WARN_AT = 0.8
 /** Claude Code caps a /goal condition. */
 export const GOAL_CONDITION_MAX = 500
-
-// ---------------------------------------------------------------------------
-// Whose session is next
-// ---------------------------------------------------------------------------
 
 export type WorkerSpec = { role: StepRole; stepId: string; brief: string; model: string | null; attempt: number }
 export type NextSession = { role: 'lead' } | ({ kind: 'worker' } & WorkerSpec)
@@ -132,10 +128,6 @@ export function nextSession(goal: Pick<Goal, 'plan'>, steps: readonly GoalStepSt
   return w ? { kind: 'worker', ...w } : { role: 'lead' }
 }
 
-// ---------------------------------------------------------------------------
-// After a session
-// ---------------------------------------------------------------------------
-
 export type OpenAsk = { kind: 'ask' | 'plan_change'; ev: GoalEvent }
 
 /** The question or plan change the user hasn't answered yet, if any. */
@@ -149,7 +141,6 @@ export function openAsk(events: readonly GoalEvent[]): OpenAsk | null {
   return null
 }
 
-/** Every step of the plan is done or dropped. */
 export function allDone(plan: GoalPlan | null, steps: readonly GoalStepState[]): boolean {
   if (!plan?.steps.length) return false
   return plan.steps.every((p) => FINISHED.has(steps.find((s) => s.stepId === p.id)?.status ?? 'pending'))
@@ -189,10 +180,6 @@ export function workerOutcome(row: Pick<GoalSessionRecord, 'outcome'> | undefine
   if (error) return row?.outcome === 'blocked' ? 'blocked' : 'failed'
   return row?.outcome ?? 'failed'
 }
-
-// ---------------------------------------------------------------------------
-// The lead's engine tools, checked
-// ---------------------------------------------------------------------------
 
 const stepOf = (plan: GoalPlan | null, id: string): PlanStep | undefined => plan?.steps.find((s) => s.id === id)
 
@@ -251,10 +238,6 @@ export function reportResult(
   return { ok: false, error: `no worker logged step ${r.stepId} done: dispatch_worker it, or ask the user` }
 }
 
-// ---------------------------------------------------------------------------
-// Plan changes
-// ---------------------------------------------------------------------------
-
 /**
  * The step rows after an accepted plan change: a step the new plan keeps keeps
  * its state (done stays done); a dropped step is skipped; a new one starts
@@ -294,10 +277,6 @@ export function planInputOf(plan: GoalPlan): Record<string, unknown> {
   })
 }
 
-// ---------------------------------------------------------------------------
-// The scheduler and the budget
-// ---------------------------------------------------------------------------
-
 /** Which queued goals start now: highest priority first, then the oldest, up to the free slots. */
 export function pickGoals<G extends Pick<Goal, 'id' | 'priority' | 'createdAt'>>(queued: readonly G[], running: number, cap: number): G[] {
   const free = Math.max(0, cap - running)
@@ -306,7 +285,6 @@ export function pickGoals<G extends Pick<Goal, 'id' | 'priority' | 'createdAt'>>
 
 export type BudgetCheck = { kind: 'ok' } | { kind: 'warn'; text: string } | { kind: 'stop'; text: string }
 
-/** Minutes of session time a goal has used. */
 export const minutesUsed = (sessions: readonly Pick<GoalSessionRecord, 'startedAt' | 'endedAt'>[], now: number) =>
   sessions.reduce((n, s) => n + Math.max(0, (s.endedAt ?? now) - s.startedAt), 0) / 60_000
 
@@ -320,10 +298,6 @@ export function budgetCheck(goal: Pick<Goal, 'budget' | 'spentUsd'>, minutes: nu
   if (cap !== null && minutes >= cap * BUDGET_WARN_AT) return { kind: 'warn', text: `Used ${Math.round(minutes)} of ${cap} minutes.` }
   return { kind: 'ok' }
 }
-
-// ---------------------------------------------------------------------------
-// Prompts
-// ---------------------------------------------------------------------------
 
 /** The lead's contract for a run wake, in its system prompt. Its tools are the `goal` server's. */
 export const LEAD_RUN_APPEND = `
@@ -418,9 +392,9 @@ export function leadRunPrompt(goal: Pick<Goal, 'id' | 'title' | 'doneWhen' | 'pl
 export type HeldAction = { id: string; summary: string; status: string }
 
 /**
- * What a reviewer reads instead of the ledger (M6, reviewer independence):
+ * What a reviewer reads instead of the ledger (reviewer independence):
  * the plan's steps and the change itself, never the builders' handoff, log
- * or transcript — it judges the diff against the done-when, not the story.
+ * or transcript. It judges the diff against the done-when, not the story.
  */
 export type ReviewView = { plan: GoalPlan | null; steps: readonly GoalStepState[]; diff: string }
 

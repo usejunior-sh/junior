@@ -25,11 +25,11 @@ import { broadcast, broadcastSessionList, invalidateInbox } from '../ws/send.js'
 import { teamRunOf, workerSpec } from '../team-run/state.js'
 
 /**
- * Send-back notes to the session that drafted the action — under exactly the
+ * Send-back notes to the session that drafted the action, under exactly the
  * constraints it drafted under, never more:
  * - a job run: a headless continuation of its own Claude session (resume),
- *   built by jobQuery like the run itself — the same grants, the same
- *   fence, the hold wrap — so the redraft is held for approval again and can
+ *   built by jobQuery like the run itself, the same grants, the same
+ *   fence, the hold wrap, so the redraft is held for approval again and can
  *   do nothing the job couldn't. One still running gets them when it ends.
  * - a team worker: revived as a worker (its tools, its permission mode, the
  *   hold veto), only while its run is still known; otherwise not at all.
@@ -70,7 +70,7 @@ export async function deliverSendBack(rt: WorkspaceRuntime, rec: ActionRecord): 
   if (delivery !== null) await recordDelivery(rt, rec, delivery)
 }
 
-/** Keep on a sent-back record whether its notes reached the session (once — a later word doesn't overwrite "delivered"). */
+/** Keep on a sent-back record whether its notes reached the session (once. A later word doesn't overwrite "delivered"). */
 async function recordDelivery(rt: WorkspaceRuntime, rec: ActionRecord, delivery: string): Promise<void> {
   await onActionChain(rt, async () => {
     const cur = await rt.store.actions.get(rec.id)
@@ -97,7 +97,7 @@ const jobContinuations = new Map<string, Promise<void>>()
 /**
  * Continue a finished job run's own Claude session with one message from
  * triage, headless, under the job's own run spec (jobQuery: grants,
- * allowlist, unattended, the fence) plus the hold — the same box the run had.
+ * allowlist, unattended, the fence) plus the hold. The same box the run had.
  * The transcript continues on its session row. `onStarted` fires once the
  * agent is up with the message.
  */
@@ -204,7 +204,7 @@ export async function deliverPendingSendBacks(rt: WorkspaceRuntime, sessionId: s
 
 /**
  * Where a dispatch run gets its connector: the drafting session's folder, its
- * folder's own MCP server of that name (as a job run loads them — passed
+ * folder's own MCP server of that name (as a job run loads them, passed
  * explicitly, the project's settings and hooks never loaded), a team worker's
  * agent-declared server, and the user's own config (user-scope servers and
  * claude.ai connectors).
@@ -305,8 +305,8 @@ async function runDispatch(rt: WorkspaceRuntime, rec: ActionRecord): Promise<{ t
 }
 
 /**
- * Send one approved action whose time has come. Claimed first — one atomic
- * scheduled → sending update — so a timer and the minute tick racing for it
+ * Send one approved action whose time has come. Claimed first, one atomic
+ * scheduled → sending update, so a timer and the minute tick racing for it
  * send it once; whoever loses does nothing.
  */
 export async function dispatchAction(rt: WorkspaceRuntime, id: string): Promise<void> {
@@ -372,7 +372,7 @@ export async function tickActions(rt: WorkspaceRuntime, now = Date.now()): Promi
 }
 
 /**
- * Boot: an action left `sending` died with the previous process mid-send — it
+ * Boot: an action left `sending` died with the previous process mid-send. It
  * may have gone out, so it is unknown, never retried by itself. Scheduled
  * ones get their timers back (or go now, if their time passed).
  */

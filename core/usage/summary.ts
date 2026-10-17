@@ -14,7 +14,7 @@ import type {
 } from '../../shared/protocol.js'
 import { entryCost, type UsageEntry } from './ledger.js'
 
-/** Local calendar day, `YYYY-MM-DD` — the daemon runs on the user's machine. */
+/** Local calendar day, `YYYY-MM-DD`, the daemon runs on the user's machine. */
 const dayKey = (ts: number) => {
   const d = new Date(ts)
   const m = `${d.getMonth() + 1}`.padStart(2, '0')
@@ -105,7 +105,7 @@ export function summarize(entries: UsageEntry[], since: number, now: number): Us
   }
   totals.sessions = sessions.size
 
-  // Every day in the window, including the silent ones — a chart with holes
+  // Every day in the window, including the silent ones, a chart with holes
   // punched out of it reads as "no data", not "no work".
   const daily: UsageDay[] = []
   for (let t = since; t <= now; t += 86_400_000) {
@@ -138,13 +138,13 @@ export function summarize(entries: UsageEntry[], since: number, now: number): Us
 }
 
 /**
- * Spend folded by Claude session id — the join key onto a triage session's
+ * Spend folded by Claude session id: the join key onto a triage session's
  * `sdkSessionId`. Kept beside `summarize()` rather than inside it: the item
  * page wants one number per session and none of the day/model/project rollups.
  *
  * Note the same caveat the window carries elsewhere: `entries` is whatever
  * `scanUsage` was asked for, so a session whose transcript predates the window
- * simply isn't in here — the caller reports that, it is not an error.
+ * simply isn't in here. The caller reports that, it is not an error.
  */
 export function summarizeBySession(entries: UsageEntry[]): Map<string, SessionSpend> {
   const out = new Map<string, SessionSpend>()
@@ -180,7 +180,7 @@ export function summarizeBySession(entries: UsageEntry[]): Map<string, SessionSp
 }
 
 /**
- * Spend folded by model, largest first — the split behind a cost readout.
+ * Spend folded by model, largest first, the split behind a cost readout.
  * A sibling of `summarize()` for callers that want only this slice: the item
  * page asks about one item's sessions, not the whole machine.
  */

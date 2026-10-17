@@ -1,7 +1,7 @@
 /**
  * The morning brief: what the Junior page's first tab shows, in four
- * sections ordered by urgency — people waiting on you, what's due today,
- * what's waiting for your review, and what happened while you were away —
+ * sections ordered by urgency, people waiting on you, what's due today,
+ * what's waiting for your review, and what happened while you were away,
  * plus the one thing to start with. Built from the ranked open inbox and the
  * brief's facts; deterministic, no model in the path. Pure and browser-safe;
  * time is always an argument.
@@ -87,14 +87,14 @@ function row(i: MorningItem, extra: Partial<MorningRow> = {}): MorningRow {
 /**
  * The brief, from the open inbox and the facts the page already gathered.
  * Each item lands in at most one section: people first, then review, then
- * due — so a review request that is also due today reads as a review.
+ * due, so a review request that is also due today reads as a review.
  */
 export function morningBrief(input: { items: readonly MorningItem[]; facts: BriefFacts; now: number }): MorningBrief {
   const { items, facts, now } = input
   const open = items.filter((i) => isOpen(i) && i.kind !== 'digest')
   const taken = new Set<string>()
 
-  // People waiting on you: a human asked something of you — a question, a decision. Oldest first.
+  // People waiting on you: a human asked something of you, a question, a decision. Oldest first.
   const people = open
     .filter((i) => i.source !== 'manual' && myTurn(i) && i.label !== 'review' && (PEOPLE_ASKS.has(i.label ?? '') || i.peopleWaiting > 0))
     .sort((a, b) => waitingSince(a) - waitingSince(b))

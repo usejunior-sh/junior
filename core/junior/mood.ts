@@ -27,7 +27,7 @@ export type MoodSignals = {
 }
 
 /**
- * The rail's face: the most urgent state wins — needs > stuck > working >
+ * The rail's face: the most urgent state wins, needs > stuck > working >
  * hello. It only changes when one of these does, so it never pulls the eye.
  */
 export function railMood(s: MoodSignals): Mood {

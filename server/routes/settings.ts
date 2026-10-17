@@ -55,7 +55,7 @@ export async function settingsRoutes({ req, url, json, rt }: ScopedCtx): Promise
         if (!project) throw new Error('unknown project')
         const cached = rt.folderProbes.get(project.path)
         const probe = cached && !refresh && Date.now() - cached.probedAt < FOLDER_PROBE_TTL_MS ? cached : await probeConnectors(rt, project.path)
-        // the run's own server shadows any user server named triage — never offer it
+        // the run's own server shadows any user server named triage, never offer it
         const connectors = probe.connectors.filter((c) => c.server !== RESERVED_SERVER)
         body = { ok: true, probedAt: probe.probedAt, connectors, cwd: project.path, elsewhere: await localServersElsewhere(rt, project.path, connectors) }
       } else {
@@ -69,7 +69,7 @@ export async function settingsRoutes({ req, url, json, rt }: ScopedCtx): Promise
     json(body.ok ? 200 : 502, body)
     return true
   }
-  // --- settings, briefs, playbooks, dispatch (.docs/next-version.md, phase 2) ---
+  // settings, briefs, playbooks, dispatch
   // Junior (.docs/junior-goals-teams): the persona, the page's day, today's plan.
   if (url.pathname === '/api/persona') {
     let body: PersonaResponse

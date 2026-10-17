@@ -1,9 +1,5 @@
 import { DAY, HOUR, ID, LOGIN, MIN } from './base.js'
 
-// ---------------------------------------------------------------------------
-// Items
-// ---------------------------------------------------------------------------
-
 export type DemoItem = {
   id: string
   source: 'github' | 'slack' | 'linear' | 'web' | 'job' | 'manual'
@@ -17,7 +13,7 @@ export type DemoItem = {
   created: number
   /** last source activity (ms ago) */
   updated: number
-  /** when triage first saw it (ms ago) — drives "New" */
+  /** when triage first saw it (ms ago), drives "New" */
   ingested: number
   ciFailing?: boolean
   isDraft?: boolean
@@ -51,7 +47,7 @@ const slack = (ch: string, p: string) => `https://acme.slack.com/archives/${ch}/
 
 export function items(): DemoItem[] {
   return [
-    // — Needs you now —
+    // Needs you now
     {
       id: ID.item.ciRedis,
       source: 'github',
@@ -81,7 +77,7 @@ export function items(): DemoItem[] {
       why: 'Direct question to you in #eng-payments, no reply yet',
     },
 
-    // — Due —
+    // Due
     {
       id: ID.item.stripe,
       source: 'linear',
@@ -113,7 +109,7 @@ export function items(): DemoItem[] {
       dueInDays: -1,
     },
 
-    // — People waiting —
+    // People waiting
     {
       id: ID.item.applePay,
       source: 'github',
@@ -208,7 +204,7 @@ export function items(): DemoItem[] {
       ingested: 2 * DAY,
     },
 
-    // — New —
+    // New
     {
       id: ID.item.flakyBilling,
       source: 'linear',
@@ -240,7 +236,7 @@ export function items(): DemoItem[] {
       why: '214 events/h against a 3/h baseline, starting right after the 14:05 deploy',
     },
 
-    // — Brief ready —
+    // Brief ready
     {
       id: ID.item.memcached,
       source: 'linear',
@@ -272,7 +268,7 @@ export function items(): DemoItem[] {
       why: 'Fixes CVE-2026-3311 (request smuggling); major bump, 2 call sites use the old Agent API',
     },
 
-    // — AI working —
+    // AI working
     {
       id: ID.item.paginate,
       source: 'linear',
@@ -289,7 +285,7 @@ export function items(): DemoItem[] {
       override: { stage: 'working', turn: 'ai' },
     },
 
-    // — To review —
+    // To review
     {
       id: ID.item.n1,
       source: 'linear',
@@ -318,7 +314,7 @@ export function items(): DemoItem[] {
       ingested: 2 * DAY,
     },
 
-    // — Waiting on others —
+    // Waiting on others
     {
       id: ID.item.node22,
       source: 'github',
@@ -348,7 +344,7 @@ export function items(): DemoItem[] {
       override: { turn: 'others', note: 'Infra to provision the staging Redis cluster' },
     },
 
-    // — Backlog —
+    // Backlog
     {
       id: 'linear:ACME-187',
       source: 'linear',
@@ -406,7 +402,7 @@ export function items(): DemoItem[] {
       ingested: 2 * DAY,
     },
 
-    // — Landed today (done) —
+    // Landed today (done)
     {
       id: 'linear:ACME-227',
       source: 'linear',
@@ -466,7 +462,7 @@ export function items(): DemoItem[] {
       status: { to: 'done', at: 0.75, reason: 'shipped' },
     },
 
-    // — Parked —
+    // Parked
     {
       id: 'linear:ACME-160',
       source: 'linear',

@@ -1,5 +1,5 @@
 /**
- * Files attached to a chat message or a work item — any type, not only images.
+ * Files attached to a chat message or a work item, any type, not only images.
  *
  * Bytes never ride the WebSocket or an item save. The client first uploads each
  * file (`POST /api/uploads?name=`, raw body) into a pending folder,
@@ -35,7 +35,7 @@ export const uploadsDir = (root: string): string => path.join(root, 'uploads')
  */
 export function sanitizeFileName(raw: unknown): string {
   let name = typeof raw === 'string' ? raw : ''
-  // Whatever follows the last / or \ — a client may send a full path.
+  // Whatever follows the last / or \. A client may send a full path.
   name = name.split(/[\\/]/).pop() ?? ''
   name = name
     .normalize('NFC')
@@ -105,7 +105,7 @@ export async function pruneUploads(root: string, now = Date.now(), maxAgeMs = UP
 }
 
 /**
- * The raw request body, refused as soon as it passes `limit` — by the declared
+ * The raw request body, refused as soon as it passes `limit`, by the declared
  * length before a byte is read, then by the running total.
  */
 export function readRawBody(req: http.IncomingMessage, limit = MAX_FILE_BYTES): Promise<Buffer> {
@@ -147,7 +147,7 @@ export async function handleUpload(root: string, req: http.IncomingMessage, name
 
 /**
  * The shape of a `files` list: an array of upload ids, at most `max`, no
- * repeats. Throws on anything else — a file that silently vanishes on send is
+ * repeats. Throws on anything else: a file that silently vanishes on send is
  * worse than an error.
  */
 export function fileIdList(v: unknown, max: number): string[] {
@@ -211,7 +211,7 @@ export const sessionFilesDir = (root: string, sessionId: string): string =>
 /**
  * Move the uploads a message names into its session's folder and return their
  * refs, in order. All are checked first, so an unknown id sends nothing. The
- * event log keeps these refs (id, name, bytes) — never the bytes.
+ * event log keeps these refs (id, name, bytes), never the bytes.
  */
 export async function claimSessionFiles(root: string, sessionId: string, ids: readonly string[], max: number): Promise<FileRef[]> {
   const refs = await resolveUploads(root, ids, max)
@@ -222,7 +222,7 @@ export async function claimSessionFiles(root: string, sessionId: string, ids: re
   return refs
 }
 
-/** Where a claimed file sits on disk — the path Claude is given. */
+/** Where a claimed file sits on disk. The path Claude is given. */
 export const sessionFilePath = (root: string, sessionId: string, ref: FileRef): string =>
   path.join(sessionFilesDir(root, sessionId), ref.id, ref.name)
 
@@ -233,7 +233,7 @@ export async function removeSessionFiles(root: string, sessionId: string): Promi
 
 /**
  * `root` is the workspace's `attachments` folder. An item's files, one
- * `<uuid>/<name>` folder each — under `items/`, apart from the item images'
+ * `<uuid>/<name>` folder each, under `items/`, apart from the item images'
  * `<slug>/` folders, and inside the already-listed attachments dir.
  */
 export const itemFilesDir = (root: string, itemId: string): string =>
@@ -271,8 +271,8 @@ export const readItemFile = (root: string, itemId: string, ref: FileRef): Promis
 /**
  * Copy an item's files into a session's folder, each under a fresh uuid, so the
  * session owns its copy (deleting the session never touches the item, and the
- * other way round). A file that has gone missing is skipped — the prompt is
- * worth more than the attachment — and named in `missing`, so the caller can
+ * other way round). A file that has gone missing is skipped, the prompt is
+ * worth more than the attachment, and named in `missing`, so the caller can
  * log it and tell the model. `files` is the session's refs, in order.
  */
 export async function copyItemFilesToSession(
@@ -290,7 +290,7 @@ export async function copyItemFilesToSession(
       await copyFile(itemFilePath(root, itemId, f), sessionFilePath(root, sessionId, { ...f, id }))
       out.push({ ...f, id })
     } catch {
-      // the file is gone — the ref outlived it
+      // the file is gone: the ref outlived it
       missing.push(f)
       await rm(path.join(sessionFilesDir(root, sessionId), id), { recursive: true, force: true }).catch(() => {})
     }

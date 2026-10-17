@@ -1,12 +1,12 @@
 /**
- * Due dates and the inbox's day sections — pure, browser-safe, local time.
+ * Due dates and the inbox's day sections, pure, browser-safe, local time.
  * Time is always an argument.
  *
  * An item is due on a *day* (local midnight, ms). Where the day comes from:
- *   explicit — the source said so (a Linear/Jira due date, "by EOD" read by a job)
- *   you      — set from the inbox (t / m / w / l); survives rescans
- *   default  — nothing set: the label's default (labels.ts), resolved against
- *              now, so a default is never late — it is a section, not a date
+ *   explicit, the source said so (a Linear/Jira due date, "by EOD" read by a job)
+ *   you, set from the inbox (t / m / w / l); survives rescans
+ *   default, nothing set: the label's default (labels.ts), resolved against
+ *              now, so a default is never late, it is a section, not a date
  * A user-set Later is `you` with no day.
  *
  * Sections: Today (overdue rolls in), the next workday, This week (up to the
@@ -55,7 +55,7 @@ export function weekEnd(now: number): number {
   return d
 }
 
-/** The day a bucket means right now — what t / m / w set; Later has none. */
+/** The day a bucket means right now, what t / m / w set; Later has none. */
 export function dueFor(bucket: Section, now: number): number | null {
   switch (bucket) {
     case 'today':
@@ -139,7 +139,7 @@ export function dueChip(at: number, now: number): string {
 
 /**
  * A deadline a source or a job stated. A bare date ("2026-10-12") is that
- * local day, not UTC midnight — which in the Americas is the day before.
+ * local day, not UTC midnight, which in the Americas is the day before.
  */
 export function parseDue(raw: unknown): number | null {
   if (typeof raw !== 'string' || !raw.trim()) return null
@@ -156,7 +156,7 @@ export function parseDue(raw: unknown): number | null {
 /**
  * A due from a save (the date picker, the MCP tools, the inbox keys): a local
  * day ("2026-10-21") or a section name. `null` clears it back to the label's
- * default; `undefined` (absent) leaves it alone. Anything else throws — a date
+ * default; `undefined` (absent) leaves it alone. Anything else throws: a date
  * that silently doesn't stick is worse than an error.
  */
 export function dueInput(raw: unknown, now: number): { at: number | null } | null | undefined {

@@ -1,7 +1,7 @@
 /**
  * Files for `@` mentions: a per-folder index the composer's picker searches,
  * and the send-time resolver that turns a picked path into what the model
- * receives. Nothing here escapes the folder it was asked about — a mention is
+ * receives. Nothing here escapes the folder it was asked about. A mention is
  * resolved inside the session's own cwd (the folder the agent already has), and
  * the picker only lists what `git` considers part of the project, so ignored
  * secrets never show up by accident.
@@ -57,7 +57,7 @@ async function listGit(root: string): Promise<string[] | null> {
     )
     return stdout.split('\0').filter(Boolean)
   } catch {
-    return null // not a repo, or no git — fall back to walking
+    return null // not a repo, or no git: fall back to walking
   }
 }
 
@@ -84,7 +84,7 @@ async function walk(root: string): Promise<{ files: string[]; truncated: boolean
           break
         }
       }
-      // symlinks are neither followed nor listed — they can point anywhere
+      // symlinks are neither followed nor listed: they can point anywhere
     }
   }
   return { files, truncated }
@@ -161,7 +161,7 @@ export class FileIndex {
   }
 }
 
-/** One index per folder, a handful at a time — folders a workspace has sessions in. */
+/** One index per folder, a handful at a time, folders a workspace has sessions in. */
 export class FileIndexes {
   private readonly byRoot = new Map<string, FileIndex>()
 
@@ -184,9 +184,7 @@ export class FileIndexes {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Resolution — a picked path becomes bytes for the model
-// ---------------------------------------------------------------------------
+// Resolution: a picked path becomes bytes for the model
 
 export type ResolvedFile =
   | { kind: 'text'; abs: string; rel: string; bytes: number; text: string }
@@ -197,7 +195,7 @@ export type ResolvedFile =
 
 /**
  * Resolve `ref` inside `cwd` and read it if it is small text. The realpath of
- * the target must stay under the realpath of `cwd` — a symlink pointing out of
+ * the target must stay under the realpath of `cwd`. A symlink pointing out of
  * the project resolves to an error, not to the file it points at.
  */
 export async function resolveFileMention(cwd: string, ref: string): Promise<ResolvedFile> {
@@ -237,9 +235,7 @@ export async function resolveFileMention(cwd: string, ref: string): Promise<Reso
   return { kind: 'text', abs: real, rel: shown, bytes: st.size, text: buf.toString('utf8') }
 }
 
-// ---------------------------------------------------------------------------
-// Editing — the Changes view opens a changed file and saves it back
-// ---------------------------------------------------------------------------
+// Editing: the Changes view opens a changed file and saves it back
 
 /** Files above this open read-only: a textarea is the wrong tool past it. */
 export const MAX_EDIT_BYTES = 1024 * 1024
@@ -249,7 +245,7 @@ const versionOf = (buf: Buffer) => createHash('sha1').update(buf).digest('hex')
 /**
  * `rel` resolved to a real path inside `root`, or an error. Absolute paths,
  * `..` escapes, symlinks pointing out of the folder, and anything under
- * `.git/` are all refused — this is the only gate between the browser and a
+ * `.git/` are all refused. This is the only gate between the browser and a
  * write to disk.
  */
 async function containedPath(root: string, rel: string): Promise<{ real: string } | { error: string; missing?: true }> {
@@ -284,7 +280,7 @@ export async function readProjectFile(root: string, rel: string): Promise<Projec
 }
 
 /**
- * Overwrite an existing file — never create one — provided it still holds
+ * Overwrite an existing file, never create one, provided it still holds
  * the bytes the editor opened. Agents write to these same files; a stale save
  * is a conflict for the user to resolve, not a silent revert of their work.
  */

@@ -5,13 +5,13 @@ import { errText } from './errors.js'
 
 /**
  * The MCP endpoint (streamable HTTP): the same contract the stdio shim serves
- * (core/mcp/tools.ts), reachable as a URL instead of a spawned process —
+ * (core/mcp/tools.ts), reachable as a URL instead of a spawned process,
  * `http://localhost:5178/mcp` for a running daemon, `…:5188/mcp` in dev. No
  * per-session subprocess to spawn, resolve on PATH, or lose a connect race
  * with, which is most of what made MCP feel unreliable from outside triage.
  *
  * The workspace rides in the URL (`?workspace=<id>`), not an env var, and an
- * id that matches nothing is refused at `initialize` — the client shows the
+ * id that matches nothing is refused at `initialize`. The client shows the
  * server as failed instead of quietly filing work into the default inbox.
  */
 export const MCP_PATH = '/mcp'

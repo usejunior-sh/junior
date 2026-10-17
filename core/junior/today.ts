@@ -87,9 +87,7 @@ export function draftPlan(input: {
     .map((c, i) => ({ date: input.date, itemId: c.id, owner: 'you' as const, addedBy: 'draft' as const, addedAt: input.now, order: start + i, carriedFrom: null }))
 }
 
-// ---------------------------------------------------------------------------
 // The rows as the page shows them
-// ---------------------------------------------------------------------------
 
 /** What a plan row reads of its item. */
 export type PlanItem = {
@@ -225,9 +223,7 @@ function todoNote(item: PlanItem): string | null {
   return null
 }
 
-// ---------------------------------------------------------------------------
 // "Also today…": find the work item someone means
-// ---------------------------------------------------------------------------
 
 /**
  * The references in a message, in order: links, "#455", "NOV-123". What the

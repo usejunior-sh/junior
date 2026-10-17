@@ -1,6 +1,6 @@
 /**
  * Quick capture: ⌘⇧T from any app pops one line; Enter files it as a manual
- * item in the inbox, with you — the same route the inbox's own add uses
+ * item in the inbox, with you. The same route the inbox's own add uses
  * (POST /api/items/manual → createManualOp). Esc, or clicking away, dismisses.
  *
  * The window is a non-activating panel, so it takes the keyboard without
@@ -17,7 +17,7 @@ export const CAPTURE_HOTKEY = 'CommandOrControl+Shift+T'
 const SIZE = { width: 560, height: 56 }
 
 let panel: BrowserWindow | null = null
-// The workspace the item lands in — the main window's, '' for the default.
+// The workspace the item lands in: the main window's, '' for the default.
 let workspaceOf: () => string = () => ''
 
 /** Register the hotkey and the panel's IPC. False if another app holds the hotkey. */
@@ -40,7 +40,7 @@ export function toggleCapture() {
     return
   }
   const p = panel && !panel.isDestroyed() ? panel : (panel = createPanel())
-  // On the display the pointer is on, a third of the way down — where Spotlight sits.
+  // On the display the pointer is on, a third of the way down, where Spotlight sits.
   const area = screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workArea
   p.setBounds({
     x: Math.round(area.x + (area.width - SIZE.width) / 2),

@@ -1,8 +1,6 @@
 
 
-// ---------------------------------------------------------------------------
 // Async queue: lets us push user messages into a live session's input.
-// ---------------------------------------------------------------------------
 export class AsyncQueue<T> implements AsyncIterable<T> {
   private items: T[] = []
   private waiters: ((r: IteratorResult<T>) => void)[] = []

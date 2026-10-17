@@ -8,7 +8,7 @@ import { cyan, die, dim, execFileP, green, red, tilde, yellow } from './ui.js'
 
 /**
  * Removing the agent is a decision, and Triage.app puts one back on every
- * launch — so record it. Deleted again by the next explicit `triage install`.
+ * launch, so record it. Deleted again by the next explicit `triage install`.
  */
 export const OPT_OUT_FILE = path.join(TRIAGE_DIR, 'no-launch-agent')
 

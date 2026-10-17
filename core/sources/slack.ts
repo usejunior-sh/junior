@@ -1,11 +1,11 @@
 /**
- * Slack scanning — built-in rules + user-defined jobs (.docs/jobs.md),
+ * Slack scanning: built-in rules + user-defined jobs (.docs/jobs.md),
  * re-based onto the Agent SDK. Fetched *through* the installed Claude Code's
  * claude.ai Slack connector, headless and read-only by construction (tool
- * allowlist) — this repo never holds Slack credentials.
+ * allowlist). This repo never holds Slack credentials.
  *
  * Design rules: the LLM reads and extracts (URLs, refs, timestamps) and
- * answers exactly one judgment per candidate — "does this match — yes/no
+ * answers exactly one judgment per candidate, "does this match, yes/no
  * (+ a one-line why)". It never scores, never merges, never decides done.
  * Malformed output rows are discarded, never repaired.
  *
@@ -39,17 +39,13 @@ export const MAX_ROWS_PER_JOB = 15
 
 export interface JobScanSpec {
   id: string
-  /** '#channel' | '@dm' — the boundary the section may not leave */
+  /** '#channel' | '@dm': the boundary the section may not leave */
   scope: string
   instruction: string
   /** ISO watermark: scan messages after this; absent = recent-history window */
   cursor?: string
   createsItems: boolean
 }
-
-// ---------------------------------------------------------------------------
-// Prompt composition
-// ---------------------------------------------------------------------------
 
 const SCAN_PREAMBLE = `You are a triage scanner. Your Slack tools are deferred: first use ToolSearch to load mcp__claude_ai_Slack__slack_search_public_and_private, mcp__claude_ai_Slack__slack_read_channel and mcp__claude_ai_Slack__slack_read_thread, then use them (read-only) to perform every scan section below.
 
@@ -82,14 +78,12 @@ export function composeScanPrompt(builtins: boolean, jobs: JobScanSpec[]): strin
   ].join('\n\n')
 }
 
-// ---------------------------------------------------------------------------
-// Per-job run prompt (.docs/jobs-v2.md) — one job, one session. The
+// Per-job run prompt (.docs/jobs-v2.md): one job, one session. The
 // output contract is TOOL CALLS, not JSON: for each match the scanner calls
 // upsert_work_item, so a work item exists because a tool call created it (no
 // parse-failure-reads-as-empty bug), and the run transcript is the receipt.
 // The server injects a permalink-shaped upsert tool and stamps identity,
-// kind, provenance, and the channel itself — the model only adds candidates.
-// ---------------------------------------------------------------------------
+// kind, provenance, and the channel itself. The model only adds candidates.
 
 const SLACK_MCP_TOOLS = READ_ONLY_SLACK_TOOLS.filter((t) => t.startsWith('mcp__'))
 
@@ -112,9 +106,7 @@ For EACH matching thread, call the upsert_work_item tool exactly once, with:
 Call upsert_work_item at most ${MAX_ROWS_PER_JOB} times, once per matching thread. It is the ONLY write tool you may use. If nothing matches, do not call it at all — just finish. If you cannot access any Slack tools at all, reply with exactly no-slack-tools and stop.`
 }
 
-// ---------------------------------------------------------------------------
-// Output parsing — strict, per-row validation; malformed rows are discarded.
-// ---------------------------------------------------------------------------
+// Output parsing: strict, per-row validation; malformed rows are discarded.
 
 export interface RawBuiltinRow {
   title: string
@@ -179,10 +171,8 @@ export function parseScanRows(
   return { builtins, jobs }
 }
 
-// ---------------------------------------------------------------------------
-// Normalization — identity is deterministic: one item per thread, keyed by
+// Normalization. Identity is deterministic: one item per thread, keyed by
 // the permalink tail. Same scheme for every scanner, external ones included.
-// ---------------------------------------------------------------------------
 
 export function permalinkId(permalink: string): string {
   const tail = permalink.replace(/^https?:\/\/[^/]+\/archives\//, '').replace(/[?#].*$/, '')
@@ -238,23 +228,19 @@ export function normalizeJobRows(
   })
 }
 
-// ---------------------------------------------------------------------------
-// Execution
-// ---------------------------------------------------------------------------
-
 export interface SlackScanOutcome {
   builtinItems: WorkItem[]
   jobItems: WorkItem[]
   matchesByJob: Map<string, number>
   /** total tokens the scan consumed (0 when the SDK reports none) */
   tokens: number
-  /** ISO time the scan started — the next cursor for every job it covered */
+  /** ISO time the scan started: the next cursor for every job it covered */
   startedAt: string
 }
 
 /**
- * The coding agent a scan runs through — the server's provider (server/providers),
- * passed in so core never spawns one itself.
+ * The coding agent a scan runs through: the server's provider
+ * (server/providers), passed in so core never spawns one itself.
  */
 export interface HeadlessAgent {
   run(spec: {
@@ -343,11 +329,9 @@ export async function scanSlack(agent: HeadlessAgent, timeoutMs = 180_000): Prom
   return outcome.builtinItems
 }
 
-// ---------------------------------------------------------------------------
-// Job preview — the trust-maker in the creation flow: run a draft against
+// Job preview, the trust-maker in the creation flow: run a draft against
 // the scope's recent history and show what it *would have* matched. Reads
 // only; never touches jobs, cursors, or items.
-// ---------------------------------------------------------------------------
 
 export async function previewJob(
   agent: HeadlessAgent,
@@ -369,11 +353,9 @@ export async function previewJob(
   return { rows, tokens }
 }
 
-// ---------------------------------------------------------------------------
-// Job drafting — one LLM call parsing a plain-text wish into the structured
+// Job drafting: one LLM call parsing a plain-text wish into the structured
 // form. Every field stays editable in the UI; this is a convenience, not an
 // authority, so a parse failure just returns null and the user fills the form.
-// ---------------------------------------------------------------------------
 
 const DRAFT_PROMPT = (text: string) => `Parse this job request into JSON. A job scans one Slack scope (a "#channel" or "@dm") on a cadence for threads matching a plain-English instruction.
 

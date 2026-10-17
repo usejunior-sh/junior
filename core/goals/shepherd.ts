@@ -1,6 +1,6 @@
 /**
- * The PR shepherd (M5, .docs/goals/goals-engine.md "Default policies"): once a
- * goal opens a PR, a watcher in plain code — no model — polls it through `gh`
+ * The PR shepherd (.docs/goals/goals-engine.md "Default policies"): once a
+ * goal opens a PR, a watcher in plain code, no model, polls it through `gh`
  * and turns what it sees into steps, until the PR is merged.
  *
  *   assess(snapshot, watch)   what's new on the PR, each thing keyed so it is acted on once
@@ -12,14 +12,12 @@
  * policies ride in the plan the user approves, so what the engine does on its
  * own is something they read first.
  *
- * Pure — no I/O, no clock. The server fetches (server/goals.ts ghPrSource)
+ * Pure: no I/O, no clock. The server fetches (server/goals.ts ghPrSource)
  * and carries the decisions out (goalWatchPrsOp).
  */
 import { MAX_FIX_ATTEMPTS, type GateSpec } from './types.js'
 
-// ---------------------------------------------------------------------------
 // What the watcher reads
-// ---------------------------------------------------------------------------
 
 /** A PR: `owner/repo` and its number. */
 export type PrRef = { repo: string; number: number }
@@ -30,7 +28,7 @@ export type PrCheck = {
   status: 'pending' | 'success' | 'failure' | 'neutral'
   /** changes when the check runs again (a check run's id), so a rerun's failure is new */
   id: string
-  /** the Actions run behind it — for `gh run view --log-failed` and a rerun; null for a status context */
+  /** the Actions run behind it, for `gh run view --log-failed` and a rerun; null for a status context */
   runId: number | null
   url: string | null
   /** GitHub's own word for how it ended (TIMED_OUT, CANCELLED, …), for the flake test */
@@ -136,9 +134,7 @@ export function prRefFrom(refs: readonly string[], repo: string | null): PrRef |
   return null
 }
 
-// ---------------------------------------------------------------------------
 // The default policies (the table in goals-engine.md)
-// ---------------------------------------------------------------------------
 
 export type PolicyId = 'push' | 'checks_failed' | 'bot_thread' | 'human_thread' | 'bot_repeat' | 'conflict' | 'ready' | 'closed' | 'budget'
 
@@ -171,9 +167,7 @@ export const SHEPHERD_GATE: GateSpec = {
   connectors: [],
 }
 
-// ---------------------------------------------------------------------------
 // The watch: what the watcher remembers between polls
-// ---------------------------------------------------------------------------
 
 export type PrWatch = {
   /** the gate it serves; a new gate on the goal starts the back-off over */
@@ -227,9 +221,7 @@ export function nextPoll(w: PrWatch, changed: boolean, at: number): PrWatch {
   return { ...w, quiet, nextPollAt: at + pollDelay(quiet) }
 }
 
-// ---------------------------------------------------------------------------
 // What's new on the PR
-// ---------------------------------------------------------------------------
 
 export type WatcherEvent =
   | { kind: 'pushed'; key: string; sha: string; from: string | null }
@@ -288,10 +280,6 @@ export function fingerprint(t: Pick<PrThread, 'author' | 'path' | 'body'>): stri
 const FLAKY = /\b(timed? ?out|timeout|ETIMEDOUT|ECONNRESET|ECONNREFUSED|EAI_AGAIN|socket hang up|rate limit(ed)?|50[234]\b|service unavailable|runner (has received a shutdown|lost communication)|network (error|unreachable)|flak(y|e))\b/i
 
 export const looksFlaky = (log: string): boolean => FLAKY.test(log)
-
-// ---------------------------------------------------------------------------
-// The policy for each event
-// ---------------------------------------------------------------------------
 
 export type ShepherdStep = 'fix_ci' | 'fix_thread' | 'rebase' | 'merge'
 
@@ -405,9 +393,7 @@ export function afterDecision(w: PrWatch, ev: WatcherEvent, d: PolicyDecision): 
   return out
 }
 
-// ---------------------------------------------------------------------------
 // The steps' briefs: what a worker gets beyond the plan and the handoff
-// ---------------------------------------------------------------------------
 
 /** How much of a CI log or a diff goes into a brief: the end of a log, the start of a diff. */
 export const BRIEF_LOG_CHARS = 12_000

@@ -1,17 +1,14 @@
 /**
- * Briefs (.docs/next-version.md, phase 2) — the parts with no runtime state:
- * playbooks and dispatch templates as files, the headless contract a brief
- * session runs under, and the prompt that carries the variable material.
+ * Briefs, the parts with no runtime state: playbooks and dispatch templates
+ * as files, the headless contract a brief session runs under, and the prompt
+ * that carries the variable material.
  *
  *   ~/.triage/workspaces/<id>/playbooks/<ItemKind>.md   how to brief this kind
  *   ~/.triage/workspaces/<id>/dispatch/<ItemKind>.md    how a dispatched session opens
  *
- * Both are seeded with defaults on boot and never overwritten once present —
+ * Both are seeded with defaults on boot and never overwritten once present,
  * they are the user's to edit, like a skill. These two files are the only
  * places the pipeline is customisable in prose; everything else is code.
- *
- * The queue, the runner and the routes live in server/index.ts beside the
- * job runs; this module is imported by it and imports nothing from it.
  */
 import { existsSync } from 'node:fs'
 import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises'
@@ -22,7 +19,7 @@ import { BASE } from '../core/work/score.js'
 export const PLAYBOOK_KINDS = Object.keys(BASE) as ItemKind[]
 
 /**
- * Brief types — playbooks picked by what the brief should be, not by what the
+ * Brief types: playbooks picked by what the brief should be, not by what the
  * item is. Any item can be briefed with one; the kind's playbook stays the
  * default. Seeded and listed beside the kinds, but never a dispatch template.
  */
@@ -32,10 +29,8 @@ const PLAYBOOK_NAMES: readonly string[] = [...PLAYBOOK_KINDS, ...BRIEF_TYPES]
 const KIND_RE = /^[a-z][a-z0-9-]{0,40}$/
 export const isPlaybookName = (v: unknown): v is string => typeof v === 'string' && KIND_RE.test(v)
 
-// ---------------------------------------------------------------------------
-// Playbook defaults — suggested headings per kind, not a schema. The body is
+// Playbook defaults: suggested headings per kind, not a schema. The body is
 // free markdown; the model may add or drop sections.
-// ---------------------------------------------------------------------------
 
 const COMMON_TAIL = `
 Write for the person who will act on this in the next ten minutes: lead with the verdict or the
@@ -284,10 +279,8 @@ export async function listPlaybooks(dir: string): Promise<{ kind: string; custom
   return out
 }
 
-// ---------------------------------------------------------------------------
-// The headless contract — appended to Claude Code's own system prompt for every
+// The headless contract: appended to Claude Code's own system prompt for every
 // brief session, so it survives `resume` and every iteration runs under it.
-// ---------------------------------------------------------------------------
 
 export const BRIEF_SYSTEM_APPEND = `
 You are running headless inside triage to write a BRIEF about one work item. Nobody is watching this
@@ -358,10 +351,8 @@ export function composeBriefPrompt(input: BriefPromptInput): string {
 export const briefRelPath = (itemId: string): string =>
   `briefs/${itemId.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80) || 'item'}.md`
 
-// ---------------------------------------------------------------------------
-// Dispatch templates — how a dispatched session opens, per kind. A tiny
+// Dispatch templates: how a dispatched session opens, per kind. A tiny
 // mustache subset: {{var}}, {{#var}}…{{/var}} (when set), {{^var}}…{{/var}} (when not).
-// ---------------------------------------------------------------------------
 
 export const DEFAULT_DISPATCH_TEMPLATE = `Work item from the triage inbox — {{kind}}:
 {{title}}

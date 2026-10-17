@@ -1,9 +1,9 @@
 /**
- * The inbox tabs — the sidebar beside the inbox, one tab per step of the
+ * The inbox tabs: the sidebar beside the inbox, one tab per step of the
  * pipeline (.docs/work-item-model.md). Pure, browser-safe; time is an argument.
  *
  *   1. Needs you now      a blocked agent: a session on a prompt, an action or
- *                         step to approve, a paused team — or something broke
+ *                         step to approve, a paused team, or something broke
  *   2. Due                your turn, and a day you or the source set is today or past
  *   3. People waiting     your turn, and a person asked: reviews, replies, decisions
  *   4. New                your turn, arrived in the last day
@@ -53,7 +53,7 @@ export type TabItem = Pick<
   'id' | 'source' | 'peopleWaiting' | 'createdAt' | 'updatedAt' | 'ingestedAt' | 'dueAt' | 'dueSource'
 > & { label: Label; score: number; flow?: ItemFlow; linked?: { id: string }[] }
 
-/** A session held on a prompt — reduced to what the tab reads. */
+/** A session held on a prompt: reduced to what the tab reads. */
 export interface BlockedSession {
   id: string
   /** the item it was dispatched for */
@@ -65,7 +65,7 @@ export interface TabEntry<T> {
   item: T
   /** New: arrived in the last day. Updated: an older item with fresh activity. */
   badge?: 'new' | 'updated'
-  /** a wait on someone else that has gone on too long — offer a nudge */
+  /** a wait on someone else that has gone on too long, offer a nudge */
   stuck?: boolean
 }
 
@@ -74,7 +74,7 @@ export interface InboxTabs<T, S> {
   tabs: Map<OpenTab, TabEntry<T>[]>
   /** blocked sessions under the row they belong to, keyed by the row's id */
   sessionsByRow: Map<string, S[]>
-  /** blocked sessions whose item isn't an open row — each its own row in Needs you now */
+  /** blocked sessions whose item isn't an open row. Each its own row in Needs you now */
   orphans: S[]
   /** rows per tab; Needs you now counts its orphan sessions too */
   counts: Record<OpenTab, number>
@@ -166,7 +166,7 @@ export function inboxTabs<T extends TabItem, S extends BlockedSession>(
   return { tabs, sessionsByRow, orphans, counts }
 }
 
-/** "2d", "5h", "12m" — how long something has been waiting. */
+/** "2d", "5h", "12m", how long something has been waiting. */
 export function waitedFor(since: number, now: number): string {
   const m = Math.max(0, Math.floor((now - since) / 60_000))
   if (m < 60) return `${m}m`

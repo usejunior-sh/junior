@@ -1,9 +1,5 @@
 import { DAY, HOUR, ID, MIN } from './base.js'
 
-// ---------------------------------------------------------------------------
-// Artifacts
-// ---------------------------------------------------------------------------
-
 export type DemoArtifact = {
   id: string
   path: string
@@ -137,9 +133,7 @@ Update both call sites, pin \`bodyTimeout: 120_000\` for webhook delivery, then 
   ]
 }
 
-// ---------------------------------------------------------------------------
 // The demo project's repo: just enough code for paths and diffs to be real
-// ---------------------------------------------------------------------------
 
 export const REPO_FILES: Record<string, string> = {
   'package.json': JSON.stringify({ name: '@acme/api', private: true, type: 'module', scripts: { test: 'vitest run' } }, null, 2) + '\n',

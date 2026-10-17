@@ -3,7 +3,7 @@ import type { AgentRelay } from '../../shared/protocol.js'
 /**
  * What the main agent reads when the user writes to one of its subagents. The
  * SDK can't address a subagent directly, so main is asked to pass the text on
- * with SendMessage, verbatim — which also resumes an agent that has finished.
+ * with SendMessage, verbatim, which also resumes an agent that has finished.
  * The transcript shows the raw text, marked as relayed, instead of this.
  */
 export function frameAgentRelay(relay: AgentRelay, text: string): string {

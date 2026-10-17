@@ -1,6 +1,5 @@
 /**
- * Deterministic blocking-impact scoring — ported from hey-triage
- * (src/core/score.ts, decision 007). No LLM, ever (vision principle 3).
+ * Deterministic blocking-impact scoring. No LLM, ever.
  * Blocking impact ranks above recency: base weight by kind, then how many
  * humans are waiting, then how long they've waited.
  */
@@ -14,7 +13,7 @@ export const BASE: Record<ItemKind, number> = {
   'own-pr-conflicting': 70,
   'own-pr-approved': 65,
   'ticket-assigned': 50,
-  // a to-do the user chose to add — it sits in YOUR CYCLE and leans on priority
+  // a to-do the user chose to add. It sits in YOUR CYCLE and leans on priority
   manual: 45,
   'own-pr-stale': 40,
   // deliberately modest: mentions and reviews must outrank topical matches

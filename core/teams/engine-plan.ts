@@ -6,7 +6,7 @@ export const currentStep = (run: TeamRun): RecipeStep | undefined => run.recipe.
 export const workerById = (run: TeamRun, id: string): Worker | undefined => run.workers.find((w) => w.id === id)
 export const currentTask = (run: TeamRun): PlanTask | undefined => (run.task === null ? undefined : run.card.tasks[run.task])
 export const changeIndex = (r: TeamRecipe) => r.steps.findIndex((s) => s.output === 'change')
-/** Cut at a word, and say so — a note that stops mid-word reads as a bug. */
+/** Cut at a word, and say so. A note that stops mid-word reads as a bug. */
 export const clip = (s: string, max: number) => (s.length <= max ? s : `${s.slice(0, s.lastIndexOf(' ', max - 1) > max * 0.6 ? s.lastIndexOf(' ', max - 1) : max - 1)}…`)
 export const bump = (run: TeamRun) => {
   run.rev += 1
@@ -49,10 +49,6 @@ export function normalizeRun(run: TeamRun): TeamRun {
   }
   return run
 }
-
-// ---------------------------------------------------------------------------
-// The card
-// ---------------------------------------------------------------------------
 
 export const MAX_CRITERIA = 8
 export const MAX_TASKS = 8
@@ -156,7 +152,7 @@ function dateFrom(v: unknown): number {
 }
 
 /**
- * The goal part of a card — from the lead's propose_team or your edit. `now`
+ * The goal part of a card, from the lead's propose_team or your edit. `now`
  * pins "today" to the day it was set. Throws a message the lead can act on.
  */
 export function goalFrom(raw: unknown, now: number, prev?: RunGoal | null): RunGoal {
@@ -197,7 +193,7 @@ export const goalOverdue = (run: Pick<TeamRun, 'goal' | 'state'>, now: number): 
   !!run.goal && run.goal.horizon.at !== null && now > run.goal.horizon.at && run.state !== 'done' && run.state !== 'stopped'
 
 /**
- * A new task list for a running plan — your drawer edit, or the lead's revision
+ * A new task list for a running plan, your drawer edit, or the lead's revision
  * you accepted. Tasks already started stay exactly where they are; only what is
  * still to do can change. Applied between tasks: the loop reads the list fresh
  * each time it starts one.
@@ -247,7 +243,7 @@ export function renderCard(c: TeamCard): string {
     .join('\n\n')
 }
 
-/** The task list, one line each — what every agent in the loop sees of the plan. */
+/** The task list, one line each, what every agent in the loop sees of the plan. */
 export function renderTaskList(run: TeamRun, mark?: string): string {
   return run.card.tasks
     .map((t) => {
@@ -267,7 +263,7 @@ export function workersFor(run: TeamRun, i: number, slices: (Slice | null)[], se
   return slices.map((slice, n) => {
     const id = task ? `${s.id}:${task}:${n + 1}` : `${s.id}:${n + 1}`
     const existing = workerById(run, id)
-    // In the loop, every task's worker for a step reuses that step's session — one Implementer
+    // In the loop, every task's worker for a step reuses that step's session, one Implementer
     // tab, not one per task; a fresh context per task is a fresh start, not a new session.
     const earlier = task ? [...run.workers].reverse().find((w) => w.stepId === s.id && w.sessionId && w.id.endsWith(`:${n + 1}`)) : undefined
     const w: Worker = {
@@ -286,7 +282,7 @@ export function workersFor(run: TeamRun, i: number, slices: (Slice | null)[], se
   })
 }
 
-/** The latest-round handoffs of a step — of one task, in the loop. */
+/** The latest-round handoffs of a step: of one task, in the loop. */
 export function outputsOf(run: TeamRun, stepId: string, task?: string): Handoff[] {
   const all = run.outputs.filter((o) => o.stepId === stepId && (task === undefined || o.task === task))
   const latest = Math.max(-1, ...all.map((o) => o.round))

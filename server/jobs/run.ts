@@ -33,8 +33,7 @@ function notifyRun(rt: WorkspaceRuntime, w: Job, status: JobRunStatus, detail?: 
 /**
  * Run one job to completion as a headless session. Persists the transcript to
  * the event log (so it is observable like any session) and records the run's
- * receipt on the job row and its own session row. Stateless (job-spec.md,
- * item 4): nothing from this run feeds the next one's prompt.
+ * receipt on the job row and its own session row. Stateless: nothing from this run feeds the next one's prompt.
  */
 export async function runJob(
   rt: WorkspaceRuntime,
@@ -203,7 +202,7 @@ export async function runJob(
       error,
     })
     await ledger(rt, rt.store.jobRuns.finish(job.id, run.slot, { status, reason: error, sessionId: session.id, endedAt: Date.now(), costUsd }))
-    // the run's own receipt, on its session row — powers the Activity view
+    // the run's own receipt, on its session row, powers the Activity view
     session.runStatus = status
     session.runMatches = matches
     session.runNew = newCount
@@ -232,8 +231,8 @@ export async function runJob(
 
 /**
  * Boot: a job run still without a final status died with the previous
- * process. Mark it interrupted — on its session and, when it was the job's
- * latest run, on the job — instead of leaving it "running" forever. No
+ * process. Mark it interrupted, on its session and, when it was the job's
+ * latest run, on the job, instead of leaving it "running" forever. No
  * retry: the next run's look-back window overlaps the lost one.
  */
 export async function markInterruptedRuns(rt: WorkspaceRuntime): Promise<void> {

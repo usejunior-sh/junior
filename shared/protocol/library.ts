@@ -1,13 +1,11 @@
 import type { TeamRecipe } from '../../core/teams/recipe.js'
 import type { EffortLevel } from './session.js'
 
-// ---------------------------------------------------------------------------
-// Teams v2 (server/teams.ts, core/teams/recipe.ts): a team is a recipe file —
-// steps, fan-out, gates, budget — filled in by agents, which are Claude Code
+// Teams v2 (server/teams.ts, core/teams/recipe.ts): a team is a recipe file
+// (steps, fan-out, gates, budget), filled in by agents, which are Claude Code
 // agent files. Both live in the workspace folder, seeded with defaults.
-// ---------------------------------------------------------------------------
 
-/** What an agent may do. Compiled to tool rules at spawn — never a prompt-only promise. */
+/** What an agent may do. Compiled to tool rules at spawn, never a prompt-only promise. */
 export type AgentCan = 'read' | 'edit' | 'run' | 'web' | 'browser'
 export const AGENT_CANS: AgentCan[] = ['read', 'edit', 'run', 'web', 'browser']
 
@@ -15,7 +13,7 @@ export const AGENT_CANS: AgentCan[] = ['read', 'edit', 'run', 'web', 'browser']
 export const AGENT_COLORS = ['red', 'blue', 'green', 'yellow', 'purple', 'orange', 'pink', 'cyan'] as const
 export type AgentColor = (typeof AGENT_COLORS)[number]
 
-/** One agent — the fields of a Claude Code agent file triage understands. */
+/** One agent: the fields of a Claude Code agent file triage understands. */
 export type AgentSpec = {
   /** slug: the file name, and how a recipe step names it */
   name: string
@@ -53,18 +51,16 @@ export type TeamLibraryResponse =
   | { ok: true; teams: RecipeEntry[]; agents: AgentEntry[]; dir: string }
   | { ok: false; error: string }
 
-// ---------------------------------------------------------------------------
 // Skills and agents (server/library.ts): every Claude Code skill and subagent a
-// session can see — the workspace's own (a local plugin, `triage:<name>`), the
+// session can see: the workspace's own (a local plugin, `triage:<name>`), the
 // user's (~/.claude), each project's (.claude/), and installed plugins' (read-only).
-// ---------------------------------------------------------------------------
 
 export type LibraryKind = 'skill' | 'agent'
 export type LibrarySource = 'workspace' | 'personal' | 'project' | 'plugin'
 
 export type LibraryEntry = {
   kind: LibraryKind
-  /** what Claude calls it — `/name` or the subagent type; `triage:name` / `plugin:name` when namespaced */
+  /** what Claude calls it: `/name` or the subagent type; `triage:name` / `plugin:name` when namespaced */
   name: string
   /** the folder (skill) or file stem (agent) */
   slug: string
@@ -74,7 +70,7 @@ export type LibraryEntry = {
   scope: string
   /** SKILL.md, or the agent's .md */
   path: string
-  /** false for plugins — the plugin manager rewrites their files */
+  /** false for plugins: the plugin manager rewrites their files */
   editable: boolean
   /** agents: frontmatter extras */
   model?: string

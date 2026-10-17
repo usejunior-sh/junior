@@ -6,8 +6,8 @@
  * Specs say what triage wants (a folder, a model, which tools, a veto on every
  * tool call); each adapter decides how its agent is told. What comes back is
  * `ProviderEvent`: each adapter folds its own stream into it, so the server
- * reads one shape whatever the agent. A few shapes are still Claude's own —
- * MCP server configs and the permission result — and are named here so
+ * reads one shape whatever the agent. A few shapes are still Claude's own,
+ * MCP server configs and the permission result, and are named here so
  * callers import them from the seam, not from the SDK.
  */
 import type {
@@ -55,7 +55,7 @@ export type Capability =
 
 export type Capabilities = Readonly<Record<Capability, boolean>>
 
-/** Fast mode as the agent says it is really serving — and why not, when it isn't. */
+/** Fast mode as the agent says it is really serving, and why not, when it isn't. */
 export type FastModeVerdict = { state?: FastModeState; reason?: FastModeDisabledReason }
 
 /** A tool call the agent made, as the server reads it (which files a turn touched). */
@@ -74,7 +74,7 @@ export type ProviderEvent = {
 } & (
   /** the agent is up: its own session id (the key for resume) and what it runs */
   | { kind: 'started'; sessionId?: string; model?: string; terminalCommands?: string[] }
-  /** an in-flight piece of a message — broadcast live, never persisted */
+  /** an in-flight piece of a message: broadcast live, never persisted */
   | { kind: 'stream' }
   /** a committed turn message (the agent's, or a tool result fed back to it) */
   | { kind: 'message'; role: 'assistant' | 'user'; toolCalls: ToolCall[] }
@@ -119,7 +119,7 @@ export type ToolApprovalContext = {
   suggestions?: PermissionUpdate[]
   /** the subagent making the call, when it isn't the main agent */
   agentID?: string
-  /** the tool_use this call is — what an action record matches the prompt to */
+  /** the tool_use this call is: what an action record matches the prompt to */
   toolUseID?: string
 }
 
@@ -143,7 +143,7 @@ export type SessionSpec = {
   /** text appended to the agent's own system prompt (survives resume) */
   systemAppend?: string
   mcpServers: McpServers
-  /** load only `mcpServers` — none of the user's other connectors or plugins */
+  /** load only `mcpServers`: none of the user's other connectors or plugins */
   strictMcp?: boolean
   /** the only built-in tools the agent gets */
   tools?: string[]
@@ -253,7 +253,7 @@ export interface Provider {
   readonly capabilities: Capabilities
   /** how a workspace logs this agent in */
   readonly auth: {
-    /** the env var an API key is read from — and stored under in the workspace's .env */
+    /** the env var an API key is read from, and stored under in the workspace's .env */
     readonly apiKeyVar: string
     /** spawn-env overrides for `auth`, merged over process.env; undefined = inherit */
     env(auth: ProviderAuth): Record<string, string> | undefined
@@ -287,7 +287,7 @@ export interface Provider {
   commands(spec: ProbeSpec): Promise<CommandEntry[]>
   /** a real round-trip, proving the auth in `env` works */
   checkAuth(env: SpawnEnv): Promise<{ ok: boolean; error?: string }>
-  /** who is signed in with `env`, on what plan, and how much of it is used — no turn spent */
+  /** who is signed in with `env`, on what plan, and how much of it is used, no turn spent */
   account(env: SpawnEnv): Promise<AccountStatus>
 }
 

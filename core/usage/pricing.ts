@@ -1,8 +1,8 @@
 /**
  * List prices for the models Claude Code runs, in dollars per million tokens.
  *
- * Claude Code's transcripts record tokens, never money — cost is derived here.
- * Two honest caveats travel with every number this produces:
+ * Claude Code's transcripts record tokens, never money, cost is derived here.
+ * Two caveats travel with every number this produces:
  *
  *  - These are first-party API list prices. On a Pro/Max subscription nothing
  *    is billed per token, so the figure is "what this would have cost on the
@@ -71,7 +71,7 @@ export type TokenCounts = {
   output: number
   /** Cache writes at the 5-minute TTL. */
   cacheWrite5m: number
-  /** Cache writes at the 1-hour TTL — twice the write premium. */
+  /** Cache writes at the 1-hour TTL: twice the write premium. */
   cacheWrite1h: number
   cacheRead: number
 }

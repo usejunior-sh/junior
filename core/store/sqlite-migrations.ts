@@ -117,7 +117,7 @@ export const GOALS_SCHEMA = `CREATE TABLE IF NOT EXISTS goals (
      PRIMARY KEY (goal_id, session_id)
    );`
 
-// Numbered, append-only. A new migration is a new entry — never edit an old one.
+// Numbered, append-only. A new migration is a new entry, never edit an old one.
 export const MIGRATIONS: string[] = [
   `CREATE TABLE sessions (
      id             TEXT PRIMARY KEY,
@@ -136,7 +136,7 @@ export const MIGRATIONS: string[] = [
      PRIMARY KEY (session_id, seq)
    );
    CREATE INDEX idx_sessions_updated ON sessions(updated_at DESC);`,
-  // 2: the inbox snapshot — one row holding the latest ranked result, so the
+  // 2: the inbox snapshot: one row holding the latest ranked result, so the
   // page renders instantly on load and across server restarts.
   `CREATE TABLE inbox_snapshot (
      id        INTEGER PRIMARY KEY CHECK (id = 1),
@@ -148,7 +148,7 @@ export const MIGRATIONS: string[] = [
      key   TEXT PRIMARY KEY,
      value TEXT NOT NULL
    );`,
-  // 4: projects — a named local folder, optionally tied to a GitHub repo.
+  // 4: projects: a named local folder, optionally tied to a GitHub repo.
   `CREATE TABLE projects (
      id         TEXT PRIMARY KEY,
      name       TEXT NOT NULL,
@@ -156,7 +156,7 @@ export const MIGRATIONS: string[] = [
      path       TEXT NOT NULL,
      created_at INTEGER NOT NULL
    );`,
-  // 5: the jobs engine (.docs/jobs.md) — user-defined jobs, the
+  // 5: the jobs engine (.docs/jobs.md): user-defined jobs, the
   // persistent ingested items they (and external scanners) produce, and the
   // user-state overlay that survives every snapshot rebuild.
   `CREATE TABLE jobs (
@@ -190,15 +190,15 @@ export const MIGRATIONS: string[] = [
      pinned       INTEGER NOT NULL DEFAULT 0
    );`,
   // 6: the model a session runs on. NULL = Claude Code's own default, which
-  // is not the same as any named model — an org can move it under us.
+  // is not the same as any named model. An org can move it under us.
   `ALTER TABLE sessions ADD COLUMN model TEXT;
    ALTER TABLE sessions ADD COLUMN effort TEXT;`,
   // 7: how much a session asks before acting. NULL = 'default' (ask every
   // time), which is what every session predating this column was doing.
   `ALTER TABLE sessions ADD COLUMN permission_mode TEXT;`,
-  // 8: pinned sessions — they sort above the rest, regardless of activity.
+  // 8: pinned sessions: they sort above the rest, regardless of activity.
   `ALTER TABLE sessions ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0;`,
-  // 9: user priority overrides (any item, survives re-sync) + manual items —
+  // 9: user priority overrides (any item, survives re-sync) + manual items:
   // to-dos the user adds by hand, in their own editable table.
   `ALTER TABLE item_state ADD COLUMN priority INTEGER;
    CREATE TABLE manual_items (
@@ -215,7 +215,7 @@ export const MIGRATIONS: string[] = [
   // EVERY source (built-ins, job hits, GitHub, manual), never hard-deleted;
   // lifecycle lives on the row and in an append-only per-item event log. This
   // supersedes ingested_items + item_state + manual_items + the slack.cache
-  // config (all left in place, unused — a fresh start, no fold-forward). Job
+  // config (all left in place, unused, a fresh start, no fold-forward). Job
   // runs become real sessions (kind/job_id on sessions); jobs record each
   // run's status/session/error and a template origin.
   `CREATE TABLE work_items (
@@ -252,21 +252,21 @@ export const MIGRATIONS: string[] = [
    ALTER TABLE jobs ADD COLUMN last_run_error TEXT;
    ALTER TABLE jobs ADD COLUMN template_id TEXT;`,
   // 11: per-run outcome on the (job-run) session row, so the Activity view is
-  // a true history of runs — each run is a session, and these are its receipt.
+  // a true history of runs: each run is a session, and these are its receipt.
   `ALTER TABLE sessions ADD COLUMN run_status TEXT;
    ALTER TABLE sessions ADD COLUMN run_matches INTEGER;
    ALTER TABLE sessions ADD COLUMN run_tokens INTEGER;
    ALTER TABLE sessions ADD COLUMN run_error TEXT;`,
-  // 12: cron schedule per job — the precise fire schedule, superseding the
+  // 12: cron schedule per job: the precise fire schedule, superseding the
   // coarse hourly/daily/weekly cadence (old rows derive it from cadence).
   `ALTER TABLE jobs ADD COLUMN schedule TEXT;`,
-  // 13: fast mode per session — premium speed at premium price, so it is opt-in
+  // 13: fast mode per session: premium speed at premium price, so it is opt-in
   // per session and defaults off, including for every session that predates it.
   `ALTER TABLE sessions ADD COLUMN fast_mode INTEGER NOT NULL DEFAULT 0;`,
-  // 14: artifacts + links (.docs/next-version.md, phase 1). `artifacts` is an
+  // 14: artifacts + links. `artifacts` is an
   // index over markdown files (the file is the truth); `links` is the one
-  // polymorphic relation table for artifact↔item, artifact↔session and, from
-  // phase 2, session↔item. IF NOT EXISTS because ensureDurableSchema also
+  // polymorphic relation table for artifact↔item, artifact↔session and
+  // session↔item. IF NOT EXISTS because ensureDurableSchema also
   // converges these for DBs whose version counter got here another way.
   `CREATE TABLE IF NOT EXISTS artifacts (
      id         TEXT PRIMARY KEY,
@@ -293,7 +293,7 @@ export const MIGRATIONS: string[] = [
    );
    CREATE INDEX IF NOT EXISTS idx_links_to ON links(to_kind, to_id);
    CREATE INDEX IF NOT EXISTS idx_links_from ON links(from_kind, from_id);`,
-  // 15: brief jobs (.docs/next-version.md, phase 2) — the FIFO queue and the
+  // 15: brief jobs, the FIFO queue and the
   // state machine for playbook runs, one row per run, newest = the item's brief.
   `CREATE TABLE IF NOT EXISTS brief_jobs (
      id          TEXT PRIMARY KEY,
@@ -320,7 +320,7 @@ export const MIGRATIONS: string[] = [
    UPDATE jobs SET connectors = '["slack"]' WHERE connectors IS NULL;`,
   // 17: what a job run cost in dollars (the SDK's total_cost_usd on the result
   // message), so the job page can show spend, not just tokens. Backfilled from
-  // the event log — the result message is already persisted there.
+  // the event log: the result message is already persisted there.
   `ALTER TABLE sessions ADD COLUMN run_cost_usd REAL;
    UPDATE sessions SET run_cost_usd = (
      SELECT json_extract(e.payload, '$.message.total_cost_usd') FROM session_events e
@@ -329,7 +329,7 @@ export const MIGRATIONS: string[] = [
    WHERE kind = 'job-run' AND run_cost_usd IS NULL;`,
   // 18: a job may pin the model its runs use; NULL = Claude Code's default.
   `ALTER TABLE jobs ADD COLUMN model TEXT;`,
-  // 19: what a run produces — many items (default) or one rolling digest.
+  // 19: what a run produces: many items (default) or one rolling digest.
   `ALTER TABLE jobs ADD COLUMN output TEXT;`,
   `CREATE TABLE IF NOT EXISTS session_turns (
      session_id TEXT NOT NULL,
@@ -343,8 +343,9 @@ export const MIGRATIONS: string[] = [
      PRIMARY KEY (session_id, seq)
    );
    CREATE INDEX IF NOT EXISTS session_turns_root ON session_turns(root);`,
-  // 21: job-spec.md — tool grants, required project, scheduler hardening (start-time clock, catch-up, limits, streaks),
-  // and run receipts that say why a run happened and how many finds were new.
+  // 21: job tool grants, required project, scheduler hardening (start-time
+  // clock, catch-up, limits, streaks), and run receipts that say why a run
+  // happened and how many finds were new.
   `ALTER TABLE jobs ADD COLUMN tools TEXT;
    ALTER TABLE jobs ADD COLUMN config_error TEXT;
    ALTER TABLE jobs ADD COLUMN catch_up_window TEXT;
@@ -358,7 +359,7 @@ export const MIGRATIONS: string[] = [
    UPDATE jobs SET last_run_started_at = last_run_at WHERE last_run_started_at IS NULL;
    ALTER TABLE sessions ADD COLUMN run_trigger TEXT;
    ALTER TABLE sessions ADD COLUMN run_new INTEGER;`,
-  // 22: the slot ledger — one row per (job, slot), however it ended. Additive; existing runs are not backfilled.
+  // 22: the slot ledger: one row per (job, slot), however it ended. Additive; existing runs are not backfilled.
   `CREATE TABLE IF NOT EXISTS job_runs (
      id         TEXT PRIMARY KEY,
      job_id   TEXT NOT NULL,
@@ -374,16 +375,16 @@ export const MIGRATIONS: string[] = [
    );`,
   // 23: a per-job daily spend cap, summed from the ledger.
   `ALTER TABLE jobs ADD COLUMN daily_budget_usd REAL;`,
-  // 24: jobs as files — the row is state, keyed by the file's id; this names the file.
+  // 24: jobs as files: the row is state, keyed by the file's id; this names the file.
   `ALTER TABLE jobs ADD COLUMN file TEXT;`,
   // 25: due dates (core/work/due.ts). due_source is 'explicit' (the source
   // stated it) or 'you' (set in the inbox; survives rescans); NULL = the
   // label's default, resolved at read time. 'you' with no due_at = Later.
   `ALTER TABLE work_items ADD COLUMN due_at INTEGER;
    ALTER TABLE work_items ADD COLUMN due_source TEXT;`,
-  // 26: workspace → default project → checkout (decision 549a251e). Exactly one
+  // 26: workspace → default project → checkout. Exactly one
   // project is the default (the partial unique index holds it to one), and a
-  // session records its project instead of having it derived from `cwd` —
+  // session records its project instead of having it derived from `cwd`, since
   // worktree folders break path matching. Backfilled at boot, not here: it
   // needs the default, which needs the session counts.
   `ALTER TABLE projects ADD COLUMN is_default INTEGER NOT NULL DEFAULT 0;
@@ -392,8 +393,8 @@ export const MIGRATIONS: string[] = [
   // 27: the agent a session runs on, fixed for its life. Every session before
   // this ran on Claude, so the default backfills them.
   `ALTER TABLE sessions ADD COLUMN provider TEXT NOT NULL DEFAULT 'claude';`,
-  // 28: checkouts — a project's folders, its main one and its git worktrees
-  // (worktrees phase 1). Sessions record theirs in `sessions.checkout_id`,
+  // 28: checkouts: a project's folders, its main one and its git worktrees
+  // (see server/worktrees.ts). Sessions record theirs in `sessions.checkout_id`,
   // which ensureDurableSchema adds: SQLite has no ADD COLUMN IF NOT EXISTS,
   // and this step must survive a version counter that got here another way.
   // A session's checkout is backfilled at boot (its project's main one), not
@@ -410,7 +411,7 @@ export const MIGRATIONS: string[] = [
      created_at INTEGER NOT NULL
    );
    CREATE INDEX IF NOT EXISTS idx_checkouts_project ON checkouts(project_id);`,
-  // 29: outbound actions (core/actions) — every effect a session had that left
+  // 29: outbound actions (core/actions): every effect a session had that left
   // this machine, one row each; `action_calls` maps each tool_use folded into
   // a row back to it (a collapsed git push holds several). Also converged by
   // ensureDurableSchema, as 28 is.
@@ -449,7 +450,7 @@ export const MIGRATIONS: string[] = [
      PRIMARY KEY (session_id, tool_use_id)
    );
    CREATE INDEX IF NOT EXISTS idx_action_calls_action ON action_calls(action_id);`,
-  // 30: queued actions (core/actions/queue.ts) — every step of a held call's
+  // 30: queued actions (core/actions/queue.ts): every step of a held call's
   // life, append-only. The queue's own columns on `actions` (full args,
   // expiry, send time, notes…) are added by ensureDurableSchema, which only
   // adds a column that is missing: an ALTER here would break a DB that
@@ -466,11 +467,11 @@ export const MIGRATIONS: string[] = [
      args       TEXT
    );
    CREATE INDEX IF NOT EXISTS idx_action_history_action ON action_history(action_id, id);`,
-  // 31: goals (core/goals) — the goal record, its event log (transitions and
+  // 31: goals (core/goals): the goal record, its event log (transitions and
   // the bus, replayed when unhandled), plan steps at run time, armed gates,
   // and one row per session. Also converged by ensureDurableSchema.
   GOALS_SCHEMA,
-  // 32: today's plan (core/junior/today.ts) — one row per item per local day,
+  // 32: today's plan (core/junior/today.ts): one row per item per local day,
   // and each day's own record. Also converged by ensureDurableSchema.
   TODAY_SCHEMA,
 ]

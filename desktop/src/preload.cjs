@@ -20,7 +20,7 @@ else if (location.protocol === 'file:') {
     version: arg ? arg.slice('--triage-version='.length) : '',
     retry: () => ipcRenderer.send('splash:retry'),
     openLog: () => ipcRenderer.send('splash:open-log'),
-    // { state: 'starting' | 'error', text, detail? } — the latest is replayed on load
+    // { state: 'starting' | 'error', text, detail? }, the latest is replayed on load
     onStatus: (cb) => ipcRenderer.on('splash:status', (_e, s) => cb(s)),
   })
 }

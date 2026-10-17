@@ -23,10 +23,6 @@ import { OPEN_TABS, SCENES, TAB_TITLES, type Scene } from './scenes.js'
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const REPO = path.resolve(HERE, '../..')
 
-// ---------------------------------------------------------------------------
-// Args
-// ---------------------------------------------------------------------------
-
 const argv = process.argv.slice(2)
 const mode = argv[0] === 'serve' ? 'serve' : 'shots'
 const flag = (name: string) => argv.includes(`--${name}`)
@@ -44,9 +40,7 @@ const ONLY = opt('only', '')
   .filter(Boolean)
 const BASE = `http://localhost:${PORT}`
 
-// ---------------------------------------------------------------------------
 // Framed outputs: platform sizes in CSS px, rendered at 2x
-// ---------------------------------------------------------------------------
 
 type Format = { name: string; width: number; height: number; headline: boolean }
 const FORMATS: Format[] = [
@@ -54,8 +48,6 @@ const FORMATS: Format[] = [
   { name: 'linkedin', width: 1200, height: 1200, headline: true }, // LinkedIn square feed
   { name: 'og', width: 1200, height: 630, headline: false }, // link previews: HN, Reddit, Slack, the site
 ]
-
-// ---------------------------------------------------------------------------
 
 async function main() {
   if (await healthy()) throw new Error(`something already answers on :${PORT}; pass --port`)
@@ -137,10 +129,6 @@ async function waitHealthy(server: ChildProcess) {
   }
   throw new Error(`the demo server did not answer on :${PORT} within 60s`)
 }
-
-// ---------------------------------------------------------------------------
-// Capture
-// ---------------------------------------------------------------------------
 
 async function capture() {
   const scenes = ONLY.length ? SCENES.filter((s) => ONLY.includes(s.name)) : SCENES
@@ -277,9 +265,7 @@ async function shoot(browser: Browser, scene: Scene, file: string) {
   }
 }
 
-// ---------------------------------------------------------------------------
 // Frame: the raw shot as a window on a dark stage, sized per platform
-// ---------------------------------------------------------------------------
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;')
 

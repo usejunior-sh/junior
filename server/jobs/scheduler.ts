@@ -13,17 +13,15 @@ import { jobsEnabled } from '../settings-ops.js'
 
 export const SCHEDULER_TICK_MS = 60_000
 
-// ---------------------------------------------------------------------------
 // Job runs (.docs/jobs-v2.md): one run per job, each a real session so
 // its transcript is the run's receipt. A small queue caps concurrency and
 // jitters starts so the top of the hour doesn't stampede; a per-job in-flight
 // guard turns "already running" into a recorded 'skipped', never a silent no-op.
 // The output contract is TOOL CALLS: the run gets a permalink-shaped
 // upsert_work_item that stamps identity, kind, and provenance, so a work item
-// exists because a tool call created it — no JSON parsing, no cursor-advance-on-
+// exists because a tool call created it. No JSON parsing, no cursor-advance-on-
 // garbled-output bug. Cursors advance only on a successful run.
-// ---------------------------------------------------------------------------
-/** Which jobs are overdue — no `ok` ledger row within grace (isOverdue). */
+/** Which jobs are overdue: no `ok` ledger row within grace (isOverdue). */
 export async function overdueJobs(rt: WorkspaceRuntime, jobs: Job[], now: number): Promise<Set<string>> {
   const lastOk = await rt.store.jobRuns.lastOkAt().catch(() => new Map<string, number>())
   return new Set(jobs.filter((w) => isOverdue(scheduleOf(w), w, lastOk.get(w.id), now)).map((w) => w.id))
@@ -33,7 +31,7 @@ export async function overdueJobs(rt: WorkspaceRuntime, jobs: Job[], now: number
 /**
  * Where Claude Code keeps its transcripts. The user's own `~/.claude` (or
  * whatever `CLAUDE_CONFIG_DIR` points at), plus the private config dir of
- * every Claude workspace on the `config-dir` auth backend — those sessions are
+ * every Claude workspace on the `config-dir` auth backend. Those sessions are
  * the user's spend too, and they log somewhere else. Claude's only: the usage
  * ledger reads Claude Code's transcript format.
  */

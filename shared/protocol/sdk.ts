@@ -1,14 +1,12 @@
 import type { SlashCommandInfo } from './catalog.js'
 import type { FastModeDisabledReason, FastModeState } from './session.js'
 
-// ---------------------------------------------------------------------------
 // Agent SDK payloads
 //
 // The server forwards Agent SDK messages verbatim. Rather than mirror the SDK's
 // full type surface into the browser (it is a node-only package), these types
-// describe exactly the subset the UI reads — everything else stays untyped and
+// describe exactly the subset the UI reads. Everything else stays untyped and
 // is ignored. Widen these as the UI starts reading more.
-// ---------------------------------------------------------------------------
 
 /** A content block as it arrives on the wire: `type` plus unknown extras. */
 export type RawBlock = { type: string } & Record<string, unknown>
@@ -47,7 +45,7 @@ export type StreamEvent = {
 export type SdkMessage = {
   type: string
   subtype?: string
-  /** Claude Code's own session id — present on every SDK message. */
+  /** Claude Code's own session id: present on every SDK message. */
   session_id?: string
   model?: string
   tools?: string[]
@@ -60,7 +58,7 @@ export type SdkMessage = {
   /** Carried on init and result messages; the session's fast-mode reality. */
   fast_mode_state?: FastModeState
   fast_mode_disabled_reason?: FastModeDisabledReason
-  /** init only: the `/` commands whose UX needs a real terminal — we hide them. */
+  /** init only: the `/` commands whose UX needs a real terminal, we hide them. */
   terminal_slash_commands?: string[]
   /** `commands_changed` only: the replacement list, to be swapped in whole. */
   commands?: SlashCommandInfo[]

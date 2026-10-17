@@ -1,17 +1,17 @@
 /**
  * Two checks on a shell command, for the Autonomy levels (.docs/junior-goals-teams/modes-autonomy-goals.md):
  *
- *   readOnlyCommand     runs alone at "Asks before commands" — a short list of
+ *   readOnlyCommand     runs alone at "Asks before commands", a short list of
  *                       read verbs, no shell metacharacters at all, so nothing
  *                       can be chained, redirected or substituted onto it
- *   destructiveCommand  still asks at "Asks before sending" — work you can't
+ *   destructiveCommand  still asks at "Asks before sending", work you can't
  *                       get back; every simple command in the line is checked
  *
  * Pure and browser-safe.
  */
 import { splitCommand, unwrap, type CommandPart } from './bash.js'
 
-/** `gh`/`git` read verbs — the only shell a brief may run. */
+/** `gh`/`git` read verbs: the only shell a brief may run. */
 export const GIT_READ_RE =
   /^\s*(gh\s+(pr|issue|api|search|run|repo)\s+(view|diff|checks|list|status|comments)\b|git\s+(log|show|diff|blame|status|branch|ls-files)\b)/
 /** Plain lookups on top of those. `find` is read-only only without its acting flags. */

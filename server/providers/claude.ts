@@ -1,5 +1,5 @@
 /**
- * Claude Code through the Agent SDK — the one place triage calls `query()`.
+ * Claude Code through the Agent SDK: the one place triage calls `query()`.
  * Every session is full Claude Code: its own system prompt and tools, plus the
  * user's settings, plugins and MCP connectors from ~/.claude unless a spec
  * says otherwise.
@@ -114,7 +114,7 @@ export const claude: Provider = {
         ...(spec.model ? { model: spec.model } : {}),
         ...(spec.effort ? { effort: spec.effort } : {}),
         // Fast mode: the SDK only honours it from the inline (flag) settings
-        // layer and only when it is explicitly true — a user/project setting is
+        // layer and only when it is explicitly true, a user/project setting is
         // ignored in the Agent SDK ('sdk_opt_in_required'), so it is set at
         // spawn here and cleared, not set false, when turned off.
         ...(spec.fastMode || spec.settings
@@ -151,7 +151,7 @@ export const claude: Provider = {
       backgroundTask: async (toolUseId) => {
         await q.backgroundTasks(toolUseId)
       },
-      // Plugins, skills and agents in one go — project and personal ones too, not only plugins'.
+      // Plugins, skills and agents in one go, project and personal ones too, not only plugins'.
       reloadLibrary: async () => (await q.reloadPlugins()).commands,
     }
   },
@@ -226,7 +226,7 @@ export const claude: Provider = {
   },
 
   // `accountInfo` says who is signed in; the plan windows come from the
-  // SDK's `/usage` call, marked experimental — so it is asked separately and
+  // SDK's `/usage` call, marked experimental, so it is asked separately and
   // a failure there costs the limits, never the account.
   account(env) {
     return withProbe(

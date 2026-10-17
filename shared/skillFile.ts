@@ -1,7 +1,7 @@
 /**
  * Skill and agent files (SKILL.md, agents/<name>.md) as text: a YAML-ish
  * frontmatter block, then the prompt. Other tools write these by hand, so the
- * reader is lenient — block scalars (`description: >`), quoted strings, lists —
+ * reader is lenient, block scalars (`description: >`), quoted strings, lists,
  * and the writer is surgical: setting one field rewrites only that key's lines,
  * so keys triage doesn't know (allowed-tools, metadata, hooks…) and the
  * author's formatting survive an edit from the settings form.
@@ -40,7 +40,7 @@ function blockEnd(head: string[], i: number): number {
   return j
 }
 
-/** Every top-level key as a plain string — lists joined with ", ", block scalars folded or kept. */
+/** Every top-level key as a plain string, lists joined with ", ", block scalars folded or kept. */
 export function readFields(text: string): Record<string, string> {
   const s = split(text)
   if (!s) return {}
@@ -59,7 +59,7 @@ export function readFields(text: string): Record<string, string> {
     } else if (rest.startsWith('[') && rest.endsWith(']')) {
       out[m[1]] = rest.slice(1, -1).split(',').map(unquote).filter(Boolean).join(', ')
     } else if (rest === '' && more.length) {
-      // a nested map (metadata:) — not a value the form edits
+      // a nested map (metadata:), not a value the form edits
       out[m[1]] = ''
     } else {
       // a plain scalar may run on over indented lines

@@ -80,12 +80,12 @@ export type TeamRunFile = {
     | { kind: 'artifact'; id: string }
     | { kind: 'project'; path: string }
     | { kind: 'file'; path: string }
-    /** a file in the run folder, relative to it — opens inline (GET /api/teams/file) */
+    /** a file in the run folder, relative to it, opens inline (GET /api/teams/file) */
     | { kind: 'runfile'; path: string }
     | { kind: 'library'; library: 'team' | 'agent'; name: string }
     | { kind: 'handoff'; id: string }
     | null
-  /** the runs that wrote or produced it (WorkerRun ids) — the row's "by T2" links */
+  /** the runs that wrote or produced it (WorkerRun ids). The row's "by T2" links */
   runs: string[]
   /** still being written: the plan, or a file the working run is changing */
   live?: boolean

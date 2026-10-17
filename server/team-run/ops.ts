@@ -20,7 +20,7 @@ import { currentBrief } from '../brief-run.js'
 
 const CHECK_TIMEOUT_MS = 240_000
 
-/** The project's own typecheck/lint/test — free, and before any checker is paid to find a type error. */
+/** The project's own typecheck/lint/test: free, and before any checker is paid to find a type error. */
 export async function runProjectChecks(run: TeamRun): Promise<CheckResult[]> {
   const cmds = run.root ? await detectChecks(run.root) : []
   run.checkCmds = cmds
@@ -38,7 +38,7 @@ export async function runProjectChecks(run: TeamRun): Promise<CheckResult[]> {
   return results
 }
 
-/** The run is over: the plan gets its Outcome — it is the result on the item — and the lead says so. */
+/** The run is over: the plan gets its Outcome, it is the result on the item, and the lead says so. */
 export async function finishTeamRun(rt: WorkspaceRuntime, run: TeamRun): Promise<void> {
   if (run.root) run.endTree = (await snapshotTree(run.root)) ?? undefined
   await schedulePlanSync(rt, run, true)
@@ -62,7 +62,7 @@ export async function noteTeamSpend(rt: WorkspaceRuntime, sessionId: string, del
     // session mid-turn. Paused meanwhile (by you, or the budget), it waits for your resume instead.
     const decided = sessionId === run.leadSessionId ? rt.goalDecisions.get(run.id) : undefined
     const over = run.state === 'running' && (spent >= run.budgetUsd || overBudget)
-    // Past the budget a "met" still closes the goal — it spends nothing more.
+    // Past the budget a "met" still closes the goal, it spends nothing more.
     if (decided && run.state === 'running' && (!over || closes(run, decided))) {
       rt.goalDecisions.delete(run.id)
       try {
@@ -196,7 +196,7 @@ function draftedRecipe(raw: unknown, known: Set<string>): TeamRecipe {
 
 /**
  * The lead proposes a team: a saved team or one it drafted, plus the card. The
- * run waits, proposed, until you approve. A session with no work item gets one —
+ * run waits, proposed, until you approve. A session with no work item gets one,
  * the result, "needs you" and the cost all land on an item.
  */
 export async function proposeTeamOp(rt: WorkspaceRuntime, sessionId: string, raw: unknown): Promise<TeamRun> {
@@ -303,7 +303,7 @@ export async function editTeamCardOp(rt: WorkspaceRuntime, raw: unknown): Promis
 
 /**
  * Your edit to a running plan, from the drawer: the tasks still to do, and the
- * decisions. Tasks land between tasks — the loop reads the list fresh each time.
+ * decisions. Tasks land between tasks: the loop reads the list fresh each time.
  */
 export async function editPlanOp(rt: WorkspaceRuntime, raw: unknown): Promise<void> {
   const run = teamRunFrom(rt, raw)

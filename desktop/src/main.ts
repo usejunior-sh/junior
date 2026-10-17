@@ -1,6 +1,6 @@
 /**
  * Triage.app's main process (ARCHITECTURE.md): windows over the local daemon,
- * a menu, a menu-bar icon. The app attaches, it does not own — quitting it
+ * a menu, a menu-bar icon. The app attaches, it does not own, quitting it
  * never stops the daemon, so live sessions and jobs carry on.
  *
  * One main window, which only hides on close so the app lives on in the Dock;
@@ -39,7 +39,7 @@ type SplashStatus = { state: 'starting' | 'error'; text: string; detail?: string
 
 let win: BrowserWindow | null = null // the main window
 const extra = new Set<BrowserWindow>() // workspace windows opened from it
-// Where each window goes once the daemon answers — and goes back to after a
+// Where each window goes once the daemon answers, and goes back to after a
 // reconnect, so a workspace window comes back on its own workspace.
 const target = new WeakMap<BrowserWindow, string>()
 let tray: Tray | null = null
@@ -52,9 +52,8 @@ let splash: SplashStatus = { state: 'starting', text: 'Looking for triage…' }
 let browser: BrowserHost | null = null
 
 // An unpackaged app (`npm start` in desktop/) is the dev app: its own data
-// folder, so it never shares the installed app's single-instance lock — which
-// would quit it on launch and bring the installed window forward instead —
-// nor its window state or the browser pane's cookies.
+// folder, so it never shares the installed app's single-instance lock, which
+// would quit it on launch and bring the installed window forward instead, nor its window state or the browser pane's cookies.
 if (!app.isPackaged) {
   app.setName('Triage Dev')
   app.setPath('userData', path.join(app.getPath('appData'), 'Triage Dev'))
@@ -86,8 +85,6 @@ function start() {
   void connect()
   setInterval(watchdog, 5000)
 }
-
-// ── window ─────────────────────────────────────────────────────────────────
 
 /**
  * A window over the daemon, headed for `url` (the main window: the daemon's
@@ -250,8 +247,6 @@ function showWindow() {
 
 const onSplash = (w: BrowserWindow): boolean => !w.isDestroyed() && w.webContents.getURL() === SPLASH_URL
 
-// ── connecting ─────────────────────────────────────────────────────────────
-
 function setSplash(s: SplashStatus) {
   splash = s
   for (const w of allWindows()) if (onSplash(w)) w.webContents.send('splash:status', s)
@@ -294,7 +289,7 @@ async function connect(how: 'ensure' | 'restart' = 'ensure') {
 }
 
 /**
- * An automatic reconnect, at most once per 10s — a daemon that keeps failing
+ * An automatic reconnect, at most once per 10s. A daemon that keeps failing
  * to load ends on the splash's error, waiting for Retry, instead of a loop.
  */
 function reconnect() {
@@ -309,7 +304,7 @@ function reconnect() {
   void connect()
 }
 
-// A loaded SPA doesn't fail a load when the daemon dies — its socket just
+// A loaded SPA doesn't fail a load when the daemon dies, its socket just
 // drops. Two misses in a row (not one: `triage restart` is a short gap) sends
 // every window back to the splash. And a splash showing an error recovers on
 // its own once a daemon appears.
@@ -322,7 +317,7 @@ async function watchdog() {
     if (splash.state === 'error' && health && health !== 'other') void connect()
     return
   }
-  // 'other' includes a busy daemon that missed the 1.5s probe — not gone.
+  // 'other' includes a busy daemon that missed the 1.5s probe, not gone.
   misses = health === null ? misses + 1 : 0
   if (misses >= 2) {
     misses = 0
@@ -351,8 +346,6 @@ async function confirmRestart(message = 'Restart the triage server?') {
   if (response === 0) void connect('restart')
 }
 
-// ── navigation ─────────────────────────────────────────────────────────────
-
 type NavState = { canGoBack: boolean; canGoForward: boolean; fullscreen: boolean }
 
 function navState(w: BrowserWindow | null): NavState {
@@ -372,8 +365,6 @@ function goForward(w: BrowserWindow | null) {
 function sendNav(w: BrowserWindow) {
   if (!w.isDestroyed() && !onSplash(w)) w.webContents.send('nav:state', navState(w))
 }
-
-// ── menu + tray ────────────────────────────────────────────────────────────
 
 function buildMenu(): Menu {
   const template: MenuItemConstructorOptions[] = [
@@ -467,10 +458,8 @@ function statusLine(health: DaemonHealth | 'other' | null | undefined): string {
   return `triage v${health.version} · ${n} live session${n === 1 ? '' : 's'}`
 }
 
-// ── helpers ────────────────────────────────────────────────────────────────
-
 /**
- * After an app upgrade the running daemon can still be the old one — it keeps
+ * After an app upgrade the running daemon can still be the old one. It keeps
  * running across app quits. Unpackaged, the app's version says nothing about
  * the server's (dev runs the repo build), so only a packaged app compares.
  */
@@ -491,7 +480,7 @@ function isDaemonUrl(raw: string): boolean {
   }
 }
 
-// Only schemes a browser or mail client should handle — never file: or app handlers.
+// Only schemes a browser or mail client should handle, never file: or app handlers.
 function openExternal(url: string) {
   if (/^(https?|mailto):/i.test(url)) void shell.openExternal(url)
 }
@@ -510,7 +499,7 @@ function loadWindowState(): WindowState {
     const s = JSON.parse(fs.readFileSync(stateFile(), 'utf8')) as { bounds?: Rectangle; maximized?: boolean }
     const b = s.bounds
     if (b && [b.x, b.y, b.width, b.height].every(Number.isFinite)) {
-      // Clamp to the display it was on — or the nearest, if that one is gone.
+      // Clamp to the display it was on, or the nearest, if that one is gone.
       const area = screen.getDisplayMatching(b).workArea
       const width = Math.min(Math.max(b.width, MIN_SIZE.width), area.width)
       const height = Math.min(Math.max(b.height, MIN_SIZE.height), area.height)

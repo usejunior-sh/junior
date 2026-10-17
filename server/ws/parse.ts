@@ -6,7 +6,7 @@ const effort = (v: unknown): EffortLevel | undefined => (isEffortLevel(v) ? v : 
 const PERMISSION_MODES: PermissionMode[] = ['default', 'acceptEdits', 'auto', 'bypassPermissions', 'gated']
 
 /**
- * Unrecognized modes fall through to `undefined`, i.e. ask — a frame the
+ * Unrecognized modes fall through to `undefined`, i.e. ask. A frame the
  * server does not understand must never widen what a session may do.
  */
 const permissionMode = (v: unknown): PermissionMode | undefined =>
@@ -14,7 +14,7 @@ const permissionMode = (v: unknown): PermissionMode | undefined =>
 
 /**
  * AskUserQuestion answers off the socket: a flat string→string map, or nothing.
- * Non-string values are dropped rather than passed through — this object is
+ * Non-string values are dropped rather than passed through. This object is
  * merged into a tool's input.
  */
 const questionAnswers = (v: unknown): QuestionAnswers | undefined => {
@@ -31,7 +31,7 @@ export const BASE64 = /^[A-Za-z0-9+/]+={0,2}$/
 
 /**
  * Image attachments off the socket. Anything malformed, oversized, or of an
- * unsupported media type is dropped rather than forwarded — these bytes go
+ * unsupported media type is dropped rather than forwarded. These bytes go
  * both into the event log and up to the API.
  */
 const imageAttachments = (v: unknown): ImageAttachment[] | undefined => {
@@ -73,7 +73,7 @@ const mentionList = (v: unknown): Mention[] | undefined => {
 }
 
 /**
- * The socket is untrusted input (vision principle 6), so incoming frames are
+ * The socket is untrusted input, so incoming frames are
  * validated into the ClientMessage union rather than cast into it.
  */
 export function parseClientMessage(raw: unknown): ClientMessage | null {
@@ -111,7 +111,7 @@ export function parseClientMessage(raw: unknown): ClientMessage | null {
         ? { type: 'set_model', sessionId: m.sessionId, model: model(m.model), effort: effort(m.effort) }
         : null
     case 'set_fast_mode':
-      // Anything but an explicit true is off — the paid-for mode is the one
+      // Anything but an explicit true is off. The paid-for mode is the one
       // that has to be asked for exactly.
       return typeof m.sessionId === 'string'
         ? { type: 'set_fast_mode', sessionId: m.sessionId, fastMode: m.fastMode === true }

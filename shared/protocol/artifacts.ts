@@ -1,12 +1,10 @@
 
 
-// ---------------------------------------------------------------------------
-// Artifacts (GET/POST/PUT/DELETE /api/artifacts, GET/POST/DELETE /api/links) —
-// markdown files with frontmatter under the workspace's artifacts folder
-// (.docs/next-version.md, phase 1). The file is the truth; this is its index
+// Artifacts (GET/POST/PUT/DELETE /api/artifacts, GET/POST/DELETE /api/links):
+// markdown files with frontmatter under the workspace's artifacts folder.
+// The file is the truth; this is its index
 // row. There is ONE kind of artifact: what a document *is to* an item or a
 // session ("the brief for", "context for") is a link role, not a type.
-// ---------------------------------------------------------------------------
 
 export type ArtifactAuthor = 'human' | 'model'
 export const isArtifactAuthor = (v: unknown): v is ArtifactAuthor => v === 'human' || v === 'model'
@@ -22,7 +20,7 @@ export type Artifact = {
   refs: string[]
   created: number
   updated: number
-  /** file mtime and size at index time — the cheap "has it changed" check */
+  /** file mtime and size at index time. The cheap "has it changed" check */
   mtime: number
   size: number
   /** set when the frontmatter did not parse and defaults were used */
@@ -34,7 +32,7 @@ export const LINK_KINDS: readonly LinkKind[] = ['artifact', 'item', 'session']
 export const isLinkKind = (v: unknown): v is LinkKind => LINK_KINDS.includes(v as LinkKind)
 
 /**
- * artifact→item: `brief` (the document about it — inherits the item's
+ * artifact→item: `brief` (the document about it: inherits the item's
  * lifecycle) or `context` (human notes it should be read with);
  * artifact→session: `context`; session→item: `dispatch` (the session works
  * the item) or `brief` (the session wrote its brief).

@@ -1,7 +1,7 @@
 /**
  * The WebSocket contract between the triage server and its frontends.
  *
- * This is the only thing a frontend is allowed to know about the server —
+ * This is the only thing a frontend is allowed to know about the server,
  * "thin frontends, fat core" (see .docs/vision.md). Both `server/` and `web/`
  * import this file, so a change to the wire format is a compile error on the
  * side that did not keep up.

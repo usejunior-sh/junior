@@ -1,23 +1,21 @@
 
 
-// ---------------------------------------------------------------------------
-// System / daemon status + logs (GET /api/system, GET /api/logs) — the gateway
+// System / daemon status + logs (GET /api/system, GET /api/logs), the gateway
 // status surface: is the daemon up, is the scheduler ticking, are connectors
 // live, and its recent activity log.
-// ---------------------------------------------------------------------------
 /**
- * Which copy of triage answered — computed from where the running code lives
+ * Which copy of triage answered: computed from where the running code lives
  * and how its version is labelled (server/state.ts `buildInfo`). Several copies
  * coexist on one machine, so this is what lets the UI, the CLI and
  * `curl /api/health` all name the same one.
  *
- * `channel` is the question actually worth asking — how far is this from what
+ * `channel` is the question actually worth asking, how far is this from what
  * other people have?
  *
- *   dev     — a source checkout, uncommitted work included (`npm run dev`)
- *   preview — a real install, but built from commits nobody has yet: the
+ *   dev, a source checkout, uncommitted work included (`npm run dev`)
+ *   preview, a real install, but built from commits nobody has yet: the
  *             version carries a prerelease label (1.0.4-dev.g23d0004)
- *   release — a clean released version, the same bytes `curl | sh` hands out
+ *   release, a clean released version, the same bytes `curl | sh` hands out
  *
  * `surface` is where it is installed, which is a different axis: a preview and
  * a release both normally live in Triage.app.
@@ -30,11 +28,11 @@ export type Build = {
   commit: string | null
   /** the preview was built with uncommitted changes in the tree */
   dirty: boolean
-  /** the package root on disk — the unambiguous answer to "which copy?" */
+  /** the package root on disk: the unambiguous answer to "which copy?" */
   root: string
   /** the state root this daemon reads: ~/.triage, or ~/.triage-dev in dev */
   home: string
-  /** `home` is prod's ~/.triage — false means this daemon is on dev's data */
+  /** `home` is prod's ~/.triage: false means this daemon is on dev's data */
   prodData: boolean
 }
 
@@ -60,7 +58,7 @@ export type SystemStatus = {
   jobs: { total: number; enabled: number; overdue: number; failing: number; configErrors: number }
   /** the macOS LaunchAgent that keeps triage running after reboot/crash: installed? (null off macOS) */
   launchAgent: boolean | null
-  /** the workspace's global jobs switch — off = the scheduler never runs a job */
+  /** the workspace's global jobs switch: off = the scheduler never runs a job */
   jobsEnabled: boolean
   /** where JSONL log files are written, or null if file logging is off */
   logDir: string | null
@@ -82,15 +80,13 @@ export type LogsResponse =
   | { ok: true; entries: LogEntry[]; subsystems: string[] }
   | { ok: false; error: string }
 
-// ---------------------------------------------------------------------------
 // Usage (GET /api/usage?days=N)
 //
 // What Claude Code has spent on this machine, read from its own transcripts
-// (`~/.claude/projects/**/*.jsonl`) rather than from anything we write — so it
+// (`~/.claude/projects/**/*.jsonl`) rather than from anything we write, so it
 // covers sessions started here, in a terminal, or anywhere else. Cost is
 // derived from list prices: on a Pro/Max subscription it is what the same
 // tokens would have cost on the API, not a bill.
-// ---------------------------------------------------------------------------
 
 export type UsageTotals = {
   input: number
@@ -104,7 +100,7 @@ export type UsageTotals = {
   cost: number
   messages: number
   sessions: number
-  /** Messages on a model we have no price for — counted, not costed. */
+  /** Messages on a model we have no price for, counted, not costed. */
   unpricedMessages: number
 }
 
@@ -125,7 +121,7 @@ export type UsageByModel = {
   cacheRead: number
   tokens: number
   cost: number
-  /** False when the model has no price row — its cost reads as 0. */
+  /** False when the model has no price row. Its cost reads as 0. */
   priced: boolean
 }
 
@@ -147,21 +143,19 @@ export type UsageSummary = {
   daily: UsageDay[]
   models: UsageByModel[]
   projects: UsageByProject[]
-  /** Models seen with no price row — surfaced so the total is honest. */
+  /** Models seen with no price row: surfaced so the total is honest. */
   unpricedModels: string[]
   scan: { files: number; reread: number; ms: number }
 }
 
 export type UsageResponse = { ok: true; usage: UsageSummary } | { ok: false; error: string }
 
-// ---------------------------------------------------------------------------
 // Per-session spend (GET /api/usage/sessions?ids=…&days=…)
 //
 // What a work item cost: the same ledger the Usage tab reads, folded by
 // session instead of by day/model/project. The client asks about the sessions
 // it already knows are linked to the item, so the item→session join stays in
 // one place (ItemPage's `linkedSessions`) instead of being re-derived here.
-// ---------------------------------------------------------------------------
 
 export type SessionSpend = {
   cost: number
@@ -189,7 +183,7 @@ export type UsageModelSlice = {
 export type SessionsUsage = {
   /** The window the ledger was scanned over. */
   days: number
-  /** Keyed by *triage* session id — ids with no transcript in the window are absent. */
+  /** Keyed by *triage* session id: ids with no transcript in the window are absent. */
   bySession: Record<string, SessionSpend>
   /** The same spend split by model, largest first. */
   models: UsageModelSlice[]

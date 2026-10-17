@@ -46,9 +46,9 @@ const JOB_TEMPLATES: Array<
 const NEEDS_PROJECT = 'pick the project this job runs in'
 
 /**
- * Every job runs in a project folder (job-spec.md, item 2) and there is no
- * fallback folder. A job without one — saved before the rule, its project
- * since removed, or left in the retired scratch project — pauses with a config
+ * Every job runs in a project folder and there is no
+ * fallback folder. A job without one, saved before the rule, its project
+ * since removed, or left in the retired scratch project, pauses with a config
  * error until the user picks a project. It never runs somewhere else.
  */
 export async function migrateJobProjects(rt: WorkspaceRuntime): Promise<void> {
@@ -158,7 +158,7 @@ const configKey = (w: Pick<Job, Exclude<keyof JobConfig, 'catchUpWindow' | 'time
 /**
  * Bring the rows in line with `jobs/*.md`. Cheap when nothing moved: it
  * re-reads only when a file, the project list or a connector probe changed
- * (or `force`). A file is never trusted blindly — anything that fails the
+ * (or `force`). A file is never trusted blindly: anything that fails the
  * schema, names a missing project or a tool the probe doesn't know becomes a
  * config error on its row, which holds the job; it never throws. A file
  * without an id (hand-written) or with a copied one gets its own, written
@@ -174,7 +174,7 @@ export function syncJobFiles(rt: WorkspaceRuntime, opts: { force?: boolean; defe
 async function syncJobFilesNow(rt: WorkspaceRuntime, { force = false, deferFirstRun }: { force?: boolean; deferFirstRun?: string }): Promise<void> {
   const files = await rt.jobFiles.scan()
   const projects = await rt.store.projects.list()
-  // only listed when a job names a skill or an agent — a skill removed later holds that job at the next tick
+  // only listed when a job names a skill or an agent. A skill removed later holds that job at the next tick
   const named = files.some((f) => /^(skills|agents)\s*:/m.test(f.text))
   const lib: JobLibrary = named ? await jobLibrary(rt) : { skills: new Map(), agents: new Map() }
   const sig = JSON.stringify([
@@ -322,7 +322,7 @@ export async function saveJobText(rt: WorkspaceRuntime, id: string | null, raw: 
 /**
  * A chat drafts a job (MCP draft_job): the file is written exactly as a
  * form or a hand edit would write it, but saved off and marked a draft. Only
- * the user's click on the job page turns it on — a model never schedules
+ * the user's click on the job page turns it on. A model never schedules
  * runs by itself. Checked like any job file; anything wrong is refused with
  * the reasons, so the chat can fix them and try again.
  */
@@ -397,7 +397,7 @@ export function draftJobText(d: { id: string; title: string; file: string; warni
 
 /**
  * A chat's trial run of a job (MCP try_job): the dry run the job page offers,
- * on the job's file as it stands — the same prompt, tools and fences as a
+ * on the job's file as it stands. The same prompt, tools and fences as a
  * real run, with nothing filed and nothing sent. It waits for the run, so the
  * chat can show the user what the job would have done before they turn it on.
  */

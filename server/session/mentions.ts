@@ -8,13 +8,11 @@ import { summarize } from './summaries.js'
 import { checkoutById } from './checkouts.js'
 
 /** The live subprocess for a session, starting one (with `resume`) if needed. */
-// ---------------------------------------------------------------------------
-// `@` mentions — resolved at send time into blocks the model reads
-// ---------------------------------------------------------------------------
+// `@` mentions: resolved at send time into blocks the model reads
 
 const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n)}\n… [truncated — ${s.length - n} more characters]` : s)
 
-/** What a session last said, for a `@session:` stub — its final reply, else the last assistant text. */
+/** What a session last said, for a `@session:` stub. Its final reply, else the last assistant text. */
 async function lastReplyText(rt: WorkspaceRuntime, sessionId: string): Promise<string | null> {
   const last = await rt.store.events.lastSeq(sessionId)
   const events = await rt.store.events.read(sessionId, Math.max(0, last - 200))

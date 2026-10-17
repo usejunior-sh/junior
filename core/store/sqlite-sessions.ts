@@ -198,7 +198,7 @@ export class SqliteSessions implements SessionStore {
 
   /**
    * Delete a session and its log. The event rows reference the session, so
-   * they go first — with foreign keys on, the other order fails.
+   * they go first, with foreign keys on, the other order fails.
    */
   async remove(id: string): Promise<void> {
     this.db.prepare('DELETE FROM session_events WHERE session_id = ?').run(id)

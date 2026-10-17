@@ -60,7 +60,7 @@ const broadcastBrief = (rt: WorkspaceRuntime, job: BriefJob) => {
 }
 
 /**
- * Spawn-time extras by session kind. Every session gets the same thing first —
+ * Spawn-time extras by session kind. Every session gets the same thing first,
  * who it is inside triage (shared/triageContext.ts): the workspace, its own
  * triage session id, the artifacts folder. That is the layer that is knowable
  * at spawn and true for the session's whole life; what *exists* right now is a
@@ -92,7 +92,7 @@ export async function extrasFor(rt: WorkspaceRuntime, row: StoredSession): Promi
       mcp: { team: makeTeamMcp(rt, row.id), ...(pane ? { browser: browserMcpFor(rt, row) } : {}) },
       disallowedTools: tools.disallowedTools,
       // A worker loads only what its step needs: a short built-in list and
-      // triage's own servers (+ the browser if allowed) — not every connector
+      // triage's own servers (+ the browser if allowed), not every connector
       // and plugin in ~/.claude, whose schemas ride every call.
       tools: tools.tools,
       strictMcpConfig: true,
@@ -157,7 +157,7 @@ function makeBriefMcp(rt: WorkspaceRuntime, sessionId: string) {
         async (args) => {
           try {
             // A run writes under its running job. After it, the user may open
-            // this session and ask for changes — the rewrite lands on the
+            // this session and ask for changes: the rewrite lands on the
             // brief the last job made, so talking to the brief works too.
             const job = await rt.store.briefs.forSession(sessionId)
             if (!job) return errResult('no brief job belongs to this session')
@@ -216,7 +216,7 @@ export async function enqueueBriefsOp(rt: WorkspaceRuntime, raw: unknown): Promi
     // Kept only when it differs from the file, so an untouched template keeps following the file.
     const playbookBody = edited && edited !== (await readPlaybook(rt.playbookDir, playbook)).body ? edited : null
     const job = await rt.store.briefs.create({ id: randomUUID(), itemId: id, playbook, playbookBody, model, note })
-    // A re-brief of a finished brief continues the session that wrote it — it already knows the item.
+    // A re-brief of a finished brief continues the session that wrote it. It already knows the item.
     if (latest?.status === 'ready' && latest.sessionId && rt.rows.has(latest.sessionId)) {
       await rt.store.briefs.update(job.id, { sessionId: latest.sessionId })
       job.sessionId = latest.sessionId
@@ -247,7 +247,7 @@ export function briefFiledItem(rt: WorkspaceRuntime, job: Job, itemId: string, r
 
 /**
  * "You missed X": the item page's feedback goes straight into the session that
- * wrote the brief, as the user's own message — the same as typing it there —
+ * wrote the brief, as the user's own message, the same as typing it there,
  * and that session rewrites the brief with write_brief. Tracked as a job, so
  * the item shows briefing → ready. Not queued: it is a reply to a session that
  * already knows the item. With that session gone, it queues a fresh run
@@ -362,7 +362,7 @@ async function startBriefRun(rt: WorkspaceRuntime, job: BriefJob): Promise<void>
   const scored = rt.inboxCache?.items.find((i) => i.id === item.id)
   const iteration = !!reuse && !!job.note && !!existing
   // Screenshots the human put on the item ride the first message as real
-  // image blocks — a brief about a broken UI needs to see it.
+  // image blocks: a brief about a broken UI needs to see it.
   const images = await itemImageAttachments(rt.attachmentsDir, item.id, item.images)
   // Files of any type go in as paths the session can Read.
   const { files, note: missingNote } = await itemFilesForSession(rt, row.id, item)

@@ -1,5 +1,5 @@
 /**
- * Workflow blocks (M6): a named run of steps a plan can include, expanded into
+ * Workflow blocks: a named run of steps a plan can include, expanded into
  * the plan as it is read so the user reviews what will run. They replace team
  * recipes: every recipe in `<ws>/teams/*.md` is a block, its steps mapped onto
  * plan steps (who does each → a role, `gate: you` → a user gate after the
@@ -35,7 +35,6 @@ export function roleOf(s: Pick<RecipeStep, 'agent' | 'output'>): StepRole {
   return AGENT_ROLE[s.agent] ?? 'reviewer'
 }
 
-/** A recipe as a workflow block. */
 export function blockFromRecipe(name: string, r: TeamRecipe): WorkflowBlock {
   const steps: BlockStep[] = []
   for (const s of r.steps) {

@@ -1,5 +1,5 @@
 /**
- * Branch names for new worktrees, from a title: `{kind}/{slug}` —
+ * Branch names for new worktrees, from a title: `{kind}/{slug}`:
  * "Model list is cached forever" → `fix/model-list-is-cached-forever`.
  * Shared so the item dispatch (server) and the new-session composer (web)
  * name a branch the same way. Git has the last word on validity.

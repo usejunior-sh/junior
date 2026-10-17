@@ -3,14 +3,14 @@
  *
  *   artifacts/goals/<goal-id>/
  *     plan.md      the plan (source of truth for it; the DB caches it parsed)
- *     log.md       append-only, one entry per session (decision 9), rolled
+ *     log.md       append-only, one entry per session, rolled
  *                  over to log-001.md, log-002.md… past LOG_ROLLOVER_BYTES
  *     handoff.md   rewritten by each session: done, next, watch out for
  *
  * Every write that changes a file commits only the goal's own folder
- * (decision 7: `git add -- goals/<id>` and a pathspec commit), so whatever
+ * (`git add -- goals/<id>` and a pathspec commit), so whatever
  * else is dirty or staged in the artifacts repo never rides along. A failed
- * commit leaves the file written — the DB is the source of truth for state —
+ * commit leaves the file written, the DB is the source of truth for state,
  * and the next write's commit picks the change up. After
  * LEDGER_COMMIT_WARN_AFTER failures in a row the goal page shows a warning.
  *
@@ -157,7 +157,7 @@ export class GoalLedger {
     }
   }
 
-  /** Set after repeated commit failures (decision 7), else null. */
+  /** Set after repeated commit failures, else null. */
   warning(goalId: string): string | null {
     const n = this.failures.get(goalId) ?? 0
     return n >= LEDGER_COMMIT_WARN_AFTER ? `The ledger's last ${n} commits failed. The files are written; their history isn't being kept until git works again.` : null

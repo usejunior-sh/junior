@@ -87,7 +87,7 @@ export const SCENES: Scene[] = [
   },
 ]
 
-/** The tab strip every desktop scene opens with — like a real afternoon. */
+/** The tab strip every desktop scene opens with, like a real afternoon. */
 export const OPEN_TABS = [ID.s.fixN1, ID.s.paginate, `item:${ID.item.memcached}`, ID.s.replyPriya]
 export const TAB_TITLES: Record<string, string> = {
   [`item:${ID.item.memcached}`]: 'Move the session store off Memcached',

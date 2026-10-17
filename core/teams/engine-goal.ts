@@ -7,7 +7,7 @@ import { beginStep, close, finish, finishTask } from './engine.js'
 export type GoalVerdictInput = {
   met: boolean
   evidence: string
-  /** not met: what's still missing — every worker in the next round reads it */
+  /** not met: what's still missing. Every worker in the next round reads it */
   gap?: string
   /** not met, a team with a task loop: the tasks the next round works */
   tasks?: unknown

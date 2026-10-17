@@ -15,9 +15,9 @@ try {
       const mode = statSync(helper).mode
       if ((mode & 0o111) === 0) chmodSync(helper, mode | 0o755)
     } catch {
-      // no helper on this platform — fine
+      // no helper on this platform, fine
     }
   }
 } catch {
-  // node-pty not installed (optional on unsupported platforms) — nothing to fix
+  // node-pty not installed (optional on unsupported platforms), nothing to fix
 }

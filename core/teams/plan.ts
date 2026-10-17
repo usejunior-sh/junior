@@ -1,7 +1,7 @@
 /**
  * The team Plan (Teams v2): one artifact per run, on the work item and the lead
  * session. It is the plan you approve, the ledger every agent orients from, and
- * — at the end — the outcome. triage's code is its only writer: it is rendered
+ * and, at the end, the outcome. triage's code is its only writer: it is rendered
  * from the run's state after every change, so no agent can mark a task done
  * that isn't, and you change it through the drawer, never by editing the file.
  * Pure, so the rendering is tested without a server.
@@ -24,7 +24,7 @@ const STATE: Record<TeamRun['state'], string> = {
 
 export const planTitle = (run: TeamRun): string => `Plan · ${run.title}`.slice(0, 120)
 
-/** Where the run stands, in one line — the plan's subtitle and the item page's status. */
+/** Where the run stands, in one line. The plan's subtitle and the item page's status. */
 export function planStatus(run: TeamRun): string {
   const n = run.card.tasks.length
   const done = run.card.tasks.filter((t) => run.tasks[t.id]?.status === 'done' || run.tasks[t.id]?.status === 'unresolved').length

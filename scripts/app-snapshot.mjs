@@ -3,12 +3,12 @@
 //   node scripts/app-snapshot.mjs [--arch arm64|x64] [--build-only]
 //
 // The app bundle *is* the install (desktop/ARCHITECTURE.md), so "get my change
-// into prod" means: build the app, then run the real installer over it — the
+// into prod" means: build the app, then run the real installer over it, the
 // same path a `curl | sh` user takes, shims and LaunchAgent included, so the
 // thing you try is the thing they get.
 //
-// The build is labelled with a prerelease version — 1.0.4-dev.gabc1234, plus
-// `.dirty` if the tree has uncommitted changes — so the UI badges it Preview
+// The build is labelled with a prerelease version, 1.0.4-dev.gabc1234, plus
+// `.dirty` if the tree has uncommitted changes, so the UI badges it Preview
 // and never shows unreleased code under a release number. package.json is
 // restored byte for byte afterwards, even if the build fails. Nothing is
 // committed, tagged or published.
@@ -59,8 +59,8 @@ if (argv.includes('--build-only')) {
   process.exit(0)
 }
 
-// The installer quits the running app, replaces it, relinks the CLI and — when
-// no session is mid-turn — restarts the daemon onto this build. Going through
+// The installer quits the running app, replaces it, relinks the CLI and, when
+// no session is mid-turn: restarts the daemon onto this build. Going through
 // install.sh rather than copying the bundle is the point: it is the only path
 // that is exercised on every machine, so it is the one worth testing.
 execFileSync('sh', ['install.sh'], {

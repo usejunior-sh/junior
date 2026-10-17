@@ -16,9 +16,8 @@
 /** One simple command: its words, quotes removed. */
 export type CommandPart = string[]
 
-/** A pattern from the actions file, parsed. */
 export type BashPattern = {
-  /** as written — what a record cites as why it counted */
+  /** as written: what a record cites as why it counted */
   text: string
   /** leading words, each a set of alternatives */
   words: string[][]
@@ -71,7 +70,7 @@ function readHeredoc(s: string, i: number): [Heredoc, number] {
 /**
  * A double-quoted string from just after its `"`: its text and the index
  * after the closing quote. The scripts of its `$( )` and backticks go into
- * `subs` when given — they run, quotes or not.
+ * `subs` when given. They run, quotes or not.
  */
 function readDouble(s: string, i: number, subs?: string[]): [string, number] {
   let out = ''
@@ -100,7 +99,7 @@ function readDouble(s: string, i: number, subs?: string[]): [string, number] {
   return [out, i + 1]
 }
 
-/** From just after `$(`, the index after its matching `)` — quotes and heredocs inside are skipped whole. */
+/** From just after `$(`, the index after its matching `)`, quotes and heredocs inside are skipped whole. */
 function skipSubst(s: string, i: number): number {
   let depth = 1
   const docs: Heredoc[] = []
@@ -135,7 +134,7 @@ const SHELLS = new Set(['bash', 'sh', 'zsh', 'dash'])
 
 /**
  * Split a shell command into its simple commands, each as a list of words.
- * Not a shell: enough of one to find where commands start — quotes, escapes,
+ * Not a shell: enough of one to find where commands start, quotes, escapes,
  * `$( )`, backticks, heredocs, comments and redirections (`2>&1` is not a
  * background `&`) are respected. `bash -c "…"` is opened up and split too,
  * and so is every command substitution (`$( )`, backticks, also inside
@@ -206,7 +205,7 @@ function scan(src: string): { parts: CommandPart[]; subs: string[] } {
       inWord = true
       i = j
     } else if ((c === '$' || ((c === '<' || c === '>') && !inWord)) && s[i + 1] === '(') {
-      // `$( )`, or a process substitution `<( )` / `>( )` — a word, whose script runs too.
+      // `$( )`, or a process substitution `<( )` / `>( )`. A word, whose script runs too.
       const j = skipSubst(s, i + 2)
       // `$(( ))` is arithmetic, not a script.
       if (s[i + 2] !== '(') subs.push(s.slice(i + 2, j - 1))
@@ -257,7 +256,7 @@ function scan(src: string): { parts: CommandPart[]; subs: string[] } {
       endPart()
       i += s[i + 1] === ';' ? 2 : 1
     } else if (c === ')' || ((c === '(' || c === '{' || c === '}') && !inWord)) {
-      // An unquoted `)` always closes something — `(cd x; git push)` ends at it.
+      // An unquoted `)` always closes something: `(cd x; git push)` ends at it.
       endPart()
       i++
     } else {
@@ -421,7 +420,7 @@ export function describePart(part: CommandPart, p: BashPattern): string {
 /**
  * The branch a `git push` names, if it names one: `git push origin feat`,
  * `git push -u origin HEAD:feat` → "feat". Null when it pushes the current
- * branch implicitly — the result says which, later (pushedBranch).
+ * branch implicitly. The result says which, later (pushedBranch).
  */
 export function pushTarget(part: CommandPart): string | null {
   const w = unwrap(part)

@@ -1,6 +1,6 @@
 /**
- * The browser, daemon side (.docs/browser.md). Triage.app hosts the tabs — one
- * per session — and runs CDP commands on them; this module is everything
+ * The browser, daemon side (.docs/browser.md). Triage.app hosts the tabs, one
+ * per session, and runs CDP commands on them; this module is everything
  * above that: the host connection, the `browser` MCP server each chat gets,
  * page logs per session, and the evidence (screenshots, checkpoints, diffs)
  * kept on disk under the workspace.

@@ -22,7 +22,7 @@ export async function sessionRoutes({ req, url, json, access, rt }: ScopedCtx): 
     return true
   }
 
-  // The tail of a background shell's output — polled by the chat while it runs.
+  // The tail of a background shell's output, polled by the chat while it runs.
   {
     const m = /^\/api\/sessions\/([^/]+)\/shells\/([^/]+)\/output$/.exec(url.pathname)
     if (m && req.method === 'GET') {

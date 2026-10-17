@@ -11,12 +11,10 @@ import { teamRunOf } from '../team-run/state.js'
 import { errText } from '../errors.js'
 import { broadcast } from '../ws/send.js'
 
-// ---------------------------------------------------------------------------
-// Outbound actions (core/actions; spec 7ce2f076, phase 1 — record only).
-// Every persisted event of a Claude session — chat, brief, team worker, job
-// run — passes through its tracker; what leaves this machine becomes a record
+// Outbound actions (core/actions, record only).
+// Every persisted event of a Claude session, chat, brief, team worker, job
+// run: passes through its tracker; what leaves this machine becomes a record
 // with a card. Permissions are untouched: this only jobs.
-// ---------------------------------------------------------------------------
 
 /** What a connector's server said about one of its tools, from the latest probes. */
 function toolHints(rt: WorkspaceRuntime, toolName: string): ToolHints | undefined {
@@ -46,7 +44,7 @@ export function actionContext(rt: WorkspaceRuntime, row: StoredSession): TrackCo
 
 /**
  * Fold one persisted event of a session into its action records. Claude
- * sessions only (Codex approves differently — later). Never throws into the
+ * sessions only (Codex approves differently, later). Never throws into the
  * caller: a recording failure must not break a session.
  */
 export function noteActionEvent(rt: WorkspaceRuntime, row: StoredSession, ev: SessionEvent, at = Date.now()): void {
@@ -97,7 +95,7 @@ const ACTIONS_BACKFILL_KEY = 'actions_backfill'
 /**
  * Weeks of history on day one: replay every Claude session's stored log
  * through the same fold the live path uses. Runs once per workspace (the
- * config key); running it again changes nothing — a call already recorded is
+ * config key); running it again changes nothing. A call already recorded is
  * skipped, and its outcome re-applies as the same outcome.
  */
 export async function backfillActions(rt: WorkspaceRuntime, opts: { force?: boolean } = {}): Promise<{ sessions: number }> {
@@ -121,7 +119,7 @@ export async function backfillActions(rt: WorkspaceRuntime, opts: { force?: bool
 
 /**
  * Records with names for their ids, as the Actions page and the item page show
- * them — their titles and "why it counted" in words, and a queued one's
+ * them. Their titles and "why it counted" in words, and a queued one's
  * history. Batched: one job list, one history query, one item read per
  * distinct item, however many rows.
  */
@@ -158,7 +156,7 @@ export async function actionViews(rt: WorkspaceRuntime, records: ActionRecord[])
   })
 }
 
-/** Queued actions waiting on you, workspace-wide — the rail's badge. */
+/** Queued actions waiting on you, workspace-wide, the rail's badge. */
 export async function needsYouCount(rt: WorkspaceRuntime): Promise<number> {
   return (await rt.store.actions.list({ status: ['needs_you'], limit: 5000 })).length
 }

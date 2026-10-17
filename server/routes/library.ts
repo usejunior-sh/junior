@@ -15,7 +15,7 @@ import { dispatchPreviewOp, goalActionOp, teamGoalsOp } from '../team-run/mcp.js
 import type { ScopedCtx } from './ctx.js'
 
 export async function libraryRoutes({ req, url, json, rt }: ScopedCtx): Promise<boolean> {
-  // Skills and agents (server/library.ts): list, read, write, create, delete — then reload everywhere.
+  // Skills and agents (server/library.ts): list, read, write, create, delete, then reload everywhere.
   if (url.pathname.startsWith('/api/library')) {
     const route = `${req.method} ${url.pathname}`
     try {

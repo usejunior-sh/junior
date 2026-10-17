@@ -29,7 +29,7 @@ export function canonicalizeRef(raw: string): string | null {
   return null
 }
 
-/** `web:<host/path>` for an http(s) URL — lowercase host, no hash, no utm_* params, no trailing slash. */
+/** `web:<host/path>` for an http(s) URL: lowercase host, no hash, no utm_* params, no trailing slash. */
 export function webRef(raw: string): string | null {
   if (!/^https?:\/\//i.test(raw)) return null
   try {
@@ -142,7 +142,7 @@ export function linkByRefs(items: ScoredItem[]): ScoredItem[] {
 }
 
 /**
- * A canonical ref back to a URL a browser can open — or null when the ref is
+ * A canonical ref back to a URL a browser can open, or null when the ref is
  * lossy. `github:` goes to /issues/N, which GitHub redirects to /pull/N for a
  * PR; `linear:` and `slack:` refs dropped the workspace, so they have none.
  */

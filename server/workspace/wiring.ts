@@ -18,11 +18,9 @@ import { probeConnectors, probeModels } from './probes.js'
 import { recoverActions } from '../session/actions-send.js'
 import { backfillActions } from '../session/actions-record.js'
 
-// ---------------------------------------------------------------------------
-// Workspace management — registry CRUD + the live runtime bookkeeping. Auth is
+// Workspace management: registry CRUD + the live runtime bookkeeping. Auth is
 // spawn-time: changing a workspace's backend stops its live subprocesses (the
 // next message revives them with the new env) and re-probes.
-// ---------------------------------------------------------------------------
 export function wireWorkspace(meta: WorkspaceMeta): Workspace {
   return {
     id: meta.id,
@@ -43,7 +41,7 @@ export function wireWorkspace(meta: WorkspaceMeta): Workspace {
 export const wireWorkspaces = (): Workspace[] => registry.workspaces.map(wireWorkspace)
 
 /**
- * "Which workspace am I bound to?" — the current workspace a caller resolved to
+ * "Which workspace am I bound to?": the current workspace a caller resolved to
  * (chat via cookie/param, external shim via TRIAGE_WORKSPACE) plus the roster of
  * all workspaces so the caller can see what else exists and how to switch. The
  * one answer both the in-process tool and the stdio shim's get_workspace return.
@@ -73,12 +71,12 @@ export async function initRuntime(rt: WorkspaceRuntime): Promise<void> {
   await bootBriefs(rt)
   // Plan review events the last daemon wrote but never finished: wake their lead, queue their steps.
   await replayGoalEvents(rt.goalDeps, goalEngineFor(rt)).catch((err) => log('error', 'goals', `replay failed: ${errText(err)}`, { workspace: rt.meta.id }))
-  // M3: the goals that were mid-session when the daemon died pick up from their handoff, and nothing they queued is filed twice.
+  // the goals that were mid-session when the daemon died pick up from their handoff, and nothing they queued is filed twice.
   await loadGoalHeld(rt.goalDeps, rt.goalHeld).catch((err) => log('error', 'goals', `could not load held actions: ${errText(err)}`, { workspace: rt.meta.id }))
   await bootGoalRun(rt.goalDeps, goalEngineFor(rt)).catch((err) => log('error', 'goals', `could not resume running goals: ${errText(err)}`, { workspace: rt.meta.id }))
   await rt.teamLibrary.seed().catch((err) => log('error', 'teams', `could not seed agents and teams: ${err}`, { workspace: rt.meta.id }))
   await loadTeamRuns(rt)
-  // The last snapshot makes the first page load instant — but only while it
+  // The last snapshot makes the first page load instant, but only while it
   // is still fresh, and only in today's shape: one saved before stage/turn
   // carries no flows, one before the inbox tabs no counts, and serving either
   // leaves the sidebar wrong until the next sync.

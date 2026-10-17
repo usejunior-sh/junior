@@ -81,7 +81,7 @@ async function submitStepOp(rt: WorkspaceRuntime, sessionId: string, args: Submi
 
 /**
  * A builder's handoff lists the files git says changed since its task (or the
- * run) began — not the ones it remembers changing, which is the part of a
+ * run) began, not the ones it remembers changing, which is the part of a
  * handoff every summary gets wrong.
  */
 async function filesFromGit(run: TeamRun): Promise<void> {
@@ -382,7 +382,7 @@ export async function dispatchPreviewOp(rt: WorkspaceRuntime, itemId: string): P
   ])
   const mentions: Mention[] = [{ kind: 'item', ref: item.id, label: item.title }]
   if (brief) mentions.push({ kind: 'artifact', ref: brief.artifact.id, label: brief.artifact.title })
-  // No description here — the @item: mention below attaches the work item itself,
+  // No description here: the @item: mention below attaches the work item itself,
   // and the agent can read its description via get_work_item rather than duplicating it.
   const body = renderTemplate(tpl, {
     kind: item.kind,
@@ -397,7 +397,7 @@ export async function dispatchPreviewOp(rt: WorkspaceRuntime, itemId: string): P
   // (they never ride in localStorage), so the text says they are coming.
   const shots = item.images?.length ?? 0
   const note = shots ? `\n\n${shots} screenshot${shots === 1 ? '' : 's'} from this item ${shots === 1 ? 'is' : 'are'} attached to this message.` : ''
-  // The mention tokens must appear in the text — the composer attaches only what the text names.
+  // The mention tokens must appear in the text. The composer attaches only what the text names.
   const text = `${body}${note}\n\n${mentions.map(mentionToken).join(' ')}`
   // What the draft offers, never picks: a branch for a new worktree, and the item's own worktree if it has one.
   const main = mainCheckout(rt, project?.id)

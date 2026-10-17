@@ -2,7 +2,7 @@
  * What the browser tools may do without asking (.docs/browser.md). Reading
  * the page and acting on it is the point of the feature, so those never
  * prompt; going to a site that isn't on this machine, and running arbitrary
- * script, do — unless the session already runs without prompts.
+ * script, do, unless the session already runs without prompts.
  */
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'

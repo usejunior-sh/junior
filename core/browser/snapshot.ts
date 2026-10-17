@@ -2,7 +2,7 @@
  * The page as the agent reads it: Chrome's accessibility tree, folded into
  * indented text where every element worth acting on carries a `uid`. The uid
  * is Chrome's backendDOMNodeId, so it stays valid across snapshots for as long
- * as the element is on the page — no uid table to keep in step. The idea (not
+ * as the element is on the page. No uid table to keep in step. The idea (not
  * the code) is chrome-devtools-mcp's.
  *
  * Pure: takes the raw `Accessibility.getFullAXTree` nodes.
@@ -24,7 +24,7 @@ export type AXNode = {
 
 /** Roles that are only structure: their children are lifted, they get no line. */
 const TRANSPARENT = new Set(['generic', 'none', 'presentation', 'LineBreak', 'InlineTextBox', 'group', 'Section', 'div', 'LabelText', 'paragraph'])
-/** Roles worth a uid — the things an agent clicks, types into, or points at. */
+/** Roles worth a uid: the things an agent clicks, types into, or points at. */
 const TEXT_ROLES = new Set(['StaticText', 'text'])
 /** States worth printing, in this order. */
 const STATES = ['focused', 'disabled', 'checked', 'pressed', 'selected', 'expanded', 'required', 'invalid', 'readonly'] as const
@@ -108,5 +108,5 @@ export function formatSnapshot(all: AXNode[], opts: { rootUid?: number; maxNodes
   return { text: lines.join('\n'), nodes: lines.length, truncated }
 }
 
-/** Every uid that appears in a snapshot's text — what an agent may act on. */
+/** Every uid that appears in a snapshot's text, what an agent may act on. */
 export const uidsIn = (text: string): number[] => [...text.matchAll(/uid=(\d+)/g)].map((m) => Number(m[1]))

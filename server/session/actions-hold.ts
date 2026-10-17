@@ -20,14 +20,12 @@ import { errText } from '../errors.js'
 import { invalidateInbox } from '../ws/send.js'
 import { deliverSendBack, dispatchAction } from './actions-send.js'
 
-// ---------------------------------------------------------------------------
-// Queued actions (core/actions/queue.ts; spec 7ce2f076, phase 2). In a job
+// Queued actions (core/actions/queue.ts). In a job
 // run or a team worker, a connector call that sorts as an action is held, not
 // run: the agent is told "queued as #a1b2c3", and the call waits on the
 // Actions page for approve / edit / send back / reject. An approved one goes
-// out 15s later through a headless one-tool run fenced to the approved args —
+// out 15s later through a headless one-tool run fenced to the approved args:
 // the daemon never calls an MCP server itself. Chats keep asking now.
-// ---------------------------------------------------------------------------
 
 /** The model that sends approved actions: cheap, and it only copies JSON into one call. */
 export const DISPATCH_MODEL = 'haiku'
@@ -65,7 +63,7 @@ function roleFenceOf(rt: WorkspaceRuntime, row: StoredSession): RoleFence | null
     return {
       write: roleWrites(goalRun.role),
       role: goalRun.role,
-      // Reviewer independence (M6): not the builders' handoff, log or transcripts.
+      // Reviewer independence: not the builders' handoff, log or transcripts.
       ...(goalRun.role === 'reviewer' ? { hidden: [path.join(rt.goalLedger.root, goalDir(goalRun.goalId)), `${path.sep}.claude${path.sep}projects${path.sep}`] } : {}),
     }
   if (row.kind === 'goal') return { write: false, role: 'lead' }
@@ -78,7 +76,7 @@ function roleFenceOf(rt: WorkspaceRuntime, row: StoredSession): RoleFence | null
 
 /**
  * A session's PreToolUse veto: its role fence first, then the hold. None for a
- * session with neither — except a chat, which always gets one: its Autonomy
+ * session with neither, except a chat, which always gets one: its Autonomy
  * level can change mid-session and the hook is only installed at spawn.
  */
 export function sessionVeto(rt: WorkspaceRuntime, row: StoredSession): { veto?: ToolVeto } {
@@ -119,7 +117,7 @@ export function holdIfAction(
 ): { allow: true } | { allow: false; reason: string } {
   if (!holdable(toolName) || !holdsActions(rt, row)) return { allow: true }
   const args = isArgsObject(input) ? input : {}
-  // A team worker's push, PR or comment from the shell: refused, not filed — a team hands
+  // A team worker's push, PR or comment from the shell: refused, not filed, a team hands
   // work in and you send it. (A job's Bash isn't held in this phase: sending needs its folder.)
   // A chat's is held like any send, and sent from the chat's folder.
   if (toolName === 'Bash' && !chatHoldsSends(rt, row)) {
@@ -143,8 +141,8 @@ export function holdIfAction(
     return { allow: true }
   }
   if (!sorted) return { allow: true }
-  // A goal's worker: the same call any of the goal's sessions already filed —
-  // before a crash, or by the worker this one replaced — is that action.
+  // A goal's worker: the same call any of the goal's sessions already filed
+  // before a crash, or by the worker this one replaced, is that action.
   const goalRun = rt.goalRuns.get(row.id)
   const filed = goalRun ? rt.goalHeld.find(goalRun.goalId, toolName, args) : null
   if (filed) return { allow: false, reason: queuedMessage(filed) }
@@ -186,7 +184,7 @@ export function holdIfAction(
   return { allow: false, reason: queuedMessage(id) }
 }
 
-/** Run `fn` on the workspace's action chain — after every write queued before it, before any after. */
+/** Run `fn` on the workspace's action chain, after every write queued before it, before any after. */
 export function onActionChain<T>(rt: WorkspaceRuntime, fn: () => Promise<T>): Promise<T> {
   const run = rt.actionChain.then(fn)
   rt.actionChain = run.then(
@@ -203,8 +201,8 @@ function forgetHeld(rt: WorkspaceRuntime, actionId: string): void {
 
 /**
  * One move on a queued action (core/actions/queue.ts `move`), stored with its
- * history line. The effects that follow a move — a send timer, notes to the
- * drafting session, the inbox's "my turn" — are the caller's.
+ * history line. The effects that follow a move, a send timer, notes to the
+ * drafting session, the inbox's "my turn", are the caller's.
  */
 export async function moveAction(rt: WorkspaceRuntime, id: string, m: ActionMove, now = Date.now()): Promise<ActionRecord> {
   const next = await onActionChain(rt, async () => {

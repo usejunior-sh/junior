@@ -80,7 +80,7 @@ export function offerFor(i: OfferItem, now: number): Offer {
       say: `Draft a reply${i.author ? ` to ${i.author}` : ''} on ${where} (${i.url}) for me to edit. Nothing gets posted until I send it.`,
     }
   }
-  // A to-do is named by its own words — in full in the message, so Junior can find it; anything else
+  // A to-do is named by its own words, in full in the message, so Junior can find it; anything else
   // gets its title and link alongside the ref.
   const mine = i.source === 'manual'
   const about = mine ? '' : ` (${i.title}${i.url ? `, ${i.url}` : ''})`
@@ -130,9 +130,7 @@ export function firstOffers(items: readonly OfferItem[], opts: { slack: boolean;
   return out
 }
 
-// ---------------------------------------------------------------------------
 // What I can do: eight sentences, blanks filled from this Mac
-// ---------------------------------------------------------------------------
 
 /** The data the blanks are filled from. */
 export type CanDoFill = {

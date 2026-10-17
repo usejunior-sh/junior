@@ -5,8 +5,8 @@
  * shapes (snapshots, logs, evidence); the app only runs Chrome DevTools
  * Protocol commands on the right tab.
  *
- * `desktop/src/browser.ts` keeps a copy of these types — its tsconfig can't
- * reach outside `desktop/src` — so a change here is a change there too, and a
+ * `desktop/src/browser.ts` keeps a copy of these types, its tsconfig can't
+ * reach outside `desktop/src`, so a change here is a change there too, and a
  * new BROWSER_WIRE_VERSION.
  */
 
@@ -63,7 +63,7 @@ export type HostFrame =
   | { type: 'log'; sessionId: string; log: PageLog }
   /** the tab navigated (by the agent, a link, or you) */
   | { type: 'navigated'; sessionId: string; url: string; byUser: boolean }
-  /** you took the tab somewhere or clicked in it — the agent's next call hears about it */
+  /** you took the tab somewhere or clicked in it. The agent's next call hears about it */
   | { type: 'touched'; sessionId: string }
   | { type: 'closed'; sessionId: string }
 

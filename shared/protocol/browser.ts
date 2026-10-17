@@ -1,9 +1,7 @@
 
 
-// ---------------------------------------------------------------------------
 // The browser pane (.docs/browser.md). The page lives in Triage.app; these are
 // the daemon's routes for what sessions saw there and for the element picker.
-// ---------------------------------------------------------------------------
 
 export type BrowserShotKind = 'screenshot' | 'checkpoint' | 'compare' | 'pick'
 
@@ -23,7 +21,7 @@ export type BrowserShot = {
 
 export type BrowserShotsResponse = { ok: true; shots: BrowserShot[] } | { ok: false; error: string }
 
-/** POST /api/browser/pick { sessionId, uid } — an element picked in the pane, described for the composer. */
+/** POST /api/browser/pick { sessionId, uid }, an element picked in the pane, described for the composer. */
 export type BrowserPickResponse =
   | { ok: true; text: string; image: string | null; shot: number | null }
   | { ok: false; error: string }

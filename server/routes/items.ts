@@ -31,7 +31,7 @@ export async function itemRoutes({ req, url, json, rt }: ScopedCtx): Promise<boo
       }
       const snoozeUntil = typeof parsed?.snoozeUntil === 'number' ? parsed.snoozeUntil : undefined
       if (statusV === 'snoozed' && !snoozeUntil) throw new Error('snoozed needs snoozeUntil (epoch ms)')
-      // A recorded transition on the durable item — never a delete (.docs/jobs-v2.md).
+      // A recorded transition on the durable item, never a delete (.docs/jobs-v2.md).
       await rt.store.items.transition(id, { status: statusV, actor: 'user', snoozeUntil })
       invalidateInbox(rt)
       log('info', 'inbox', `${statusV}: ${id} (by user)`, { id, status: statusV, actor: 'user', workspace: rt.meta.id })
@@ -55,7 +55,7 @@ export async function itemRoutes({ req, url, json, rt }: ScopedCtx): Promise<boo
     json(body.ok ? 200 : 502, body)
     return true
   }
-  // One item, whole and unfiltered — what the MCP tool get_work_item reads,
+  // One item, whole and unfiltered, what the MCP tool get_work_item reads,
   // and what the stdio shim reaches for over HTTP.
   if (url.pathname === '/api/items/detail' && req.method === 'GET') {
     let body: ItemDetailResponse
@@ -122,7 +122,7 @@ export async function itemRoutes({ req, url, json, rt }: ScopedCtx): Promise<boo
     json(body.ok ? 200 : 502, body)
     return true
   }
-  // Every item a job has ever filed, any status — the job page's Items tab.
+  // Every item a job has ever filed, any status. The job page's Items tab.
   if (url.pathname === '/api/jobs/items' && req.method === 'GET') {
     let body: ItemListResponse
     try {
@@ -170,7 +170,7 @@ export async function itemRoutes({ req, url, json, rt }: ScopedCtx): Promise<boo
     json(status, body)
     return true
   }
-  // The slot ledger for one job — the job page's Runs table.
+  // The slot ledger for one job: the job page's Runs table.
   if (url.pathname === '/api/jobs/runs' && req.method === 'GET') {
     let body: JobRunsResponse
     let status = 200

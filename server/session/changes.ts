@@ -12,20 +12,16 @@ import { expandHome } from '../folders.js'
 import { broadcast } from '../ws/send.js'
 import { checkoutList } from './checkouts.js'
 
-// ---------------------------------------------------------------------------
-// Session changes — reconstructing what one session did to a shared worktree
-// ---------------------------------------------------------------------------
+// Session changes: reconstructing what one session did to a shared worktree
 
 export type OpenTurn = { seq: number; root: string; startedAt: number; touched: Set<string> }
 
 /** Tools whose `file_path` counts as this session naming a file itself. */
 export const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit'])
 
-// ---------------------------------------------------------------------------
 // Skills and agents (server/library.ts): the settings tabs read and write the
 // files; anything that changes them reloads every live session, so a new skill
 // is in `/` and a new agent is spawnable without starting over.
-// ---------------------------------------------------------------------------
 
 /** Every skill and agent on this machine a job could name, keyed by the name Claude calls it. */
 export async function jobLibrary(rt: WorkspaceRuntime): Promise<JobLibrary> {
@@ -50,7 +46,7 @@ export async function libraryRootsFor(rt: WorkspaceRuntime): Promise<LibraryRoot
 }
 
 /**
- * A tool call that may have written a skill or agent. Generous on purpose — a
+ * A tool call that may have written a skill or agent. Generous on purpose: a
  * false hit costs one reload; a miss means the new skill waits for a new session.
  */
 const LIBRARY_PATH_RE = /(^|[\/])(skills|agents)[\/]/
@@ -92,7 +88,7 @@ function currentTree(root: string): Promise<string | null> {
   return tree
 }
 
-/** A turn's delta, memoised — the trees either side of a finished turn never move. */
+/** A turn's delta, memoised, the trees either side of a finished turn never move. */
 async function turnDelta(
   rt: WorkspaceRuntime,
   root: string,
@@ -120,7 +116,7 @@ const overlaps = (a: StoredTurn, b: StoredTurn): boolean =>
  *
  * Sessions share a working tree, so `git status` cannot answer this. Each of a
  * session's turns is bracketed by two trees, and the agent only edits while
- * its own turn runs — so the union of the per-turn deltas is this session's
+ * its own turn runs, so the union of the per-turn deltas is this session's
  * file set, and anything another session moved outside those windows is simply
  * not in it. Within a window we can still be fooled by a *concurrent* session,
  * which is what `confidence` reports rather than hides.
@@ -172,7 +168,7 @@ export async function computeSessionChanges(rt: WorkspaceRuntime, row: StoredSes
   const since = turns[0].startedAt
   const foreign = (await rt.store.turns.othersInRoot(root, row.id)).filter((t) => (t.endedAt ?? Date.now()) >= since)
 
-  // --- our own per-turn deltas: the file set, and which turn moved what -----
+  // our own per-turn deltas: the file set, and which turn moved what
   const mine = new Map<string, { turns: number[]; ambiguous: boolean }>()
   const turnSummaries: SessionTurnSummary[] = []
   for (const [i, t] of turns.entries()) {
@@ -199,7 +195,7 @@ export async function computeSessionChanges(rt: WorkspaceRuntime, row: StoredSes
     })
   }
 
-  // --- which of those files another session also moved ----------------------
+  // which of those files another session also moved
   const alsoBy = new Map<string, Set<string>>()
   for (const f of foreign) {
     const to = f.postTree ?? now
@@ -212,7 +208,7 @@ export async function computeSessionChanges(rt: WorkspaceRuntime, row: StoredSes
     }
   }
 
-  // --- the numbers: net baseline → now, so a file edited twice counts once --
+  // the numbers: net baseline → now, so a file edited twice counts once
   const net = await treeDiff(root, turns[0].preTree, now)
   const touchedAbs = new Set(turns.flatMap((t) => t.touched))
   const files: ChangedFile[] = []

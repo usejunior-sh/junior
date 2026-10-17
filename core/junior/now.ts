@@ -1,7 +1,7 @@
 /**
  * "Right now": where Junior is, in one line above the headline. The most
- * relevant live session wins — one on today's plan first, then the most
- * recently active — and its own todo list says what it is doing and which
+ * relevant live session wins, one on today's plan first, then the most
+ * recently active, and its own todo list says what it is doing and which
  * step it's on. Pure and browser-safe.
  */
 

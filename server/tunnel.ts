@@ -4,11 +4,11 @@
  * The daemon runs the user's own `ngrok` (their install, their account, their
  * authtoken) as a child process and reads the public URL from its JSON log.
  * Nothing about access changes: ngrok forwards from loopback under its own
- * hostname, which server/remote.ts already treats as remote — so every
+ * hostname, which server/remote.ts already treats as remote, so every
  * request through the tunnel still needs the pairing token.
  *
  * A stand-in until triage has its own relay (or a Cloudflare tunnel); the
- * interface here — start, stop, a status with a URL — is what either would
+ * interface here, start, stop, a status with a URL, is what either would
  * implement too.
  */
 import { spawn, execFileSync, type ChildProcess } from 'node:child_process'
@@ -112,7 +112,7 @@ export class NgrokTunnel {
   }
 }
 
-/** Kill an agent a previous daemon left behind — but only if that pid is still an ngrok. */
+/** Kill an agent a previous daemon left behind, but only if that pid is still an ngrok. */
 function killStale() {
   let pid: number
   try {

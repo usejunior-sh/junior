@@ -28,7 +28,7 @@ export type QueuedRun = { id: string; trigger: JobRunTrigger; slot: number }
 /**
  * Is every MCP server this job uses up, per the latest probes? Only a server
  * the probe positively reports broken (needs auth, failed, disabled) blocks a
- * run — a server missing from a stale probe gets the benefit of the doubt, and
+ * run. A server missing from a stale probe gets the benefit of the doubt, and
  * a run that truly can't reach it fails loudly with no-connector-tools.
  */
 function jobReady(rt: WorkspaceRuntime, w: Job, project: Project | null): true | string {
@@ -52,7 +52,7 @@ const SKIP_TEXT: Record<SkipReason, string> = {
 }
 
 /**
- * The slot ledger is additive — a failed write must never break a run or a
+ * The slot ledger is additive: a failed write must never break a run or a
  * tick, so it is logged and swallowed.
  */
 export function ledger(rt: WorkspaceRuntime, write: Promise<unknown>): Promise<void> {
@@ -73,11 +73,11 @@ async function recordSkip(rt: WorkspaceRuntime, w: Job, reason: SkipReason, slot
 }
 
 /**
- * The scheduler tick for one workspace (job-spec.md, item 3): decide per
+ * The scheduler tick for one workspace: decide per
  * job, record skips, queue due runs oldest slot first.
  */
 export async function runDueJobs(rt: WorkspaceRuntime, now = Date.now()): Promise<void> {
-  // The global switch (Settings → Sources) — off means the scheduler never runs a job.
+  // The global switch (Settings → Sources): off means the scheduler never runs a job.
   if (!(await jobsEnabled(rt))) return
   await syncJobFiles(rt).catch(() => {}) // logged by the sync; a bad file never stops the tick
   const projects = await rt.store.projects.list()
@@ -105,7 +105,7 @@ export async function runDueJobs(rt: WorkspaceRuntime, now = Date.now()): Promis
 }
 
 /**
- * Queue a single job to run now (the per-job "Run" button — a manual run,
+ * Queue a single job to run now (the per-job "Run" button. A manual run,
  * independent of the schedule). Respects the in-flight guard so a double-click
  * can't start two runs of the same job.
  */
@@ -124,8 +124,8 @@ function pumpRunQueue(rt: WorkspaceRuntime): void {
     if (rt.runningJobs.has(run.id)) continue
     rt.runningJobs.add(run.id)
     rt.activeRuns += 1
-    // The due rule's clock moves when the run starts — now, not after the
-    // jitter — so a tick in between can't see a stale slot and skip it.
+    // The due rule's clock moves when the run starts, now, not after the
+    // jitter, so a tick in between can't see a stale slot and skip it.
     const startedAt = Date.now()
     const runId = randomUUID()
     void rt.store.jobs.markRunStarted(run.id, { startedAt, trigger: run.trigger })
@@ -135,7 +135,7 @@ function pumpRunQueue(rt: WorkspaceRuntime): void {
     // otherwise freezes when the Mac sleeps again seconds later.
     const letGo = power.hold(`job ${run.id}`)
     // The run's slot is freed exactly once: when it settles, or by the
-    // watchdog if it hangs past its timeout — else every later slot of this
+    // watchdog if it hangs past its timeout, else every later slot of this
     // job would skip as overlap until a restart.
     let released = false
     let dog: NodeJS.Timeout | undefined

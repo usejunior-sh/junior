@@ -1,5 +1,5 @@
 /**
- * The actions file on disk — `<workspace>/actions.md` (core/actions/rules.ts):
+ * The actions file on disk: `<workspace>/actions.md` (core/actions/rules.ts):
  * the outbound Bash patterns and the per-tool overrides, one file.
  *
  * Seeded the way team and job templates are: written when missing, kept up
@@ -30,7 +30,7 @@ export class ActionsFile {
   readonly path: string
   private readonly manifestPath: string
   private cache: { mtimeMs: number; rules: ActionRules; errors: string[] } | null = null
-  /** last time the file's mtime was looked at — a stat per tool call is cheap, but not free */
+  /** last time the file's mtime was looked at. A stat per tool call is cheap, but not free */
   private checkedAt = 0
 
   constructor(root: string) {

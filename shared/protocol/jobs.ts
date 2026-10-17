@@ -1,11 +1,9 @@
 
 
-// ---------------------------------------------------------------------------
 // Jobs (GET/POST/PUT/DELETE /api/jobs, POST /api/jobs/draft,
-// POST /api/jobs/preview) — the ingestion engine (.docs/jobs.md).
+// POST /api/jobs/preview): the ingestion engine (.docs/jobs.md).
 // Domain types live in core/job/types.ts; type-only re-exports, so nothing
 // server-side leaks into the browser bundle.
-// ---------------------------------------------------------------------------
 
 export type { NewJob, Job, JobCadence, JobConnector, JobDraft, JobNotify, JobOutput, JobPreviewResult, JobPreviewRow, JobRunStatus, JobRunTrigger, JobSlotRun, JobSlotStatus, JobToolGrant } from '../../core/job/types.js'
 
@@ -19,14 +17,14 @@ export type JobFileReference = {
   builtins: string[]
   /** each connected MCP server and its tool lines, as a file spells them (`<server>/<tool>`) */
   servers: { server: string; tools: string[] }[]
-  /** skills and agents a job may name (`skills:`, `agents:`) — not a project's, which runs don't load */
+  /** skills and agents a job may name (`skills:`, `agents:`), not a project's, which runs don't load */
   skills: string[]
   agents: string[]
 }
 
 /**
- * GET /api/jobs/file[?id=] — a job's file text (or a starter) and the
- * reference list. POST /api/jobs/file[?id=] { text } — saved only when it
+ * GET /api/jobs/file[?id=]: a job's file text (or a starter) and the
+ * reference list. POST /api/jobs/file[?id=] { text }: saved only when it
  * validates; otherwise `errors` lists every problem and nothing is written.
  */
 export type JobFileResponse =
@@ -34,7 +32,7 @@ export type JobFileResponse =
   | { ok: true; id: string }
   | { ok: false; error: string; errors?: string[] }
 
-/** GET /api/jobs/runs?id= — the slot ledger for one job, newest slot first. */
+/** GET /api/jobs/runs?id=: the slot ledger for one job, newest slot first. */
 export type JobRunsResponse =
   | { ok: true; runs: import('../../core/job/types.js').JobSlotRun[] }
   | { ok: false; error: string }
@@ -45,7 +43,7 @@ export type JobDraftResponse =
 
 // A preview is a dry run streamed like a session: POST starts it and returns
 // an ephemeral session id to subscribe to; GET polls its outcome. Nothing is
-// stored — the events live in memory for a few minutes and then go.
+// stored: the events live in memory for a few minutes and then go.
 export type JobPreviewStartResponse = { ok: true; previewId: string } | { ok: false; error: string }
 export type JobPreviewStatusResponse =
   | { ok: true; status: 'running' | 'ready' | 'failed'; result?: import('../../core/job/types.js').JobPreviewResult; error?: string }

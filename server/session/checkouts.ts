@@ -7,9 +7,7 @@ import { WorkspaceRuntime } from '../workspace/runtime.js'
 import { broadcast } from '../ws/send.js'
 import { errText } from '../errors.js'
 
-// ---------------------------------------------------------------------------
 // Checkouts (server/worktrees.ts): a project's main folder and its worktrees
-// ---------------------------------------------------------------------------
 
 export const checkoutList = (rt: WorkspaceRuntime): Checkout[] => [...rt.checkouts.values()]
 
@@ -40,7 +38,7 @@ export function syncCheckouts(rt: WorkspaceRuntime): Promise<void> {
   return next
 }
 
-/** A project's main checkout — the folder the user added. */
+/** A project's main checkout: the folder the user added. */
 export const mainCheckout = (rt: WorkspaceRuntime, projectId: string | null | undefined): Checkout | undefined =>
   projectId ? checkoutList(rt).find((c) => c.projectId === projectId && c.kind === 'main') : undefined
 
@@ -54,7 +52,7 @@ export const checkoutById = (rt: WorkspaceRuntime, id: string | null | undefined
 /**
  * Boot: rows for every project's folders, then every session saved before
  * checkouts gets its project's main one. Stored once, never re-derived from
- * `cwd` — a worktree's folder isn't the project's.
+ * `cwd`, a worktree's folder isn't the project's.
  */
 export async function loadCheckouts(rt: WorkspaceRuntime): Promise<void> {
   for (const c of await rt.store.checkouts.list()) rt.checkouts.set(c.id, c)
@@ -69,8 +67,8 @@ const worktreesRoot = (rt: WorkspaceRuntime) => path.join(workspaceDir(rt.meta.i
 /**
  * Make a worktree of `project` on `branch` and get it ready: `git worktree
  * add`, then node_modules and `.env*` from the main folder. Discovery records
- * the row (one writer, so no duplicate), and then what only triage knows —
- * the base it was cut from and the item it was made for — goes on it.
+ * the row (one writer, so no duplicate), and then what only triage knows,
+ * the base it was cut from and the item it was made for, goes on it.
  */
 export async function makeWorktree(
   rt: WorkspaceRuntime,

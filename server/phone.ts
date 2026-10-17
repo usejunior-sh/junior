@@ -13,9 +13,9 @@ import { errText } from './errors.js'
 
 /** Phone access (server/remote.ts): off until switched on in Settings → Phone. */
 export let remote = loadRemote()
-/** The 6-digit code Settings → Phone shows; memory only — a restart just mints another. */
+/** The 6-digit code Settings → Phone shows; memory only. A restart just mints another. */
 let pairCode: PairCode | null = null
-/** Phone access from anywhere — the user's ngrok, run while access and "Anywhere" are both on. */
+/** Phone access from anywhere: the user's ngrok, run while access and "Anywhere" are both on. */
 export const tunnel = new NgrokTunnel((): void => {
   const s = tunnel.status
   if (s.state === 'up') log('info', 'remote', `tunnel up at ${s.url}`)

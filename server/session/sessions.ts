@@ -17,9 +17,9 @@ export async function deleteSession(rt: WorkspaceRuntime, sessionId: string): Pr
   rt.live.get(sessionId)?.stop()
   // Files attached to its messages go with it.
   await removeSessionFiles(rt.attachmentsDir, sessionId)
-  // Its actions stay on record — they happened; only the tracker goes.
+  // Its actions stay on record: they happened; only the tracker goes.
   rt.actionTrackers.delete(sessionId)
-  // Its tab closes; its evidence stays on disk — the Verification note points at it.
+  // Its tab closes; its evidence stays on disk. The Verification note points at it.
   browserHub.forget(sessionId)
   rt.live.delete(sessionId)
   rt.rows.delete(sessionId)
@@ -39,9 +39,9 @@ export async function deleteSession(rt: WorkspaceRuntime, sessionId: string): Pr
 }
 
 /**
- * The workspace's default project (decision 549a251e): where a session,
+ * The workspace's default project: where a session,
  * terminal or item lands when nothing names a project. null only while the
- * workspace has no projects at all — onboarding asks for one.
+ * workspace has no projects at all, onboarding asks for one.
  */
 export async function defaultProject(rt: WorkspaceRuntime): Promise<Project | null> {
   return (await rt.store.projects.list()).find((p) => p.isDefault) ?? null
@@ -49,7 +49,7 @@ export async function defaultProject(rt: WorkspaceRuntime): Promise<Project | nu
 
 /**
  * Add a folder as a project; the workspace's first project becomes its
- * default. Picking a folder that isn't a project adds it — there is no
+ * default. Picking a folder that isn't a project adds it. There is no
  * "unsaved folder" state.
  */
 export async function addProject(rt: WorkspaceRuntime, folder: string, name?: string, repo = ''): Promise<Project> {
@@ -68,7 +68,7 @@ export async function addProject(rt: WorkspaceRuntime, folder: string, name?: st
   return project
 }
 
-/** The project a new session runs in: the one named, else the one at `cwd` — added if it isn't one yet. */
+/** The project a new session runs in: the one named, else the one at `cwd`, added if it isn't one yet. */
 export async function projectForSession(rt: WorkspaceRuntime, cwd: string, projectId?: string): Promise<Project> {
   const projects = await rt.store.projects.list()
   if (projectId) {
@@ -116,7 +116,7 @@ export async function createSession(
 
 export async function getOrRevive(rt: WorkspaceRuntime, sessionId: string): Promise<LiveSession | null> {
   // A fresh start: end the old subprocess and begin a new Claude session instead
-  // of resuming — the transcript page continues, the model's history doesn't.
+  // of resuming: the transcript page continues, the model's history doesn't.
   const fresh = rt.freshNext.delete(sessionId)
   const existing = rt.live.get(sessionId)
   if (existing && !fresh) return existing
@@ -151,7 +151,7 @@ export async function getOrRevive(rt: WorkspaceRuntime, sessionId: string): Prom
 
 /**
  * Boot: load stored sessions, and expire permission prompts orphaned by the
- * previous process (their subprocess died with it — Allow can never apply).
+ * previous process (their subprocess died with it, Allow can never apply).
  */
 export async function loadSessions(rt: WorkspaceRuntime) {
   for (const row of await rt.store.sessions.list()) {

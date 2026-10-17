@@ -7,9 +7,7 @@ import { WorkspaceRuntime } from '../workspace/runtime.js'
 import { teamRunLink } from '../team-run/state.js'
 import { errText } from '../errors.js'
 
-// ---------------------------------------------------------------------------
-// Session registry helpers — all per-workspace.
-// ---------------------------------------------------------------------------
+// Session registry helpers: all per-workspace.
 export function summarize(rt: WorkspaceRuntime, row: StoredSession): SessionSummary {
   const l = rt.live.get(row.id)
   return {
@@ -42,7 +40,7 @@ export function summarize(rt: WorkspaceRuntime, row: StoredSession): SessionSumm
 
 /**
  * The chat session list: pinned first, then most recently active. Job-run
- * sessions are real sessions but not chats — they are excluded here and reached
+ * sessions are real sessions but not chats. They are excluded here and reached
  * through the job that owns them (.docs/jobs-v2.md).
  */
 export function summaries(rt: WorkspaceRuntime): SessionSummary[] {
@@ -60,7 +58,7 @@ export function summaries(rt: WorkspaceRuntime): SessionSummary[] {
 /**
  * Image blocks inside tool results (a browser screenshot, a Read of a PNG) are
  * for the model, which already has them. The log and every open page get the
- * block without its bytes — the transcript shows saved shots from disk.
+ * block without its bytes. The transcript shows saved shots from disk.
  */
 export function slimToolImages<T>(record: T): T {
   const m = record as { type?: string; message?: { content?: unknown } }
@@ -79,7 +77,7 @@ export function slimToolImages<T>(record: T): T {
 /**
  * A turn ended: if it used the browser, add it to the session's Verification
  * note (server/browser.ts renderVerification), linked to the session and its
- * item — the evidence "done" points at.
+ * item. The evidence "done" points at.
  */
 export async function noteBrowserTurn(rt: WorkspaceRuntime, row: StoredSession, startedAt: number, record: unknown): Promise<void> {
   try {

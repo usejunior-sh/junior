@@ -1,11 +1,11 @@
 /**
- * The triage MCP contract — one tool table, one dispatcher, two external
+ * The triage MCP contract: one tool table, one dispatcher, two external
  * transports.
  *
  * The stdio shim (server/mcp.ts, dependency-free, for clients that spawn a
  * process) and the daemon's own streamable-HTTP endpoint (POST /mcp in
  * server/index.ts, for clients that take a URL) both import this file, so
- * they cannot drift — a tool that exists over stdio and not over HTTP is the
+ * they cannot drift. A tool that exists over stdio and not over HTTP is the
  * kind of gap nobody notices until an agent silently stops being able to file
  * work. The in-process SDK server that web chats get is defined separately
  * with zod in server/index.ts, against the same `*Op` functions.
@@ -180,7 +180,7 @@ export const TOOLS = [
       required: ['id'],
     },
   },
-  // Today's plan (core/junior/today.ts) — one list for the user and Junior per local day.
+  // Today's plan (core/junior/today.ts): one list for the user and Junior per local day.
   {
     name: 'get_today',
     description:
@@ -205,7 +205,7 @@ export const TOOLS = [
     description: "Take a work item off today's plan. The item itself is untouched: it stays in the inbox, at its status.",
     inputSchema: { type: 'object', properties: { itemId: { type: 'string' } }, required: ['itemId'] },
   },
-  // Artifacts — markdown notes/briefs beside the inbox (.docs/next-version.md).
+  // Artifacts: markdown notes/briefs beside the inbox (.docs/next-version.md).
   {
     name: 'list_artifacts',
     description:
@@ -294,7 +294,7 @@ export async function callTool(
 ): Promise<ToolResult> {
   if (name === 'list_work_items') {
     // 'open' is the live inbox (a scan); every other status is a plain read of
-    // the durable store — the same split the server makes internally. The
+    // the durable store: the same split the server makes internally. The
     // status is checked here rather than left to /api/items, which falls back
     // to 'open' for anything it does not recognise: a caller that asked for
     // 'archived' must not be handed the open queue and told nothing.
@@ -340,7 +340,7 @@ export async function callTool(
     }
     if (!body.ok || !body.current) return { text: `failed: ${body.error ?? 'no workspace'}`, isError: true }
     // The server resolved to `current`; if this connection asked for a
-    // workspace that does not match, it fell back to the default — say so
+    // workspace that does not match, it fell back to the default, say so
     // here even though every other tool refuses outright, because this is
     // the tool a caller reaches for to find out what went wrong.
     const requested = conn.requestedWorkspace
@@ -424,7 +424,7 @@ export async function callTool(
     return { text: `${head.join('\n')}\n\n${body.body ?? ''}`, isError: false }
   }
   if (name === 'write_artifact') {
-    // An external agent writes as the model — never as the user.
+    // An external agent writes as the model, never as the user.
     const body = (await api('/api/artifacts', { ...args, author: 'model' })) as {
       ok: boolean
       artifact?: { id: string; path: string }

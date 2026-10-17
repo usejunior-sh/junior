@@ -5,7 +5,7 @@ import { buildInfo, pkgVersion } from './state.js'
 export const PORT = Number(process.env.PORT || 5178)
 
 export const VERSION = pkgVersion()
-// Which copy of triage this is (checkout / unreleased build / release) — fixed
+// Which copy of triage this is (checkout / unreleased build / release), fixed
 // for the life of the process, reported everywhere so every surface agrees.
 export const BUILD = buildInfo()
 export const SERVER_STARTED = Date.now()

@@ -1,9 +1,9 @@
 /**
- * Codex through `codex app-server` — JSON-RPC 2.0 as newline-delimited JSON
+ * Codex through `codex app-server`: JSON-RPC 2.0 as newline-delimited JSON
  * over stdio, one subprocess per session. Chat sessions only: Codex has no
  * hook triage could fence a tool call with, so jobs, scans and team workers
  * stay on Claude (`hooks: false` keeps `requireVeto` refusing them), and it
- * can't host triage's in-process MCP server — the user's own
+ * can't host triage's in-process MCP server. The user's own
  * ~/.codex/config.toml brings its MCP servers instead.
  *
  * Every approval Codex asks for goes through `SessionSpec.approve`, so the
@@ -25,7 +25,7 @@ type RpcError = { code?: number; message?: string }
 
 /**
  * One `codex app-server` subprocess as a JSON-RPC peer. Server requests (the
- * approvals) are always answered — an unanswered one hangs the turn — so a
+ * approvals) are always answered, an unanswered one hangs the turn, so a
  * handler that throws replies with an error instead.
  */
 class CodexClient {
@@ -216,7 +216,7 @@ class EventQueue implements AsyncIterable<ProviderEvent> {
 /**
  * Claude's permission modes as Codex's approval policy and sandbox. Bypass is
  * Codex's own full access; every other mode keeps the workspace sandbox and
- * asks — `acceptEdits`/`auto` answer patches here without asking (see below).
+ * asks, `acceptEdits`/`auto` answer patches here without asking (see below).
  */
 const threadPolicy = (mode: PermissionMode | null | undefined) =>
   mode === 'bypassPermissions'

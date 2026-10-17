@@ -37,7 +37,7 @@ export class PageLogBuffer {
     return dedupe(this.logs.filter((l) => l.seq > from && keep(l)))
   }
 
-  /** how many errors since the last load — the one number browser_open reports */
+  /** how many errors since the last load. The one number browser_open reports */
   errorsSinceLoad(): number {
     return this.logs.filter((l) => l.seq > this.loadMark && l.level === 'error').length
   }

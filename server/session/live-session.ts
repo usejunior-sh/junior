@@ -47,15 +47,13 @@ export type SessionExtras = {
   maxBudgetUsd?: number
   /** the only built-in tools the subprocess gets (a team worker's lean toolset) */
   tools?: string[]
-  /** load only the MCP servers passed here — none of the user's other connectors or plugins */
+  /** load only the MCP servers passed here, none of the user's other connectors or plugins */
   strictMcpConfig?: boolean
   /** plain MCP server configs passed through (e.g. the user's chrome-devtools for a browser-allowed agent) */
   externalMcp?: Record<string, Record<string, unknown>>
 }
 
-// ---------------------------------------------------------------------------
 // Live session: one running Claude subprocess bound to a stored session row.
-// ---------------------------------------------------------------------------
 export class LiveSession {
   status: SessionStatus = 'starting'
   model?: string
@@ -72,7 +70,7 @@ export class LiveSession {
     string,
     {
       input: Record<string, unknown>
-      /** the tool asking — the inbox says "Permission: Bash" or "Question" */
+      /** the tool asking: the inbox says "Permission: Bash" or "Question" */
       toolName: string
       /** The SDK's own "don't ask again" rules, replayed on `allow_always`. */
       suggestions: PermissionUpdate[]
@@ -80,13 +78,13 @@ export class LiveSession {
     }
   >()
   private readonly q: AgentSession
-  /** The subprocess's cumulative cost at its last result — turn cost is the difference. */
+  /** The subprocess's cumulative cost at its last result, turn cost is the difference. */
   private costSeen = 0
-  /** This turn wrote a skill or agent file — reload them everywhere when it ends. */
+  /** This turn wrote a skill or agent file, reload them everywhere when it ends. */
   private libraryTouched = false
   /** Whether this subprocess was spawned able to bypass permission checks. */
   private readonly bypassArmed: boolean
-  /** The agent this session runs on — its own, not the workspace's. */
+  /** The agent this session runs on: its own, not the workspace's. */
   readonly provider: Provider
 
   constructor(
@@ -105,7 +103,7 @@ export class LiveSession {
       // it survives `resume` (.docs/next-version.md).
       ...(extras.systemAppend ? { systemAppend: extras.systemAppend } : {}),
       // The triage inbox as in-process tools, so a chat can list/create/edit
-      // work items directly — same tool surface as the stdio shim external
+      // work items directly: same tool surface as the stdio shim external
       // Claude Code sessions get (server/mcp.ts). Scoped to this workspace.
       // Brief sessions add their own `write_brief` server on top. An agent
       // that can't host in-process servers (Codex) gets none of them: it
@@ -142,10 +140,10 @@ export class LiveSession {
       // Revival: replay the agent's own transcript into the new subprocess.
       ...(resumeSdkSessionId ? { resume: resumeSdkSessionId } : {}),
       // The workspace's own skills and agents, for a chat. Not for briefs, job
-      // runs or team workers — each runs a lean, fixed toolset on purpose.
+      // runs or team workers: each runs a lean, fixed toolset on purpose.
       ...(row.kind === 'chat' && !extras.tools ? { plugins: [rt.libraryDir] } : {}),
       // A read-only worker or brief is fenced, and a job run or a team worker
-      // holds its outbound calls for you (core/actions/queue.ts) — a hook, so
+      // holds its outbound calls for you (core/actions/queue.ts), a hook, so
       // no mode or ~/.claude allow rule skips either. Chats keep asking now,
       // through `approve` below.
       ...(this.provider.capabilities.hooks ? sessionVeto(rt, row) : {}),
@@ -219,13 +217,13 @@ export class LiveSession {
   private async pump() {
     try {
       for await (const ev of this.q) {
-        // init and result messages carry what fast mode is really doing —
+        // init and result messages carry what fast mode is really doing,
         // including why it is not serving, which is the only way the user
         // learns their toggle was overruled (wrong model, wrong plan, …).
         if (ev.fastMode) this.noteFastMode(ev.fastMode)
         if (ev.kind === 'started') {
           this.model = ev.model
-          // The key for `resume` — without it a stored session can't continue.
+          // The key for `resume`; without it a stored session can't continue.
           if (ev.sessionId && ev.sessionId !== this.row.sdkSessionId) {
             this.row.sdkSessionId = ev.sessionId
             void this.rt.store.sessions.setSdkSessionId(this.row.id, ev.sessionId)
@@ -234,8 +232,8 @@ export class LiveSession {
           // is kept on the workspace: the first session to start teaches the
           // draft tabs too. Set before the list is asked for, which reads it.
           if (ev.terminalCommands) this.rt.terminalCommands = ev.terminalCommands
-          // The subprocess already knows what `/` offers in this folder —
-          // take it rather than make the composer pay for its own probe.
+          // The subprocess already knows what `/` offers in this folder.
+          // Take it rather than make the composer pay for its own probe.
           void this.refreshCommands()
           this.setStatus('idle')
         }
@@ -259,20 +257,20 @@ export class LiveSession {
           void this.endTurn()
           void this.rt.store.sessions.touch(this.row.id)
           void syncCheckouts(this.rt)
-          // The turn may have created files — the next `@` search relists.
+          // The turn may have created files: the next `@` search relists.
           this.rt.files.invalidate(this.row.cwd)
           // A brief run is one turn: its result is the run's end.
           if (this.row.kind === 'brief') void onBriefTurnDone(this.rt, this.row.id)
           // So is a goal lead's: it proposed the plan, or it never will.
           if (this.row.kind === 'goal') void settleGoalLead(this.rt, this.row.id)
-          // A skill or agent this turn wrote is usable now — here and in every other session.
+          // A skill or agent this turn wrote is usable now, here and in every other session.
           if (this.libraryTouched) {
             this.libraryTouched = false
             reloadLibraryEverywhere(this.rt)
           }
           // Team spend: total_cost_usd is cumulative for this subprocess, so
-          // the turn's cost is the difference from the last result it sent —
-          // tracked for every session, so a chat that becomes a lead mid-way
+          // the turn's cost is the difference from the last result it sent.
+          // Tracked for every session, so a chat that becomes a lead mid-way
           // books only what it spends from then on.
           const cost = ev.costUsd ?? null
           const delta = cost === null ? 0 : Math.max(0, cost - this.costSeen)
@@ -387,14 +385,14 @@ export class LiveSession {
     opts: { title?: string; description?: string; suggestions?: PermissionUpdate[]; agentID?: string; toolUseID?: string },
   ): Promise<PermissionResult> {
     const effect = classifyEffect(toolName)
-    // Plan mode: the plan is yours to approve, like a PR — never waved through by a mode or a rule.
+    // Plan mode: the plan is yours to approve, like a PR, never waved through by a mode or a rule.
     if (toolName === 'ExitPlanMode') return this.askUser(toolName, toolInput, opts, effect)
-    // Reading our own inbox is harmless in any mode — never prompt for it. Every
+    // Reading our own inbox is harmless in any mode, never prompt for it. Every
     // triage write (create/edit/upsert/resolve) still goes through the prompt.
     if (TRIAGE_READ_TOOLS.has(toolName)) {
       return Promise.resolve({ behavior: 'allow', updatedInput: toolInput })
     }
-    // Team runs: triage's own team tools only record and route — the card is
+    // Team runs: triage's own team tools only record and route, the card is
     // the approval. A worker that can't edit runs read-only git/gh unattended,
     // and any worker runs the project's own checks without a click.
     if (TEAM_TOOLS.has(toolName)) return Promise.resolve({ behavior: 'allow', updatedInput: toolInput })
@@ -412,7 +410,7 @@ export class LiveSession {
     }
     // The level you picked on the team card. Outbound calls have already met the veto
     // (held, or refused from the shell), so under `local` what reaches here stays on this
-    // machine — except a connector write nothing recognised as an action, which still asks.
+    // machine: except a connector write nothing recognised as an action, which still asks.
     if (run && run.leadSessionId !== this.row.id) {
       const level = run.card.permissions ?? 'ask'
       if (level === 'everything' || (level === 'local' && (toolName === 'Bash' || effect !== 'external-write'))) {
@@ -420,7 +418,7 @@ export class LiveSession {
       }
     }
     // Brief sessions are headless (.docs/next-version.md): nobody is there to
-    // answer a prompt, so the policy is fixed — reads and the brief's own write
+    // answer a prompt, so the policy is fixed, reads and the brief's own write
     // tool run, narrow read-only gh/git commands run, everything else is denied.
     // A goal's drafting lead is headless too: reads, read-only gh/git, and its plan.
     // A goal run's sessions are headless as well. The role fence and the hold
@@ -500,7 +498,7 @@ export class LiveSession {
           effect,
           // A subagent's call says whose it is, so the card (and its agent's dock row) can.
           ...(opts.agentID ? { agentId: opts.agentID } : {}),
-          // Which call this is — the action record's "who allowed it" keys on it.
+          // Which call this is: the action record's "who allowed it" keys on it.
           ...(opts.toolUseID ? { toolUseId: opts.toolUseID } : {}),
         },
         true,
@@ -516,7 +514,7 @@ export class LiveSession {
     if (pending.toolName === 'ExitPlanMode') {
       if (behavior === 'deny') pending.resolve({ behavior: 'deny', message: 'The user wants to keep planning. Wait for what they say should change, then revise the plan.' })
       else {
-        // Out of plan mode, back to the session's own level — in the same answer, so nothing runs in between.
+        // Out of plan mode, back to the session's own level, in the same answer, so nothing runs in between.
         const back = this.row.permissionMode ?? 'default'
         const sdkBack = back === 'gated' ? 'default' : back
         pending.resolve({ behavior: 'allow', updatedInput: pending.input, updatedPermissions: [{ type: 'setMode', mode: sdkBack, destination: 'session' }] })
@@ -532,7 +530,7 @@ export class LiveSession {
         updatedInput: { ...pending.input, answers },
       })
     } else {
-      // 'allow_always' is 'allow' plus the SDK's suggested rules — re-homed to
+      // 'allow_always' is 'allow' plus the SDK's suggested rules, re-homed to
       // 'session' first. The SDK suggests 'localSettings', which would write
       // the rule into the project's .claude on disk and outlive the session; a
       // button in a transcript is consent for this session, not a settings
@@ -586,7 +584,7 @@ export class LiveSession {
   /**
    * Switch how much this session asks, for every turn from here on.
    *
-   * Returns false when the running subprocess cannot take the switch — the
+   * Returns false when the running subprocess cannot take the switch. The
    * caller has already persisted it, so the fix is to end this subprocess and
    * let the next turn revive one built for the new mode. That is the case for
    * 'bypassPermissions': its opt-in is a spawn-time CLI flag, so a subprocess
@@ -652,7 +650,7 @@ export class LiveSession {
   /**
    * A message for one of this session's subagents. The SDK has no way to put it
    * straight into a subagent, so the main agent gets a short framed turn asking
-   * it to pass the text on with SendMessage — which also resumes an agent that
+   * it to pass the text on with SendMessage, which also resumes an agent that
    * has finished. The transcript keeps the raw text and who it was for.
    */
   async sendAgentMessage(relay: AgentRelay, text: string) {

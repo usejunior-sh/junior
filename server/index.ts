@@ -1,13 +1,11 @@
 #!/usr/bin/env node
 /**
- * triage-dev POC server
- *
- * Serves the web UI on :5178 and drives the locally installed Claude Code
- * via @anthropic-ai/claude-agent-sdk.
+ * The triage daemon: serves the web UI on :5178 and drives the locally
+ * installed Claude Code via @anthropic-ai/claude-agent-sdk.
  *
  * Sessions are persisted to SQLite (core/store): the row + an append-only
  * event log (the same events the UI renders; stream deltas excluded). The
- * Claude subprocess itself is ephemeral — a session with no live subprocess
+ * Claude subprocess itself is ephemeral: a session with no live subprocess
  * is revived on the next user message via the SDK's `resume`, keyed by the
  * sdk_session_id captured from the init message. The agent's own memory of
  * the conversation lives in ~/.claude's transcript, not here; our event log
@@ -15,12 +13,12 @@
  *
  * Workspaces (.docs/workspaces.md): one daemon, N isolated workspaces. Each
  * workspace has its own SQLite file, its own Claude auth backend (spawn env),
- * and its own runtime state — every map and cache that used to be a module
+ * and its own runtime state. Every map and cache that used to be a module
  * singleton lives on a WorkspaceRuntime. Every HTTP request and WS connection
  * is bound to exactly one workspace (?workspace= param, else the triage_ws
  * cookie, else the default), and broadcasts stay inside that boundary.
  *
- * The wire format lives in shared/protocol.ts and is shared with the frontend.
+ * The wire format lives in shared/protocol/ and is shared with the frontend.
  */
 import http from 'node:http'
 import path from 'node:path'
@@ -68,7 +66,7 @@ const server = http.createServer(async (req, res) => {
   if (await remoteRoute(ctx)) return
   if (await workspaceListRoutes(ctx)) return
 
-  // --- everything below is scoped to one workspace ---------------------------
+  // everything below is scoped to one workspace
   const rt = resolveRuntime(req, url)
   const scoped: ScopedCtx = { ...ctx, rt }
   if (await workspaceRoutes(scoped)) return
@@ -84,12 +82,10 @@ const server = http.createServer(async (req, res) => {
   await serveWeb(url.pathname, res)
 })
 
-// ---------------------------------------------------------------------------
-// WebSocket — each connection binds to one workspace at upgrade time
+// WebSocket: each connection binds to one workspace at upgrade time
 // (?workspace= param, else the triage_ws cookie, else the default), and only
 // ever sees that workspace's sessions and events.
-// ---------------------------------------------------------------------------
-// Drop other devices at accept while phone access is off — the same as a
+// Drop other devices at accept while phone access is off, the same as a
 // loopback-only bind, without a restart to switch it on (server/remote.ts).
 server.on('connection', (sock) => {
   if (isLoopbackAddress(sock.remoteAddress)) return
@@ -102,7 +98,7 @@ server.on('connection', (sock) => {
 })
 
 // Upgrades are routed by path: the UI's socket, and the browser pane's host.
-// Two servers can't share `server` — each aborts the other's paths with a 400.
+// Two servers can't share `server`: each aborts the other's paths with a 400.
 const wss = new WebSocketServer({
   noServer: true,
   path: '/ws',
@@ -123,7 +119,7 @@ server.on('upgrade', (req, socket, head) => {
   const pathname = new URL(req.url ?? '/', 'http://localhost').pathname
   if (pathname === BROWSER_HOST_PATH) {
     // This machine only, and no Origin: every browser sends one, so no web
-    // page — not even one the agent is looking at — can pose as the host.
+    // page, not even one the agent is looking at, can pose as the host.
     if (accessOf(req, remote) !== 'local' || req.headers.origin) {
       socket.end('HTTP/1.1 403 Forbidden\r\nconnection: close\r\n\r\n')
       return
@@ -142,7 +138,7 @@ for (const meta of registry.workspaces) runtimes.set(meta.id, new WorkspaceRunti
 for (const rt of runtimes.values()) await initRuntime(rt)
 
 // The wss wraps the http server and re-emits its errors, so the handler has
-// to sit on both — an unhandled 'error' on either one crashes with a raw stack.
+// to sit on both: an unhandled 'error' on either one crashes with a raw stack.
 for (const emitter of [server, wss]) emitter.on('error', onListenError)
 function onListenError(err: NodeJS.ErrnoException) {
   if (err.code === 'EADDRINUSE') {

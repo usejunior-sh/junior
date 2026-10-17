@@ -7,8 +7,8 @@
  * LOCAL time, so "0 9 * * *" means 9am where the user sits.
  *
  * Scheduling is coalescing by construction (like Hermes): the due-checker asks
- * `lastScheduled(expr, now)` — the most recent minute at or before now that the
- * expression matches — and a job is due when its last run predates that. A
+ * `lastScheduled(expr, now)`, the most recent minute at or before now that the
+ * expression matches, and a job is due when its last run predates that. A
  * machine that slept through a slot fires it once on wake; it never stacks,
  * because the next check finds the same (now past) slot already covered.
  */
@@ -81,7 +81,6 @@ export function parseCron(expr: string): CronExpr | null {
   }
 }
 
-/** Is `expr` a valid 5-field cron expression? */
 export function isValidCron(expr: string): boolean {
   return parseCron(expr) !== null
 }
@@ -128,10 +127,8 @@ export function nextScheduled(expr: string, from: number): number | null {
   return null
 }
 
-// ---------------------------------------------------------------------------
-// Human-readable rendering and presets — powering the frequency dropdown and
+// Human-readable rendering and presets: powering the frequency dropdown and
 // the "Every day at 9:00 AM" preview line.
-// ---------------------------------------------------------------------------
 
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 

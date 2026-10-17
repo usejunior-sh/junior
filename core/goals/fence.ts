@@ -1,12 +1,12 @@
 /**
- * The role fence (goals-mapping.md, M0 findings): what a read-only session —
- * a reviewer, a tester, a brief — may not do, checked as a PreToolUse hook so
+ * The role fence (.docs/goals/goals-mapping.md): what a read-only session,
+ * a reviewer, a tester, a brief, may not do, checked as a PreToolUse hook so
  * it runs before the user's own `~/.claude` allow rules and permission mode.
  * Those approve shell commands first otherwise, and a "read-only" reviewer
  * wrote to /tmp and ran `pkill` without a prompt (artifact fde089a4).
  *
  * A deny-list, not a sandbox: file tools are refused outright, and Bash is
- * refused when its text writes — a redirect to a file, a command that
+ * refused when its text writes. A redirect to a file, a command that
  * changes files or processes, a git or package-manager verb that does. A
  * script an interpreter runs (`python -c`, `node -e`) isn't read. Outbound
  * effects are the Actions hold's to catch, after this. Pure and browser-safe.
@@ -21,8 +21,8 @@ export type RoleFence = {
   /** who, for the refusal: "reviewer", "brief" */
   role: string
   /**
-   * Paths this session may not read (M6, reviewer independence: the goal's
-   * ledger and session transcripts). Any tool input naming one is refused —
+   * Paths this session may not read (reviewer independence: the goal's
+   * ledger and session transcripts). Any tool input naming one is refused,
    * a guard against looking, not a sandbox.
    */
   hidden?: readonly string[]

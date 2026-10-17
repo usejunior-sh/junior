@@ -16,7 +16,7 @@ import { errText } from '../errors.js'
 import type { ScopedCtx } from './ctx.js'
 
 export async function itemWriteRoutes({ req, url, json, rt }: ScopedCtx): Promise<boolean> {
-  // What a set of sessions cost — the item page's per-item spend readout. The
+  // What a set of sessions cost: the item page's per-item spend readout. The
   // caller names the sessions (it owns the item→session join); we map each to
   // the Claude session id captured at init and fold the ledger by that.
   if (url.pathname === '/api/usage/sessions' && req.method === 'GET') {
@@ -137,7 +137,7 @@ export async function itemWriteRoutes({ req, url, json, rt }: ScopedCtx): Promis
     json(body.ok ? 200 : 400, body)
     return true
   }
-  // Manual items — to-dos the user adds by hand. Create/edit/delete; they merge
+  // Manual items, to-dos the user adds by hand. Create/edit/delete; they merge
   // into the inbox like any other source and share the done/snooze overlay.
   if (url.pathname === '/api/items/manual') {
     let body: ManualItemResponse

@@ -1,5 +1,5 @@
 /**
- * Workspaces (.docs/workspaces.md) — the top-level scope isolating work from
+ * Workspaces (.docs/workspaces.md): the top-level scope isolating work from
  * personal. Hermes-profile-style storage under a single daemon: each workspace
  * is its own directory holding its own SQLite file, so isolation is physical
  * (a workspace cannot read another's rows), never a WHERE clause.
@@ -7,7 +7,7 @@
  *   ~/.triage/
  *     workspaces.json          registry (no secrets)
  *     workspaces/<id>/
- *       triage.db              same schema as ever — no migration needed
+ *       triage.db              the workspace's SQLite file
  *       .env                   secrets (the provider's API key), mode 0600
  *       <provider>/            private config dir for the config-dir backend
  *
@@ -15,7 +15,7 @@
  * the directory layout, the one-time migrations (the legacy single DB into the
  * default workspace; workspaces from before providers onto Claude) and what is
  * stored for each auth backend. The provider's adapter turns that into spawn
- * env. It holds no runtime state — the server builds a WorkspaceRuntime per
+ * env. It holds no runtime state: the server builds a WorkspaceRuntime per
  * entry on top of this.
  */
 import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
@@ -30,7 +30,7 @@ import type { ProviderAuth, ProviderId } from './providers/types.js'
 export type WorkspaceMeta = {
   id: string
   name: string
-  /** hex color — the ambient "which world am I in" signal */
+  /** hex color: the ambient "which world am I in" signal */
   color: string
   description?: string
   /** the coding agent its sessions, runs and probes go through */
@@ -38,7 +38,7 @@ export type WorkspaceMeta = {
   /** the primary provider's auth */
   authBackend: WorkspaceAuthBackend
   /**
-   * Other agents connected here, each with its own auth — chats may run on
+   * Other agents connected here, each with its own auth, chats may run on
    * them. Absent = only the primary.
    */
   connections?: Partial<Record<ProviderId, { authBackend: WorkspaceAuthBackend }>>
@@ -63,7 +63,7 @@ export const workspaceDbFile = (id: string) => path.join(workspaceDir(id), 'tria
 
 /**
  * Which SQLite file a workspace opens. TRIAGE_DB keeps its pre-workspaces
- * meaning — "the default workspace's DB lives here" — so dev/test overrides
+ * meaning, "the default workspace's DB lives here", so dev/test overrides
  * keep working; every other workspace always uses its own directory.
  */
 export function dbFileFor(id: string, defaultId: string): string {
@@ -71,7 +71,7 @@ export function dbFileFor(id: string, defaultId: string): string {
   return workspaceDbFile(id)
 }
 export const workspaceEnvFile = (id: string) => path.join(workspaceDir(id), '.env')
-/** The private config dir of a config-dir provider — `claude/` for Claude, as it always was, `codex/` for Codex. */
+/** The private config dir of a config-dir provider, `claude/` for Claude, as it always was, `codex/` for Codex. */
 export const workspaceAuthDir = (meta: Pick<WorkspaceMeta, 'id' | 'provider'>, provider: ProviderId = meta.provider) =>
   path.join(workspaceDir(meta.id), provider)
 
@@ -112,7 +112,7 @@ export function loadRegistry(): WorkspaceRegistry {
     const parsed = JSON.parse(readFileSync(REGISTRY_FILE, 'utf8')) as WorkspaceRegistry
     if (parsed && Array.isArray(parsed.workspaces) && parsed.workspaces.length > 0) reg = parsed
   } catch {
-    // no registry yet — first run
+    // no registry yet: first run
   }
 
   if (!reg) {
@@ -142,7 +142,7 @@ export function loadRegistry(): WorkspaceRegistry {
 
 /**
  * Every workspace names its provider. One saved before providers existed ran
- * on Claude, so it gets `claude` — and keeps everything else it had, its
+ * on Claude, so it gets `claude`, and keeps everything else it had, its
  * config dir included (`claude/` is that provider's dir). True = changed.
  *
  * Only Claude can be a workspace's provider for now: jobs, briefs, probes
@@ -178,13 +178,13 @@ export function ensureWorkspaceDirs(id: string): void {
 
 /**
  * One-time migration: the pre-workspaces DB (~/.triage/triage-dev.db, or
- * TRIAGE_DB) moves into the default workspace's directory — with its WAL/SHM
- * siblings — so nothing is lost and the old path stops being written. Skipped
+ * TRIAGE_DB) moves into the default workspace's directory, with its WAL/SHM
+ * siblings, so nothing is lost and the old path stops being written. Skipped
  * when the workspace DB already exists (never clobber) or there is nothing to
  * move.
  */
 function migrateLegacyDb(defaultId: string): void {
-  if (process.env.TRIAGE_DB) return // override in force — the default workspace uses it in place
+  if (process.env.TRIAGE_DB) return // override in force: the default workspace uses it in place
   const target = workspaceDbFile(defaultId)
   if (existsSync(target) || !existsSync(LEGACY_DB)) return
   ensureWorkspaceDirs(defaultId)
@@ -216,7 +216,7 @@ function readEnvFile(id: string): Record<string, string> {
       if (m) out[m[1]] = m[2]
     }
   } catch {
-    // no .env — fine for inherit/config-dir
+    // no .env: fine for inherit/config-dir
   }
   return out
 }
@@ -232,7 +232,7 @@ export function apiKeyHint(meta: Pick<WorkspaceMeta, 'id' | 'provider'>, provide
 
 /**
  * What triage keeps for a provider's auth backend here, as its adapter reads
- * it. A provider that isn't connected reads as `inherit` — a session already
+ * it. A provider that isn't connected reads as `inherit`. A session already
  * on it still runs, on the machine's own login.
  */
 export function authOf(meta: WorkspaceMeta, provider: ProviderId = meta.provider): ProviderAuth {
@@ -254,7 +254,7 @@ export function authOf(meta: WorkspaceMeta, provider: ProviderId = meta.provider
 
 /**
  * The env overrides a provider's subprocesses spawn with in this workspace, as
- * its adapter resolves them. `undefined` for `inherit` — the agent finds its
+ * its adapter resolves them. `undefined` for `inherit`: the agent finds its
  * own login. The overrides are merged over process.env at the spawn site.
  */
 export function envOverridesFor(meta: WorkspaceMeta, provider: ProviderId = meta.provider): Record<string, string> | undefined {

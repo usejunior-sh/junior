@@ -1,11 +1,9 @@
 import type { Goal, GoalTurn, GoalPlan, GoalStepState, Gate, GoalEvent, StepRole } from '../../core/goals/types.js'
 import type { PlanComment } from '../../core/goals/review.js'
 
-// ---------------------------------------------------------------------------
-// Goals (GET /api/goals, GET /api/goals/<id>) — outcomes Junior drives across
+// Goals (GET /api/goals, GET /api/goals/<id>), outcomes Junior drives across
 // many sessions (.docs/goals/goals-engine.md). Domain types live in
 // core/goals/types.ts; the state machine in core/goals/machine.ts.
-// ---------------------------------------------------------------------------
 
 export type {
   Gate,
@@ -42,7 +40,7 @@ export type GoalsResponse =
   | {
       ok: true
       goals: GoalSummary[]
-      /** goals whose turn is the user's — the Inbox's and the rail's count */
+      /** goals whose turn is the user's: the Inbox's and the rail's count */
       waitingOnYou: number
     }
   | { ok: false; error: string }
@@ -74,17 +72,17 @@ export type GoalResponse =
       handoff: string
       /** the latest entries of log.md, oldest first */
       log: string
-      /** set after repeated ledger commit failures (decision 7) */
+      /** set after repeated ledger commit failures */
       ledgerWarning: string | null
-      /** comments on the plan under review, since it was proposed — what send-back hands the lead */
+      /** comments on the plan under review, since it was proposed, what send-back hands the lead */
       comments: PlanComment[]
       /** the lead session drafting the plan right now, if one is */
       leadSessionId: string | null
-      /** M3: the session working the goal right now (a run lead or a worker), if one is */
+      /** the session working the goal right now (a run lead or a worker), if one is */
       liveSession: { sessionId: string; role: StepRole; stepId: string | null } | null
-      /** M6: everyone on the goal right now — the lead alone, or its workers side by side — oldest first */
+      /** everyone on the goal right now, the lead alone, or its workers side by side, oldest first */
       team: GoalTeamMember[]
-      /** M3: what the goal waits on the user for — a question with Junior's recommended answer, or a plan change */
+      /** what the goal waits on the user for. A question with Junior's recommended answer, or a plan change */
       ask: GoalAsk | null
     }
   | { ok: false; error: string }
@@ -110,7 +108,7 @@ export type GoalWriteOutcome =
   | 'commented'
   | 'sent_back'
   | 'unchanged'
-  // M3: the run loop's steering — answers, messages, edits, take over and hand back, the result
+  // the run loop's steering: answers, messages, edits, take over and hand back, the result
   | 'answered'
   | 'messaged'
   | 'edited'

@@ -1,7 +1,7 @@
 /**
  * The job page's Runs table: one row per slot from the ledger (run, skipped,
  * missed or over budget), joined to the run's session receipt for what only a
- * session knows — tokens and what it filed. Runs from before the ledger have
+ * session knows, tokens and what it filed. Runs from before the ledger have
  * no row there, so they come in from their session alone. Pure.
  */
 import type { ActivityRun, JobRunTrigger, JobSlotRun, JobSlotStatus } from '../../shared/protocol.js'

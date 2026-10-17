@@ -19,7 +19,7 @@ export async function jobRoutes({ req, url, json, rt }: ScopedCtx): Promise<bool
     let status = 200
     try {
       // Jobs are files: create and edit write `jobs/<name>.md`, then sync
-      // the row from it — the same path a hand edit takes.
+      // the row from it: the same path a hand edit takes.
       if (req.method === 'POST') {
         const parsed = jobPatchFrom(await readJsonBody(req))
         if ('error' in parsed) throw new Error(parsed.error)
@@ -66,7 +66,7 @@ export async function jobRoutes({ req, url, json, rt }: ScopedCtx): Promise<bool
         const { runOnceNow: _ignored, ...patch } = parsed.patch
         // The on/off switch edits only the `enabled:` line, so a hand-kept file stays as written.
         const onlyToggle = Object.keys(patch).every((k) => k === 'enabled') && patch.enabled !== undefined
-        // A legacy row gets its first file here — saving it is the way across.
+        // A legacy row gets its first file here, saving it is the way across.
         const name = existing.file ?? rt.jobFiles.freeName(patch.title ?? existing.title)
         const merged = { ...existing, ...patch } as Job
         if (patch.schedule) merged.schedule = patch.schedule

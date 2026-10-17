@@ -1,6 +1,6 @@
 /**
  * The goal state machine: which trigger moves a goal from which state to
- * which, and who may pull it. Pure — no clock, no I/O — so every allowed and
+ * which, and who may pull it. Pure, no clock, no I/O, so every allowed and
  * refused pair is unit-tested (test/goal-machine.test.ts). Only the engine
  * calls `transition`; agents propose through engine tools, and the user's
  * clicks arrive as triggers with `by: 'you'`.
@@ -56,7 +56,7 @@ export const TRANSITIONS: Readonly<Record<GoalTrigger, Rule>> = {
   /** the lead's drafting session exited with a valid plan */
   plan_proposed: { from: ['draft_plan'], to: 'plan_ready', by: 'engine' },
   approve: { from: ['plan_ready'], to: 'queued', by: 'you' },
-  /** with comments — the lead wakes to revise */
+  /** with comments: the lead wakes to revise */
   send_back: { from: ['plan_ready'], to: 'draft_plan', by: 'you' },
   /** the scheduler gave it a slot */
   start: { from: ['queued'], to: 'running', by: 'engine' },
@@ -70,7 +70,7 @@ export const TRANSITIONS: Readonly<Record<GoalTrigger, Rule>> = {
    */
   ask_you: { from: ['queued', 'running', 'waiting_world'], to: 'waiting_you', by: 'engine' },
   gate_met: { from: ['waiting_world'], to: 'queued', by: 'engine' },
-  /** the PR watcher (M5) dispatched a step while the goal waits on its PR: the step's worker needs a slot */
+  /** the PR watcher dispatched a step while the goal waits on its PR: the step's worker needs a slot */
   watcher_step: { from: ['waiting_world'], to: 'queued', by: 'engine' },
   answer: { from: ['waiting_you'], to: 'queued', by: 'you' },
   /** a gate that ran past its deadline or stumped its checker: wait on it, without waking the lead */
@@ -95,7 +95,7 @@ export const isTerminal = (s: GoalState) => TERMINAL_STATES.includes(s)
 
 export type TransitionResult = { ok: true; from: GoalState; to: GoalState } | { ok: false; error: string }
 
-/** Where `trigger` takes a goal in `from`, pulled `by` whom — or why it can't. */
+/** Where `trigger` takes a goal in `from`, pulled `by` whom, or why it can't. */
 export function transition(from: GoalState, trigger: GoalTrigger, by: TriggerBy): TransitionResult {
   const rule = TRANSITIONS[trigger]
   if (!rule) return { ok: false, error: `unknown trigger "${trigger}"` }
@@ -104,7 +104,7 @@ export function transition(from: GoalState, trigger: GoalTrigger, by: TriggerBy)
   return { ok: true, from, to: rule.to }
 }
 
-/** The triggers that apply in a state, for whom — what the goal page offers as buttons. */
+/** The triggers that apply in a state, for whom, what the goal page offers as buttons. */
 export function triggersFrom(state: GoalState, by?: TriggerBy): GoalTrigger[] {
   return GOAL_TRIGGERS.filter((t) => TRANSITIONS[t].from.includes(state) && (by === undefined || TRANSITIONS[t].by === by))
 }

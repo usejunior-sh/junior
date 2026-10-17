@@ -4,8 +4,8 @@
  * Everything here is read-only and never touches the user's index, HEAD or
  * working tree. A "snapshot" is a tree object built through a throwaway index
  * (`GIT_INDEX_FILE=<tmp> git read-tree HEAD && git add -A && git write-tree`),
- * which is what lets us photograph the working tree — untracked files included
- * — without staging anything. `.gitignore` is respected, so an edit to an
+ * which is what lets us photograph the working tree, untracked files included
+ * without staging anything. `.gitignore` is respected, so an edit to an
  * ignored file is invisible to this whole feature.
  *
  * Trees are written into the repo's object database, so they survive until a
@@ -45,7 +45,7 @@ export async function repoRoot(cwd: string): Promise<string | null> {
 /**
  * Photograph the working tree as a git tree object.
  *
- * Returns null on any failure — a snapshot is best-effort telemetry about a
+ * Returns null on any failure: a snapshot is best-effort telemetry about a
  * session, never something worth failing a turn over.
  */
 export async function snapshotTree(root: string): Promise<string | null> {
@@ -57,7 +57,7 @@ export async function snapshotTree(root: string): Promise<string | null> {
     try {
       await git(root, ['read-tree', 'HEAD'], env)
     } catch {
-      /* unborn branch — start from an empty index */
+      /* unborn branch: start from an empty index */
     }
     await git(root, ['add', '-A'], env)
     const sha = (await git(root, ['write-tree'], env)).trim()
@@ -101,7 +101,7 @@ export async function treeDiff(root: string, from: string, to: string): Promise<
   const parts = nums.split('\0')
   for (const rec of parts) {
     if (!rec) continue
-    // `<ins>\t<del>\t<path>` — a binary file reports "-" for both counts.
+    // `<ins>\t<del>\t<path>`: a binary file reports "-" for both counts.
     const m = /^(\d+|-)\t(\d+|-)\t([\s\S]+)$/.exec(rec)
     if (!m) continue
     const entry = byPath.get(m[3])
@@ -136,11 +136,9 @@ export async function filePatch(
   return { patch: out.slice(0, PATCH_BUDGET), truncated: true }
 }
 
-// ---------------------------------------------------------------------------
-// Working-tree changes — the Changes rail: what is uncommitted in a project,
+// Working-tree changes (the Changes rail): what is uncommitted in a project,
 // against HEAD, whoever made it. Read-only like everything above; optional
 // locks are off so a background refresh never races the user's own `git`.
-// ---------------------------------------------------------------------------
 
 /** git's well-known empty tree: the base for a repo with no commits yet. */
 const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904'
@@ -179,7 +177,7 @@ async function countLines(abs: string): Promise<{ lines: number; isBinary: boole
 
 /**
  * Everything uncommitted under `dir`: tracked files against HEAD (staged or
- * not — one view, the way a reviewer reads it) plus untracked files as adds.
+ * not. One view, the way a reviewer reads it) plus untracked files as adds.
  * Paths are relative to `dir`, not the repo root, so a project that is a
  * subfolder of a repo sees only its own files.
  */
@@ -215,7 +213,7 @@ export async function worktreeChanges(dir: string): Promise<TreeChange[]> {
   return [...byPath.values()].sort((a, b) => a.path.localeCompare(b.path))
 }
 
-/** One file's uncommitted patch — against HEAD, or against nothing when untracked. */
+/** One file's uncommitted patch: against HEAD, or against nothing when untracked. */
 export async function worktreePatch(dir: string, file: string): Promise<{ patch: string; truncated: boolean }> {
   const base = await headTree(dir)
   const flags = ['--no-renames', '--no-color', '--no-ext-diff', '--unified=3']
@@ -251,7 +249,7 @@ export type ListedWorktree = {
   path: string
   /** null = detached HEAD */
   branch: string | null
-  /** the repo's own folder — the first entry git lists */
+  /** the repo's own folder: the first entry git lists */
   primary: boolean
   /** git's word for a worktree whose folder is gone; it reads as removed */
   prunable: boolean

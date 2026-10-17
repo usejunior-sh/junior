@@ -18,7 +18,7 @@ import { defaultProject } from './session/sessions.js'
 /**
  * The `urls` field of an item save: the complete desired list of the human's
  * links, trimmed and deduplicated. Absent leaves them alone, `[]` clears them.
- * Refused, not repaired, like images — a link that silently vanishes is worse.
+ * Refused, not repaired, like images, a link that silently vanishes is worse.
  */
 export function itemUrls(v: unknown): string[] | undefined {
   if (v === undefined || v === null) return undefined
@@ -36,7 +36,7 @@ export function itemUrls(v: unknown): string[] | undefined {
 /**
  * The `images` field of an item save: `{ id }` keeps an image the item already
  * holds, anything else is a new base64 upload, judged by the same rules as a
- * chat attachment. The list is the complete desired set — absent leaves the
+ * chat attachment. The list is the complete desired set, absent leaves the
  * item's images alone, `[]` drops them all. Unlike the socket's
  * `imageAttachments`, a bad entry is *refused*, not dropped: this is a form,
  * and a screenshot that silently vanishes on save is worse than an error.
@@ -69,7 +69,7 @@ export function itemImageEdits(raw: Record<string, unknown>): ItemImageEdit[] | 
 
 /**
  * Write the item's new image set to disk and record the refs. Works for any
- * item, not just manual ones — a screenshot pasted onto a GitHub item's
+ * item, not just manual ones. A screenshot pasted onto a GitHub item's
  * description is the same thing.
  */
 export async function setItemImagesOp(rt: WorkspaceRuntime, id: string, edits: ItemImageEdit[]): Promise<ItemImage[]> {
@@ -109,14 +109,12 @@ export async function setItemFilesOp(rt: WorkspaceRuntime, id: string, plan: Non
   return files
 }
 
-// ---------------------------------------------------------------------------
-// Work-item operations — one core, three callers: the HTTP routes below, the
+// Work-item operations. One core, three callers: the HTTP routes below, the
 // in-process MCP server that web chats get (rt.triageMcp(), one per session), and the
 // stdio shim (server/mcp.ts) which reaches them over HTTP. Every transport
 // funnels through these functions, so list/create/edit/upsert/resolve behave
 // identically no matter who calls them. Validation stays in workItemFrom/
-// manualItemFrom — the single source of truth, never duplicated per transport.
-// ---------------------------------------------------------------------------
+// manualItemFrom: the single source of truth, never duplicated per transport.
 export async function listItemsOp(
   rt: WorkspaceRuntime,
   filter: { source?: string; kind?: string; status?: string } = {},
@@ -135,8 +133,8 @@ export async function listItemsOp(
  * One work item, whole. The counterpart to listItemsOp: that one answers "what
  * should I do next" and is therefore open-only and repo-scoped, this one
  * answers "tell me about this one" and filters nothing. Every neighbour it
- * returns carries an id and a title, so a reader handed an id — by a `linked`
- * sibling, by an old link, by the user — can always follow it one more hop.
+ * returns carries an id and a title, so a reader handed an id, by a `linked`
+ * sibling, by an old link, by the user, can always follow it one more hop.
  */
 export async function itemDetailOp(rt: WorkspaceRuntime, rawId: unknown): Promise<ItemDetail> {
   const id = typeof rawId === 'string' ? rawId.trim() : ''
@@ -146,7 +144,7 @@ export async function itemDetailOp(rt: WorkspaceRuntime, rawId: unknown): Promis
 
   const [all, links] = await Promise.all([rt.store.items.listAll(), rt.store.links.forTarget('item', id)])
 
-  // Ref-siblings, transitively — the same component the inbox folds into one
+  // Ref-siblings, transitively, the same component the inbox folds into one
   // card (core/work/link.ts), so detail and card never disagree about who is
   // related to whom. Unlike the card, this reaches items of any status.
   const byId = new Map(all.map((i) => [i.id, i]))
@@ -221,7 +219,7 @@ async function linkedSessions(rt: WorkspaceRuntime, links: Link[]): Promise<Item
 /**
  * What a session is allowed to know about itself. A session is spawned before
  * `create_session` links it to a work item, so its system prompt cannot name
- * the item — it can only point here (shared/triageContext.ts).
+ * the item. It can only point here (shared/triageContext.ts).
  */
 export async function sessionContextOp(rt: WorkspaceRuntime, rawId: unknown): Promise<SessionContext> {
   const id = typeof rawId === 'string' ? rawId.trim() : ''
@@ -265,7 +263,7 @@ export async function createManualOp(rt: WorkspaceRuntime, raw: unknown): Promis
   const id = `manual:${randomUUID()}`
   await rt.store.items.createManual({ id, ...input, projectId: input.projectId ?? (await defaultProject(rt))?.id })
   if (due) await rt.store.items.setDue(id, due)
-  // The item has to exist before its images can hang off it — the folder is
+  // The item has to exist before its images can hang off it, the folder is
   // named after the id the line above minted.
   try {
     if (images?.length) await setItemImagesOp(rt, id, images)
@@ -282,8 +280,8 @@ export async function createManualOp(rt: WorkspaceRuntime, raw: unknown): Promis
 }
 
 // Edits target manual (user-authored) items only. Scanned items are
-// upsert-newer-wins, so a free-form edit would be clobbered by the next scan —
-// reject those with a clear message rather than silently no-op'ing.
+// upsert-newer-wins, so a free-form edit would be clobbered by the next scan.
+// Reject those with a clear message rather than silently no-op'ing.
 export async function editManualOp(rt: WorkspaceRuntime, id: string, raw: unknown): Promise<void> {
   if (!id || !id.startsWith('manual:'))
     throw new Error('edit_work_item only edits manual items (id must start with "manual:")')

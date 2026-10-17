@@ -13,7 +13,7 @@ export type CriterionStatus = 'met' | 'not met' | 'partly' | 'unreported'
 export type CriterionReport = { id: string; status: CriterionStatus; evidence: string }
 
 /**
- * The run's ledger: what workers learned, appended as they hand in — never
+ * The run's ledger: what workers learned, appended as they hand in, never
  * rewritten, never capped on disk (only what's inlined into a prompt is cut).
  * `where` maps the code for whoever comes next; `failed` keeps a fix round from
  * repeating an earlier one; `verify` says how to check this project.
@@ -34,13 +34,13 @@ export type TeamCard = {
   outOfScope: string[]
   /** the task loop's work list, in order; empty for a team without a loop */
   tasks: PlanTask[]
-  /** what you (or the lead, with your OK) decided — every agent reads these */
+  /** what you (or the lead, with your OK) decided, every agent reads these */
   decisions: string[]
   steps: CardStep[]
   budgetUsd: number
-  /** what the workers may do without asking — yours to pick before it runs (the team file may preselect it) */
+  /** what the workers may do without asking, yours to pick before it runs (the team file may preselect it) */
   permissions: TeamPermissions | null
-  /** every worker in fast mode — yours to turn on (the team file may preselect it); switchable mid-run */
+  /** every worker in fast mode: yours to turn on (the team file may preselect it); switchable mid-run */
   fast: boolean
   /** the lead's note to you: why this team, what it left out */
   note: string
@@ -77,7 +77,7 @@ export type Handoff = {
   workerId: string | null
   label: string
   at: number
-  /** one line — what the step tracker shows */
+  /** one line: what the step tracker shows */
   summary: string
   /** the full text, forwarded verbatim to whoever reads it next */
   body: string
@@ -87,7 +87,7 @@ export type Handoff = {
   checks?: CheckResult[]
   /** each acceptance criterion the step answered for, by id */
   criteria?: CriterionReport[]
-  /** what the reviewer should look at hardest — the one part of a builder's handoff a reviewer reads */
+  /** what the reviewer should look at hardest. The one part of a builder's handoff a reviewer reads */
   unsure?: string
   /** a fix round: the builder's answer to each open finding */
   resolutions?: Resolution[]
@@ -96,7 +96,7 @@ export type Handoff = {
 }
 
 /**
- * One run: a worker's go at one step, for one task and fix round — what the
+ * One run: a worker's go at one step, for one task and fix round, what the
  * session page marks with a divider. Recorded when triage sends the step; a
  * nudge or a resume is more of the same run, not a new one.
  */
@@ -136,12 +136,12 @@ export type GoalVerdict = { at: number; met: boolean; evidence: string; round: n
 
 /** What makes a run a goal. */
 export type RunGoal = {
-  /** the outcome, in words — Junior judges it when the team finishes a round */
+  /** the outcome, in words, Junior judges it when the team finishes a round */
   doneWhen: string
   horizon: RunGoalHorizon
   /** rounds after the first: each starts when Junior judged the done-when not met */
   round: number
-  /** what's still missing, from the last verdict — every worker in the round reads it */
+  /** what's still missing, from the last verdict. Every worker in the round reads it */
   gap: string | null
   /** what the lead owes before the team can move: a verdict on the done-when, or a way past what stopped the team */
   owes: 'verdict' | 'unstick' | null
@@ -182,7 +182,7 @@ export type TeamRun = {
   step: number
   /** the lead was asked to split the current fan-out step and hasn't yet */
   splitting: boolean
-  /** fix rounds used — on the current task, in the loop */
+  /** fix rounds used, on the current task, in the loop */
   round: number
   /** index into card.tasks while the task loop runs, else null */
   task: number | null
@@ -193,7 +193,7 @@ export type TeamRun = {
   workerRuns: WorkerRun[]
   /** workers the current step still waits on */
   awaiting: string[]
-  /** awaited workers that submitted mid-turn — acted on when their turn ends */
+  /** awaited workers that submitted mid-turn: acted on when their turn ends */
   submitted: string[]
   outputs: Handoff[]
   /** runs from before the ledger: what implementers left for whoever builds next (read-only now) */
@@ -202,9 +202,9 @@ export type TeamRun = {
   ledger: LedgerEntry[]
   /** every review finding's state, by id */
   findingState: Record<string, { status: FindingStatus; note?: string; round: number }>
-  /** the project's checks as they stood when you approved — so a worker tells a pre-existing failure from its own */
+  /** the project's checks as they stood when you approved, so a worker tells a pre-existing failure from its own */
   baseline?: { results: CheckResult[]; at: number } | null
-  /** the run folder (plan, ledger, verify, handoffs, reviews, patches) — set by the server */
+  /** the run folder (plan, ledger, verify, handoffs, reviews, patches), set by the server */
   dir?: string
   /** a change to the task list the lead proposed, waiting for your OK (applied between tasks) */
   revision: { tasks: PlanTask[]; why: string } | null
@@ -215,7 +215,7 @@ export type TeamRun = {
   /** USD per session id (the lead's included) */
   spend: Record<string, number>
   budgetUsd: number
-  /** bumps on every change — the client's cue to refetch */
+  /** bumps on every change: the client's cue to refetch */
   rev: number
   /** `<step>:<round>:<worker>` already nudged, so a nudge never loops */
   nudged: string[]
@@ -227,11 +227,11 @@ export type TeamRun = {
   checkCmds?: string[]
   runBase?: string
   baseTree?: string
-  /** the tree when the run ended — what it changed stays what it changed, whatever happens to the checkout after */
+  /** the tree when the run ended: what it changed stays what it changed, whatever happens to the checkout after */
   endTree?: string
   /** set when the run is a goal */
   goal?: RunGoal | null
-  /** every resume, oldest first — by Junior or by you */
+  /** every resume, oldest first, by Junior or by you */
   resumes?: RunResume[]
   /** fix rounds before this one don't count against the cap: Junior got the team moving again here */
   roundFloor?: number

@@ -1,7 +1,7 @@
 /**
  * The persistence seam ("thin frontends, fat core").
  *
- * One interface per aggregate, expressed in domain types — no SQL, no driver
+ * One interface per aggregate, expressed in domain types. No SQL, no driver
  * types, no dialect. Everything is async even though the SQLite adapter is
  * synchronous underneath: `pg`/`mysql2` never will be, and retrofitting
  * Promises onto every call site later is the expensive rewrite this seam
@@ -46,11 +46,11 @@ export type StoredSession = {
   id: string
   title: string
   cwd: string
-  /** The project the session runs in — stored, never derived from `cwd` (a worktree's folder isn't the project's). */
+  /** The project the session runs in: stored, never derived from `cwd` (a worktree's folder isn't the project's). */
   projectId: string | null
-  /** The checkout the session runs in — stored at creation, never derived from `cwd`. null only before backfill. */
+  /** The checkout the session runs in: stored at creation, never derived from `cwd`. null only before backfill. */
   checkoutId: string | null
-  /** Claude Code's own session id — the key for `resume` and the link to its transcript. */
+  /** Claude Code's own session id: the key for `resume` and the link to its transcript. */
   sdkSessionId: string | null
   /** The model the user picked; null = whatever Claude Code defaults to. */
   model: string | null
@@ -156,7 +156,7 @@ export interface SessionStore {
  * Sessions in the same folder share a working tree, so "what did *this*
  * session change" cannot be read off `git status`. It is reconstructed from
  * these: the agent only edits while its own turn runs, so everything between
- * `preTree` and `postTree` happened in this session's window — and is this
+ * `preTree` and `postTree` happened in this session's window, and is this
  * session's work unless another session's turn overlapped it.
  */
 export type StoredTurn = {
@@ -185,7 +185,7 @@ export interface TurnStore {
   ): Promise<void>
   /** This session's turns, oldest first. */
   list(sessionId: string): Promise<StoredTurn[]>
-  /** Every *other* session's turns against the same root — for collision checks. */
+  /** Every *other* session's turns against the same root, for collision checks. */
   othersInRoot(root: string, exceptSessionId: string): Promise<StoredTurn[]>
   /** The highest turn seq recorded for a session, or 0. */
   lastSeq(sessionId: string): Promise<number>
@@ -219,7 +219,7 @@ export interface ProjectStore {
   create(p: Project): Promise<void>
   /** Make `id` the workspace's one default project. */
   setDefault(id: string): Promise<void>
-  /** Throws for the default project — it can only be replaced. */
+  /** Throws for the default project: it can only be replaced. */
   remove(id: string): Promise<void>
   /** Delete the retired built-in scratch projects (a dev-build leftover); returns what was removed. */
   retireBuiltin(): Promise<Project[]>
@@ -229,7 +229,7 @@ export type CheckoutPatch = { branch?: string | null; state?: CheckoutState; bas
 
 /** A project's folders: its main checkout and its worktrees. */
 export interface CheckoutStore {
-  /** Every checkout, removed ones included — main first within a project. */
+  /** Every checkout, removed ones included, main first within a project. */
   list(): Promise<Checkout[]>
   create(c: Checkout): Promise<void>
   /** What discovery moves (branch, state), plus what triage knows of a worktree it made itself (base, item). */
@@ -238,7 +238,7 @@ export interface CheckoutStore {
   removeForProject(projectId: string): Promise<void>
 }
 
-/** Scheduler-owned state on a job — never part of the user's edit. */
+/** Scheduler-owned state on a job, never part of the user's edit. */
 export type JobStatePatch = {
   enabled?: boolean
   /** null clears it */
@@ -264,7 +264,7 @@ export interface JobStore {
 }
 
 /**
- * The slot ledger (`job_runs`): one durable row per (job, slot) — scheduled,
+ * The slot ledger (`job_runs`): one durable row per (job, slot), scheduled,
  * catch-up, manual or skipped. Additive: the job row and session receipts
  * stay the source for what the UI reads today.
  */
@@ -277,15 +277,15 @@ export interface JobRunLedger {
   finish(jobId: string, slot: number, end: JobSlotFinish): Promise<boolean>
   /**
    * The slots a catch-up run collapsed: one `missed` row each, reason
-   * `covered by <runId>`. INSERT OR IGNORE — an existing row keeps its own
+   * `covered by <runId>`. INSERT OR IGNORE: an existing row keeps its own
    * story. Returns how many were written.
    */
   insertMissed(jobId: string, slots: number[], runId: string, at: number): Promise<number>
   /** One job's rows, newest slot first. */
   list(jobId: string, limit?: number): Promise<JobSlotRun[]>
-  /** Dollars one job's runs recorded since `since` (epoch ms) — the daily budget's meter. */
+  /** Dollars one job's runs recorded since `since` (epoch ms), the daily budget's meter. */
   spentSince(jobId: string, since: number): Promise<number>
-  /** When each job's latest `ok` row ended — the overdue rule's clock. */
+  /** When each job's latest `ok` row ended, the overdue rule's clock. */
   lastOkAt(): Promise<Map<string, number>>
   /** Boot: every `running` row died with the previous process. Returns how many. */
   sweepInterrupted(endedAt: number, reason: string): Promise<number>
@@ -312,11 +312,11 @@ export type NewManualItem = {
 
 /**
  * The durable inbox (.docs/jobs-v2.md): one row per work item, keyed by its
- * canonical id, for every source — built-ins, job hits, GitHub, and manual
+ * canonical id, for every source, built-ins, job hits, GitHub, and manual
  * to-dos. Never hard-deleted, never auto-expired; an item leaves the open inbox
  * only by a recorded transition (done/snoozed/archived) or a wake. The
  * idempotent upsert rule and the deterministic reopen rule live in the adapter
- * — correctness in the contract, not the prompt. Every transition is appended
+ * Correctness lives in the contract, not the prompt. Every transition is appended
  * to the item's own event log.
  */
 /** What the store keeps about an item's flow: the last derived stage/turn and any override. */
@@ -341,7 +341,7 @@ export interface WorkItemStore {
   get(id: string): Promise<WorkItem | null>
   /** Items in one status (default 'open'), newest source activity first. */
   list(status?: ItemStatus): Promise<WorkItem[]>
-  /** Every item regardless of status — for reconciliation and counts. */
+  /** Every item regardless of status, for reconciliation and counts. */
   listAll(): Promise<WorkItem[]>
   /** Record a status transition: append the matching event and set the column. */
   transition(id: string, change: StatusChange): Promise<void>
@@ -366,9 +366,9 @@ export interface WorkItemStore {
   setFlowOverride(id: string, override: FlowOverride | null, actor: string): Promise<void>
   /** Items that went done at or after `since` and are still done ("Landed today"). */
   countDoneSince(since: number): Promise<number>
-  /** When each of these items last changed status (epoch ms) — a plan row's "done 06:10". Unknown ids are absent. */
+  /** When each of these items last changed status (epoch ms). A plan row's "done 06:10". Unknown ids are absent. */
   statusTimes(ids: readonly string[]): Promise<Map<string, number>>
-  /** Archived items whose latest archive was a Delete (`reason: 'deleted by user'`) — Archived's Deleted filter. */
+  /** Archived items whose latest archive was a Delete (`reason: 'deleted by user'`): Archived's Deleted filter. */
   deletedIds(): Promise<Set<string>>
   /** The append-only transition log for one item, in order. */
   events(id: string): Promise<ItemEvent[]>
@@ -395,12 +395,12 @@ export type NewBriefJob = {
   playbookBody?: string | null
   model?: string | null
   note?: string | null
-  /** born running in this session (never queued) — a reply to a brief session that already knows the item */
+  /** born running in this session (never queued). A reply to a brief session that already knows the item */
   running?: { sessionId: string; startedAt: number }
 }
 
 /**
- * Brief jobs (.docs/next-version.md, phase 2): the queue and the state machine
+ * Brief jobs: the queue and the state machine
  * in one table, so it survives a restart and stays FIFO. The current brief of
  * an item is its newest job.
  */
@@ -409,13 +409,13 @@ export interface BriefJobStore {
   get(id: string): Promise<BriefJob | null>
   /** The newest job for an item, whatever its status. */
   latestForItem(itemId: string): Promise<BriefJob | null>
-  /** The newest job that ran (or runs) in a session — how a revived brief session finds its tool. */
+  /** The newest job that ran (or runs) in a session, how a revived brief session finds its tool. */
   forSession(sessionId: string): Promise<BriefJob | null>
-  /** The newest job per item — the inbox's status pills in one query. */
+  /** The newest job per item: the inbox's status pills in one query. */
   latestPerItem(): Promise<BriefJob[]>
   /** Jobs in one status, oldest first (the queue order for 'queued'). */
   list(status?: BriefStatus): Promise<BriefJob[]>
-  /** How many jobs started at or after `sinceMs` — the daily cap's counter. */
+  /** How many jobs started at or after `sinceMs`, the daily cap's counter. */
   countStartedSince(sinceMs: number): Promise<number>
   update(id: string, patch: Partial<Omit<BriefJob, 'id' | 'itemId' | 'playbook' | 'playbookBody'>>): Promise<void>
   /** Boot: every 'running' job's subprocess died with the old daemon. Returns the ids. */
@@ -425,8 +425,8 @@ export interface BriefJobStore {
 }
 
 /**
- * The artifacts index (.docs/next-version.md, phase 1): one row per markdown
- * file under the workspace's artifacts folder. The file is the truth — rows are
+ * The artifacts index: one row per markdown
+ * file under the workspace's artifacts folder. The file is the truth: rows are
  * rebuilt from disk by the server's indexer, never edited on their own.
  */
 export interface ArtifactStore {
@@ -450,7 +450,7 @@ export interface LinkStore {
   /** Idempotent on (from, to, role): an existing identical link is returned, not duplicated. */
   add(l: NewLink): Promise<Link>
   remove(id: string): Promise<void>
-  /** Drop every link touching an entity, either side — when the entity goes away. */
+  /** Drop every link touching an entity, either side, when the entity goes away. */
   removeFor(kind: LinkKind, id: string): Promise<void>
   forTarget(kind: LinkKind, id: string): Promise<Link[]>
   forSource(kind: LinkKind, id: string): Promise<Link[]>
@@ -473,7 +473,7 @@ export type ActionQuery = {
 
 /**
  * Outbound actions (core/actions): one row per action, and one call row per
- * tool_use folded into it — the map from a transcript's tool call to its
+ * tool_use folded into it. The map from a transcript's tool call to its
  * record, and what makes recording a call twice a no-op.
  */
 export interface ActionStore {
@@ -510,7 +510,7 @@ export type GoalQuery = {
 /** What goal_create writes: the record without its run-time fields, which start empty. */
 export type NewGoal = Pick<Goal, 'id' | 'title' | 'doneWhen' | 'horizon' | 'sourceItemId' | 'key' | 'projectId' | 'budget' | 'priority'>
 
-/** `goal_sessions` — a log entry's structured half; its words live in log.md. */
+/** `goal_sessions`: a log entry's structured half; its words live in log.md. */
 export type GoalSessionRecord = Omit<GoalLogEntry, 'text'>
 
 /**
@@ -539,7 +539,7 @@ export interface GoalStore {
   addEvent(e: Omit<GoalEvent, 'seq' | 'handledAt'>): Promise<GoalEvent>
   /** One goal's events, oldest first; `after` = only seqs past it. */
   events(goalId: string, opts?: { after?: number; limit?: number }): Promise<GoalEvent[]>
-  /** Every event not yet acted on, across goals, oldest first — the replay after a restart. */
+  /** Every event not yet acted on, across goals, oldest first. The replay after a restart. */
   unhandled(): Promise<GoalEvent[]>
   markHandled(goalId: string, seq: number, at: number): Promise<void>
   steps(goalId: string): Promise<GoalStepState[]>
@@ -547,9 +547,9 @@ export interface GoalStore {
   gate(id: string): Promise<Gate | null>
   gates(goalId: string): Promise<Gate[]>
   putGate(g: Gate): Promise<void>
-  /** Open AI gates whose next check is at or before `now` — the sweep's work list. */
+  /** Open AI gates whose next check is at or before `now`, the sweep's work list. */
   dueGates(now: number): Promise<Gate[]>
-  /** Open gates of either kind whose deadline is at or before `now` — they go to the user. */
+  /** Open gates of either kind whose deadline is at or before `now`. They go to the user. */
   overdueGates(now: number): Promise<Gate[]>
   /** Upsert on (goalId, sessionId): a session's row is written at start and closed at its end. */
   putSession(r: GoalSessionRecord): Promise<void>
@@ -559,7 +559,7 @@ export interface GoalStore {
 /**
  * Today's plan (core/junior/today.ts): rows per local day, plus each day's own
  * record, so an emptied day stays opened and a removed row is not drafted back.
- * Done is never stored here — it is the item's own status.
+ * Done is never stored here: it is the item's own status.
  */
 export interface TodayStore {
   /** The day's record, or null when it was never opened. */
@@ -574,7 +574,7 @@ export interface TodayStore {
   setDrafted(date: string, at: number): Promise<void>
   /** One day's rows, in order. */
   entries(date: string): Promise<TodayEntry[]>
-  /** The latest day before `date` with rows, and its rows — where carry-overs come from. */
+  /** The latest day before `date` with rows, and its rows, where carry-overs come from. */
   lastBefore(date: string): Promise<{ date: string; entries: TodayEntry[] } | null>
   /** Insert a row, or update its owner in place (a row keeps its position). */
   put(e: TodayEntry): Promise<void>

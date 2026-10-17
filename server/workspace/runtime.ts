@@ -34,12 +34,10 @@ import { defaultProject } from '../session/sessions.js'
 import { createManualOp } from '../items-ops.js'
 import { makeTriageMcp } from '../triage-mcp.js'
 
-// ---------------------------------------------------------------------------
-// Workspace runtimes — everything that used to be a module singleton, one per
+// Workspace runtimes: everything that used to be a module singleton, one per
 // workspace. Physical isolation: each runtime owns its own store (its own
 // SQLite file), its own live sessions and WS clients, and its own caches, so
 // nothing can bleed across the boundary by construction.
-// ---------------------------------------------------------------------------
 export type ConnectorProbe = { probedAt: number; connectors: Connector[] }
 export type ModelProbe = { probedAt: number; models: ModelOption[] }
 export type CommandProbe = { probedAt: number; commands: SlashCommandInfo[] }
@@ -54,12 +52,12 @@ export class WorkspaceRuntime {
   // session registry: every session lives in the store; a subset is live
   readonly rows = new Map<string, StoredSession>()
   readonly live = new Map<string, LiveSession>()
-  /** a project's folders, main and worktrees, by id — the rows, kept in step by syncCheckouts */
+  /** a project's folders, main and worktrees, by id. The rows, kept in step by syncCheckouts */
   readonly checkouts = new Map<string, Checkout>()
   /** checkout discovery runs one at a time; a call while one runs queues exactly one more */
   checkoutSyncRunning: Promise<void> | null = null
   checkoutSyncQueued: Promise<void> | null = null
-  /** WS clients bound to THIS workspace — broadcasts never cross the boundary */
+  /** WS clients bound to THIS workspace: broadcasts never cross the boundary */
   readonly clients = new Set<WebSocket>()
 
   // inbox
@@ -88,7 +86,7 @@ export class WorkspaceRuntime {
   /** model catalogs per agent: the workspace's own at boot, another's (Codex) on first ask */
   readonly modelCache = new Map<ProviderId, ModelProbe>()
   readonly modelInFlight = new Map<ProviderId, Promise<ModelProbe>>()
-  /** `/` command lists, keyed by folder — a project's own commands live under it */
+  /** `/` command lists, keyed by folder, a project's own commands live under it */
   readonly commandCache = new Map<string, CommandProbe>()
   readonly commandInFlight = new Map<string, Promise<CommandProbe>>()
   /** commands this CLI binds to a real terminal; learned from a session's init */
@@ -99,7 +97,7 @@ export class WorkspaceRuntime {
    * The in-process triage MCP server a chat session gets. One instance per
    * session, never shared: the SDK connects each instance to exactly one
    * transport, so a second concurrent session handed the same object loses
-   * its connect and lands `status: "failed"` in system/init — a chat with no
+   * its connect and lands `status: "failed"` in system/init: a chat with no
    * mcp__triage__* tools whenever another session in the workspace is live.
    */
   readonly triageMcp: () => ReturnType<typeof createSdkMcpServer>
@@ -109,7 +107,7 @@ export class WorkspaceRuntime {
   get provider(): Provider {
     return providerFor(this.meta.provider)
   }
-  /** PTY shells opened from the web UI — run with this workspace's spawn env */
+  /** PTY shells opened from the web UI, run with this workspace's spawn env */
   readonly terminals: TerminalManager
   /** per-folder file listings behind the composer's `@` picker */
   readonly files = new FileIndexes()
@@ -120,22 +118,22 @@ export class WorkspaceRuntime {
   readonly goalDeps: GoalDeps
   /** what sessions saw in the browser pane: screenshots, checkpoints, diffs (.docs/browser.md) */
   readonly shots: ShotStore
-  /** playbooks and dispatch templates — the two prose-customisable stages, as files */
+  /** playbooks and dispatch templates: the two prose-customisable stages, as files */
   readonly playbookDir: string
   readonly dispatchDir: string
-  /** screenshots attached to work items — bytes on disk, refs on the item */
+  /** screenshots attached to work items: bytes on disk, refs on the item */
   readonly attachmentsDir: string
 
-  // brief runs (.docs/next-version.md, phase 2): one at a time per workspace
+  // brief runs: one at a time per workspace
   briefActive: string | null = null
   briefPumping = false
   readonly briefTimers = new Map<string, ReturnType<typeof setTimeout>>()
   readonly briefExtras = new Map<string, SessionExtras>()
   /** goal id → its drafting lead while one runs (startGoalLead) */
   readonly goalLeads = new Map<string, GoalLead>()
-  /** M3: the sessions the goal run loop started (run leads and workers), by session id */
+  /** the sessions the goal run loop started (run leads and workers), by session id */
   readonly goalRuns = new Map<string, GoalRun>()
-  /** M3: actions a goal's workers queued, across sessions and restarts (server/goals.ts GoalHeldIndex) */
+  /** actions a goal's workers queued, across sessions and restarts (server/goals.ts GoalHeldIndex) */
   readonly goalHeld = new GoalHeldIndex()
   /** jobs whose run has called write_brief at least once */
   readonly briefWrote = new Set<string>()
@@ -144,11 +142,11 @@ export class WorkspaceRuntime {
 
   // Teams (server/teams.ts): agents and recipes are files; runs persist under `team_runs`.
   readonly teamLibrary: TeamLibrary
-  /** the workspace's own skills and agents — a local plugin every chat session loads (server/library.ts) */
+  /** the workspace's own skills and agents: a local plugin every chat session loads (server/library.ts) */
   readonly libraryDir: string
   // Jobs are files (server/job-files.ts); rows hold their state.
   readonly jobFiles: JobFiles
-  /** what the last file sync saw — files, projects, probes; unchanged = nothing to do */
+  /** what the last file sync saw: files, projects, probes; unchanged = nothing to do */
   jobSyncSig = ''
   /** syncs run one at a time: the tick and an API call can't interleave */
   jobSync: Promise<void> = Promise.resolve()
@@ -166,13 +164,13 @@ export class WorkspaceRuntime {
   // tracker per session folding its events into records as they persist.
   readonly actionsFile: ActionsFile
   readonly actionTrackers = new Map<string, ActionTracker>()
-  /** action writes run one at a time, in event order — a settle never beats its attempt */
+  /** action writes run one at a time, in event order. A settle never beats its attempt */
   actionChain: Promise<void> = Promise.resolve()
   /** a broadcast of `actions_changed` is pending (coalesced per tick) */
   actionsDirty: Set<string> | null = null
   /** approved actions' send timers, by action id (the minute tick catches any a restart lost) */
   readonly actionTimers = new Map<string, NodeJS.Timeout>()
-  /** held calls still waiting, by session + tool + args — an agent retrying the same call hears the same id */
+  /** held calls still waiting, by session + tool + args. An agent retrying the same call hears the same id */
   readonly heldCalls = new Map<string, string>()
   /** actions whose dispatch run is out now */
   readonly dispatching = new Set<string>()
@@ -210,7 +208,7 @@ export class WorkspaceRuntime {
         // A goal's state is its item's flow (flowSignals): the Inbox reads it again.
         invalidateInbox(this)
       },
-      // Plan review reacts the moment its event is written (server/goals.ts onGoalEvent) — no polling.
+      // Plan review reacts the moment its event is written (server/goals.ts onGoalEvent), no polling.
       emit: (ev) =>
         void onGoalEvent(this.goalDeps, goalEngineFor(this), ev).catch((err) =>
           log('error', 'goals', `event ${ev.kind} on ${ev.goalId}: ${errText(err)}`, { workspace: meta.id }),
@@ -218,7 +216,7 @@ export class WorkspaceRuntime {
       // A goal made in chat lives under a new manual item, like a team proposed from one.
       itemFor: (goal) =>
         createManualOp(this, { title: goal.title.slice(0, 120), description: `Goal — done when: ${goal.doneWhen}`, ...(goal.projectId ? { projectId: goal.projectId } : {}) }),
-      // M6: the workspace's team recipes are the workflow blocks a plan may name.
+      // the workspace's team recipes are the workflow blocks a plan may name.
       blocks: async () => (await this.teamLibrary.list()).teams.flatMap((t) => (t.recipe ? [blockFromRecipe(t.name, t.recipe)] : [])),
     }
     this.playbookDir = path.join(workspaceDir(meta.id), 'playbooks')
@@ -260,7 +258,7 @@ export const runtimes = new Map<string, WorkspaceRuntime>()
 
 /**
  * The browser pane's host link (.docs/browser.md): Triage.app's main process,
- * when it is open. Daemon-wide — the app is one per machine — while each
+ * when it is open. Daemon-wide, the app is one per machine, while each
  * session's tools and evidence stay in its own workspace.
  */
 export const browserHub = new BrowserHub()

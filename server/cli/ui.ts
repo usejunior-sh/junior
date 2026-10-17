@@ -3,7 +3,6 @@ import os from 'node:os'
 import { promisify } from 'node:util'
 import { pkgVersion, DEFAULT_PORT } from '../state.js'
 
-// --- styling -----------------------------------------------------------------
 // Dependency-free ANSI. Colors turn off when piped or when NO_COLOR is set.
 
 const useColor = Boolean(process.stdout.isTTY) && !process.env.NO_COLOR

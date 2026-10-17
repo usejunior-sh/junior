@@ -1,9 +1,9 @@
 /**
- * Phase 2 of the actions spec (7ce2f076): queue → approve → dispatch.
+ * Queue → approve → dispatch.
  *
  * In a job run or a team worker, a connector call or a Bash command that
- * sorts as an action is held instead of run: the agent is told it was queued, and the call waits
- * here for you. Every status change goes through `move`, which says what is
+ * sorts as an action is held instead of run: the agent is told it was queued,
+ * and the call waits here for you. Every status change goes through `move`, which says what is
  * allowed from where and writes the history line for it:
  *
  *   (held call)  → needs_you                       queue      agent
@@ -12,7 +12,7 @@
  *   needs_you    → rejected                        reject     you
  *   needs_you    → expired     now ≥ expiresAt     expire     triage
  *   scheduled    → needs_you   now < sendAt        undo       you
- *   scheduled    → sending     now ≥ sendAt        claim      triage (one atomic update — never twice)
+ *   scheduled    → sending     now ≥ sendAt        claim      triage (one atomic update, never twice)
  *   sending      → succeeded | failed | unknown    settle     triage
  *   failed | unknown → scheduled                   retry      you
  *
@@ -48,13 +48,13 @@ export function canonJson(v: unknown): string {
   return JSON.stringify(v ?? null)
 }
 
-/** Deep equality of two args objects — the dispatch fence's whole test. */
+/** Deep equality of two args objects: the dispatch fence's whole test. */
 export const argsEqual = (a: unknown, b: unknown): boolean => canonJson(a) === canonJson(b)
 
 /** A plain JSON object (what a tool's input is), not an array or a scalar. */
 export const isArgsObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v)
 
-/** What the agent is told when its call is held — the deny reason it reads. */
+/** What the agent is told when its call is held. The deny reason it reads. */
 export function queuedMessage(actionId: string): string {
   return (
     `Queued for the user's approval as action #${shortActionId(actionId)}. ` +
@@ -64,8 +64,8 @@ export function queuedMessage(actionId: string): string {
 }
 
 /**
- * A job's dry run (preview) never sends: a call that sorts as an action —
- * a connector write or an outbound command — is refused with this, and listed
+ * A job's dry run (preview) never sends: a call that sorts as an action,
+ * a connector write or an outbound command, is refused with this, and listed
  * in the preview as what the real run would queue for approval.
  */
 export const DRY_RUN_MESSAGE = 'dry run: this would be queued for approval — nothing was sent. Carry on as if it had been queued.'
@@ -120,7 +120,7 @@ export function heldEntry(rec: ActionRecord, fullArgs: Record<string, unknown>, 
 }
 
 export type ActionMove =
-  /** with `args`: edit, then approve — the edited args are what goes out */
+  /** with `args`: edit, then approve, the edited args are what goes out */
   | { type: 'approve'; args?: Record<string, unknown> }
   | { type: 'undo' }
   | { type: 'send_back'; notes: string }
@@ -245,9 +245,7 @@ export const dueToExpire = (rec: Pick<ActionRecord, 'status' | 'queue'>, now: nu
 /** The delay before a scheduled action's timer fires (0 = now). */
 export const sendDelay = (rec: Pick<ActionRecord, 'queue'>, now: number): number => Math.max(0, (rec.queue?.sendAt ?? now) - now)
 
-// ---------------------------------------------------------------------------
 // Dispatch: the one-tool run that sends an approved action.
-// ---------------------------------------------------------------------------
 
 /** What the dispatch run is told: call this one tool with these args, once. */
 export function dispatchPrompt(tool: string, args: Record<string, unknown>): string {
@@ -284,16 +282,16 @@ export const TOOL_SEARCH = 'ToolSearch'
 
 /**
  * The dispatch fence, as a PreToolUse veto: the one tool, with args that
- * deep-equal the approved ones, once. Anything else is denied — another
+ * deep-equal the approved ones, once. Anything else is denied: another
  * tool, a changed value, a second call. ToolSearch (which only loads a
  * deferred tool's schema) passes and never counts as the one call.
  */
 export class DispatchFence {
-  /** the call went through the fence — from here, it may have run */
+  /** the call went through the fence, from here, it may have run */
   allowed = false
   /** the tool_use the fence let through */
   allowedCall: string | null = null
-  /** calls it turned away, with why — for the record when nothing went out */
+  /** calls it turned away, with why, for the record when nothing went out */
   denials: string[] = []
 
   constructor(
@@ -332,7 +330,7 @@ function diffHint(input: unknown, approved: Record<string, unknown>): string {
 /**
  * The action's connector as the dispatch run's init message saw it:
  * listed       its tool is in the run's tool list
- * connected    the server is up (its tools deferred — ToolSearch loads them)
+ * connected    the server is up (its tools deferred, ToolSearch loads them)
  * pending      still connecting (claude.ai connectors start this way)
  * failed       the server is there but failed, needs auth, or is disabled
  * missing      no server of that name in the run at all
@@ -364,7 +362,7 @@ const serverOfTool = (tool: string): string => {
 
 /**
  * Every other connector the dispatch run would load from the user's config,
- * as `mcp__<server>` entries for `disallowedTools` — so the run carries one
+ * as `mcp__<server>` entries for `disallowedTools`, so the run carries one
  * server's schemas, not every connector's (cost), and can reach nothing else.
  */
 export function dispatchDisallowed(knownServers: readonly string[], tool: string): string[] {
@@ -399,14 +397,14 @@ const clipError = (s: string): string => (s.length > 400 ? `${s.slice(0, 399)}�
 
 /**
  * How a dispatch run ended, for the record:
- * - never let through: nothing went out — failed (a missing connector says so), safe to retry
+ * - never let through: nothing went out, failed (a missing connector says so), safe to retry
  * - let through, result back: succeeded with its link, or failed with what came back
- * - let through, no result (the run died, timed out, was stopped): unknown —
+ * - let through, no result (the run died, timed out, was stopped): unknown,
  *   it may have gone out; never retried by itself
  */
 export function dispatchOutcome(t: DispatchTrace, serverName: string, link: { bash?: boolean; push?: boolean } = {}): DispatchOutcome {
   if (!t.allowed) {
-    // Only when the server is truly absent or broken — a pending one may just have been slow, and a
+    // Only when the server is truly absent or broken. A pending one may just have been slow, and a
     // claude.ai connector is often left out of the init list altogether: missing from it says
     // nothing until the run itself also found no such tool.
     const claudeAi = serverName.startsWith('claude_ai_')

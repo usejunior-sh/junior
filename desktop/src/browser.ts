@@ -1,6 +1,6 @@
 /**
  * The browser pane's host (.docs/browser.md). Each triage session gets its own
- * tab — a WebContentsView in its own partition, no preload, sandboxed — shown
+ * tab, a WebContentsView in its own partition, no preload, sandboxed, shown
  * in whichever window's pane is on that session, else parked in a hidden
  * window where it keeps rendering, so the agent can screenshot it while you
  * look at something else.
@@ -13,7 +13,7 @@
 import { BrowserWindow, ipcMain, session as electronSession, WebContentsView, type IpcMainEvent, type IpcMainInvokeEvent, type Rectangle } from 'electron'
 import { PORT } from './daemon.js'
 
-// ── the wire (a copy of core/browser/wire.ts — desktop can't import outside src/) ──
+// The wire: a copy of core/browser/wire.ts, since desktop can't import outside src/
 
 const WIRE_VERSION = 1
 type Viewport = { width: number; height: number; deviceScaleFactor: number; mobile: boolean }
@@ -157,7 +157,7 @@ class Tab {
         if (!level) return
         const args = (p.args as { value?: unknown; description?: string; type?: string }[]) ?? []
         const text = args.map((a) => (a.value !== undefined ? (typeof a.value === 'string' ? a.value : JSON.stringify(a.value)) : (a.description ?? a.type))).join(' ')
-        // Electron's own dev-build nag about the page's CSP — not the page's problem
+        // Electron's own dev-build nag about the page's CSP, not the page's problem
         if (text.startsWith('%cElectron Security Warning')) return
         const frame = (p.stackTrace as { callFrames?: { url?: string; lineNumber?: number }[] } | undefined)?.callFrames?.[0]
         this.log({ level, source: 'console', text, ...(frame?.url ? { url: `${frame.url}:${(frame.lineNumber ?? 0) + 1}` } : {}) })
@@ -304,8 +304,6 @@ export class BrowserHost {
     setInterval(() => this.closeIdle(), 60_000)
   }
 
-  // ── the daemon link ──────────────────────────────────────────────────────
-
   private connect() {
     if (this.retry) clearTimeout(this.retry)
     this.retry = null
@@ -389,7 +387,7 @@ export class BrowserHost {
           await tab.wc.loadURL(f.url)
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err)
-          // ERR_ABORTED: superseded by a redirect or an in-page move — the page did load
+          // ERR_ABORTED: superseded by a redirect or an in-page move, the page did load
           if (!/ERR_ABORTED/.test(msg)) return { url: f.url, title: '', status, error: msg.match(/ERR_[A-Z_]+/)?.[0] ?? msg }
         } finally {
           tab.wc.off('did-navigate', onNav)
@@ -452,8 +450,6 @@ export class BrowserHost {
     if (!second) throw new Error('the page did not produce a screenshot (is it still loading?)')
     return second
   }
-
-  // ── tabs ────────────────────────────────────────────────────────────────
 
   private configureSession() {
     if (this.sessionConfigured) return
@@ -560,8 +556,6 @@ export class BrowserHost {
   private paneOf(tab: Tab): Pane | undefined {
     return [...this.panes.values()].find((p) => p.sessionId === tab.sessionId && p.rect && !p.win.isDestroyed())
   }
-
-  // ── the pane (web UI ⇄ main) ──────────────────────────────────────────────
 
   /** Push one tab's state to every window; each pane filters by its session. */
   pushState(tab: Tab) {

@@ -11,7 +11,7 @@ import { JOB_BUDGET_KEY, JOB_TIMEOUT_KEY } from './jobs/queue.js'
 import { seedJobTemplates } from './jobs/ops.js'
 import { broadcastSessionList, invalidateInbox } from './ws/send.js'
 
-// --- settings, briefs and dispatch (.docs/next-version.md, phase 2) ----------
+// settings, briefs and dispatch
 
 const JOBS_ENABLED_KEY = 'jobs.enabled'
 const BRIEFS_CAP_KEY = 'briefs.dailyCap'
@@ -107,7 +107,7 @@ export async function projectFor(rt: WorkspaceRuntime, item: WorkItem): Promise<
 
 /**
  * Every source item lands with its project stored: the one it names, else the
- * project whose repo it belongs to, else the default — so adding a project
+ * project whose repo it belongs to, else the default, so adding a project
  * later doesn't move it. Only an insert takes it; a refresh keeps the stored one.
  */
 export async function upsertItem(rt: WorkspaceRuntime, item: WorkItem, prov?: Provenance): Promise<UpsertResult> {
@@ -118,8 +118,8 @@ export async function upsertItem(rt: WorkspaceRuntime, item: WorkItem, prov?: Pr
 /**
  * Boot: the workspace gets a default project if it has projects but none is
  * the default (the one most sessions ran in), and every session and item
- * saved before projects were stored gets one (decision 549a251e, migration).
- * A workspace with no projects is left alone — onboarding asks for a folder.
+ * saved before projects were stored gets one.
+ * A workspace with no projects is left alone, onboarding asks for a folder.
  */
 export async function migrateDefaultProject(rt: WorkspaceRuntime): Promise<void> {
   let projects = await rt.store.projects.list()

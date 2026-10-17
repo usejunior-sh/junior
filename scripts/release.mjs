@@ -8,7 +8,7 @@
 // --notes) → one y/N gate → `npm version` + push with the tag → a *draft*
 // GitHub release. The tag push starts .github/workflows/desktop.yml, which
 // builds Triage.app for both arches, attaches the zips and install.sh, and
-// takes the release out of draft — so `curl | sh` never sees a half-built one.
+// takes the release out of draft, so `curl | sh` never sees a half-built one.
 // Nothing is published to npm.
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
@@ -44,7 +44,6 @@ function die(msg) {
 }
 const ok = (msg) => console.log(`  ✓ ${msg}`)
 
-// ── preflight ────────────────────────────────────────────────────────────────
 console.log('\npreflight')
 if (git('rev-parse', '--abbrev-ref', 'HEAD') !== 'main') die('not on main')
 ok('on main')
@@ -74,7 +73,6 @@ const drafts = JSON.parse(gh('release', 'list', '--repo', REPO, '--limit', '10',
 if (drafts.length) die(`draft release left over: ${drafts.join(', ')} — re-run its CI or delete it first`)
 ok('no draft releases')
 
-// ── version ──────────────────────────────────────────────────────────────────
 const [major, minor, patch] = current.split(/[.-]/).map(Number)
 const version =
   bump === 'patch' ? `${major}.${minor}.${patch + 1}`
@@ -84,13 +82,11 @@ const version =
 if (!/^\d+\.\d+\.\d+(-[\w.]+)?$/.test(version)) die(`not a version or bump keyword: ${bump}`)
 if (git('tag', '--list', `v${version}`)) die(`tag v${version} already exists`)
 
-// ── checks ───────────────────────────────────────────────────────────────────
 console.log('\nchecks')
 run('npm', 'run', 'typecheck')
 run('npm', 'run', 'build')
 run('npm', 'test')
 
-// ── notes ────────────────────────────────────────────────────────────────────
 let notes
 if (notesFile) {
   notes = readFileSync(notesFile, 'utf8')
@@ -125,7 +121,6 @@ if (notesFile) {
 notes = notes.replace(/^###[^\n]*\n+(?=###|\*\*Full changelog|(?![\s\S]))/gm, '')
 if (!notes.trim()) die('release notes are empty')
 
-// ── the gate ─────────────────────────────────────────────────────────────────
 console.log(`\n────────────────────────────────────────\nv${current} → v${version}\n\n${notes.trim()}\n`)
 console.log('about to run:')
 console.log(`  npm version ${version} -m "release: v%s"`)
@@ -136,7 +131,6 @@ const answer = await rl.question('\nrelease? [y/N] ')
 rl.close()
 if (!/^y(es)?$/i.test(answer.trim())) die('not confirmed — nothing was changed')
 
-// ── bump, tag, push, draft ───────────────────────────────────────────────────
 run('npm', 'version', version, '-m', 'release: v%s')
 run('git', 'push', '--follow-tags', 'origin', 'main')
 

@@ -1,20 +1,20 @@
 #!/usr/bin/env node
 /**
- * Triage MCP server (stdio) — the ingestion contract as MCP tools, so any
+ * Triage MCP server (stdio): the ingestion contract as MCP tools, so any
  * external scanner (a Claude Code routine, a cron'd headless session, a gh-aw
  * workflow) can *be* a job-runner: "read #channel, find X, call
- * upsert_work_item" — and cannot create duplicates or clobber user state,
+ * upsert_work_item", and cannot create duplicates or clobber user state,
  * because every rule is enforced server-side (.docs/jobs.md).
  *
  * A thin shim: JSON-RPC 2.0 over stdio (newline-delimited, per the MCP stdio
  * transport), forwarding to the running triage server's HTTP API. Hand-rolled
- * on purpose — no MCP SDK dependency (vision principle 5), and the SQLite
+ * on purpose, no MCP SDK dependency, and the SQLite
  * single-writer stays the server process.
  *
  *   claude mcp add triage -- npx tsx /path/to/server/mcp.ts
  *   TRIAGE_URL overrides the default http://localhost:5178
  *   TRIAGE_WORKSPACE names the workspace to act in (.docs/workspaces.md);
- *   unset = the default workspace — an external agent never writes into an
+ *   unset = the default workspace, an external agent never writes into an
  *   ambiguous workspace. A *set* id that no workspace matches is refused, not
  *   silently resolved to the default: a typo must not write into the wrong
  *   inbox. Only get_workspace still answers, so the mismatch is diagnosable.
@@ -28,7 +28,7 @@ const WORKSPACE = process.env.TRIAGE_WORKSPACE || ''
 
 type JsonRpcRequest = { jsonrpc: '2.0'; id?: number | string; method: string; params?: Record<string, unknown> }
 
-/** A failure of the connection itself, not of the call — reported as tool text. */
+/** A failure of the connection itself, not of the call, reported as tool text. */
 class ShimError extends Error {}
 
 /** What to tell the caller to run, picked from the URL they configured. */
@@ -54,7 +54,7 @@ async function api(path: string, body?: unknown, method?: string): Promise<unkno
   }
   // The API answers JSON for its own failures too ({ ok: false, error }), so a
   // body that will not parse means we are not talking to a triage server at
-  // all — a wrong port (the Vite dev server serves HTML on 5189) or a proxy.
+  // all: a wrong port (the Vite dev server serves HTML on 5189) or a proxy.
   const text = await res.text()
   try {
     return JSON.parse(text) as unknown
@@ -105,7 +105,7 @@ rl.on('line', (line) => {
     try {
       msg = JSON.parse(line) as JsonRpcRequest
     } catch {
-      return // not a JSON-RPC frame — ignore
+      return // not a JSON-RPC frame: ignore
     }
     if (msg.id === undefined) return // notification (e.g. notifications/initialized)
     try {
@@ -115,7 +115,7 @@ rl.on('line', (line) => {
             protocolVersion: PROTOCOL_VERSION,
             capabilities: { tools: {} },
             serverInfo: { name: 'triage', version: '0.2.0' },
-            // The same self-description the in-process server carries — an
+            // The same self-description the in-process server carries, an
             // external Claude Code session should learn what triage is from
             // the same string a web chat does (shared/triageContext.ts).
             instructions: TRIAGE_MCP_INSTRUCTIONS,

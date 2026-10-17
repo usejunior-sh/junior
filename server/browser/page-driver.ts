@@ -2,9 +2,7 @@ import type { TabState } from '../../core/browser/wire.js'
 import { type AXNode, formatSnapshot } from '../../core/browser/snapshot.js'
 import { BrowserHub, FULL_PAGE_MAX_CSS } from './hub.js'
 
-// ---------------------------------------------------------------------------
 // One session's page, driven: the CDP sequences every tool is built from.
-// ---------------------------------------------------------------------------
 
 type Quad = number[]
 type LayoutMetrics = {

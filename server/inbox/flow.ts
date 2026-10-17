@@ -7,11 +7,9 @@ import { ANY_ITEM_ID_RE } from '../validate.js'
 import { invalidateInbox } from '../ws/send.js'
 import { jobsEnabled } from '../settings-ops.js'
 
-// ---------------------------------------------------------------------------
-// Stage and turn (core/work/flow.ts): read the signals around every item — its
+// Stage and turn (core/work/flow.ts): read the signals around every item, its
 // newest brief, its newest dispatched session, its team run, the user's
-// override — and derive where it is and whose move it is.
-// ---------------------------------------------------------------------------
+// override, and derive where it is and whose move it is.
 
 async function flowSignals(rt: WorkspaceRuntime): Promise<Map<string, FlowSignals>> {
   const [jobs, links, stored] = await Promise.all([rt.store.briefs.list(), rt.store.links.list(), rt.store.items.flowState()])
@@ -84,7 +82,7 @@ export async function withFlows<T extends CoreWorkItem & { flow?: ItemFlow }>(rt
   return items
 }
 
-/** The flow of one item, at any status — what the item page shows. */
+/** The flow of one item, at any status, what the item page shows. */
 export async function flowFor(rt: WorkspaceRuntime, item: CoreWorkItem): Promise<ItemFlow> {
   return flowOf(item, (await flowSignals(rt)).get(item.id))
 }

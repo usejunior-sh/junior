@@ -1,14 +1,14 @@
 /**
- * Work items — ported from hey-triage (src/core/types.ts), trimmed to what
- * the web inbox renders. Kinds for sources not yet ported (slack, linear)
- * are kept: scoring is source-agnostic and the ids/kinds are settled.
+ * Work items, trimmed to what the web inbox renders. Kinds for sources
+ * without a built-in scanner (linear) are kept: scoring is source-agnostic
+ * and the ids/kinds are settled.
  */
 export type WorkSource = 'github' | 'slack' | 'linear' | 'web' | 'job' | 'manual'
 
 export type ItemKind =
   | 'review-requested' // someone asked you to review their PR
-  | 'reply-needed' // changes requested on your PR — reviewer is waiting on you
-  | 'own-pr-approved' // approved but unmerged — merge it
+  | 'reply-needed' // changes requested on your PR: reviewer is waiting on you
+  | 'own-pr-approved' // approved but unmerged: merge it
   | 'own-pr-conflicting' // your PR has merge conflicts
   | 'own-pr-stale' // your PR, no activity for days
   | 'own-pr-open' // your PR, healthy, waiting on review
@@ -25,8 +25,8 @@ export type Group = 'blocking' | 'blocked-stale' | 'cycle' | 'fyi'
 
 /**
  * One record of a scan finding (or refinding) an item (.docs/jobs-v2.md).
- * Provenance is a list, so a thread matched by two jobs keeps both — "found
- * by Mentions (run 41), also matched Onboarding (run 42)" — rather than the
+ * Provenance is a list, so a thread matched by two jobs keeps both, "found
+ * by Mentions (run 41), also matched Onboarding (run 42)", rather than the
  * inbox doubling up or a later find clobbering the first.
  */
 export interface Provenance {
@@ -54,7 +54,7 @@ export interface WorkItem {
   kind: ItemKind
   title: string
   url: string
-  /** repo, Slack channel, or Linear team — the item's home */
+  /** repo, Slack channel, or Linear team, the item's home */
   repo: string
   author: string
   /** humans waiting on *you* for this item */
@@ -71,10 +71,10 @@ export interface WorkItem {
   jobId?: string
   /** the project this item belongs to (manual items; empty = none) */
   projectId?: string
-  /** scanner's one-line match reason (rendered on the item) — the latest find's */
+  /** scanner's one-line match reason (rendered on the item), the latest find's */
   why?: string
   /**
-   * what a job hit asks of you, picked by the run (labels.ts) — the latest
+   * what a job hit asks of you, picked by the run (labels.ts), the latest
    * find's. A string, not a Label: a stored ask can outlive its label.
    */
   ask?: string
@@ -90,15 +90,15 @@ export interface WorkItem {
   ingestedAt?: number
   /** current lifecycle state; set by the store on projection */
   status?: import('./state.js').ItemStatus
-  /** archived by a Delete, not an Archive — set only on the archived list */
+  /** archived by a Delete, not an Archive, set only on the archived list */
   deleted?: boolean
   /**
-   * the human's short intent, in their words — on any item, not just manual
+   * the human's short intent, in their words, on any item, not just manual
    * ones; never overwritten by ingestion or by a brief (.docs/next-version.md)
    */
   description?: string
   /**
-   * links the human put on the item — a Slack thread, the PR, a doc. Like
+   * links the human put on the item. A Slack thread, the PR, a doc. Like
    * `description`, on any item and never touched by ingestion; `url` stays
    * the source's own link.
    */
@@ -106,13 +106,13 @@ export interface WorkItem {
   /** pre-0.7 name for `description` on manual items; read as a fallback, never written */
   note?: string
   /**
-   * screenshots the human attached — refs only; the bytes live in the
+   * screenshots the human attached: refs only; the bytes live in the
    * workspace's `attachments/` folder (see ItemImage) so an inbox sync stays
    * small. Briefs and dispatched sessions get them as real image blocks.
    */
   images?: import('../../shared/protocol.js').ItemImage[]
   /**
-   * files of any type the human attached — refs only, like `images`; the bytes
+   * files of any type the human attached, refs only, like `images`; the bytes
    * live under the workspace's `attachments/items/` folder. A brief or a
    * dispatched session is handed them as paths it can Read.
    */
@@ -128,8 +128,8 @@ export interface ScoredItem extends WorkItem {
   label: import('./labels.js').Label
   /**
    * items sharing a canonical ref, folded into this card (linked, not merged).
-   * Carries id and title, not just the URL, so a reader — a person or a model
-   * with get_work_item — can actually follow one.
+   * Carries id and title, not just the URL, so a reader, a person or a model
+   * with get_work_item, can actually follow one.
    */
   linked?: { id: string; title: string; source: WorkSource; url: string; repo: string; author: string }[]
   /** stage and turn (flow.ts): where the item is, and whose move it is */

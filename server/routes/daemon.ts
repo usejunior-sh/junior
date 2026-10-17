@@ -79,7 +79,7 @@ export async function gateRoutes({ req, res, url, json, access }: RouteCtx): Pro
   }
 
   if (url.pathname === '/api/health') {
-    // The CLI's "is triage running" probe — see server/state.ts. Daemon-wide.
+    // The CLI's "is triage running" probe: see server/state.ts. Daemon-wide.
     json(200, {
       app: 'triage',
       version: VERSION,
@@ -97,7 +97,7 @@ export async function gateRoutes({ req, res, url, json, access }: RouteCtx): Pro
 
 export async function workspaceListRoutes({ req, url, json }: RouteCtx): Promise<boolean> {
   if (url.pathname === '/api/git/branch') {
-    // Which branch a folder has checked out — the draft composer shows it
+    // Which branch a folder has checked out. The draft composer shows it
     // beside the project before any session exists. Not a repo → null.
     const cwd = expandHome(url.searchParams.get('cwd') ?? '')
     try {
@@ -109,7 +109,7 @@ export async function workspaceListRoutes({ req, url, json }: RouteCtx): Promise
     return true
   }
 
-  // --- workspace management (daemon-wide, not workspace-scoped) --------------
+  // workspace management (daemon-wide, not workspace-scoped)
   if (url.pathname === '/api/workspaces' && req.method === 'GET') {
     const body: WorkspacesResponse = {
       ok: true,
@@ -185,7 +185,7 @@ export async function workspaceListRoutes({ req, url, json }: RouteCtx): Promise
       if (!rt) throw new Error('unknown workspace id')
       if (id === registry.defaultId) throw new Error('the default workspace cannot be deleted — make another workspace the default first')
       // Remove from the registry and stop the runtime. The directory (DB,
-      // .env, claude/) stays on disk — never delete data, only unregister.
+      // .env, claude/) stays on disk, never delete data, only unregister.
       for (const s of rt.live.values()) s.stop()
       for (const ws of rt.clients) ws.close()
       runtimes.delete(id)
@@ -221,7 +221,7 @@ export async function workspaceListRoutes({ req, url, json }: RouteCtx): Promise
     json(200, { ok: true })
     return true
   }
-  // A live probe with the workspace's own env — the creation modal's verify
+  // A live probe with the workspace's own env, the creation modal's verify
   // step, and the settings dialog's "Check again". Clears the caches first so
   // the answer reflects the auth as configured right now.
   if (url.pathname === '/api/workspaces/verify' && req.method === 'POST') {
@@ -236,7 +236,7 @@ export async function workspaceListRoutes({ req, url, json }: RouteCtx): Promise
       const [models, connectors, auth] = await Promise.all([
         probeModels(rt),
         probeConnectors(rt),
-        // inherit is the machine's own login — already proven by daily use.
+        // inherit is the machine's own login: already proven by daily use.
         rt.meta.authBackend === 'inherit' ? Promise.resolve({ ok: true as const }) : probeAuth(rt),
       ])
       body = {

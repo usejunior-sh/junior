@@ -57,7 +57,7 @@ const MAX_LISTED = 2
 
 const plural = (n: number, one: string, many: string) => (n === 1 ? one : many)
 
-/** "A", "A and B", "A, B and C" — over segments, so a reference stays a reference. `and = ','` = a plain list. */
+/** "A", "A and B", "A, B and C", over segments, so a reference stays a reference. `and = ','` = a plain list. */
 function joinList(parts: Segment[][], and = 'and'): Segment[] {
   const out: Segment[] = []
   const last = and === ',' ? ', ' : ` ${and} `
@@ -91,7 +91,7 @@ const itemRef = (f: ItemDone): Segment[] => [{ label: f.title, target: { kind: '
 const jobRef = (f: JobDone): BriefRef => ({ label: f.title, target: { kind: 'job', id: f.jobId } })
 const personRef = (b: Blocking): BriefRef => ({ label: b.who, target: { kind: 'item', id: b.itemId } })
 
-/** One ask per person — their longest wait — oldest first. Someone with three asks is one person blocked. */
+/** One ask per person, their longest wait, oldest first. Someone with three asks is one person blocked. */
 export function byPerson(b: readonly Blocking[]): Blocking[] {
   const first = new Map<string, Blocking>()
   for (const x of [...b].sort((a, c) => a.since - c.since)) {
@@ -195,7 +195,7 @@ function shortAge(since: number, now: number): string {
   return h < 24 ? `${h}h` : `${Math.floor(h / 24)}d`
 }
 
-/** The brief as plain text — for tests and for a session's context. */
+/** The brief as plain text, for tests and for a session's context. */
 export function briefText(segs: Segment[]): string {
   return segs.map((s) => (typeof s === 'string' ? s : s.label)).join('')
 }

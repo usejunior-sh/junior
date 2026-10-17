@@ -1,5 +1,5 @@
 /**
- * What triage tells a model about itself — the one place the product explains
+ * What triage tells a model about itself. The one place the product explains
  * its own vocabulary, split by how often each layer changes:
  *
  *   static concepts  → `TRIAGE_MCP_INSTRUCTIONS`, the MCP server's `instructions`
@@ -9,7 +9,7 @@
  *                      server/mcp.ts) because both expose the same tools.
  *   session identity → `triageSessionAppend()`, appended to Claude Code's own
  *                      system prompt at spawn so it survives `resume`. Workspace,
- *                      session id, artifacts folder — known at spawn, fixed for
+ *                      session id, artifacts folder, known at spawn, fixed for
  *                      the session's life.
  *   live state       → neither. Which items are open and which artifacts exist
  *                      is a tool call away and stale a turn later; putting it in
@@ -19,7 +19,7 @@
  * this file, so it stays a shim.
  */
 
-/** `instructions` for the triage MCP server — the vocabulary, not the contents. */
+/** `instructions` for the triage MCP server: the vocabulary, not the contents. */
 export const TRIAGE_MCP_INSTRUCTIONS = `Triage is a local work inbox for one engineer. It ranks what actually needs them — GitHub, Slack, Linear, and their own to-dos — and runs one loop: identify → brief → dispatch. These tools are that inbox. Everything is on this machine; nothing here posts anywhere.
 
 - work item — one piece of work, id-keyed: "github:owner/repo#12", "slack:…", "linear:KEY-1", "manual:<uuid>". Scanned items are upserted by their scanner and update-only-if-newer, so only "manual:" items can be edited here. Status is open, snoozed, done or archived; list_work_items shows open ones by default, get_work_item reads any of them.
@@ -35,13 +35,13 @@ list_work_items, get_work_item, get_session_context, list_artifacts, read_artifa
 export type TriageSessionKind = 'chat' | 'job-run' | 'brief' | 'goal'
 
 export type TriageSessionIdentity = {
-  /** the triage session id — the handle for get_session_context and `links` */
+  /** the triage session id: the handle for get_session_context and `links` */
   sessionId: string
   workspaceId: string
   workspaceName: string
   /** absolute path of the workspace's artifacts folder */
   artifactsRoot: string
-  /** the workspace's own skills and agents — a plugin its chat sessions load as `triage:` */
+  /** the workspace's own skills and agents: a plugin its chat sessions load as `triage:` */
   libraryRoot?: string
   /** what the user calls their junior engineer here (the persona's name); absent = Junior */
   juniorName?: string
@@ -49,7 +49,7 @@ export type TriageSessionIdentity = {
 
 /**
  * The system-prompt append for a triage-spawned session: who it is and where to
- * look. Deliberately says "look it up" rather than naming the work item — a
+ * look. Deliberately says "look it up" rather than naming the work item. A
  * session is spawned before `create_session` links it to one (server/index.ts),
  * so at spawn time there is nothing true to say about it.
  */
@@ -72,10 +72,9 @@ too when there is one, so the note comes back with the work rather than getting 
 }
 
 /**
- * How a chat sets up a job (decisions 4 and 5 in "Triage re-positioning and
- * 24/7 junior engineer"): there is no form, the user tells Junior and Junior
- * takes the assignment the way a good junior engineer would. "New job" in the
- * UI opens a chat whose first message starts "New job:".
+ * How a chat sets up a job (no form): the user tells Junior and Junior takes
+ * the assignment the way a good junior engineer would. "New job" in the UI
+ * opens a chat whose first message starts "New job:".
  */
 export const jobsSection = (name: string) => `
 
@@ -91,7 +90,7 @@ message starting "New job:"), take it on the way a good junior engineer would:
    named (only those load in its runs). It is saved off; only the user turns it on.
 4. Offer a trial run with try_job, so they see what it would file before they turn it on.`
 
-/** The jobs section for the default name — what a chat gets when the persona is unchanged. */
+/** The jobs section for the default name, what a chat gets when the persona is unchanged. */
 export const JOBS_SECTION = jobsSection('Junior')
 
 /** What a message sent in Goal mode opens with, so the model knows the user chose a full goal. */
@@ -99,7 +98,7 @@ export const GOAL_MODE_MARK = '[Goal mode] '
 
 /**
  * How a chat starts a goal (.docs/junior-goals-teams/modes-autonomy-goals.md):
- * small goals stay in the chat; a full goal is a team run with a done-when —
+ * small goals stay in the chat; a full goal is a team run with a done-when,
  * the team keeps going round after round until Junior judges it met. "Turn
  * into a goal" on an item opens a chat whose first message starts "New goal:"
  * and names the item.
@@ -129,7 +128,7 @@ line before starting and suggest Plan (or Goal, when it needs more than one roun
 /**
  * Where a skill or agent the user asks for should go. Triage reloads skills
  * and agents in every live session when a turn writes one, so it is usable
- * straight away — say so rather than telling the user to restart.
+ * straight away, say so rather than telling the user to restart.
  */
 const librarySection = (root: string) => `
 

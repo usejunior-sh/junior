@@ -119,7 +119,7 @@ export function kindOfTool(toolName: string): ActionKind {
   return 'other'
 }
 
-/** The order a Bash call that does several outbound things is recorded by — the headline wins. */
+/** The order a Bash call that does several outbound things is recorded by, the headline wins. */
 const KIND_RANK: ActionKind[] = ['pr', 'ticket', 'comment', 'merge', 'release', 'post', 'message', 'email', 'update', 'push', 'other']
 
 function sortBash(command: string, rules: ActionRules): SortedAction | null {
@@ -179,13 +179,13 @@ export function sortCall(
   if (h?.destructive === true) return { kind, why: 'annotation', whyDetail: 'destructive', summary }
   if (h?.readOnly === false) return { kind, why: 'annotation', whyDetail: 'not read-only', summary }
 
-  // 2. The verbs in its name — a write verb wins over a read verb.
+  // 2. The verbs in its name: a write verb wins over a read verb.
   const words = wordsOf(leafOf(toolName))
   const write = words.find((w) => WRITE_VERBS.has(w))
   if (write) return { kind, why: 'name verb', whyDetail: write, summary }
   if (words.some((w) => READ_VERBS.has(w))) return null
 
-  // 3. Can't tell — count it; a wrong "yes" is one click to fix, a wrong "no" is invisible.
+  // 3. Can't tell: count it; a wrong "yes" is one click to fix, a wrong "no" is invisible.
   return { kind, why: 'unknown', whyDetail: null, summary }
 }
 
@@ -212,7 +212,7 @@ export function bashOffPatterns(rules: ActionRules): Set<string> {
 
 /**
  * Has the actions file since said this record is not an action? Such records
- * stay stored — "This is an action" brings them back — but leave the list.
+ * stay stored, "This is an action" brings them back, but leave the list.
  * Never re-sorted from stored args (those can be clipped): a Bash record is
  * set aside when every pattern it counted by has a `not_action` `Bash(…)`
  * entry; a connector by its name alone.
@@ -233,11 +233,11 @@ export function overrideEntries(rec: { tool: string; whyDetail: string | null })
 
 /**
  * A row's "Not an action" / "This is an action", applied to the actions
- * file's text. Worked from what the record stored — its tool, or for Bash the
- * patterns it counted by — never by re-sorting its (possibly clipped) args.
+ * file's text. Worked from what the record stored, its tool, or for Bash the
+ * patterns it counted by, never by re-sorting its (possibly clipped) args.
  * Not an action: its entries join `not_action` and leave `action`.
- * This is an action: the `not_action` entries that hide it go — a server-wide
- * `mcp__x__*` stays, outranked by the tool's own name in `action` — and a
+ * This is an action: the `not_action` entries that hide it go, a server-wide
+ * `mcp__x__*` stays, outranked by the tool's own name in `action`, and a
  * connector that sorting alone still wouldn't count joins `action`.
  */
 export function withRowOverride(

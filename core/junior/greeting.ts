@@ -144,7 +144,7 @@ export function awayWindow(prev: SeenState | null, now: number): SeenState {
   return { seenAt: now, since: Math.min(prev.since, now), away: prev.away }
 }
 
-/** "2 days", "5 hours", "20 minutes" — how long someone has waited, in words. */
+/** "2 days", "5 hours", "20 minutes", how long someone has waited, in words. */
 export function waitedWords(since: number, now: number): string {
   const m = Math.max(0, Math.floor((now - since) / 60_000))
   if (m < 60) return m <= 1 ? 'a minute' : `${m} minutes`

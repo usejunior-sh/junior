@@ -3,10 +3,6 @@ import { randomUUID } from 'node:crypto'
 import { type Artifact, isArtifactAuthor, type Link, isLinkKind, isLinkRole, type LinkKind, type BriefJob, type BriefStatus } from '../../shared/protocol.js'
 import type { ArtifactStore, LinkStore, NewLink, BriefJobStore, NewBriefJob } from './types.js'
 
-// ---------------------------------------------------------------------------
-// Artifacts index + links (.docs/next-version.md, phase 1)
-// ---------------------------------------------------------------------------
-
 type ArtifactRow = {
   id: string
   path: string
@@ -139,10 +135,6 @@ export class SqliteLinks implements LinkStore {
     return (this.db.prepare('SELECT * FROM links ORDER BY created_at').all() as LinkRow[]).map(toLink)
   }
 }
-
-// ---------------------------------------------------------------------------
-// Brief jobs (.docs/next-version.md, phase 2)
-// ---------------------------------------------------------------------------
 
 type BriefJobRow = {
   id: string

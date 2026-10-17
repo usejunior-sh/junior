@@ -1,12 +1,12 @@
 /**
- * How a queued action reads, wherever it shows up — the Actions page's tabs,
+ * How a queued action reads, wherever it shows up. The Actions page's tabs,
  * the stub card's payload, whether a closed row may carry a quick ✓, the
  * "#a1b2c3" an agent is told. Pure and browser-safe: the web imports it, and
  * the server says the same short id in the message it hands the agent.
  */
 import type { ActionKind, ActionStatus } from './types.js'
 
-/** The Actions page's tabs (spec phase 2): Needs you · Scheduled · Sent · Stopped. */
+/** The Actions page's tabs: Needs you · Scheduled · Sent · Stopped. */
 export type ActionTab = 'needs_you' | 'scheduled' | 'sent' | 'stopped'
 export const ACTION_TABS: readonly ActionTab[] = ['needs_you', 'scheduled', 'sent', 'stopped']
 export const TAB_LABEL: Record<ActionTab, string> = { needs_you: 'Needs you', scheduled: 'Scheduled', sent: 'Sent', stopped: 'Stopped' }
@@ -29,7 +29,7 @@ export function tabOf(status: ActionStatus): ActionTab {
 
 /**
  * May a closed row approve with one click? Only for what is cheap to take
- * back — a ticket, a post (drafts), an update. Anything that reaches a person
+ * back. A ticket, a post (drafts), an update. Anything that reaches a person
  * (a message, an email, a comment) or can't be undone (a PR, a merge) has to
  * be opened and read first.
  */
@@ -37,7 +37,7 @@ export const QUICK_APPROVE_KINDS: readonly ActionKind[] = ['ticket', 'post', 'up
 export const quickApprovable = (kind: ActionKind): boolean => QUICK_APPROVE_KINDS.includes(kind)
 
 /**
- * "#a1b2c3" — six characters of a 32-bit FNV-1a hash of the record's id. Stable
+ * "#a1b2c3": six characters of a 32-bit FNV-1a hash of the record's id. Stable
  * (the id is `<session>:<tool_use>`), so the agent's message and every card
  * name the same action.
  */
@@ -52,7 +52,7 @@ export function shortActionId(id: string): string {
 
 /** The fields that hold what a person will read, best first. */
 const READABLE_KEYS = ['text', 'body', 'message', 'markdown', 'content', 'comment', 'description', 'title', 'subject', 'summary', 'name']
-/** Where it goes — shown above the text, never as the text. */
+/** Where it goes: shown above the text, never as the text. */
 const TARGET_KEYS = ['to', 'channel', 'channel_name', 'channel_id', 'recipient', 'recipients', 'repo', 'team', 'project', 'issue', 'pr', 'thread_ts']
 
 export type Payload = {

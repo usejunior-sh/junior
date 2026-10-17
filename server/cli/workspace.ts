@@ -3,8 +3,7 @@ import { explicitColor } from './args.js'
 import { resolvePort } from './lifecycle.js'
 import { bold, cyan, die, dim, green } from './ui.js'
 
-// --- workspaces ---------------------------------------------------------------
-// Prefer the running server's API (it owns the registry while it's up — edits
+// Prefer the running server's API (it owns the registry while it's up, edits
 // behind its back would diverge from the runtimes it already built); fall back
 // to the registry file only when no server is running.
 

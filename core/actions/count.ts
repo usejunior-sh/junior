@@ -1,6 +1,6 @@
 /**
  * The daily count line: "Today: 3 PRs, 5 comments, 2 tickets, 1 post".
- * Counts only what went out — succeeded. A call still waiting on its result,
+ * Counts only what went out, succeeded. A call still waiting on its result,
  * one held for approval, a failed or denied one: none of them. Pure and
  * browser-safe.
  */

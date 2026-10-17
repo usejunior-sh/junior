@@ -1,6 +1,6 @@
 /**
  * Team recipes (Teams v2): a team is a markdown file whose frontmatter fixes
- * the run's shape — steps, who does each, fan-out, gates, fix loops, budget —
+ * the run's shape, steps, who does each, fan-out, gates, fix loops, budget,
  * and whose body is plain-English advice to the lead. The lead only decides the
  * size (how many workers, which slices, what each brief says) inside that shape;
  * triage runs the steps.
@@ -20,14 +20,10 @@
  *   ---
  *   Advice to the lead.
  *
- * Every run starts with the team card — the lead's plan, which you approve — so
+ * Every run starts with the team card, the lead's plan, which you approve, so
  * a planning step is never written in the file. Pure and browser-safe: the team
  * card editor validates with the same code the server runs.
  */
-
-// ---------------------------------------------------------------------------
-// The shape
-// ---------------------------------------------------------------------------
 
 /**
  * What a step hands on. `change` edits the checkout (one writer per checkout);
@@ -62,13 +58,13 @@ export type RecipeStep = {
   /** per-step model override, e.g. a cheap model for fan-out workers */
   model: string | null
   /**
-   * `task`: this step is part of the per-task loop — the run's contiguous
+   * `task`: this step is part of the per-task loop. The run's contiguous
    * `for-each: task` steps run once for every task on the plan, in order.
    */
   forEach: 'task' | null
   /**
    * The change step in a task loop: `fresh` (default) starts every task in a
-   * clean context — the plan and its notes carry what earlier tasks learned;
+   * clean context. The plan and its notes carry what earlier tasks learned;
    * `carry` keeps one context across tasks.
    */
   context: 'fresh' | 'carry' | null
@@ -79,14 +75,14 @@ export type TeamRecipe = {
   description: string
   /** item kinds this team is suggested for in the dispatch picker */
   useFor: string[]
-  /** spend ceiling for one run, USD — reaching it pauses the run */
+  /** spend ceiling for one run, USD, reaching it pauses the run */
   budgetUsd: number
   /** what the team may do without asking; null = you pick on the card, every run */
   permissions: TeamPermissions | null
   /** every worker in fast mode (premium speed and price); null = off unless you turn it on */
   fast: boolean | null
   lead: { model: string | null; effort: Effort | null }
-  /** when the run counts as finished, in words — shown on the team card and judged in the report */
+  /** when the run counts as finished, in words, shown on the team card and judged in the report */
   done: string
   steps: RecipeStep[]
   /** the file's body: advice to the lead on sizing and briefing */
@@ -95,9 +91,9 @@ export type TeamRecipe = {
 
 /**
  * How much a team's workers do without asking, chosen per run on the card:
- * - `ask` — the builder's file edits run; every shell command asks you
- * - `local` — edits and shell commands run; anything that leaves this machine is held for you
- * - `everything` — nothing asks and nothing is held
+ * - `ask`, the builder's file edits run; every shell command asks you
+ * - `local`, edits and shell commands run; anything that leaves this machine is held for you
+ * - `everything`. Nothing asks and nothing is held
  * In every mode a worker's push, PR or comment from the shell is refused (`everything` aside):
  * the team hands work in, it never sends it.
  */
@@ -116,10 +112,8 @@ export const MAX_BUDGET_USD = 500
 
 const SLUG_RE = /^[a-z0-9][a-z0-9-]{0,47}$/
 
-// ---------------------------------------------------------------------------
 // A small YAML subset: maps, lists, flow `[a, b]` / `{ a: 1 }`, quoted or bare
 // scalars, `#` comments. Values stay strings; the schema converts them.
-// ---------------------------------------------------------------------------
 
 export type YamlValue = string | YamlValue[] | { [key: string]: YamlValue }
 
@@ -129,7 +123,7 @@ export class YamlError extends Error {}
 
 const KEY_RE = /^([A-Za-z_][\w-]*):(?:\s+(.*))?$/
 
-/** A quote opens a quoted scalar only where a value starts — the apostrophe in `it's` is just text. */
+/** A quote opens a quoted scalar only where a value starts. The apostrophe in `it's` is just text. */
 const opensQuote = (s: string, i: number): boolean => i === 0 || /[\s:,[{]/.test(s[i - 1])
 
 /** Drop a trailing ` # comment` that sits outside quotes. */
@@ -261,10 +255,8 @@ function inline(raw: string, n: number): YamlValue {
   return s
 }
 
-// ---------------------------------------------------------------------------
 // File → recipe, strictly: an unknown key or a broken rule is an error, so a
 // typo never runs as something else.
-// ---------------------------------------------------------------------------
 
 export type ParsedRecipe = { recipe: TeamRecipe; errors: [] } | { recipe: null; errors: string[] }
 
@@ -475,9 +467,7 @@ export function taskLoop(r: { steps: RecipeStep[] }): { from: number; to: number
   return loop.length ? { from: loop[0], to: loop[loop.length - 1] } : null
 }
 
-// ---------------------------------------------------------------------------
 // Recipe → file, in the shipped style (Save as team writes this)
-// ---------------------------------------------------------------------------
 
 const BARE_RE = /^[A-Za-z0-9][\w .,/()$+-]*$/
 const q = (s: string): string => (BARE_RE.test(s) && !/:\s|\s#|[\s,]$/.test(s) ? s : JSON.stringify(s))
