@@ -57,6 +57,8 @@ export type StoredSession = {
   effort: EffortLevel | null
   /** Fast mode, as the user set it. Persisted so a revived session keeps it. */
   fastMode: boolean
+  /** Plan mode: the session reads and plans, edits nothing, until you approve its plan. */
+  planning: boolean
   /** How much the session asks before acting; null = 'default' (ask). */
   permissionMode: PermissionMode | null
   /** The agent the session runs on, fixed at creation; rows from before providers are 'claude'. */
@@ -102,6 +104,7 @@ export type NewSession = {
   model?: string | null
   effort?: EffortLevel | null
   fastMode?: boolean
+  planning?: boolean
   permissionMode?: PermissionMode | null
   /** omitted = 'claude' */
   provider?: ProviderId
@@ -130,6 +133,8 @@ export interface SessionStore {
   setModel(id: string, model: string | null, effort: EffortLevel | null): Promise<void>
   /** Persist a fast-mode switch, so a revived session keeps the choice. */
   setFastMode(id: string, fastMode: boolean): Promise<void>
+  /** Persist plan mode on or off, so a revived session is still planning. */
+  setPlanning(id: string, planning: boolean): Promise<void>
   /** Persist a permission-mode switch, so a revived session keeps the choice. */
   setPermissionMode(id: string, mode: PermissionMode | null): Promise<void>
   /** Give a session a new title. */

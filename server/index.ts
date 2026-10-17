@@ -156,6 +156,7 @@ import {
   isEffortLevel,
   isImageMediaType,
   isProviderId,
+  isSessionMode,
   isLinkKind,
   isLinkRole,
   isMentionKind,
@@ -444,7 +445,7 @@ import { DEFAULT_GOAL_MODELS, GATE_SWEEP_INTERVAL_MS, MAX_GOAL_TEAM, goalDir, ty
 import { WATCH_TICK_MS } from '../core/goals/shepherd.js'
 import { GATE_SERVER, GATE_TOOL_SEARCH, GATE_VERDICT_FULL, GATE_VERDICT_TOOL, gateCheckPrompt, gateFenceDecision, gateReadTools, gateServers, verdictFrom } from '../core/goals/gates.js'
 import { WORKSPACE_PLUGIN, createLibraryEntry, ensureWorkspacePlugin, libraryRoots, locate as locateLibrary, libraryTargets, listLibrary, readLibraryFile, removeLibraryItem, writeLibraryFile, type LibraryRoot } from './library.js'
-import { TRIAGE_MCP_INSTRUCTIONS, triageSessionAppend } from '../shared/triageContext.js'
+import { GOAL_MODE_MARK, TRIAGE_MCP_INSTRUCTIONS, triageSessionAppend } from '../shared/triageContext.js'
 import { DEFAULT_PERSONA, personaAppend, personaFrom, type Persona } from '../core/junior/persona.js'
 import { needsRows, type SendsSource, type TeamSource } from '../core/junior/needs.js'
 import { pickNow, todoProgress, type NowCandidate, type TodoProgress } from '../core/junior/now.js'
@@ -967,6 +968,8 @@ class LiveSession {
       // How much this session asks. 'gated' is ours, enforced in requestPermission;
       // the adapter leaves the agent at its baseline so every call reaches it.
       permissionMode: row.permissionMode,
+      // Plan mode: the agent reads and plans until you approve its plan (ExitPlanMode).
+      ...(row.planning ? { planning: true } : {}),
       // Revival: replay the agent's own transcript into the new subprocess.
       ...(resumeSdkSessionId ? { resume: resumeSdkSessionId } : {}),
       // The workspace's own skills and agents, for a chat. Not for briefs, job
@@ -1180,15 +1183,16 @@ class LiveSession {
     return this.pendingPermissions.values().next().value?.toolName
   }
 
-  async sendUserMessage(text: string, images?: ImageAttachment[], mentions?: Mention[], opts: { from?: string } = {}) {
+  async sendUserMessage(text: string, images?: ImageAttachment[], mentions?: Mention[], opts: { from?: string; mode?: 'goal' } = {}) {
     // Mentions are resolved now, against this session's folder, so the event
     // log records what the model was actually given (and why a file wasn't).
     const attached = mentions?.length ? await resolveMentions(this.rt, this.row.cwd, mentions) : null
     // Before the agent can touch anything: the tree this turn starts from.
     await this.beginTurn()
-    this.emit({ kind: 'local_user', text, images, mentions: attached?.resolved, ...(opts.from ? { from: opts.from } : {}) }, true)
+    this.emit({ kind: 'local_user', text, images, mentions: attached?.resolved, ...(opts.from ? { from: opts.from } : {}), ...(opts.mode ? { mode: opts.mode } : {}) }, true)
     // A message from triage or a teammate is framed for the model; the transcript keeps the raw text and a badge.
-    const modelText = opts.from && text ? frameTeamMessage(opts.from, text) : text
+    // One sent in Goal mode says so, so Junior goes straight to a goal card.
+    const modelText = opts.from && text ? frameTeamMessage(opts.from, text) : opts.mode === 'goal' ? `${GOAL_MODE_MARK}${text}` : text
     this.setStatus('running')
     void this.rt.store.sessions.touch(this.row.id)
     // Images lead: the model reads them as context for the text that follows.
@@ -1210,6 +1214,8 @@ class LiveSession {
     opts: { title?: string; description?: string; suggestions?: PermissionUpdate[]; agentID?: string; toolUseID?: string },
   ): Promise<PermissionResult> {
     const effect = classifyEffect(toolName)
+    // Plan mode: the plan is yours to approve, like a PR — never waved through by a mode or a rule.
+    if (toolName === 'ExitPlanMode') return this.askUser(toolName, toolInput, opts, effect)
     // Reading our own inbox is harmless in any mode — never prompt for it. Every
     // triage write (create/edit/upsert/resolve) still goes through the prompt.
     if (TRIAGE_READ_TOOLS.has(toolName)) {
@@ -1334,7 +1340,16 @@ class LiveSession {
     if (!pending) return
     this.pendingPermissions.delete(id)
     if (this.pendingPermissions.size === 0) broadcastSessionList(this.rt)
-    if (behavior === 'deny') {
+    if (pending.toolName === 'ExitPlanMode') {
+      if (behavior === 'deny') pending.resolve({ behavior: 'deny', message: 'The user wants to keep planning. Wait for what they say should change, then revise the plan.' })
+      else {
+        // Out of plan mode, back to the session's own level — in the same answer, so nothing runs in between.
+        const back = this.row.permissionMode ?? 'default'
+        const sdkBack = back === 'gated' ? 'default' : back
+        pending.resolve({ behavior: 'allow', updatedInput: pending.input, updatedPermissions: [{ type: 'setMode', mode: sdkBack, destination: 'session' }] })
+        void this.planApproved(typeof pending.input.plan === 'string' ? pending.input.plan : '')
+      }
+    } else if (behavior === 'deny') {
       pending.resolve({ behavior: 'deny', message: 'Denied by the user in the triage web UI.' })
     } else if (answers) {
       // AskUserQuestion: the picked labels ride back in on the tool's input,
@@ -1359,6 +1374,40 @@ class LiveSession {
       })
     }
     this.emit({ kind: 'permission_resolved', id, behavior, ...(answers ? { answers } : {}) }, true)
+  }
+
+  /** Plan mode on or off, for the next turn on. Returns false when the subprocess can't switch (it is revived instead). */
+  async setPlanning(on: boolean): Promise<boolean> {
+    if (!this.q.setPlanning) return false
+    try {
+      await this.q.setPlanning(on, this.row.permissionMode ?? 'default')
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  /**
+   * You approved the plan: the session leaves plan mode and codes at its own
+   * level, and the plan is kept as a file on the session and its item.
+   */
+  private async planApproved(plan: string): Promise<void> {
+    this.row.planning = false
+    await this.rt.store.sessions.setPlanning(this.row.id, false)
+    broadcastSessionList(this.rt)
+    // The SDK took the mode change with the answer; this makes sure, for agents that don't.
+    await this.q.setPlanning?.(false, this.row.permissionMode ?? 'default').catch(() => {})
+    if (!plan.trim()) return
+    try {
+      const title = `Plan · ${this.row.title || 'session'}`.slice(0, 120)
+      const artifact = await this.rt.artifacts.writeAt(`plans/${this.row.id}.md`, { title, body: plan, author: 'model' })
+      await this.rt.store.links.add({ fromKind: 'artifact', fromId: artifact.id, toKind: 'session', toId: this.row.id, role: 'plan' })
+      const itemId = this.rt.sessionItem.get(this.row.id)
+      if (itemId) await this.rt.store.links.add({ fromKind: 'artifact', fromId: artifact.id, toKind: 'item', toId: itemId, role: 'plan' })
+      this.notice(`Plan approved — kept as ${artifact.path}. Coding at the session's own permission level.`)
+    } catch (err) {
+      log('warn', 'sessions', `could not save the plan: ${errText(err)}`, { session: this.row.id, workspace: this.rt.meta.id })
+    }
   }
 
   /**
@@ -1485,6 +1534,7 @@ function summarize(rt: WorkspaceRuntime, row: StoredSession): SessionSummary {
     fastModeState: l?.fastModeState,
     fastModeDisabledReason: l?.fastModeDisabledReason,
     permissionMode: row.permissionMode ?? undefined,
+    planning: row.planning || undefined,
     ...(row.provider !== DEFAULT_PROVIDER ? { provider: row.provider } : {}),
     pinned: row.pinned || undefined,
     ...(row.checkoutId ? { checkoutId: row.checkoutId } : {}),
@@ -2776,7 +2826,7 @@ async function createSession(
   effort: EffortLevel | null,
   fastMode: boolean,
   permissionMode: PermissionMode | null,
-  opts: { kind?: SessionKind; spawn?: boolean; projectId?: string | null; checkoutId?: string | null; provider?: ProviderId } = {},
+  opts: { kind?: SessionKind; spawn?: boolean; projectId?: string | null; checkoutId?: string | null; provider?: ProviderId; planning?: boolean } = {},
 ): Promise<StoredSession> {
   const projectId = opts.projectId ?? (await defaultProject(rt))?.id ?? null
   // Every session names its checkout at birth: the one asked for, else its project's main folder.
@@ -2792,6 +2842,7 @@ async function createSession(
     effort,
     fastMode,
     permissionMode,
+    ...(opts.planning ? { planning: true } : {}),
     ...(opts.provider ? { provider: opts.provider } : {}),
     ...(opts.kind ? { kind: opts.kind } : {}),
   })
@@ -11198,6 +11249,7 @@ function parseClientMessage(raw: unknown): ClientMessage | null {
         effort: effort(m.effort),
         fastMode: m.fastMode === true,
         permissionMode: permissionMode(m.permissionMode),
+        mode: isSessionMode(m.mode) ? m.mode : undefined,
         // An agent this build doesn't know is dropped: the session runs on Claude.
         provider: isProviderId(m.provider) ? m.provider : undefined,
         itemId: typeof m.itemId === 'string' && m.itemId ? m.itemId : undefined,
@@ -11218,6 +11270,10 @@ function parseClientMessage(raw: unknown): ClientMessage | null {
         ? { type: 'set_permission_mode', sessionId: m.sessionId, mode }
         : null
     }
+    case 'set_session_mode':
+      return typeof m.sessionId === 'string' && (m.mode === 'normal' || m.mode === 'plan')
+        ? { type: 'set_session_mode', sessionId: m.sessionId, mode: m.mode }
+        : null
     case 'rename_session':
       return typeof m.sessionId === 'string'
         ? { type: 'rename_session', sessionId: m.sessionId, title: str(m.title) }
@@ -11238,6 +11294,7 @@ function parseClientMessage(raw: unknown): ClientMessage | null {
             text: str(m.text),
             images: imageAttachments(m.images),
             mentions: mentionList(m.mentions),
+            ...(m.mode === 'goal' ? { mode: 'goal' as const } : {}),
           }
         : null
     case 'permission_response':
@@ -11361,7 +11418,8 @@ wss.on('connection', (ws, req) => {
             msg.effort ?? null,
             msg.fastMode === true,
             msg.permissionMode ?? null,
-            { projectId: project.id, checkoutId: checkout?.id, provider: msg.provider },
+            // Plan mode is Claude's; another agent starts normally.
+            { projectId: project.id, checkoutId: checkout?.id, provider: msg.provider, planning: msg.mode === 'plan' && (msg.provider ?? 'claude') === 'claude' },
           )
           // Dispatched from an item: the link is what the item page shows as "sessions".
           if (msg.itemId) await linkSessionToItem(rt, row.id, msg.itemId, 'dispatch').catch(() => {})
@@ -11377,7 +11435,7 @@ wss.on('connection', (ws, req) => {
           if (msg.firstMessage?.trim() || images.length || msg.mentions?.length)
             void rt.live
               .get(row.id)
-              ?.sendUserMessage(msg.firstMessage?.trim() ?? '', images.length ? images : undefined, msg.mentions)
+              ?.sendUserMessage(msg.firstMessage?.trim() ?? '', images.length ? images : undefined, msg.mentions, msg.mode === 'goal' ? { mode: 'goal' } : {})
           break
         }
         case 'set_model': {
@@ -11422,7 +11480,24 @@ wss.on('connection', (ws, req) => {
           // be. Where it cannot (arming a bypass needs a spawn-time flag), the
           // subprocess is retired so the next turn brings up one that can.
           const session = rt.live.get(row.id)
-          if (session && !(await session.setPermissionMode(msg.mode))) session.stop()
+          // Planning, the new level waits for the plan's approval — switching the subprocess now would end plan mode.
+          // (Arming a bypass still needs a fresh subprocess; it comes back up in plan mode.)
+          if (row.planning) {
+            if (session && msg.mode === 'bypassPermissions') session.stop()
+          } else if (session && !(await session.setPermissionMode(msg.mode))) session.stop()
+          broadcastSessionList(rt)
+          break
+        }
+        case 'set_session_mode': {
+          const row = rt.rows.get(msg.sessionId)
+          if (!row || row.provider !== 'claude' || row.kind !== 'chat') break
+          const planning = msg.mode === 'plan'
+          if (row.planning === planning) break
+          row.planning = planning
+          await rt.store.sessions.setPlanning(row.id, planning)
+          const session = rt.live.get(row.id)
+          if (session && !(await session.setPlanning(planning))) session.stop()
+          if (session) session.notice(planning ? 'Plan mode — Junior reads and writes a plan, and edits nothing until you approve it.' : 'Plan mode off.')
           broadcastSessionList(rt)
           break
         }
@@ -11485,7 +11560,7 @@ wss.on('connection', (ws, req) => {
             }
           }
           const session = await getOrRevive(rt, msg.sessionId)
-          void session?.sendUserMessage(msg.text.trim(), msg.images, msg.mentions)
+          void session?.sendUserMessage(msg.text.trim(), msg.images, msg.mentions, msg.mode ? { mode: msg.mode } : {})
           break
         }
         case 'permission_response': {

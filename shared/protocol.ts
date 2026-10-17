@@ -396,6 +396,18 @@ export type PermissionBehavior = 'allow' | 'allow_always' | 'deny'
 export type PermissionMode = 'default' | 'acceptEdits' | 'auto' | 'bypassPermissions' | 'gated'
 
 /**
+ * What Junior does before it starts (.docs/junior-goals-teams/modes-autonomy-goals.md) —
+ * separate from PermissionMode, which is how much it asks while it works:
+ * - `normal`: starts right away
+ * - `plan`: reads and writes a plan, edits nothing, until you approve the plan (the SDK's `plan`
+ *   mode); then it codes in the same session at its permission mode. Stored on the session.
+ * - `goal`: the message is a goal — Junior proposes a team run with a done-when. One message at a time.
+ */
+export type SessionMode = 'normal' | 'plan' | 'goal'
+export const SESSION_MODES: readonly SessionMode[] = ['normal', 'plan', 'goal']
+export const isSessionMode = (v: unknown): v is SessionMode => SESSION_MODES.includes(v as SessionMode)
+
+/**
  * A tool's blast radius, as the server classifies it before deciding whether
  * `'gated'` mode lets it run unattended:
  *
@@ -461,6 +473,8 @@ export type SessionSummary = {
   fastModeDisabledReason?: FastModeDisabledReason
   /** How much this session asks before acting. Absent = 'default'. */
   permissionMode?: PermissionMode
+  /** Plan mode: reading and planning until you approve the plan. Absent = not planning. */
+  planning?: boolean
   /** The agent this session runs on. Absent = 'claude'. */
   provider?: ProviderId
   /** Pinned to the top of the sidebar. Absent = not pinned. */
@@ -1838,6 +1852,8 @@ export type SessionEvent =
       from?: string
       /** A message the user wrote to a subagent, relayed to it through the main agent. */
       relay?: AgentRelay
+      /** sent in Goal mode: Junior proposes a goal for it */
+      mode?: 'goal'
     }
   | { kind: 'error'; message: string }
   /** a line triage writes into the transcript itself — a team paused, a stage began */
@@ -1968,6 +1984,8 @@ export type ClientMessage =
       model?: string
       effort?: EffortLevel
       permissionMode?: PermissionMode
+      /** Plan: start in plan mode. Goal: the first message is a goal. Omitted = normal. */
+      mode?: SessionMode
       fastMode?: boolean
       /** The agent to run on, for the session's whole life. Omitted = 'claude'. */
       provider?: ProviderId
@@ -1980,6 +1998,8 @@ export type ClientMessage =
   | { type: 'set_fast_mode'; sessionId: string; fastMode: boolean }
   /** Switch how much a session asks — mid-session, and for every turn after. */
   | { type: 'set_permission_mode'; sessionId: string; mode: PermissionMode }
+  /** Plan mode on or off — mid-session. (Goal rides on the message: user_message.mode.) */
+  | { type: 'set_session_mode'; sessionId: string; mode: Exclude<SessionMode, 'goal'> }
   /** Give a session a new title. */
   | { type: 'rename_session'; sessionId: string; title: string }
   /** Pin a session to the top of the list, or unpin it. */
@@ -1987,7 +2007,7 @@ export type ClientMessage =
   /** Delete a session and its transcript. Irreversible — the UI confirms. */
   | { type: 'delete_session'; sessionId: string }
   | { type: 'subscribe'; sessionId: string }
-  | { type: 'user_message'; sessionId: string; text: string; images?: ImageAttachment[]; mentions?: Mention[] }
+  | { type: 'user_message'; sessionId: string; text: string; images?: ImageAttachment[]; mentions?: Mention[]; mode?: 'goal' }
   | {
       type: 'permission_response'
       sessionId: string

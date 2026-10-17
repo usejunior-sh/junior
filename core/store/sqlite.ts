@@ -662,6 +662,8 @@ function ensureDurableSchema(db: DatabaseSync) {
   ensure('sessions', 'run_tokens', 'run_tokens INTEGER', s)
   ensure('sessions', 'run_error', 'run_error TEXT', s)
   ensure('sessions', 'run_cost_usd', 'run_cost_usd REAL', s)
+  // Plan mode (Session mode: Normal / Plan / Goal): the session plans before it codes.
+  ensure('sessions', 'planning', 'planning INTEGER NOT NULL DEFAULT 0', s)
 
   const w = cols('jobs')
   ensure('jobs', 'last_run_status', 'last_run_status TEXT', w)
@@ -847,6 +849,7 @@ type SessionRow = {
   model: string | null
   effort: string | null
   fast_mode: number
+  planning?: number
   permission_mode: string | null
   provider: string | null
   pinned: number
@@ -891,6 +894,7 @@ const toSession = (r: SessionRow): StoredSession => ({
   model: r.model,
   effort: toEffort(r.effort),
   fastMode: r.fast_mode === 1,
+  planning: r.planning === 1,
   permissionMode: toPermissionMode(r.permission_mode),
   provider: toProvider(r.provider),
   pinned: r.pinned === 1,
@@ -922,10 +926,10 @@ class SqliteSessions implements SessionStore {
     const checkoutId = s.checkoutId ?? null
     this.db
       .prepare(
-        `INSERT INTO sessions (id, title, cwd, project_id, checkout_id, sdk_session_id, model, effort, fast_mode, permission_mode, provider, kind, job_id, run_trigger, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO sessions (id, title, cwd, project_id, checkout_id, sdk_session_id, model, effort, fast_mode, planning, permission_mode, provider, kind, job_id, run_trigger, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
-      .run(s.id, s.title, s.cwd, s.projectId, checkoutId, model, effort, fastMode ? 1 : 0, permissionMode, provider, kind, jobId, s.runTrigger ?? null, now, now)
+      .run(s.id, s.title, s.cwd, s.projectId, checkoutId, model, effort, fastMode ? 1 : 0, s.planning ? 1 : 0, permissionMode, provider, kind, jobId, s.runTrigger ?? null, now, now)
     return {
       id: s.id,
       title: s.title,
@@ -935,6 +939,7 @@ class SqliteSessions implements SessionStore {
       model,
       effort,
       fastMode,
+      planning: s.planning ?? false,
       permissionMode,
       provider,
       kind,
@@ -1005,6 +1010,10 @@ class SqliteSessions implements SessionStore {
 
   async setModel(id: string, model: string | null, effort: EffortLevel | null): Promise<void> {
     this.db.prepare('UPDATE sessions SET model = ?, effort = ? WHERE id = ?').run(model, effort, id)
+  }
+
+  async setPlanning(id: string, planning: boolean): Promise<void> {
+    this.db.prepare('UPDATE sessions SET planning = ? WHERE id = ?').run(planning ? 1 : 0, id)
   }
 
   async setFastMode(id: string, fastMode: boolean): Promise<void> {

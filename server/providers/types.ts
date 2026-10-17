@@ -158,6 +158,8 @@ export type SessionSpec = {
   /** a hard stop: the agent ends the run past this spend */
   maxBudgetUsd?: number
   permissionMode?: PermissionMode | null
+  /** plan mode: read and plan, edit nothing, until the plan is approved (Claude only) */
+  planning?: boolean
   /** the agent's own session id to continue */
   resume?: string
   /** local plugin folders to load (the workspace's skills and agents); adapters without plugins ignore it */
@@ -174,6 +176,8 @@ export interface AgentSession extends AsyncIterable<ProviderEvent> {
   /** off clears the opt-in rather than writing false */
   setFastMode(on: boolean): Promise<void>
   setPermissionMode(mode: PermissionMode): Promise<void>
+  /** In or out of plan mode; out, the session goes back to `mode`. Absent where the agent has no plan mode. */
+  setPlanning?(on: boolean, mode: PermissionMode): Promise<void>
   commands(): Promise<CommandEntry[]>
   interrupt(): Promise<void>
   /** stop one subagent */

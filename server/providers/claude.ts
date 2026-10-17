@@ -121,7 +121,7 @@ export const claude: Provider = {
           ? { settings: { ...(spec.settings ?? {}), ...(spec.fastMode ? { fastMode: true } : {}) } }
           : {}),
         ...(spec.maxBudgetUsd ? { maxBudgetUsd: spec.maxBudgetUsd } : {}),
-        ...(sdkMode(spec.permissionMode) ? { permissionMode: sdkMode(spec.permissionMode) } : {}),
+        ...(spec.planning ? { permissionMode: 'plan' as const } : sdkMode(spec.permissionMode) ? { permissionMode: sdkMode(spec.permissionMode) } : {}),
         // The SDK refuses 'bypassPermissions' without this explicit opt-in.
         ...(spec.permissionMode === 'bypassPermissions' ? { allowDangerouslySkipPermissions: true } : {}),
         ...(spec.resume ? { resume: spec.resume } : {}),
@@ -141,6 +141,7 @@ export const claude: Provider = {
         await q.applyFlagSettings({ fastMode: on ? true : null })
       },
       setPermissionMode: (mode) => q.setPermissionMode(sdkMode(mode) ?? 'default'),
+      setPlanning: (on, mode) => q.setPermissionMode(on ? 'plan' : sdkMode(mode) ?? 'default'),
       commands: () => q.supportedCommands(),
       interrupt: async () => {
         await q.interrupt()
