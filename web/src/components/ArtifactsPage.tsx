@@ -18,7 +18,7 @@ function when(ms: number): string {
 
 /**
  * The Artifacts page: every markdown note and brief in the workspace's
- * artifacts folder, straight from the index. A list, not a tree — the folder is
+ * artifacts folder, straight from the index. A list, not a tree, the folder is
  * shallow by design (notes/, briefs/). Briefs of finished items hide by default.
  */
 export function ArtifactsPage({ onOpen, onPin }: { onOpen: (id: string) => void; onPin: (id: string, title: string) => void }) {

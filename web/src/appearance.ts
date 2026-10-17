@@ -1,5 +1,5 @@
 /**
- * How this browser renders the app: colour theme and base text size. A per-browser, per-device preference — it lives in localStorage and is
+ * How this browser renders the app: colour theme and base text size. A per-browser, per-device preference, it lives in localStorage and is
  * applied to the document root, not the session store. The Appearance and
  * Themes settings tabs edit it; `initAppearance()` (called before the first
  * paint) applies the saved values and keeps "System" in step with the OS colour scheme.
@@ -7,8 +7,8 @@
  * Choosing a theme is two decisions, as in most editors: a *mode* (system,
  * light, dark) and one theme per scheme (the dark theme, the light theme). The
  * mode picks which of the two is showing. JS resolves it to one concrete theme
- * id and writes it to `document.documentElement[data-theme]` — the hand-tuned
- * Triage themes are styled in styles.css, the rest are compiled from their
+ * id and writes it to `document.documentElement[data-theme]`. The hand-tuned
+ * Triage themes are styled in styles/tokens.css, the rest are compiled from their
  * palettes into one injected <style> (see themes.ts).
  */
 import { useSyncExternalStore } from 'react'
@@ -65,7 +65,7 @@ function writeRaw(key: string, value: string) {
   try {
     localStorage.setItem(key, value)
   } catch {
-    // storage blocked — the value still applies for this page load
+    // storage blocked: the value still applies for this page load
   }
 }
 
@@ -115,10 +115,8 @@ function installThemeStyles() {
   el.textContent = themeStylesheet()
 }
 
-// ---------------------------------------------------------------------------
 // External-store plumbing so a settings pane re-renders on every change and on
 // OS-scheme flips, while getSnapshot stays referentially stable between them.
-// ---------------------------------------------------------------------------
 
 const listeners = new Set<() => void>()
 let snapshot: Appearance | null = null
@@ -145,7 +143,7 @@ export function writeAppearance(patch: Partial<Appearance>) {
 
 /**
  * Put a theme on screen: it becomes its scheme's pick, and a fixed mode of the
- * other scheme follows it — clicking a light theme while in dark mode should
+ * other scheme follows it, clicking a light theme while in dark mode should
  * show it. "System" is left alone; the pick applies when the OS gets there.
  */
 export function chooseTheme(theme: Theme) {

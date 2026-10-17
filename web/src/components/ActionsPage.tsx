@@ -1,6 +1,6 @@
 /**
  * Actions (.docs/action-card-variations.html, P3 "Split: list + detail"):
- * everything sessions did — or want to do — that leaves this machine. Tabs
+ * everything sessions did, or want to do, that leaves this machine. Tabs
  * Needs you · Scheduled · Sent · Stopped; a dense list on the left, the
  * selected action's stub card on the right, where a queued one is approved,
  * edited, sent back or rejected. The keyboard clears the queue: J/K move,

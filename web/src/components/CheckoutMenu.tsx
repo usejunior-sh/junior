@@ -1,7 +1,7 @@
 /**
  * Everything you do with a checkout, from wherever it's shown (the session
  * header's chip, a Changes group): open it in an editor found on this Mac,
- * reveal it, open a terminal there, copy its path — and, for a worktree,
+ * reveal it, open a terminal there, copy its path, and, for a worktree,
  * remove it once the work is done (.docs/worktrees-ux.html §4, §10).
  */
 import { CodeXml, Copy, FolderOpen, SquareTerminal, Trash2 } from 'lucide-react'
@@ -20,7 +20,7 @@ function shortPath(p: string): string {
 
 type Props = {
   checkout: Checkout
-  /** the trigger — rendered as-is (`asChild`), so it must be a button */
+  /** the trigger: rendered as-is (`asChild`), so it must be a button */
   children: ReactNode
   /** omit to leave "New terminal here" out */
   onNewTerminal?: () => void

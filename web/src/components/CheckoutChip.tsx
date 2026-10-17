@@ -1,6 +1,6 @@
 /**
  * The checkout chip (.docs/worktrees-ux.html §0): where something runs. The
- * main checkout stays quiet — `project · branch`, like the old folder pill;
+ * main checkout stays quiet: `project · branch`, like the old folder pill;
  * only a worktree gets the branch glyph and the blue edge. A removed one
  * strikes through. At most one trailing fact (ahead count, a state word), so
  * it fits a narrow panel.

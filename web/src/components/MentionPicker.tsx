@@ -22,7 +22,7 @@ type Props = {
 
 const TAB_LABEL = (kind: MentionKind | null) => (kind === null ? 'All' : GROUP_TITLE[kind])
 
-/** The glyph for a mention kind — shared by the picker, the tray chips and the transcript. */
+/** The glyph for a mention kind: shared by the picker, the tray chips and the transcript. */
 export function MentionIcon({ kind, dir, size = 13 }: { kind: MentionKind; dir?: boolean; size?: number }) {
   if (kind === 'item') return <Inbox size={size} aria-hidden="true" />
   if (kind === 'session') return <MessagesSquare size={size} aria-hidden="true" />
@@ -36,10 +36,10 @@ export const flatHits = (groups: readonly Group[]): MentionHit[] => groups.flatM
  * The `@` picker: a popover above the prompt box listing what the token under
  * the caret could mean, grouped by kind and headed by a tab per kind. The
  * query always searches every kind at once; the tabs only narrow what is
- * shown, and they are the same thing as typing the `artifact:` prefix — both
+ * shown, and they are the same thing as typing the `artifact:` prefix, both
  * go through `setMentionKind`, so neither can drift from the other.
  *
- * Focus never leaves the textarea — the box's own key handler drives both the
+ * Focus never leaves the textarea: the box's own key handler drives both the
  * selection and the tabs, so typing keeps narrowing the list.
  */
 export function MentionPicker({ open, groups, kind, onKind, selected, onHover, onPick, children }: Props) {

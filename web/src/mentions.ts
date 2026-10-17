@@ -2,7 +2,7 @@
  * `@` mentions in a composer: spotting the token under the caret, searching
  * the things it could mean (files under the session folder, work items, other
  * sessions), and holding the picked ones until the message is sent. The kinds
- * are a registry — a new kind is one entry in `SOURCES`, a resolver on the
+ * are a registry: a new kind is one entry in `SOURCES`, a resolver on the
  * server, and nothing else.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -21,9 +21,7 @@ import { artifactStore, useArtifacts } from './artifactStore.js'
 import { useSessions } from './hooks.js'
 import type { ArtifactWithLinks } from '../../shared/protocol.js'
 
-// ---------------------------------------------------------------------------
 // The token under the caret
-// ---------------------------------------------------------------------------
 
 export type ActiveMention = {
   /** index of the `@` */
@@ -46,7 +44,7 @@ export function activeMention(text: string, caret: number): ActiveMention | null
     if (text[i] === '@') {
       if (i > 0 && !/\s/.test(text[i - 1])) return null
       const raw = text.slice(i + 1, caret)
-      // A closed token (`@item:x ` already committed) never reopens — the
+      // A closed token (`@item:x ` already committed) never reopens, the
       // trailing space ends it, which the loop above already guarantees.
       const m = /^(file|item|session|artifact):(.*)$/.exec(raw)
       if (m) return { start: i, end: caret, query: m[2], kind: m[1] as MentionKind }
@@ -76,9 +74,7 @@ export function setMentionKind(text: string, active: ActiveMention, kind: Mentio
   return { text: next, caret: active.start + token.length }
 }
 
-// ---------------------------------------------------------------------------
-// Search — one result shape for every kind
-// ---------------------------------------------------------------------------
+// Search: one result shape for every kind
 
 export type MentionHit = Mention & {
   /** the dimmer second line: a folder, a score reason, a session status */
@@ -201,20 +197,18 @@ export function useMentionSearch(active: ActiveMention | null, root: string, exc
   }, [active, kind, query, root, files, inbox.items, sessions, artifacts.artifacts, exclude])
 }
 
-// ---------------------------------------------------------------------------
 // The picked mentions, held until send
-// ---------------------------------------------------------------------------
 
 /**
  * What the message has attached, for as long as the message says so.
  *
- * The text is the truth and the chips are a mirror — so the mirror is *derived*
+ * The text is the truth and the chips are a mirror, so the mirror is *derived*
  * rather than kept in step: a mention counts as attached exactly while its
  * token is in the draft. Delete `@src/foo.ts`, or clear the box, and the chip
  * goes with it; nothing can be attached that the message doesn't mention.
  *
  * Picked mentions stay in the pool after their token leaves, because the text
- * can come back — retyped, pasted back, restored from a draft — and the
+ * can come back, retyped, pasted back, restored from a draft, and the
  * attachment should ride along with it rather than have to be picked again.
  * The pool is emptied on send.
  */
@@ -223,7 +217,7 @@ export function useMentions(text: string, initial: readonly Mention[] = []) {
 
   const mentions = useMemo(() => pool.filter((m) => text.includes(mentionToken(m))), [pool, text])
 
-  // The cap counts what is attached, not what the pool remembers — attaching
+  // The cap counts what is attached, not what the pool remembers, attaching
   // and detaching all afternoon must not use the budget up.
   const full = mentions.length >= MAX_MENTIONS_PER_MESSAGE
 

@@ -3,7 +3,7 @@
  * where it starts, and `html.kbOpen` marks an on-screen keyboard. iOS overlays
  * the keyboard on the page instead of resizing it, so without this a phone's
  * composer sits under the keys; while the keyboard is up, the phone layout
- * (styles.css) sizes the app to the visible area instead of the screen.
+ * (styles/phone.css) sizes the app to the visible area instead of the screen.
  */
 export function trackViewport() {
   const vv = window.visualViewport

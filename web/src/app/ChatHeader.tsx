@@ -12,10 +12,10 @@ import type { AgentRun } from '../agents.js'
 import { EFFORT_LABEL } from '../models.js'
 import { projectColor } from '../tabs.js'
 
-/** `/Users/you/Code/x` → `~/Code/x` — display only. */
+/** `/Users/you/Code/x` → `~/Code/x`: display only. */
 const homely = (p: string) => p.replace(/^\/(?:Users|home)\/[^/]+/, '~')
 
-/** `/Users/you/Code/x` → `x` — the header's fallback once the homely path won't fit. */
+/** `/Users/you/Code/x` → `x`: the header's fallback once the homely path won't fit. */
 const folderName = (p: string) => p.replace(/\/+$/, '').split('/').filter(Boolean).pop() ?? p
 
 /**

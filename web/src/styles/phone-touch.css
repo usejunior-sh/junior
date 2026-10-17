@@ -1,4 +1,4 @@
-/* ---------- phone: terminals — the keys a phone keyboard lacks ---------- */
+/* ---------- phone: terminals: the keys a phone keyboard lacks ---------- */
 .termKeys { display: flex; gap: 4px; padding: 6px 8px; border-top: 1px solid var(--hair); background: var(--deep); overflow-x: auto; scrollbar-width: none; flex: none; }
 .termKeys::-webkit-scrollbar { display: none; }
 .termKeys button {
@@ -9,12 +9,12 @@
 .termKeys button:active { background: var(--wash-2); color: var(--ink); }
 @media (max-width: 767px), (pointer: coarse) and (max-height: 500px) {
   /* The top bar names the shell; its header keeps the folder. Stay inline-block
-     (not inline-flex) so the pill truncates its own text as one line — flexing
+     (not inline-flex) so the pill truncates its own text as one line, flexing
      it makes the inner .t span an unshrinkable flex item that spills past the cap. */
   #chatHeader.termHeader .pills .pill.mono { max-width: 50vw; }
 }
 
-/* ---------- phone: a changed file — the file on one line, the view controls on the next ---------- */
+/* ---------- phone: a changed file: the file on one line, the view controls on the next ---------- */
 @media (max-width: 767px), (pointer: coarse) and (max-height: 500px) {
   .chgBar { flex-wrap: wrap; height: auto; min-height: 0; row-gap: 8px; padding-top: 8px; padding-bottom: 8px; }
   .chgBar .crumb { flex: 1 1 0; }
@@ -54,7 +54,7 @@
 .tunnelLine { display: flex; align-items: center; gap: 8px; margin: 4px 0 0; font-size: 0.9231rem; color: var(--ash); }
 .tunnelLine code { font-family: var(--mono); color: var(--body); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 
-/* settings → phone: where you'll use it from — two cards, one chosen (the auth-card idiom) */
+/* settings → phone: where you'll use it from, two cards, one chosen (the auth-card idiom) */
 .reachPick { padding: 12px 0 4px; border-top: 1px solid var(--hair-soft); }
 .reachLbl { display: block; font-weight: 500; color: var(--body); font-size: 1rem; margin-bottom: 10px; }
 .reachCards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
@@ -93,7 +93,7 @@
   .rail, .topbar, .panelHead, .tabband, .termKeys { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
   .prow:active, .railBtn:active, .listRow:active, .artRow:active { background: var(--wash-2); }
 }
-/* A phone on its side: height is what is scarce — icon-only bottom bar, slimmer top bar. */
+/* A phone on its side: height is what is scarce, icon-only bottom bar, slimmer top bar. */
 @media (pointer: coarse) and (max-height: 500px) {
   :root { --nav-h: 44px; }
   .topbar.mobile { height: 44px; }
@@ -102,7 +102,7 @@
   .itemAside > .asideActions { max-width: 520px; }
 }
 
-/* Touch keeps :hover on whatever was tapped last — a row stays lit long after
+/* Touch keeps :hover on whatever was tapped last. A row stays lit long after
    the finger has gone. On a touch screen, hover tints nothing. */
 @media (hover: none) {
   .wrow:hover:not(.checked), .prow:hover:not(.sel), .listRow:hover, .libRow:hover,
@@ -124,7 +124,7 @@
 .uiMenu.perm .uiMenuItem.on { background: var(--wash-2); }
 
 @media (max-width: 767px), (pointer: coarse) and (max-height: 500px) {
-  /* A team's strip scrolls sideways; on a phone each member is name and state — model and spend live on desktop. */
+  /* A team's strip scrolls sideways; on a phone each member is name and state, model and spend live on desktop. */
   #teamStrip { padding: 4px 10px; scrollbar-width: none; }
   #teamStrip::-webkit-scrollbar { display: none; }
   #teamStrip .teamLabel, .teamTab .model, .teamTab .spend { display: none; }

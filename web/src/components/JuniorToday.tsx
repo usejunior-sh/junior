@@ -1,7 +1,7 @@
 /**
  * The Junior page's two working tabs: Today's goals (one list, every row with
  * an owner, ending in "Also today…") and Blocked on you (what holds Junior
- * until you answer). On a first open — no plan yet, nothing used — Junior
+ * until you answer). On a first open, no plan yet, nothing used, Junior
  * says what it can see and offers work instead (JuniorFirstOpen).
  */
 import { X } from 'lucide-react'

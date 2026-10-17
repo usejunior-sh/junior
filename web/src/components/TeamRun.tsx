@@ -15,9 +15,7 @@ export { TeamFastToggle } from './team/TeamEditors.js'
 export { TeamSide } from './team/TeamSide.js'
 export type { TeamSideTab } from './team/TeamSide.js'
 
-// ---------------------------------------------------------------------------
 // The strip: one tab per session, then the planned agents, the spend and controls
-// ---------------------------------------------------------------------------
 
 export function TeamStrip({
   run,
@@ -143,9 +141,7 @@ export function TeamStrip({
   )
 }
 
-// ---------------------------------------------------------------------------
-// The dock: small, above the composer, on the lead — what the run needs now
-// ---------------------------------------------------------------------------
+// The dock: small, above the composer, on the lead, what the run needs now
 
 function Flow({ run }: { run: TeamRunView }) {
   const at = run.state === 'done' ? run.recipe.steps.length : run.step

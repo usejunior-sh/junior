@@ -10,9 +10,7 @@ import { type AgentDraft, draftFromEntry, blankDraft, agentProblem, agentBody, A
 import { Markdown } from '../Markdown.js'
 import { BackToList, Field } from './fields.js'
 
-// ---------------------------------------------------------------------------
 // One skill or agent file
-// ---------------------------------------------------------------------------
 
 const MODEL_ALIASES = ['inherit', 'fable', 'opus', 'sonnet', 'haiku']
 
@@ -23,7 +21,7 @@ export function EntryEditor({
   onDeleted,
 }: {
   entry: LibraryEntry
-  /** back to the list — only shown on a phone, where the list and the editor take turns */
+  /** back to the list, only shown on a phone, where the list and the editor take turns */
   onBack: () => void
   onDirty: (dirty: boolean) => void
   onDeleted: () => void
@@ -323,9 +321,7 @@ function AgentFields({ fields, readOnly, onSet }: { fields: Record<string, strin
   )
 }
 
-// ---------------------------------------------------------------------------
 // A team agent: the team form, saved through the teams API (server/teams.ts)
-// ---------------------------------------------------------------------------
 
 export function TeamAgentEditor({
   entry,

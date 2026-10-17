@@ -1,7 +1,7 @@
 /**
  * Whether the page is laid out for a phone: narrower than 767px (the design
- * system's "Mobile Large" ceiling) or a touch screen under 500px tall — a
- * phone held sideways. Matches the phone `@media` blocks in styles.css. There
+ * system's "Mobile Large" ceiling) or a touch screen under 500px tall, a
+ * phone held sideways. Matches the phone `@media` blocks in styles/phone.css. There
  * the shell is a single column: a top bar with a back button, one page, and
  * the rail as a bottom tab bar.
  */

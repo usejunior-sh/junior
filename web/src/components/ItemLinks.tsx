@@ -1,7 +1,7 @@
 /**
  * Where an item points: its source, the links you put on it (a Slack thread,
  * the PR, a doc), and the PRs/pages the scanner saw mentioned. One click out
- * to each. Only your own links can be removed — the rest belong to the source.
+ * to each. Only your own links can be removed. The rest belong to the source.
  */
 import { CircleDot, ExternalLink, GitPullRequest, Link2, MessageSquare, Plus, SquareKanban, X } from 'lucide-react'
 import { useState } from 'react'
@@ -20,7 +20,7 @@ const ORIGIN_LABEL = { source: 'source', mentioned: 'mentioned', added: '' } as 
 
 type Props = {
   item: ScoredItem
-  /** the links as the server saved them — the page patches its copy of the item */
+  /** the links as the server saved them. The page patches its copy of the item */
   onSaved: (urls: string[]) => void
   onDirty: () => void
 }

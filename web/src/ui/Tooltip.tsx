@@ -1,8 +1,8 @@
 /**
- * A thin, styled wrapper around Radix's tooltip — Junior's speech bubble when
+ * A thin, styled wrapper around Radix's tooltip, Junior's speech bubble when
  * you hover its face in a chat. Radix owns the timing (a short delay so a
  * passing pointer doesn't flicker it), the positioning and the accessibility;
- * we own the pixels via the `uiTip*` classes in styles.css. Content is
+ * we own the pixels via the `uiTip*` classes in styles/*.css. Content is
  * portaled like the menus are (see portalContainer.ts), so it lands inside a
  * modal dialog when the trigger sits in one.
  */

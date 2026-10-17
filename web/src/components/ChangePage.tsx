@@ -2,7 +2,7 @@
  * One changed file, full width: its uncommitted diff against HEAD, and an
  * editor that saves straight to disk.
  *
- * The editor is a plain textarea on purpose — this is for the fix you spot
+ * The editor is a plain textarea on purpose. This is for the fix you spot
  * while reading a diff, not a replacement for your editor. Saves carry the
  * version the text was opened at, so a file an agent rewrote in the meantime
  * comes back as a conflict to resolve instead of being silently reverted.
@@ -20,13 +20,13 @@ type Props = {
   /** a checkout id; a project id means that project's main checkout (links from before checkouts) */
   checkoutId: string
   path: string
-  /** the first keystroke pins the tab — edits should not live in a peek */
+  /** the first keystroke pins the tab: edits should not live in a peek */
   onDirty: () => void
 }
 
 type Loaded = { content: string; version: string; eol: '\n' | '\r\n' }
 
-/** The shared split/unified preference — the session drawer reads the same key. */
+/** The shared split/unified preference: the session drawer reads the same key. */
 const modeKey = 'triage.changes.mode'
 
 /**
@@ -83,7 +83,7 @@ export function ChangePage({ checkoutId, path, onDirty }: Props) {
   }, [storeLoaded])
 
   // Re-read the diff whenever the store says this file moved (a turn ended,
-  // a save, the poll) — its counts are the cheapest fingerprint we have.
+  // a save, the poll), its counts are the cheapest fingerprint we have.
   const fingerprint = entry ? `${entry.status}:${entry.insertions}:${entry.deletions}` : 'clean'
   const loadDiff = useCallback(() => {
     let cancelled = false

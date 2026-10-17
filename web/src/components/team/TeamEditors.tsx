@@ -7,9 +7,7 @@ import { Select, SelectItem } from '../../ui/Select.js'
 import { teamsCall, PERMISSION_META } from '../../teams.js'
 import { errText, wireCard } from './shared.js'
 
-// ---------------------------------------------------------------------------
 // The side drawer: everything, editable in place while the card is proposed
-// ---------------------------------------------------------------------------
 
 /** Reads as text; a click makes it a field; Enter or leaving it saves, Escape drops the change. */
 export function Editable({
@@ -100,7 +98,7 @@ export function EditList({ items, onChange, disabled, add }: { items: string[]; 
 }
 
 /**
- * Fast mode for every agent on the team — premium speed, premium price. Before approval it's
+ * Fast mode for every agent on the team, premium speed, premium price. Before approval it's
  * on the card; while the run goes, it switches every worker session at once.
  */
 export function TeamFastToggle({ run, onError }: { run: TeamRunView; onError?: (e: string | null) => void }) {

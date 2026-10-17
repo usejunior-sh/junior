@@ -1,5 +1,5 @@
 /**
- * The spend vocabulary — formatting and series colour — shared by every
+ * The spend vocabulary, formatting and series colour, shared by every
  * surface that shows cost: the Usage tab and the per-item readout on the item
  * page. One module on purpose: two formattings of `$`, or two blues for Opus,
  * is how two surfaces start disagreeing.
@@ -9,7 +9,7 @@
 export const money = (n: number) =>
   n >= 1000 ? `$${(n / 1000).toFixed(1)}k` : n >= 0.01 || n === 0 ? `$${n.toFixed(2)}` : '<$0.01'
 
-/** `2.3M`, `903k`, `38` — never a raw seven-digit number. */
+/** `2.3M`, `903k`, `38`, never a raw seven-digit number. */
 export function tokens(n: number): string {
   if (n >= 1e9) return `${(n / 1e9).toFixed(2)}B`
   if (n >= 1e6) return `${(n / 1e6).toFixed(1)}M`
@@ -21,7 +21,7 @@ export function tokens(n: number): string {
  * Series colours: the first six slots of the validated dark categorical
  * palette (blue, orange, aqua, yellow, magenta, violet). Checked against this
  * surface for the lightness band, chroma floor, colour-blind separation and
- * contrast — do not swap one for a brighter app accent, which fails the band.
+ * contrast, do not swap one for a brighter app accent, which fails the band.
  * Models past the sixth fold into "Other" rather than inventing a hue.
  */
 export const SERIES = ['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181', '#9085e9']

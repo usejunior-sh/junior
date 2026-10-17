@@ -4,9 +4,7 @@ import { store } from '../../store.js'
 import { ColorPicker, authTitle } from '../workspaceAuth.js'
 import { Row, SaveRow, Section, useSavedFlash } from './shared.js'
 
-// ---------------------------------------------------------------------------
-// Workspace — identity, default, delete.
-// ---------------------------------------------------------------------------
+// Workspace: identity, default, delete.
 
 export function WorkspaceTab({ workspace }: { workspace: Workspace }) {
   const [name, setName] = useState(workspace.name)

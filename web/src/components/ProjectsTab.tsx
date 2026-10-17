@@ -15,11 +15,11 @@ const tilde = (p: string) => p.replace(/^\/(?:Users|home)\/[^/]+/, '~')
 
 /**
  * The Projects settings tab. Adding or removing a project is a one-time act of
- * setup, so it lives here rather than in the rail; the frequent affordance —
- * "start a session in project X" — is the composer's ProjectPicker.
+ * setup, so it lives here rather than in the rail; the frequent affordance,
+ * "start a session in project X", is the composer's ProjectPicker.
  *
  * One project is the default: where work lands when nothing names a project.
- * It can be replaced, never removed (decision 549a251e).
+ * It can be replaced, never removed.
  */
 export function ProjectsTab() {
   const [state, setState] = useState<LoadState>({ phase: 'loading' })
@@ -43,7 +43,7 @@ export function ProjectsTab() {
   }, [load])
 
   async function remove(p: Project) {
-    // Jobs run only in their project; removing it pauses them (job-spec.md, item 2).
+    // Jobs run only in their project; removing it pauses them.
     const wb = (await fetch('/api/jobs')
       .then((r) => r.json())
       .catch(() => null)) as JobsResponse | null
@@ -178,8 +178,8 @@ function AddProjectModal({
       <Dialog.Portal>
         <Dialog.Overlay className="projOverlay" />
         {/*
-          A <dialog> element only for the styling — every `dialog …` rule in
-          styles.css applies. Radix owns the behaviour, because this opens
+          A <dialog> element only for the styling. Every `dialog …` rule in
+          styles/*.css applies. Radix owns the behaviour, because this opens
           *inside* the settings dialog and only its layer stack gets Esc and
           the focus trap right for a nested modal.
         */}
@@ -243,7 +243,7 @@ export const folderName = (p: string) => p.replace(/\/+$/, '').split('/').pop() 
 
 /**
  * A project folder: the OS-native chooser on this Mac (the server shells out
- * to it — a browser can't read absolute paths), a typed path from a phone.
+ * to it. A browser can't read absolute paths), a typed path from a phone.
  */
 export function FolderField({
   value,

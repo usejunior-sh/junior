@@ -10,7 +10,7 @@
  *
  * - **Modal only.** A plain `<dialog open>` is used elsewhere purely as a
  *   styling shell. It never enters the top layer, and it may carry a
- *   `transform` — which would make it the containing block for the popper's
+ *   `transform`, which would make it the containing block for the popper's
  *   `position: fixed` and shift the popup by the dialog's own offset. Those
  *   stay on `<body>`.
  * - **Resolved on open, never on mount.** Our dialogs render their children

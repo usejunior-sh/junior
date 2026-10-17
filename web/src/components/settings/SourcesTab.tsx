@@ -6,9 +6,7 @@ import { MAX_GOAL_TEAM } from '../../../../core/goals/types.js'
 import { RepoScopeEditor } from '../RepoScope.js'
 import { Row, Section, useWorkspaceSettings } from './shared.js'
 
-// ---------------------------------------------------------------------------
-// Sources — GitHub scope, connectors.
-// ---------------------------------------------------------------------------
+// Sources: GitHub scope, connectors.
 
 export function SourcesTab() {
   const [connectors, setConnectors] = useState<{ total: number; connected: number; slack: boolean } | 'loading' | 'error'>(
@@ -98,7 +96,7 @@ export function GoalTeamSection() {
   )
 }
 
-/** The global jobs switch — off by default in 0.7 (.docs/next-version.md) — and default run limits. */
+/** The global jobs switch, off by default in 0.7 (.docs/next-version.md), and default run limits. */
 function JobsSwitchSection() {
   const { settings, error, save } = useWorkspaceSettings()
   const [timeoutMin, setTimeoutMin] = useState('')

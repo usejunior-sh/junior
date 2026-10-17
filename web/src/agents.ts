@@ -1,12 +1,12 @@
 /**
- * Folds a session's event log into the subagents it spawned — the agent cards,
+ * Folds a session's event log into the subagents it spawned. The agent cards,
  * the dock, the All agents menu and the agent view all read this. Pure and
  * memoisable, like `buildTranscript`.
  *
  * A subagent has no session of its own: it lives inside the main agent's
  * subprocess, and everything it does arrives on the same stream tagged with the
  * id of the tool_use that started it (`parent_tool_use_id`). Its lifecycle comes
- * from `task_*` system messages with task_type 'local_agent' — 'local_bash' is a
+ * from `task_*` system messages with task_type 'local_agent', 'local_bash' is a
  * shell command, not an agent (core/shells/fold.ts).
  */
 import { isToolResultBlock, isToolUseBlock, type RawBlock, type SdkMessage, type SessionEvent } from '../../shared/protocol.js'
@@ -14,13 +14,13 @@ import { isToolResultBlock, isToolUseBlock, type RawBlock, type SdkMessage, type
 export type AgentState = 'running' | 'done' | 'failed' | 'stopped' | 'interrupted'
 
 export type AgentRun = {
-  /** The tool_use that started it — the key everywhere, and its events' `parent_tool_use_id`. */
+  /** The tool_use that started it: the key everywhere, and its events' `parent_tool_use_id`. */
   toolUseId: string
   /** The agent's own id (a task_id): what stopTask and SendMessage take. Unknown until it starts. */
   agentId?: string
   /** The agent that spawned this one; null when the main agent did. */
   parentToolUseId: string | null
-  /** subagent_type — "Explore", "Plan", "general-purpose", a custom agent, or "skill" for a forked skill */
+  /** subagent_type: "Explore", "Plan", "general-purpose", a custom agent, or "skill" for a forked skill */
   type: string
   /** The few words the spawning agent gave it. */
   description: string
@@ -31,7 +31,7 @@ export type AgentRun = {
   state: AgentState
   startedAt?: number
   endedAt?: number
-  /** Run length as the agent counts it — the fallback when a timestamp is missing. */
+  /** Run length as the agent counts it. The fallback when a timestamp is missing. */
   durationMs?: number
   tokens?: number
   toolUses: number
@@ -46,7 +46,7 @@ export type AgentRun = {
 
 /** The tools that spawn a subagent. Newer CLIs call it Agent, older ones Task. */
 export const AGENT_TOOLS: ReadonlySet<string> = new Set(['Agent', 'Task'])
-/** How a subagent hands its report back — that call is the report, not a step of the work. */
+/** How a subagent hands its report back. That call is the report, not a step of the work. */
 export const HANDBACK_TOOL = 'SubagentHandback'
 
 /** A task_notification whose summary only points elsewhere carries no report of its own. */
@@ -148,7 +148,7 @@ export function buildAgents(
       continue
     }
     // A fresh subprocess: nothing the last one was running survived it. (Not
-    // the SDK's init — that arrives at the start of every turn, same process.)
+    // the SDK's init: that arrives at the start of every turn, same process.)
     if (ev.kind === 'subprocess') {
       for (const r of runs.values()) if (r.state === 'running') finish(r, 'interrupted', at)
       asking.clear()
@@ -269,7 +269,7 @@ export function buildAgents(
 /** What to call an agent in one line: the words it was given, else its type. */
 export const agentLabel = (r: AgentRun): string => r.description || r.type
 
-/** The agents above this one, outermost first — the breadcrumb between Main and it. */
+/** The agents above this one, outermost first. The breadcrumb between Main and it. */
 export function agentAncestors(runs: readonly AgentRun[], r: AgentRun): AgentRun[] {
   const out: AgentRun[] = []
   const seen = new Set<string>()

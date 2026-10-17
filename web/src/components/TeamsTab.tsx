@@ -23,7 +23,7 @@ const openFolder = () => void teamsCall('POST', 'open').catch(() => {})
 
 /**
  * Settings → Teams: the workspace's teams. A team is a recipe file
- * (server/teams.ts) — edited as its file, made from a run with "Save as team".
+ * (server/teams.ts), edited as its file, made from a run with "Save as team".
  * The agents a team is made of are edited under Settings → Agents, with who
  * uses each said out loud.
  */

@@ -10,11 +10,9 @@ export type Preview =
   | { phase: 'ready'; id: string; sig: string; result: JobPreviewResult }
   | { phase: 'failed'; id: string; sig: string; message: string }
 
-// ---------------------------------------------------------------------------
-// Step 2 — the dry run. Transcript first (it is the proof), the would-be
+// Step 2: the dry run. Transcript first (it is the proof), the would-be
 // item(s) once the run ends (they are the payoff). The transcript is the same
 // component the session page uses, fed by the ephemeral session's events.
-// ---------------------------------------------------------------------------
 
 export function PreviewStep({
   preview,

@@ -8,13 +8,13 @@ import type { Checkout, Editor, EditorsResponse, OpenCheckoutResponse } from '..
 export const checkoutOf = (checkouts: readonly Checkout[], id: string | undefined | null): Checkout | undefined =>
   id ? checkouts.find((c) => c.id === id) : undefined
 
-/** A worktree's branch without its kind prefix — `fix/model-list-cache` → `model-list-cache` — for tight spots like tabs. */
+/** A worktree's branch without its kind prefix, `fix/model-list-cache` → `model-list-cache`, for tight spots like tabs. */
 export const branchSlug = (branch: string) => branch.slice(branch.lastIndexOf('/') + 1)
 
 /** What a checkout is called in one word: its branch, else that it's detached. */
 export const checkoutLabel = (c: Checkout) => c.branch ?? 'detached'
 
-// --- editors: detected once per page load, the last one used listed first ---
+// editors: detected once per page load, the last one used listed first
 
 const lastKey = 'triage.editor.last'
 let editors: readonly Editor[] = []
@@ -82,7 +82,7 @@ export async function openCheckout(checkoutId: string, editor: string): Promise<
         editors = lastFirst(editors)
         for (const fn of listeners) fn()
       } catch {
-        // storage blocked — the order just doesn't stick
+        // storage blocked: the order just doesn't stick
       }
     }
     return null

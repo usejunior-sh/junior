@@ -1,5 +1,5 @@
 /* =========================================================================
-   Phone layout (≤ 767px — the design system's Mobile Large ceiling — or a
+   Phone layout (≤ 767px, the design system's Mobile Large ceiling, or a
    touch screen under 500px tall, i.e. a phone on its side; keep in step with
    MOBILE_QUERY in useMobile.ts). One column: a 48px top bar with a
    back button, one page, and the rail turned into a bottom tab bar. A
@@ -10,7 +10,7 @@
 @media (max-width: 767px), (pointer: coarse) and (max-height: 500px) {
   :root { --nav-h: 56px; font-size: max(var(--app-font-size, 13px), 15px); }
   input, textarea, select, [contenteditable="true"] { font-size: 16px !important; }
-  /* Pinned to the whole screen — a home-screen app on iOS reports a viewport
+  /* Pinned to the whole screen: a home-screen app on iOS reports a viewport
      shorter than the screen, and sizing to it left a dead band under the tab
      bar. Only while the keyboard is up does the app shrink to the visible
      height (--vvh, viewport.ts), so the keys never cover the composer. */
@@ -102,7 +102,7 @@ html.kbOpen .shell.mobile .panel { bottom: 0; }
   .btn.sm { height: 34px; padding: 0 12px; }
 
   /* A ledger row on a phone: priority bar, glyph, a title allowed two lines,
-     the age, and the row menu — the full set of actions lives in that menu
+     the age, and the row menu. The full set of actions lives in that menu
      and on the item page. No checkboxes, no shortcut legend. */
   .wrow {
     grid-template-columns: 3px 18px minmax(0, 1fr) auto auto; column-gap: 10px;
@@ -129,7 +129,7 @@ html.kbOpen .shell.mobile .panel { bottom: 0; }
   .selBar { max-width: calc(100vw - 24px); overflow-x: auto; }
 }
 
-/* ---------- phone: item page — one column, the actions first ---------- */
+/* ---------- phone: item page: one column, the actions first ---------- */
 @media (max-width: 767px), (pointer: coarse) and (max-height: 500px) {
   /* The two columns dissolve into one list, re-ordered for a thumb: what the
      item is, then what you can do with it, then the brief and the history. */
@@ -147,9 +147,9 @@ html.kbOpen .shell.mobile .panel { bottom: 0; }
   .btnGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
-/* ---------- phone: a session — transcript edge to edge, composer under the thumb ----------
+/* ---------- phone: a session: transcript edge to edge, composer under the thumb ----------
    Every pixel of height goes to the transcript. The header is one slim line
-   (state, model, project · branch — the top bar already names the session);
+   (state, model, project · branch. The top bar already names the session);
    the composer is a one-line box over a row of icon buttons. Model and
    permissions are icons here; tapping one opens its picker with the current
    choice checked. */
@@ -220,7 +220,7 @@ html.kbOpen .shell.mobile .panel { bottom: 0; }
   .setRow { flex-wrap: wrap; gap: 10px 16px; }
 }
 
-/* ---------- phone: dialogs — full width, pinned near the top so a keyboard never covers them ---------- */
+/* ---------- phone: dialogs: full width, pinned near the top so a keyboard never covers them ---------- */
 @media (max-width: 767px), (pointer: coarse) and (max-height: 500px) {
   dialog, dialog.itemComposer, dialog#palette, dialog#helpOverlay, dialog.repoDialog, dialog.sheet {
     width: calc(100vw - 16px); max-width: none;
@@ -255,7 +255,7 @@ html.kbOpen .shell.mobile .panel { bottom: 0; }
   #newSessionHome #box { min-height: 72px; }
 }
 
-/* ---------- phone: artifacts — title on its own line, tags and age under it ---------- */
+/* ---------- phone: artifacts: title on its own line, tags and age under it ---------- */
 @media (max-width: 767px), (pointer: coarse) and (max-height: 500px) {
   .artRow { flex-wrap: wrap; row-gap: 6px; padding: 12px 14px; }
   .artRow .artTitle { flex: 1 1 calc(100% - 40px); white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
@@ -266,7 +266,7 @@ html.kbOpen .shell.mobile .panel { bottom: 0; }
   .artTools .root { flex: 1 1 100%; order: 3; }
 }
 
-/* ---------- phone: an artifact — heading, then actions, then the document ---------- */
+/* ---------- phone: an artifact: heading, then actions, then the document ---------- */
 @media (max-width: 767px), (pointer: coarse) and (max-height: 500px) {
   .artBack { display: none; } /* the top bar's back does this */
   .artHead { flex-direction: column; gap: 12px; }
@@ -283,7 +283,7 @@ html.kbOpen .shell.mobile .panel { bottom: 0; }
   .artEditor .keysHint { display: none; }
 }
 
-/* ---------- phone: jobs — the table becomes one block per job ---------- */
+/* ---------- phone: jobs: the table becomes one block per job ---------- */
 @media (max-width: 767px), (pointer: coarse) and (max-height: 500px) {
   .jobHead { flex-wrap: wrap; align-items: center; gap: 10px; }
   .jobHead .seg { margin: 0; order: 3; flex: 1 1 100%; overflow-x: auto; scrollbar-width: none; }

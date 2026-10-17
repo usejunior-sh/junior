@@ -25,7 +25,7 @@ export function ItemSessions({ linkedSessions, links, spend, checkouts, onNaviga
 }) {
   return (
     <>
-      {/* Team runs: each has a run folder — plan, ledger, reviews, every handoff — read on its page. */}
+      {/* Team runs: each has a run folder, plan, ledger, reviews, every handoff, read on its page. */}
       {(() => {
         const leads = linkedSessions.filter(({ s: x }) => x.teamRun?.role === 'lead').map(({ s: x }) => x)
         // Runs from before the folder, whose state is gone, still have their Plan artifact.

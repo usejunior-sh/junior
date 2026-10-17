@@ -1,8 +1,8 @@
 /**
- * The job form's integrations field (job-spec.md, item 1): the built-ins
+ * The job form's integrations field: the built-ins
  * (Web, GitHub, writing files) plus every MCP server Claude Code can load in
- * the job's project folder — claude.ai connectors, global, local and project
- * servers — discovered by the server's probe, so a newly connected server
+ * the job's project folder, claude.ai connectors, global, local and project
+ * servers, discovered by the server's probe, so a newly connected server
  * shows up without a triage release.
  *
  * Selecting a server checks its default tools: our curated preset when we
@@ -40,7 +40,7 @@ const TABS: Array<{ id: TabId; label: string; scopes: ConnectorScope[] }> = [
   { id: 'other', label: 'Plugins & other', scopes: ['plugin', 'managed', 'unknown'] },
 ]
 
-/** A server from an older triage server carries no scope — read it as "unknown", never drop it. */
+/** A server from an older triage server carries no scope, read it as "unknown", never drop it. */
 const scopeOf = (c: Connector): ConnectorScope => (SCOPE_ORDER.includes(c.scope) ? c.scope : 'unknown')
 
 const tilde = (p: string) => p.replace(/^\/(?:Users|home)\/[^/]+/, '~')
@@ -115,17 +115,17 @@ export function JobToolPicker({
     if (current) return setServerTools(c, [])
     const defaults = defaultToolsFor(c.server, c.tools)
     if (defaults.length) setServerTools(c, defaults)
-    // open it: show what got checked, or — nothing read-only to pre-check — let the user pick
+    // open it: show what got checked, or, nothing read-only to pre-check, let the user pick
     setOpen((s) => new Set(s).add(c.server))
   }
 
   const connectors = probe.phase === 'ready' ? probe.connectors : []
   const known = new Set(connectors.map((c) => c.server))
-  // Saved grants for servers this folder's probe doesn't report — kept, flagged, removable.
+  // Saved grants for servers this folder's probe doesn't report, kept, flagged, removable.
   const orphans = value.filter((g) => g.source.kind === 'mcp' && probe.phase === 'ready' && !known.has(g.source.server))
 
   // Connected servers (and any server this job already uses) are listed by
-  // scope; the rest — usually a long tail of connectors awaiting auth — fold
+  // scope; the rest, usually a long tail of connectors awaiting auth, fold
   // into one line so they don't bury the ones that work. Tabs split by source,
   // the search narrows by server or tool name.
   const listed = (c: Connector) => healthy(c) || byKey.has(`mcp:${c.server}`)

@@ -1,6 +1,6 @@
 /**
  * The browser pane beside a session (.docs/browser.md). The toolbar is ours;
- * the page under it is a native view Triage.app lays over `.bpStage` — so the
+ * the page under it is a native view Triage.app lays over `.bpStage`, so the
  * stage reports where it is, and hides the view whenever one of our own
  * popovers or dialogs would otherwise sit underneath it.
  */

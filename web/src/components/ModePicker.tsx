@@ -8,7 +8,7 @@ import { Menu, MenuContent, MenuItem, MenuTrigger } from '../ui/Menu.js'
 const ICON: Record<SessionMode, typeof Signpost> = { normal: Signpost, plan: ListChecks, goal: Target }
 
 /**
- * What Junior does before it starts — an override, not a choice: "Junior
+ * What Junior does before it starts: an override, not a choice: "Junior
  * decides" by default, and a forced Plan first or Goal takes its colour.
  * New sessions only: a running session shows plan mode as a status chip instead.
  */

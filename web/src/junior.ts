@@ -1,7 +1,7 @@
 /**
  * Junior on the client: the persona (from `hello` and `persona` frames), the
  * Junior page's day (one read, refetched when anything it shows moves), the
- * brief's "while you were away" window, today's plan writes, and starters —
+ * brief's "while you were away" window, today's plan writes, and starters,
  * a Junior chat with its first message written, waiting for you to send it.
  */
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
@@ -58,16 +58,14 @@ export async function savePersona(patch: Partial<Persona>): Promise<Persona | st
 
 /**
  * A chat with Junior, first message written (or none), waiting for you to
- * send it — the same as every starter in the app. `job` = a "New job:" chat.
+ * send it. The same as every starter in the app. `job` = a "New job:" chat.
  */
 export function startJuniorChat(text = '', opts: { intent?: 'job' } = {}) {
   const d = text || opts.intent ? draftStore.create({ text, ...(opts.intent ? { intent: opts.intent } : {}) }) : draftStore.findEmpty() ?? draftStore.create()
   location.hash = `/new/${d.id}`
 }
 
-// ---------------------------------------------------------------------------
-// The brief's window: per browser, per workspace — where *you* were.
-// ---------------------------------------------------------------------------
+// The brief's window: per browser, per workspace, where *you* were.
 
 const seenKey = (ws: string) => `triage.junior.seen.${ws || 'default'}`
 
@@ -116,9 +114,7 @@ export function useAwayWindow(workspaceId: string): SeenState {
   return win
 }
 
-// ---------------------------------------------------------------------------
 // The day: one read, kept current.
-// ---------------------------------------------------------------------------
 
 /** What in the session list moves the page: who runs, who waits, which team step. */
 const sessionsKey = (ss: readonly SessionSummary[]) =>
@@ -179,10 +175,6 @@ export function useJuniorDay(win: SeenState): { day: JuniorDay | null; error: st
   return { day, error, reload: () => void load() }
 }
 
-// ---------------------------------------------------------------------------
-// The plan's writes
-// ---------------------------------------------------------------------------
-
 async function post<T extends { ok: boolean; error?: string }>(url: string, body: unknown): Promise<T> {
   const res = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
   return (await res.json()) as T
@@ -226,9 +218,7 @@ export async function matchToday(q: string): Promise<Extract<TodayMatchResponse,
   }
 }
 
-// ---------------------------------------------------------------------------
 // The rail's face: the most urgent state, from what the client already holds.
-// ---------------------------------------------------------------------------
 
 /**
  * needs > stuck > working > hello (core/junior/mood.ts). Needs = a session on

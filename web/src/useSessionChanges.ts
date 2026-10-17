@@ -1,5 +1,5 @@
 /**
- * One session's changes, fetched once — the transcript's per-turn summaries.
+ * One session's changes, fetched once, the transcript's per-turn summaries.
  */
 import { useEffect, useState } from 'react'
 import type { SessionChanges, SessionChangesResponse } from '../../shared/protocol.js'

@@ -1,8 +1,8 @@
 /**
  * Settings is a page: `#/settings/<tab>`, with the route as its only state.
  *
- * Any component can still open it on a specific tab — a "Fix" link on an auth
- * error opens Providers, the workspace menu opens Workspace — by calling
+ * Any component can still open it on a specific tab, a "Fix" link on an auth
+ * error opens Providers, the workspace menu opens Workspace, by calling
  * `openSettings(tab)`, which is just navigation. Closing goes back to whatever
  * was in front before settings opened (App tells us via `noteReturnHash`).
  */
@@ -73,7 +73,7 @@ export const settingsHash = (tab: SettingsTab) => `/settings/${tab}`
 
 /** The last tab shown, so the gear reopens where you were. */
 let lastTab: SettingsTab = DEFAULT_SETTINGS_TAB
-/** The page settings was opened from — where Close and Esc go. */
+/** The page settings was opened from, where Close and Esc go. */
 let returnHash = '/inbox'
 
 /** App calls this for every non-settings route, so Close knows where to land. */

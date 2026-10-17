@@ -2,7 +2,7 @@
  * Unsent composer text, per live session. The live-session composer unmounts
  * whenever you leave it for another tab or rail section (the content area is a
  * conditional render on the route), so its draft cannot live in the component's
- * own `useState` or switching away and back would blank it — exactly the trap
+ * own `useState` or switching away and back would blank it, exactly the trap
  * the new-session draft avoids by living in `draftStore`. It lives here instead:
  * module-level, keyed by session id (a uuid, unique across workspaces),
  * persisted per browser so a reload never costs the text, and cleared the
@@ -34,7 +34,7 @@ function persist() {
   try {
     localStorage.setItem(KEY, JSON.stringify(drafts))
   } catch {
-    // storage blocked — the draft still survives this page load
+    // storage blocked: the draft still survives this page load
   }
 }
 

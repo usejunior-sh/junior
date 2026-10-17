@@ -51,10 +51,10 @@ type Props = {
   scope?: string | null
   /** Open a subagent's view (null = back to main). */
   onOpenAgent?: (toolUseId: string | null) => void
-  /** Drawn before the first item and after the last — an agent's brief and how it ended. */
+  /** Drawn before the first item and after the last. An agent's brief and how it ended. */
   lead?: ReactNode
   tail?: ReactNode
-  /** Drawn before the first item folded from event `at` (0-based) or later — a team run's dividers. */
+  /** Drawn before the first item folded from event `at` (0-based) or later, a team run's dividers. */
   marks?: readonly TranscriptMark[]
   /** Junior is the one talking (a Claude session's main view): each of its turns opens with its face and name. */
   speaker?: { status: SessionStatus }
@@ -65,7 +65,7 @@ const NO_MARKS: readonly TranscriptMark[] = []
 
 const NO_AGENTS: readonly AgentRun[] = []
 
-/** What Junior says or does in a turn — anything else (your messages, markers, CLI output) isn't its. */
+/** What Junior says or does in a turn. Anything else (your messages, markers, CLI output) isn't its. */
 const JUNIOR_KINDS = new Set<TranscriptItem['kind']>(['assistant', 'thinking', 'tool', 'toolGroup', 'agent', 'permission', 'error'])
 
 /** A word for what a call is doing, for the working face's bubble ("Editing Transcript.tsx…"). */
@@ -147,7 +147,7 @@ function speakerTurns(
   return { at, thinking: live && !open }
 }
 
-/** Scroll to the newest card still waiting on you — where the needs-you face points. */
+/** Scroll to the newest card still waiting on you, where the needs-you face points. */
 function jumpToWaiting(from: Element | null) {
   const cards = from?.closest('#transcript')?.querySelectorAll('.perm:has(.actions), .perm.ask:has(.askOptions)')
   cards?.[cards.length - 1]?.scrollIntoView({ behavior: 'smooth', block: 'center' })
@@ -193,7 +193,7 @@ function SignOff({ stats }: { stats: string }) {
  * Who else was touching the repo during this turn, in the width a one-line
  * turn marker has. A session's title is the first line of its first message
  * (up to 80 chars), which is far too long to sit inline, so a single one is
- * clamped and several collapse to a count — the full list is in the tooltip.
+ * clamped and several collapse to a count. The full list is in the tooltip.
  */
 const MAX_OVERLAP_CHARS = 32
 
@@ -222,7 +222,7 @@ export function Transcript({
   const byCall = useMemo(() => new Map(agents.map((a) => [a.toolUseId, a])), [agents])
   const byAgentId = useMemo(() => new Map(agents.filter((a) => a.agentId).map((a) => [a.agentId!, a])), [agents])
   const openAgent = useCallback((id: string | null) => onOpenAgent?.(id), [onOpenAgent])
-  // Outbound actions this session took, by the tool call that made each one —
+  // Outbound actions this session took, by the tool call that made each one, 
   // drawn as a line under that call (a collapsed push names several calls).
   const { actions } = useActions({ session: sessionId })
   const actionByCall = useMemo(() => {
@@ -233,7 +233,7 @@ export function Transcript({
   const { ref, scrollToBottom } = useStickToBottom()
   const refs = useRefIndex()
   // Reference chips resolve against the artifacts index, which isn't otherwise
-  // loaded while a chat is in front — pull it once so names appear.
+  // loaded while a chat is in front, pull it once so names appear.
   const { loaded } = useArtifacts()
   useEffect(() => {
     if (!loaded) void artifactStore.refresh()
@@ -303,8 +303,8 @@ export function Transcript({
 }
 
 /**
- * The user's text with each `@` token shown as its label — `@smoke test`
- * rather than `@session:72dce3d1-…` — and clickable when it names something
+ * The user's text with each `@` token shown as its label, `@smoke test`
+ * rather than `@session:72dce3d1-…`, and clickable when it names something
  * the app can open. Bare ids typed into the text get the same name chips as an
  * agent reply. The stored text keeps the token; only the rendering changes, so
  * a reload shows the same thing.
@@ -370,7 +370,7 @@ function linkifyText(text: string, refs: RefIndex, onRef: (hash: string) => void
 }
 
 /**
- * A job a chat drafted (draft_job) is off until the user turns it on —
+ * A job a chat drafted (draft_job) is off until the user turns it on,
  * so the call's result carries a way there, right under it.
  */
 function DraftJobLinks({ tools, onRef }: { tools: readonly TranscriptItem[]; onRef: (hash: string) => void }) {
@@ -514,7 +514,7 @@ const Item = memo(function Item({
     case 'error':
       return <ErrorCard text={item.text} />
     case 'meta':
-      // A turn that changed files says so here, where it happened — the drawer
+      // A turn that changed files says so here, where it happened, the drawer
       // below answers "in total", this answers "in this turn".
       return (
         <div className={`meta${signoff && item.stats ? ' signoff' : ''}`}>
@@ -563,11 +563,11 @@ const Item = memo(function Item({
       )
     case 'permission': {
       // AskUserQuestion arrives as a permission prompt, but it is a question
-      // for the reader — render it as choices, not as JSON to approve.
+      // for the reader: render it as choices, not as JSON to approve.
       const questions = item.toolName === 'AskUserQuestion' ? parseQuestions(item.input) : null
-      // Plan mode's plan, to approve like a PR — read as the document it is.
+      // Plan mode's plan, to approve like a PR, read as the document it is.
       const plan = item.toolName === 'ExitPlanMode' && typeof item.input?.plan === 'string' ? item.input.plan : null
-      // Junior is asking unless a subagent is — then the wrapper below names it.
+      // Junior is asking unless a subagent is, then the wrapper below names it.
       const junior = !item.agentId
       const card = questions ? (
         <AskCard item={item} questions={questions} onRespond={onRespond} junior={junior} />
@@ -576,7 +576,7 @@ const Item = memo(function Item({
       ) : (
         <PermissionCard item={item} onRespond={onRespond} junior={junior} />
       )
-      // A subagent's prompt says who is asking — answering it here or in its view is the same answer.
+      // A subagent's prompt says who is asking, answering it here or in its view is the same answer.
       if (!item.agentId) return card
       return (
         <div className="agentAsks">
@@ -597,7 +597,7 @@ function relayNote(d: 'verbatim' | 'reworded' | undefined): string {
 
 /**
  * The partially-streamed assistant message. Isolated in its own component so a
- * burst of token deltas re-renders this node alone — the rest of the transcript
+ * burst of token deltas re-renders this node alone. The rest of the transcript
  * is untouched between committed messages.
  */
 function LiveLine({ sessionId, onGrow }: { sessionId: string; onGrow: () => void }) {
@@ -638,7 +638,7 @@ function useStickToBottom() {
 
 /**
  * A failed turn. When the text reads like a credentials problem, the card
- * also offers the fix — the Claude auth tab, opened directly.
+ * also offers the fix. The Claude auth tab, opened directly.
  */
 const AUTH_ERROR = /api[ -]?key|authenticat|unauthori[sz]ed|not logged in|\/login|\b401\b|credential|oauth|token (?:has )?expired|billing|insufficient credits/i
 

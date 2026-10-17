@@ -1,7 +1,7 @@
-/* ---------- Actions (core/actions): what left this machine — or wants to ----------
-   One card everywhere (.docs/action-card-variations.html, C + C2): a stub row —
-   kind glyph, a title that says what happened, a short link, a status pill —
-   that opens to the details. One that needs you opens by default with the
+/* ---------- Actions (core/actions): what left this machine, or wants to ----------
+   One card everywhere (.docs/action-card-variations.html, C + C2): a stub row,
+   kind glyph, a title that says what happened, a short link, a status pill.
+   That opens to the details. One that needs you opens by default with the
    draft and the verbs, on a yellow edge; approved, it is a slim blue undo row.
    The Actions page is P3: a dense list beside the selected card. */
 .actHead { align-items: flex-end; }
@@ -119,11 +119,11 @@
 .asplit .dt .keys kbd { margin-left: 8px; }
 .asplit .dt .keys kbd:first-child { margin-left: 0; }
 
-/* ---------- phone: Actions — the list alone, the card as a sheet ---------- */
+/* ---------- phone: Actions: the list alone, the card as a sheet ---------- */
 @media (max-width: 767px), (pointer: coarse) and (max-height: 500px) {
   .actHead .actTitle { order: 1; flex: 1 1 100%; }
   .actHead .filter { order: 2; }
-  /* One line of tabs that scrolls sideways — `.seg.wrap` would drop "Stopped" to a second line at 390px. */
+  /* One line of tabs that scrolls sideways, `.seg.wrap` would drop "Stopped" to a second line at 390px. */
   .actSeg.seg.wrap { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; max-width: 100%; }
   .actSeg .segBtn { flex: none; }
   .actSeg::-webkit-scrollbar { display: none; }

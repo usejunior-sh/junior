@@ -8,7 +8,7 @@ import { teamsCall, usd } from '../teams.js'
 
 /**
  * A team run that is a goal (.docs/junior-goals-teams/modes-autonomy-goals.md):
- * the done-when Junior judges, the horizon, and what only you do — answer
+ * the done-when Junior judges, the horizon, and what only you do, answer
  * Junior's questions, raise the budget, accept the result or say what's missing.
  *
  *   GoalAsks       above the composer, on the lead: Junior's open questions, each with its recommended answer
@@ -32,17 +32,13 @@ const errText = (err: unknown) => (err instanceof Error ? err.message : String(e
 const goalCall = (verb: 'answer' | 'accept' | 'reopen' | 'wake', body: unknown) => teamsCall<{ ok: true }>('POST', `goal/${verb}`, body)
 const clock = (at: number) => new Date(at).toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' })
 
-/** "looks again at Fri 14:20" — or "in 12 min" when it's soon. */
+/** "looks again at Fri 14:20", or "in 12 min" when it's soon. */
 export function wakeText(until: number, now = Date.now()): string {
   const min = Math.round((until - now) / 60_000)
   if (min <= 0) return 'looking again now'
   if (min < 60) return `looks again in ${min} min`
   return `looks again ${clock(until)}`
 }
-
-// ---------------------------------------------------------------------------
-// Questions
-// ---------------------------------------------------------------------------
 
 function Ask({ run, q }: { run: TeamRunView; q: GoalQuestion }) {
   const [text, setText] = useState('')
@@ -85,7 +81,7 @@ function Ask({ run, q }: { run: TeamRunView; q: GoalQuestion }) {
   )
 }
 
-/** Junior's open questions on the goal — every one waits for you, the run carries on meanwhile. */
+/** Junior's open questions on the goal: every one waits for you, the run carries on meanwhile. */
 export function GoalAsks({ run }: { run: TeamRunView }) {
   const open = run.goal?.questions.filter((q) => q.answer === null) ?? []
   if (!open.length) return null
@@ -98,9 +94,7 @@ export function GoalAsks({ run }: { run: TeamRunView }) {
   )
 }
 
-// ---------------------------------------------------------------------------
 // The budget: only you raise it
-// ---------------------------------------------------------------------------
 
 export function RaiseBudget({ run, onError }: { run: TeamRunView; onError: (e: string | null) => void }) {
   const step = Math.max(2, Math.round(run.budgetUsd * 0.5))
@@ -131,9 +125,7 @@ export function RaiseBudget({ run, onError }: { run: TeamRunView; onError: (e: s
   )
 }
 
-// ---------------------------------------------------------------------------
-// The result: Junior judged it done — you accept it, or say what's missing
-// ---------------------------------------------------------------------------
+// The result: Junior judged it done: you accept it, or say what's missing
 
 export function ResultActions({ run, onError }: { run: TeamRunView; onError: (e: string | null) => void }) {
   const [why, setWhy] = useState<string | null>(null)
@@ -195,9 +187,7 @@ export function WakeNow({ run, onError }: { run: TeamRunView; onError: (e: strin
   )
 }
 
-// ---------------------------------------------------------------------------
 // The drawer's goal section
-// ---------------------------------------------------------------------------
 
 const HORIZONS: { kind: GoalHorizonKind; label: string }[] = [
   { kind: 'today', label: 'Today' },
@@ -260,7 +250,7 @@ function GoalEdit({ run, goal, onError }: { run: TeamRunView; goal: RunGoal | nu
   )
 }
 
-/** The goal in the drawer: what it's for, and — once it runs — every verdict, question and resume. */
+/** The goal in the drawer: what it's for, and, once it runs, every verdict, question and resume. */
 export function GoalSide({ run, editable, onError }: { run: TeamRunView; editable: boolean; onError: (e: string | null) => void }) {
   const g = run.goal ?? null
   const [history, setHistory] = useState(false)

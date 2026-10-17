@@ -29,7 +29,7 @@ export type Say = string | { line: string; sub?: string }
 
 /**
  * Junior's face in a chat: its eyes follow the pointer while it's on screen,
- * and it notices you — hover it and it lifts, a finished one smiles back, and
+ * and it notices you, hover it and it lifts, a finished one smiles back, and
  * a speech bubble says what it's at ("Done in 32s · 9 steps", "Waiting on your
  * answer ↓"). A face that's working or waiting on you only lifts: hovering
  * never hides its state. With `onClick` it's a button (the needs-you face
@@ -73,7 +73,7 @@ export function ChatFace({ mood, size, say, onClick }: { mood: Mood; size: numbe
 
 /**
  * "Junior …" with its face: who is asking, on the cards triage draws in a chat
- * (questions, approvals, plans). The face shows the state the card is in —
+ * (questions, approvals, plans). The face shows the state the card is in,
  * needs you while it waits, done once answered. The name is the persona's, so
  * a renamed Junior follows.
  */

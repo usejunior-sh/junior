@@ -102,7 +102,7 @@ kbd { font-family: var(--mono); font-size: 0.8462rem; color: var(--ash); border:
 .secLabel.day-later .tier { color: var(--stone); font-weight: 400; }
 .secLabel .qual.over { color: var(--yellow); text-transform: none; letter-spacing: 0; }
 
-/* atmospheric glow — one per section, anchored at its top */
+/* atmospheric glow: one per section, anchored at its top */
 .glow {
   position: absolute; top: -120px; left: 50%; transform: translateX(-50%);
   width: 900px; height: 360px; border-radius: var(--r-full); opacity: 0.55; pointer-events: none;
@@ -145,7 +145,7 @@ kbd { font-family: var(--mono); font-size: 0.8462rem; color: var(--ash); border:
 .wsPill .wsName { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .wsPill svg { color: var(--stone); flex: none; }
 /* Which build is running (TopBar.tsx BuildBadge). Loud enough to catch the eye
-   on every glance at the bar, quiet enough to live there all day — a released
+   on every glance at the bar, quiet enough to live there all day. A released
    build renders nothing at all, so seeing one of these is the whole signal. */
 .buildBadge {
   display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 9px;
@@ -156,7 +156,7 @@ kbd { font-family: var(--mono); font-size: 0.8462rem; color: var(--ash); border:
 .buildBadge:hover { opacity: 1; background: color-mix(in srgb, currentColor 12%, transparent); }
 .buildBadge.dev { color: var(--yellow); }
 .buildBadge.preview { color: var(--blue); }
-/* Built with uncommitted changes — these bytes exist nowhere but this machine. */
+/* Built with uncommitted changes: these bytes exist nowhere but this machine. */
 .buildBadge .buildDirty { width: 5px; height: 5px; border-radius: var(--r-full); background: currentColor; }
 
 .topIcon {
@@ -175,7 +175,7 @@ kbd { font-family: var(--mono); font-size: 0.8462rem; color: var(--ash); border:
    its controls are not. The left zone tracks rail + panel; the traffic lights
    (trafficLightPosition x 16, desktop/src/main.ts) sit in its 92px inset. */
 /* Set apart from the tabs below by a lifted surface and a lit bottom edge that
-   fades out at the sides (.docs/titlebar-variations.html, 6a) — no shadow. */
+   fades out at the sides (.docs/titlebar-variations.html, 6a), no shadow. */
 .desktopBar {
   position: relative; padding: 0; gap: 0; -webkit-app-region: drag; user-select: none;
   background: linear-gradient(to bottom, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.012)), #08080a;
@@ -205,7 +205,7 @@ kbd { font-family: var(--mono); font-size: 0.8462rem; color: var(--ash); border:
 .wsLabelled .wsName { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .wsLabelled svg { color: var(--ash); flex: none; transition: color 0.1s ease; }
 .wsLabelled:hover svg, .wsLabelled[data-state="open"] svg { color: var(--ink); }
-/* Panel hidden: nothing in the bar moves — the left zone keeps its width and
+/* Panel hidden: nothing in the bar moves. The left zone keeps its width and
    its divider, so the toggle, ← → and the workspace stay where the hand left them. */
 /* Fullscreen hides the traffic lights, so their inset goes too. */
 .desktopBar.fullscreen .dbSide { padding-left: 14px; }
@@ -311,7 +311,7 @@ kbd { font-family: var(--mono); font-size: 0.8462rem; color: var(--ash); border:
   scroll-behavior: smooth;
 }
 .tabband .strip::-webkit-scrollbar { display: none; }
-/* The fade is the affordance — without it a scrolled strip reads as clipped. */
+/* The fade is the affordance, without it a scrolled strip reads as clipped. */
 .tabband .strip[data-fade="right"] { mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); }
 .tabband .strip[data-fade="left"] { mask-image: linear-gradient(to left, #000 calc(100% - 28px), transparent); }
 .tabband .strip[data-fade="both"] {
@@ -352,7 +352,7 @@ kbd { font-family: var(--mono); font-size: 0.8462rem; color: var(--ash); border:
 
 /* ---------- page shell (inbox / item / jobs / projects / connectors) ---------- */
 .page { flex: 1; min-height: 0; overflow-y: auto; padding: 28px 40px 48px; position: relative; }
-/* width tiers: list pages (.full) fill the pane like Linear — the extra width
+/* width tiers: list pages (.full) fill the pane like Linear. The extra width
    goes to the title column. Everything else is a centred 1100px column; forms
    cap themselves narrower (.wform). */
 .page .inner { max-width: 1100px; margin: 0 auto; }
@@ -361,7 +361,7 @@ kbd { font-family: var(--mono); font-size: 0.8462rem; color: var(--ash); border:
 .pageHead > div:first-child { min-width: 0; }
 .display { margin: 0; font-family: var(--display); font-weight: 400; font-size: 2.7692rem; line-height: 1; letter-spacing: -0.36px; color: var(--ink); }
 .display .muted { color: var(--mute); }
-/* the count of what's blocking is the one alarming number in the headline —
+/* the count of what's blocking is the one alarming number in the headline,
    lift it to ink so it reads alongside the day, not with the total. */
 .display .blk { color: var(--ink); }
 .display.md { font-size: 2.4615rem; line-height: 1.05; letter-spacing: -0.32px; }

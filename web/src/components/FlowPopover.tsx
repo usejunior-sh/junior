@@ -1,6 +1,6 @@
 /**
  * The item page's stage + turn chip (core/work/flow.ts). Stage and turn are
- * derived — this is the override for what the rules can't see ("waiting on
+ * derived: this is the override for what the rules can't see ("waiting on
  * Niraj"). It holds until something newer happens to the item, and every
  * change lands in the item's timeline.
  */

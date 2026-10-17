@@ -1,11 +1,11 @@
 /**
- * The colour themes, as data. A theme is a small palette — four surfaces, four
- * text lanes, eight accents — and everything else the stylesheet needs
+ * The colour themes, as data. A theme is a small palette, four surfaces, four
+ * text lanes, eight accents, and everything else the stylesheet needs
  * (hairlines, washes, glows, tints, project hues, the terminal's ANSI colours)
  * is derived from it here. Adding a theme is adding one entry to THEMES.
  *
  * The two Triage themes are the exception: their tokens are hand-tuned in
- * styles.css (`:root` and `[data-theme="light"]`), so they carry a palette only
+ * styles/tokens.css (`:root` and `[data-theme="light"]`), so they carry a palette only
  * for the preview swatch and keep their own terminal colours. Every other theme
  * is compiled to a `:root[data-theme="<id>"]` block and injected once as a
  * <style> element (see appearance.ts), so switching is a single attribute write.
@@ -23,9 +23,9 @@ export type ThemePalette = {
   canvas: string
   /** Panels and inset cards. */
   card: string
-  /** Hover/selected chips, menus — one step away from card. */
+  /** Hover/selected chips, menus, one step away from card. */
   elev: string
-  /** Code blocks and the terminal — the deepest well. */
+  /** Code blocks and the terminal: the deepest well. */
   deep: string
   /** Headline text and the primary button fill. */
   ink: string
@@ -51,7 +51,7 @@ export type Theme = {
   name: string
   scheme: ThemeScheme
   palette: ThemePalette
-  /** Tokens live in styles.css rather than being compiled from the palette. */
+  /** Tokens live in styles/tokens.css rather than being compiled from the palette. */
   handTuned?: true
   /** Exact terminal colours, when the derived ones are not good enough. */
   terminal?: ITheme
@@ -129,7 +129,7 @@ export const THEMES: ReadonlyArray<Theme> = [
     },
   },
 
-  // --- dark -----------------------------------------------------------------
+  // dark
   {
     id: 'tokyo-night',
     name: 'Tokyo Night',
@@ -208,7 +208,7 @@ export const THEMES: ReadonlyArray<Theme> = [
     },
   },
 
-  // --- light ----------------------------------------------------------------
+  // light
   {
     id: 'catppuccin-latte',
     name: 'Catppuccin Latte',
@@ -256,10 +256,8 @@ export function themeFor(scheme: ThemeScheme, id: string | null | undefined): Th
   return t && t.scheme === scheme ? t : byId.get(DEFAULT_THEME[scheme])!
 }
 
-// ---------------------------------------------------------------------------
 // Compiling a palette to the stylesheet's token layer. The names and the
-// dark/light weights mirror the hand-tuned blocks in styles.css.
-// ---------------------------------------------------------------------------
+// dark/light weights mirror the hand-tuned blocks in styles/tokens.css.
 
 const mix = (color: string, pct: number, other = 'transparent') => `color-mix(in srgb, ${color} ${pct}%, ${other})`
 
@@ -328,7 +326,7 @@ function tokens({ scheme, palette: p }: Theme): Record<string, string> {
   }
 }
 
-/** Every compiled theme as one stylesheet — hand-tuned ones are skipped. */
+/** Every compiled theme as one stylesheet: hand-tuned ones are skipped. */
 export function themeStylesheet(): string {
   return THEMES.filter((t) => !t.handTuned)
     .map((t) => {

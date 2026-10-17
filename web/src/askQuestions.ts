@@ -2,7 +2,7 @@
  * The `AskUserQuestion` tool call, read out of a permission request.
  *
  * The tool arrives on the same channel as every other permission prompt, but
- * its input *is* the question — showing it as raw JSON with Allow/Deny buttons
+ * its input *is* the question, showing it as raw JSON with Allow/Deny buttons
  * asks the reader to answer a multiple-choice question by approving a blob. So
  * it gets parsed here and rendered as the choices it actually is.
  */
@@ -20,7 +20,7 @@ export const OTHER = 'Other'
 
 /**
  * Returns the questions when `input` really is a well-formed AskUserQuestion
- * call, and null otherwise — a malformed one falls back to the plain
+ * call, and null otherwise. A malformed one falls back to the plain
  * permission card rather than rendering a card with nothing to click.
  */
 export function parseQuestions(input: Record<string, unknown>): AskQuestion[] | null {

@@ -2,8 +2,8 @@
  * The job form, as a page (#/jobs/new, #/jobs/<id>/edit), in two
  * steps. Details: a name, the instructions (where to look and what counts),
  * the project folder every run works in, the integrations and tools the run
- * may use (job-spec.md, items 1–2), output, model, a schedule, and run
- * limits (item 3). Preview: a dry run of exactly that — the transcript streams in as
+ * may use, output, model, a schedule, and run
+ * limits. Preview: a dry run of exactly that. The transcript streams in as
  * it happens, and at the end the item(s) it would have filed. Nothing is
  * saved by the preview; Create is the only write.
  */
@@ -173,7 +173,7 @@ export function JobFormPage({ id, onNavigate }: { id: string | null; onNavigate:
             const { jobId, note } = JSON.parse(raw) as { jobId: string; note: string }
             if (jobId === id) f.instruction = `${f.instruction}\nNot: things like “${note}”.`
           } catch {
-            // stale handoff — ignore
+            // stale handoff, ignore
           }
         }
         setForm(f)
@@ -291,7 +291,7 @@ export function JobFormPage({ id, onNavigate }: { id: string | null; onNavigate:
         else if (body.status === 'ready' && body.result) setPreview({ phase: 'ready', id: pid, sig, result: body.result })
         else if (body.status === 'failed') setPreview({ phase: 'failed', id: pid, sig, message: body.error ?? 'the preview failed' })
       } catch {
-        // transient — try again next tick
+        // transient: try again next tick
       }
     }
     const t = setInterval(() => void tick(), 1500)

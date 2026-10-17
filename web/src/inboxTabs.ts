@@ -1,6 +1,6 @@
 /**
  * The inbox tabs (core/work/inbox-tabs.ts) over the shared inbox snapshot and
- * the live session list — read by both the sidebar and the inbox page, so the
+ * the live session list, read by both the sidebar and the inbox page, so the
  * counts beside a tab are always the rows under it.
  */
 import { useMemo } from 'react'
@@ -38,7 +38,7 @@ export function tabOfItem(tabs: Tabs, id: string): OpenTab | null {
   return null
 }
 
-/** "Permission: Bash", "Question" or "Plan to approve" — what a blocked session is waiting on. */
+/** "Permission: Bash", "Question" or "Plan to approve", what a blocked session is waiting on. */
 export function waitingText(s: Pick<SessionSummary, 'waitingOn'>): string {
   if (!s.waitingOn) return 'Waiting on you'
   if (s.waitingOn === 'AskUserQuestion') return 'Question'

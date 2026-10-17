@@ -10,7 +10,7 @@ import {
 } from '../../shared/protocol.js'
 import { uuid } from './uuid.js'
 
-/** An attachment plus the bits only the composer needs — a key and a preview URL. */
+/** An attachment plus the bits only the composer needs. A key and a preview URL. */
 export type PendingImage = ImageAttachment & { id: string; url: string }
 
 /**
@@ -20,7 +20,7 @@ export type PendingImage = ImageAttachment & { id: string; url: string }
  */
 export type PendingFile = { id: string; name: string; bytes: number; uploadId?: string }
 
-/** 1.2 MB, 340 KB — what a file chip says beside the name. */
+/** 1.2 MB, 340 KB, what a file chip says beside the name. */
 export function fileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`
@@ -44,7 +44,7 @@ const readAsBase64 = (file: File) =>
   new Promise<string>((resolve, reject) => {
     const reader = new FileReader()
     reader.onerror = () => reject(reader.error)
-    // `data:<type>;base64,<payload>` — the wire format wants the payload alone.
+    // `data:<type>;base64,<payload>`, the wire format wants the payload alone.
     reader.onload = () => resolve(String(reader.result).split(',')[1] ?? '')
     reader.readAsDataURL(file)
   })
@@ -75,7 +75,7 @@ function setTray(key: string, next: Tray) {
 /**
  * The tray behind a composer: paste, drop, or pick files and hold them until
  * the message is sent. A PNG/JPEG/GIF/WebP under the image cap stays an inline
- * image (the model sees it); anything else — a pdf, a csv, a big or odd image —
+ * image (the model sees it); anything else, a pdf, a csv, a big or odd image,
  * is uploaded at once and travels as an id, which Junior reads from disk.
  * Refusals come with a message rather than a silent drop: a file that vanishes
  * is worse than one that explains itself.
@@ -188,7 +188,7 @@ export function useAttachments(key?: string) {
     [images],
   )
 
-  /** Upload ids of the files that landed — what `files` on the wire names. */
+  /** Upload ids of the files that landed, what `files` on the wire names. */
   const fileIds = useCallback(
     (): string[] | undefined => {
       const ids = files.flatMap((f) => (f.uploadId ? [f.uploadId] : []))
@@ -218,7 +218,7 @@ export function useAttachments(key?: string) {
 }
 
 /**
- * Put an image in a composer's tray from code — the browser pane's picker
+ * Put an image in a composer's tray from code. The browser pane's picker
  * hands over a crop of the element you picked. Same caps as a paste.
  */
 export function attachImage(key: string, img: ImageAttachment) {

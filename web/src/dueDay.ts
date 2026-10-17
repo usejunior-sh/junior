@@ -1,6 +1,6 @@
 import type { ScoredItem } from '../../shared/protocol.js'
 
-/** "YYYY-MM-DD" in local time — the day string the due route and the pickers speak. */
+/** "YYYY-MM-DD" in local time: the day string the due route and the pickers speak. */
 export function toDayInput(ms: number): string {
   const d = new Date(ms)
   const p = (n: number) => String(n).padStart(2, '0')

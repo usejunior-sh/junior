@@ -1,5 +1,5 @@
 /**
- * The settings page (`#/settings/<tab>`) — it takes the place of the panel and
+ * The settings page (`#/settings/<tab>`): it takes the place of the panel and
  * the tabbed main area: a tab list down the left, one pane on the right. Every
  * tab is a destination in its own right: `openSettings('providers')` (or the
  * hash) lands on it with nothing to click through, which is what a "Fix" link
@@ -56,9 +56,9 @@ const ICONS: Record<SettingsTab, ComponentType<LucideProps>> = {
 
 type Props = {
   workspace: Workspace | null
-  /** The tab in front — the route's. */
+  /** The tab in front: the route's. */
   tab: SettingsTab
-  /** Open the system sheet (status · activity · logs) — leaves settings first. */
+  /** Open the system sheet (status · activity · logs), leaves settings first. */
   onOpenSystem: (tab: SystemTab) => void
 }
 
@@ -75,7 +75,7 @@ export function SettingsPage({ workspace, tab, onOpenSystem }: Props) {
       document.querySelector('.settingsTab[data-state="active"]')?.scrollIntoView({ inline: 'center', block: 'nearest' }),
     )
   }, [tab])
-  // Esc leaves settings — but not from a field (it would throw away an edit)
+  // Esc leaves settings, but not from a field (it would throw away an edit)
   // or while a menu, select or dialog inside it is the thing Esc should close.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

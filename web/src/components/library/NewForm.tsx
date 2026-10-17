@@ -6,9 +6,7 @@ import { createLibraryEntry, askClaude, createPrompt, targetCwd } from '../../li
 import { Select, SelectItem } from '../../ui/Select.js'
 import { Field, SOURCE_HINT } from './fields.js'
 
-// ---------------------------------------------------------------------------
 // New: a template now, or a session that writes it with you
-// ---------------------------------------------------------------------------
 
 const TEAM_TARGET = 'team'
 

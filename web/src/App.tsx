@@ -106,7 +106,7 @@ export function App() {
     move: moveTab,
   } = useOpenTabs(workspaceId)
 
-  /** Every document the band is holding — pinned or peeked. */
+  /** Every document the band is holding: pinned or peeked. */
   const docKeys = useMemo(
     () => [...tabs, ...(preview ? [preview] : [])].filter((k) => isDocKey(k)),
     [tabs, preview],
@@ -117,7 +117,7 @@ export function App() {
   // for the sections whose list *is* the panel (see onRailGo); it closes on
   // any navigation, which is how picking a row in it lands you on the row.
   const mobile = useIsMobile()
-  // Queued actions waiting on you — the Actions rail badge.
+  // Queued actions waiting on you: the Actions rail badge.
   const pendingActions = usePendingActions()
   const goals = useTeamGoals(sessions)
   // Junior's name and face, everywhere it shows: the rail and the phone's title.
@@ -126,7 +126,7 @@ export function App() {
   const [sheet, setSheet] = useState<RailSection | null>(null)
   useEffect(() => setSheet(null), [route, mobile])
 
-  // First run: the workspace modal doubles as onboarding — introduce the
+  // First run: the workspace modal doubles as onboarding, introduce the
   // concept, name the default workspace, pick the Claude auth method.
   useEffect(() => {
     if (!onboarded && activeWorkspace) {
@@ -136,7 +136,7 @@ export function App() {
   }, [onboarded, activeWorkspace?.id])
 
   const current = sessions.find((s) => s.id === currentId) ?? null
-  // The browser pane beside this session (.docs/browser.md) — Triage.app only, never on a phone.
+  // The browser pane beside this session (.docs/browser.md), Triage.app only, never on a phone.
   const browserOpen = useBrowserOpen(currentId) && hasBrowser && !mobile
   const currentCheckout = checkoutOf(checkouts, current?.checkoutId)
   const chatHeaderRef = useRef<HTMLDivElement>(null)
@@ -149,7 +149,7 @@ export function App() {
   const currentDraft = drafts.find((d) => d.id === currentDraftId) ?? null
   // Drafts are per workspace; bind before anything reads them.
   useEffect(() => draftStore.bind(workspaceId), [workspaceId])
-  // Name the workspace in the tab title — with one tab per workspace, the
+  // Name the workspace in the tab title, with one tab per workspace, the
   // favicon alone cannot tell them apart.
   useEffect(() => {
     document.title = activeWorkspace ? `triage • ${activeWorkspace.name}` : 'triage'
@@ -218,7 +218,7 @@ export function App() {
 
   // Back to a section lands on what you were last doing there; clicking the
   // section you are already in pops to its root (Inbox, Artifacts, Jobs).
-  // Sessions and Terminals have no index page — their list *is* the panel — so
+  // Sessions and Terminals have no index page, their list *is* the panel, so
   // they keep their own "take me to the live one" fallback chain instead.
   const goTo = useCallback(
     (section: RailSection) => {
@@ -245,13 +245,13 @@ export function App() {
     [navigate, route, lastRoutes, currentId, currentTerminalId, terminals, tabs, sessions, drafts, newSession],
   )
 
-  // The rail only navigates — hiding the panel is its own button beside the
+  // The rail only navigates: hiding the panel is its own button beside the
   // search field (and ⌘B). Clicking any icon while collapsed reopens it,
   // still landing on that section.
   const onRailGo = useCallback(
     (section: RailSection) => {
       if (mobile) {
-        // The inbox's tabs, Sessions, Terminals and Changes live in the panel —
+        // The inbox's tabs, Sessions, Terminals and Changes live in the panel, 
         // so on a phone their tab opens it as a sheet; the
         // rest go to their page, and a second tap pops to its root.
         if (MOBILE_SHEETS.includes(section)) setSheet((s) => (s === section ? null : section))
@@ -270,7 +270,7 @@ export function App() {
   const collapsePanel = useCallback(() => panelSize.setCollapsed(true), [panelSize])
 
   // Closing the tab you are on lands you on its neighbour, else the inbox.
-  // A terminal tab closing does not kill the shell — that is the panel's menu.
+  // A terminal tab closing does not kill the shell. That is the panel's menu.
   const activeTabKey = tabKeyOf(route) ?? 'home'
   const closeOpenTab = useCallback(
     (key: string) => {
@@ -280,15 +280,15 @@ export function App() {
         const next = i === -1 ? undefined : tabs[i + 1] ?? tabs[i - 1]
         navigate(next ? routeOfKey(next) : '/inbox')
       }
-      // Closing a draft tab discards the draft — there is nowhere else it lives.
+      // Closing a draft tab discards the draft. There is nowhere else it lives.
       if (key.startsWith('draft:')) draftStore.remove(key.slice(6))
       closeTab(key)
     },
     [tabs, activeTabKey, navigate, closeTab],
   )
 
-  // Empty the band. Drafts go with their tabs — that is the only place they
-  // live — and with nothing left open, the inbox is where you land.
+  // Empty the band. Drafts go with their tabs: that is the only place they
+  // live, and with nothing left open, the inbox is where you land.
   const closeAllOpenTabs = useCallback(() => {
     for (const key of [...tabs, ...(preview ? [preview] : [])]) {
       if (key.startsWith('draft:')) draftStore.remove(key.slice(6))
@@ -301,7 +301,7 @@ export function App() {
 
   const { create, addJob, goalFrom, refineJob, dispatch, dispatchById, continueInMain } = useDispatchers({ navigate, pendingDraft, setCreateError, inbox, checkouts })
 
-  // --- derived shell state -------------------------------------------------
+  // derived shell state
 
   const railActive: RailSection | null = sectionOf(route)
   // Which list the panel shows: the route's section, or on a phone the open sheet (none when shut).
@@ -364,7 +364,7 @@ export function App() {
   }, [preview, docTab])
 
   // The phone's top bar: what is in front, and where "back" goes. Back is
-  // *up* — to the page's list — rather than browser history, so it means the
+  // *up*, to the page's list, rather than browser history, so it means the
   // same thing in a home-screen app, which has no browser back at all.
   const mobileTitle = sheet
     ? SHEET_LABEL[sheet]

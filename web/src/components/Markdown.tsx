@@ -1,6 +1,6 @@
 /**
  * Markdown rendering for assistant output: marked (GFM) → DOMPurify → HTML.
- * Sanitized even though the text comes from our own agent — tool results and
+ * Sanitized even though the text comes from our own agent, tool results and
  * quoted web content flow through assistant messages, so treat it as untrusted.
  *
  * A ```mermaid fence renders as a diagram. The parse emits a placeholder that
@@ -47,7 +47,7 @@ const escapeHtml = (s: string) =>
 /**
  * Is the fence terminated? An assistant mid-sentence produces a `code` token
  * for the half-written block too, and trying to draw that is a guaranteed
- * parse error on every keystroke — so diagrams wait for the closing fence.
+ * parse error on every keystroke, so diagrams wait for the closing fence.
  */
 const closedFence = (raw: string) => /(?:^|\n)[ \t]{0,3}(?:`{3,}|~{3,})[ \t]*$/.test(raw.trimEnd())
 
@@ -139,7 +139,7 @@ function linkifyRefs(root: HTMLElement, index: RefIndex): void {
       frag.appendChild(refChip(hit.kind, hit.label, hit.hash))
       last = m.index + m[0].length
     }
-    if (last === 0) continue // every match was unknown — leave the node be
+    if (last === 0) continue // every match was unknown: leave the node be
     if (last < text.length) frag.appendChild(document.createTextNode(text.slice(last)))
     node.parentNode?.replaceChild(frag, node)
   }
@@ -165,7 +165,7 @@ export const Markdown = memo(function Markdown({
   const { html, diagrams } = useMemo(() => renderMarkdown(text), [text])
 
   // Setting innerHTML wipes the SVGs, so they go back in after every change to
-  // the markup — before paint, which is what keeps a streaming message steady.
+  // the markup: before paint, which is what keeps a streaming message steady.
   // `rendered` ticks when a diagram finishes, which is the other way in here.
   useLayoutEffect(() => {
     const root = host.current
@@ -176,7 +176,7 @@ export const Markdown = memo(function Markdown({
       const code = diagrams[index]
       if (code === undefined) continue
       const svg = diagram(theme, code)
-      if (svg === undefined) continue // still rendering — the code block stands in
+      if (svg === undefined) continue // still rendering: the code block stands in
       if (svg === null) {
         figure.classList.add('failed')
         continue
@@ -243,7 +243,7 @@ export const Markdown = memo(function Markdown({
   )
 
   // Copies the rendered markdown as rich text (HTML + a plain-text fallback)
-  // so pasting into a rich editor — email, Slack, docs — keeps the formatting,
+  // so pasting into a rich editor, email, Slack, docs, keeps the formatting,
   // not just the raw source the code block already offers.
   const copyPreview = useCallback(async () => {
     if (preview === null) return

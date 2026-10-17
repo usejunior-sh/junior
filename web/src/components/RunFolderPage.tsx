@@ -15,7 +15,7 @@ const GROUPS: { id: TeamRunFolderFile['group']; label: string }[] = [
  * A team run's folder, read in the app (`#/run/<run>/<file>`): the plan, the
  * ledger, how to check, the reviews and every handoff are markdown files that
  * triage writes as the run goes (.docs/teams.md → "Handoffs and the run
- * folder"). Read-only — the run is changed from its session, never here.
+ * folder"). Read-only: the run is changed from its session, never here.
  */
 export function RunFolderPage({ runId, path, rev, onNavigate }: { runId: string; path: string; rev: number; onNavigate: (hash: string) => void }) {
   const [folder, setFolder] = useState<Extract<TeamRunFolderResponse, { ok: true }> | null>(null)

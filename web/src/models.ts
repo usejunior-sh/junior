@@ -4,7 +4,7 @@
  * hand (both per workspace, in /api/settings).
  *
  * One store per page load, shared by every picker: the list is a property of
- * the machine, not of a composer. A failed probe is never remembered — it
+ * the machine, not of a composer. A failed probe is never remembered: it
  * retries on a backoff and on demand, and meanwhile the last good list (kept
  * in localStorage) stands in, so a flaky probe cannot empty the picker.
  */
@@ -84,7 +84,7 @@ export function reloadModels(refresh = false): Promise<void> {
       try {
         localStorage.setItem(LAST_GOOD_KEY, JSON.stringify(catalog))
       } catch {
-        /* storage full or blocked — the list still works this load */
+        /* storage full or blocked: the list still works this load */
       }
       set({ catalog, ...(prefs ?? {}), status: 'ready', error: undefined })
     } else {
@@ -101,7 +101,7 @@ const otherInFlight = new Map<ProviderId, Promise<void>>()
 
 /**
  * Load another agent's list (`/api/models?provider=`). Not retried on a timer:
- * an agent that isn't installed would fail forever — the picker offers Retry.
+ * an agent that isn't installed would fail forever, the picker offers Retry.
  */
 export function reloadProviderModels(provider: ProviderId, refresh = false): Promise<void> {
   if (provider === 'claude') return reloadModels(refresh)
@@ -195,7 +195,7 @@ const merged = (() => {
   }
 })()
 
-/** Every model there is — hidden ones included — for looking a session's model up by id. */
+/** Every model there is, hidden ones included, for looking a session's model up by id. */
 export function useModels(): ModelOption[] {
   return merged(useModelStore())
 }

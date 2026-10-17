@@ -1,5 +1,5 @@
 /**
- * Usage — what Claude Code has cost on this machine.
+ * Usage: what Claude Code has cost on this machine.
  *
  * The numbers come from Claude Code's own transcripts (see `core/usage/`), so
  * this covers every session on the machine, not only the ones started here.
@@ -52,7 +52,7 @@ export function UsageTab({ refreshNonce }: { refreshNonce: number }) {
     }
   }, [days, refreshNonce])
 
-  // Colour is owned by the model, in one fixed order — a narrower window that
+  // Colour is owned by the model, in one fixed order, a narrower window that
   // drops a model must not repaint the ones that remain. Past the sixth hue
   // the tail stacks as one "Other" band rather than inventing colours.
   const colors = useMemo(() => {
@@ -252,7 +252,7 @@ function Legend({
 
 const H = 176
 const PAD = { top: 10, right: 6, bottom: 20, left: 46 }
-/** `.chartHost`'s own left padding — the tooltip is positioned against it. */
+/** `.chartHost`'s own left padding: the tooltip is positioned against it. */
 const HOST_PAD = 12
 const BAR_MAX = 24
 /** A 2px gap in the surface colour separates stacked segments. */
@@ -261,7 +261,7 @@ const GAP = 2
 /**
  * The smallest round number above the tallest column. A coarse 1/2/5 ladder
  * would put a $260 peak under a $500 ceiling and waste half the plot, so the
- * ladder is fine enough to sit just above the data — and every step halves
+ * ladder is fine enough to sit just above the data, and every step halves
  * cleanly, because the middle gridline is the midpoint.
  */
 const LADDER = [1, 1.2, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10]
@@ -289,7 +289,7 @@ function DailyChart({
   const [width, setWidth] = useState(640)
   const [hover, setHover] = useState<number | null>(null)
 
-  // Measure before the first paint — an observer alone leaves one frame at
+  // Measure before the first paint: an observer alone leaves one frame at
   // the fallback width, which is a visibly short chart on open.
   useLayoutEffect(() => {
     const el = host.current
@@ -302,7 +302,7 @@ function DailyChart({
   }, [])
 
   const valueOf = (day: UsageSummary['daily'][number]) => (metric === 'cost' ? day.cost : day.tokens)
-  /** One band's value — the Other band is the sum of everything past the sixth. */
+  /** One band's value: the Other band is the sum of everything past the sixth. */
   const valueFor = (day: UsageSummary['daily'][number], model: string) =>
     model === OTHER_KEY
       ? tail.reduce((sum, id) => sum + (day.byModel[id]?.[metric] ?? 0), 0)
@@ -317,7 +317,7 @@ function DailyChart({
   const band = plotW / Math.max(rows.length, 1)
   const barW = Math.min(BAR_MAX, Math.max(3, band - 6))
   const y = (v: number) => PAD.top + plotH - (v / top) * plotH
-  // Label every nth day, always including the last — a 90-day window can't
+  // Label every nth day, always including the last, a 90-day window can't
   // carry 90 legible dates. A regular tick too near the last one is dropped
   // rather than allowed to collide with it.
   const every = Math.max(1, Math.ceil(rows.length / 8))
@@ -384,7 +384,7 @@ function DailyChart({
                   {dayLabel(day.date)}
                 </text>
               ) : null}
-              {/* A full-height hit target — the bars themselves are too thin. */}
+              {/* A full-height hit target: the bars themselves are too thin. */}
               <rect
                 x={PAD.left + i * band}
                 y={PAD.top}

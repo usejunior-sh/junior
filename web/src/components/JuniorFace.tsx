@@ -1,7 +1,7 @@
 /**
  * Junior's face (.docs/junior-goals-teams/junior-face.js, ported): a soft slab
  * with a darker underside, two pill eyes and two brows. Expressions are
- * states — hello, listen, think, working, needs, done, stuck, asleep — and
+ * states, hello, listen, think, working, needs, done, stuck, asleep, and
  * ease into each other.
  *
  * Motion: `follow` tracks the pointer (the Junior page only), `wander`
@@ -39,9 +39,7 @@ const MOODS: Record<Mood, Geo> = {
 
 const clone = (g: Geo): Geo => ({ happy: g.happy, eyes: [{ ...g.eyes[0] }, { ...g.eyes[1] }], brows: [{ ...g.brows[0] }, { ...g.brows[1] }] })
 
-// ---------------------------------------------------------------------------
 // Colour: the persona's body colour; underside and brows derived from it.
-// ---------------------------------------------------------------------------
 
 function hexToHsl(h: string): [number, number, number] {
   const n = parseInt(h.slice(1), 16)
@@ -84,9 +82,7 @@ export function facePalette(body: string) {
   }
 }
 
-// ---------------------------------------------------------------------------
 // Motion: one loop for every face on the page.
-// ---------------------------------------------------------------------------
 
 export type FaceMotion = 'follow' | 'wander' | 'still'
 

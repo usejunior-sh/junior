@@ -1,7 +1,7 @@
 /**
  * Every project's uncommitted files, per checkout, as a tiny external store, shared by the
  * Changes panel, the file page and the rail badge. It is a view of the disk,
- * which anything can change — an agent, a terminal, your editor — so it
+ * which anything can change, an agent, a terminal, your editor, so it
  * refreshes when a turn ends, when the window regains focus, and on a slow
  * poll while the panel is open. There is no push for "a file changed".
  */

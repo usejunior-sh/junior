@@ -2,7 +2,7 @@
  * The newest brief job per work item, as a tiny external store: the inbox
  * rows show a status pill from it, the item page opens on it, and the Create
  * brief dialog knows what is already queued. Loaded once on demand, then kept
- * current by the server's `brief_status` frames — one per transition.
+ * current by the server's `brief_status` frames, one per transition.
  */
 import { useSyncExternalStore } from 'react'
 import type { BriefJob, BriefJobsResponse } from '../../shared/protocol.js'

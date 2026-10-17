@@ -1,7 +1,7 @@
 /**
  * The agent a session runs on, as a mark drawn in lucide's grammar (24px box,
  * 2px round strokes, currentColor) so it sits beside the rest of the icon set.
- * Not the vendors' logos — a starburst for Claude, a prompt in a hexagon for Codex.
+ * Not the vendors' logos: a starburst for Claude, a prompt in a hexagon for Codex.
  */
 import type { ProviderId } from '../../../shared/protocol.js'
 

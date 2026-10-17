@@ -39,7 +39,7 @@
 .tab .t.draft { font-style: italic; color: var(--mute); }
 .tab.active .t.draft { color: var(--body); }
 /* The peek slot: open, but not committed to. Borrows the draft tab's
-   provisional voice because it means the same thing — the next document you
+   provisional voice because it means the same thing. The next document you
    open takes this slot, so nothing accumulates from browsing. */
 .tab.preview .t { font-style: italic; color: var(--mute); }
 .tab.preview.active .t { color: var(--body); }
@@ -62,7 +62,7 @@
 .chip .pdot { width: 6px; height: 6px; border-radius: var(--r-full); flex: none; }
 
 
-/* ---------- model popover (J) ---------- */
+/* ---------- model popover ---------- */
 .mpop {
   z-index: 60; width: 380px; max-width: calc(100vw - 24px); background: var(--elev); border: 1px solid var(--hair-strong); border-radius: var(--r-lg);
   box-shadow: 0 0 0 1px var(--ring); color: var(--body); font-size: 1rem; overflow: hidden; outline: none;
@@ -121,7 +121,7 @@
 .projRowItem .check { margin-top: 2px; }
 .projRowItem.on { background: var(--wash-2); }
 /* "No project" has no colour to show, so it indents to the same text column
-   as the rows below it and reads muted — it is an absence, not a project. */
+   as the rows below it and reads muted. It is an absence, not a project. */
 .projRowItem.none { align-items: center; padding-left: 26px; }
 .projRowItem.none .name { color: var(--mute); }
 

@@ -60,12 +60,12 @@ type Props = {
   onProviderChange?: (provider: ProviderId) => void
   onFastModeChange: (fastMode: boolean) => void
   onPermissionModeChange: (mode: PermissionMode) => void
-  /** What Junior does before it starts (Junior decides / Plan first / Goal) — new sessions only; with it, Shift+Tab cycles this instead of the permission mode. */
+  /** What Junior does before it starts (Junior decides / Plan first / Goal), new sessions only; with it, Shift+Tab cycles this instead of the permission mode. */
   mode?: SessionMode
   onModeChange?: (mode: SessionMode) => void
-  /** A read-only chip where the mode picker would be — a running session's "Planning". */
+  /** A read-only chip where the mode picker would be, a running session's "Planning". */
   status?: ReactNode
-  /** A turn is in flight — offer the interrupt button. */
+  /** A turn is in flight: offer the interrupt button. */
   running?: boolean
   onInterrupt?: () => void
   /** Mentions the box opens with (a dispatched draft): their tokens are already in `text`. */
@@ -82,17 +82,17 @@ type Props = {
  * The prompt box, shared by the draft tab and the live session so the two are
  * the same object in two places: a card headed by where it runs, a tray of
  * attached images and `@` mentions, the message, and the session's knobs as
- * pills underneath with the one bright control on the page — send.
+ * pills underneath with the one bright control on the page, send.
  *
  * Typing `@` opens the mention picker over the box: files under the folder,
- * artifacts, work items, sessions — one query across all of them, narrowed by
+ * artifacts, work items, sessions. One query across all of them, narrowed by
  * the picker's tabs. The picker never takes focus; the box's key handler moves
  * the selection and the tabs while the keystrokes keep narrowing the query.
  *
  * Typing `/` as the first character opens the command picker the same way,
  * over the commands and skills this folder's Claude Code actually has. Picking
- * one only writes text — the CLI expands `/name args` itself when the message
- * lands — so unlike a mention there is nothing to attach and nothing to
+ * one only writes text, the CLI expands `/name args` itself when the message
+ * lands, so unlike a mention there is nothing to attach and nothing to
  * resolve.
  */
 export function PromptBox({
@@ -136,7 +136,7 @@ export function PromptBox({
   const [sendHover, setSendHover] = useState(false)
   const mentions = useMentions(text, initialMentions)
 
-  // --- the `@` picker ------------------------------------------------------
+  // the `@` picker
   const [caret, setCaret] = useState(0)
   // Escape closes the picker for the token being typed; a new `@` reopens it.
   const [dismissedAt, setDismissedAt] = useState<number | null>(null)
@@ -151,9 +151,9 @@ export function PromptBox({
     if (active === null) setDismissedAt(null)
   }, [active])
 
-  // --- the `/` picker ------------------------------------------------------
+  // the `/` picker
   // A command is only ever the whole start of a message, so a `/` name and an
-  // `@` token can never both be under the caret — the two pickers are mutually
+  // `@` token can never both be under the caret. The two pickers are mutually
   // exclusive by construction rather than by a rule kept in step here.
   const cmdActive = useMemo(() => activeCommand(text, caret), [text, caret])
   // The folder's list is fetched the first time a `/` is typed against it
@@ -203,7 +203,7 @@ export function PromptBox({
     [active, text, mentions, rewrite],
   )
 
-  /** Picking a command only writes text — there is nothing to attach. */
+  /** Picking a command only writes text: there is nothing to attach. */
   const pickCommand = useCallback(
     (c: CommandHit) => {
       if (!cmdActive) return
@@ -233,7 +233,7 @@ export function PromptBox({
 
   /**
    * The chip and the token are one thing, so dropping the chip is a text edit
-   * and nothing else — every copy of the token goes, and the tray follows.
+   * and nothing else. Every copy of the token goes, and the tray follows.
    */
   const removeMention = useCallback(
     (m: Mention) => {
@@ -247,7 +247,7 @@ export function PromptBox({
     [text, onTextChange],
   )
 
-  // --- the box -------------------------------------------------------------
+  // the box
   const autosize = useCallback(() => {
     const el = box.current
     if (!el) return
@@ -261,7 +261,7 @@ export function PromptBox({
     const el = box.current
     if (!el) return
     el.focus()
-    // Land the caret at the end — a dispatched draft arrives prefilled.
+    // Land the caret at the end: a dispatched draft arrives prefilled.
     el.setSelectionRange(el.value.length, el.value.length)
     setCaret(el.value.length)
   }, [focusKey])
@@ -387,7 +387,7 @@ export function PromptBox({
                       pick(hits[Math.min(sel, hits.length - 1)])
                       return
                     }
-                    // Tab walks the kind tabs rather than attaching — Enter already
+                    // Tab walks the kind tabs rather than attaching, Enter already
                     // attaches, and the tabs are otherwise mouse-only.
                     if (e.key === 'Tab') {
                       e.preventDefault()
@@ -405,7 +405,7 @@ export function PromptBox({
                     submit()
                   } else if (e.key === 'Tab' && e.shiftKey) {
                     // Claude Code's own gesture, and the composer is where the
-                    // hands already are — so it lives here rather than in the
+                    // hands already are, so it lives here rather than in the
                     // global map, which ignores keys typed into a text field.
                     e.preventDefault()
                     if (modeOn) onModeChange!(nextSessionMode(mode))

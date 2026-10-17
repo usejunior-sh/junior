@@ -6,7 +6,7 @@ import { loadTeamPicker, teamsCall, usd } from '../teams.js'
 
 type Props = {
   item: ScoredItem
-  /** the lead's session opened — go to it */
+  /** the lead's session opened: go to it */
   onStarted: (sessionId: string) => void
   onError: (message: string) => void
 }
@@ -14,7 +14,7 @@ type Props = {
 /**
  * Dispatch to a team (Teams v2): the suggested team first, Solo next, the rest,
  * then "Create a team". Picking one opens a lead session that proposes a team
- * card — nothing runs until you approve it. Costs shown are only ever what this
+ * card. Nothing runs until you approve it. Costs shown are only ever what this
  * team's finished runs really spent.
  */
 export function TeamPicker({ item, onStarted, onError }: Props) {

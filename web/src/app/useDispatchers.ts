@@ -56,7 +56,7 @@ export function useDispatchers({ navigate, pendingDraft, setCreateError, inbox, 
   )
 
   // Thumbs-down on a matched item: the correction lands as appended text on
-  // the job's instruction — the rule stays human-readable.
+  // the job's instruction: the rule stays human-readable.
   const refineJob = useCallback(
     (item: ScoredItem) => {
       if (!item.jobId) return
@@ -106,7 +106,7 @@ export function useDispatchers({ navigate, pendingDraft, setCreateError, inbox, 
     [navigate],
   )
 
-  // Start on a Junior-owned plan row: the same dispatch as the inbox's, by id —
+  // Start on a Junior-owned plan row: the same dispatch as the inbox's, by id, 
   // the row may name an item the open inbox doesn't hold (a to-do made a moment ago).
   const dispatchById = useCallback(
     (id: string) => {

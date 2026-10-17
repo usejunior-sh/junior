@@ -71,12 +71,12 @@ function label(t: ToolItem): string {
 /**
  * A run of tool calls as one pill, sized to its text so it reads as an aside
  * between sentences. It says what the run set out to do (its first call), how
- * many steps it took and how long. The label holds still while calls stream in
- * — only the step count moves — so the pill doesn't change width under the
+ * many steps it took and how long. The label holds still while calls stream in;
+ * only the step count moves, so the pill doesn't change width under the
  * reader. A failed call opens it, since that one needs reading.
  *
  * While a call is out the pill keeps a clock on it, and names it when it isn't
- * the first — a five-minute test run should look like one, not like a hang. A
+ * the first. A five-minute test run should look like one, not like a hang. A
  * shell left running in the background keeps the pill live until it settles.
  */
 export const ToolGroup = memo(function ToolGroup({ sessionId, item }: { sessionId: string; item: Group }) {

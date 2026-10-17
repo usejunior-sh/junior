@@ -13,9 +13,7 @@ import { DEFAULT_MODE } from '../../permissionModes.js'
 import type { SystemTab } from '../SystemModal.js'
 import { Loading, Row, Section } from './shared.js'
 
-// ---------------------------------------------------------------------------
-// Sessions — defaults for new sessions (per browser).
-// ---------------------------------------------------------------------------
+// Sessions: defaults for new sessions (per browser).
 
 export function SessionsTab() {
   const [d, setD] = useState<SessionDefaults>(() => readSessionDefaults())
@@ -83,9 +81,7 @@ export function SessionsTab() {
   )
 }
 
-// ---------------------------------------------------------------------------
-// Shortcuts — read-only for now.
-// ---------------------------------------------------------------------------
+// Shortcuts: read-only for now.
 
 export function ShortcutsTab() {
   return (
@@ -106,9 +102,7 @@ export function ShortcutsTab() {
   )
 }
 
-// ---------------------------------------------------------------------------
-// About — the daemon.
-// ---------------------------------------------------------------------------
+// About: the daemon.
 
 export function AboutTab({ onOpenSystem }: { onOpenSystem: (t: SystemTab) => void }) {
   const [status, setStatus] = useState<SystemStatus | null>(null)

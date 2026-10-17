@@ -7,18 +7,18 @@ import { choosesProject, ProjectPicker } from './ProjectPicker.js'
 type Props = {
   projects: readonly Project[]
   cwd: string
-  /** the session's project — its folder may be a worktree, which no project's path matches */
+  /** the session's project: its folder may be a worktree, which no project's path matches */
   projectId?: string
   branch?: string | null
-  /** Omitted once the session exists — a running session's folder is fixed. */
+  /** Omitted once the session exists: a running session's folder is fixed. */
   onPick?: (cwd: string) => void
   /** a checkout picker, shown instead of the plain branch (draft composer, git projects) */
   checkout?: ReactNode
-  /** the folder to show when it isn't `cwd` — a picked worktree, or a note that one will be made */
+  /** the folder to show when it isn't `cwd`. A picked worktree, or a note that one will be made */
   where?: string
 }
 
-/** `/Users/you/Code/x` → `~/Code/x` — display only. */
+/** `/Users/you/Code/x` → `~/Code/x`: display only. */
 const homely = (p: string) => p.replace(/^\/(?:Users|home)\/[^/]+/, '~')
 
 /** Where the prompt runs: project, branch, folder. The header of the prompt box. */

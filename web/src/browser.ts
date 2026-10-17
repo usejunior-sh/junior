@@ -1,7 +1,7 @@
 /**
  * The browser pane, client side (.docs/browser.md). The page itself is a
  * native view Triage.app lays over the pane's rect; this module is its remote
- * control — the preload's `triageDesktop.browser` — plus which sessions have
+ * control, the preload's `triageDesktop.browser`, plus which sessions have
  * the pane open. Outside Triage.app (a browser tab, a phone) there is no
  * bridge, and the pane says where to find it.
  */

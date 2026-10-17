@@ -11,7 +11,7 @@ export const defaultProjectOf = (projects: readonly Project[]): Project | undefi
   projects.find((p) => p.isDefault) ?? projects[0]
 
 /**
- * Progressive disclosure (decision 549a251e): with one project there is
+ * Progressive disclosure: with one project there is
  * nothing to choose, so pickers stay hidden and the default is implied.
  */
 export const choosesProject = (projects: readonly Project[]) => projects.length > 1
@@ -19,7 +19,7 @@ export const choosesProject = (projects: readonly Project[]) => projects.length 
 /**
  * Picking a project, in the two senses the app means it.
  *
- * `ProjectPicker` chooses the *folder a session runs in* — selection is a
+ * `ProjectPicker` chooses the *folder a session runs in*, selection is a
  * path, and a path that isn't a saved project is still a legal answer.
  * `ProjectIdPicker` tags a work item with a *project*, so selection is an id
  * and "no project" is a legal answer.
@@ -32,7 +32,7 @@ export const choosesProject = (projects: readonly Project[]) => projects.length 
 type MenuBodyProps = {
   projects: readonly Project[]
   caption: string
-  /** rendered above the saved projects — the "no project" / unsaved-cwd row */
+  /** rendered above the saved projects: the "no project" / unsaved-cwd row */
   leading?: ReactNode
   isOn: (p: Project) => boolean
   onPick: (p: Project) => void
@@ -139,7 +139,7 @@ type IdProps = {
   caption?: string
   /** offer "No project" (default); off where a project is required, e.g. a job */
   allowNone?: boolean
-  /** the trigger, given what to show — so each caller keeps its own chrome */
+  /** the trigger, given what to show, so each caller keeps its own chrome */
   children: (current: Project | undefined) => ReactNode
 }
 

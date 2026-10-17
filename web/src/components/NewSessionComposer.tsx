@@ -143,7 +143,7 @@ type Props = {
   draft: Draft
   onChange: (patch: { text?: string; cwd?: string; label?: string; checkoutId?: string; newBranch?: string }) => void
   onCreate: (s: NewSession) => void
-  /** the last send failed (e.g. the worktree couldn't be made) — a new object per failure */
+  /** the last send failed (e.g. the worktree couldn't be made). A new object per failure */
   error?: { message: string } | null
   /** a send that makes a worktree: the step the server is on */
   step?: CreateStep | null
@@ -155,7 +155,7 @@ const STEPS: { step: CreateStep; label: (branch: string) => string }[] = [
   { step: 'session', label: () => 'Starting the session' },
 ]
 
-/** A send that makes a worktree, as a checklist: done, doing, to do — with a running clock. */
+/** A send that makes a worktree, as a checklist: done, doing, to do, with a running clock. */
 function MakingWorktree({ branch, step }: { branch: string; step: CreateStep | null }) {
   const [started] = useState(Date.now)
   const [now, setNow] = useState(Date.now)
@@ -209,7 +209,7 @@ export function NewSessionComposer({ draft, onChange, onCreate, error, step }: P
   // No folder chosen yet → the default project. Until projects load the
   // server picks it: an empty cwd on send means "the default project".
   const fallback = defaultProjectOf(projects)
-  // "New job" / "New goal": a chat with Junior that sets one up — no checkout to pick, it names its own project.
+  // "New job" / "New goal": a chat with Junior that sets one up. No checkout to pick, it names its own project.
   // Opened as one, or picked from the starters under the box.
   const [job, setJob] = useState(draft.intent === 'job')
   // Mode (Normal / Plan / Goal): "Turn into a goal" opens on Goal. A goal's first message goes out marked
@@ -227,7 +227,7 @@ export function NewSessionComposer({ draft, onChange, onCreate, error, step }: P
   const isNew = canPick && draft.newBranch !== undefined
   // A dispatched item asks where it runs, up front; the head's picker stays in step with it.
   const suggestBranch = () => draft.branchHint ?? branchFromTitle(draft.label ?? draft.text)
-  // The item's own worktree, read live rather than trusted from the draft — a draft can outlive the moment it was made.
+  // The item's own worktree, read live rather than trusted from the draft. A draft can outlive the moment it was made.
   const continueCo = projectCheckouts.find(
     (c) => c.kind === 'worktree' && (c.id === draft.continueIn || (!!draft.itemId && c.itemId === draft.itemId)),
   )
@@ -241,7 +241,7 @@ export function NewSessionComposer({ draft, onChange, onCreate, error, step }: P
     else if (v === 'continue' && continueCo) onChange({ checkoutId: continueCo.id, newBranch: undefined })
     else if (v === 'new') onChange({ checkoutId: undefined, newBranch: draft.newBranch ?? suggestBranch() })
   }
-  // The last pick here is the default for the next new session — a per-browser
+  // The last pick here is the default for the next new session, a per-browser
   // preference (see sessionDefaults.ts), which the Sessions settings tab edits too.
   // Read on mount, not at module load: the page lives for days in the Mac app,
   // so a load-time read would pin every new draft to the first pick.

@@ -1,5 +1,5 @@
 /**
- * What I can do: eight sentences, blanks filled from this Mac — projects, top
+ * What I can do: eight sentences, blanks filled from this Mac, projects, top
  * items, refs. Click a blank to cycle it; Start opens a Junior chat with the
  * sentence as its first message, waiting for you to send it.
  */

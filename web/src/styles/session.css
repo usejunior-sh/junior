@@ -6,7 +6,7 @@
 #chatTitle { flex: 1 1 auto; font-size: 1.0769rem; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 #chatHeader .pills { display: flex; flex: none; gap: 6px; margin-left: 8px; }
 #chatHeader .pills .pill { flex: none; max-width: 320px; }
-/* The folder pill's hidden twin, always holding the full path — measured to decide when the
+/* The folder pill's hidden twin, always holding the full path, measured to decide when the
    shown pill can afford it back, never rendered. */
 #chatHeader .pills .pill.measure { position: fixed; top: -9999px; left: -9999px; visibility: hidden; pointer-events: none; }
 #chatHeader .state { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; color: var(--mute); font-size: 0.9231rem; flex: none; }
@@ -48,7 +48,7 @@
 .costPop .keys .v { font-family: var(--mono); color: var(--mute); }
 .costPop .foot { font-size: 0.8462rem; color: var(--stone); }
 
-/* providers — the top-bar stack, its popover, and Settings → Providers */
+/* providers: the top-bar stack, its popover, and Settings → Providers */
 .topIcon.provStack { gap: 0; padding: 0 5px; }
 .topIcon.provStack.on { color: var(--ink); background: var(--elev); }
 .provMark { display: inline-flex; align-items: center; justify-content: center; width: 19px; height: 19px; border-radius: var(--r-full); background: var(--canvas); border: 1px solid var(--hair-strong); }

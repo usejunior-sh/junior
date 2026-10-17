@@ -2,7 +2,7 @@
  * The Changes panel: every project's uncommitted files, grouped project →
  * checkout. A project in one folder reads as a single flat group; one with
  * worktrees gets a sub-group per checkout (main first), each against its own
- * HEAD with its ahead count. A row opens the file in the content area — its
+ * HEAD with its ahead count. A row opens the file in the content area. Its
  * diff and an editor. What it lists is the disk, not a session: anything that
  * changed a file (an agent, a terminal, your editor) shows up here.
  */
@@ -67,7 +67,7 @@ export function ChangesPanel({ projects, loaded, loading, current, onOpen, onPin
       try {
         localStorage.setItem(collapsedKey, JSON.stringify([...next]))
       } catch {
-        // storage blocked — the toggle still works for this page load
+        // storage blocked: the toggle still works for this page load
       }
       return next
     })
@@ -110,7 +110,7 @@ export function ChangesPanel({ projects, loaded, loading, current, onOpen, onPin
       )
     })
 
-  // "Open in…" and friends ride beside a group's toggle, never inside it — a button can't hold a button.
+  // "Open in…" and friends ride beside a group's toggle, never inside it. A button can't hold a button.
   const menu = (cc: CheckoutChanges) => (
     <CheckoutMenu checkout={cc.checkout} onNewTerminal={() => onNewTerminal(cc.checkout.id)} align="end">
       <button type="button" className="iconBtn sm coBtn" aria-label={`Open ${cc.checkout.path} in…`} title="Open in…">

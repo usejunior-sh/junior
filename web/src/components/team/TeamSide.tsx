@@ -48,7 +48,7 @@ export function TeamSide({
   const [busy, setBusy] = useState<string | null>(null)
   const [saveName, setSaveName] = useState<string | null>(null)
   const [allHandoffs, setAllHandoffs] = useState(false)
-  // What you just saved, shown until the server's copy comes back — so an edit never flickers back.
+  // What you just saved, shown until the server's copy comes back, so an edit never flickers back.
   const [pending, setPending] = useState<TeamCard | null>(null)
   useEffect(() => setPending(null), [run.rev])
   const card = pending ?? run.card

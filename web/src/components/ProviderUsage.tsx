@@ -15,7 +15,7 @@ const KIND_LABEL: Record<string, string> = {
   vertex: 'Vertex',
 }
 
-/** "samar@… · Business plan" — or what there is of it. */
+/** "samar@… · Business plan", or what there is of it. */
 export function accountLine(status: ProviderStatus): string {
   const a = status.account
   if (!a) return ''

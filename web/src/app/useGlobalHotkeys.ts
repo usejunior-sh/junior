@@ -68,7 +68,7 @@ export function useGlobalHotkeys({ route, navigate, newSession, newTerminal, ter
         if (e.key === 'p') return openSettings('projects')
         if (e.key === 'j') return goTo('jobs')
         if (e.key === 'a') return goTo('actions')
-        return // unknown sequence — swallow
+        return // unknown sequence, swallow
       }
       if (e.key === 'g') {
         goPrefix.current = window.setTimeout(() => (goPrefix.current = undefined), 1000)

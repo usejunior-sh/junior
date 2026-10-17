@@ -16,7 +16,7 @@ type Props = {
   mode: 'split' | 'unified'
   /** omitted in tool cards, where there is nothing to comment on */
   onComment?: (sel: { from: number; to: number; text: string }) => void
-  /** cap before "show the rest" — tool cards render short, the drawer long */
+  /** cap before "show the rest": tool cards render short, the drawer long */
   maxRows?: number
 }
 
@@ -53,7 +53,7 @@ export const DiffView = memo(function DiffView({ diff, mode, onComment, maxRows 
   }
 
   // Clicking a row starts a selection; shift-clicking extends it. Deliberately
-  // not a native text selection — copying code out of a diff should still work.
+  // not a native text selection: copying code out of a diff should still work.
   const pick = (i: number, shift: boolean) =>
     setSel((prev) => (shift && prev ? { ...prev, head: i } : { anchor: i, head: i }))
 

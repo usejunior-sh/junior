@@ -4,10 +4,8 @@ import type { ScoredItem } from '../../../shared/protocol.js'
 import { dayInput } from '../dueDay.js'
 import { Calendar } from './Calendar.js'
 
-// ---------------------------------------------------------------------------
 // Due-date picker: an exact day for one item, from its row menu. The menu's
 // Today / Tomorrow / This week / Later cover the quick cases; this is the rest.
-// ---------------------------------------------------------------------------
 
 export function DueDialog({
   item,

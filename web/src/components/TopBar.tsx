@@ -26,7 +26,7 @@ type Props = {
   onWorkspaceSettings: () => void
   onOpenSystem: (tab: 'status' | 'activity') => void
   onOpenSettings: () => void
-  /** The settings page is in front — the gear shows it, and closes it. */
+  /** The settings page is in front: the gear shows it, and closes it. */
   settingsOpen?: boolean
   onHelp: () => void
   /** Which copy of triage is answering; null until `hello` lands. */
@@ -36,7 +36,7 @@ type Props = {
 }
 
 /**
- * Which build am I looking at — the badge that ends the "wait, which triage is
+ * Which build am I looking at: the badge that ends the "wait, which triage is
  * this?" question. Three copies can run on one machine, so a released build
  * says nothing (that is the normal case, and noise there would be ignored) and
  * anything *ahead* of a release is called out. Clicking opens System status,
@@ -147,7 +147,7 @@ export function TopBar({
   )
 }
 
-/** Providers, system status, activity, settings, help — the right end of the bar. */
+/** Providers, system status, activity, settings, help, the right end of the bar. */
 function SystemIcons({
   workspace,
   conn,
@@ -158,7 +158,7 @@ function SystemIcons({
 }: Pick<Props, 'conn' | 'onOpenSystem' | 'onOpenSettings' | 'settingsOpen' | 'onHelp'> & { workspace: Workspace | undefined }) {
   return (
     <>
-      {/* a daemon from before providers sends none — it shows once that daemon restarts */}
+      {/* a daemon from before providers sends none. It shows once that daemon restarts */}
       {workspace?.providers && <ProvidersButton workspace={workspace} />}
       <button type="button" className="topIcon" title={CONN_TITLE[conn]} onClick={() => onOpenSystem('status')}>
         <Gauge size={15} aria-hidden="true" />
@@ -259,11 +259,11 @@ function WorkspaceSwitcher({
 }) {
   // A tab is bound to its workspace by its URL, so a workspace row is really a
   // link: ⌘/Ctrl-click opens it in a second tab instead of moving this one.
-  // Radix drives rows through `onSelect`, which does not carry the modifier —
+  // Radix drives rows through `onSelect`, which does not carry the modifier, 
   // the pointer event that preceded it does, so stash it there.
   const newTab = useRef(false)
   // The glyph swallows its own pointer events (below), so Radix never selects
-  // the row for it and never closes the menu either — we hold `open` to do it.
+  // the row for it and never closes the menu either. We hold `open` to do it.
   const [open, setOpen] = useState(false)
   const active = workspaces.find((w) => w.id === workspaceId)
   if (!active) return null // hello not in yet

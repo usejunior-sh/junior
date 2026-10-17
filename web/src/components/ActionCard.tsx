@@ -1,13 +1,13 @@
 /**
  * An outbound action as a stub card (.docs/action-card-variations.html, C and
- * C2): one closed row — what happened, where it landed, its status — that
+ * C2): one closed row, what happened, where it landed, its status, that
  * opens to the details: where, who allowed it, why it counted, the exact
  * command or args, when. The same card under the tool call that made it (the
  * transcript), on the item page, and on the right of the Actions page.
  *
  * A queued action that needs you opens by default with the draft and the
  * verbs: Approve / Edit / Send back / Reject. Closed, its row keeps a quick ✓
- * / ✕ — the ✓ only for what is cheap to take back (a ticket, a post draft, an
+ * / ✕. The ✓ only for what is cheap to take back (a ticket, a post draft, an
  * update); a message, an email, a comment or a PR has to be opened and read.
  * Approved, it shrinks to "Sending … in 12s · Undo", then settles.
  *
@@ -74,7 +74,7 @@ export function ActionCard({
     if (!needs) setMode('view')
     wasNeeds.current = needs
   }, [needs])
-  // A keyboard verb from the page — only a new one: a card mounting under an old command ignores it.
+  // A keyboard verb from the page, only a new one: a card mounting under an old command ignores it.
   const seenCommand = useRef(command?.n)
   useEffect(() => {
     if (!command || command.n === seenCommand.current) return
@@ -103,7 +103,7 @@ export function ActionCard({
   const left = a.queue?.sendAt != null ? a.queue.sendAt - now : 0
   const undoRow = counting ? (
     <div className="astub go">
-      {/* Only the state is announced — the countdown ticking every second is not. */}
+      {/* Only the state is announced: the countdown ticking every second is not. */}
       <span className="sr-only" role="status">
         {a.status === 'sending' ? `Sending: ${a.title}` : `Scheduled: ${a.title}. Undo is available for a few seconds.`}
       </span>
@@ -237,7 +237,7 @@ function NeedsYou({ a, mode, setMode, busy, now, run }: { a: ActionView; mode: M
   )
 }
 
-/** The args readably: where it goes, then its text fields — or the JSON when it has none. */
+/** The args readably: where it goes, then its text fields, or the JSON when it has none. */
 function Payload({ args }: { args: Record<string, unknown> }) {
   const p = payloadOf(args)
   return (
@@ -266,7 +266,7 @@ function Payload({ args }: { args: Record<string, unknown> }) {
 
 /**
  * Edit, then approve: one box per readable field, or the whole args as JSON.
- * What you approve here is what goes out — the server checks it is a JSON
+ * What you approve here is what goes out. The server checks it is a JSON
  * object, and the dispatch fence holds the run to it.
  */
 function EditArgs({
@@ -497,7 +497,7 @@ function Details({
   )
 }
 
-/** The cards for a run of tool calls — once per record, however many of its calls are here. */
+/** The cards for a run of tool calls, once per record, however many of its calls are here. */
 export function ActionNotes({
   tools,
   byCall,
@@ -534,7 +534,7 @@ export function ActionNotes({
   )
 }
 
-/** An item's actions, newest first, as stubs — the ones waiting on you open. */
+/** An item's actions, newest first, as stubs. The ones waiting on you open. */
 export function ItemActions({ actions, onNavigate }: { actions: readonly ActionView[]; onNavigate: (hash: string) => void }) {
   return (
     <div className="astubs item">

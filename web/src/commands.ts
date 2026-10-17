@@ -3,12 +3,12 @@
  * folder's list current, and ranking it on every keystroke.
  *
  * The `@` picker's sibling, but a much smaller thing. Nothing is attached and
- * nothing is resolved — picking a command only writes text, because Claude
+ * nothing is resolved, picking a command only writes text, because Claude
  * Code's own CLI expands `/name args` when the message reaches it. Neither
  * this file nor the server has to know a command was used.
  *
  * The list comes from the SDK (`supportedCommands()`), keyed by folder, and is
- * small enough — a few dozen entries — that the search is local and instant.
+ * small enough, a few dozen entries, that the search is local and instant.
  * No debounce: the list is already here, so narrowing it is a filter, not a
  * fetch.
  */
@@ -17,12 +17,10 @@ import { fuzzyRank, fuzzyScore } from '../../shared/fuzzy.js'
 import type { CommandsResponse, SlashCommandInfo } from '../../shared/protocol.js'
 import { store } from './store.js'
 
-// ---------------------------------------------------------------------------
 // The command under the caret
-// ---------------------------------------------------------------------------
 
 export type ActiveCommand = {
-  /** always 0 — a command is only a command at the very start of a message */
+  /** always 0: a command is only a command at the very start of a message */
   start: 0
   /** index just past the query (the caret) */
   end: number
@@ -31,7 +29,7 @@ export type ActiveCommand = {
 
 /**
  * The `/word` being typed, if the message is one. The `/` must be the first
- * character — anywhere else it is a path, a date or a fraction — and the
+ * character, anywhere else it is a path, a date or a fraction, and the
  * picker closes at the first space, which is where the command ends and its
  * arguments begin.
  */
@@ -47,7 +45,7 @@ export function activeCommand(text: string, caret: number): ActiveCommand | null
 }
 
 /**
- * Replace the typed name with the picked one plus a space — so arguments can
+ * Replace the typed name with the picked one plus a space, so arguments can
  * follow straight away, and a command that takes none still submits cleanly
  * once the draft is trimmed.
  */
@@ -61,10 +59,6 @@ export function insertCommand(
   const rest = text.slice(/^\/\S*/.exec(text)?.[0].length ?? active.end)
   return { text: token + rest.replace(/^ /, ''), caret: token.length }
 }
-
-// ---------------------------------------------------------------------------
-// The folder's list
-// ---------------------------------------------------------------------------
 
 /** Folders already fetched, so switching tabs doesn't refetch. */
 const cache = new Map<string, SlashCommandInfo[]>()
@@ -95,7 +89,7 @@ function load(cwd: string): Promise<void> {
 }
 
 /**
- * The commands available in `cwd`. Fetched lazily — `enabled` goes true the
+ * The commands available in `cwd`. Fetched lazily: `enabled` goes true the
  * first time the user types `/`, so a composer that never uses them never
  * spawns the probe the server needs for a folder with no live session.
  *
@@ -127,10 +121,6 @@ export function useCommands(cwd: string, enabled: boolean): { commands: SlashCom
   return { commands: cache.get(cwd) ?? [], loading: enabled && !cache.has(cwd) }
 }
 
-// ---------------------------------------------------------------------------
-// Search
-// ---------------------------------------------------------------------------
-
 export type CommandHit = SlashCommandInfo & {
   /** where it came from: a plugin's name, or `user` / `project` for a skill */
   source?: string
@@ -148,7 +138,7 @@ const LIMIT = 40
  *
  * Two things have to be dug out of the strings the SDK hands over. A skill
  * defined by the user or the project has its origin appended to the
- * description as `(user)` / `(project)` — which is real information, but at
+ * description as `(user)` / `(project)`, which is real information, but at
  * the end of the one field that gets ellipsised, so it is moved to a badge.
  * And a skill's description is written to route a *model*, not to label a
  * menu row: the useful sentence comes first and a paragraph of "Use when the
@@ -163,7 +153,7 @@ export const hit = (c: SlashCommandInfo): CommandHit => {
   const source = colon > 0 ? c.name.slice(0, colon) : tagged?.[2]
   // A sentence end, not just a full stop. A period only ends a sentence when
   // the string ends there or a capital follows it, which is what keeps
-  // `v0.8.0`, `.gitignore` and — the one that actually bit — the `(e.g.` in
+  // `v0.8.0`, `.gitignore` and, the one that actually bit, the `(e.g.` in
   // /loop's description from cutting the row off mid-clause.
   const stop = /\.(?:\s+(?=[A-Z])|$)/.exec(body)
   const short = stop ? body.slice(0, stop.index + 1) : body
@@ -172,7 +162,7 @@ export const hit = (c: SlashCommandInfo): CommandHit => {
 
 /**
  * Rank a folder's commands against what has been typed. Matching runs over
- * the name *and* the description, so `/` + "ship" finds `/release` — but the
+ * the name *and* the description, so `/` + "ship" finds `/release`, but the
  * two are ranked separately and name matches always sort first, because
  * someone typing a name knows what they want.
  */
@@ -186,7 +176,7 @@ export function useCommandSearch(active: ActiveCommand | null, commands: readonl
     const taken = new Set(byName.map((c) => c.name))
 
     // An alias is a name the user may well know (`/cost` for `/usage`), so it
-    // matches like one — and the row says which alias got them there.
+    // matches like one, and the row says which alias got them there.
     const aliased: CommandHit[] = []
     for (const c of commands) {
       if (taken.has(c.name)) continue
@@ -211,7 +201,7 @@ export function useCommandSearch(active: ActiveCommand | null, commands: readonl
   }, [active?.query, commands])
 }
 
-/** The exact command a draft names, if it names one — for the composer's hint. */
+/** The exact command a draft names, if it names one, for the composer's hint. */
 export function commandFor(text: string, commands: readonly SlashCommandInfo[]): SlashCommandInfo | null {
   const m = /^\/(\S+)/.exec(text)
   if (!m) return null

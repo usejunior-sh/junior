@@ -1,5 +1,5 @@
 /**
- * The system sheet — anchored top-right under the gauge icon. An icon rail of
+ * The system sheet: anchored top-right under the gauge icon. An icon rail of
  * three views (status · activity · logs) beside the body, the way the design's
  * "Usage & providers" sheet is laid out.
  */

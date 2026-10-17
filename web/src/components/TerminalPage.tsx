@@ -1,6 +1,6 @@
 /**
  * One terminal tab: an xterm.js emulator wired to a daemon-side PTY over the
- * WebSocket. Output never touches React state — it streams straight from the
+ * WebSocket. Output never touches React state: it streams straight from the
  * store's terminal channel into the emulator; the summary (title, status) is
  * the only structural state.
  */
@@ -106,7 +106,7 @@ export function TerminalPage({ terminal, onRename, onClose, onNewHere }: Props) 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [terminal.id])
 
-  // Repaint the scrollback in the other theme — including the already-written
+  // Repaint the scrollback in the other theme, including the already-written
   // rows, which xterm re-renders from its buffer when `options.theme` is set.
   useEffect(() => {
     if (emulator.current) emulator.current.options.theme = palette

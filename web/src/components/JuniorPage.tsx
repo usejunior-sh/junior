@@ -1,6 +1,6 @@
 /**
  * The Junior page (.docs/junior-goals-teams/junior-home-v2.html, variation J):
- * Junior on the left, the day on the right. The sidebar is Junior's card —
+ * Junior on the left, the day on the right. The sidebar is Junior's card:
  * Chat (⌘J), right now, what it can see, what it can do, Customize. The
  * right side is a two-tone serif headline over three tabs: Morning brief,
  * Today's goals, Blocked on you. "What I can do" in full and the persona open

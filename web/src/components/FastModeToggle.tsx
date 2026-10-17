@@ -4,7 +4,7 @@ import { FAST_MODE_BLURB, fastModeReason, modelSupportsFastMode } from '../fastM
 import { findModel, useModels } from '../models.js'
 
 type Props = {
-  /** The model this session runs on — fast mode is a property of the model. */
+  /** The model this session runs on: fast mode is a property of the model. */
   model?: string
   /** What the user asked for. */
   fastMode?: boolean
@@ -16,7 +16,7 @@ type Props = {
 }
 
 /**
- * A binary the user flips, so a plain toggle chip rather than a menu — the
+ * A binary the user flips, so a plain toggle chip rather than a menu. The
  * chip is both the control and the readout. When the session says it asked for
  * fast mode and the subprocess says it isn't serving, the chip shows that
  * disagreement instead of quietly claiming speed it isn't getting.

@@ -1,8 +1,8 @@
 /**
  * Our one calendar idiom. Radix ships no calendar primitive, so the month grid
  * is react-day-picker (headless-ish, keyboard- and screen-reader-complete) and
- * the pixels are ours (`.calendar` in styles.css, design tokens only).
- * `DatePopover` is the Radix Popover around it — the due pill in the composer.
+ * the pixels are ours (`.calendar` in styles/*.css, design tokens only).
+ * `DatePopover` is the Radix Popover around it. The due pill in the composer.
  */
 import * as Popover from '@radix-ui/react-popover'
 import { CalendarDays, X } from 'lucide-react'

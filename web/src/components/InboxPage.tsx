@@ -22,7 +22,7 @@ type OtherState =
   | { phase: 'error'; message: string }
 
 type Props = {
-  /** the tab in front — the route's (`#/inbox/<tab>`), resolved by the shell */
+  /** the tab in front: the route's (`#/inbox/<tab>`), resolved by the shell */
   tab: InboxTab
   /** the open tabs, shared with the sidebar so the counts are the rows */
   tabs: Tabs
@@ -35,7 +35,7 @@ type Props = {
   onPinItem: (id: string, title: string) => void
   /** Bumped by the shell (Queue panel "+") to open the new-item composer. */
   composeSignal?: number
-  /** Go to a route — a job or a session an alert points at. */
+  /** Go to a route: a job or a session an alert points at. */
   onNavigate: (path: string) => void
 }
 
@@ -57,7 +57,7 @@ export function InboxPage({ tab, tabs, onDispatch, onGoal, onRefineJob, onOpenIt
   const [pickingDue, setPickingDue] = useState<ScoredItem | null>(null)
   const [scanning, setScanning] = useState(false)
   const [sel, setSel] = useState(0)
-  // Multi-select (.docs/next-version.md, phase 2): checked rows brief together.
+  // Multi-select: checked rows brief together.
   const [checked, setChecked] = useState<Set<string>>(new Set())
   const [briefError, setBriefError] = useState<string | null>(null)
   /** one row's brief, composed in place */
@@ -120,7 +120,7 @@ export function InboxPage({ tab, tabs, onDispatch, onGoal, onRefineJob, onOpenIt
     [isOpen],
   )
 
-  // A status change is a recorded transition on a durable item — the row leaves
+  // A status change is a recorded transition on a durable item, the row leaves
   // the current tab optimistically; the item is never deleted (.docs/jobs-v2.md).
   // A row is every signal folded into it, so they all move together.
   const setItemState = useCallback(
@@ -243,7 +243,7 @@ export function InboxPage({ tab, tabs, onDispatch, onGoal, onRefineJob, onOpenIt
   // One item: the composer, with its template to edit.
   const briefOne = useCallback((item: ScoredItem) => setBriefing(item), [])
 
-  // Checked items: queued at once, each with its own kind's template — editing is per item.
+  // Checked items: queued at once, each with its own kind's template, editing is per item.
   const briefChecked = useCallback(async () => {
     const targets = checkedItems
     if (!targets.length) return
@@ -546,7 +546,7 @@ export function InboxPage({ tab, tabs, onDispatch, onGoal, onRefineJob, onOpenIt
         onSaved={(count) => {
           setRepoCount(count)
           setReposOpen(false)
-          void inboxStore.refresh(true) // scope changed — resync now
+          void inboxStore.refresh(true) // scope changed: resync now
         }}
       />
 
@@ -559,7 +559,7 @@ export function InboxPage({ tab, tabs, onDispatch, onGoal, onRefineJob, onOpenIt
           setComposer({ open: false, editing: null })
           reload(false) // include the new/edited item
         }}
-        onSavedMore={() => reload(false)} // "Add more" — refresh, stay open
+        onSavedMore={() => reload(false)} // "Add more": refresh, stay open
       />
 
       <BriefComposerDialog item={briefing} latest={briefing ? briefs.byItem.get(briefing.id) ?? null : null} onClose={() => setBriefing(null)} />

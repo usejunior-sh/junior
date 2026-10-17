@@ -67,7 +67,7 @@ export function useDocumentTabs({ conn, route, docKeys, inbox, artifacts, sessio
     [liveTitle, titles],
   )
 
-  /** Commit a peeked document to a real tab — it stops being replaceable. */
+  /** Commit a peeked document to a real tab, it stops being replaceable. */
   const pin = useCallback(
     (key: string, title?: string) => {
       if (title) remember({ [key]: title })
@@ -89,7 +89,7 @@ export function useDocumentTabs({ conn, route, docKeys, inbox, artifacts, sessio
     if (key && isDocKey(key)) setPreview(key)
   }, [route, setPreview])
 
-  // Names arrive after the tab does — stores load, things get renamed. Teach
+  // Names arrive after the tab does: stores load, things get renamed. Teach
   // the band every name it can currently resolve.
   useEffect(() => {
     const patch: Record<string, string> = {}

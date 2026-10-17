@@ -2,7 +2,7 @@
  * Settings → MCP: how another agent connects to this inbox.
  *
  * The daemon serves its tools at `POST /mcp` (streamable HTTP), so connecting
- * is a URL, not a spawned process — which is the whole reason this tab can be
+ * is a URL, not a spawned process, which is the whole reason this tab can be
  * three copyable lines instead of a page of troubleshooting. The workspace
  * rides in that URL, so the snippet shown here is the one for the workspace
  * you are looking at; paste it somewhere else and it still files work here.
@@ -21,7 +21,7 @@ const CLIENTS: ReadonlyArray<{ id: Client; label: string }> = [
   { id: 'stdio', label: 'No HTTP support' },
 ]
 
-/** A copyable line. Code lives in a well — mono on the card surface, never bare. */
+/** A copyable line. Code lives in a well: mono on the card surface, never bare. */
 export function Snippet({ text, label }: { text: string; label?: string }) {
   const [copied, setCopied] = useState(false)
   const copy = async () => {
@@ -70,7 +70,7 @@ export function McpTab({ workspace }: { workspace: Workspace | null }) {
   // right on almost every machine, and a wrong port is a visible failure in
   // the client, not a silent one.
   const port = status?.port ?? 5178
-  // The default workspace needs no parameter — a bare URL is the one people
+  // The default workspace needs no parameter: a bare URL is the one people
   // remember, and it is also what a fresh install resolves to.
   const qs = workspace && !workspace.isDefault ? `?workspace=${workspace.id}` : ''
   const url = `http://localhost:${port}/mcp${qs}`

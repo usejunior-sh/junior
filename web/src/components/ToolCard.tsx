@@ -12,7 +12,7 @@ const str = (v: unknown): string => (typeof v === 'string' ? v : '')
  * The diff an edit-shaped tool describes, straight from its own input.
  *
  * This is the exact change the agent asked for, which is a stronger claim than
- * anything the snapshot diff can make — no other session can be mixed into it.
+ * anything the snapshot diff can make. No other session can be mixed into it.
  * `MultiEdit` is folded into one patch by applying its edits in order.
  */
 function toolDiff(name: string, input: Record<string, unknown>): ParsedDiff | null {

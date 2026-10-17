@@ -15,12 +15,12 @@ import type { TranscriptMark } from './Transcript.js'
 /**
  * A team run as a room you walk through (.docs/team-session-storybook.html, layout A):
  *
- *   TeamRuns    the drawer's Runs tab — the team by person (TeamRail) or by task (TeamMap)
+ *   TeamRuns    the drawer's Runs tab, the team by person (TeamRail) or by task (TeamMap)
  *   TeamRail    the team, each member's runs nested under it
- *   RunHeader   over the transcript — whose session this is, which run you're reading, the run's spend
+ *   RunHeader   over the transcript, whose session this is, which run you're reading, the run's spend
  *   runMarks    a divider at the start of every run in the transcript, sticky while you read it
  *   TeamMap     every run, by task and step
- *   TeamFiles   in the drawer — what the team works from, what it changed, what it left as proof
+ *   TeamFiles   in the drawer, what the team works from, what it changed, what it left as proof
  *
  * A run is one worker's go at one step, for one task and fix round (WorkerRun). The reviewer
  * starts fresh for every task, so its one session holds many runs; the dividers keep them apart.
@@ -28,7 +28,7 @@ import type { TranscriptMark } from './Transcript.js'
 
 export type RunStatus = ReturnType<typeof runStatus>
 
-/** Open a member's session, scrolled to a run (or to now) — in this tab, or in a new one behind it (⌘-click). */
+/** Open a member's session, scrolled to a run (or to now), in this tab, or in a new one behind it (⌘-click). */
 export type OpenRun = (sessionId: string, runId: string | null, newTab?: boolean) => void
 const newTab = (e: { metaKey: boolean; ctrlKey: boolean }) => e.metaKey || e.ctrlKey
 
@@ -137,10 +137,6 @@ function useNow(ticking: boolean, every = 5000): number {
 
 const clock = (at: number | null) => (at ? new Date(at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '')
 const checkOutputs = (view: TeamRunView) => view.outputs.filter((o) => o.checks)
-
-// ---------------------------------------------------------------------------
-// The rail
-// ---------------------------------------------------------------------------
 
 export function TeamRail({
   run,
@@ -293,9 +289,7 @@ export function RunsViewToggle({ view, onView }: { view: RunsView; onView: (view
   )
 }
 
-// ---------------------------------------------------------------------------
 // The header over a member's transcript, and the dividers inside it
-// ---------------------------------------------------------------------------
 
 export function RunHeader({
   run,
@@ -482,10 +476,6 @@ export function useRunScroll(sessionId: string, enabled: boolean, depsKey: strin
   return { current, jump }
 }
 
-// ---------------------------------------------------------------------------
-// The run map
-// ---------------------------------------------------------------------------
-
 export function TeamMap({
   run,
   current,
@@ -588,10 +578,6 @@ export function TeamMap({
     </div>
   )
 }
-
-// ---------------------------------------------------------------------------
-// Files
-// ---------------------------------------------------------------------------
 
 const GROUPS: { id: TeamRunFile['group']; label: string }[] = [
   { id: 'ledger', label: 'Ledger' },

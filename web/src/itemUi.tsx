@@ -44,7 +44,7 @@ export const KIND_LABEL: Record<string, string> = {
   fyi: 'fyi',
 }
 
-/** Brief types (server/briefs.ts BRIEF_TYPES) — playbooks picked by what the brief is, for any kind. */
+/** Brief types (server/briefs.ts BRIEF_TYPES): playbooks picked by what the brief is, for any kind. */
 export const BRIEF_TYPE_LABEL: Record<string, string> = {
   plan: 'Plan',
   overview: 'Overview',
@@ -56,7 +56,7 @@ export const playbookLabel = (name: string): string => BRIEF_TYPE_LABEL[name] ??
 export const PRIORITY_LABEL: Record<number, string> = { 0: 'none', 1: 'Urgent', 2: 'High', 3: 'Normal', 4: 'Low' }
 export const PRIORITY_VALUES = [0, 1, 2, 3, 4]
 
-/** Page headings — with the one-line reason the group exists. */
+/** Page headings, with the one-line reason the group exists. */
 export const GROUP_TITLE: Record<Group, string> = {
   blocking: 'Blocking · people are waiting on you',
   'blocked-stale': 'Your work · gone quiet',
@@ -84,7 +84,7 @@ export function itemTone(item: ScoredItem): 'red' | 'yellow' | null {
 }
 
 /**
- * The inbox row's gutter bar carries priority and nothing else — one channel,
+ * The inbox row's gutter bar carries priority and nothing else. One channel,
  * read down the page, never also printed as a pill. Trouble with the *item*
  * (failing CI, conflicts) colours the kind glyph instead, so the two signals
  * never compete for the same 3px.
@@ -124,7 +124,7 @@ export function shortAge(input: number | string | undefined | null): string {
   return `${Math.round(s / 31536000)}y`
 }
 
-/** "3h ago" / "just now" — relTime with the suffix handled. */
+/** "3h ago" / "just now": relTime with the suffix handled. */
 export function ago(input: number | string | undefined | null): string {
   const r = relTime(input)
   return r === 'just now' || r === '—' ? r : `${r} ago`

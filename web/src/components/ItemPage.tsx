@@ -1,6 +1,6 @@
 /**
  * One work item, in full: what it is (title + your description), the brief
- * about it (a markdown document a playbook run wrote — .docs/next-version.md),
+ * about it (a markdown document a playbook run wrote, .docs/next-version.md),
  * why it ranked, what has happened to it, and the sessions working on it.
  * The actions live in the right column so the left reads as a page, not a form.
  */
@@ -62,7 +62,7 @@ export function ItemPage({ id, onDispatch, onGoal, onNavigate, onDirty }: Props)
   const [brief, setBrief] = useState<BriefView | null>(null)
   const [briefOpen, setBriefOpen] = useState(false)
   const [descDraft, setDescDraft] = useState<string | null>(null)
-  /** the images the editor is holding — parallel to `descDraft`, null when not editing */
+  /** the images the editor is holding: parallel to `descDraft`, null when not editing */
   const [imgDraft, setImgDraft] = useState<ItemImage[] | null>(null)
   /** the files the editor is holding, the same way */
   const [fileDraft, setFileDraft] = useState<FileRef[] | null>(null)
@@ -73,11 +73,11 @@ export function ItemPage({ id, onDispatch, onGoal, onNavigate, onDirty }: Props)
   const [busy, setBusy] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [spend, setSpend] = useState<SessionsUsage | null>(null)
-  /** the readout is optional — a ledger that can't be read hides it rather than sitting on a skeleton */
+  /** the readout is optional: a ledger that can't be read hides it rather than sitting on a skeleton */
   const [spendFailed, setSpendFailed] = useState(false)
 
   // Anything unsaved on this page would be lost if the peek slot handed the
-  // tab to the next document — so the first keystroke keeps it.
+  // tab to the next document, so the first keystroke keeps it.
   const dirty = descDraft !== null || imgDraft !== null || fileDraft !== null || feedback.trim() !== ''
   useEffect(() => {
     if (dirty) onDirty()
@@ -131,7 +131,7 @@ export function ItemPage({ id, onDispatch, onGoal, onNavigate, onDirty }: Props)
 
   // The brief and the links follow the item's newest job: every transition
   // (queued → running → ready) arrives as a frame and refetches both.
-  // Opened straight from a link, the inbox never loaded the jobs — and the Re-brief
+  // Opened straight from a link, the inbox never loaded the jobs, and the Re-brief
   // composer starts from the newest one.
   useEffect(() => {
     if (!briefs.loaded) void briefStore.refresh()
@@ -184,7 +184,7 @@ export function ItemPage({ id, onDispatch, onGoal, onNavigate, onDirty }: Props)
   }, [sessions, links, item])
 
   // What the item cost: the ledger, folded by the item's linked sessions. Refetched
-  // when the set changes and when a live one settles — a running session's
+  // when the set changes and when a live one settles, a running session's
   // transcript is still growing, so its figure is a floor, not a total.
   const spendKey = linkedSessions.map(({ s }) => `${s.id}:${s.status}`).join(',')
   useEffect(() => {
@@ -209,7 +209,7 @@ export function ItemPage({ id, onDispatch, onGoal, onNavigate, onDirty }: Props)
     return () => {
       live = false
     }
-    // `spendKey` is the real dependency — `linkedSessions` is a fresh array each render.
+    // `spendKey` is the real dependency: `linkedSessions` is a fresh array each render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [spendKey])
 
@@ -472,7 +472,7 @@ export function ItemPage({ id, onDispatch, onGoal, onNavigate, onDirty }: Props)
           )}
         </div>
 
-        {/* Description — the human's intent, in their words (and their
+        {/* Description: the human's intent, in their words (and their
             screenshots). Never written by a run; both go to the brief. */}
         <div
           className={`descBlock${descDragging ? ' dragging' : ''}`}

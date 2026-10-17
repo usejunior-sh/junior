@@ -77,7 +77,7 @@ export function tabKeyOf(route: Route): string | null {
   }
 }
 
-/** The route a tab key points back at — the inverse of `tabKeyOf`. */
+/** The route a tab key points back at, the inverse of `tabKeyOf`. */
 export function routeOfKey(key: string): string {
   const cut = key.indexOf(':')
   const id = cut === -1 ? '' : key.slice(cut + 1)

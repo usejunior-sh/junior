@@ -1,5 +1,5 @@
 /**
- * Jobs, as a table: one row per job — switch, name, the integrations it
+ * Jobs, as a table: one row per job, switch, name, the integrations it
  * may use and its project, schedule, last run (with failure streaks, catch-ups
  * and config errors), next run, the last seven outcomes, tokens this week. Active /
  * Paused / All tabs, a filter, and Add job. Runs live on each job, not on
@@ -15,7 +15,7 @@ import { relTime } from '../itemUi.js'
 import { Menu, MenuContent, MenuItem, MenuTrigger } from '../ui/Menu.js'
 import { cronText, fmtUntil, grantIcon, grantLabel, runStatusText } from '../jobUi.js'
 
-/** "5m ago", "3d ago" — or a plain date past two weeks, where "ago" would read wrong. */
+/** "5m ago", "3d ago", or a plain date past two weeks, where "ago" would read wrong. */
 export const ago = (at: number): string => {
   const r = relTime(at)
   return /^\d+[mhd]$/.test(r) ? `${r} ago` : r

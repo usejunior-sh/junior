@@ -1,6 +1,6 @@
 /**
  * One job (#/jobs/<id>): a health strip that answers "is it working", then
- * Overview (the rule and its settings), Runs (every run is a session — the
+ * Overview (the rule and its settings), Runs (every run is a session. The
  * receipt first, the transcript one click deeper), and Items (what it filed).
  */
 import * as Dialog from '@radix-ui/react-dialog'
@@ -573,12 +573,10 @@ export function JobPage({ id, onNavigate }: { id: string; onNavigate: (hash: str
   )
 }
 
-// ---------------------------------------------------------------------------
 // Spend per day, last 14 days. One series, so one hue; bars are thin with a
 // rounded data-end, a 2px gap, and a hover tooltip carrying cost, tokens, runs.
 // Days with runs but no recorded cost (runs older than the cost column) show
 // as an outline so "nothing spent" and "not recorded" don't read the same.
-// ---------------------------------------------------------------------------
 
 const DAYS = 14
 
@@ -653,10 +651,8 @@ function CostChart({ runs }: { runs: ActivityRun[] }) {
 
 const days0 = (days: Array<{ at: number }>) => days[0].at
 
-// ---------------------------------------------------------------------------
 // A run's transcript, in place. The run is a session; this replays its event
 // log into the same Transcript the session page uses.
-// ---------------------------------------------------------------------------
 
 function RunTranscriptModal({ run, jobTitle, onClose, onNavigate }: { run: ActivityRun | null; jobTitle: string; onClose: () => void; onNavigate: (hash: string) => void }) {
   const sessionId = run?.sessionId ?? null

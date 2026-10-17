@@ -4,9 +4,9 @@
  * Everything the UI renders lives here; components read slices through the
  * hooks in hooks.ts. Two notification channels, on purpose:
  *
- *   structural — sessions, connection state, committed events. Fires at the
+ *   structural, sessions, connection state, committed events. Fires at the
  *                rate the SDK emits messages (a handful per turn).
- *   live       — the partially-streamed assistant line. Fires at most once per
+ *   live, the partially-streamed assistant line. Fires at most once per
  *                animation frame, because token deltas arrive far faster than
  *                anything should re-render.
  */
@@ -49,9 +49,9 @@ export class Store {
   #workspaceId = ''
   #workspaces: readonly Workspace[] = []
   #onboarded = true
-  /** Which copy of triage this tab is talking to — null until `hello` lands. */
+  /** Which copy of triage this tab is talking to, null until `hello` lands. */
   #build: Build | null = null
-  /** Junior's persona in this workspace — the rail's name and face colour. */
+  /** Junior's persona in this workspace: the rail's name and face colour. */
   #persona: Persona = DEFAULT_PERSONA
 
   #liveText = new Map<string, string>()
@@ -69,7 +69,7 @@ export class Store {
   // Terminals: the list is structural state; output bypasses React entirely and
   // goes straight to the xterm instance that asked for it.
   #terminals: readonly TerminalSummary[] = []
-  /** Every project's folders — main and worktrees — that sessions and terminals name by id. */
+  /** Every project's folders, main and worktrees, that sessions and terminals name by id. */
   #checkouts: readonly Checkout[] = []
   #terminalListeners = new Map<string, Set<(data: string, replay: boolean) => void>>()
   #subscribedTerminals = new Set<string>()
@@ -79,7 +79,7 @@ export class Store {
   #subscribedTo: string | null = null
   #reconnectTimer: ReturnType<typeof setTimeout> | undefined
 
-  // -- reads ----------------------------------------------------------------
+  // reads
 
   getConn = (): ConnState => this.#conn
   getSessions = (): readonly SessionSummary[] => this.#sessions
@@ -112,7 +112,7 @@ export class Store {
     for (const fn of this.#liveListeners) fn()
   }
 
-  // -- connection -----------------------------------------------------------
+  // connection
 
   connect() {
     if (this.#ws) return
@@ -151,8 +151,8 @@ export class Store {
   }
 
   /**
-   * Coming back to the page — a phone unlocked, a laptop woken, the network
-   * back — reconnects now instead of waiting out the retry timer. A socket
+   * Coming back to the page, a phone unlocked, a laptop woken, the network
+   * back, reconnects now instead of waiting out the retry timer. A socket
    * the OS killed in the background often still claims to be connecting.
    */
   resume() {
@@ -177,7 +177,7 @@ export class Store {
     this.send({ type: 'subscribe', sessionId })
   }
 
-  // -- terminals --------------------------------------------------------------
+  // terminals
 
   /**
    * Stream one terminal's output to `fn`. `replay` is true for the scrollback
@@ -208,11 +208,11 @@ export class Store {
     if (set) for (const fn of set) fn(data, replay)
   }
 
-  // -- workspaces -------------------------------------------------------------
+  // workspaces
 
   /**
    * Move this tab to a workspace. The URL is what binds it, so this is a
-   * navigation — every page remounts against the new scope (they all fetch on
+   * navigation. Every page remounts against the new scope (they all fetch on
    * mount). The cookie is still written as the fallback for a bare, unprefixed
    * URL: a plain `localhost:5178` bookmark should reopen the last workspace.
    */
@@ -231,7 +231,7 @@ export class Store {
         this.#notify()
       }
     } catch {
-      // transient — the next hello refreshes it anyway
+      // transient: the next hello refreshes it anyway
     }
   }
 
@@ -241,7 +241,7 @@ export class Store {
     this.#notify()
   }
 
-  // -- incoming -------------------------------------------------------------
+  // incoming
 
   /** Who wants to know when the artifacts index changed (the artifacts store, an open artifact page). */
   readonly #artifactsListeners = new Set<() => void>()
@@ -249,7 +249,7 @@ export class Store {
   readonly #inboxListeners = new Set<() => void>()
   readonly #libraryListeners = new Set<() => void>()
   readonly #changesListeners = new Set<(sessionId: string) => void>()
-  /** Who follows brief jobs (the brief store) — one frame per transition. */
+  /** Who follows brief jobs (the brief store), one frame per transition. */
   readonly #briefListeners = new Set<(job: BriefJob) => void>()
   readonly #commandsListeners = new Set<(cwd: string, commands: SlashCommandInfo[]) => void>()
   /** Who follows outbound actions (the Actions page, an item, a transcript's action lines). */
@@ -262,7 +262,7 @@ export class Store {
   #handle(msg: ServerMessage) {
     switch (msg.type) {
       case 'hello':
-        // Pin the tab to whatever the daemon actually resolved — canonicalises
+        // Pin the tab to whatever the daemon actually resolved, canonicalises
         // a bare URL and repairs one naming a workspace that no longer exists.
         adoptWorkspace(msg.workspaceId)
         this.#sessions = msg.sessions

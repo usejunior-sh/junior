@@ -1,7 +1,7 @@
 /**
  * The context panel's width, dragged from its right edge. A per-browser
  * preference, so it lives in localStorage and is applied as the `--panel-w`
- * custom property on the shell — the panel itself never re-renders during a
+ * custom property on the shell. The panel itself never re-renders during a
  * drag, only the variable changes.
  */
 import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
@@ -41,7 +41,7 @@ export function usePanelWidth() {
     try {
       localStorage.setItem(KEY, String(width))
     } catch {
-      // storage blocked — the width still applies for this page load
+      // storage blocked: the width still applies for this page load
     }
   }, [width])
 
@@ -49,7 +49,7 @@ export function usePanelWidth() {
     try {
       localStorage.setItem(COLLAPSED_KEY, collapsed ? '1' : '0')
     } catch {
-      // storage blocked — the collapse state still applies for this page load
+      // storage blocked: the collapse state still applies for this page load
     }
   }, [collapsed])
 

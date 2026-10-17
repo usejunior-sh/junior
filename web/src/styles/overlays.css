@@ -58,7 +58,7 @@
 .uiSelect[data-disabled] { opacity: 0.5; cursor: default; pointer-events: none; }
 .uiSelect > span:first-of-type { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .uiSelect .caret { margin-left: auto; color: var(--ash); flex: none; }
-/* Above the app's dialog layers (overlays 80/90, dialog bodies 81/91) — Radix
+/* Above the app's dialog layers (overlays 80/90, dialog bodies 81/91), Radix
    copies this z-index onto its popper wrapper, which is the positioned
    element, so it is the lever that actually works. Same layer as .uiMenu, so
    menus and selects can't cover each other. Native modal dialogs are a
@@ -149,7 +149,7 @@ dialog#helpOverlay { width: 400px; }
 #helpOverlay td { padding: 6px 0; font-size: 1rem; color: var(--body); vertical-align: top; }
 #helpOverlay td:first-child { width: 120px; }
 
-/* system sheet — anchored top right, icon rail + body */
+/* system sheet: anchored top right, icon rail + body */
 dialog.sheet { width: 600px; padding: 0; margin: 50px 88px auto auto; grid-template-columns: 48px minmax(0, 1fr); overflow: hidden; max-height: calc(100vh - 100px); }
 dialog.sheet[open] { display: grid; }
 .sheetRail { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 0; border-right: 1px solid var(--hair); }

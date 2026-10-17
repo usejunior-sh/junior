@@ -11,7 +11,7 @@
  * Fields edit the frontmatter surgically (shared/skillFile.ts), so keys the
  * form doesn't show survive. Saving reloads every open session (server). The
  * Agents tab also lists the workspace's team agents and edits them with the
- * team form — they are a team run's cast, not a chat's subagents.
+ * team form. They are a team run's cast, not a chat's subagents.
  */
 import { Search, X, Plus, Lock } from 'lucide-react'
 import { type ReactNode, useState, useRef, useCallback, useEffect, useMemo } from 'react'

@@ -1,8 +1,8 @@
 /**
  * In place of the composer, for a session whose worktree was removed: it has
  * no folder to run in. Two ways on (.docs/worktrees-ux.html §0, "Removed is
- * history"): bring the worktree back at the same folder — Claude Code keys a
- * transcript by folder, so only that resumes this conversation — or start a
+ * history"): bring the worktree back at the same folder, Claude Code keys a
+ * transcript by folder, so only that resumes this conversation, or start a
  * new session in the main folder that points back at this one.
  */
 import { FolderX, LoaderCircle } from 'lucide-react'

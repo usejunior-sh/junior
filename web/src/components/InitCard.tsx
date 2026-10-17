@@ -8,12 +8,12 @@ const serverOf = (tool: string) => tool.slice(5).split('__')[0] ?? ''
 
 /**
  * The session's opening line: model, tool count, and every MCP server it
- * loaded. Status is a dot, not a colour wash — connected green, anything else
- * dim — so a long connector list reads as inventory, not as a wall of alarms.
+ * loaded. Status is a dot, not a colour wash, connected green, anything else
+ * dim, so a long connector list reads as inventory, not as a wall of alarms.
  *
  * The status a server reports is not always the truth about this session. Two
- * servers can claim one name — triage's own in-process server always wins the
- * name `triage` over anything in ~/.claude — and the card would then show the
+ * servers can claim one name, triage's own in-process server always wins the
+ * name `triage` over anything in ~/.claude, and the card would then show the
  * loser's status next to the winner's tools. So a server whose tools are in
  * the session reads as working, whatever its row said.
  */

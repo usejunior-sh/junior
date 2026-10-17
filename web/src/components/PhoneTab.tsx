@@ -3,7 +3,7 @@
  *
  * One switch, then a QR code. The code carries the pairing token
  * (server/remote.ts), so scanning it is the whole sign-in; the phone keeps a
- * cookie and comes straight in afterwards. Managed from the Mac only — a
+ * cookie and comes straight in afterwards. Managed from the Mac only: a
  * paired phone sees that it is paired and nothing it could leak.
  */
 import * as RadioGroup from '@radix-ui/react-radio-group'
@@ -49,7 +49,7 @@ export function PhoneTab() {
   const [host, setHost] = useState('')
 
   // Polled while access is on: a code is single use and short-lived, so the
-  // one on screen has to follow the server's — used, expired, or burned.
+  // one on screen has to follow the server's, used, expired, or burned.
   const enabled = status?.local === true && status.enabled
   const starting = status?.local === true && status.tunnel && status.tunnelStatus.state === 'starting'
   useEffect(() => {
@@ -196,7 +196,7 @@ function PairSection({
   const base = `${location.protocol}//${chosen}${port}`
   const pairUrl = `${base}/api/pair?token=${encodeURIComponent(status.token)}`
   // Anywhere: the same pairing link, on the tunnel's address. No address
-  // picker and no typed code — over the internet only the QR code pairs.
+  // picker and no typed code: over the internet only the QR code pairs.
   const ts = status.tunnelStatus
   if (status.tunnel) {
     if (ts.state !== 'up') return null

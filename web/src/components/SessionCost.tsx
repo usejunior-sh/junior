@@ -1,6 +1,6 @@
 /**
  * What this session has cost, as a pill in the chat header; hover (or tap, on
- * a phone) for the split — input, output, cache writes and reads, and models.
+ * a phone) for the split, input, output, cache writes and reads, and models.
  *
  * Same ledger and vocabulary as the item page's cost block (`/api/usage/sessions`,
  * `usageFormat.ts`), so the two never disagree. The transcript is the source,
@@ -13,7 +13,7 @@ import type { SessionStatus, SessionsUsage, SessionsUsageResponse } from '../../
 import { useEvents } from '../hooks.js'
 import { MAX_SERIES, OTHER, SERIES, modelLabel, money, tokens } from '../usageFormat.js'
 
-/** The widest window the ledger offers — a session from last month still adds up. */
+/** The widest window the ledger offers: a session from last month still adds up. */
 const DAYS = 90
 /** Claude Code appends to its transcript a moment after the SDK emits the message. */
 const SETTLE_MS = 1500
@@ -28,7 +28,7 @@ export function SessionCost({ sessionId, status }: { sessionId: string; status: 
   const replies = events.reduce((n, ev) => (ev.kind === 'sdk' && ev.message.type === 'assistant' ? n + 1 : n), 0)
   const [usage, setUsage] = useState<SessionsUsage | null>(() => lastSeen.get(sessionId) ?? null)
   const [open, setOpen] = useState(false)
-  /** The session the ledger has answered for — until then, a skeleton holds the pill's place. */
+  /** The session the ledger has answered for, until then, a skeleton holds the pill's place. */
   const [settled, setSettled] = useState<string | null>(() => (lastSeen.has(sessionId) ? sessionId : null))
   const hover = useRef<ReturnType<typeof setTimeout>>(undefined)
   /** The session whose first, undelayed fetch has gone out. */

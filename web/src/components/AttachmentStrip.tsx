@@ -21,7 +21,7 @@ type Props = {
   onRemoveMention?: (m: Mention) => void
 }
 
-/** A file's chip: icon, name, size — and an x when it can be taken back out. */
+/** A file's chip: icon, name, size, and an x when it can be taken back out. */
 export function FileChip({ file, href, onRemove }: { file: StripFile; href?: string; onRemove?: () => void }) {
   const body = (
     <>

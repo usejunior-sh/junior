@@ -1,4 +1,4 @@
-/* Junior's name with its face — on the cards triage draws (questions, approvals, plans). */
+/* Junior's name with its face, on the cards triage draws (questions, approvals, plans). */
 /* Inline, not flex: the words after the name keep their leading space ("Junior wants to use…", "Junior’s plan"). */
 .jrLabel .jrFace { display: inline-block; vertical-align: middle; margin: -6px 9px -4px 0; }
 .jrLabel .jrWho { color: var(--ink); font-family: var(--sans); font-weight: 500; }
@@ -35,8 +35,8 @@
 }
 .uiTipArrow { fill: var(--elev); }
 @keyframes tipIn { from { opacity: 0; transform: translateY(3px) scale(0.97); } to { opacity: 1; transform: none; } }
-/* Junior's bubble: the plain tip, with one sharp corner by the face so it reads as Junior speaking —
-   its words, then the facts under them, quieter. */
+/* Junior's bubble: the plain tip, with one sharp corner by the face so it reads as Junior speaking.
+   Its words, then the facts under them, quieter. */
 .uiTip.junior { display: flex; flex-direction: column; gap: 1px; padding: 7px 11px 8px; border-radius: 10px 10px 10px 3px; }
 .uiTip.junior[data-side="bottom"] { border-radius: 3px 10px 10px 10px; }
 .uiTip.junior .tipLine { font-weight: 500; color: var(--ink); }
@@ -203,7 +203,7 @@
 button.chip:hover:not(:disabled), .chip[data-state="open"] { color: var(--ink); border-color: var(--hair-bright); }
 .chip:disabled { opacity: 0.45; cursor: default; }
 .chip svg { width: 12px; height: 12px; flex: none; color: var(--ash); }
-/* The composer's chips — the knobs beside send and the project/branch pickers in its head — are one
+/* The composer's chips, the knobs beside send and the project/branch pickers in its head, are one
    height (28px), a size up from other chips, so they and the send button read as one set. Phones keep
    their own row (see the end). */
 @media (min-width: 768px) {
@@ -275,7 +275,7 @@ button.chip:hover:not(:disabled), .chip[data-state="open"] { color: var(--ink); 
 #newSessionHome { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px; padding: 20px 40px; position: relative; }
 /* Junior's new session: the face asks in a bubble, reacts as you type, nods when you send.
    Its colour (the persona's, as --junior) touches the glow, the bubble, the caret, the border
-   while you type and send — nothing else. */
+   while you type and send, nothing else. */
 /* 22px from the page's gap + 14px here: about 36px between Junior's line and the box */
 #newSessionHome .nsWho { position: relative; display: flex; align-items: center; justify-content: center; gap: 16px; max-width: 760px; margin-bottom: 14px; }
 #newSessionHome .nsFace { position: relative; display: inline-flex; flex: none; }
@@ -298,7 +298,7 @@ button.chip:hover:not(:disabled), .chip[data-state="open"] { color: var(--ink); 
 #newSessionHome.junior #box { caret-color: var(--junior); }
 #newSessionHome.junior #sendBtn:not(:disabled) { background: var(--junior); color: #14121a; }
 #newSessionHome.junior #sendBtn:hover:not(:disabled) { background: color-mix(in srgb, var(--junior) 85%, white); }
-/* Once there's something to send, send is the primary button with Junior in it — the same white,
+/* Once there's something to send, send is the primary button with Junior in it. The same white,
    radius and height as the plain send, so it reads as the one bright control, not an oversized chip.
    The face carries the colour. It pops in. */
 #sendBtn.face, #newSessionHome.junior #sendBtn.face:not(:disabled) {
@@ -338,7 +338,7 @@ button.chip:hover:not(:disabled), .chip[data-state="open"] { color: var(--ink); 
 #newSessionHome h2 { margin: 0; font-family: var(--display); font-weight: 400; font-size: 2.7692rem; letter-spacing: -0.36px; line-height: 1; color: var(--ink); }
 #newSessionHome #composer { width: 100%; padding: 0; display: flex; justify-content: center; }
 #newSessionHome .frame { width: 100%; }
-/* The draft box opens tall — a first prompt is usually a paragraph. In a live
+/* The draft box opens tall: a first prompt is usually a paragraph. In a live
    session it starts at two lines and grows with what you type. */
 #newSessionHome #box { min-height: 96px; }
 #newSessionHome .actions { display: flex; align-items: center; gap: 12px; }

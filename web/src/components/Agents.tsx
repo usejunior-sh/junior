@@ -1,8 +1,8 @@
 /**
  * Subagents in a chat (.docs/subagents-ux.html), in four places so none of them is big:
  *
- *   AgentCard      in the transcript — one per Agent call, the history
- *   AgentDock      above the composer — only what's running now; gone when nothing is
+ *   AgentCard      in the transcript, one per Agent call, the history
+ *   AgentDock      above the composer, only what's running now; gone when nothing is
  *   AgentsMenu     every agent this session spawned, finished ones too (header, dock, breadcrumb)
  *   AgentHeader    an agent's own view: Main › … › it, its state, Stop / Background
  *
@@ -81,7 +81,7 @@ function AgentStatus({ run }: { run: AgentRun }) {
 
 const tokens = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(n >= 100_000 ? 0 : 1)}k tok` : `${n} tok`)
 
-/** "12 tools · 38.6k tok · 52s" — whatever is known. */
+/** "12 tools · 38.6k tok · 52s", whatever is known. */
 function numbers(run: AgentRun, now: number, withTokens = true): string {
   const ms = agentElapsedMs(run, now)
   return [
@@ -327,7 +327,7 @@ export function AgentHeader({
   )
 }
 
-/** What the spawning agent asked of it — first in its view, folded. */
+/** What the spawning agent asked of it, first in its view, folded. */
 export function AgentBrief({ run, from }: { run: AgentRun; from: string }) {
   const [open, setOpen] = useState(false)
   if (!run.prompt) return null
@@ -344,7 +344,7 @@ export function AgentBrief({ run, from }: { run: AgentRun; from: string }) {
   )
 }
 
-/** How it ended — last in its view. */
+/** How it ended: last in its view. */
 export function AgentOutcome({ run, to }: { run: AgentRun; to: string }) {
   if (run.state === 'running') return null
   if (run.state === 'failed') return <div className="msg error">{run.error || 'The agent failed.'}</div>
@@ -370,7 +370,7 @@ export function AgentOutcome({ run, to }: { run: AgentRun; to: string }) {
 
 /**
  * The composer in an agent's view. The SDK can't address a subagent, so this
- * writes to main, which passes it on with SendMessage — said once, plainly.
+ * writes to main, which passes it on with SendMessage, said once, plainly.
  */
 export function AgentComposer({ run, onSend }: { run: AgentRun; onSend: (text: string) => void }) {
   const [text, setText] = useState('')

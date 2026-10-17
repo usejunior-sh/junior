@@ -26,7 +26,7 @@ export const EMPTY_TEXT: Partial<Record<InboxTab, string>> = {
 
 /**
  * An item row with the sessions dispatched for it that are held on a prompt,
- * one line each beneath it — answering one opens the session.
+ * one line each beneath it, answering one opens the session.
  */
 export function WorkRowWithSessions({
   entry,
@@ -83,7 +83,7 @@ export function SessionRow({
   )
 }
 
-/** Something broke that isn't an item — opens where it can be fixed. */
+/** Something broke that isn't an item: opens where it can be fixed. */
 export function AlertRow({ alert, onOpen }: { alert: InboxAlert; onOpen: () => void }) {
   return (
     <div className="wrow alert alertRow">
@@ -125,13 +125,13 @@ function flowTitle(f: ItemFlow): string {
 }
 
 /**
- * One work item, one line (.docs/work-item-variations.html — variation A).
+ * One work item, one line (.docs/work-item-variations.html, variation A).
  *
  * The row is a ledger entry, not a card: state, source and age sit in
  * fixed-width right-aligned cells so they form columns down the page, and
  * scanning happens by alignment rather than by reading a strip of pills. The
  * right-hand cells are the row's one piece of real estate and three things
- * take turns in it, never two at once — the meta columns at rest, the
+ * take turns in it, never two at once. The meta columns at rest, the
  * shortcut legend when the row is keyboard-selected, the action cluster on
  * hover. Because they swap in place, nothing reflows under the cursor.
  */

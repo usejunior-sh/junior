@@ -6,7 +6,7 @@ export function signalIds(item: ScoredItem): string[] {
   return [item.id, ...(item.linked ?? []).map((l) => l.id)]
 }
 
-/** "4 signals · Niraj, Drew" — for a row that folds several items about one thing. */
+/** "4 signals · Niraj, Drew", for a row that folds several items about one thing. */
 export function signalsText(item: ScoredItem): string | null {
   if (!item.linked?.length) return null
   const people = [...new Set([item.author, ...item.linked.map((l) => l.author)].filter(Boolean))]
@@ -18,7 +18,7 @@ export function signalsText(item: ScoredItem): string | null {
 export const DUE_KEYS: Record<string, Section> = { t: 'today', m: 'next-workday', w: 'this-week', l: 'later' }
 export const DUE_KEY_OF = Object.fromEntries(Object.entries(DUE_KEYS).map(([k, s]) => [s, k])) as Record<Section, string>
 
-/** Tomorrow 09:00 local — the one snooze duration the inbox knows (`z`). */
+/** Tomorrow 09:00 local: the one snooze duration the inbox knows (`z`). */
 export function tomorrow9(): number {
   const t = new Date()
   t.setDate(t.getDate() + 1)

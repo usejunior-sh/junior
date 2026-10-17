@@ -1,6 +1,6 @@
 /**
  * The Junior page's sidebar (.docs/junior-goals-teams/junior-home-v2.html, J):
- * Junior's card, not a settings form — who it is, what it's doing right now,
+ * Junior's card, not a settings form, who it is, what it's doing right now,
  * what it can see on this Mac, and what it can do. Name,
  * colour and voice sit behind "Customize"; every capability opens a Junior
  * chat with the first message written, waiting for you to send it.
@@ -97,7 +97,7 @@ export function JuniorSide({ day, mood, onNavigate, onSeeAll, onCustomize, onDis
 
 /**
  * The next row Junior could take off today's plan when it's free: one of its
- * own that hasn't started, else one of yours that is just to do — not done,
+ * own that hasn't started, else one of yours that is just to do, not done,
  * not running, not waiting on you or anyone else, not finished and waiting
  * for your review.
  */
@@ -107,7 +107,7 @@ export function nextForJunior(rows: readonly PlanRow[]): PlanRow | null {
   return rows.find((r) => r.owner === 'junior' && r.startable && takeable(r)) ?? rows.find((r) => r.owner === 'you' && takeable(r)) ?? null
 }
 
-/** What Junior is doing, with its step as a bar — or, when free, an offer to take the next row. */
+/** What Junior is doing, with its step as a bar, or, when free, an offer to take the next row. */
 function Now({ day, onNavigate, onDispatch }: { day: JuniorDay; onNavigate: (hash: string) => void; onDispatch: (itemId: string) => void }) {
   const now: JuniorNow = day.now
   const [skipped, setSkipped] = useState<string[]>([])

@@ -1,7 +1,7 @@
 /**
  * The workspace's identity and Claude-auth controls, shared by the create /
  * onboarding flow (WorkspaceModal) and the settings page's Workspace and
- * Providers tabs — one set of cards, one verify panel, so the two doors
+ * Providers tabs. One set of cards, one verify panel, so the two doors
  * never drift apart.
  */
 import { Check, KeyRound, Laptop, RefreshCw, UserRound } from 'lucide-react'
@@ -102,7 +102,7 @@ export function AuthCards({
   onChange: (b: WorkspaceAuthBackend) => void
   apiKey: string
   onApiKeyChange: (k: string) => void
-  /** masked tail of a key already stored — the field then reads as "replace", not "required" */
+  /** masked tail of a key already stored. The field then reads as "replace", not "required" */
   apiKeyHint?: string | null
 }) {
   return (
@@ -196,7 +196,7 @@ export function VerifyPanel({
             <div className="wsVerifyRow bad">✗ Auth failed{state.authError ? ` — ${state.authError}` : ''}</div>
           )}
           {(() => {
-            // Report what the probe actually saw — never assert from the backend
+            // Report what the probe actually saw, never assert from the backend
             // choice alone. api-key workspaces normally have zero claude.ai
             // connectors (those ride a claude.ai login), and the probe proves it.
             const claudeAi = state.connectors.filter((c) => c.source === 'claude.ai' && c.status === 'connected')

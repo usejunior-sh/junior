@@ -1,5 +1,5 @@
 /**
- * Unified-diff parsing and a small line differ — both pure, both dependency
+ * Unified-diff parsing and a small line differ, both pure, both dependency
  * free on purpose (a diff library is a lot of weight for two screens, and the
  * published package should stay cheap to install).
  *
@@ -9,7 +9,7 @@
  */
 
 export type DiffRow =
-  /** `@@ … @@` — a jump in the file */
+  /** `@@ … @@`: a jump in the file */
   | { kind: 'hunk'; text: string; oldNo: null; newNo: null }
   | { kind: 'context'; text: string; oldNo: number; newNo: number }
   | { kind: 'add'; text: string; oldNo: null; newNo: number }
@@ -72,7 +72,7 @@ export function parsePatch(patch: string): ParsedDiff {
     } else if (line.startsWith(' ')) {
       rows.push({ kind: 'context', text: body, oldNo: oldNo++, newNo: newNo++ })
     }
-    // Anything else is a stray trailing line — drop it rather than render it.
+    // Anything else is a stray trailing line, drop it rather than render it.
   }
 
   return { rows, additions, deletions, isBinary }
@@ -110,7 +110,7 @@ export function toSplit(rows: readonly DiffRow[]): SplitRow[] {
 /**
  * A line diff of two strings, for tool inputs that never reached git.
  *
- * Classic LCS over lines — O(n·m) in table size, which is the right trade for
+ * Classic LCS over lines: O(n·m) in table size, which is the right trade for
  * an `Edit`'s couple of dozen lines and keeps the whole thing dependency free.
  * Above `MAX_LCS_CELLS` it degrades to "all removed, then all added" rather
  * than locking the tab up.
@@ -171,7 +171,7 @@ export function diffLines(before: string, after: string): ParsedDiff {
 
 /**
  * Drop long runs of unchanged lines, leaving `pad` lines of context either
- * side of each change — the same job `--unified=N` does for git, but applied
+ * side of each change. The same job `--unified=N` does for git, but applied
  * to a diff we computed ourselves.
  */
 export function collapseContext(rows: readonly DiffRow[], pad = 3): DiffRow[] {

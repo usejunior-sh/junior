@@ -1,7 +1,7 @@
 /**
  * Mermaid diagrams for ```mermaid fences (rendered by components/Markdown.tsx).
  *
- * Mermaid is a megabyte of grammar and layout code, so it is a lazy import — a
+ * Mermaid is a megabyte of grammar and layout code, so it is a lazy import. A
  * page without diagrams never pays for it. Rendering is async and slow enough
  * to see, while markdown re-renders on every token of a streaming message, so
  * every diagram is cached by (theme, source): the second render of the same
@@ -28,7 +28,7 @@ const load = () => (loading ??= import('mermaid').then((m) => m.default))
 /**
  * Mermaid bakes its palette into each SVG as it renders, so the config is read
  * back off the live CSS variables rather than hard-coded. A theme flip renders
- * again under a new cache key — the SVGs already on the page are not restyled.
+ * again under a new cache key. The SVGs already on the page are not restyled.
  */
 function config(theme: DiagramTheme): MermaidConfig {
   const css = getComputedStyle(document.documentElement)
@@ -91,7 +91,7 @@ async function renderOne(mermaid: Mermaid, code: string): Promise<string | null>
 
 /**
  * Render every source not already cached for `theme`. Resolves to true when
- * the cache changed — i.e. when the caller has something new to show.
+ * the cache changed, i.e. when the caller has something new to show.
  */
 export async function renderDiagrams(theme: DiagramTheme, codes: string[]): Promise<boolean> {
   if (!codes.some((code) => !cache.has(cacheKey(theme, code)))) return false

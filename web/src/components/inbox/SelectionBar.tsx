@@ -53,10 +53,6 @@ export function SelectionBar({
   )
 }
 
-// ---------------------------------------------------------------------------
-// Cards
-// ---------------------------------------------------------------------------
-
 export type RowActions = {
   tab: InboxTab
   projectName: (id?: string) => string | undefined

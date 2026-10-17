@@ -1,6 +1,6 @@
 /**
  * What a dispatched session can actually reach: the claude.ai connectors and
- * local MCP servers, exactly as a session loads them. Lives in Settings —
+ * local MCP servers, exactly as a session loads them. Lives in Settings:
  * there is nothing to *do* here beyond looking and re-probing, so it is a
  * read-out, not a destination.
  *

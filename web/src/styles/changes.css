@@ -1,5 +1,5 @@
 /* ---------------------------------------------------------------------------
-   Session changes — the drawer between the transcript and the composer, and
+   Session changes: the drawer between the transcript and the composer, and
    the diff primitive it shares with the Edit/Write tool cards.
    --------------------------------------------------------------------------- */
 
@@ -178,7 +178,7 @@
 .tab.active .br { color: var(--ash); }
 .tab .br.gone { text-decoration: line-through; }
 
-/* A session row in a worktree grows a mono sub-line — the Terminals row pattern. */
+/* A session row in a worktree grows a mono sub-line, the Terminals row pattern. */
 .prow.wt { height: auto; padding-top: 6px; padding-bottom: 6px; align-items: flex-start; }
 .prow.wt > .dot { margin-top: 6px; }
 .prow.wt .t { display: flex; flex-direction: column; gap: 2px; white-space: normal; }
@@ -254,7 +254,7 @@
 .rmWorktree .checkLine code { font-family: var(--mono); font-size: 0.8462rem; color: var(--ink); }
 .rmWorktree .row .danger { margin-right: auto; }
 
-/* A session whose worktree is gone: the composer's card, centred — one line saying what happened, the two ways on below. */
+/* A session whose worktree is gone: the composer's card, centred. One line saying what happened, the two ways on below. */
 #composer .frame.goneBar { align-items: center; gap: 16px; padding: 20px 20px 18px; text-align: center; }
 .goneBar .d { display: inline-flex; align-items: center; gap: 8px; margin: 0; color: var(--mute); font-size: 0.9615rem; line-height: 1.45; }
 .goneBar .ic { flex: none; color: var(--ash); }
@@ -290,7 +290,7 @@
 /* Radix collapsible content carries `hidden` when closed; our display rules must not override it. */
 .limitsBody[hidden], .tsTools[hidden] { display: none; }
 
-/* integrations picker: tabs by source, search, bounded scroll (job-spec.md, item 1) */
+/* integrations picker: tabs by source, search, bounded scroll */
 .tsBar { display: flex; align-items: center; gap: 10px; padding: 6px 12px; border-bottom: 1px solid var(--hair); flex-wrap: wrap; }
 .tsTabList { display: flex; gap: 2px; }
 .tsTab { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 8px; border: 0; border-radius: var(--r-sm); background: transparent; color: var(--ash); font-size: 0.8846rem; cursor: pointer; }
@@ -305,7 +305,7 @@
 .toolServers .tsEmpty code { font-family: var(--mono); font-size: 0.8462rem; }
 
 /* ---------- settings → phone: QR pairing ----------
-   The QR card is the one white surface in the pane — the design system's
+   The QR card is the one white surface in the pane. The design system's
    "email card inset": contrast is the elevation, no shadow. */
 .phonePair { display: flex; gap: 20px; align-items: flex-start; margin-bottom: 12px; }
 .phoneQrCard { flex: none; width: 184px; padding: 0; border-radius: var(--r-lg); overflow: hidden; background: #fff; }

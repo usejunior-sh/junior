@@ -1,7 +1,7 @@
 /**
  * Triage.app (desktop/): the Electron preload exposes `window.triageDesktop`
- * on the daemon's pages. Present = the UI draws its own title bar — traffic
- * lights inside the top bar, ← → driving the window's history — instead of
+ * on the daemon's pages. Present = the UI draws its own title bar, traffic
+ * lights inside the top bar, ← → driving the window's history, instead of
  * the grey one macOS would add. Absent (a browser, a phone) = nothing changes.
  */
 import { useEffect, useState } from 'react'

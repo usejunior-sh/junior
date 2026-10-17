@@ -3,9 +3,7 @@ import type { WorkspaceSettings, SettingsResponse } from '../../../../shared/pro
 
 export const Loading = () => <div className="pickerLoading">Loading…</div>
 
-// ---------------------------------------------------------------------------
-// Building blocks — a section with a heading, and a row: label left, control right.
-// ---------------------------------------------------------------------------
+// Building blocks: a section with a heading, and a row: label left, control right.
 
 export function Section({ title, hint, children }: { title: string; hint?: ReactNode; children: ReactNode }) {
   return (
@@ -29,7 +27,7 @@ export function Row({ label, hint, children }: { label: string; hint?: ReactNode
   )
 }
 
-/** A save button plus a fading "Saved" — one idiom for every form here. */
+/** A save button plus a fading "Saved". One idiom for every form here. */
 export function SaveRow({
   dirty,
   saving,
@@ -99,11 +97,9 @@ export function useWorkspaceSettings() {
   return { settings, error, save }
 }
 
-// ---------------------------------------------------------------------------
-// Appearance — theme and text size (per browser).
-// ---------------------------------------------------------------------------
+// Appearance: theme and text size (per browser).
 
-/** A pill of mutually-exclusive options — the same idiom as the inbox filter. */
+/** A pill of mutually-exclusive options: the same idiom as the inbox filter. */
 export function Segmented<T extends string | number>({
   value,
   options,

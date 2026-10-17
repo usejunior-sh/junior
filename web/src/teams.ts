@@ -103,7 +103,7 @@ type TeamGoalsState = { goals: TeamGoalSummary[]; waitingOnYou: number; loaded: 
 /**
  * The Goals tab's list (GET /api/teams/goals): every team run that is a goal.
  * Refetched when any goal's lead moves on the session list (its run's state or
- * revision) — the same cue the team strip and dock refetch on.
+ * revision). The same cue the team strip and dock refetch on.
  */
 export function useTeamGoals(sessions: readonly SessionSummary[]): TeamGoalsState {
   const [state, setState] = useState<TeamGoalsState>({ goals: [], waitingOnYou: 0, loaded: false, error: null })

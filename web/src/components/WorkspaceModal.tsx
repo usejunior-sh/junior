@@ -1,17 +1,17 @@
 /**
- * The workspace modal (.docs/workspaces.md) — one component, two entrances:
+ * The workspace modal (.docs/workspaces.md), one component, two entrances:
  *
- *   create      — "New workspace…" from the sidebar switcher
- *   onboarding  — first run: the same flow, introducing the concept and
+ *   create, "New workspace…" from the sidebar switcher
+ *   onboarding, first run: the same flow, introducing the concept and
  *                 configuring the default workspace
  *
  * Editing an existing workspace lives on the settings page (Workspace and
  * Claude auth tabs), which shares these cards and the verify panel.
  *
- * Three steps: identity (name, colour, default project folder — every
+ * Three steps: identity (name, colour, default project folder, every
  * workspace has one, decision 549a251e) → Claude auth (three cards, the
  * tradeoffs spelled out on each) → verify (a live probe with the workspace's own env, so a workspace
- * is never left silently broken — jobs fail in the background, auth must be
+ * is never left silently broken, jobs fail in the background, auth must be
  * proven in the foreground).
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -56,7 +56,7 @@ export function WorkspaceModal({ mode, onClose }: Props) {
     if (!mode) return
     const ws = mode.kind === 'create' ? null : mode.workspace
     setStep('identity')
-    // The default workspace is born "Default" — onboarding asks for a real name.
+    // The default workspace is born "Default": onboarding asks for a real name.
     setName(ws && ws.name !== 'Default' ? ws.name : '')
     setColor(ws?.color ?? WORKSPACE_COLORS[0])
     setDescription(ws?.description ?? '')
@@ -99,7 +99,7 @@ export function WorkspaceModal({ mode, onClose }: Props) {
 
   const close = useCallback(() => {
     // Onboarding is once-per-install: closing it (Escape, backdrop, Skip)
-    // counts as "skip" — it must not reappear on every load.
+    // counts as "skip": it must not reappear on every load.
     if (mode?.kind === 'onboarding') finishOnboarding()
     else {
       void store.refreshWorkspaces()

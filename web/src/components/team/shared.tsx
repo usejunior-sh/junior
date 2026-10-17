@@ -6,9 +6,9 @@ import { teamsCall, loadTeamRun, colorOf } from '../../teams.js'
 /**
  * A team run in a session (Teams v2), in three places so none of them is big:
  *
- *   TeamStrip  over the transcript — who's on the team, what each is doing and has spent
- *   TeamDock   above the composer, on the lead — the one thing the run needs from you now
- *   TeamSide   a drawer on the right — every detail, editable in place before you approve
+ *   TeamStrip  over the transcript, who's on the team, what each is doing and has spent
+ *   TeamDock   above the composer, on the lead, the one thing the run needs from you now
+ *   TeamSide   a drawer on the right. Every detail, editable in place before you approve
  *
  * All three read one fetch of the run (useTeamRun), refetched whenever its revision moves.
  */

@@ -35,7 +35,7 @@ const ITEMS: Array<{ id: RailSection; label: string; icon: ComponentType<LucideP
   { id: 'jobs', label: 'Jobs', icon: CalendarClock },
 ]
 
-/** The labelled 64px rail — Junior first, then one button per destination, counts as small badges. */
+/** The labelled 64px rail: Junior first, then one button per destination, counts as small badges. */
 export function Rail({ active, collapsed, inboxCount, runningCount, terminalCount, changedCount, actionsCount, goalsCount, juniorName, juniorMood, onGo }: Props) {
   const juniorToggle = collapsed !== undefined && active === 'junior'
   return (

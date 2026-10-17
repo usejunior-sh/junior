@@ -17,7 +17,7 @@ import { PromptBox } from './PromptBox.js'
 import { PromptHead } from './PromptHead.js'
 
 type Props = {
-  /** The live session this composer steers — keys its unsent draft. */
+  /** The live session this composer steers: keys its unsent draft. */
   sessionId: string
   status: SessionStatus
   cwd: string
@@ -31,11 +31,11 @@ type Props = {
   permissionMode?: PermissionMode
   /** Plan mode is on: Junior plans, edits nothing, until you approve the plan. */
   planning?: boolean
-  /** The agent the session runs on — shown, never changed: a session keeps its agent. */
+  /** The agent the session runs on: shown, never changed: a session keeps its agent. */
   provider: ProviderId
-  /** `mode: 'goal'` — sent in Goal mode */
+  /** `mode: 'goal'`: sent in Goal mode */
   onSend: (text: string, images?: ImageAttachment[], mentions?: Mention[], mode?: 'goal', files?: string[]) => void
-  /** Plan mode on or off — here only off: the Planning chip's way out */
+  /** Plan mode on or off: here only off: the Planning chip's way out */
   onPlanningChange: (planning: boolean) => void
   onInterrupt: () => void
   onModelChange: (model: string | undefined, effort: EffortLevel | undefined) => void
@@ -44,7 +44,7 @@ type Props = {
 }
 
 /**
- * The session composer — the same prompt box the draft tab uses, headed by the
+ * The session composer: the same prompt box the draft tab uses, headed by the
  * folder the session runs in, plus the interrupt button while a turn is live.
  */
 export function Composer({
@@ -75,7 +75,7 @@ export function Composer({
   const [projects, setProjects] = useState<Project[]>([])
   const running = status === 'running' || status === 'starting'
 
-  // Only to name the project in the header — the folder itself is already fixed.
+  // Only to name the project in the header. The folder itself is already fixed.
   useEffect(() => {
     void fetch('/api/projects')
       .then((r) => r.json() as Promise<ProjectsResponse>)

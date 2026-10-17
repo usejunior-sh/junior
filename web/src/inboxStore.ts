@@ -1,7 +1,7 @@
 /**
  * The open inbox, as a tiny external store shared by every surface that shows
  * it: the Queue panel, the rail badge, the inbox page and the item page. The
- * server keeps a snapshot cache, so a refresh is cheap (~30ms) — the page that
+ * server keeps a snapshot cache, so a refresh is cheap (~30ms). The page that
  * owns the full lifecycle (InboxPage) publishes here after its own loads and
  * optimistic edits, so the panel never lags the list beside it.
  */
@@ -64,7 +64,7 @@ export const inboxStore = {
     notify()
   },
 
-  /** Local edit (done / snoozed / priority) — keep the panel in step. */
+  /** Local edit (done / snoozed / priority), keep the panel in step. */
   patch(fn: (items: readonly ScoredItem[]) => readonly ScoredItem[]) {
     snap = { ...snap, items: fn(snap.items) }
     notify()

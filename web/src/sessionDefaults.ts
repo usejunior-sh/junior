@@ -1,8 +1,8 @@
 /**
  * What a new session starts with, when nothing on the draft says otherwise:
- * model, effort, fast mode, autonomy level. A per-browser preference — the
+ * model, effort, fast mode, autonomy level. A per-browser preference, the
  * draft composer writes the last pick here, the Sessions settings tab edits
- * it directly — so it lives in localStorage, not the session store.
+ * it directly, so it lives in localStorage, not the session store.
  */
 import type { EffortLevel, PermissionMode } from '../../shared/protocol.js'
 import { isEffort } from './models.js'
@@ -10,7 +10,7 @@ import { isPermissionMode, normalizeMode } from './permissionModes.js'
 
 const MODEL_KEY = 'triage.newSession.model'
 const EFFORT_KEY = 'triage.newSession.effort'
-// Fast mode is stored as an explicit '1' — anything else is off, so a stale
+// Fast mode is stored as an explicit '1'. Anything else is off, so a stale
 // or garbled value can never quietly start billing at premium rates.
 const FAST_MODE_KEY = 'triage.newSession.fastMode'
 const PERMISSION_KEY = 'triage.newSession.permissionMode'

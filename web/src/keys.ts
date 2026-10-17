@@ -1,6 +1,6 @@
 /** Shared guards for global hotkeys. */
 
-/** True when the event originates in a text-entry control — letter keys belong to it. */
+/** True when the event originates in a text-entry control, letter keys belong to it. */
 export function isTypingTarget(e: KeyboardEvent): boolean {
   const el = e.target as HTMLElement | null
   if (!el) return false
@@ -8,7 +8,7 @@ export function isTypingTarget(e: KeyboardEvent): boolean {
 }
 
 /**
- * True while any <dialog> or popover menu is open — single-key hotkeys should
+ * True while any <dialog> or popover menu is open, single-key hotkeys should
  * stay quiet, or "n" typed at an open menu starts a new session behind it.
  */
 export function anyDialogOpen(): boolean {

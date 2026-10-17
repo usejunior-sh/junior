@@ -1,10 +1,10 @@
 /**
- * One goal: what it's for, where it stands, and its ledger — plan.md,
+ * One goal: what it's for, where it stands, and its ledger, plan.md,
  * handoff.md and the latest log.md entries, read straight from the goal's
  * folder in the artifacts repo. Steps, gates and the event history sit in the
- * aside. A plan up for review gets the review box (M2): comment on a step or
- * the whole plan, send it back with the comments, or approve it. Once it runs
- * (M3), the steering box: message the lead, answer what it asked, take over
+ * aside. A plan up for review gets the review box: comment on a step or
+ * the whole plan, send it back with the comments, or approve it. Once it runs,
+ * the steering box: message the lead, answer what it asked, take over
  * the worktree and hand it back, accept the result.
  */
 import { useState } from 'react'
@@ -22,7 +22,7 @@ import { Markdown } from './Markdown.js'
 
 const HORIZON: Record<GoalHorizon, string> = { today: 'today', until_done: 'until done', ongoing: 'ongoing' }
 
-/** plan.md without its machine-readable tail — the page shows the prose. */
+/** plan.md without its machine-readable tail: the page shows the prose. */
 const planProse = (md: string) => md.split(/\n## Plan data\n/)[0]!
 
 function eventText(e: GoalEvent): string {
@@ -141,7 +141,7 @@ const STEERABLE = new Set<Goal['state']>(['queued', 'running', 'waiting_world', 
 
 const GATE_WHY = { approval: 'Approval', needs_user: "The checker can't tell", deadline: 'Past its deadline' } as const
 
-/** "in 5m", "in 3h" — or "due" once the time has come. */
+/** "in 5m", "in 3h", or "due" once the time has come. */
 function inSpan(at: number | null): string {
   if (at == null) return '—'
   const s = Math.round((at - Date.now()) / 1000)
@@ -173,7 +173,7 @@ function AskText({ ask }: { ask: GoalAsk }) {
 }
 
 /**
- * Steering a goal that runs (decision 8): one box that says the right thing
+ * Steering a goal that runs: one box that says the right thing
  * for where the goal stands. A message wakes the lead; an answer settles what
  * it asked; take over pauses it and opens the worktree; hand back wakes the
  * lead to what you changed.

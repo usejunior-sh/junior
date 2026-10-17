@@ -1,7 +1,7 @@
 /**
  * Skills and agents (server/library.ts) from the browser: the list, one file,
  * and the writes. The server reloads every live session after a write and
- * broadcasts `library_changed`, which `useLibrary` refetches on — so a skill a
+ * broadcasts `library_changed`, which `useLibrary` refetches on, so a skill a
  * session just wrote shows up here without a refresh.
  */
 import { useCallback, useEffect, useState } from 'react'
@@ -46,7 +46,7 @@ export const removeLibraryItem = (path: string, fileOnly = false) =>
   call<{ ok: true }>('DELETE', `/api/library?path=${encodeURIComponent(path)}${fileOnly ? '&file=1' : ''}`)
 export const openLibraryFolder = (path: string) => call<{ ok: true }>('POST', '/api/library/open', { path })
 
-/** The folder a target writes into, for a project target its repo — where a session making one should run. */
+/** The folder a target writes into, for a project target its repo, where a session making one should run. */
 export const targetCwd = (t: LibraryTarget | undefined): string | undefined =>
   t?.id.startsWith('project:') ? t.id.slice('project:'.length) : undefined
 

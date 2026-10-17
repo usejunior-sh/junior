@@ -1,6 +1,6 @@
 /**
- * A v4 UUID. `crypto.randomUUID` exists only in a secure context — https or
- * localhost — and a paired phone loads the daemon over plain http on the LAN,
+ * A v4 UUID. `crypto.randomUUID` exists only in a secure context, https or
+ * localhost, and a paired phone loads the daemon over plain http on the LAN,
  * where it is undefined. `getRandomValues` has no such restriction.
  */
 export function uuid(): string {

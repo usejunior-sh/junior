@@ -28,7 +28,7 @@ export function grantIcon(g: JobToolGrant): ComponentType<LucideProps> {
 
 export { grantLabel }
 
-/** "ok (caught up)", "failed ×3", … — a run status the way the list shows it. */
+/** "ok (caught up)", "failed ×3", …, a run status the way the list shows it. */
 export function runStatusText(status: JobRunStatus | undefined, trigger?: JobRunTrigger, failures = 0): string {
   if (!status) return 'never'
   if (status === 'ok') return trigger === 'catch_up' ? 'ok (caught up)' : 'ok'
@@ -48,7 +48,7 @@ export function fmtUntil(at: number, now = Date.now()): string {
 
 export const TRIGGER_LABEL: Record<JobRunTrigger, string> = { scheduled: 'scheduled', catch_up: 'caught up', manual: 'manual', redraft: 'redraft after a send-back' }
 
-/** The schedule presets — a preset plus a local time renders to one cron line. */
+/** The schedule presets: a preset plus a local time renders to one cron line. */
 export type SchedulePreset = 'hourly' | 'daily' | 'weekdays' | 'weekly' | 'custom'
 
 export const PRESETS: Array<{ id: SchedulePreset; label: string }> = [

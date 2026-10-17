@@ -1,6 +1,6 @@
 /**
- * Resolving the bare ids an agent drops into chat — an artifact id, a session
- * id, a work-item id — back to the entity's name and the in-app route that
+ * Resolving the bare ids an agent drops into chat, an artifact id, a session
+ * id, a work-item id, back to the entity's name and the in-app route that
  * opens it. The data is already in the client stores (sessions, the artifacts
  * index, the open inbox), so this is a lookup, not a fetch.
  *
@@ -39,7 +39,7 @@ const escapeRe =(s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 /**
  * The lookup index over everything the client currently knows how to open. Work
  * items come from the open inbox only, so a done/snoozed item falls back to its
- * id — acceptable; artifacts and sessions are the reference types that matter.
+ * id, acceptable; artifacts and sessions are the reference types that matter.
  */
 export function useRefIndex(): RefIndex {
   const sessions = useSessions()

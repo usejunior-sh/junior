@@ -12,12 +12,10 @@ import { PRIORITY_VALUES, PRIORITY_LABEL } from '../../itemUi.js'
 import { Select, SelectItem } from '../../ui/Select.js'
 import { choosesProject, ProjectIdPicker, defaultProjectOf } from '../ProjectPicker.js'
 
-// ---------------------------------------------------------------------------
 // Item composer: add or edit a manual work item. Title, description, link,
-// project, priority — plus screenshots, which are the point: a brief or a
+// project, priority, plus screenshots, which are the point: a brief or a
 // dispatched session reads the images the same way it reads the description,
 // so "here is what's broken" can be a paste rather than a paragraph.
-// ---------------------------------------------------------------------------
 
 export function ItemComposer({
   open,
@@ -45,7 +43,7 @@ export function ItemComposer({
   const [description, setDescription] = useState('')
   const [url, setUrl] = useState('')
   const [linkOpen, setLinkOpen] = useState(false)
-  /** images the item already holds (edit only) — dropping one here deletes it on save */
+  /** images the item already holds (edit only), dropping one here deletes it on save */
   const [kept, setKept] = useState<ItemImage[]>([])
   /** files the item already holds (edit only), dropped here the same way */
   const [keptFiles, setKeptFiles] = useState<FileRef[]>([])
@@ -153,7 +151,7 @@ export function ItemComposer({
           e.preventDefault()
           void save()
         }}
-        // ⌘↵ saves from any field — the description is where you live, and
+        // ⌘↵ saves from any field: the description is where you live, and
         // reaching for the button to save a two-line to-do is a tax.
         onKeyDown={(e) => {
           if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && title.trim() && !saving && !attach.uploading) {
@@ -317,10 +315,8 @@ export function ItemComposer({
   )
 }
 
-// ---------------------------------------------------------------------------
 // Repo picker: which repos the GitHub source is scoped to, per workspace.
-// Empty = no GitHub items (scope is opt-in per workspace — see workspaces.md).
-// ---------------------------------------------------------------------------
+// Empty = no GitHub items (scope is opt-in per workspace, .docs/workspaces.md).
 
 export function RepoPicker({
   open,

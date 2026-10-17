@@ -14,7 +14,7 @@ const EVENT_LABEL: Record<string, string> = {
   'flow-set': 'turn set',
 }
 
-/** A stage/turn event's one line: "Ready · My turn", "Waiting on others — Niraj", "back to automatic". */
+/** A stage/turn event's one line: "Ready · My turn", "Waiting on others, Niraj", "back to automatic". */
 function flowLine(ev: ItemEvent): string | undefined {
   const d = ev.detail ?? {}
   if (ev.event === 'moved') {

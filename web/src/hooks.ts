@@ -19,7 +19,7 @@ export function useWorkspaceId() {
   return useSyncExternalStore(store.subscribeStructural, store.getWorkspaceId)
 }
 
-/** Which copy of triage this tab is talking to — see shared/protocol.ts `Build`. */
+/** Which copy of triage this tab is talking to, see shared/protocol.ts `Build`. */
 export function useBuild() {
   return useSyncExternalStore(store.subscribeStructural, store.getBuild)
 }
@@ -53,37 +53,37 @@ export function useLiveText(sessionId: string | null) {
 
 export type Route =
   | { page: 'home' }
-  /** `#/junior` — Junior's page: the brief, today's plan, what it can do */
+  /** `#/junior`: Junior's page: the brief, today's plan, what it can do */
   | { page: 'junior' }
   | { page: 'session'; id: string }
   | { page: 'draft'; id: string }
-  /** `#/inbox/<tab>` — one inbox tab; bare `#/inbox` opens the first that needs you */
+  /** `#/inbox/<tab>`: one inbox tab; bare `#/inbox` opens the first that needs you */
   | { page: 'inbox'; tab?: InboxTab }
   | { page: 'item'; id: string }
   | { page: 'terminal'; id: string }
   | { page: 'terminals' }
   | { page: 'jobs' }
-  /** `#/jobs/new` or `#/jobs/<id>/edit` — the full-page job form */
+  /** `#/jobs/new` or `#/jobs/<id>/edit`: the full-page job form */
   | { page: 'job-form'; id: string | null }
-  /** `#/jobs/<id>` — one job: health, runs, items */
+  /** `#/jobs/<id>`: one job: health, runs, items */
   | { page: 'job'; id: string }
   | { page: 'artifacts' }
   | { page: 'artifact'; id: string }
-  /** `#/run/<runId>/<path>` — one file in a team run's folder (plan.md, ledger.md, a handoff…) */
+  /** `#/run/<runId>/<path>`: one file in a team run's folder (plan.md, ledger.md, a handoff…) */
   | { page: 'run'; runId: string; path: string }
   | { page: 'changes' }
-  /** `#/change/<checkoutId>/<encoded path>` — one changed file: its diff, and an editor (a project id = its main checkout) */
+  /** `#/change/<checkoutId>/<encoded path>`: one changed file: its diff, and an editor (a project id = its main checkout) */
   | { page: 'change'; checkoutId: string; path: string }
-  /** `#/actions` — everything sessions did that left this machine */
+  /** `#/actions`: everything sessions did that left this machine */
   | { page: 'actions' }
-  /** `#/goals` — outcomes Junior drives across sessions */
+  /** `#/goals`: outcomes Junior drives across sessions */
   | { page: 'goals' }
-  /** `#/goals/<id>` — one goal: its state and ledger */
+  /** `#/goals/<id>`: one goal: its state and ledger */
   | { page: 'goal'; id: string }
-  /** `#/settings/<tab>` — the settings page, on that tab */
+  /** `#/settings/<tab>`: the settings page, on that tab */
   | { page: 'settings'; tab: SettingsTab }
 
-/** The hash for a work item — ids carry `:` `/` `#`, so they travel encoded. */
+/** The hash for a work item: ids carry `:` `/` `#`, so they travel encoded. */
 export const itemHash = (id: string) => `/item/${encodeURIComponent(id)}`
 
 function parseRoute(hash: string): Route {

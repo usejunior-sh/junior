@@ -1,6 +1,6 @@
 /**
  * The artifact editor: the whole content area, for writing at length. A modal
- * is the wrong shape for that — it fights the page for height, a stray Escape
+ * is the wrong shape for that. It fights the page for height, a stray Escape
  * loses the text, and there is no room to see what the markdown renders as.
  *
  * One component for creating and editing. Three layouts (write · split ·
@@ -16,7 +16,7 @@ import { Markdown } from './Markdown.js'
 type Layout = 'write' | 'split' | 'preview'
 
 type Props = {
-  /** the artifact id, or 'new' — keys the parked draft */
+  /** the artifact id, or 'new', keys the parked draft */
   draftKey: string
   initialTitle: string
   initialBody: string
@@ -48,7 +48,7 @@ function readDraft(key: string): { title: string; body: string } | null {
       return { title: typeof d.title === 'string' ? d.title : '', body: d.body }
     }
   } catch {
-    // blocked storage — the editor still works for this page load
+    // blocked storage: the editor still works for this page load
   }
   return null
 }
@@ -56,7 +56,7 @@ function readDraft(key: string): { title: string; body: string } | null {
 const words = (s: string) => (s.trim() ? s.trim().split(/\s+/).length : 0)
 
 export function ArtifactEditor({ draftKey, initialTitle, initialBody, crumb, saveLabel, onSave, onCancel }: Props) {
-  // A parked draft wins over what the file says — it is the newer keystrokes.
+  // A parked draft wins over what the file says. It is the newer keystrokes.
   const parked = useMemo(() => readDraft(draftKey), [draftKey])
   const [title, setTitle] = useState(parked?.title || initialTitle)
   const [body, setBody] = useState(parked?.body ?? initialBody)
@@ -143,7 +143,7 @@ export function ArtifactEditor({ draftKey, initialTitle, initialBody, crumb, sav
     return () => document.removeEventListener('keydown', onKey)
   }, [save, cancel, dirty])
 
-  // Tab indents inside the body instead of leaving the box — it is a text editor, briefly.
+  // Tab indents inside the body instead of leaving the box. It is a text editor, briefly.
   function onBodyKey(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key !== 'Tab' || e.shiftKey) return
     e.preventDefault()

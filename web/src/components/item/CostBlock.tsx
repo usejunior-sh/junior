@@ -6,7 +6,7 @@ export function CostBlock({ linkedSessions, spend, spendFailed, split }: { linke
   return (
     <>
       {/* What the item cost: the ledger, folded over this item's sessions.
-          Deliberately small — the cache share, the daily series and the
+          Deliberately small: the cache share, the daily series and the
           per-project view stay on Usage. Placements considered:
           .docs/item-cost-variations.html */}
       {linkedSessions.length > 0 && !spendFailed && (
@@ -25,7 +25,7 @@ export function CostBlock({ linkedSessions, spend, spendFailed, split }: { linke
                 {tokens(spend.totals.tokens)} tokens · {spend.totals.sessions}
                 {spend.totals.sessions === 1 ? ' session' : ' sessions'}
               </div>
-              {/* A single-model item gets no meter — one full bar says nothing.
+              {/* A single-model item gets no meter: one full bar says nothing.
                   The legend below always names the models and carries their
                   values, so identity is never colour alone. */}
               {split.length > 1 && (

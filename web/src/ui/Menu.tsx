@@ -1,12 +1,12 @@
 /**
- * A thin, styled wrapper around Radix's dropdown-menu — our one menu idiom.
+ * A thin, styled wrapper around Radix's dropdown-menu, our one menu idiom.
  *
  * Radix owns the hard parts (focus trapping, keyboard nav, collision-aware
  * positioning, click-outside, Escape, submenu timing); we own the pixels via
- * the `uiMenu*` classes in styles.css.
+ * the `uiMenu*` classes in styles/*.css.
  *
  * Content is portaled out of the tree, so the styling never depends on where
- * the trigger sits. *Where* it lands is decided by `usePortalContainer` —
+ * the trigger sits. *Where* it lands is decided by `usePortalContainer`,
  * <body> normally, into the surrounding dialog when that dialog is a native
  * modal one, which the browser paints above everything else. See
  * portalContainer.ts for why; Select.tsx shares it. That is what the plumbing
@@ -14,7 +14,7 @@
  * trigger is the anchor it measures from, and the content reads the answer
  * off context.
  *
- * The portal is a DOM portal only — React still bubbles events through the
+ * The portal is a DOM portal only, React still bubbles events through the
  * *component* tree, so a click on a menu item reaches whatever wraps the
  * trigger. Our menus live inside clickable rows (sessions, terminals), so the
  * content swallows click/keydown: picking "Delete" must not also select the
@@ -33,7 +33,7 @@ function cx(base: string, extra?: string) {
 /**
  * The root tracks where its content should portal to (see portalContainer.ts)
  * and hands it down, so `MenuContent` doesn't need to know anything about the
- * dialog it might be sitting in. The trigger is the anchor we measure from —
+ * dialog it might be sitting in. The trigger is the anchor we measure from,
  * it is the one node of a menu that lives in the normal tree.
  */
 type MenuCtx = { anchorRef: (node: HTMLElement | null) => void; container: HTMLElement | undefined }
@@ -65,7 +65,7 @@ export function Menu({
 /**
  * Composes any caller-supplied ref with our anchor rather than letting one
  * win: under React 19 `ref` is an ordinary prop, so a spread would silently
- * drop whichever came first — and dropping the anchor makes exactly one menu
+ * drop whichever came first, and dropping the anchor makes exactly one menu
  * quietly stop escaping its dialog, with nothing to show why.
  */
 export function MenuTrigger({ ref, ...props }: ComponentProps<typeof DropdownMenu.Trigger>) {
@@ -183,7 +183,7 @@ export function CtxMenu({ open, onOpenChange, ...props }: ComponentProps<typeof 
   )
 }
 
-/** The right-clicked area is the anchor — the context-menu equivalent of a trigger button. */
+/** The right-clicked area is the anchor: the context-menu equivalent of a trigger button. */
 export function CtxMenuTrigger({ ref, ...props }: ComponentProps<typeof ContextMenu.Trigger>) {
   const { anchorRef } = useContext(MenuContext)
   return (

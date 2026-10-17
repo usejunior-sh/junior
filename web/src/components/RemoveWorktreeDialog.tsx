@@ -6,12 +6,10 @@ import type { Checkout, RemovalCheck, RemovalCheckResponse, RemoveCheckoutRespon
 import { changesStore } from '../changesStore.js'
 import { checkoutLabel } from '../checkouts.js'
 
-// ---------------------------------------------------------------------------
 // Remove a worktree without losing work (.docs/worktrees-ux.html §10). The
 // checks come first: merged into the default branch, nothing uncommitted,
 // nothing running. All clear → "Remove worktree" is the primary button.
 // Anything at risk → "Keep it" is, and removing anyway is red and set apart.
-// ---------------------------------------------------------------------------
 
 const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? '' : 's'}`
 

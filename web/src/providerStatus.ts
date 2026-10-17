@@ -3,7 +3,7 @@
  * store shared by the top-bar Providers popover and Settings → Providers.
  *
  * Each read spawns a throwaway subprocess per agent server-side, so it is
- * fetched on demand — when one of those opens — and reused while fresh. The
+ * fetched on demand, when one of those opens, and reused while fresh. The
  * server caches too; `refresh` goes past both.
  */
 import { useEffect, useSyncExternalStore } from 'react'
@@ -52,7 +52,7 @@ export function loadProviderStatus(workspaceId: string, refresh = false): Promis
   return run
 }
 
-/** Drop what is known, e.g. after a connection changed — the next open reads afresh. */
+/** Drop what is known, e.g. after a connection changed. The next open reads afresh. */
 export function invalidateProviderStatus() {
   set({ at: 0 })
 }
@@ -75,7 +75,7 @@ export function useProviderStatus(workspaceId: string, active = true): ProviderS
   return s.workspaceId === workspaceId ? s : { workspaceId, providers: null, loading: active, error: null, at: 0 }
 }
 
-/** "in 3h", "in 2d", "in 12m" — when a window resets. */
+/** "in 3h", "in 2d", "in 12m", when a window resets. */
 export function resetsIn(at: number, now = Date.now()): string {
   const mins = Math.max(0, Math.round((at - now) / 60_000))
   if (mins < 60) return `in ${mins}m`

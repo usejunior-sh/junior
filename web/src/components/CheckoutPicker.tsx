@@ -11,7 +11,7 @@ import { plausibleBranch } from '../../../shared/branch.js'
 import { checkoutLabel } from '../checkouts.js'
 import { Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from '../ui/Menu.js'
 
-/** `/Users/you/Code/x` → `~/Code/x` — display only. */
+/** `/Users/you/Code/x` → `~/Code/x`: display only. */
 const homely = (p: string) => p.replace(/^\/(?:Users|home)\/[^/]+/, '~')
 
 type Props = {

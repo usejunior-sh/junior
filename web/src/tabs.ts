@@ -1,7 +1,7 @@
 /**
  * The tab band: Inbox is pinned; every session opened in this browser gets a
- * closable tab beside it. Per workspace, per browser — a tab is where *you*
- * are, not a property of the session — so it lives in localStorage, not the
+ * closable tab beside it. Per workspace, per browser, a tab is where *you*
+ * are, not a property of the session, so it lives in localStorage, not the
  * server.
  */
 import { useCallback, useEffect, useState, type MouseEvent } from 'react'
@@ -76,7 +76,7 @@ export function useOpenTabs(workspaceId: string) {
     try {
       localStorage.setItem(key(workspaceId), JSON.stringify(band))
     } catch {
-      // storage full or blocked — tabs are a convenience, not state we need
+      // storage full or blocked: tabs are a convenience, not state we need
     }
   }, [band, workspaceId])
 
@@ -88,7 +88,7 @@ export function useOpenTabs(workspaceId: string) {
     })
   }, [])
 
-  /** Closes a pinned tab or the preview — a key only ever lives in one of them. */
+  /** Closes a pinned tab or the preview. A key only ever lives in one of them. */
   const close = useCallback((id: string) => {
     setBand((b) => prune({ ...b, tabs: b.tabs.filter((t) => t !== id), preview: b.preview === id ? null : b.preview }))
   }, [])
@@ -118,7 +118,7 @@ export function useOpenTabs(workspaceId: string) {
 
   /**
    * Drag-reorder a pinned tab: move `id` to sit immediately before `before`,
-   * or to the end when `before` is null. Both are tab keys, not indices — the
+   * or to the end when `before` is null. Both are tab keys, not indices, the
    * rendered strip (App.tsx) is a filtered subsequence of `tabs` (a dead
    * terminal or a missing draft drops out of render but stays in the band
    * until closed), so an index into one is not an index into the other.
@@ -147,7 +147,7 @@ export function useOpenTabs(workspaceId: string) {
 }
 
 /**
- * Browser-style open gestures for a list row. A plain click peeks — the tab
+ * Browser-style open gestures for a list row. A plain click peeks: the tab
  * is provisional and the next document replaces it. ⌘/ctrl-click and
  * middle-click keep it *without* leaving where you are; double-click opens it
  * and keeps it.
@@ -174,7 +174,7 @@ export function rowOpen(open: () => void, pin: () => void) {
 /**
  * The last route you were on in each rail section. The rail is *section*
  * navigation: leaving Artifacts for a session and coming back should land on
- * the artifact you were reading, not the grid. Per workspace, per browser —
+ * the artifact you were reading, not the grid. Per workspace, per browser,
  * where *you* were, so the same reasoning (and storage) as the tabs above.
  */
 const routeKey = (workspaceId: string) => `triage.lastRoute.${workspaceId || 'default'}`
@@ -207,7 +207,7 @@ export function useLastRoutes(workspaceId: string) {
     try {
       localStorage.setItem(routeKey(workspaceId), JSON.stringify(lastRoutes))
     } catch {
-      // storage full or blocked — rail memory is a convenience, not state we need
+      // storage full or blocked: rail memory is a convenience, not state we need
     }
   }, [lastRoutes, workspaceId])
 
@@ -219,13 +219,13 @@ export function useLastRoutes(workspaceId: string) {
 }
 
 /**
- * A stable colour per project — the small dot on a tab that says which
+ * A stable colour per project: the small dot on a tab that says which
  * codebase it belongs to. Keyed by the project's id, not its folder, so every
  * checkout of a project (main and its worktrees) keeps the same hue; a bare
  * folder with no project falls back to its path. Never needs storing.
  *
  * The hash picks a slot, not a colour: what comes back is `var(--hue-N)`, so
- * the dark theme's neons and the light theme's darker re-picks (styles.css)
+ * the dark theme's neons and the light theme's darker re-picks (styles/tokens.css)
  * swap on a theme flip without re-rendering anything.
  */
 const HUES = 8

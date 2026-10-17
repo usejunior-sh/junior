@@ -56,7 +56,7 @@
 button.refLink { font: inherit; line-height: inherit; }
 
 /* An entity reference the agent dropped into prose, resolved to its name and
-   made clickable — reads as the same object as the @ chip that attaches it. */
+   made clickable, reads as the same object as the @ chip that attaches it. */
 .refLink {
   display: inline-flex; align-items: baseline; gap: 4px; max-width: 320px; vertical-align: baseline;
   padding: 0 5px 1px; border-radius: var(--r-xs); background: var(--wash-2);
@@ -83,8 +83,8 @@ button.refLink { font: inherit; line-height: inherit; }
 .slOpt.sel .desc { color: var(--mute); }
 
 /* The lit pill behind a recognized /command. Sits under a transparent-
-   background textarea, so the command's own glyphs read straight through it —
-   nothing is drawn twice and the caret is never occluded. */
+   background textarea, so the command's own glyphs read straight through it.
+   Nothing is drawn twice and the caret is never occluded. */
 .boxWrap { position: relative; display: flex; flex-direction: column; }
 .cmdPill {
   position: absolute; pointer-events: none; z-index: 0; border-radius: var(--r-xs);
@@ -92,7 +92,7 @@ button.refLink { font: inherit; line-height: inherit; }
 }
 .boxWrap #box { position: relative; z-index: 1; }
 
-/* Output a command produced locally — already formatted by the CLI, so it is
+/* Output a command produced locally: already formatted by the CLI, so it is
    shown verbatim rather than re-flowed as markdown. */
 .msg.commandOut {
   align-self: stretch; margin: 0; padding: 12px 14px; background: var(--wash-2); border: 1px solid var(--hair);

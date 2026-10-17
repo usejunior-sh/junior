@@ -68,9 +68,7 @@ export function PanelSearch({ onSearch, placeholder }: { onSearch: () => void; p
   )
 }
 
-// ---------------------------------------------------------------------------
-// Inbox tabs — the inbox's sidebar, one tab per step (core/work/inbox-tabs.ts)
-// ---------------------------------------------------------------------------
+// Inbox tabs: the inbox's sidebar, one tab per step (core/work/inbox-tabs.ts)
 
 const TAB_ICON: Record<InboxTab, LucideIcon> = {
   needs: Hand,
@@ -156,9 +154,7 @@ export function InboxTabsPanel({ tabs, statusCounts, loaded, current, onGo, onAd
   )
 }
 
-// ---------------------------------------------------------------------------
-// Artifacts — the workspace's notes and briefs, newest first
-// ---------------------------------------------------------------------------
+// Artifacts: the workspace's notes and briefs, newest first
 
 type ArtifactsProps = {
   artifacts: readonly ArtifactWithLinks[]
@@ -179,7 +175,7 @@ function ago(ms: number): string {
   return `${Math.round(m / 1440)}d`
 }
 
-/** Notes you wrote, then briefs the model wrote — two groups, each newest first. */
+/** Notes you wrote, then briefs the model wrote, two groups, each newest first. */
 export function ArtifactsPanel({ artifacts, loaded, currentId, onOpen, onPin, onNew, onRefresh, onSearch }: ArtifactsProps) {
   const visible = artifacts.filter((a) => !a.hidden)
   const groups: Array<[string, ArtifactWithLinks[]]> = [
@@ -238,11 +234,9 @@ export function ArtifactsPanel({ artifacts, loaded, currentId, onOpen, onPin, on
   )
 }
 
-// ---------------------------------------------------------------------------
-// Sessions — every session in the workspace, pinned first
-// ---------------------------------------------------------------------------
+// Sessions: every session in the workspace, pinned first
 
-/** Newest first. Archived is only the tail of the same axis — nothing is filed by hand. */
+/** Newest first. Archived is only the tail of the same axis. Nothing is filed by hand. */
 const TIME_BUCKETS = ['Today', 'Yesterday', 'Previous 7 days', 'Previous 30 days', 'Archived'] as const
 
 /** Which bucket a session falls in, by last activity against local midnight. */
@@ -259,7 +253,7 @@ function bucketOf(updatedAt: number): (typeof TIME_BUCKETS)[number] {
 type SessionsProps = {
   sessions: readonly SessionSummary[]
   currentId: string | null
-  /** unsent session tabs — listed first so a half-written prompt is never lost */
+  /** unsent session tabs: listed first so a half-written prompt is never lost */
   drafts: readonly Draft[]
   currentDraftId: string | null
   onSelectDraft: (id: string) => void
@@ -286,7 +280,7 @@ export function SessionsPanel({
   onDelete,
   onSearch,
 }: SessionsProps) {
-  // At most one row is being renamed at a time — the panel is a list, not a form.
+  // At most one row is being renamed at a time. The panel is a list, not a form.
   const [renaming, setRenaming] = useState<string | null>(null)
   // Deleting is irreversible, so it is confirmed in a modal rather than on the row.
   const [deleting, setDeleting] = useState<SessionSummary | null>(null)
@@ -585,14 +579,12 @@ function DeleteSessionDialog({
   )
 }
 
-// ---------------------------------------------------------------------------
-// Terminals — the shells the daemon is running for this workspace
-// ---------------------------------------------------------------------------
+// Terminals: the shells the daemon is running for this workspace
 
 type TerminalsProps = {
   terminals: readonly TerminalSummary[]
   currentId: string | null
-  /** Where "+" opens a shell by default — the active tab's folder, when there is one. */
+  /** Where "+" opens a shell by default. The active tab's folder, when there is one. */
   defaultCwd?: string
   onSelect: (id: string) => void
   onNew: (cwd?: string) => void

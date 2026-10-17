@@ -1,7 +1,7 @@
 /**
  * The top bar's Providers button: the workspace's connected agents as a small
- * stack of marks, and on click each one's account — who is signed in, how
- * much of every plan window is gone — with a way into Settings → Providers.
+ * stack of marks, and on click each one's account, who is signed in, how
+ * much of every plan window is gone, with a way into Settings → Providers.
  * Accounts are read when the popover opens, never on page load: each read is
  * a throwaway subprocess per agent.
  */

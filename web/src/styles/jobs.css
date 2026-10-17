@@ -1,4 +1,4 @@
-/* ---------- jobs: the table (T1) ---------- */
+/* ---------- jobs: the table ---------- */
 .jobHead { display: flex; align-items: flex-end; gap: 16px; margin-bottom: 18px; }
 .jobHead .seg { margin-left: 8px; margin-bottom: 5px; }
 .jobHead .segBtn .n { font-family: var(--mono); font-size: 0.8462rem; color: var(--stone); margin-left: 6px; }
@@ -49,8 +49,8 @@
 .wform input:focus, .wform textarea:focus { border-color: var(--ink); }
 .wform input::placeholder, .wform textarea::placeholder { color: var(--stone); }
 .wform textarea { min-height: 118px; resize: vertical; line-height: 1.6; }
-/* NB this one is a single class, unlike .pill.uiSelect / .teamSel.uiSelect —
-   it can be, because it is defined *after* .uiSelect and so wins the box
+/* NB this one is a single class, unlike .pill.uiSelect / .teamSel.uiSelect.
+   It can be, because it is defined *after* .uiSelect and so wins the box
    properties on source order. It has to stay single, because it also dresses
    the project menu's plain <button>, which carries no .uiSelect. Keep it below
    the select block.
@@ -65,7 +65,7 @@
 }
 .wformSelect:hover { border-color: var(--hair-bright); }
 .wformSelect:focus-visible, .wformSelect[data-state="open"] { border-color: var(--ink); }
-/* not :first-of-type — the colour dot is a span too, and must not stretch */
+/* not :first-of-type: the colour dot is a span too, and must not stretch */
 .wformSelect > span:not(.pdot) { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .wformSelect .caret { flex: none; color: var(--ash); }
 .wformSelect .pdot { width: 7px; height: 7px; border-radius: var(--r-full); flex: none; }
@@ -123,7 +123,7 @@
 }
 .formError { color: var(--red); font-size: 0.9231rem; font-family: var(--mono); }
 
-/* ---------- job form: integrations picker (job-spec.md, item 1) ---------- */
+/* ---------- job form: integrations picker ---------- */
 .toolPicker { display: flex; flex-direction: column; gap: 8px; }
 .cchip.on.warn { border-color: var(--edge-yellow); }
 .cchip.on.warn .tick { color: var(--yellow); }
@@ -161,7 +161,7 @@
 .tsMore svg.rot { transform: rotate(90deg); }
 .tsRow.off .tsPick { cursor: default; opacity: 0.55; }
 
-/* ---------- job form: run limits (job-spec.md, item 3) ---------- */
+/* ---------- job form: run limits ---------- */
 .limitsCard { padding: 0; }
 .limitsCard > .limitsHead { display: flex; align-items: center; gap: 8px; width: 100%; padding: 10px 14px; background: transparent; border: 0; color: var(--ink); cursor: pointer; font-size: 0.9615rem; text-align: left; }
 .limitsCard > .limitsHead .m { margin-left: auto; color: var(--ash); font-size: 0.8462rem; font-family: var(--mono); }

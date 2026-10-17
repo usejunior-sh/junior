@@ -12,7 +12,7 @@ export function useNewSessionFlow({ navigate, replaceTab, openTab, currentTermin
   currentTerminalId: string | null
   currentDraftId: string | null
 }) {
-  // A session created from this tab becomes the selected one — and when it
+  // A session created from this tab becomes the selected one, and when it
   // came from a draft tab, it takes that tab's slot.
   const pendingDraft = useRef<string | null>(null)
   // A send that failed (a worktree git wouldn't make): the draft stays, and says why.

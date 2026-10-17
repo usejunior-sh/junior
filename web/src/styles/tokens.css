@@ -1,12 +1,12 @@
 /* =========================================================================
-   triage — workbench design system (.docs/design.md + the "Triage Workbench
+   triage: workbench design system (.docs/design.md + the "Triage Workbench
    Final" canvas)
 
    True-black canvas, translucent-white hairlines instead of shadows, one
    bright surface per viewport (the white primary button). Editorial serif for
    the wordmark and page headlines, Geist for UI, Geist Mono for machine data (paths, scores,
    diffs, code). Accent colours appear only as status dots, diff colouring
-   and atmospheric glows — never as filled controls.
+   and atmospheric glows, never as filled controls.
    ========================================================================= */
 
 :root {
@@ -30,7 +30,7 @@
   --ash: #888e90;
   --stone: #464a4d;
 
-  /* accents — status, diff and glow only */
+  /* accents: status, diff and glow only */
   --orange: #ff801f;
   --yellow: #ffc53d;
   --blue: #3b9eff;
@@ -61,7 +61,7 @@
   --accent: var(--ink);
 
   /* The editorial-serif signature lane (design.md): the wordmark and the page
-     display headline. Everything else stays technical — Geist + Geist Mono. */
+     display headline. Everything else stays technical: Geist + Geist Mono. */
   --serif: "Instrument Serif", "Tiempos Headline", Georgia, serif;
   --display: var(--serif);
   --brand: var(--serif);
@@ -84,7 +84,7 @@
   /* the second bar under it: a team session's run header, and the drawer's tabs beside it */
   --sub-bar-h: 42px;
 
-  /* semantic layer — the seam a light theme overrides (see [data-theme="light"]).
+  /* semantic layer: the seam a light theme overrides (see [data-theme="light"]).
      on-primary: ink/text sitting on the one bright surface (the primary button,
      switch thumbs). wash-*: the translucent hover/selected overlays. select: the
      text-selection highlight. primary-hover: the primary button's hover fill. */
@@ -95,7 +95,7 @@
   --select: rgba(255, 255, 255, 0.18);
   --primary-hover: #f1f7fe;
 
-  /* lifted surfaces — menus, popovers, dialogs. ring: the 1px separation round
+  /* lifted surfaces: menus, popovers, dialogs. ring: the 1px separation round
      a floating panel. drop: the shadow under it. scrim: the overlay behind a
      modal. On black these are near-opaque black; on white they invert to a
      faint ink, so the same rule reads right in both themes. */
@@ -105,7 +105,7 @@
   --scroll-thumb: #2a2c30;
   --scroll-thumb-hover: #3a3d42;
 
-  /* accent edges — the hairline round a red/yellow chip, derived from the
+  /* accent edges: the hairline round a red/yellow chip, derived from the
      accent so the light theme's darkened accents carry through automatically. */
   --edge-red: color-mix(in srgb, var(--red) 36%, transparent);
   --edge-red-hi: color-mix(in srgb, var(--red) 55%, transparent);
@@ -116,11 +116,11 @@
   --edge-blue-hi: color-mix(in srgb, var(--blue) 55%, transparent);
   /* a link under the pointer: away from the page ink in both themes */
   --link-hover: #6db6ff;
-  /* red as *reading* text (error bodies) — softer than the status red on black,
+  /* red as *reading* text (error bodies): softer than the status red on black,
      darker than it on white. */
   --red-ink: #ff7a92;
 
-  /* project hues — one stable dot colour per codebase (see tabs.ts). Indexed,
+  /* project hues: one stable dot colour per codebase (see tabs.ts). Indexed,
      not named, because the index is hashed from the folder path. */
   --hue-0: #3b9eff;
   --hue-1: #11ff99;
@@ -136,17 +136,17 @@
   color-scheme: dark;
   /* The Text-size control scales every rem-based font-size in the app off this
      root size (13px = 1rem). Paddings/dimensions stay in px, so text grows
-     without the layout growing — that is what separates it from browser zoom. */
+     without the layout growing. That is what separates it from browser zoom. */
   font-size: var(--app-font-size, 13px);
 }
 
-/* Light theme — the whole colour system re-expressed for a white canvas. The
+/* Light theme: the whole colour system re-expressed for a white canvas. The
    app is dark-first (design.md), so this overrides the token layer rather than
    any component rule; JS resolves "system" and writes the concrete value. */
 :root[data-theme="light"] {
   color-scheme: light;
 
-  /* surfaces — a light-grey page with white panels floating on it. Unlike the
+  /* surfaces: a light-grey page with white panels floating on it. Unlike the
      dark theme (where "elevated" is brighter), elevation here reads as a greyer
      surface, so hover/selected chips and menus stay visible against white. */
   --canvas: #f6f8fa;
@@ -154,7 +154,7 @@
   --elev: #eceef2;
   --deep: #e6e9ee;
 
-  /* lines — hairlines go from white-on-black to black-on-white */
+  /* lines: hairlines go from white-on-black to black-on-white */
   --hair: rgba(11, 12, 14, 0.1);
   --hair-strong: rgba(11, 12, 14, 0.16);
   --hair-soft: rgba(11, 12, 14, 0.06);
@@ -168,7 +168,7 @@
   --ash: #71767b;
   --stone: #b3b8bd;
 
-  /* accents — the dark theme's neons are darkened for contrast on white */
+  /* accents: the dark theme's neons are darkened for contrast on white */
   --orange: #c85a00;
   --yellow: #8a6d1f;
   --blue: #1f6feb;
@@ -192,7 +192,7 @@
   --select: rgba(31, 111, 235, 0.18);
   --primary-hover: #23262b;
 
-  /* lifted surfaces — a black ring round a white menu is a bruise, so the ring
+  /* lifted surfaces: a black ring round a white menu is a bruise, so the ring
      becomes a hairline and the drop a soft grey. */
   --ring: rgba(11, 12, 14, 0.14);
   --drop: rgba(11, 12, 14, 0.14);
@@ -205,7 +205,7 @@
   --red-ink: #b3172f;
   --link-hover: #0a4fb5;
 
-  /* project hues — the neons vanish on a white canvas, so each is re-picked at
+  /* project hues: the neons vanish on a white canvas, so each is re-picked at
      a weight that still reads as a 6px dot. */
   --hue-0: #1f6feb;
   --hue-1: #0f9d58;

@@ -1,7 +1,7 @@
 /**
  * The artifacts index as a tiny external store, shared by the Artifacts page,
- * the `@` picker and (later) the item page's brief card. Loaded lazily — the
- * first surface that needs it asks — and refreshed whenever the server says
+ * the `@` picker and (later) the item page's brief card. Loaded lazily, the
+ * first surface that needs it asks, and refreshed whenever the server says
  * the index changed, so an edit in your editor shows up without a reload.
  */
 import { useSyncExternalStore } from 'react'

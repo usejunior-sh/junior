@@ -22,7 +22,7 @@ import { isMobile } from '../useMobile.js'
 import { PROVIDER_LABEL, ProviderIcon } from './ProviderIcon.js'
 
 type Props = {
-  /** The current model — an alias the user picked, or the wire id the SDK reported. */
+  /** The current model: an alias the user picked, or the wire id the SDK reported. */
   model?: string
   effort?: EffortLevel
   /** `undefined` on either side means "whatever the agent defaults to". */
@@ -136,7 +136,7 @@ export function ModelPopover({
           sideOffset={8}
           collisionPadding={12}
           // Desktop: Radix focuses the search box, the first thing in here. A
-          // phone would pop its keyboard over the list — show the current
+          // phone would pop its keyboard over the list, show the current
           // model instead.
           onOpenAutoFocus={(e) => {
             if (!isMobile()) return

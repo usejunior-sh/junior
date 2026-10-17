@@ -59,9 +59,7 @@ export function AppearanceTab() {
   )
 }
 
-// ---------------------------------------------------------------------------
-// Themes — a gallery per scheme. The mode decides which pick is on screen.
-// ---------------------------------------------------------------------------
+// Themes: a gallery per scheme. The mode decides which pick is on screen.
 
 export function ThemesTab() {
   const a = useAppearance()
@@ -122,7 +120,7 @@ function ThemeGallery({
 }
 
 /**
- * A thumbnail of the workbench in a theme's own colours — painted from its
+ * A thumbnail of the workbench in a theme's own colours, painted from its
  * palette, not the live tokens, so every card shows itself whatever is active.
  */
 function ThemePreview({ theme }: { theme: Theme }) {

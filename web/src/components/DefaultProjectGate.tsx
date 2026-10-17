@@ -1,7 +1,7 @@
 /**
- * Every workspace has a default project (decision 549a251e). One that has
- * none — skipped onboarding, created from the CLI, or from before projects
- * were required — is asked for a folder when it opens. "Later" puts it off
+ * Every workspace has a default project. One that has
+ * none, skipped onboarding, created from the CLI, or from before projects
+ * were required, is asked for a folder when it opens. "Later" puts it off
  * for this page load; the next open asks again.
  */
 import { useEffect, useState } from 'react'

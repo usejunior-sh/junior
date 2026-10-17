@@ -1,7 +1,7 @@
 /**
  * Background shells in a chat:
  *
- *   ShellDock   above the composer — the AgentDock's sibling. A background
+ *   ShellDock   above the composer: the AgentDock's sibling. A background
  *               shell's Bash call returned at once and the turn may be long
  *               over, so this is the one place that says one is still going.
  *   ShellTail   the end of its output, read off the file it writes to and
@@ -17,7 +17,7 @@ import { useNow } from './Agents.js'
 const POLL_MS = 1500
 /** A screenful: enough to see a test run's progress or a build's last error. */
 const TAIL_LINES = 40
-// Colour and cursor escapes — what npm, vitest and friends sprinkle on a terminal.
+// Colour and cursor escapes: what npm, vitest and friends sprinkle on a terminal.
 const ANSI = /\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07]*\x07/g
 
 function useShellOutput(sessionId: string, run: ShellRun) {
@@ -45,7 +45,7 @@ function useShellOutput(sessionId: string, run: ShellRun) {
   return out
 }
 
-/** The last lines a background shell wrote — live while it runs, read once after. */
+/** The last lines a background shell wrote, live while it runs, read once after. */
 export function ShellTail({ sessionId, run }: { sessionId: string; run: ShellRun }) {
   const out = useShellOutput(sessionId, run)
   const ref = useRef<HTMLPreElement>(null)

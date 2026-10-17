@@ -43,7 +43,7 @@
    surface. The only bright thing in it is the Save button. */
 .settings { flex: 1; min-width: 0; min-height: 0; background: var(--card); overflow: hidden; }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-/* The scrim and pop-in the settings modal had — still used by other centred dialogs (mermaid, …). */
+/* The scrim and pop-in the settings modal had, still used by other centred dialogs (mermaid, …). */
 .settingsOverlay { position: fixed; inset: 0; z-index: 80; background: var(--scrim); animation: fadeIn 0.14s ease; }
 @keyframes settingsIn { from { opacity: 0; transform: translate(-50%, -50%) scale(0.985); } to { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
 .settingsTabs { display: grid; grid-template-columns: 228px minmax(0, 1fr); height: 100%; }
@@ -127,14 +127,14 @@
 .setKeys tr:first-child td { border-top: none; }
 .setKeys td:first-child { width: 120px; }
 
-/* Radix switch — the one toggle idiom */
+/* Radix switch: the one toggle idiom */
 .uiSwitch { position: relative; width: 34px; height: 20px; padding: 0; border-radius: var(--r-full); background: var(--elev); border: 1px solid var(--hair-strong); transition: background 0.12s, border-color 0.12s; cursor: pointer; }
 .uiSwitch[data-state="checked"] { background: var(--ink); border-color: var(--ink); }
 .uiSwitch:disabled { opacity: 0.45; cursor: default; }
 .uiSwitchThumb { display: block; width: 14px; height: 14px; border-radius: 50%; background: var(--ash); transform: translateX(2px); transition: transform 0.14s ease, background 0.12s; }
 .uiSwitch[data-state="checked"] .uiSwitchThumb { transform: translateX(16px); background: var(--on-primary); }
 
-/* Radix slider — stepped numeric settings (text size) */
+/* Radix slider: stepped numeric settings (text size) */
 .uiSlider { position: relative; display: flex; align-items: center; width: 160px; height: 20px; touch-action: none; user-select: none; cursor: pointer; }
 .uiSliderTrack { position: relative; flex: 1; height: 3px; border-radius: var(--r-full); background: var(--hair-strong); }
 .uiSliderRange { position: absolute; height: 100%; border-radius: var(--r-full); background: var(--ink); }
@@ -165,7 +165,6 @@
   .tabband .strip { scroll-behavior: auto; }
 }
 
-/* late additions */
 .tab .pdot.live { animation: pulse 1.4s ease-in-out infinite; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 .perm.ask .btn { margin-right: 8px; }

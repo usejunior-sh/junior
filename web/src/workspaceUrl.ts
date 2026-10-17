@@ -4,7 +4,7 @@
  * The daemon already scopes every request to one workspace (`?workspace=`
  * param, else the `triage_ws` cookie, else the default). The cookie is
  * per-browser though, so two tabs could never hold two workspaces at once.
- * The tab's own answer lives in its URL instead — `/w/<id>/#/inbox` — and
+ * The tab's own answer lives in its URL instead, `/w/<id>/#/inbox`, and
  * rides the wire as the query param the server already honours, so the
  * address bar stays clean and none of the ~100 fetch call sites change.
  *
@@ -27,7 +27,7 @@ function readPath(pathname = location.pathname): string {
 /** The workspace this tab is pinned to, or '' until `hello` says otherwise. */
 export const boundWorkspace = (): string => bound
 
-/** Where the SPA is mounted for a workspace — always the trailing-slash form. */
+/** Where the SPA is mounted for a workspace, always the trailing-slash form. */
 export const basePath = (id: string): string => `/w/${encodeURIComponent(id)}/`
 
 /**

@@ -10,7 +10,7 @@ import { Select, SelectItem } from '../ui/Select.js'
 type DialogProps = {
   /** the item to brief; null = closed */
   item: ScoredItem | null
-  /** the item's newest brief job — a re-brief starts from its playbook and its edited text */
+  /** the item's newest brief job: a re-brief starts from its playbook and its edited text */
   latest: BriefJob | null
   onClose: () => void
 }
@@ -18,7 +18,7 @@ type DialogProps = {
 /**
  * "Create brief" / "Re-brief": the composer in a modal, so the item page keeps
  * its Brief card as a document and the inbox can brief a row where it stands.
- * With edits or a note in it, only Cancel or Queue closes it — a stray click
+ * With edits or a note in it, only Cancel or Queue closes it. A stray click
  * or Esc never drops a rewritten template.
  */
 export function BriefComposerDialog({ item, latest, onClose }: DialogProps) {
@@ -79,8 +79,8 @@ type Props = {
 
 /**
  * The brief composer (Decision 8): the brief's first message, editable. The
- * template's text sits in the box — switch it with the chip or a `/` at the
- * very start — and the note below it is the user's own words to Junior. The
+ * template's text sits in the box, switch it with the chip or a `/` at the
+ * very start, and the note below it is the user's own words to Junior. The
  * edited text runs for this brief only; Save as template writes it back to
  * the playbook file. Nothing spends tokens until Queue brief.
  */
@@ -134,7 +134,7 @@ export function BriefComposer({ item, latest, focusSignal, portalTo, onQueued, o
     return () => {
       live = false
     }
-    // once per mount — later switches go through pick()
+    // once per mount: later switches go through pick()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 

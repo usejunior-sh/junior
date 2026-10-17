@@ -1,6 +1,6 @@
 /**
  * A job as its file (#/jobs/new, #/jobs/<id>/edit): the whole
- * `jobs/<slug>.md` in one editor — frontmatter for the settings, the body
+ * `jobs/<slug>.md` in one editor, frontmatter for the settings, the body
  * for the instruction. Save checks it exactly as the scheduler would and
  * writes it only when nothing is wrong; every problem is listed at once. The
  * side list carries what a file has to name by id: projects and tool lines.

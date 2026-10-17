@@ -2,7 +2,7 @@
  * Autonomy: when Junior checks in with you (.docs/junior-goals-teams/modes-autonomy-goals.md).
  * Four levels, each named by what Junior still asks about.
  *
- * The wire values are the session's PermissionMode — mostly the SDK's own
+ * The wire values are the session's PermissionMode, mostly the SDK's own
  * ('gated' is triage's, enforced server-side, and so are the extras on top of
  * 'acceptEdits' and 'auto'); only the copy lives here. Order is least to most
  * Junior does alone, which is also the Shift+Tab cycle where it cycles this.
@@ -84,7 +84,7 @@ export function levelsFor({ hooks = true, allowNever = false, current }: { hooks
 
 /**
  * The next level in the cycle. "Never asks" is deliberately not reachable this
- * way — a keystroke should not land you on it; that costs a trip through the menu.
+ * way. A keystroke should not land you on it; that costs a trip through the menu.
  */
 export function nextMode(id: PermissionMode | undefined, hooks = true): PermissionMode {
   const cycle = AUTONOMY_LEVELS.filter((m) => m.risk !== 'high' && (hooks || m.id !== 'auto'))

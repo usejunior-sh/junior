@@ -106,7 +106,7 @@ dialog.itemComposer { width: 800px; max-width: calc(100vw - 48px); padding: 0; o
 .pillRow .pill.add:hover { color: var(--body); }
 .pillRow .pill.add.set { color: var(--ink); border-style: solid; }
 .pillRow .pill:hover { border-color: var(--hair-bright); }
-/* Calendar (react-day-picker): its --rdp-* variables mapped onto our tokens —
+/* Calendar (react-day-picker): its --rdp-* variables mapped onto our tokens,
    hairlines, no shadows, the selected day is the one off-white fill. */
 .calendar {
   --rdp-accent-color: var(--ink);
@@ -167,11 +167,11 @@ dialog.itemComposer { width: 800px; max-width: calc(100vw - 48px); padding: 0; o
 .calendar .rdp-chevron { width: 14px; height: 14px; }
 .projModal .calendar { margin: 8px 0 4px; width: 100%; }
 .uiMenu.calendarPop .calendar { width: 266px; }
-/* Pills whose trigger *is* a Select — the inbox compose bar's setters and the
+/* Pills whose trigger *is* a Select: the inbox compose bar's setters and the
    Create-brief dialog's knobs. Not scoped to .pillRow: both rows want the same
    thing, and one rule beats two that must be kept in step.
    .uiSelect is a 36px full-width form control by default, so the pill variant
-   pulls it back to pill shape; the caret goes — a pill is already an obvious
+   pulls it back to pill shape; the caret goes. A pill is already an obvious
    affordance and the row has no room for it. Colour is left to .pill.set and
    the .prio* rules below. */
 .pill.uiSelect {

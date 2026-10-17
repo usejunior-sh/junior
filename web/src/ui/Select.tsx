@@ -1,17 +1,17 @@
 /**
- * A thin, styled wrapper around Radix's select — our one <select> idiom.
+ * A thin, styled wrapper around Radix's select, our one <select> idiom.
  *
  * Radix owns the hard parts (typeahead, keyboard nav, collision-aware
  * positioning, click-outside, Escape, the hidden native input that keeps
  * forms working); we own the pixels via the `uiSelect*` classes in
- * styles.css. The trigger is a sibling of `.prioBar` — same 36px bar, same
- * hairline that brightens on hover and while open — and the popup reuses the
+ * styles/*.css. The trigger is a sibling of `.prioBar`, same 36px bar, same
+ * hairline that brightens on hover and while open, and the popup reuses the
  * `.uiMenu` surface, so menus and selects read as one system.
  *
  * Content is portaled out of the tree, so the styling never depends on where
- * the trigger sits. *Where* it lands is decided by `usePortalContainer` —
+ * the trigger sits. *Where* it lands is decided by `usePortalContainer`,
  * <body> normally, into the surrounding dialog when that dialog is a native
- * modal one. See portalContainer.ts for why; Menu.tsx shares it. The portal is a DOM portal only — React still
+ * modal one. See portalContainer.ts for why; Menu.tsx shares it. The portal is a DOM portal only, React still
  * bubbles events through the *component* tree, so a click inside the popup
  * reaches whatever wraps the trigger. Several of these live inside dialogs
  * and clickable rows, so the content swallows click/keydown: picking a value
@@ -25,7 +25,7 @@
  * sentinel on the way down and swaps it back on the way up. A caller writes
  * `<SelectItem value="">None</SelectItem>` and gets `''` back in
  * `onValueChange`; the sentinel never escapes this module. Don't delete it as
- * dead code — removing it makes every empty-valued item throw at render.
+ * dead code: removing it makes every empty-valued item throw at render.
  */
 import * as SelectPrimitive from '@radix-ui/react-select'
 import { Check, ChevronDown, ChevronUp } from 'lucide-react'
@@ -127,7 +127,7 @@ export function Select({
 /**
  * `description` renders *outside* `ItemText` on purpose. Radix clones an
  * item's `ItemText` content into the trigger to show the current value, so
- * anything put in there for a second line would land in the trigger too —
+ * anything put in there for a second line would land in the trigger too,
  * which has one line to spend. Outside it, the row can be two lines while the
  * trigger stays the name alone.
  */

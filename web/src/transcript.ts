@@ -35,7 +35,7 @@ export type ToolResult = { text: string; isError: boolean }
 export type ToolItem = {
   key: string
   kind: 'tool'
-  /** the tool_use id — what an action record names its call by */
+  /** the tool_use id: what an action record names its call by */
   id?: string
   name: string
   input: Record<string, unknown>
@@ -43,7 +43,7 @@ export type ToolItem = {
   /** When the call was made and when its result came back (ms epoch), if known. */
   startedAt?: number
   endedAt?: number
-  /** Bash only: the shell it ran — still running after the call returned, if it went to the background. */
+  /** Bash only: the shell it ran: still running after the call returned, if it went to the background. */
   shell?: ShellRun
 }
 
@@ -66,7 +66,7 @@ export type TranscriptItem =
       /** In an agent's view: this was written to the agent and relayed through main. */
       relayed?: { delivery?: RelayDelivery; sent?: string }
     }
-  /** In the main transcript: a message the user wrote to a subagent — one quiet line, not a bubble. */
+  /** In the main transcript: a message the user wrote to a subagent. One quiet line, not a bubble. */
   | { key: string; kind: 'relay'; text: string; relay: AgentRelay; delivery?: RelayDelivery }
   /** An Agent/Task call: the subagent it started, drawn as one card. */
   | { key: string; kind: 'agent'; toolUseId: string }
@@ -79,13 +79,13 @@ export type TranscriptItem =
       text: string
       /** 1-based turn this marker ends, for the changeset line */
       turn?: number
-      /** a turn's end, without the frame: "32.2s · 9 turns · $0.8007" — for Junior's sign-off */
+      /** a turn's end, without the frame: "32.2s · 9 turns · $0.8007", for Junior's sign-off */
       stats?: string
       /** how long the turn took, for Junior's "Done in 32s" */
       ms?: number
     }
   | { key: string; kind: 'init'; model?: string; toolCount: number; servers: McpServerInfo[]; mcpTools: string[] }
-  /** What a local command (`/usage`, `/context`) printed — not the model talking. */
+  /** What a local command (`/usage`, `/context`) printed, not the model talking. */
   | { key: string; kind: 'command'; text: string }
   | ToolItem
   /** A run of back-to-back tool calls (and the thinking between them), drawn as one row. */
@@ -109,7 +109,7 @@ export type TranscriptItem =
 export type TranscriptScope = {
   /** Fold only what this subagent did (its Agent tool_use id). Unset = the main agent. */
   scope?: string | null
-  /** The session's agents (buildAgents) — which calls started one, and whose prompt is whose. */
+  /** The session's agents (buildAgents), which calls started one, and whose prompt is whose. */
   agents?: readonly AgentRun[]
   /** The session's shells (buildShells); folded from `events` when not given. */
   shells?: readonly ShellRun[]
@@ -142,7 +142,7 @@ export function buildTranscript(
   const agentCalls = new Set(agents.map((a) => a.toolUseId))
   const shellsById = new Map((shells ?? buildShells(events, timeOf)).map((r) => [r.toolUseId, r]))
   const scopedAgentId = scope ? agents.find((a) => a.toolUseId === scope)?.agentId : undefined
-  // Relayed messages waiting for main's SendMessage, oldest first — matched by
+  // Relayed messages waiting for main's SendMessage, oldest first, matched by
   // recipient, whatever view is being built (the call itself is main's).
   const relays: Array<{ agentId: string; text: string; mark: (d: RelayDelivery, sent: string) => void }> = []
 
@@ -239,7 +239,7 @@ export function buildTranscript(
             })
           }
         } else if (m.type === 'system' && m.subtype === 'local_command_output') {
-          // A command the CLI answers by itself — `/usage`, `/context`. Without
+          // A command the CLI answers by itself, `/usage`, `/context`. Without
           // this the message would send and visibly do nothing, which is
           // exactly what someone tries a command picker on first.
           if (m.content?.trim()) items.push({ key: `lc${i}`, kind: 'command', text: m.content })
@@ -252,7 +252,7 @@ export function buildTranscript(
             } else if (isToolUseBlock(b) && (agentCalls.has(b.id) || AGENT_TOOLS.has(b.name))) {
               items.push({ key: `c${i}.${j}`, kind: 'agent', toolUseId: b.id })
             } else if (isToolUseBlock(b) && b.name === HANDBACK_TOOL) {
-              // The agent's report — its view shows it as the hand-back card, not as a step.
+              // The agent's report: its view shows it as the hand-back card, not as a step.
             } else if (isToolUseBlock(b)) {
               const item = {
                 key: `c${i}.${j}`,
@@ -307,7 +307,7 @@ const UNFOLDED = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit'])
 /**
  * Folds each run of back-to-back tool calls into one `toolGroup`, so the prose
  * between runs is what the eye lands on. Thinking inside a run folds with it;
- * anything else — text, a permission prompt, an edit — ends the run. A run with
+ * anything else, text, a permission prompt, an edit, ends the run. A run with
  * no tool call in it (thinking alone) is left as it was.
  *
  * Runs only ever grow at their end, so keying a group by its first member keeps
@@ -370,8 +370,8 @@ function humanize(leaf: string): string {
 }
 
 /**
- * A tool call as one readable line: the tool, what it touched, and — for MCP
- * tools — which server it came from. Bash leads with the `description` the
+ * A tool call as one readable line: the tool, what it touched, and, for MCP
+ * tools, which server it came from. Bash leads with the `description` the
  * model wrote for it; the raw command is one click away.
  */
 export function toolLine(name: string, input: Record<string, unknown>): { verb: string; target: string; server?: string } {
@@ -398,7 +398,7 @@ export function toolLine(name: string, input: Record<string, unknown>): { verb: 
 }
 
 /**
- * How long a set of calls took, first call made to last result back — model
+ * How long a set of calls took, first call made to last result back, model
  * time between calls included, since that is the wait the reader sat through.
  * Empty when any end is unknown (a dry run's replayed history, a call still out).
  */

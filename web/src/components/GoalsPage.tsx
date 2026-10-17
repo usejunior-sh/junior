@@ -1,8 +1,8 @@
 /**
  * Goals (.docs/junior-goals-teams/modes-autonomy-goals.md): team runs with a
  * done-when, which Junior keeps going round after round until it judges the
- * done-when met. A dense table — goal, where it stands, due, last touched,
- * spend — with Active / Finished tabs. Goals are made by talking to Junior
+ * done-when met. A dense table, goal, where it stands, due, last touched,
+ * spend, with Active / Finished tabs. Goals are made by talking to Junior
  * ("Turn into a goal", or "New goal:" in any chat), never from a form here.
  *
  * goalDot / spendText / money still serve the old goals engine's page (GoalPage).
@@ -36,7 +36,7 @@ export function spendText(g: Pick<GoalSummary, 'spentUsd' | 'budget'>): string {
 
 const finished = (g: TeamGoalSummary) => g.state === 'stopped' || (g.state === 'done' && !!g.acceptedAt)
 
-/** Where a goal stands, in a few words — the one thing to know about it now. */
+/** Where a goal stands, in a few words. The one thing to know about it now. */
 function standing(g: TeamGoalSummary): string {
   const round = g.round ? ` · round ${g.round + 1}` : ''
   if (g.asks) return `Junior asks you ${g.asks === 1 ? 'a question' : `${g.asks} questions`}`

@@ -54,7 +54,7 @@ import { defaultProjectOf } from './ProjectPicker.js'
 const homely = (p: string) => p.replace(/^\/(?:Users|home)\/[^/]+/, '~')
 
 /**
- * What a tab holds. The first three are *processes* — something is alive and
+ * What a tab holds. The first three are *processes*: something is alive and
  * would be lost; the rest are *documents*, which is why only they are ever
  * peeked at rather than pinned.
  */
@@ -85,7 +85,7 @@ export type OpenTab = {
   branch?: string
   /** that worktree has since been removed */
   branchGone?: boolean
-  /** the peek slot — styled as provisional, and replaced by the next document */
+  /** the peek slot: styled as provisional, and replaced by the next document */
   preview?: boolean
 }
 
@@ -95,7 +95,7 @@ type Props = {
   /** 'inbox', a tab key, or a page tab key */
   activeKey: string
   tabs: readonly OpenTab[]
-  /** The one document being peeked at, if any — it outlives navigating away. */
+  /** The one document being peeked at, if any, it outlives navigating away. */
   preview?: OpenTab | null
   /** A transient tab for a rail *index* (Jobs, Terminals, Artifacts). */
   pageTab?: PageTab | null
@@ -111,7 +111,7 @@ type Props = {
   /** Drag a pinned tab: move it to sit before `before`'s key, or to the end when `before` is null. */
   onReorder: (key: string, before: string | null) => void
   onNew: () => void
-  /** Open a shell — in `cwd`, or the daemon's default (home) when undefined. */
+  /** Open a shell, in `cwd`, or the daemon's default (home) when undefined. */
   onNewTerminal: (cwd?: string) => void
   /** The folder a new terminal opens in by default: the active tab's. */
   terminalCwd?: string
@@ -120,7 +120,7 @@ type Props = {
 /**
  * Which edges still have tabs past them, as a `data-fade` value. The band
  * scrolls once the tabs stop fitting, and a scrolling strip with no edge
- * treatment reads as a clipped one — the fade is the only thing saying
+ * treatment reads as a clipped one. The fade is the only thing saying
  * "there is more this way".
  */
 function useEdgeFade(ref: RefObject<HTMLDivElement | null>, count: number) {
@@ -158,11 +158,11 @@ type DragBag = {
   onDragEnd: () => void
 }
 
-/** The context-menu path to the same reorder — the keyboard route, since drag is pointer-only. */
+/** The context-menu path to the same reorder. The keyboard route, since drag is pointer-only. */
 type ReorderBag = { canLeft: boolean; canRight: boolean; onLeft: () => void; onRight: () => void }
 
 /**
- * A private MIME type for the drag payload, not `text/plain` — the prompt box
+ * A private MIME type for the drag payload, not `text/plain`. The prompt box
  * and the inbox title field are drop targets everywhere in this app, and a
  * plain-text tab key would land in them as typed text on an overshot drop.
  * Nothing outside the band ever reads this payload (the dragged key lives in
@@ -172,7 +172,7 @@ type ReorderBag = { canLeft: boolean; canRight: boolean; onLeft: () => void; onR
 const TAB_DRAG_TYPE = 'application/x-triage-tab'
 
 /**
- * Native HTML5 drag and drop for the strip — one horizontal list doesn't need
+ * Native HTML5 drag and drop for the strip. One horizontal list doesn't need
  * a library. `dropBefore` names the key the dragged tab would land in front
  * of (or `null` for the end); it drives both the reorder call and the
  * indicator, so the two can never show a different answer than they act on.
@@ -183,7 +183,7 @@ function useTabDrag(tabs: readonly OpenTab[], onReorder: (key: string, before: s
   const [dragKey, setDragKey] = useState<string | null>(null)
   const [dropBefore, setDropBefore] = useState<string | null>(null)
   // Separate from dragKey: dropBefore's own `null` already means "end of
-  // list", so it can't also mean "pointer isn't over a tab right now" — the
+  // list", so it can't also mean "pointer isn't over a tab right now", the
   // gap past the last tab, Inbox, the +. Without this the last real target
   // stays painted under the cursor once the drag leaves the strip.
   const [overStrip, setOverStrip] = useState(false)
@@ -360,9 +360,9 @@ function Tab({
   onClose: (key: string) => void
   onCloseAll: () => void
   onPin: (key: string) => void
-  /** Present only for pinned tabs — the preview slot and page tab neither drag nor take a drop. */
+  /** Present only for pinned tabs: the preview slot and page tab neither drag nor take a drop. */
   drag?: DragBag
-  /** Present only for pinned tabs — same reasoning as `drag`, but this is the keyboard/menu route to it. */
+  /** Present only for pinned tabs: same reasoning as `drag`, but this is the keyboard/menu route to it. */
   reorder?: ReorderBag
 }) {
   const close = (e: MouseEvent) => {
@@ -450,7 +450,7 @@ function Tab({
   )
 }
 
-/** The "+": a new session, or a new terminal — here, or in a project folder. */
+/** The "+": a new session, or a new terminal, here, or in a project folder. */
 function NewTabMenu({ onNew, onNewTerminal, terminalCwd }: Pick<Props, 'onNew' | 'onNewTerminal' | 'terminalCwd'>) {
   const [open, setOpen] = useState(false)
   const [projects, setProjects] = useState<Project[]>([])

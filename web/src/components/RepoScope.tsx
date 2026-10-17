@@ -1,6 +1,6 @@
 /**
  * Which GitHub repos this workspace's inbox pulls from. Empty = no GitHub
- * items — scope is opt-in per workspace (.docs/workspaces.md). Used inline
+ * items: scope is opt-in per workspace (.docs/workspaces.md). Used inline
  * by the Sources settings tab and inside the inbox's repo dialog.
  */
 import { useEffect, useMemo, useState } from 'react'

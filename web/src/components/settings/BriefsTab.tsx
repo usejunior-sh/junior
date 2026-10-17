@@ -5,9 +5,7 @@ import { playbookLabel } from '../../itemUi.js'
 import { Select, SelectItem } from '../../ui/Select.js'
 import { Row, Section, useWorkspaceSettings } from './shared.js'
 
-// ---------------------------------------------------------------------------
-// Briefs — the daily cap, the default model, and the two prose files per kind.
-// ---------------------------------------------------------------------------
+// Briefs: the daily cap, the default model, and the two prose files per kind.
 
 export function BriefsTab() {
   const { settings, error, save } = useWorkspaceSettings()
@@ -77,7 +75,7 @@ export function BriefsTab() {
   )
 }
 
-/** A per-kind markdown file with a kind picker, a textarea and Save — playbooks and dispatch templates share it. */
+/** A per-kind markdown file with a kind picker, a textarea and Save, playbooks and dispatch templates share it. */
 function ProseFileSection({
   title,
   hint,

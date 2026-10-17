@@ -19,7 +19,7 @@ const tilde = (p: string) => p.replace(/^\/(?:Users|home)\/[^/]+/, '~')
 /**
  * One artifact: the rendered markdown, its frontmatter as chips, and what it
  * is linked to. Edit (or `#/artifact/new`) hands the whole content area to the
- * ArtifactEditor — long notes need the room — and the page follows the file
+ * ArtifactEditor, long notes need the room, and the page follows the file
  * when it changes on disk.
  */
 export function ArtifactPage({
@@ -36,7 +36,7 @@ export function ArtifactPage({
   return <ExistingArtifactPage id={id} onNavigate={onNavigate} onDirty={onDirty} />
 }
 
-/** `#/artifact/new` — a fresh full-page editor; saving lands on the new artifact's page. */
+/** `#/artifact/new`: a fresh full-page editor; saving lands on the new artifact's page. */
 function NewArtifactPage({ onNavigate }: { onNavigate: (hash: string) => void }) {
   return (
     <div id="artifactPage" className="page artEditPage">
@@ -92,7 +92,7 @@ function ExistingArtifactPage({ id, onNavigate, onDirty }: { id: string; onNavig
     void load()
   }, [load])
 
-  // The file may change under us (your editor, a session) — follow it, unless mid-edit.
+  // The file may change under us (your editor, a session), follow it, unless mid-edit.
   useEffect(() => store.onArtifactsChanged(() => void load()), [load])
 
   useEffect(() => {
@@ -164,7 +164,7 @@ function ExistingArtifactPage({ id, onNavigate, onDirty }: { id: string; onNavig
 
   const { artifact: a, body, links, abs } = state
 
-  // Edit mode takes the whole content area — long notes need the room.
+  // Edit mode takes the whole content area, long notes need the room.
   if (editing) {
     return (
       <div id="artifactPage" className="page artEditPage">
@@ -222,7 +222,7 @@ function ExistingArtifactPage({ id, onNavigate, onDirty }: { id: string; onNavig
                 <button type="button" className="btn sm" onClick={() => setEditing(true)} title="Full-page editor (⌘S saves)">
                   <Pencil size={13} aria-hidden="true" /> Edit
                 </button>
-                {/* The editor opens on the Mac's screen — no use to a phone. */}
+                {/* The editor opens on the Mac's screen. No use to a phone. */}
                 {onThisMac() && (
                   <button type="button" className="btn sm" onClick={() => void openInEditor()} disabled={busy !== null} title={abs}>
                     <ExternalLink size={13} aria-hidden="true" /> Open in editor

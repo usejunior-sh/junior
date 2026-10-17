@@ -20,7 +20,7 @@ type Props = {
  * picked labels back as the tool's answer.
  */
 export const AskCard = memo(function AskCard({ item, questions, onRespond, junior = true }: Props) {
-  // Keyed by question index — the tool allows two questions with the same text.
+  // Keyed by question index: the tool allows two questions with the same text.
   const [picked, setPicked] = useState<Record<number, string[]>>({})
   const [other, setOther] = useState<Record<number, string>>({})
 

@@ -1,11 +1,11 @@
 /* ---------- inbox home: the ledger (.docs/work-item-variations.html, A) ----
-   One item, one line. Hierarchy comes from alignment — state, source and age
+   One item, one line. Hierarchy comes from alignment, state, source and age
    sit in fixed-width right-aligned cells so they read as columns down the
-   page — not from a strip of pills. Three things take turns in that right-
+   page, not from a strip of pills. Three things take turns in that right-
    hand space and never share it: the meta columns at rest, the shortcut
    legend when the row is keyboard-selected, the actions on hover. They swap
    in place, so nothing reflows under the cursor.                            */
-/* The row's breakpoints track the list's own width, not the viewport — the
+/* The row's breakpoints track the list's own width, not the viewport. The
    rail and the Queue panel eat 344px before the ledger gets any. */
 .homeList { display: flex; flex-direction: column; container-type: inline-size; container-name: ledger; }
 .homeList .secLabel { margin: 26px 0 0; }
@@ -32,7 +32,7 @@
 .wrow.checked .check { color: var(--blue); }
 
 /* The gutter bar is the one place priority is printed (itemUi.priorityClass).
-   Normal and Low get no bar — a mark on every row marks nothing. */
+   Normal and Low get no bar: a mark on every row marks nothing. */
 .wrow .bar { width: 3px; height: 20px; border-radius: 2px; background: transparent; }
 .wrow.p1 .bar { background: var(--orange); }
 .wrow.p2 .bar { background: var(--yellow); }
@@ -83,7 +83,7 @@
 .wrow .meta .state.brief-failed { color: var(--red); }
 .wrow .meta .src { width: 120px; font-family: var(--mono); font-size: 0.8462rem; color: var(--stone); }
 .wrow .meta .when { width: 40px; font-family: var(--mono); font-size: 0.8462rem; color: var(--stone); }
-/* Stage and turn (core/work/flow.ts): the stage in words, the turn as a dot —
+/* Stage and turn (core/work/flow.ts): the stage in words, the turn as a dot,
    bright on your turn, blue while the AI has it, amber while someone else
    does. A dot with a ring is a turn you set by hand. */
 .wrow .meta .stage { width: 84px; display: inline-flex; align-items: center; justify-content: flex-end; gap: 6px; color: var(--ash); }
@@ -104,7 +104,7 @@
 .wrow .t .waited { flex: none; font-family: var(--mono); font-size: 0.8462rem; color: var(--ash); }
 .wrow .t .waited.stuck { color: var(--amber); }
 
-/* The inbox page's "landed today" — the day's progress, kept in the meta line. */
+/* The inbox page's "landed today": the day's progress, kept in the meta line. */
 .pageMeta .landed { display: inline-flex; align-items: center; gap: 4px; }
 .pageMeta .landed svg { color: var(--green); }
 .pageMeta .landed .n { font-family: var(--mono); color: var(--ink); }
@@ -117,7 +117,7 @@
 .toolRow .seg .segBtn svg { margin-left: 4px; color: var(--stone); }
 
 /* Cramped: the columns give way one at a time, and the trailing clause goes
-   first — a `why` squeezed to a single letter reads as a glitch. */
+   first. A `why` squeezed to a single letter reads as a glitch. */
 @container ledger (max-width: 800px) {
   .wrow .t .why { display: none; }
 }
@@ -151,7 +151,7 @@
 .uiMenuItem .dot.prio2 { background: var(--yellow); }
 .uiMenuItem .dot.prio0, .uiMenuItem .dot.prio3, .uiMenuItem .dot.prio4 { background: var(--stone); }
 
-/* priority — a custom dropdown (Radix Menu) styled as a full-width bar:
+/* priority: a custom dropdown (Radix Menu) styled as a full-width bar:
    a leading state dot, a quiet label, the value right-aligned in its priority
    colour, and a caret. Replaces the native <select>. */
 .prioBar {
@@ -206,7 +206,7 @@
 .segRow button svg { color: var(--ash); flex: none; }
 .segRow button:hover svg { color: var(--ink); }
 
-/* session — a refined card: title on one line, role·state in a quiet corner label,
+/* session: a refined card: title on one line, role·state in a quiet corner label,
    the action on its own bottom line, and a left accent (no status dot) for live state. */
 .sessCard { position: relative; display: block; padding: 12px 13px 12px 15px; color: inherit; text-decoration: none; transition: border-color 0.1s ease; }
 .sessCard:hover { border-color: var(--hair-bright); }
@@ -235,7 +235,7 @@
 .tlRow .why { color: var(--ash); display: block; }
 .asideEmpty { color: var(--stone); font-size: 0.9231rem; }
 
-/* per-item spend — a labelled section with a value, in the aside's own
+/* per-item spend: a labelled section with a value, in the aside's own
    vocabulary. Three lines on purpose: the model split and the cache share
    are Usage-tab questions, and a chart in 320px answers neither well.
    Variations that were considered: .docs/item-cost-variations.html */
@@ -256,7 +256,7 @@
 .costBlock .sub { font-size: 0.9231rem; color: var(--stone); }
 
 /* the model split. Colour comes from the shared series palette in
-   web/src/usageFormat.ts — the same hues the Usage tab uses, so Opus is the
+   web/src/usageFormat.ts. The same hues the Usage tab uses, so Opus is the
    same blue on both surfaces. 2px surface gaps between segments; the legend
    carries the value, so identity is never colour alone. */
 .costBlock .meter {
@@ -270,7 +270,7 @@
 .costBlock .keys .v { font-family: var(--mono); color: var(--mute); }
 .costBlock .foot { font-size: 0.8462rem; color: var(--stone); }
 
-/* the same number per session, on the card's bottom row — it displaces
+/* the same number per session, on the card's bottom row. It displaces
    nothing, and a live session's figure ticks as the transcript grows */
 .sessCard .act .spend {
   margin-left: auto; font-family: var(--mono); font-size: 0.8846rem; color: var(--charcoal);

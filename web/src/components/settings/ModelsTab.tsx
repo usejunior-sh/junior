@@ -4,9 +4,7 @@ import { useState } from 'react'
 import { useModelStore, saveModelPrefs, reloadModels, findModel } from '../../models.js'
 import { Row, Section } from './shared.js'
 
-// ---------------------------------------------------------------------------
-// Models — which models the pickers offer, and ids Claude Code doesn't list.
-// ---------------------------------------------------------------------------
+// Models, which models the pickers offer, and ids Claude Code doesn't list.
 
 export function ModelsTab() {
   const { catalog, hidden, custom, status, error } = useModelStore()

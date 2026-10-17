@@ -62,7 +62,7 @@ dialog.artDialog textarea { min-height: 240px; font-family: var(--mono); font-si
 .descShots .shot:hover { border-color: var(--hair-bright); }
 .descShots .shot img { width: 100%; height: 100%; object-fit: cover; display: block; }
 
-/* an item's links — source, yours, mentioned — as quiet rows; the whole row opens it */
+/* an item's links, source, yours, mentioned, as quiet rows; the whole row opens it */
 .linksBlock { display: flex; flex-direction: column; gap: 2px; }
 .linksBlock .head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
 .linkRow { display: flex; align-items: center; gap: 4px; border-radius: var(--r-sm); margin: 0 -6px; }
@@ -81,7 +81,7 @@ dialog.artDialog textarea { min-height: 240px; font-family: var(--mono); font-si
 .linksBlock .addRow input { flex: 1; min-width: 0; height: 30px; box-sizing: border-box; background: var(--deep); border: 1px solid var(--hair-strong); border-radius: var(--r); color: var(--ink); padding: 0 10px; font-size: 0.9615rem; outline: none; }
 .linksBlock .addRow input:focus { border-color: var(--ink); }
 /* Floating bulk-action bar (inbox multi-select). The page is the scroller, so
-   sticky-bottom keeps the bar inside the pane — never over the rail or Queue.
+   sticky-bottom keeps the bar inside the pane, never over the rail or Queue.
    #inboxPage is a flex column whose inner column grows, so on short lists the
    dock still lands at the bottom of the pane. A stuck element is clamped to
    its containing block's content box, so the page's 48px bottom padding is
@@ -135,7 +135,7 @@ dialog.artDialog textarea { min-height: 240px; font-family: var(--mono); font-si
 .briefComposer .bcFoot kbd { margin-left: 4px; font-size: 0.7692rem; opacity: 0.7; }
 .briefComposer .bcSaved { color: var(--ash); font-family: var(--mono); font-size: 0.8462rem; }
 /* Centred by margin, not transform: the `/` picker renders inside this element as position: fixed,
-   and a transform would make the dialog its containing block — offset, and clipped by the scroll. */
+   and a transform would make the dialog its containing block, offset, and clipped by the scroll. */
 .briefModal {
   width: 760px; max-width: calc(100vw - 32px); max-height: calc(100vh - 48px); overflow-y: auto;
   inset: 0; margin: auto; height: fit-content; transform: none;

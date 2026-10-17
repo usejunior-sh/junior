@@ -1,5 +1,5 @@
 /**
- * The screenshots a browser tool call saved, right under the call — the
+ * The screenshots a browser tool call saved, right under the call. The
  * transcript keeps the bytes out of the event log, so they come from disk
  * (`[shot #n]` in the result names the file). Click one to see it full size.
  */

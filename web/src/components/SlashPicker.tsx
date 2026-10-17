@@ -5,7 +5,7 @@ import type { CommandHit } from '../commands.js'
 type Props = {
   open: boolean
   hits: readonly CommandHit[]
-  /** the list is still being fetched — say so rather than claim there is nothing */
+  /** the list is still being fetched: say so rather than claim there is nothing */
   loading: boolean
   /** index into `hits` */
   selected: number
@@ -17,7 +17,7 @@ type Props = {
 
 /**
  * The `/` picker: a popover above the prompt box listing the commands and
- * skills this folder's Claude Code actually has — its own, the user's, the
+ * skills this folder's Claude Code actually has. Its own, the user's, the
  * project's, and every plugin's.
  *
  * The `@` picker's sibling and deliberately the plainer one: there are no tabs

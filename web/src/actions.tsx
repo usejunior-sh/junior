@@ -1,7 +1,7 @@
 /**
  * Outbound actions on the client: the fetch behind the Actions page, an item's
  * Actions list and a transcript's action lines, kept current by the server's
- * `actions_changed` frames — plus the words and glyphs every surface shares,
+ * `actions_changed` frames, plus the words and glyphs every surface shares,
  * so a record reads the same wherever it shows up.
  */
 import {
@@ -119,7 +119,7 @@ export function shortLink(url: string): string {
   return linkText(url).split('/')[0]
 }
 
-/** "40s", "12m", "6h", "2d" — a span, coarse. */
+/** "40s", "12m", "6h", "2d", a span, coarse. */
 export function spanText(ms: number): string {
   const s = Math.max(0, Math.round(ms / 1000))
   if (s < 60) return `${s}s`
@@ -161,7 +161,7 @@ type ActionsState = {
 const EMPTY: ActionsState = { actions: [], today: null, file: null, loaded: false, error: null }
 
 /**
- * Actions, newest first — all of them, one session's, or one item's (`null`
+ * Actions, newest first, all of them, one session's, or one item's (`null`
  * = don't fetch). Refetches when the server says something moved: a frame
  * for another session leaves a session's list alone.
  */
@@ -242,7 +242,7 @@ export async function actOn(
   }
 }
 
-/** How many queued actions wait on you — the rail's badge, kept current by `actions_changed`. */
+/** How many queued actions wait on you. The rail's badge, kept current by `actions_changed`. */
 export function usePendingActions(): number {
   const [n, setN] = useState(0)
   useEffect(() => {

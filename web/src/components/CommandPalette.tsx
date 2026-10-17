@@ -68,7 +68,7 @@ export function CommandPalette({
       setQuery('')
       setSel(0)
       el.showModal()
-      // Work items come from the server's snapshot cache — ~30ms, no sync.
+      // Work items come from the server's snapshot cache, ~30ms, no sync.
       void fetch('/api/inbox')
         .then((r) => r.json() as Promise<InboxResponse>)
         .then((b) => {
@@ -172,7 +172,7 @@ export function CommandPalette({
     const cmd = shown[clamped]
     if (!cmd) return
     // Close the dialog now, so its focus restore lands before the command's
-    // target (a composer) mounts and focuses itself — not after, stealing it.
+    // target (a composer) mounts and focuses itself, not after, stealing it.
     dialog.current?.close()
     onClose()
     cmd.run()

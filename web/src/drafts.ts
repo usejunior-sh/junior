@@ -2,8 +2,8 @@
  * Session drafts: a "New session" tab before it is a session. A draft holds
  * the prompt being written, the folder it will run in, and (when it came from
  * the inbox) the item it dispatches. Drafts are per browser and per
- * workspace — sending one turns it into a real session on the server, and the
- * draft is discarded — so they live in localStorage, not the daemon.
+ * workspace, sending one turns it into a real session on the server, and the
+ * draft is discarded, so they live in localStorage, not the daemon.
  */
 import { useSyncExternalStore } from 'react'
 import type { Mention } from '../../shared/protocol.js'
@@ -11,19 +11,19 @@ import { uuid } from './uuid.js'
 
 export type Draft = {
   id: string
-  /** shown on the tab while the prompt is empty — the dispatched item's title, or "New session" */
+  /** shown on the tab while the prompt is empty. The dispatched item's title, or "New session" */
   label?: string
   text: string
   cwd?: string
-  /** `@` mentions the draft opens with (a dispatched item, its brief) — the tokens are in `text` */
+  /** `@` mentions the draft opens with (a dispatched item, its brief). The tokens are in `text` */
   mentions?: Mention[]
   /** the work item this draft dispatches; recorded as a link when the session starts */
   itemId?: string
   /** run in this existing checkout (a worktree) instead of the project's main folder */
   checkoutId?: string
-  /** run in a new worktree on this branch — set = "New worktree" is picked; wins over checkoutId */
+  /** run in a new worktree on this branch, set = "New worktree" is picked; wins over checkoutId */
   newBranch?: string
-  /** a dispatched item's branch name, offered if you pick "New worktree" — never picked for you */
+  /** a dispatched item's branch name, offered if you pick "New worktree", never picked for you */
   branchHint?: string
   /** a live worktree already made for the dispatched item, offered as "Continue in …" */
   continueIn?: string
@@ -46,7 +46,7 @@ function persist() {
   try {
     localStorage.setItem(key(wsId), JSON.stringify(drafts))
   } catch {
-    // storage blocked — drafts still work for this page load
+    // storage blocked: drafts still work for this page load
   }
 }
 
@@ -104,7 +104,7 @@ export const draftStore = {
     notify()
   },
 
-  /** An untouched draft — `n` focuses it rather than stacking blank tabs. */
+  /** An untouched draft: `n` focuses it rather than stacking blank tabs. */
   findEmpty(): Draft | undefined {
     return drafts.find((d) => !d.text.trim() && !d.label && !d.intent)
   },

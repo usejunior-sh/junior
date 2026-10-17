@@ -11,10 +11,10 @@ export function useSessionAgents({ events, current, currentId }: {
   currentId: string | null
 }) {
   // Subagents: folded from the same events as the transcript. Opening one swaps
-  // the transcript for its slice — remembered per session, so leaving and coming
+  // the transcript for its slice: remembered per session, so leaving and coming
   // back finds main again rather than an agent picked long ago.
   // With no subprocess behind the session, nothing it spawned can still be
-  // running — a daemon restart ends them without a word in the log.
+  // running: a daemon restart ends them without a word in the log.
   const sessionLive = current?.live
   const agents = useMemo(() => {
     const runs = buildAgents(events, store.eventTime)

@@ -22,13 +22,13 @@ function measure(s: string, font: string): number {
  * The lit pill behind a recognized `/command` in the prompt box.
  *
  * A textarea can't style part of its own value, and mirroring the whole draft
- * to fake it is the usual answer — but it isn't needed here, because a command
+ * to fake it is the usual answer, but it isn't needed here, because a command
  * is only ever the first token of the first line. So this measures one
  * substring and parks a rectangle at the box's text origin, with no wrapping
  * to mirror and no selection to keep in step.
  *
  * It lights only for a name that *resolves*: `/release` gets the pill,
- * `/relase` gets nothing. That absence is the whole point — it is how the box
+ * `/relase` gets nothing. That absence is the whole point: it is how the box
  * says "this will reach the model as prose" without an error state flashing at
  * every half-typed name on the way there.
  */
