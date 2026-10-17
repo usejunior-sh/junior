@@ -28,6 +28,7 @@
     "core/teams/recipe.ts",
     "core/shells/fold.ts",
     "core/teams/engine.ts",
+    "core/teams/engine-*.ts",
     "core/work/state.ts",
     "core/work/labels.ts",
     "core/work/due.ts",
