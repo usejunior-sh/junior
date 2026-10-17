@@ -20,6 +20,7 @@ import type {
   Checkout,
   CheckoutState,
   EffortLevel,
+  FileRef,
   InboxSnapshot,
   ItemImage,
   Link,
@@ -378,6 +379,8 @@ export interface WorkItemStore {
    * (they live on disk); this only records what the item now holds.
    */
   setImages(id: string, images: ItemImage[]): Promise<void>
+  /** Replace the file refs on any item ([] clears). Like images, the bytes are the caller's business. */
+  setFiles(id: string, files: FileRef[]): Promise<void>
   /** Replace the human's links on any item ([] clears). Never touched by ingestion. */
   setUrls(id: string, urls: string[]): Promise<void>
   /** Give every item without a project the one `assign` picks; returns how many were set. */

@@ -10,7 +10,7 @@ import { DatabaseSync } from 'node:sqlite'
 import { mkdirSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import path from 'node:path'
-import type { Artifact, BriefJob, BriefStatus, Checkout, CheckoutState, InboxSnapshot, ItemImage, Link, LinkKind, LinkRole, Project, SessionEvent } from '../../shared/protocol.js'
+import type { Artifact, BriefJob, BriefStatus, Checkout, CheckoutState, FileRef, InboxSnapshot, ItemImage, Link, LinkKind, LinkRole, Project, SessionEvent } from '../../shared/protocol.js'
 import { isArtifactAuthor, isLinkKind, isLinkRole } from '../../shared/protocol.js'
 import type { Provenance, WorkItem } from '../work/types.js'
 import type { ItemEvent, ItemEventKind, ItemStatus, StatusChange } from '../work/state.js'
@@ -1985,6 +1985,15 @@ class SqliteWorkItems implements WorkItemStore {
     const next: WorkItem = { ...(JSON.parse(r.payload) as WorkItem) }
     if (images.length > 0) next.images = images
     else delete next.images
+    this.db.prepare('UPDATE work_items SET payload = ?, updated_at = ? WHERE id = ?').run(payloadOf(next), Date.now(), id)
+  }
+
+  async setFiles(id: string, files: FileRef[]): Promise<void> {
+    const r = this.row(id)
+    if (!r) throw new Error('no such work item')
+    const next: WorkItem = { ...(JSON.parse(r.payload) as WorkItem) }
+    if (files.length > 0) next.files = files
+    else delete next.files
     this.db.prepare('UPDATE work_items SET payload = ?, updated_at = ? WHERE id = ?').run(payloadOf(next), Date.now(), id)
   }
 

@@ -31,12 +31,12 @@ export function isOldFyi(item: FadeFields, now: number): boolean {
  * note or session links to (the store's links table).
  */
 export function shouldArchive(
-  item: FadeFields & Pick<WorkItem, 'id' | 'priority' | 'description' | 'urls' | 'images' | 'returned'>,
+  item: FadeFields & Pick<WorkItem, 'id' | 'priority' | 'description' | 'urls' | 'images' | 'files' | 'returned'>,
   now: number,
   touched: ReadonlySet<string>,
 ): boolean {
   if (labelOf(item) !== 'read' || item.dueSource || item.priority) return false
-  if (item.description || item.urls?.length || item.images?.length || item.returned) return false
+  if (item.description || item.urls?.length || item.images?.length || item.files?.length || item.returned) return false
   if (touched.has(item.id)) return false
   return ageDays(item, now) > ARCHIVE_AFTER_DAYS
 }

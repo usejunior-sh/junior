@@ -111,6 +111,12 @@ export interface WorkItem {
    * small. Briefs and dispatched sessions get them as real image blocks.
    */
   images?: import('../../shared/protocol.js').ItemImage[]
+  /**
+   * files of any type the human attached — refs only, like `images`; the bytes
+   * live under the workspace's `attachments/items/` folder. A brief or a
+   * dispatched session is handed them as paths it can Read.
+   */
+  files?: import('../../shared/protocol.js').FileRef[]
 }
 
 export interface ScoredItem extends WorkItem {
