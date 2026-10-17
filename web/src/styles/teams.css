@@ -1,0 +1,217 @@
+/* ---------- teams: the Start-a-team dialog and the editor it shares with Settings ---------- */
+.teamOverlay { position: fixed; inset: 0; z-index: 90; background: var(--scrim); animation: fadeIn 0.14s ease; }
+.teamDialog {
+  position: fixed; z-index: 91; left: 50%; top: 6vh; transform: translateX(-50%);
+  width: min(920px, calc(100vw - 40px)); max-height: 88vh; display: flex; flex-direction: column; overflow: hidden;
+  background: var(--card); border: 1px solid var(--hair-strong); border-radius: var(--r-lg);
+}
+.teamDialog:focus { outline: none; }
+.teamDialogHead { display: flex; align-items: center; gap: 10px; padding: 12px 14px 12px 18px; border-bottom: 1px solid var(--hair); flex: none; }
+.teamDialogHead .t { margin: 0; font-size: 1.1538rem; font-weight: 500; color: var(--ink); white-space: nowrap; }
+.teamDialogHead .item { color: var(--ash); font-size: 1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.teamDialogHead .r { margin-left: auto; display: flex; align-items: center; gap: 8px; flex: none; }
+.pill.edited { color: var(--yellow); border-color: var(--edge-yellow, rgba(255, 197, 61, 0.35)); background: var(--tint-yellow); }
+.teamDialogFoot { border-top: 1px solid var(--hair); padding: 12px 18px 14px; display: flex; flex-direction: column; gap: 10px; flex: none; }
+.teamFootRow { display: flex; align-items: center; gap: 12px; font-size: 0.8846rem; color: var(--ash); min-width: 0; }
+.teamFootRow .sp { flex: 1; }
+.teamFootRow .path { color: var(--body); }
+.teamFootRow .why { color: var(--red); font-size: 0.8846rem; text-align: right; }
+.teamFootRow .why.quiet { color: var(--ash); }
+.teamSaveInline { display: inline-flex; gap: 6px; align-items: center; }
+.teamSaveInline .teamInp { height: 26px; width: 180px; }
+.teamSolo { overflow: auto; }
+
+.teamForm { display: flex; flex-direction: column; gap: 12px; padding: 14px 18px; overflow: auto; min-width: 0; }
+.teamRow { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 12px; align-items: start; }
+.teamRowK { color: var(--ash); font-size: 0.9231rem; padding-top: 6px; }
+.teamRowV { min-width: 0; }
+.teamInp, .teamSel, .teamArea {
+  background: var(--card); border: 1px solid var(--hair-strong); border-radius: var(--r); color: var(--body); font: inherit; font-size: 0.9615rem;
+}
+.teamInp { height: 30px; padding: 0 10px; width: 260px; max-width: 100%; }
+.teamInp.wide { width: 100%; }
+.teamInp:disabled { opacity: 0.55; }
+.teamInp.bad { border-color: var(--edge-red); }
+/* Now a Radix trigger rather than a native <select>: the caret is a real
+   element instead of a background image, but the box is unchanged, because it
+   still sits beside .teamInp in the same rows. Doubled up with .uiSelect
+   because that rule is later in this file and would otherwise win the box
+   properties and stretch the pair to full width. */
+.teamSel.uiSelect {
+  display: inline-flex; align-items: center; gap: 8px; width: auto; height: 30px;
+  padding: 0 9px 0 10px; background: var(--card); border-radius: var(--r);
+  color: var(--body); font-size: 0.9615rem; text-align: left; cursor: pointer;
+}
+.teamSel.uiSelect > span:first-of-type { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.teamSel.uiSelect .caret { flex: none; color: var(--ash); }
+.teamSel.uiSelect[data-disabled] { opacity: 0.55; pointer-events: none; }
+.teamSel.uiSelect:hover { border-color: var(--hair-bright); }
+.teamSel.uiSelect[data-state="open"], .teamSel.uiSelect:focus-visible { border-color: var(--ink); }
+.teamArea { width: 100%; padding: 8px 10px; line-height: 1.55; resize: vertical; display: block; }
+.teamInp:hover, .teamArea:hover { border-color: var(--hair-bright); }
+.teamInp:focus, .teamArea:focus { outline: none; border-color: var(--ink); }
+.teamInp::placeholder, .teamArea::placeholder { color: var(--stone); }
+.teamHint { font-size: 0.8462rem; color: var(--stone); margin-top: 5px; line-height: 1.45; }
+.teamErr { font-size: 0.8462rem; color: var(--red); margin-top: 5px; }
+.teamPair { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.teamPairK { color: var(--ash); font-size: 0.9231rem; }
+.teamColors { display: inline-flex; gap: 4px; align-items: center; }
+.teamColors button { width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center; padding: 0; border: 1px solid transparent; border-radius: var(--r-xs); background: none; cursor: pointer; }
+.teamColors button span { width: 10px; height: 10px; border-radius: 2px; display: block; }
+.teamColors button.on { border-color: var(--ink); }
+.teamColors button:focus-visible { outline: 1px solid var(--ink); }
+.teamCans { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.teamCan {
+  display: flex; gap: 9px; align-items: flex-start; padding: 7px 10px; text-align: left; font: inherit;
+  border: 1px solid var(--hair-strong); border-radius: var(--r); background: var(--card); color: var(--mute); cursor: pointer;
+}
+.teamCan:hover { border-color: var(--hair-bright); }
+.teamCan .box { width: 14px; height: 14px; border: 1px solid var(--hair-bright); border-radius: 3px; flex: none; margin-top: 2px; display: flex; align-items: center; justify-content: center; }
+.teamCan.on { color: var(--ink); background: var(--elev); }
+.teamCan.on .box { background: var(--ink); border-color: var(--ink); }
+.teamCan.on .box::after { content: ""; width: 6px; height: 3px; border-left: 1.6px solid var(--on-primary); border-bottom: 1.6px solid var(--on-primary); transform: rotate(-45deg) translate(1px, -1px); }
+.teamCan .ct { display: block; font-size: 0.9231rem; }
+.teamCan .cs { display: block; font-size: 0.8077rem; color: var(--ash); line-height: 1.4; }
+.teamCallout { margin-top: 8px; padding: 8px 11px; border-radius: var(--r); font-size: 0.9231rem; line-height: 1.5; color: var(--body); }
+.teamCallout.err { border: 1px solid var(--edge-red); background: var(--tint-red); }
+.teamCallout b { font-weight: 500; color: var(--red); }
+.teamFormFoot { display: flex; align-items: center; gap: 10px; margin-top: 2px; }
+.teamFormFoot .teamHint { margin: 0; flex: 1; }
+
+/* ---------- Settings → Teams ---------- */
+.teamsTab { padding-top: 6px; }
+.teamsTabBar { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
+.teamsTabBar .sp { flex: 1; }
+.teamsTabBar .segBtn[data-state="active"] { background: var(--elev); border-color: var(--hair-strong); color: var(--ink); }
+.libList { background: var(--card); border: 1px solid var(--hair-strong); border-radius: var(--r-lg); overflow: hidden; }
+.libRow { position: relative; display: grid; grid-template-columns: 170px minmax(0, 1fr) auto; align-items: center; gap: 14px; min-height: 42px; padding: 4px 14px; font-size: 0.9615rem; }
+.libRow.agent { grid-template-columns: 150px 64px minmax(0, 1fr) minmax(0, 140px) auto; }
+.libRow + .libRow { border-top: 1px solid var(--hair); }
+.libRow:hover { background: var(--wash-1); }
+.libName { display: flex; align-items: center; gap: 9px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.libRoster { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; color: var(--charcoal); font-size: 0.9231rem; min-width: 0; }
+.libMember { display: inline-flex; align-items: center; gap: 6px; }
+.libMissing { color: var(--red); font-size: 0.8462rem; }
+.libMuted { color: var(--stone); }
+.libModel { font-size: 0.8462rem; color: var(--ash); }
+.libCan, .libUsed { font-size: 0.8846rem; color: var(--ash); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.libStatus { font-family: var(--mono); font-size: 0.7692rem; color: var(--stone); border: 1px solid var(--hair); border-radius: var(--r-full); padding: 0 7px; line-height: 18px; white-space: nowrap; }
+.libStatus.edited { color: var(--charcoal); border-color: var(--hair-strong); }
+.libStatus.update { color: var(--yellow); border-color: var(--edge-yellow, rgba(255, 197, 61, 0.35)); }
+.libStatus.yours { color: var(--body); border-color: var(--hair-strong); }
+/* actions overlay the row's end on hover, so hidden buttons never squeeze the columns */
+.libActs { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); display: inline-flex; align-items: center; gap: 2px; padding-left: 24px; background: linear-gradient(90deg, transparent, var(--card) 24px); opacity: 0; pointer-events: none; transition: opacity 0.12s; }
+.libRow:hover .libActs, .libRow:focus-within .libActs, .libActs.confirm { pointer-events: auto; }
+.libRow:hover .libActs, .libRow:focus-within .libActs, .libActs.confirm { opacity: 1; }
+.libConfirmText { font-size: 0.8846rem; color: var(--body); margin-right: 6px; }
+.libPath { font-size: 0.8462rem; color: var(--stone); }
+.libRow.team { grid-template-columns: 170px minmax(0, 1fr) 44px auto; }
+.libSteps { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.libStepLine { font-size: 0.8462rem; color: var(--charcoal); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.libStepLine .arrow { color: var(--stone); }
+.libStepLine .gate { color: var(--yellow); }
+.libErr { font-size: 0.8846rem; color: var(--red); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.libErr .more { color: var(--ash); }
+.libBudget { font-size: 0.8462rem; color: var(--ash); text-align: right; font-variant-numeric: tabular-nums; }
+.libHint { margin-top: 10px; font-size: 0.8462rem; color: var(--stone); line-height: 1.5; }
+.libHint .mono { color: var(--ash); }
+@media (max-width: 767px) {
+  /* a phone: the steps drop under the name, budget and status */
+  .libRow.team { grid-template-columns: minmax(0, 1fr) auto auto; row-gap: 2px; padding: 8px 14px; }
+  .libRow.team .libSteps { grid-column: 1 / -1; grid-row: 2; }
+}
+
+/* Settings → Skills / Agents (LibraryTab): a searchable list beside an editor. */
+.teamsTabCount { font-size: 0.9231rem; color: var(--ash); }
+.lb { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(240px, 320px) minmax(0, 1fr); gap: 0; border: 1px solid var(--hair-strong); border-radius: var(--r-lg); background: var(--card); overflow: hidden; }
+.settingsFill > .lb { overflow: hidden; }
+.lbSide { display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--hair-strong); }
+.lbSearch { display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px; border-bottom: 1px solid var(--hair); color: var(--stone); flex: none; }
+.lbSearch input, .settings .lbSearch input:not([type]) { flex: 1; min-width: 0; height: 100%; padding: 0; border-radius: 0; background: none; border: 0; outline: none; color: var(--ink); font: inherit; font-size: 0.9615rem; }
+.lbSearch input::placeholder { color: var(--stone); }
+.lbPills { display: flex; flex-wrap: wrap; gap: 4px; padding: 8px 10px; border-bottom: 1px solid var(--hair); flex: none; }
+.lbPill { height: 22px; padding: 0 8px; border-radius: 11px; border: 1px solid var(--hair-strong); background: transparent; color: var(--mute); font: inherit; font-size: 0.8462rem; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; }
+.lbPill .n { font-family: var(--mono); font-size: 0.7692rem; color: var(--stone); }
+.lbPill:hover:not(:disabled) { color: var(--ink); border-color: var(--hair-bright); }
+.lbPill.on { background: var(--ink); border-color: var(--ink); color: var(--on-primary); }
+.lbPill.on .n { color: inherit; opacity: 0.6; }
+.lbPill:disabled { opacity: 0.4; cursor: default; }
+.lbList { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 0 8px; }
+.lbGroup + .lbGroup { margin-top: 6px; }
+.lbGroupHead { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; gap: 6px; padding: 8px 14px 4px; background: var(--card); font-size: 0.7692rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ash); cursor: default; }
+.lbGroupHead .t { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lbGroupHead .n { font-family: var(--mono); color: var(--stone); letter-spacing: 0; }
+.lbItem { display: flex; flex-direction: column; gap: 2px; width: 100%; padding: 7px 14px 8px; border: 0; border-left: 2px solid transparent; background: none; text-align: left; font: inherit; color: var(--body); cursor: pointer; }
+.lbItem:hover { background: var(--wash-1); }
+.lbItem.on { background: var(--elev); border-left-color: var(--ink); }
+.lbItemTop { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.lbItemName { flex: 1; min-width: 0; font-family: var(--mono); font-size: 0.9231rem; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lbItemMeta { display: inline-flex; align-items: center; gap: 4px; flex: none; }
+.lbItemDesc { font-size: 0.8462rem; color: var(--ash); line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.lbChip { font-family: var(--mono); font-size: 0.7308rem; color: var(--ash); border: 1px solid var(--hair-strong); border-radius: 4px; padding: 0 4px; line-height: 15px; white-space: nowrap; }
+.lbSwatch { width: 7px; height: 7px; border-radius: 50%; flex: none; display: inline-block; }
+.lbLock { color: var(--stone); flex: none; }
+.lbNone { padding: 18px 14px; font-size: 0.9231rem; color: var(--ash); line-height: 1.5; }
+.lbSideFoot { flex: none; padding: 8px 10px; border-top: 1px solid var(--hair); display: flex; }
+.lbSideFoot .btn { flex: 1; justify-content: center; }
+
+.lbMain { min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.lbEmpty { margin: auto; max-width: 360px; text-align: center; padding: 24px; color: var(--ash); }
+.lbEmptyN { font-family: var(--mono); font-size: 2.4rem; color: var(--ink); line-height: 1; }
+.lbEmptyT { margin-top: 6px; color: var(--body); }
+.lbEmpty p { font-size: 0.9231rem; line-height: 1.55; margin: 12px 0 16px; }
+.lbEditor { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.lbHead { flex: none; display: flex; align-items: flex-start; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--hair); }
+.lbHeadT { flex: 1; min-width: 0; }
+.lbHeadName { display: flex; align-items: center; gap: 8px; font-size: 1.0769rem; color: var(--ink); min-width: 0; flex-wrap: wrap; }
+.lbHeadSub { margin-top: 3px; font-size: 0.8462rem; color: var(--ash); }
+.lbHeadPath { margin-top: 3px; display: inline-flex; align-items: center; gap: 5px; max-width: 100%; padding: 0; border: 0; background: none; font-size: 0.7692rem; color: var(--stone); cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lbHeadPath:hover { color: var(--ash); }
+.lbHeadActs { display: inline-flex; align-items: center; gap: 2px; flex: none; }
+.lbSrc { display: inline-flex; align-items: center; gap: 3px; font-size: 0.7692rem; color: var(--ash); border: 1px solid var(--hair-strong); border-radius: 10px; padding: 0 7px; line-height: 17px; }
+.lbSrc.workspace { color: var(--blue); border-color: var(--edge-blue); }
+.lbSrc.ro { color: var(--stone); }
+.lbConfirm { flex: none; display: flex; align-items: center; gap: 8px; padding: 8px 16px; background: var(--tint-red); border-bottom: 1px solid var(--edge-red); font-size: 0.9231rem; color: var(--body); }
+.lbConfirm .sp, .lbFoot .sp { flex: 1; }
+.lbFiles { flex: none; display: flex; gap: 2px; padding: 6px 12px; border-bottom: 1px solid var(--hair); overflow-x: auto; }
+.lbFile { display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 8px; border-radius: 6px; border: 1px solid transparent; background: none; font-family: var(--mono); font-size: 0.7692rem; color: var(--ash); white-space: nowrap; cursor: pointer; }
+.lbFile:hover { color: var(--ink); background: var(--wash-1); }
+.lbFile.on { color: var(--ink); background: var(--elev); border-color: var(--hair-strong); }
+.lbBody { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; }
+.lbBody > .teamForm { padding: 14px 16px; }
+.lbFields { display: flex; flex-direction: column; gap: 14px; padding: 14px 16px 18px; flex: 1; min-height: 0; }
+.lbField { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 12px; align-items: start; }
+.lbField.col { grid-template-columns: 1fr; gap: 6px; flex: 1; min-height: 260px; display: flex; flex-direction: column; }
+.lbFieldK { color: var(--ash); font-size: 0.9231rem; padding-top: 6px; }
+.lbFieldK.row { display: flex; align-items: center; gap: 10px; padding-top: 0; }
+.lbFieldV { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.lbHint { font-size: 0.7692rem; color: var(--stone); line-height: 1.45; overflow-wrap: anywhere; }
+.lbArea { resize: vertical; }
+.lbSeg .segBtn { height: 22px; font-size: 0.8462rem; }
+.lbCode { flex: 1; min-height: 240px; width: 100%; resize: none; padding: 12px 14px; background: var(--bg, var(--card)); border: 1px solid var(--hair-strong); border-radius: var(--r); color: var(--body); font-family: var(--mono); font-size: 0.8846rem; line-height: 1.6; tab-size: 2; outline: none; }
+.lbCode:focus { border-color: var(--hair-bright); }
+.lbCode[readonly] { color: var(--mute); }
+.lbRaw { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 12px 16px; }
+.lbRaw .lbCode.fill { min-height: 0; }
+.lbPreview { flex: 1; min-height: 240px; overflow-y: auto; padding: 4px 14px 12px; border: 1px solid var(--hair); border-radius: var(--r); font-size: 1rem; }
+.lbColors { display: flex; gap: 6px; padding-top: 5px; }
+.lbColor { width: 18px; height: 18px; border-radius: 50%; border: 2px solid transparent; outline: 1px solid var(--hair-strong); cursor: pointer; padding: 0; }
+.lbColor.none { background: transparent; outline-style: dashed; }
+.lbColor.on { border-color: var(--card); outline: 2px solid var(--ink); }
+.lbColor:disabled { cursor: default; opacity: 0.6; }
+.lbFoot { flex: none; display: flex; align-items: center; gap: 8px; padding: 10px 16px; border-top: 1px solid var(--hair); min-height: 48px; }
+.lbErr { font-size: 0.8462rem; color: var(--red); }
+.lbErr.quiet { color: var(--ash); }
+.lbDirty { font-size: 0.8462rem; color: var(--yellow); }
+.lbSaved { display: inline-flex; align-items: center; gap: 4px; font-size: 0.8462rem; color: var(--green); }
+.lbBack { display: none; }
+@media (max-width: 767px) {
+  /* a phone: the list and the editor take turns, like a master–detail app */
+  .lb { grid-template-columns: 1fr; }
+  .lb.picked .lbSide, .lb:not(.picked) .lbMain { display: none; }
+  .lbSide { border-right: 0; }
+  .lbBack { display: inline-flex; flex: none; }
+  .lbField { grid-template-columns: 1fr; gap: 4px; }
+  .lbHeadActs .btn { display: none; }
+}
+

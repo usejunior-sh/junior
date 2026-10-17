@@ -1,0 +1,168 @@
+/* ---------- phone: terminals — the keys a phone keyboard lacks ---------- */
+.termKeys { display: flex; gap: 4px; padding: 6px 8px; border-top: 1px solid var(--hair); background: var(--deep); overflow-x: auto; scrollbar-width: none; flex: none; }
+.termKeys::-webkit-scrollbar { display: none; }
+.termKeys button {
+  flex: none; min-width: 44px; height: 36px; padding: 0 10px; border-radius: var(--r);
+  border: 1px solid var(--hair-strong); background: var(--elev); color: var(--body);
+  font-family: var(--mono); font-size: 0.8667rem; -webkit-tap-highlight-color: transparent;
+}
+.termKeys button:active { background: var(--wash-2); color: var(--ink); }
+@media (max-width: 767px), (pointer: coarse) and (max-height: 500px) {
+  /* The top bar names the shell; its header keeps the folder. Stay inline-block
+     (not inline-flex) so the pill truncates its own text as one line — flexing
+     it makes the inner .t span an unshrinkable flex item that spills past the cap. */
+  #chatHeader.termHeader .pills .pill.mono { max-width: 50vw; }
+}
+
+/* ---------- phone: a changed file — the file on one line, the view controls on the next ---------- */
+@media (max-width: 767px), (pointer: coarse) and (max-height: 500px) {
+  .chgBar { flex-wrap: wrap; height: auto; min-height: 0; row-gap: 8px; padding-top: 8px; padding-bottom: 8px; }
+  .chgBar .crumb { flex: 1 1 0; }
+  .chgBar .crumb .dir { display: none; }
+  .chgBar .sp { flex-basis: 100%; height: 0; margin: 0; }
+  .chgBar .seg { flex-wrap: nowrap; }
+}
+
+/* ---------- phone: menus, popovers and the remaining fixed-width dialogs ---------- */
+@media (max-width: 767px), (pointer: coarse) and (max-height: 500px) {
+  #deleteSession, dialog.projModal, dialog.wsModal, dialog.artDialog {
+    width: calc(100vw - 16px); max-width: none;
+    margin: calc(env(safe-area-inset-top) + 8px) 8px auto;
+    max-height: calc(var(--vvh, 100dvh) - env(safe-area-inset-top) - 16px); overflow-y: auto;
+  }
+  .uiMenu, .uiMenu.models, .uiMenu.perm, .uiMenu.wide, .uiMenu.projMenu, .uiMenu.rowMenu, .wsMenu {
+    min-width: min(260px, calc(100vw - 16px)); max-width: calc(100vw - 16px);
+  }
+  .uiMenuItem { min-height: 44px; }
+  .mpop, .mpop.withRail, .slPop { width: calc(100vw - 16px); max-width: none; }
+  .mpRail { width: 60px; padding: 4px; }
+  .mpAgent { min-height: 56px; }
+  .wformSelect { width: 100%; }
+}
+@media (max-width: 767px), (pointer: coarse) and (max-height: 500px) {
+  /* Approving from the couch: permission and question buttons get a full thumb's width. */
+  .perm .actions .btn { flex: 1 1 auto; height: 44px; justify-content: center; }
+  .perm .well { max-height: 120px; }
+}
+.phoneCode { margin-top: 12px; }
+.phoneCode .cap { display: block; font-family: var(--mono); font-size: 0.7692rem; color: var(--stone); margin-bottom: 4px; }
+.phoneCode .row { display: flex; align-items: center; gap: 12px; padding: 10px 14px; background: var(--deep); border: 1px solid var(--hair-strong); border-radius: var(--r); }
+.phoneCode .digits { font-family: var(--mono); font-size: 1.8462rem; letter-spacing: 0.18em; color: var(--ink); font-variant-numeric: tabular-nums; }
+.phoneCode .digits .gap { display: inline-block; width: 0.5em; }
+.phoneCode .row .btn { margin-left: auto; }
+.phoneCode .note { display: block; margin-top: 6px; font-size: 0.8462rem; color: var(--ash); }
+.tunnelLine { display: flex; align-items: center; gap: 8px; margin: 4px 0 0; font-size: 0.9231rem; color: var(--ash); }
+.tunnelLine code { font-family: var(--mono); color: var(--body); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+
+/* settings → phone: where you'll use it from — two cards, one chosen (the auth-card idiom) */
+.reachPick { padding: 12px 0 4px; border-top: 1px solid var(--hair-soft); }
+.reachLbl { display: block; font-weight: 500; color: var(--body); font-size: 1rem; margin-bottom: 10px; }
+.reachCards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.reachCard {
+  display: flex; flex-direction: column; gap: 5px; text-align: left; padding: 12px 14px; border-radius: var(--r-lg);
+  background: var(--canvas); border: 1px solid var(--hair-strong); color: var(--body); cursor: pointer;
+  transition: border-color 0.1s ease;
+}
+.reachCard:hover { border-color: var(--hair-bright); }
+.reachCard[data-state="checked"] { border-color: var(--ink); }
+.reachCard:disabled { cursor: default; opacity: 0.7; }
+.reachCard:focus-visible { outline: 1px solid var(--ink); outline-offset: 2px; }
+.reachHead { display: flex; align-items: center; gap: 8px; font-weight: 500; color: var(--ink); font-size: 1rem; }
+.reachHead svg { color: var(--ash); }
+.reachCard[data-state="checked"] .reachHead svg { color: var(--ink); }
+.reachDot { display: grid; place-items: center; width: 14px; height: 14px; border-radius: var(--r-full); border: 1px solid var(--hair-bright); flex: none; }
+.reachCard[data-state="checked"] .reachDot { border-color: var(--ink); }
+.reachDotOn { width: 6px; height: 6px; border-radius: var(--r-full); background: var(--ink); }
+.reachBody { font-size: 0.9231rem; line-height: 1.5; color: var(--mute); }
+@media (max-width: 767px), (pointer: coarse) and (max-height: 500px) {
+  .reachCards { grid-template-columns: minmax(0, 1fr); }
+  .reachCard { padding: 14px; }
+}
+.tunnelUp { margin-top: 4px; }
+.tunnelUp .mcpSnip { margin-top: 6px; }
+.reachPick + .tunnelLine, .reachPick + .tunnelUp, .reachPick + .msg { margin-top: 10px; }
+
+/* ---------- touch screens: nothing waits on a hover that never comes ---------- */
+@media (hover: none) {
+  .md .codeToolbar, .md .mermaidZoom, .linkRow .rm, .termTitle svg { opacity: 1; }
+  .libActs { opacity: 1; pointer-events: auto; }
+}
+@media (pointer: coarse) {
+  /* No double-tap-to-zoom delay on controls, no grey flash, no copy callout on the chrome. */
+  button, a, [role="button"], [role="tab"], [role="radio"], [role="menuitem"] { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+  .rail, .topbar, .panelHead, .tabband, .termKeys { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+  .prow:active, .railBtn:active, .listRow:active, .artRow:active { background: var(--wash-2); }
+}
+/* A phone on its side: height is what is scarce — icon-only bottom bar, slimmer top bar. */
+@media (pointer: coarse) and (max-height: 500px) {
+  :root { --nav-h: 44px; }
+  .topbar.mobile { height: 44px; }
+  .shell.mobile .railBtn span.label { display: none; }
+  .shell.mobile .railBadge { top: 4px; }
+  .itemAside > .asideActions { max-width: 520px; }
+}
+
+/* Touch keeps :hover on whatever was tapped last — a row stays lit long after
+   the finger has gone. On a touch screen, hover tints nothing. */
+@media (hover: none) {
+  .wrow:hover:not(.checked), .prow:hover:not(.sel), .listRow:hover, .libRow:hover,
+  .wtbl tbody tr:hover td, .rtbl tbody tr:hover td { background: transparent; }
+  .wrow:hover .t .name { color: var(--body); }
+  .wrow .t:hover .name, .wtbl td.nm .t:hover { text-decoration: none; }
+}
+@media (max-width: 767px), (pointer: coarse) and (max-height: 500px) {
+  html.kbOpen .settings { bottom: auto; height: var(--vvh); }
+}
+@media (max-width: 767px), (pointer: coarse) and (max-height: 500px) {
+  /* The model picker under a thumb: taller rows, effort levels wrap instead of running off the edge. */
+  .mpOpt { min-height: 44px; }
+  .mpFoot { flex-wrap: wrap; row-gap: 6px; }
+  .mpFoot .eff { white-space: nowrap; min-height: 34px; }
+  .mpList { height: calc(4 * 44px + 3 * 1px + 10px); max-height: 40vh; }
+}
+/* The mode in force reads as chosen at a glance, not only by its check. */
+.uiMenu.perm .uiMenuItem.on { background: var(--wash-2); }
+
+@media (max-width: 767px), (pointer: coarse) and (max-height: 500px) {
+  /* A team's strip scrolls sideways; on a phone each member is name and state — model and spend live on desktop. */
+  #teamStrip { padding: 4px 10px; scrollbar-width: none; }
+  #teamStrip::-webkit-scrollbar { display: none; }
+  #teamStrip .teamLabel, .teamTab .model, .teamTab .spend { display: none; }
+  .teamTab { height: 34px; }
+  /* On a phone the details drawer is a full sheet over the session, and the dock goes edge to edge. */
+  .teamSide { position: fixed; inset: 0; z-index: 60; width: auto; max-width: none; border-left: 0; background: var(--canvas); padding-bottom: env(safe-area-inset-bottom); }
+  .teamDock { width: calc(100% - 20px); }
+  .tdLine { display: none; }
+  /* Subagents on a phone: the dock and the agent header go edge to edge; the card drops its numbers to its second line's width. */
+  .agentDock { width: calc(100% - 16px); }
+  .adName { max-width: 140px; }
+  .adNow { display: none; }
+  .agentHead { padding: 6px 12px 0; }
+  .ahCrumb { max-width: 90px; }
+  .ahRow { flex-wrap: wrap; row-gap: 2px; }
+  .ahCrumbs { flex: 1 1 100%; }
+  .acNums, .acEnd .pill { display: none; }
+  #chatHeader .agentsBtn { margin-left: 0; padding: 0 6px; }
+}
+@media (max-width: 767px), (pointer: coarse) and (max-height: 500px) {
+  /* Tool calls: the verb takes only its own width, so what was run gets the rest of the line. */
+  .tline .tlVerb { min-width: 0; }
+  .tline .tlNote, .toolGroup .tgCount { font-size: 0.8rem; }
+  .toolGroup .tgBody { margin-left: 6px; padding-left: 10px; }
+  .tool { padding: 10px 12px; }
+}
+
+/* A job a chat drafted (MCP draft_job): off until you review and enable it. */
+.draftBanner {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0 0 14px; padding: 10px 12px;
+  border: 1px dashed var(--hair-bright); border-radius: var(--r); background: var(--card);
+}
+.draftBanner .tag, .draftTag {
+  font-family: var(--mono); font-size: 0.7692rem; letter-spacing: 0.4px; text-transform: uppercase;
+  color: var(--amber); border: 1px solid var(--hair-strong); border-radius: var(--r-full); padding: 1px 7px;
+}
+.draftBanner .txt { flex: 1 1 260px; color: var(--body); font-size: 0.9615rem; }
+.draftTag { margin-left: 8px; vertical-align: 1px; }
+/* draft_job's result in a chat: one click to the job page. */
+.draftLink { display: flex; align-items: center; gap: 10px; margin: 4px 0 10px; color: var(--body); font-size: 0.9615rem; }
+

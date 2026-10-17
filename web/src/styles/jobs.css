@@ -1,0 +1,302 @@
+/* ---------- jobs: the table (T1) ---------- */
+.jobHead { display: flex; align-items: flex-end; gap: 16px; margin-bottom: 18px; }
+.jobHead .seg { margin-left: 8px; margin-bottom: 5px; }
+.jobHead .segBtn .n { font-family: var(--mono); font-size: 0.8462rem; color: var(--stone); margin-left: 6px; }
+.jobHead .filter { margin-left: auto; width: 220px; height: 30px; padding: 0 10px; border-radius: var(--r); border: 1px solid var(--hair-strong); background: var(--canvas); color: var(--ink); font-size: 0.9231rem; outline: none; }
+.jobHead .filter::placeholder { color: var(--stone); }
+.jobHead .filter:focus { border-color: var(--ink); }
+.wtblWrap { background: var(--card); border: 1px solid var(--hair-strong); border-radius: var(--r-lg); overflow: hidden; }
+.wtbl { width: 100%; border-collapse: collapse; font-size: 0.9615rem; }
+.wtbl th { font-size: 0.8462rem; letter-spacing: 0.6px; text-transform: uppercase; color: var(--stone); text-align: left; font-weight: 400; padding: 8px 10px; border-bottom: 1px solid var(--hair-strong); white-space: nowrap; }
+.wtbl th.r, .wtbl td.r { text-align: right; }
+.wtbl td { padding: 0 10px; height: 40px; border-bottom: 1px solid var(--hair); color: var(--body); white-space: nowrap; vertical-align: middle; }
+.wtbl tbody tr:last-child td { border-bottom: 0; }
+.wtbl tbody tr:hover td { background: var(--wash-1); }
+.wtbl tr.off td { color: var(--stone); }
+.wtbl tr.off td.nm .t { color: var(--stone); }
+.wtbl td.sw { width: 36px; padding-right: 0; }
+/* the name column takes the slack on a wide pane; the rest hug their content */
+.wtbl td.nm { width: 100%; }
+.wtbl td.nm .t { background: none; border: 0; padding: 0; color: var(--ink); font-size: 1.0385rem; letter-spacing: -0.1px; cursor: pointer; text-align: left; }
+.wtbl td.nm .t:hover { text-decoration: underline; text-decoration-color: var(--stone); text-underline-offset: 3px; }
+.wtbl .mono { font-family: var(--mono); font-size: 0.8846rem; color: var(--ash); }
+.wtbl .bad { color: var(--red); }
+.wtbl td.acts { width: 100px; padding-right: 8px; }
+.wtbl .actRow { display: flex; gap: 2px; justify-content: flex-end; }
+.wtblEmpty { padding: 40px 0; text-align: center; color: var(--ash); display: flex; flex-direction: column; align-items: center; gap: 14px; }
+.wtblFoot { display: flex; gap: 16px; margin-top: 14px; font-size: 0.9231rem; color: var(--stone); align-items: center; }
+.uses { display: inline-flex; gap: 4px; align-items: center; }
+.uses .u { width: 20px; height: 20px; border-radius: var(--r-sm); border: 1px solid var(--hair-strong); background: var(--elev); display: inline-flex; align-items: center; justify-content: center; color: var(--mute); }
+.uses .u.proj { width: auto; padding: 0 6px; font-family: var(--mono); font-size: 0.7692rem; color: var(--ash); }
+.runDots { display: inline-flex; gap: 3px; align-items: center; }
+.runDots .dot { width: 6px; height: 6px; }
+.runDots .dot.none { background: transparent; border: 1px solid var(--hair-strong); width: 5px; height: 5px; }
+
+/* ---------- jobs: the form page ---------- */
+.page .inner.wform { display: flex; flex-direction: column; gap: 20px; max-width: 720px; }
+.crumbs { display: flex; align-items: center; gap: 8px; font-size: 1rem; color: var(--ash); margin-bottom: 2px; }
+.crumb.link { background: none; border: 0; padding: 0; color: var(--ash); cursor: pointer; font-size: 1rem; }
+.crumb.link:hover { color: var(--ink); }
+.crumb.now { color: var(--ink); }
+.crumbSep { color: var(--stone); }
+.wform .field { display: flex; flex-direction: column; gap: 6px; }
+.wform label { font-size: 0.9231rem; color: var(--mute); }
+.wform .hint { color: var(--stone); font-size: 0.9231rem; }
+.wform input, .wform textarea {
+  width: 100%; background: var(--canvas); border: 1px solid var(--hair-strong); color: var(--ink);
+  border-radius: var(--r); padding: 8px 10px; font-size: 1rem; line-height: 1.45; outline: none; transition: border-color 0.12s;
+}
+.wform input:focus, .wform textarea:focus { border-color: var(--ink); }
+.wform input::placeholder, .wform textarea::placeholder { color: var(--stone); }
+.wform textarea { min-height: 118px; resize: vertical; line-height: 1.6; }
+/* NB this one is a single class, unlike .pill.uiSelect / .teamSel.uiSelect —
+   it can be, because it is defined *after* .uiSelect and so wins the box
+   properties on source order. It has to stay single, because it also dresses
+   the project menu's plain <button>, which carries no .uiSelect. Keep it below
+   the select block.
+   Project and model on the job form are a menu trigger and a Select, but
+   they sit in a column of text inputs, so they take the same box as their
+   siblings above: same width, border, radius and padding, caret on the end. */
+.wformSelect {
+  display: flex; align-items: center; gap: 8px; width: 320px; height: auto;
+  padding: 8px 10px; background: var(--canvas); border: 1px solid var(--hair-strong);
+  border-radius: var(--r); color: var(--ink); font-size: 1rem; line-height: 1.45;
+  text-align: left; cursor: pointer; outline: none; transition: border-color 0.12s;
+}
+.wformSelect:hover { border-color: var(--hair-bright); }
+.wformSelect:focus-visible, .wformSelect[data-state="open"] { border-color: var(--ink); }
+/* not :first-of-type — the colour dot is a span too, and must not stretch */
+.wformSelect > span:not(.pdot) { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.wformSelect .caret { flex: none; color: var(--ash); }
+.wformSelect .pdot { width: 7px; height: 7px; border-radius: var(--r-full); flex: none; }
+.wform .chipRow { gap: 6px; }
+.cchip { display: inline-flex; align-items: center; gap: 7px; height: 28px; padding: 0 10px 0 8px; border-radius: var(--r); border: 1px solid var(--hair-strong); background: transparent; color: var(--mute); font-size: 0.9615rem; transition: color 0.1s, border-color 0.1s, background 0.1s; }
+.cchip:hover { color: var(--ink); border-color: var(--hair-bright); }
+.cchip.on { color: var(--ink); border-color: var(--hair-bright); background: var(--elev); }
+.cchip .tick { color: var(--green); }
+.schedCard { padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+.schedCard .line { display: flex; align-items: center; gap: 8px; color: var(--ink); }
+.schedCard .line > svg { color: var(--ash); flex: none; }
+.schedCard .line .cron { margin-left: auto; font-family: var(--mono); font-size: 0.8462rem; color: var(--stone); }
+.schedCard .ctl { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.schedCard input.time { width: 124px; padding: 2px 8px; font-family: var(--mono); font-size: 0.9231rem; color-scheme: dark; }
+.schedCard input.cronIn { width: 200px; font-family: var(--mono); padding: 4px 8px; }
+.wform .foot { display: flex; gap: 8px; justify-content: flex-end; align-items: center; margin-top: 6px; }
+.wform .foot .hint { margin-right: auto; }
+.schedCard .nextRuns { font-size: 0.8846rem; color: var(--body); }
+.schedCard .nextRuns .at { color: var(--ink); }
+.schedCard .nextRuns .dim { color: var(--stone); }
+
+/* the job file editor: the file left, what it can name (click to copy) right */
+.wfile .crumbs { align-items: center; }
+.wfileName { margin-left: auto; color: var(--stone); font-size: 0.8462rem; }
+.wfileGrid { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 20px; align-items: start; }
+.wfileMain { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.wfileText {
+  width: 100%; min-height: 62vh; resize: vertical; box-sizing: border-box;
+  font-family: var(--mono); font-size: 1rem; line-height: 1.6; color: var(--body); font-variant-ligatures: none;
+  background: var(--deep); border: 1px solid var(--hair-strong); border-radius: var(--r-lg); padding: 16px 18px; tab-size: 2;
+}
+.wfileText:focus { outline: none; border-color: var(--charcoal); }
+.wfile .foot { display: flex; gap: 8px; justify-content: flex-end; align-items: center; }
+.wfile .foot .hint { margin-right: auto; }
+.wfileRef { display: flex; flex-direction: column; gap: 2px; border: 1px solid var(--hair); border-radius: var(--r-lg); padding: 12px; max-height: 72vh; overflow: auto; }
+.wfileRef .secLabel { margin: 10px 0 4px; }
+.wfileRef .secLabel:first-child { margin-top: 0; }
+.wfileEmpty { color: var(--stone); font-size: 0.9231rem; }
+.wfileCopy, .wfileServerHead {
+  display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; background: none; border: 0;
+  border-radius: var(--r-sm); padding: 4px 6px; color: var(--body); font-size: 0.8846rem; cursor: pointer;
+}
+.wfileCopy:hover, .wfileServerHead:hover { background: var(--wash-1); }
+.wfileCopy .v { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wfileCopy .k { color: var(--stone); font-size: 0.8077rem; }
+.wfileCopy svg { flex: none; color: var(--stone); }
+.wfileServerHead .mono { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wfileServerHead .n { color: var(--stone); }
+.wfileServerHead svg { flex: none; color: var(--stone); transition: transform 0.15s; }
+.wfileServer[data-state="open"] .wfileServerHead svg { transform: rotate(90deg); }
+.wfileServerBody { padding-left: 14px; }
+@media (max-width: 767px) {
+  .wfileGrid { grid-template-columns: minmax(0, 1fr); }
+  .wfileText { min-height: 50vh; }
+}
+.formError { color: var(--red); font-size: 0.9231rem; font-family: var(--mono); }
+
+/* ---------- job form: integrations picker (job-spec.md, item 1) ---------- */
+.toolPicker { display: flex; flex-direction: column; gap: 8px; }
+.cchip.on.warn { border-color: var(--edge-yellow); }
+.cchip.on.warn .tick { color: var(--yellow); }
+.wform .hint.warnText { color: var(--yellow); display: inline-flex; align-items: center; gap: 6px; }
+.toolServers { padding: 4px 0; display: flex; flex-direction: column; }
+.toolServers .tsHead { display: flex; align-items: center; gap: 10px; padding: 6px 12px 8px; border-bottom: 1px solid var(--hair); color: var(--ink); font-size: 0.9231rem; }
+.toolServers .tsHead .m { margin-left: auto; color: var(--ash); font-size: 0.8462rem; }
+.toolServers .tsEmpty { padding: 12px; color: var(--ash); font-size: 0.9231rem; }
+.toolServers .tsGroup + .tsGroup { border-top: 1px solid var(--hair-soft); }
+.toolServers .tsScope { padding: 8px 12px 2px; color: var(--stone); font-size: 0.7692rem; font-family: var(--mono); text-transform: uppercase; letter-spacing: 0.04em; }
+.tsRow { display: flex; flex-direction: column; }
+.tsRow.orphan { flex-direction: row; align-items: center; gap: 8px; padding: 6px 12px; color: var(--mute); border-top: 1px solid var(--hair-soft); }
+.tsRow.orphan .name { color: var(--ink); }
+.tsRow.orphan .count { margin-left: auto; color: var(--ash); font-size: 0.8462rem; }
+.tsLine { display: flex; align-items: center; gap: 8px; padding: 3px 8px 3px 6px; }
+.tsLine .count { margin-left: auto; color: var(--ash); font-size: 0.8462rem; font-family: var(--mono); }
+.tsLine .pill { margin-left: auto; }
+.tsPick { display: inline-flex; align-items: center; gap: 8px; min-width: 0; padding: 4px 6px; border: 0; background: transparent; color: var(--mute); border-radius: var(--r-sm); cursor: pointer; font-size: 0.9615rem; }
+.tsPick:hover:not(:disabled) { background: var(--elev); color: var(--ink); }
+.tsPick:disabled { cursor: not-allowed; opacity: 0.55; }
+.tsPick .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tsRow.on .tsPick { color: var(--ink); }
+.tsPick .box, .cbox { width: 14px; height: 14px; flex: none; display: inline-grid; place-items: center; border: 1px solid var(--hair-bright); border-radius: var(--r-xs); background: var(--canvas); color: var(--canvas); padding: 0; }
+.tsRow.on .tsPick .box, .cbox[data-state="checked"] { background: var(--ink); border-color: var(--ink); }
+.tsExpand svg { transition: transform 0.12s; }
+.tsExpand svg.rot { transform: rotate(90deg); }
+.tsTools { display: flex; flex-direction: column; padding: 2px 12px 8px 40px; }
+.tsTool { display: flex; align-items: center; gap: 8px; padding: 3px 0; color: var(--body); font-size: 0.9231rem; cursor: pointer; }
+.tsTool .tname { font-family: var(--mono); font-size: 0.8462rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tsTool .pill { margin-left: auto; height: 18px; font-size: 0.7692rem; }
+.iconBtn svg.spin { animation: spin 0.9s linear infinite; }
+.tsMore { display: flex; align-items: center; gap: 6px; width: 100%; border: 0; background: transparent; cursor: pointer; text-align: left; padding-bottom: 8px; }
+.tsMore:hover { color: var(--ash); }
+.tsMore svg { transition: transform 0.12s; }
+.tsMore svg.rot { transform: rotate(90deg); }
+.tsRow.off .tsPick { cursor: default; opacity: 0.55; }
+
+/* ---------- job form: run limits (job-spec.md, item 3) ---------- */
+.limitsCard { padding: 0; }
+.limitsCard > .limitsHead { display: flex; align-items: center; gap: 8px; width: 100%; padding: 10px 14px; background: transparent; border: 0; color: var(--ink); cursor: pointer; font-size: 0.9615rem; text-align: left; }
+.limitsCard > .limitsHead .m { margin-left: auto; color: var(--ash); font-size: 0.8462rem; font-family: var(--mono); }
+.limitsCard > .limitsHead svg { color: var(--ash); transition: transform 0.12s; }
+.limitsCard > .limitsHead svg.rot { transform: rotate(90deg); }
+.limitsBody { display: grid; grid-template-columns: 140px 1fr; gap: 12px 16px; align-items: center; padding: 4px 14px 14px; border-top: 1px solid var(--hair); padding-top: 12px; }
+.limitsBody > label { color: var(--mute); font-size: 0.9231rem; }
+.limitsBody .ctl { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.limitsBody input.num { width: 96px; padding: 4px 8px; font-family: var(--mono); font-size: 0.9231rem; }
+.checkLine { display: inline-flex; align-items: center; gap: 8px; color: var(--body); font-size: 0.9615rem; cursor: pointer; }
+.checkLine .hint { color: var(--stone); }
+/* The job form's brief option: model and template, under the checkbox. */
+.wform .briefOpts { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 4px; padding-left: 22px; }
+@media (max-width: 767px) { .wform .briefOpts { grid-template-columns: 1fr; padding-left: 0; } }
+
+/* ---------- job page: health strip, tabs, runs table, items ---------- */
+.jobPageHead { display: flex; align-items: flex-start; gap: 16px; margin-bottom: 18px; }
+.jobPageHead .acts { margin-left: auto; display: flex; gap: 6px; align-items: center; flex: none; padding-top: 6px; }
+.jobPageHead .acts .onLbl { display: flex; align-items: center; gap: 8px; color: var(--ash); font-size: 0.9231rem; margin-right: 6px; }
+.jobMetaLine { display: flex; align-items: center; gap: 8px; color: var(--ash); font-size: 0.9231rem; margin-top: 8px; flex-wrap: wrap; }
+.jobMetaLine .sep { color: var(--stone); }
+.jobMetaLine > svg { flex: none; }
+.jobRuleLine { margin: 10px 0 0; color: var(--mute); font-size: 1rem; line-height: 1.5; max-width: 72ch; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.statsCard { border: 1px solid var(--hair-strong); border-radius: var(--r-lg); background: var(--card); overflow: hidden; margin-bottom: 22px; }
+.stats { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.stat { padding: 12px 16px; border-right: 1px solid var(--hair); min-width: 0; }
+.stat:last-child { border-right: 0; }
+.stat .k { font-size: 0.8462rem; color: var(--stone); letter-spacing: 0.6px; text-transform: uppercase; white-space: nowrap; }
+.stat .v { font-size: 1.1538rem; color: var(--ink); margin-top: 4px; display: flex; align-items: baseline; gap: 2px 8px; flex-wrap: wrap; min-width: 0; min-height: 26px; }
+.stat .v small { font-size: 0.8846rem; color: var(--ash); font-family: var(--mono); white-space: nowrap; }
+.stat .v small.dim { color: var(--stone); }
+.stat .v.bad { color: var(--red); }
+.jobTabs { display: flex; gap: 4px; border-bottom: 1px solid var(--hair); margin-bottom: 4px; }
+.jobTab { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; font-size: 1rem; color: var(--mute); background: none; border: 0; border-bottom: 1px solid transparent; margin-bottom: -1px; cursor: pointer; transition: color 0.1s; }
+.jobTab:hover { color: var(--ink); }
+.jobTab:focus-visible { outline: 1px solid var(--hair-bright); outline-offset: -4px; border-radius: var(--r-sm); }
+.jobTab.active { color: var(--ink); border-bottom-color: var(--ink); }
+.jobTab .n { font-family: var(--mono); font-size: 0.8462rem; color: var(--stone); }
+.rtbl { width: 100%; border-collapse: collapse; font-size: 0.9615rem; }
+.rtbl th { font-size: 0.8462rem; letter-spacing: 0.6px; text-transform: uppercase; color: var(--stone); text-align: left; font-weight: 400; padding: 8px 12px; white-space: nowrap; }
+.rtbl th.r, .rtbl td.r { text-align: right; }
+.rtbl td { padding: 0 12px; height: 40px; border-top: 1px solid var(--hair); color: var(--body); white-space: nowrap; vertical-align: middle; }
+.rtbl td.outcome { white-space: normal; }
+.rtbl tbody tr:hover td { background: var(--wash-1); }
+.rtbl .mono { font-family: var(--mono); font-size: 0.8846rem; color: var(--ash); }
+.rtbl .bad { color: var(--red); }
+.rtbl .skip { color: var(--stone); }
+.rtbl td.d { width: 20px; padding-right: 0; }
+.rtbl td.tr { width: 110px; }
+.rtbl .tlink { display: inline-flex; align-items: center; gap: 4px; background: none; border: 0; padding: 0; color: var(--body); font-size: 0.9231rem; cursor: pointer; }
+.rtbl .tlink:hover { color: var(--blue); }
+.rtbl .tlink svg { color: var(--ash); }
+.rtblFoot { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; font-size: 0.9231rem; color: var(--stone); }
+.rtblFoot button { background: none; border: 0; padding: 0; color: var(--blue); font-size: 0.9231rem; cursor: pointer; }
+.jobRule { padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; }
+.jobRule .head { display: flex; align-items: center; gap: 8px; }
+.jobRule .head .k { font-size: 0.8462rem; letter-spacing: 0.6px; text-transform: uppercase; color: var(--stone); }
+.jobRule .head .btn { margin-left: auto; }
+.jobRule .text { font-size: 1.0385rem; color: var(--body); line-height: 1.6; white-space: pre-wrap; }
+.jobKv { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 6px 12px; font-size: 0.9615rem; line-height: 1.5; padding: 14px 16px; }
+.jobKv .k { color: var(--stone); }
+.jobKv .v { color: var(--body); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.jobOverview { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; align-items: start; margin-top: 14px; }
+.jobItems .wrow { grid-template-columns: 20px minmax(0, 1fr) auto; }
+.jobItems .wrow .meta .state { width: 90px; }
+.jobEmpty { padding: 28px 0; color: var(--ash); font-size: 0.9615rem; }
+@media (max-width: 1100px) { .stats { grid-template-columns: repeat(3, minmax(0, 1fr)); } .stat:nth-child(3) { border-right: 0; } .stat:nth-child(n+4) { border-top: 1px solid var(--hair); } .jobOverview { grid-template-columns: 1fr; } }
+
+/* ---------- job page: cost chart + run transcript modal ---------- */
+.costCard { padding: 10px 16px 8px; border-top: 1px solid var(--hair); display: flex; flex-direction: column; gap: 6px; }
+.costCard .head { display: flex; align-items: baseline; gap: 10px; font-size: 0.9231rem; color: var(--ash); }
+.costCard .head .t { color: var(--ink); font-size: 1rem; }
+.costCard .head .mono { font-family: var(--mono); font-size: 0.8846rem; color: var(--stone); }
+.costChart { position: relative; height: 120px; }
+.costChart svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.costChart .bar { background: var(--edge-blue-hi); border-radius: 4px 4px 0 0; transition: background 0.1s; max-width: 28px; margin: 0 auto; }
+.costChart .bar.hot { background: var(--blue); }
+.costChart .bar.unpriced { background: transparent; border: 1px solid var(--hair-bright); border-bottom: 0; }
+.costChart .bar.none { background: transparent; }
+.costAxis { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 0.7692rem; color: var(--stone); }
+.costTip {
+  position: absolute; bottom: calc(100% + 6px); transform: translateX(-50%); pointer-events: none; white-space: nowrap;
+  background: var(--elev); border: 1px solid var(--hair-strong); border-radius: var(--r); padding: 6px 9px;
+  font-size: 0.8846rem; color: var(--body); line-height: 1.4; z-index: 2;
+}
+.costTip .k { color: var(--ash); font-family: var(--mono); font-size: 0.8462rem; }
+.runOverlay { position: fixed; inset: 0; z-index: 80; background: var(--scrim); animation: fadeIn 0.14s ease; }
+.runModal {
+  position: fixed; z-index: 81; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  width: min(88vw, 1040px); height: min(88vh, 900px); display: flex; flex-direction: column;
+  background: var(--canvas); border: 1px solid var(--hair-strong); border-radius: var(--r-lg);
+  box-shadow: 0 0 0 1px var(--ring), 0 40px 120px var(--drop); overflow: hidden; outline: none;
+}
+.runModal .head { display: flex; align-items: center; gap: 10px; height: 48px; padding: 0 12px 0 18px; border-bottom: 1px solid var(--hair); flex: none; }
+.runModal .head .title { font-size: 1.0769rem; color: var(--ink); font-weight: 500; display: flex; align-items: center; gap: 8px; min-width: 0; }
+.runModal .head .meta { display: flex; align-items: center; gap: 8px; color: var(--ash); font-size: 0.9231rem; font-family: var(--mono); white-space: nowrap; }
+.runModal .head .meta .sep { color: var(--stone); }
+.runModal .head .right { margin-left: auto; display: flex; gap: 4px; align-items: center; }
+.runModal .body { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.runModal .body #transcript { padding: 20px 28px 24px; }
+.runModal .empty { padding: 32px; color: var(--ash); font-size: 1rem; }
+
+/* ---------- job form: the dry-run preview ---------- */
+.previewCard { padding: 0; overflow: hidden; }
+.previewCard .head { display: flex; align-items: baseline; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--hair); }
+.previewCard .head .t { color: var(--ink); font-size: 1rem; }
+.previewCard .head .m { margin-left: auto; font-family: var(--mono); font-size: 0.8462rem; color: var(--stone); white-space: nowrap; }
+.previewRow { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 14px; align-items: baseline; padding: 9px 14px; border-bottom: 1px solid var(--hair); }
+.previewRow:last-child { border-bottom: 0; }
+.previewRow .t { display: flex; align-items: baseline; gap: 10px; min-width: 0; overflow: hidden; white-space: nowrap; }
+.previewRow .t a { color: var(--body); font-size: 1.0385rem; overflow: hidden; text-overflow: ellipsis; }
+.previewRow .t a:hover { color: var(--ink); text-decoration: underline; text-decoration-color: var(--stone); text-underline-offset: 3px; }
+.previewRow .t .place { flex: none; font-family: var(--mono); font-size: 0.8462rem; color: var(--blue); }
+.previewRow .why { grid-column: 1 / -1; color: var(--ash); font-size: 0.9231rem; margin-top: 2px; }
+.previewRow .when { font-family: var(--mono); font-size: 0.8462rem; color: var(--stone); }
+.previewCard .digest { padding: 14px 16px; }
+.previewCard .digest .md { font-size: 1rem; line-height: 1.65; color: var(--body); }
+.previewCard .empty { padding: 18px 14px; color: var(--ash); font-size: 0.9615rem; }
+.previewCard .foot { padding: 8px 14px; border-top: 1px solid var(--hair); color: var(--stone); font-size: 0.8846rem; }
+
+/* ---------- job form: two steps ---------- */
+.steps { display: flex; align-items: center; gap: 10px; font-size: 0.9231rem; color: var(--stone); margin: -6px 0 4px; }
+.steps .step { display: inline-flex; align-items: center; gap: 7px; color: var(--stone); }
+.steps .step .n { width: 18px; height: 18px; border-radius: var(--r-full); border: 1px solid var(--hair-strong); display: inline-flex; align-items: center; justify-content: center; font-family: var(--mono); font-size: 0.8462rem; }
+.steps .step.now { color: var(--ink); }
+.steps .step.now .n { border-color: var(--ink); }
+.steps .step.done { color: var(--ash); }
+.steps .step.done .n { color: var(--green); border-color: var(--edge-green); }
+.steps .sep { color: var(--stone); }
+.previewStatus { display: flex; align-items: center; gap: 10px; font-size: 1rem; color: var(--body); }
+.previewStatus .m { margin-left: auto; font-family: var(--mono); font-size: 0.8846rem; color: var(--stone); }
+.previewTranscript { height: 440px; display: flex; flex-direction: column; overflow: hidden; background: var(--card); border: 1px solid var(--hair-strong); border-radius: var(--r-lg); }
+.previewTranscript #transcript { padding: 18px 22px 20px; }
+.previewTranscript #transcript .inner { max-width: none; }
+.previewTranscript .waiting { padding: 24px; color: var(--ash); font-size: 0.9615rem; }
+
+.page .inner.wform.wide { max-width: 960px; }
+

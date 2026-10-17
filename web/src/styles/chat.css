@@ -1,0 +1,346 @@
+/* Junior's name with its face — on the cards triage draws (questions, approvals, plans). */
+/* Inline, not flex: the words after the name keep their leading space ("Junior wants to use…", "Junior’s plan"). */
+.jrLabel .jrFace { display: inline-block; vertical-align: middle; margin: -6px 9px -4px 0; }
+.jrLabel .jrWho { color: var(--ink); font-family: var(--sans); font-weight: 500; }
+/* A Junior turn's first line. The face sits out in the margin left of the column, level with the name,
+   so the text keeps its full width; where the column has no margin (narrow panes, phones) it comes
+   inline and smaller. */
+#transcript { container-type: inline-size; container-name: transcript; }
+.speaker { position: relative; display: flex; align-items: center; min-height: 24px; margin-bottom: -8px; font-size: 0.9231rem; }
+.speaker .spFace { position: absolute; left: -54px; top: 50%; transform: translateY(-50%); line-height: 0; }
+.speaker .spWho { color: var(--ink); font-weight: 500; }
+.speaker .spNote { margin-left: 8px; color: var(--ash); }
+.speaker .spNote.needs { color: var(--yellow); }
+.speaker .spNote.stuck { color: var(--red-ink); }
+.speaker .spAt { margin-left: 8px; font-family: var(--mono); font-size: 0.7692rem; color: var(--stone); }
+@container transcript (max-width: 810px) {
+  .speaker .spFace { position: static; transform: none; margin-right: 8px; }
+  .speaker .spFace svg { width: 29px; height: 29px; }
+}
+/* Junior's chat face notices you: hover it and it lifts (a finished one also smiles, in ChatFace). */
+.chatFace { display: inline-block; line-height: 0; cursor: default; }
+.chatFace svg { transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1); transform-origin: 50% 80%; }
+.chatFace:hover svg { transform: translateY(-2px) scale(1.08) rotate(-4deg); }
+@media (prefers-reduced-motion: reduce) { .chatFace svg { transition: none; } .chatFace:hover svg { transform: none; } }
+/* The needs-you face is a button: it jumps to the card it's waiting on. */
+.chatFace.go { cursor: pointer; border-radius: var(--r-sm); }
+.chatFace.go:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+/* Junior's speech bubble (ui/Tooltip.tsx): a small card with a tail pointing at the face. */
+.uiTip {
+  z-index: 96; max-width: 280px; padding: 6px 10px; border-radius: var(--r);
+  background: var(--elev); border: 1px solid var(--hair-strong); box-shadow: 0 0 0 1px var(--ring), 0 6px 18px var(--drop);
+  font-family: var(--sans); font-size: 0.9231rem; line-height: 1.4; color: var(--ink);
+  transform-origin: var(--radix-tooltip-content-transform-origin);
+  animation: tipIn 0.12s ease;
+}
+.uiTipArrow { fill: var(--elev); }
+@keyframes tipIn { from { opacity: 0; transform: translateY(3px) scale(0.97); } to { opacity: 1; transform: none; } }
+/* Junior's bubble: the plain tip, with one sharp corner by the face so it reads as Junior speaking —
+   its words, then the facts under them, quieter. */
+.uiTip.junior { display: flex; flex-direction: column; gap: 1px; padding: 7px 11px 8px; border-radius: 10px 10px 10px 3px; }
+.uiTip.junior[data-side="bottom"] { border-radius: 3px 10px 10px 10px; }
+.uiTip.junior .tipLine { font-weight: 500; color: var(--ink); }
+.uiTip.junior .tipSub { font-size: 0.8462rem; color: var(--ash); }
+@media (prefers-reduced-motion: reduce) { .uiTip { animation: none; } }
+/* The turn marker as Junior's sign-off: "done · 32.2s · 9 turns · $0.80". */
+.meta.signoff .soDone { font-weight: 500; }
+/* Held sends in a chat: Junior asking, above the stubs. */
+.astubsWho { font-size: 0.9231rem; color: var(--body); margin-bottom: 4px; }
+.msg.assistant { align-self: stretch; font-size: 1.1538rem; line-height: 1.7; color: var(--body); }
+.msg.assistant.live .md > :last-child::after { content: "▍"; color: var(--ink); margin-left: 1px; animation: caret 1s steps(1) infinite; }
+.msg.thinking { color: var(--mute); font-style: italic; font-size: 1rem; white-space: pre-wrap; padding-left: 12px; border-left: 1px solid var(--hair-strong); }
+.meta { display: flex; align-items: center; gap: 12px; color: var(--stone); font-size: 0.8462rem; font-family: var(--mono); white-space: nowrap; }
+.meta::before, .meta::after { content: ""; flex: 1; border-top: 1px solid var(--hair); }
+
+/* tool / init / permission cards */
+.tool { background: var(--card); border: 1px solid var(--hair-strong); border-radius: var(--r); padding: 10px 14px; font-size: 1rem; }
+.tool summary { display: flex; align-items: center; gap: 8px; min-width: 0; cursor: pointer; list-style: none; }
+.tool summary::-webkit-details-marker { display: none; }
+.tool .glyph { display: flex; flex: none; color: var(--green); }
+.tool .glyph.fail { color: var(--red); }
+.tool .glyph.busy { color: var(--blue); animation: pulse 1.2s infinite; }
+.tool .toolName { color: var(--ink); font-weight: 500; flex: none; }
+.tool .toolHint { color: var(--ash); font-family: var(--mono); font-size: 0.9231rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tool .well { margin-top: 8px; max-height: 240px; }
+.tool .well.result { color: var(--charcoal); }
+.tool .well.fail { color: var(--red-ink); }
+
+/* A run of tool calls folded into one pill (ToolGroup.tsx): sized to its text
+   and drawn in hairline, so it reads as an aside and the prose around it leads. */
+.toolGroup { font-size: 1rem; }
+.toolGroup > summary {
+  display: inline-flex; align-items: center; gap: 8px; max-width: 100%; min-width: 0;
+  padding: 4px 10px 4px 9px; border: 1px solid var(--hair); border-radius: var(--r-full);
+  font-family: var(--mono); font-size: 0.8462rem; color: var(--ash); cursor: pointer; list-style: none;
+}
+.toolGroup > summary::-webkit-details-marker { display: none; }
+.toolGroup > summary:hover, .toolGroup[open] > summary { border-color: var(--hair-strong); }
+.toolGroup.busy > summary, .toolGroup.bg > summary { border-color: var(--edge-blue); }
+.toolGroup.fail > summary { border-color: var(--edge-red); }
+.toolGroup .chev { flex: none; color: var(--stone); transition: transform 0.15s; }
+.toolGroup[open] > summary .chev { transform: rotate(90deg); }
+.toolGroup .glyph { display: flex; flex: none; color: var(--green); }
+.toolGroup .glyph.fail { color: var(--red); }
+.toolGroup .glyph.busy, .toolGroup .glyph.bg { color: var(--blue); animation: pulse 1.2s infinite; }
+.toolGroup .glyph.stopped { color: var(--stone); }
+.toolGroup .tgLabel { min-width: 0; font-family: var(--sans); font-size: 0.9231rem; color: var(--charcoal); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.toolGroup .tgNow { min-width: 0; max-width: 40%; flex: 0 1 auto; color: var(--ash); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.toolGroup .tgNow::before { content: "·"; margin-right: 8px; color: var(--stone); }
+.toolGroup .tgCount { flex: none; color: var(--stone); font-variant-numeric: tabular-nums; }
+.toolGroup .tgCount::before { content: "·"; margin-right: 8px; }
+.toolGroup.fail .tgCount { color: var(--red-ink); }
+/* the lines hang off a hairline under the pill, so they read as its contents */
+.toolGroup .tgBody { display: flex; flex-direction: column; margin: 8px 0 2px 10px; padding-left: 12px; border-left: 1px solid var(--hair); }
+.toolGroup .tgBody .msg.thinking { margin: 4px 0; font-size: 0.9231rem; border-left: 0; padding-left: 0; }
+.tline { font-size: 0.9615rem; }
+.tline > summary { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 3px 8px; margin: 0 -8px; border-radius: var(--r-sm); cursor: pointer; list-style: none; }
+.tline > summary::-webkit-details-marker { display: none; }
+.tline > summary:hover { background: var(--wash-1); }
+.tline .tlVerb { flex: none; min-width: 64px; color: var(--charcoal); font-weight: 500; }
+.tline .tlTarget { flex: 1; min-width: 0; font-size: 0.9231rem; color: var(--ash); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tline .tlServer { color: var(--stone); }
+.tline .tlNote { flex: none; font-size: 0.8462rem; color: var(--stone); }
+.tline .tlNote.fail { color: var(--red-ink); }
+.tline .well { margin: 4px 0 6px 20px; max-height: 240px; }
+.tline .well.result { color: var(--charcoal); }
+.tline .well.fail { color: var(--red-ink); }
+
+.init { background: var(--card); border: 1px solid var(--hair); border-radius: var(--r); padding: 10px 14px; font-size: 0.9231rem; color: var(--ash); }
+.init b { color: var(--ink); font-weight: 500; }
+.init .mcp { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px; }
+.init .mcp .pill { font-family: var(--mono); font-size: 0.7692rem; }
+
+.perm { background: var(--card); border: 1px solid var(--hair-strong); border-radius: var(--r); padding: 13px 15px; }
+.perm .q { font-size: 1rem; margin-bottom: 9px; color: var(--body); line-height: 1.5; }
+.perm .q b { color: var(--ink); font-family: var(--mono); font-weight: 500; }
+.perm .q .effect { display: inline-flex; align-items: center; margin-left: 8px; padding: 0 7px; border-radius: var(--r-full); border: 1px solid var(--hair-strong); font-family: var(--mono); font-size: 0.7692rem; text-transform: uppercase; letter-spacing: 0.04em; vertical-align: 1px; line-height: 16px; }
+.perm .q .effect.external-write { color: var(--red); border-color: var(--edge-red); }
+.perm .q .effect.local-write { color: var(--yellow); border-color: var(--edge-yellow); }
+.perm .well { max-height: 160px; margin-bottom: 12px; }
+/* Plan mode's plan: the document first, the two answers under it. */
+.perm.planCard { border-color: var(--edge-blue); }
+.planCard .q { display: flex; align-items: center; gap: 6px; color: var(--ink); }
+.planCard .q svg { color: var(--blue); }
+.planCard .planHint { margin-left: auto; font-family: var(--mono); font-size: 0.7692rem; color: var(--ash); }
+.planCard .planBody { max-height: 480px; overflow: auto; margin-bottom: 12px; padding: 4px 2px; border-top: 1px solid var(--hair); border-bottom: 1px solid var(--hair); }
+.perm .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.perm .verdict { font-size: 0.9231rem; font-family: var(--mono); color: var(--ash); }
+.perm .verdict.allow, .perm .verdict.allow_always { color: var(--green); }
+.perm .verdict.deny { color: var(--red); }
+
+.perm.ask .askQ { margin-bottom: 14px; }
+.perm.ask .askHeader { display: inline-block; margin-bottom: 7px; padding: 0 8px; border-radius: var(--r-full); border: 1px solid var(--hair-strong); color: var(--charcoal); font-family: var(--mono); font-size: 0.7692rem; text-transform: uppercase; letter-spacing: 0.05em; line-height: 18px; }
+.perm.ask .askText { font-size: 1rem; line-height: 1.5; margin-bottom: 8px; color: var(--ink); }
+.perm.ask .askNote { font-size: 0.8462rem; color: var(--ash); margin-bottom: 8px; }
+.perm.ask .askOptions { display: flex; flex-direction: column; gap: 6px; }
+.perm.ask .askOption {
+  display: flex; flex-direction: column; gap: 2px; width: 100%; padding: 9px 12px; text-align: left;
+  border-radius: var(--r); background: var(--canvas); border: 1px solid var(--hair-strong); color: var(--ink);
+  transition: border-color 0.12s, background 0.12s;
+}
+.perm.ask .askOption:hover { border-color: var(--hair-bright); background: var(--elev); }
+.perm.ask .askOption.on { border-color: var(--ink); }
+.perm.ask .askLabel { font-size: 1rem; font-weight: 500; }
+.perm.ask .askDesc { font-size: 0.8462rem; color: var(--ash); line-height: 1.45; }
+.perm.ask .askOther { margin-top: 8px; width: 100%; padding: 8px 10px; border-radius: var(--r); background: var(--canvas); border: 1px solid var(--hair-bright); color: var(--ink); font-size: 1rem; outline: none; }
+.perm.ask .askOther:focus { border-color: var(--ink); }
+.perm.ask .askAnswer { font-size: 1rem; color: var(--green); }
+
+/* ---------- composer ---------- */
+#composer { padding: 12px 40px 20px; flex: none; }
+#composer .frame { max-width: var(--measure); margin: 0 auto; display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; transition: border-color 0.15s; }
+#composer .frame:focus-within { border-color: var(--hair-bright); }
+#box {
+  width: 100%; resize: none; background: transparent; color: var(--ink); border: 0; padding: 0;
+  font-size: 1.1538rem; line-height: 1.5; min-height: 46px; max-height: 320px; outline: none;
+}
+#box::placeholder { color: var(--stone); opacity: 1; }
+#composer .frame.dragging { border-color: var(--blue); }
+
+/* ---------- attachments ---------- */
+.attachments { display: flex; flex-direction: column; gap: 6px; }
+.attachments .thumbs { display: flex; flex-wrap: wrap; gap: 8px; }
+.attachments .thumb { position: relative; width: 56px; height: 56px; }
+.attachments .thumb img {
+  width: 100%; height: 100%; object-fit: cover; display: block;
+  border-radius: var(--r-sm); border: 1px solid var(--hair-strong); background: var(--elev);
+}
+.attachments .thumb .drop {
+  position: absolute; top: -5px; right: -5px; width: 16px; height: 16px; display: grid; place-items: center;
+  border-radius: var(--r-full); background: var(--elev); border: 1px solid var(--hair-bright);
+  color: var(--ash); cursor: pointer; padding: 0;
+}
+.attachments .thumb .drop:hover { color: var(--ink); }
+.attachError { font-size: 0.8462rem; color: var(--red); }
+/* A non-image file: a pill like an @ chip, with its size beside the name. Long names shrink, the size never does. */
+.fchips, .msg.user .msgFiles, .descFiles { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.msg.user .msgFiles { margin-bottom: 8px; }
+.descFiles { margin-top: 4px; }
+.fchip {
+  display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 8px 0 7px; max-width: 100%; min-width: 0;
+  background: var(--card); border: 1px solid var(--hair-strong); border-radius: var(--r-full);
+  font-family: var(--mono); font-size: 0.8462rem; color: var(--body); white-space: nowrap;
+}
+.fchip .body { display: inline-flex; align-items: center; gap: 6px; min-width: 0; color: inherit; text-decoration: none; }
+.fchip svg { flex: none; color: var(--ash); }
+.fchip .n { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.fchip .sz { flex: none; color: var(--stone); font-size: 0.7692rem; }
+.fchip.busy { border-style: dashed; color: var(--ash); }
+.fchip.busy svg { animation: spin 0.9s linear infinite; }
+.fchip a.body:hover { color: var(--ink); }
+.fchip a.body:hover .sz { color: var(--ash); }
+.fchip .x { border: 0; background: transparent; color: var(--stone); font-size: 1rem; line-height: 1; padding: 0 0 0 2px; cursor: pointer; }
+.fchip .x:hover { color: var(--ink); }
+@media (prefers-reduced-motion: reduce) { .fchip.busy svg { animation: none; } }
+.chip.attachBtn { cursor: pointer; padding: 0 7px; }
+.statusline { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.chip {
+  display: inline-flex; align-items: center; gap: 6px; min-width: 0; padding: 2px 8px; height: 22px;
+  border-radius: var(--r-full); background: var(--elev); border: 1px solid var(--hair-strong);
+  color: var(--charcoal); font-size: 0.8462rem; line-height: 1.5; white-space: nowrap;
+  transition: border-color 0.1s ease, color 0.1s ease;
+}
+button.chip:hover:not(:disabled), .chip[data-state="open"] { color: var(--ink); border-color: var(--hair-bright); }
+.chip:disabled { opacity: 0.45; cursor: default; }
+.chip svg { width: 12px; height: 12px; flex: none; color: var(--ash); }
+/* The composer's chips — the knobs beside send and the project/branch pickers in its head — are one
+   height (28px), a size up from other chips, so they and the send button read as one set. Phones keep
+   their own row (see the end). */
+@media (min-width: 768px) {
+  .statusline .chip { height: 28px; padding: 0 10px; gap: 6px; font-size: 0.9231rem; }
+  .statusline .chip svg { width: 13px; height: 13px; }
+  .statusline .chip.attachBtn { width: 28px; padding: 0; justify-content: center; }
+  .statusline #sendBtn, .statusline #stopBtn { height: 28px; min-width: 28px; }
+  /* the head's project and branch pickers match the row below */
+  .cardHead .chip.pick { height: 28px; padding: 0 10px; font-size: 0.9231rem; }
+  .cardHead .chip.pick svg { width: 13px; height: 13px; }
+}
+.chip .name { overflow: hidden; text-overflow: ellipsis; }
+.chip.model { color: var(--ink); }
+.chip.model .eff { color: var(--ash); }
+.chip.model .eff::before { content: "·"; margin-right: 6px; color: var(--stone); }
+.chip.cwd { font-family: var(--mono); max-width: 300px; overflow: hidden; text-overflow: ellipsis; }
+.chip.fast { color: var(--ash); }
+.chip.fast.on { color: var(--yellow); border-color: var(--edge-yellow-hi); }
+.chip.fast.on svg { color: var(--yellow); fill: currentColor; }
+.chip.fast.blocked { color: var(--red); border-color: var(--edge-red); }
+.chip.perm.risk-high { color: var(--red); border-color: var(--edge-red); }
+.chip.perm.risk-high svg { color: var(--red); }
+.chip.cwd.pick { cursor: pointer; }
+.modelPicker, .permPicker, .modePicker { position: relative; flex: none; display: flex; }
+/* Session mode (ModePicker): "Junior decides" is quiet; a forced Plan first or Goal says it changes what happens next. */
+.chip.sessionMode.normal { color: var(--ash); }
+.chip.sessionMode.plan { color: var(--blue); border-color: var(--edge-blue); }
+.chip.sessionMode.goal { color: var(--yellow); border-color: var(--edge-yellow); }
+.chip.sessionMode.plan svg { color: var(--blue); }
+.chip.sessionMode.goal svg { color: var(--yellow); }
+/* a running session's Planning chip: status with a way out, not a picker */
+.chip.sessionMode.planning { cursor: pointer; background: var(--tint-blue); }
+.chip.sessionMode.planning:hover { color: var(--blue); border-color: var(--edge-blue-hi); }
+/* icons sit on the name's line, not centred on the two-line row */
+.uiMenu .modeIcon { flex: none; align-self: flex-start; margin-top: 3px; color: var(--ash); }
+.uiMenuItem.mode-plan .modeIcon { color: var(--blue); }
+.uiMenuItem.mode-goal .modeIcon { color: var(--yellow); }
+/* Autonomy's meter: four rising bars, lit up to the level; neutral until "Never asks", which is all red. */
+.meter { display: inline-flex; align-items: flex-end; gap: 2px; height: 11px; flex: none; }
+.meter i { width: 3px; border-radius: 1px; background: var(--hair-strong); }
+.meter i:nth-child(1) { height: 5px; }
+.meter i:nth-child(2) { height: 7px; }
+.meter i:nth-child(3) { height: 9px; }
+.meter i:nth-child(4) { height: 11px; }
+.meter[data-bars="1"] i:nth-child(-n+1),
+.meter[data-bars="2"] i:nth-child(-n+2),
+.meter[data-bars="3"] i:nth-child(-n+3) { background: var(--charcoal); }
+.meter[data-bars="4"] i { background: var(--red); }
+.chip.perm:hover .meter[data-bars="1"] i:nth-child(-n+1),
+.chip.perm:hover .meter[data-bars="2"] i:nth-child(-n+2),
+.chip.perm:hover .meter[data-bars="3"] i:nth-child(-n+3) { background: var(--ink); }
+.uiMenuItem .meter { margin-top: 3px; align-self: flex-start; }
+#sendBtn, #stopBtn {
+  display: inline-flex; align-items: center; justify-content: center; flex: none;
+  width: 30px; height: 30px; padding: 0; border-radius: var(--r); border: 1px solid transparent;
+  transition: background 0.12s, opacity 0.1s, border-color 0.1s;
+}
+#sendBtn { background: var(--ink); color: var(--on-primary); }
+#sendBtn:hover:not(:disabled) { background: var(--primary-hover); }
+#sendBtn:disabled { opacity: 0.3; cursor: default; }
+#sendBtn.busy:disabled { opacity: 1; }
+#sendBtn .spin { animation: spin 0.9s linear infinite; }
+#stopBtn { background: transparent; border-color: var(--edge-red-hi); color: var(--red); }
+#stopBtn:hover { background: var(--tint-red); }
+#composer .hint { font-size: 0.8462rem; color: var(--stone); }
+#composer .hint kbd { font-size: 0.7692rem; }
+
+/* new-session home */
+#newSessionHome { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px; padding: 20px 40px; position: relative; }
+/* Junior's new session: the face asks in a bubble, reacts as you type, nods when you send.
+   Its colour (the persona's, as --junior) touches the glow, the bubble, the caret, the border
+   while you type and send — nothing else. */
+/* 22px from the page's gap + 14px here: about 36px between Junior's line and the box */
+#newSessionHome .nsWho { position: relative; display: flex; align-items: center; justify-content: center; gap: 16px; max-width: 760px; margin-bottom: 14px; }
+#newSessionHome .nsFace { position: relative; display: inline-flex; flex: none; }
+#newSessionHome .nsFace::before {
+  content: ""; position: absolute; inset: -40px; z-index: -1; border-radius: 50%; pointer-events: none;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--junior) 20%, transparent), transparent);
+}
+/* Junior's line beside its face: two-tone like the Junior page headline (muted greeting, ink question). */
+#newSessionHome .nsLine {
+  margin: 0; min-width: 0; font-family: var(--display); font-weight: 400; font-size: 2.2rem; line-height: 1.1; letter-spacing: -0.3px;
+  color: var(--ink); text-align: left; text-wrap: balance; min-height: 1.1em;
+}
+#newSessionHome .nsLine .g { color: var(--mute); }
+#newSessionHome .nsWho.handoff .nsFace { animation: nsNod 0.5s ease-in-out; }
+@keyframes nsNod {
+  0%, 100% { transform: none; }
+  30% { transform: translateY(6px) rotate(-4deg); }
+  60% { transform: translateY(-2px) rotate(2deg); }
+}
+#newSessionHome.junior #box { caret-color: var(--junior); }
+#newSessionHome.junior #sendBtn:not(:disabled) { background: var(--junior); color: #14121a; }
+#newSessionHome.junior #sendBtn:hover:not(:disabled) { background: color-mix(in srgb, var(--junior) 85%, white); }
+/* Once there's something to send, send is the primary button with Junior in it — the same white,
+   radius and height as the plain send, so it reads as the one bright control, not an oversized chip.
+   The face carries the colour. It pops in. */
+#sendBtn.face, #newSessionHome.junior #sendBtn.face:not(:disabled) {
+  width: auto; gap: 6px; padding: 0 9px 0 6px; font: inherit; font-size: 0.9231rem; font-weight: 500;
+  background: var(--ink); color: var(--on-primary); border-color: transparent;
+  animation: sendPillIn 0.2s ease-out;
+}
+#sendBtn.face:hover:not(:disabled), #newSessionHome.junior #sendBtn.face:hover:not(:disabled) { background: var(--primary-hover); }
+#sendBtn.face kbd { font-family: var(--mono); font-size: 0.8462rem; color: inherit; opacity: 0.55; background: none; border: 0; padding: 0; }
+@keyframes sendPillIn { from { transform: scale(0.85); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { #sendBtn.face { animation: none; } }
+/* Starters under the new-session box: shortcuts that set it up, not modes. */
+#newSessionHome .nsStarters { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; width: 100%; max-width: 760px; margin-top: -8px; }
+#newSessionHome .nsStarters button {
+  display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px; border-radius: var(--r-full);
+  border: 1px solid var(--hair); background: transparent; color: var(--ash); font: inherit; font-size: 0.8846rem; cursor: pointer;
+  transition: border-color 0.1s ease, color 0.1s ease;
+}
+#newSessionHome .nsStarters button:hover { color: var(--ink); border-color: var(--hair-bright); }
+#newSessionHome .nsStarters button.on { color: var(--ink); border-color: var(--hair-bright); background: var(--wash-2); }
+#newSessionHome .nsStarters button.on.job svg { color: var(--green); }
+#newSessionHome .nsStarters button.on.goal svg { color: var(--yellow); }
+#newSessionHome .nsStarters button.on.plan svg { color: var(--blue); }
+#newSessionHome .nsPull { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; width: 100%; max-width: 760px; margin-top: -10px; font-size: 0.9231rem; color: var(--ash); }
+#newSessionHome .nsPullLb { margin-right: 2px; }
+#newSessionHome .nsPull .chip { display: inline-flex; align-items: center; gap: 6px; max-width: 280px; padding: 2px 4px 2px 10px; border: 1px solid color-mix(in srgb, var(--junior) 35%, var(--hair-strong)); border-radius: 999px; color: var(--body); }
+#newSessionHome .nsPull .chip b { font-family: var(--mono); font-weight: 500; font-size: 0.8462rem; color: var(--ink); }
+#newSessionHome .nsPull .chip .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#newSessionHome .nsPull .chip button { display: inline-grid; place-items: center; width: 18px; height: 18px; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--ash); cursor: pointer; }
+#newSessionHome .nsPull .chip button:hover { background: var(--wash-2); color: var(--ink); }
+@media (prefers-reduced-motion: reduce) { #newSessionHome .nsWho.handoff .nsFace { animation: none; } }
+/* Phones: a smaller line, still beside the face. */
+@media (max-width: 767px) {
+  #newSessionHome .nsWho { gap: 12px; }
+  #newSessionHome .nsLine { font-size: 1.6rem; }
+}
+#newSessionHome h2 { margin: 0; font-family: var(--display); font-weight: 400; font-size: 2.7692rem; letter-spacing: -0.36px; line-height: 1; color: var(--ink); }
+#newSessionHome #composer { width: 100%; padding: 0; display: flex; justify-content: center; }
+#newSessionHome .frame { width: 100%; }
+/* The draft box opens tall — a first prompt is usually a paragraph. In a live
+   session it starts at two lines and grows with what you type. */
+#newSessionHome #box { min-height: 96px; }
+#newSessionHome .actions { display: flex; align-items: center; gap: 12px; }
+#newSessionHome .actions .hint { flex: 1; }
+

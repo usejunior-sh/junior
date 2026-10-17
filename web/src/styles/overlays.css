@@ -1,0 +1,297 @@
+/* ---------- menus (Radix dropdown) ---------- */
+.uiMenu {
+  z-index: 95; min-width: 204px; padding: 5px;
+  background: var(--elev); border: 1px solid var(--hair-strong); border-radius: var(--r);
+  box-shadow: 0 0 0 1px var(--ring);
+  font-family: var(--sans); font-size: 1rem; line-height: 1.45; color: var(--body);
+  transform-origin: var(--radix-dropdown-menu-content-transform-origin);
+}
+.uiMenu:focus, .uiMenu:focus-visible { outline: none; }
+.uiMenu.models { min-width: 300px; }
+.uiMenu.perm { min-width: 300px; max-width: 340px; }
+.uiMenu.wide { min-width: 300px; }
+.uiMenu[data-state="open"] { animation: menuIn 0.12s ease; }
+@keyframes menuIn { from { opacity: 0; transform: scale(0.97); } to { opacity: 1; transform: scale(1); } }
+.uiMenuItem {
+  display: flex; align-items: center; gap: 10px; width: 100%; padding: 7px 9px; border: none; border-radius: var(--r-sm);
+  cursor: pointer; background: transparent; color: var(--body); text-align: left; text-decoration: none; outline: none; user-select: none;
+  transition: background 0.1s ease, color 0.1s ease;
+}
+.uiMenuItem[data-highlighted] { background: var(--wash-3); color: var(--ink); }
+.uiMenuItem[data-disabled] { opacity: 0.5; pointer-events: none; }
+.uiMenuItem svg { flex: none; color: var(--ash); }
+.uiMenuItem[data-highlighted] svg { color: var(--ink); }
+.uiMenuItem .check { margin-left: auto; color: var(--ink); }
+.uiMenuItem .text { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.uiMenuItem .name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.uiMenuItem .desc { font-size: 0.8846rem; color: var(--ash); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.uiMenuItem.wrap .desc { white-space: normal; }
+.uiMenuItem.nav .name { flex: 1; }
+.uiMenuItem .val { color: var(--ash); font-size: 0.9231rem; }
+.uiMenuSubTrigger[data-state="open"] { background: var(--wash-3); color: var(--ink); }
+.uiMenuItem.danger, .uiMenuItem.danger svg { color: var(--red); }
+.uiMenuItem.danger[data-highlighted] { background: var(--tint-red); color: var(--red); }
+.uiMenuItem.risk-high .name { color: var(--red); }
+.uiMenuSep { height: 1px; margin: 5px 6px; background: var(--hair); }
+.uiMenuBlurb { margin: 4px 8px 8px; font-size: 0.8846rem; line-height: 1.4; color: var(--ash); }
+.uiMenuConfirm { margin: 5px; padding: 11px; border: 1px solid var(--edge-red); border-radius: var(--r-sm); background: var(--tint-red); }
+.uiMenuConfirm p { margin: 0 0 10px; font-size: 0.9231rem; line-height: 1.45; color: var(--ink); }
+.uiMenuConfirm button { height: 26px; padding: 0 10px; border-radius: var(--r-sm); font-size: 0.9231rem; margin-right: 8px; border: 1px solid transparent; }
+.uiMenuConfirm .danger { background: var(--red); color: #1a0308; }
+.uiMenuConfirm .cancel { background: transparent; color: var(--mute); border-color: var(--hair-strong); }
+.wsMenu { min-width: 220px; }
+
+/* ---------- selects (Radix select) ---------- */
+/* The trigger is a sibling of .prioBar: same 36px bar, same hairline that
+   brightens on hover and while open, same caret in --ash. The popup is a
+   .uiMenu, so items inherit the menu's hover/highlight wholesale. */
+.uiSelect {
+  display: flex; align-items: center; gap: 9px; width: 100%; height: 36px; padding: 0 11px;
+  border: 1px solid var(--hair-strong); border-radius: var(--r); background: transparent;
+  color: var(--body); font-family: var(--sans); font-size: 0.9231rem; text-align: left;
+  cursor: pointer; transition: border-color 0.1s ease;
+}
+.uiSelect:hover, .uiSelect[data-state="open"] { border-color: var(--hair-bright); }
+.uiSelect:focus { outline: none; }
+.uiSelect:focus-visible { outline: 1px solid var(--ink); outline-offset: 1px; }
+.uiSelect[data-placeholder] { color: var(--ash); }
+.uiSelect[data-disabled] { opacity: 0.5; cursor: default; pointer-events: none; }
+.uiSelect > span:first-of-type { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.uiSelect .caret { margin-left: auto; color: var(--ash); flex: none; }
+/* Above the app's dialog layers (overlays 80/90, dialog bodies 81/91) — Radix
+   copies this z-index onto its popper wrapper, which is the positioned
+   element, so it is the lever that actually works. Same layer as .uiMenu, so
+   menus and selects can't cover each other. Native modal dialogs are a
+   separate problem: they are in the top layer and we portal into them instead. */
+.uiSelectContent {
+  z-index: 95;
+  min-width: var(--radix-select-trigger-width);
+  max-height: var(--radix-select-content-available-height);
+  overflow: hidden;
+  transform-origin: var(--radix-select-content-transform-origin);
+}
+.uiSelectItem { padding-right: 9px; }
+.uiSelectItem .check { margin-left: auto; padding-left: 14px; }
+/* Radix mounts these only while the list can actually scroll in that
+   direction, so they double as the "there is more" hint a wheel-less user
+   would otherwise never get. Part of the menu surface, not a scrollbar. */
+.uiSelectScroll {
+  display: flex; align-items: center; justify-content: center;
+  height: 18px; cursor: default; color: var(--ash); background: var(--elev);
+}
+.uiSelectScroll:hover { color: var(--ink); }
+.wsMenu .wsDot { width: 8px; height: 8px; border-radius: var(--r-full); flex: none; }
+.wsMenu .wsMenuName { flex: 1; display: flex; align-items: center; gap: 7px; }
+.wsDefaultTag { font-style: normal; font-size: 0.7692rem; color: var(--ash); border: 1px solid var(--hair-strong); border-radius: var(--r-full); padding: 0 6px; }
+/* The open-in-a-new-tab glyph: dormant until the row is under the pointer or
+   the keyboard, so the menu reads as names, not as a row of controls. */
+.wsMenu .wsOpenTab {
+  display: flex; align-items: center; justify-content: center; flex: none;
+  width: 20px; height: 20px; margin: -3px -4px -3px 0; border-radius: var(--r-xs);
+  opacity: 0; cursor: pointer; transition: opacity 0.1s ease, background 0.1s ease;
+}
+.wsMenu .uiMenuItem[data-highlighted] .wsOpenTab { opacity: 1; }
+.wsMenu .wsOpenTab:hover { background: var(--wash-3); }
+.wsMenu .wsOpenTab:hover svg { color: var(--ink); }
+
+/* ---------- dialogs ---------- */
+dialog {
+  background: var(--card); color: var(--ink); border: 1px solid var(--hair-strong); border-radius: var(--r-lg);
+  padding: 22px; width: 460px; max-width: 92vw; box-shadow: 0 0 0 1px var(--ring);
+}
+dialog::backdrop { background: var(--scrim); }
+dialog:focus, dialog:focus-visible { outline: none; }
+dialog h3 { margin: 0 0 14px; font-size: 1.1538rem; font-weight: 500; color: var(--ink); letter-spacing: -0.1px; }
+dialog label { display: block; font-size: 0.9231rem; color: var(--mute); margin: 12px 0 5px; }
+dialog input, dialog textarea {
+  width: 100%; background: var(--canvas); border: 1px solid var(--hair-strong); color: var(--ink);
+  border-radius: var(--r); padding: 8px 10px; font-size: 1rem; line-height: 1.45; outline: none;
+  transition: border-color 0.12s;
+}
+dialog input:focus, dialog textarea:focus { border-color: var(--ink); }
+dialog input::placeholder, dialog textarea::placeholder { color: var(--stone); }
+dialog .row { margin-top: 18px; display: flex; gap: 8px; justify-content: flex-end; align-items: center; }
+dialog .row button, dialog button.go, dialog button.cancel, dialog button.danger {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  height: 30px; padding: 0 12px; border-radius: var(--r); font-size: 1rem; font-weight: 500;
+  border: 1px solid var(--hair-strong); background: var(--elev); color: var(--ink);
+}
+dialog .go { background: var(--ink) !important; color: var(--on-primary) !important; border-color: var(--ink) !important; }
+dialog .go:hover:not(:disabled) { background: var(--primary-hover) !important; }
+dialog .go:disabled { opacity: 0.45; cursor: default; }
+dialog .cancel:hover { border-color: var(--hair-bright); }
+dialog .danger { color: var(--red) !important; border-color: var(--edge-red) !important; background: transparent !important; }
+dialog .danger:hover:not(:disabled) { background: var(--tint-red) !important; }
+dialog .row button:disabled { opacity: 0.45; cursor: default; }
+dialog p { color: var(--body); font-size: 1rem; line-height: 1.55; }
+#deleteSession { width: 420px; }
+#deleteSession p { margin: 0; }
+#deleteSession p strong { color: var(--ink); font-weight: 500; }
+
+/* command palette */
+dialog#palette { width: 580px; padding: 0; margin-top: 12vh; overflow: hidden; }
+#palette .palHead { display: flex; align-items: center; border-bottom: 1px solid var(--hair); }
+#palette input { flex: 1; min-width: 0; background: transparent; border: none; border-radius: 0; color: var(--ink); padding: 15px 17px; font-size: 1.1154rem; outline: none; }
+#palette .palCancel { display: none; flex: none; height: 44px; padding: 0 14px; border: 0; background: transparent; color: var(--body); font-size: 1rem; }
+#palette .palList { max-height: 380px; overflow-y: auto; padding: 6px; }
+.palSection { padding: 9px 10px 4px; font-size: 0.7692rem; letter-spacing: 0.07em; color: var(--stone); text-transform: uppercase; font-weight: 500; }
+.palRow { display: flex; align-items: baseline; gap: 12px; padding: 8px 10px; border-radius: var(--r-sm); cursor: pointer; }
+.palRow.sel { background: var(--elev); }
+.palLabel { flex: none; max-width: 70%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 1.0385rem; color: var(--ink); }
+.palHint { margin-left: auto; color: var(--ash); font-size: 0.8462rem; font-family: var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.palEmpty { padding: 18px 12px; color: var(--ash); font-size: 1rem; }
+
+/* help */
+dialog#helpOverlay { width: 400px; }
+#helpOverlay .helpHead { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: -4px -6px 14px 0; }
+#helpOverlay .helpHead h3 { margin: 0; }
+#helpOverlay table { width: 100%; border-collapse: collapse; }
+#helpOverlay td { padding: 6px 0; font-size: 1rem; color: var(--body); vertical-align: top; }
+#helpOverlay td:first-child { width: 120px; }
+
+/* system sheet — anchored top right, icon rail + body */
+dialog.sheet { width: 600px; padding: 0; margin: 50px 88px auto auto; grid-template-columns: 48px minmax(0, 1fr); overflow: hidden; max-height: calc(100vh - 100px); }
+dialog.sheet[open] { display: grid; }
+.sheetRail { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 0; border-right: 1px solid var(--hair); }
+.sheetTab { display: flex; width: 32px; height: 32px; align-items: center; justify-content: center; border-radius: var(--r); border: 1px solid transparent; background: transparent; color: var(--mute); }
+.sheetTab:hover { color: var(--ink); }
+.sheetTab.active { background: var(--elev); color: var(--ink); border-color: var(--hair-strong); }
+.sheetRail .sep { width: 20px; height: 1px; background: var(--hair-strong); margin: 4px 0; }
+.sheetBody { display: flex; flex-direction: column; gap: 14px; padding: 16px 18px; min-height: 0; overflow-y: auto; }
+.sheetHead { display: flex; align-items: center; gap: 8px; }
+.sheetHead .title { font-size: 1.0769rem; color: var(--ink); font-weight: 500; }
+.sheetHead .sub { color: var(--ash); font-size: 0.8462rem; }
+.sheetHead .right { margin-left: auto; display: flex; gap: 4px; align-items: center; }
+.sysCard { padding: 12px 14px; display: flex; flex-direction: column; gap: 4px; }
+.sysHead { display: flex; align-items: center; gap: 10px; font-size: 1rem; color: var(--ink); padding-bottom: 6px; }
+.sysHead .sysSub { color: var(--ash); font-size: 0.8462rem; margin-left: auto; font-family: var(--mono); }
+.sysRow { display: flex; justify-content: space-between; gap: 16px; padding: 5px 0; border-top: 1px solid var(--hair); font-size: 0.9615rem; }
+.sysLabel { color: var(--ash); flex: none; }
+.sysValue { text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--body); font-family: var(--mono); font-size: 0.8846rem; }
+.sysValue.ok { color: var(--green); } .sysValue.warn { color: var(--yellow); } .sysValue.bad { color: var(--red); } .sysValue.dim { color: var(--ash); }
+.sysRunRow { display: flex; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--hair); font-size: 1rem; }
+.sysRunTitle { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sysRunMeta { color: var(--ash); font-size: 0.8462rem; font-family: var(--mono); }
+.runStatus { font-size: 0.7692rem; font-family: var(--mono); padding: 0 7px; border-radius: var(--r-full); border: 1px solid var(--hair-strong); text-transform: uppercase; letter-spacing: 0.03em; color: var(--ash); line-height: 16px; }
+.runStatus.ok { color: var(--green); border-color: var(--edge-green); }
+.runStatus.failed { color: var(--red); border-color: var(--edge-red); }
+.runStatus.timeout { color: var(--red); border-color: var(--edge-red); }
+.runStatus.interrupted { color: var(--yellow); border-color: var(--edge-yellow); }
+.sysBody.logs { display: flex; flex-direction: column; gap: 10px; }
+.logFilters { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.logTabs { display: inline-flex; gap: 4px; }
+.logTab { background: transparent; border: 1px solid transparent; color: var(--mute); font-size: 0.9231rem; height: 24px; padding: 0 9px; border-radius: var(--r-full); text-transform: capitalize; }
+.logTab.active { color: var(--ink); background: var(--elev); border-color: var(--hair-strong); }
+/* Sits between .logTabs and .logFilterInput, so it matches their height and
+   the smaller filter-row type rather than the default 36px form control. */
+.logSelect.uiSelect {
+  width: auto; height: 24px; padding: 0 8px; gap: 6px;
+  border-radius: var(--r-sm); background: var(--elev); color: var(--ink); font-size: 0.9231rem;
+}
+.logSelect.uiSelect > span:first-of-type { max-width: 200px; }
+.logFilterInput { flex: 1; min-width: 120px; padding: 3px 8px !important; font-size: 0.9231rem !important; border-radius: var(--r-sm) !important; }
+.logLines { font-family: var(--mono); font-size: 0.8846rem; line-height: 1.7; max-height: 46vh; overflow: auto; background: var(--deep); border: 1px solid var(--hair); border-radius: var(--r); padding: 8px 10px; }
+.logLine { display: flex; gap: 8px; white-space: nowrap; }
+.logTime { color: var(--stone); flex: none; }
+.logLevel { flex: none; width: 38px; text-transform: uppercase; font-size: 0.7692rem; }
+.logLevel.info { color: var(--ash); } .logLevel.warn { color: var(--yellow); } .logLevel.error { color: var(--red); }
+.logSub { color: var(--blue); flex: none; }
+.logMsg { overflow: hidden; text-overflow: ellipsis; color: var(--body); }
+.logLine.error .logMsg { color: var(--red-ink); }
+
+/* ---------- markdown ---------- */
+.md { font-size: 1.1538rem; line-height: 1.7; overflow-wrap: break-word; min-width: 0; color: var(--body); }
+.md > :first-child { margin-top: 0; }
+.md > :last-child { margin-bottom: 0; }
+.md p, .md ul, .md ol, .md pre, .md blockquote, .md table { margin: 0 0 12px; }
+.md h1, .md h2, .md h3, .md h4 { margin: 20px 0 8px; line-height: 1.3; font-weight: 500; color: var(--ink); letter-spacing: -0.01em; }
+.md h1 { font-size: 1.4615rem; } .md h2 { font-size: 1.3077rem; } .md h3 { font-size: 1.1923rem; } .md h4 { font-size: 1.1538rem; color: var(--body); }
+.md ul, .md ol { padding-left: 22px; }
+.md li { margin: 5px 0; }
+.md li > p { margin: 0; }
+.md code { font-family: var(--mono); font-size: 1rem; color: var(--ink); background: var(--card); border-radius: var(--r-xs); padding: 1px 5px; }
+.md pre { background: var(--deep); border: 1px solid var(--hair-strong); border-radius: var(--r); padding: 11px 13px; overflow-x: auto; }
+.md pre code { background: none; padding: 0; font-size: 0.9615rem; line-height: 1.6; color: var(--body); }
+.md .codeBlock { position: relative; }
+.md .codeBlock pre { margin-bottom: 0; }
+.md .codeToolbar {
+  position: absolute; top: 8px; right: 8px; z-index: 1;
+  display: flex; gap: 6px;
+  opacity: 0; transition: opacity 0.12s ease;
+}
+.md .codeBlock:hover .codeToolbar, .md .codeToolbar:focus-within { opacity: 1; }
+.md .codeCopyBtn {
+  font-family: var(--mono); font-size: 0.7692rem;
+  color: var(--mute); background: var(--card); border: 1px solid var(--hair-strong);
+  border-radius: var(--r-xs); padding: 2px 7px; cursor: pointer;
+  transition: color 0.12s ease, border-color 0.12s ease;
+}
+.md .codeCopyBtn:hover { color: var(--ink); border-color: var(--hair-bright); }
+.md .codeCopyBtn.copied { color: var(--green); border-color: var(--green); }
+.md a { color: var(--blue); }
+.md a:hover { text-decoration: underline; }
+.md blockquote { border-left: 2px solid var(--hair-strong); padding: 2px 0 2px 13px; color: var(--mute); }
+.md hr { border: none; border-top: 1px solid var(--hair); margin: 14px 0; }
+.md table { border-collapse: collapse; display: block; overflow-x: auto; max-width: 100%; }
+.md th, .md td { border: 1px solid var(--hair-strong); padding: 6px 11px; font-size: 1rem; text-align: left; }
+.md th { background: var(--card); font-weight: 500; color: var(--ink); }
+.md img { max-width: 100%; border-radius: var(--r); }
+.md strong { font-weight: 500; color: var(--ink); }
+
+/* Mermaid diagrams from ```mermaid fences (components/Markdown.tsx). Until the
+   SVG exists the figure still holds the source and reads as a code block; the
+   .ready swap replaces it with the diagram and a hover affordance that opens
+   it full-size, since the reading column is narrower than most graphs. */
+.md figure.mermaid { margin: 0 0 12px; }
+.md figure.mermaid.ready {
+  position: relative;
+  background: var(--deep);
+  border: 1px solid var(--hair-strong);
+  border-radius: var(--r);
+  padding: 14px;
+}
+.md .mermaidCanvas { max-height: 420px; overflow: auto; display: flex; justify-content: center; }
+.md .mermaidCanvas svg { max-width: 100%; height: auto; }
+.md .mermaidZoom {
+  position: absolute; top: 8px; right: 8px;
+  font-family: var(--mono); font-size: 0.7692rem;
+  color: var(--mute); background: var(--card); border: 1px solid var(--hair-strong);
+  border-radius: var(--r-xs); padding: 2px 7px; cursor: pointer;
+  opacity: 0; transition: opacity 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+.md figure.mermaid.ready:hover .mermaidZoom, .md .mermaidZoom:focus-visible { opacity: 1; }
+.md .mermaidZoom:hover { color: var(--ink); border-color: var(--hair-bright); }
+.md figure.mermaid.failed::after {
+  content: "That diagram did not parse — showing the source.";
+  display: block; margin-top: -4px; font-size: 0.8462rem; color: var(--stone);
+}
+
+/* The expanded diagram: the same SVG at whatever size it wants, scrollable. */
+.mermaidModal {
+  position: fixed; z-index: 81; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  width: min(92vw, 1200px); height: min(88vh, 860px);
+  background: var(--card); border: 1px solid var(--hair-strong); border-radius: var(--r-lg);
+  box-shadow: 0 0 0 1px var(--ring), 0 40px 120px var(--drop);
+  padding: 20px; outline: none; animation: settingsIn 0.16s ease;
+}
+.mermaidModalClose { position: absolute; top: 10px; right: 10px; z-index: 1; }
+.mermaidModalBody {
+  width: 100%; height: 100%; overflow: auto;
+  display: flex; align-items: center; justify-content: center;
+}
+.mermaidModalBody svg { max-width: 100%; height: auto; }
+
+/* The rendered preview of a ```markdown code block, plus a copy that grabs
+   rich text (HTML + plain-text fallback) so pasting elsewhere keeps formatting. */
+.markdownPreviewModal {
+  position: fixed; z-index: 81; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  width: min(92vw, 900px); height: min(88vh, 760px);
+  background: var(--card); border: 1px solid var(--hair-strong); border-radius: var(--r-lg);
+  box-shadow: 0 0 0 1px var(--ring), 0 40px 120px var(--drop);
+  padding: 20px; outline: none; animation: settingsIn 0.16s ease;
+  display: flex; flex-direction: column;
+}
+.markdownPreviewToolbar { display: flex; justify-content: flex-end; gap: 8px; margin-bottom: 10px; }
+.markdownPreviewClose { position: static; }
+.markdownPreviewBody { flex: 1; overflow: auto; }
+

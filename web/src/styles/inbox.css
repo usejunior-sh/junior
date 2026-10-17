@@ -1,0 +1,281 @@
+/* ---------- inbox home: the ledger (.docs/work-item-variations.html, A) ----
+   One item, one line. Hierarchy comes from alignment — state, source and age
+   sit in fixed-width right-aligned cells so they read as columns down the
+   page — not from a strip of pills. Three things take turns in that right-
+   hand space and never share it: the meta columns at rest, the shortcut
+   legend when the row is keyboard-selected, the actions on hover. They swap
+   in place, so nothing reflows under the cursor.                            */
+/* The row's breakpoints track the list's own width, not the viewport — the
+   rail and the Queue panel eat 344px before the ledger gets any. */
+.homeList { display: flex; flex-direction: column; container-type: inline-size; container-name: ledger; }
+.homeList .secLabel { margin: 26px 0 0; }
+.homeList > .secLabel:first-child { margin-top: 0; }
+
+.wrow {
+  position: relative; display: grid; align-items: center; height: 42px;
+  grid-template-columns: 20px 3px 20px minmax(0, 1fr) auto;
+  column-gap: 11px; padding-right: 10px;
+  border-bottom: 1px solid var(--hair);
+  transition: background 0.1s ease;
+}
+.secLabel + .wrow { border-top: 1px solid var(--hair); }
+.wrow:hover { background: var(--wash-1); }
+.wrow.sel { background: var(--wash-2); }
+.wrow.checked { background: var(--tint-blue); }
+
+.wrow .check {
+  display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px;
+  border: 0; background: transparent; color: var(--stone); border-radius: var(--r-xs); padding: 0;
+  opacity: 0; transition: opacity 0.1s;
+}
+.wrow:hover .check, .wrow.sel .check, .wrow.checked .check, .wrow .check:focus-visible { opacity: 1; }
+.wrow.checked .check { color: var(--blue); }
+
+/* The gutter bar is the one place priority is printed (itemUi.priorityClass).
+   Normal and Low get no bar — a mark on every row marks nothing. */
+.wrow .bar { width: 3px; height: 20px; border-radius: 2px; background: transparent; }
+.wrow.p1 .bar { background: var(--orange); }
+.wrow.p2 .bar { background: var(--yellow); }
+
+/* Trouble with the item colours the glyph, so it never fights the bar. */
+.wrow .glyph { display: flex; align-items: center; justify-content: center; color: var(--stone); }
+.wrow.alert .glyph { color: var(--red); }
+.wrow:hover .glyph, .wrow.sel .glyph { color: var(--ash); }
+.wrow.alert:hover .glyph, .wrow.alert.sel .glyph { color: var(--red); }
+
+.wrow .t {
+  display: flex; align-items: baseline; gap: 10px; min-width: 0; overflow: hidden; white-space: nowrap;
+  background: none; border: 0; padding: 0; text-align: left; cursor: pointer; line-height: 1.4;
+}
+.wrow .t .name { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 1.0385rem; color: var(--body); letter-spacing: -0.1px; }
+.wrow:hover .t .name, .wrow.sel .t .name { color: var(--ink); }
+.wrow .t:hover .name { text-decoration: underline; text-decoration-color: var(--stone); text-underline-offset: 3px; }
+/* The trailing clause yields the whole width before the title gives up any. */
+.wrow .t .why { flex: 0 100 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 0.9615rem; color: var(--stone); }
+.wrow .t .returned { flex: none; color: var(--green); font-family: var(--mono); font-size: 0.8462rem; }
+/* Old FYI folded into one quiet line at the end of its section. */
+.fyiFold {
+  display: flex; align-items: center; gap: 8px; width: 100%; height: 36px; padding: 0 0 0 34px;
+  border: 0; border-bottom: 1px solid var(--hair); background: transparent;
+  color: var(--stone); font-size: 0.9231rem; text-align: left; cursor: pointer;
+}
+.fyiFold:hover { color: var(--ash); background: var(--wash-1); }
+.fyiFold .chev { transition: transform 0.1s ease; }
+.fyiFold[aria-expanded="true"] .chev { transform: rotate(90deg); }
+/* Several signals folded into one row: how many, and who. */
+.wrow .t .signals { flex: none; font-size: 0.9231rem; color: var(--ash); }
+/* A stated deadline is the one amber thing on a row; lateness on your own due stays quiet. */
+.wrow .t .due { flex: none; font-family: var(--mono); font-size: 0.8462rem; color: var(--stone); }
+.wrow .t .due.explicit { color: var(--amber); }
+.wrow .t .due.explicit.late { color: var(--orange); }
+
+.wrow .meta { display: flex; align-items: center; font-size: 0.9231rem; color: var(--ash); transition: opacity 0.1s; }
+.wrow .meta .c { text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-left: 18px; }
+.wrow .meta .state { width: 134px; color: var(--mute); }
+/* The label is one tone scale, not a palette: asks that block a person read
+   brightest, your own work next, reading material fades. */
+.wrow .meta .state.label-review, .wrow .meta .state.label-reply, .wrow .meta .state.label-decide { color: var(--ink); }
+.wrow .meta .state.label-do { color: var(--body); }
+.wrow .meta .state.label-read { color: var(--stone); }
+.wrow .meta .state.brief-ready { color: var(--green); }
+.wrow .meta .state.brief-queued, .wrow .meta .state.brief-running { color: var(--blue); }
+.wrow .meta .state.brief-stale { color: var(--yellow); }
+.wrow .meta .state.brief-failed { color: var(--red); }
+.wrow .meta .src { width: 120px; font-family: var(--mono); font-size: 0.8462rem; color: var(--stone); }
+.wrow .meta .when { width: 40px; font-family: var(--mono); font-size: 0.8462rem; color: var(--stone); }
+/* Stage and turn (core/work/flow.ts): the stage in words, the turn as a dot —
+   bright on your turn, blue while the AI has it, amber while someone else
+   does. A dot with a ring is a turn you set by hand. */
+.wrow .meta .stage { width: 84px; display: inline-flex; align-items: center; justify-content: flex-end; gap: 6px; color: var(--ash); }
+.wrow .meta .stage .dot { width: 6px; height: 6px; border-radius: 50%; flex: none; background: var(--stone); }
+.wrow .meta .stage.turn-me .dot { background: var(--ink); }
+.wrow .meta .stage.turn-ai .dot { background: var(--blue); }
+.wrow .meta .stage.turn-others .dot { background: var(--amber); }
+.wrow .meta .stage.set .dot { box-shadow: 0 0 0 2px var(--canvas), 0 0 0 3px var(--hair-bright); }
+.wrow .meta .state.flow-ask { color: var(--ink); }
+.wrow .meta .state.flow-ai { color: var(--blue); }
+.wrow .meta .state.flow-others { color: var(--mute); }
+.wrow .meta .state.flow-none { color: var(--stone); }
+.wrow .meta .state.flow-broken { color: var(--red); }
+/* Row extras: New / Updated, how long a person has waited, a stuck wait. */
+.wrow .t .fresh { flex: none; font-family: var(--mono); font-size: 0.8077rem; }
+.wrow .t .fresh.new { color: var(--green); }
+.wrow .t .fresh.updated { color: var(--blue); }
+.wrow .t .waited { flex: none; font-family: var(--mono); font-size: 0.8462rem; color: var(--ash); }
+.wrow .t .waited.stuck { color: var(--amber); }
+
+/* The inbox page's "landed today" — the day's progress, kept in the meta line. */
+.pageMeta .landed { display: inline-flex; align-items: center; gap: 4px; }
+.pageMeta .landed svg { color: var(--green); }
+.pageMeta .landed .n { font-family: var(--mono); color: var(--ink); }
+
+/* A session held on a prompt, in Needs you now: under its item, or its own row. */
+.wrow.sessionRow .glyph { color: var(--red-ink); }
+.wrow.sessionRow.nested { padding-left: 28px; }
+.wrow.sessionRow.nested .bar { opacity: 0; }
+.segBtn .segN { font-family: var(--mono); font-size: 0.8462rem; color: var(--stone); margin-left: 6px; }
+.toolRow .seg .segBtn svg { margin-left: 4px; color: var(--stone); }
+
+/* Cramped: the columns give way one at a time, and the trailing clause goes
+   first — a `why` squeezed to a single letter reads as a glitch. */
+@container ledger (max-width: 800px) {
+  .wrow .t .why { display: none; }
+}
+@container ledger (max-width: 700px) {
+  .wrow .meta .src { display: none; }
+}
+@container ledger (max-width: 470px) {
+  .wrow .meta .state { display: none; }
+}
+
+.wrow .keys, .wrow .acts {
+  position: absolute; right: 10px; top: 0; height: 100%; display: flex; align-items: center;
+  opacity: 0; pointer-events: none; transition: opacity 0.1s;
+}
+.wrow .keys { gap: 13px; font-size: 0.8846rem; color: var(--stone); }
+.wrow .acts { gap: 2px; }
+.wrow .acts .btn { height: 24px; }
+/* Order matters: selection reveals the legend, hover overrides it with the
+   real controls, and an open row menu pins them while the pointer wanders. */
+.wrow.sel .meta { opacity: 0; }
+.wrow.sel .keys { opacity: 1; }
+.wrow:hover .meta, .wrow.menu .meta, .wrow:focus-within .meta { opacity: 0; }
+.wrow:hover .keys, .wrow.menu .keys, .wrow:focus-within .keys { opacity: 0; }
+.wrow:hover .acts, .wrow.menu .acts, .wrow:focus-within .acts { opacity: 1; pointer-events: auto; }
+
+/* The row's overflow menu: every glyph above also exists here with a word. */
+.uiMenu.rowMenu { min-width: 228px; }
+.uiMenuCap { padding: 7px 9px 4px; font-family: var(--mono); font-size: 0.8077rem; color: var(--stone); }
+.uiMenuItem .k { margin-left: auto; padding-left: 14px; font-family: var(--mono); font-size: 0.7692rem; color: var(--stone); }
+.uiMenuItem .dot.prio1 { background: var(--orange); }
+.uiMenuItem .dot.prio2 { background: var(--yellow); }
+.uiMenuItem .dot.prio0, .uiMenuItem .dot.prio3, .uiMenuItem .dot.prio4 { background: var(--stone); }
+
+/* priority — a custom dropdown (Radix Menu) styled as a full-width bar:
+   a leading state dot, a quiet label, the value right-aligned in its priority
+   colour, and a caret. Replaces the native <select>. */
+.prioBar {
+  display: flex; align-items: center; gap: 9px; width: 100%; height: 36px; padding: 0 11px;
+  border: 1px solid var(--hair-strong); border-radius: var(--r); background: transparent;
+  color: var(--body); font-size: 0.9231rem; cursor: pointer; transition: border-color 0.1s ease;
+}
+.prioBar:hover, .prioBar[data-state="open"] { border-color: var(--hair-bright); }
+.prioBar .lab { color: var(--mute); }
+.prioBar .val { margin-left: auto; color: var(--ash); }
+.prioBar.late .val { color: var(--red); }
+.prioBar .caret { color: var(--ash); flex: none; }
+.prioBar .dot { background: var(--stone); }
+.prioBar.prio1 .dot { background: var(--orange); } .prioBar.prio1 .val { color: var(--orange); }
+.prioBar.prio2 .dot { background: var(--yellow); } .prioBar.prio2 .val { color: var(--yellow); }
+.prioBar.prio3 .val, .prioBar.prio4 .val { color: var(--mute); }
+
+/* ---------- item page ---------- */
+.itemPage { padding: 28px 40px 48px; display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 32px; flex: 1; min-height: 0; overflow-y: auto; position: relative; }
+.itemMain { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.itemAside { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+.itemMeta { display: flex; align-items: center; gap: 8px; color: var(--ash); font-size: 0.9231rem; flex-wrap: wrap; }
+.itemMeta .sep { color: var(--stone); }
+.itemMeta > svg { flex: none; }
+.chipRow { display: flex; gap: 6px; flex-wrap: wrap; }
+.brief { padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; margin-top: 6px; }
+.brief .briefHead { display: flex; align-items: center; gap: 10px; }
+.brief .briefHead .title { font-size: 1.0769rem; color: var(--ink); font-weight: 500; }
+.brief .briefHead .when, .briefCard .briefHead .when { font-size: 0.8462rem; color: var(--ash); }
+.brief .briefHead .right { margin-left: auto; }
+.brief .line { display: flex; gap: 8px; font-size: 1rem; line-height: 1.55; color: var(--body); }
+.brief .line .dash { color: var(--stone); flex: none; }
+.brief .line .k { color: var(--ash); }
+.brief .quote { font-size: 1rem; line-height: 1.55; color: var(--body); border-left: 2px solid var(--hair-strong); padding-left: 12px; white-space: pre-wrap; }
+.rankLine { display: flex; align-items: center; gap: 8px; font-size: 0.9231rem; color: var(--ash); flex-wrap: wrap; }
+.rankLine .score { font-family: var(--mono); color: var(--ink); }
+.rankLine .eq { color: var(--stone); }
+.rankLine .formula { font-family: var(--mono); }
+.btnGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.asideActions { display: flex; flex-direction: column; gap: 8px; }
+
+/* a joined segmented control for the secondary item actions (done/snooze/archive) */
+.segRow { display: flex; border: 1px solid var(--hair-strong); border-radius: var(--r); overflow: hidden; }
+.segRow button {
+  flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  height: 36px; padding: 0 8px; background: var(--elev); border: 0; border-right: 1px solid var(--hair);
+  color: var(--body); font-size: 0.9231rem; font-weight: 500; white-space: nowrap; cursor: pointer;
+  transition: background 0.1s ease, color 0.1s ease;
+}
+.segRow button:last-child { border-right: 0; }
+.segRow button:hover { background: var(--wash-2); color: var(--ink); }
+.segRow button svg { color: var(--ash); flex: none; }
+.segRow button:hover svg { color: var(--ink); }
+
+/* session — a refined card: title on one line, role·state in a quiet corner label,
+   the action on its own bottom line, and a left accent (no status dot) for live state. */
+.sessCard { position: relative; display: block; padding: 12px 13px 12px 15px; color: inherit; text-decoration: none; transition: border-color 0.1s ease; }
+.sessCard:hover { border-color: var(--hair-bright); }
+.sessCard::before { content: ""; position: absolute; left: 0; top: 8px; bottom: 8px; width: 2px; border-radius: 2px; background: transparent; }
+.sessCard.run::before { background: var(--blue); }
+.sessCard.err::before { background: var(--red); }
+.sessCard .top { display: flex; align-items: center; gap: 10px; }
+.sessCard .ti { color: var(--ink); font-size: 1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sessCard .rs { margin-left: auto; flex: none; font-family: var(--mono); font-size: 0.8462rem; letter-spacing: 0.3px; color: var(--ash); }
+.sessCard .rs .role { color: var(--stone); }
+.sessCard.run .rs { color: var(--blue); }
+.sessCard.err .rs { color: var(--red); }
+.sessCard .me { font-family: var(--mono); font-size: 0.8846rem; color: var(--ash); margin-top: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sessCard .act { display: flex; align-items: center; gap: 5px; margin-top: 9px; font-size: 0.9231rem; color: var(--mute); transition: color 0.1s ease; }
+.sessCard .act svg { color: var(--stone); transition: color 0.1s ease; }
+.sessCard:hover .act { color: var(--ink); }
+.sessCard:hover .act svg { color: var(--mute); }
+.sessCard.run .act, .sessCard.run .act svg { color: var(--blue); }
+.linkedRow { display: flex; align-items: flex-start; gap: 8px; font-size: 1rem; color: var(--body); line-height: 1.5; }
+.linkedRow > svg { flex: none; color: var(--ash); margin-top: 3px; }
+.linkedRow .src { color: var(--ash); }
+.tl { display: flex; flex-direction: column; gap: 6px; font-size: 0.9231rem; color: var(--charcoal); }
+.tlRow { display: flex; gap: 10px; align-items: baseline; }
+.tlRow .when { font-family: var(--mono); color: var(--stone); width: 44px; flex: none; }
+.tlRow .who { color: var(--ash); }
+.tlRow .why { color: var(--ash); display: block; }
+.asideEmpty { color: var(--stone); font-size: 0.9231rem; }
+
+/* per-item spend — a labelled section with a value, in the aside's own
+   vocabulary. Three lines on purpose: the model split and the cache share
+   are Usage-tab questions, and a chart in 320px answers neither well.
+   Variations that were considered: .docs/item-cost-variations.html */
+.costBlock {
+  display: flex; flex-direction: column; gap: 5px;
+  padding: 13px 15px; background: var(--card); border: 1px solid var(--hair-strong); border-radius: var(--r-lg);
+}
+.costBlock .head { display: flex; align-items: baseline; gap: 8px; }
+.costBlock .head .lab {
+  font-size: 0.8462rem; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ash);
+}
+.costBlock .head .win { margin-left: auto; font-family: var(--mono); font-size: 0.8462rem; color: var(--stone); }
+.costBlock .big {
+  font-size: 2.1538rem; line-height: 1.05; letter-spacing: -0.6px; color: var(--ink); font-variant-numeric: tabular-nums;
+}
+/* a model with no price row: the tokens are counted, the dollars are a floor */
+.costBlock .big .approx { font-size: 1rem; color: var(--stone); margin-left: 1px; }
+.costBlock .sub { font-size: 0.9231rem; color: var(--stone); }
+
+/* the model split. Colour comes from the shared series palette in
+   web/src/usageFormat.ts — the same hues the Usage tab uses, so Opus is the
+   same blue on both surfaces. 2px surface gaps between segments; the legend
+   carries the value, so identity is never colour alone. */
+.costBlock .meter {
+  display: flex; gap: 2px; height: 6px; margin-top: 4px;
+  border-radius: var(--r-full); overflow: hidden; background: var(--hair-soft);
+}
+.costBlock .meter span { display: block; height: 100%; border-radius: 2px; min-width: 2px; }
+.costBlock .keys { display: flex; flex-wrap: wrap; gap: 3px 14px; font-size: 0.8846rem; color: var(--charcoal); }
+.costBlock .keys .key { display: inline-flex; align-items: center; gap: 6px; }
+.costBlock .keys .sw { width: 8px; height: 8px; border-radius: 2px; flex: none; }
+.costBlock .keys .v { font-family: var(--mono); color: var(--mute); }
+.costBlock .foot { font-size: 0.8462rem; color: var(--stone); }
+
+/* the same number per session, on the card's bottom row — it displaces
+   nothing, and a live session's figure ticks as the transcript grows */
+.sessCard .act .spend {
+  margin-left: auto; font-family: var(--mono); font-size: 0.8846rem; color: var(--charcoal);
+  font-variant-numeric: tabular-nums;
+}
+.sessCard:hover .act .spend { color: var(--ink); }
+.sessCard.run .act .spend { color: var(--blue); }
+

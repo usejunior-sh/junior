@@ -4,56 +4,30 @@
  * why it ranked, what has happened to it, and the sessions working on it.
  * The actions live in the right column so the left reads as a page, not a form.
  */
-import { runFileHash } from './RunFolderPage.js'
-import { AlarmClock, Archive, CalendarDays, Check, ChevronDown, ChevronRight, ExternalLink, FileText, Folder, Hash, Paperclip, Play, Sparkles, Target, X } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type {
-  BriefJobsResponse,
-  BriefResponse,
-  BriefView,
-  FileRef,
-  ItemEvent,
-  ItemEventsResponse,
-  ItemFilesResponse,
-  ItemImage,
-  ItemImageEdit,
-  ItemImagesResponse,
-  ItemListResponse,
-  ItemStatus,
-  Link,
-  LinksResponse,
-  Project,
-  ProjectsResponse,
-  RunState,
-  ScoredItem,
-  SessionsUsage,
-  SessionsUsageResponse,
-  JobsResponse,
-} from '../../../shared/protocol.js'
-import { itemFileUrl, itemImageUrl } from '../../../shared/protocol.js'
+import { Paperclip, Hash } from 'lucide-react'
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
+import { type ScoredItem, type ItemStatus, type ItemEvent, type Project, type Link, type BriefView, type ItemImage, type FileRef, type SessionsUsage, type ItemListResponse, type ItemEventsResponse, type JobsResponse, type ProjectsResponse, type BriefResponse, type LinksResponse, type SessionsUsageResponse, type ItemImageEdit, type ItemImagesResponse, type ItemFilesResponse, type BriefJobsResponse, itemImageUrl, itemFileUrl } from '../../../shared/protocol.js'
 import { withWorkspace } from '../workspaceUrl.js'
-import { projectColor } from '../tabs.js'
-import { MAX_SERIES, OTHER, OTHER_KEY, SERIES, modelLabel, money, tokens } from '../usageFormat.js'
+import { MAX_SERIES, SERIES, OTHER_KEY, OTHER } from '../usageFormat.js'
 import { useAttachments } from '../attachments.js'
 import { AttachmentStrip, FileChip } from './AttachmentStrip.js'
-import { useCheckouts, useSessions } from '../hooks.js'
-import { checkoutOf } from '../checkouts.js'
-import { inboxStore, useInbox } from '../inboxStore.js'
-import { briefPill, briefStore, useBriefs } from '../briefStore.js'
+import { useSessions, useCheckouts } from '../hooks.js'
+import { useInbox, inboxStore } from '../inboxStore.js'
+import { useBriefs, briefStore, briefPill } from '../briefStore.js'
 import { store } from '../store.js'
 import { useActions } from '../actions.js'
 import { ItemActions } from './ActionCard.js'
-import { KIND_LABEL, PRIORITY_LABEL, PRIORITY_VALUES, ago, kindIcon, relTime } from '../itemUi.js'
+import { kindIcon, KIND_LABEL, ago, PRIORITY_LABEL } from '../itemUi.js'
 import { BriefComposerDialog } from './BriefComposer.js'
-import { Markdown } from './Markdown.js'
-import { TeamPicker } from './TeamPicker.js'
-import { Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from '../ui/Menu.js'
 import { DueDialog } from './DueDialog.js'
-import { SECTION_ORDER, dueChip, dueFor, dueOf, parseDue, sectionTitle, type Section } from '../../../core/work/due.js'
-import { choosesProject, defaultProjectOf, ProjectIdPicker } from './ProjectPicker.js'
+import { type Section, SECTION_ORDER, dueFor, parseDue, dueOf, dueChip, sectionTitle } from '../../../core/work/due.js'
 import { ItemLinks } from './ItemLinks.js'
 import { FlowPopover } from './FlowPopover.js'
-import { STAGE_LABEL, TURN_LABEL, isStage, isTurn } from '../../../core/work/flow.js'
+import { AsideActions } from './item/AsideActions.js'
+import { CostBlock } from './item/CostBlock.js'
+import { BriefCard, ItemDetails, ReportCard } from './item/ItemCards.js'
+import { ItemSessions } from './item/ItemSessions.js'
+import { ItemTimeline } from './item/ItemTimeline.js'
 
 type Props = {
   id: string
@@ -65,55 +39,7 @@ type Props = {
   onDirty: () => void
 }
 
-const EVENT_LABEL: Record<string, string> = {
-  created: 'surfaced',
-  updated: 'new activity',
-  reopened: 'reopened',
-  done: 'marked done',
-  archived: 'archived',
-  snoozed: 'snoozed',
-  woken: 'snooze ended',
-  moved: 'moved',
-  'flow-set': 'turn set',
-}
-
-/** A stage/turn event's one line: "Ready · My turn", "Waiting on others — Niraj", "back to automatic". */
-function flowLine(ev: ItemEvent): string | undefined {
-  const d = ev.detail ?? {}
-  if (ev.event === 'moved') {
-    const to = d.to as { stage?: string; turn?: string } | undefined
-    if (!to) return undefined
-    const stage = isStage(to.stage) ? STAGE_LABEL[to.stage] : to.stage
-    const turn = isTurn(to.turn) ? TURN_LABEL[to.turn] : to.turn
-    return `${stage} · ${turn}${typeof d.ask === 'string' ? ` — ${d.ask}` : ''}`
-  }
-  if (ev.event === 'flow-set') {
-    if (d.cleared) return 'back to automatic'
-    const parts = [isStage(d.stage) ? STAGE_LABEL[d.stage] : null, isTurn(d.turn) ? TURN_LABEL[d.turn] : null].filter(Boolean)
-    return `${parts.join(' · ')}${typeof d.note === 'string' ? ` — ${d.note}` : ''}`
-  }
-  return undefined
-}
-
-function actorLabel(actor: string): string {
-  if (actor === 'user') return 'you'
-  if (actor === 'system') return 'system'
-  if (actor === 'agent' || actor.startsWith('agent:')) return 'an agent'
-  if (actor.startsWith('job:')) return 'a job run'
-  return actor
-}
-
 const OTHER_STATUSES: ItemStatus[] = ['snoozed', 'done', 'archived']
-
-const TEAM_STATE: Record<RunState, string> = {
-  proposed: 'needs you · approve the card',
-  running: 'running',
-  gate: 'needs you · a step is done',
-  waiting: 'waiting on the world',
-  paused: 'paused',
-  stopped: 'stopped',
-  done: 'done',
-}
 
 export function ItemPage({ id, onDispatch, onGoal, onNavigate, onDirty }: Props) {
   const snap = useInbox()
@@ -673,351 +599,56 @@ export function ItemPage({ id, onDispatch, onGoal, onNavigate, onDirty }: Props)
           }}
         />
 
-        {report && (
-          <div className="card briefCard">
-            <div className="briefHead">
-              <FileText size={14} aria-hidden="true" />
-              <span className="title">Report</span>
-              <span className="pill mute">{report.title}</span>
-              <span className="right">
-                <span className="when">rewritten {ago(report.updated)}</span>
-                <button type="button" className="btn xs" onClick={() => onNavigate(`/artifact/${report.id}`)}>
-                  Open artifact
-                </button>
-              </span>
-            </div>
-            <div className="briefBody">
-              <Markdown text={report.body} />
-            </div>
-          </div>
-        )}
+        {report && <ReportCard report={report} onNavigate={onNavigate} />}
 
         {item.kind !== 'digest' && (
-          <>
-        {/* The brief: a document a playbook run wrote, rewritten in place on iteration. */}
-        <div className="card briefCard">
-          <div className="briefHead">
-            <FileText size={14} aria-hidden="true" />
-            <span className="title">Brief</span>
-            {pill && (
-              <span className={`pill ${pill.tone}`}>
-                {job?.status === 'running' && <span className="dot live sm" aria-hidden="true" />}
-                {pill.label}
-              </span>
-            )}
-            {job?.status === 'queued' && brief?.queuePosition != null && (
-              <span className="when">#{brief.queuePosition + 1} in the queue</span>
-            )}
-            {brief?.artifact && <span className="when">updated {ago(brief.artifact.updated)}</span>}
-            <span className="right">
-              {job?.sessionId && (
-                <button type="button" className="btn xs" onClick={() => onNavigate(job.sessionId!)} title="The run's transcript">
-                  Open session
-                </button>
-              )}
-              {brief?.artifact && (
-                <button type="button" className="btn xs" onClick={() => onNavigate(`/artifact/${brief.artifact!.id}`)} title="The brief as an artifact">
-                  Open artifact
-                </button>
-              )}
-              {job?.status === 'queued' && (
-                <button type="button" className="btn xs ghost" onClick={() => void cancelBrief()}>
-                  <X size={11} aria-hidden="true" /> Cancel
-                </button>
-              )}
-              {settled && (
-                <button type="button" className="btn xs primary" onClick={() => setBriefOpen(true)}>
-                  <Sparkles size={11} aria-hidden="true" /> {brief?.artifact ? 'Re-brief' : 'Create brief'}
-                </button>
-              )}
-            </span>
-          </div>
-
-          {job?.status === 'failed' && job.error && <div className="msg error">{job.error}</div>}
-          {brief?.stale && settled && (
-            <div className="notice">The source moved after this brief was written — re-brief to catch up.</div>
-          )}
-
-          {brief?.body ? (
-            <div className="briefBody">
-              <Markdown text={brief.body} />
-            </div>
-          ) : job?.status === 'running' ? (
-            <div className="briefEmpty">The playbook is reading the item now. The brief lands here when it calls <b>write_brief</b>.</div>
-          ) : job?.status === 'queued' ? (
-            <div className="briefEmpty">Queued. Briefs run one at a time, in order.</div>
-          ) : (
-            <div className="briefEmpty">
-              No brief yet. <b>Create brief</b> opens the template it runs on — the <b>{KIND_LABEL[item.kind] ?? item.kind}</b> one,
-              or a type like Plan or PR summary — for you to edit before it runs. It reads, never writes, and the result lands here as a
-              document you can iterate on. Or skip it and <b>Dispatch</b> if you already know what to do.
-            </div>
-          )}
-
-          {brief?.body && settled && (
-            <div className="briefIterate">
-              <textarea
-                placeholder="You missed X… — goes to the brief session as your message; it rewrites the brief"
-                value={feedback}
-                onChange={(e) => setFeedback(e.target.value)}
-                onKeyDown={(e) => {
-                  if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') void iterate()
-                }}
-              />
-              <button type="button" className="btn sm" disabled={!feedback.trim() || busy === 'iterate'} onClick={() => void iterate()}>
-                Send
-              </button>
-            </div>
-          )}
-        </div>
-          </>
+          <BriefCard
+            item={item}
+            job={job}
+            brief={brief}
+            pill={pill}
+            settled={settled}
+            feedback={feedback}
+            busy={busy}
+            setFeedback={setFeedback}
+            setBriefOpen={setBriefOpen}
+            iterate={iterate}
+            cancelBrief={cancelBrief}
+            onNavigate={onNavigate}
+          />
         )}
 
         {notice && <div className="notice">{notice}</div>}
 
-        <div className="card brief">
-          <div className="briefHead">
-            <span className="title">Details</span>
-            <span className="when">updated {ago(item.updatedAt)}</span>
-            <span className="right">
-              {item.url && (
-                <a className="btn xs" href={item.url} target="_blank" rel="noreferrer">
-                  Open <ExternalLink size={11} aria-hidden="true" />
-                </a>
-              )}
-            </span>
-          </div>
-
-          <div className="secLabel mute">Ranked because</div>
-          <div className="line">
-            <span className="dash">—</span>
-            <span>{item.reason}</span>
-          </div>
-
-          {item.why && item.source !== 'manual' && (
-            <>
-              <div className="secLabel mute">Match reason</div>
-              <div className="quote">{item.why}</div>
-            </>
-          )}
-
-          {item.foundBy && item.foundBy.length > 0 && (
-            <>
-              <div className="secLabel mute">
-                Found by <span className="n">{item.foundBy.length}</span>
-              </div>
-              {item.foundBy.map((p, i) => (
-                <div className="line" key={`${p.at}-${i}`}>
-                  <span className="dash">—</span>
-                  <span>
-                    <span className="k">{p.jobId ? jobTitles.get(p.jobId) ?? 'a job' : 'source scan'}</span> · {ago(p.at)}
-                    {p.why ? ` · ${p.why}` : ''}
-                  </span>
-                </div>
-              ))}
-            </>
-          )}
-
-          <div className="secLabel mute">Source</div>
-          <div className="line">
-            <span className="dash">—</span>
-            <span>
-              <span className="k">{item.source}</span> · <span className="mono">{item.id}</span>
-            </span>
-          </div>
-        </div>
+        <ItemDetails item={item} jobTitles={jobTitles} />
       </div>
 
       <div className="itemAside">
-        <div className="asideActions">
-          <button type="button" className="btn primary wide" onClick={() => onDispatch(item)} title="Start a session on this item — the brief rides along if there is one">
-            <Play size={12} aria-hidden="true" />
-            {linkedSessions.some((x) => x.role === 'dispatch') ? 'Dispatch another session' : 'Dispatch to a session'}
-          </button>
-          <TeamPicker item={item} onStarted={onNavigate} onError={setNotice} />
-          <button type="button" className="btn wide" onClick={() => onGoal(item)} title="Junior plans it — steps, team, budget — and runs it once you approve the plan">
-            <Target size={12} aria-hidden="true" /> Turn into a goal
-          </button>
-          {isOpen && settled && (
-            <button type="button" className="btn wide" onClick={() => setBriefOpen(true)}>
-              <Sparkles size={12} aria-hidden="true" /> {brief?.artifact ? 'Re-brief' : 'Create brief'}
-            </button>
-          )}
-          {isOpen ? (
-            <div className="segRow">
-              <button type="button" title="Mark done (e)" onClick={() => void setState('done')}>
-                <Check size={12} aria-hidden="true" /> Done
-              </button>
-              <button type="button" title="Snooze until tomorrow 9am (z)" onClick={snooze1d}>
-                <AlarmClock size={12} aria-hidden="true" /> Snooze
-              </button>
-              <button type="button" title="Archive (x)" onClick={() => void setState('archived')}>
-                <Archive size={12} aria-hidden="true" /> Archive
-              </button>
-            </div>
-          ) : (
-            <div className="segRow">
-              <button type="button" onClick={() => void setState('open')}>
-                Reopen
-              </button>
-              {status !== 'archived' && (
-                <button type="button" onClick={() => void setState('archived')}>
-                  <Archive size={12} aria-hidden="true" /> Archive
-                </button>
-              )}
-            </div>
-          )}
-          {isOpen && (
-            <Menu>
-              <MenuTrigger asChild>
-                <button type="button" className={`prioBar prio${pri}`} title="Set priority">
-                  <span className="dot" aria-hidden="true" />
-                  <span className="lab">Priority</span>
-                  <span className="val">{pri === 0 ? 'None' : PRIORITY_LABEL[pri]}</span>
-                  <ChevronDown className="caret" size={13} aria-hidden="true" />
-                </button>
-              </MenuTrigger>
-              <MenuContent align="end">
-                <div className="uiMenuCap">Priority</div>
-                {PRIORITY_VALUES.map((v) => (
-                  <MenuItem key={v} onSelect={() => setPriority(v)}>
-                    <span className={`dot sm prio${v}`} aria-hidden="true" />
-                    {v === 0 ? 'None' : PRIORITY_LABEL[v]}
-                    {v === pri && <Check className="check" size={13} aria-hidden="true" />}
-                  </MenuItem>
-                ))}
-              </MenuContent>
-            </Menu>
-          )}
-          {isOpen && (
-            <Menu>
-              <MenuTrigger asChild>
-                <button type="button" className={`prioBar${due.late > 0 ? ' late' : ''}`} title="Set due date">
-                  <CalendarDays size={12} className="caret" aria-hidden="true" />
-                  <span className="lab">Due</span>
-                  <span className="val">{due.late > 0 ? `${due.late}d late` : dueLabel}</span>
-                  <ChevronDown className="caret" size={13} aria-hidden="true" />
-                </button>
-              </MenuTrigger>
-              <MenuContent align="end">
-                <div className="uiMenuCap">Due</div>
-                {SECTION_ORDER.map((s) => (
-                  <MenuItem key={s} onSelect={() => setDue(s)}>
-                    {sectionTitle(s, Date.now())}
-                    {due.source !== 'default' && due.section === s && (
-                      <Check className="check" size={13} aria-hidden="true" />
-                    )}
-                  </MenuItem>
-                ))}
-                <MenuSeparator />
-                <MenuItem onSelect={() => setPickingDue(true)}>
-                  <CalendarDays size={13} aria-hidden="true" /> Pick a date…
-                </MenuItem>
-              </MenuContent>
-            </Menu>
-          )}
-          {isOpen && item.source === 'manual' && choosesProject(projects) && (
-            <ProjectIdPicker
-              projects={projects}
-              value={item.projectId ?? defaultProjectOf(projects)?.id ?? ''}
-              allowNone={false}
-              onChange={(id) => id && setProject(id)}
-            >
-              {(current) => (
-                <button type="button" className="prioBar" title="Set project">
-                  {current ? (
-                    <span className="dot" style={{ background: projectColor(current.id) }} aria-hidden="true" />
-                  ) : (
-                    <Folder size={12} className="caret" aria-hidden="true" />
-                  )}
-                  <span className="lab">Project</span>
-                  <span className="val">{current?.name ?? 'None'}</span>
-                  <ChevronDown className="caret" size={13} aria-hidden="true" />
-                </button>
-              )}
-            </ProjectIdPicker>
-          )}
-        </div>
+        <AsideActions
+          item={item}
+          linkedSessions={linkedSessions}
+          projects={projects}
+          status={status}
+          isOpen={isOpen}
+          settled={settled}
+          brief={brief}
+          pri={pri}
+          due={due}
+          dueLabel={dueLabel}
+          onDispatch={onDispatch}
+          onGoal={onGoal}
+          onNavigate={onNavigate}
+          setNotice={setNotice}
+          setBriefOpen={setBriefOpen}
+          setPickingDue={setPickingDue}
+          setState={setState}
+          snooze1d={snooze1d}
+          setPriority={setPriority}
+          setDue={setDue}
+          setProject={setProject}
+        />
 
-        {/* Team runs: each has a run folder — plan, ledger, reviews, every handoff — read on its page. */}
-        {(() => {
-          const leads = linkedSessions.filter(({ s: x }) => x.teamRun?.role === 'lead').map(({ s: x }) => x)
-          // Runs from before the folder, whose state is gone, still have their Plan artifact.
-          const old = leads.length ? [] : links.filter((l) => l.fromKind === 'artifact' && l.role === 'plan')
-          if (!leads.length && !old.length) return null
-          return (
-            <>
-              <div className="secLabel mute">Plans</div>
-              {leads.map((lead, i) => (
-                <button key={lead.id} type="button" className="line planLine" onClick={() => onNavigate(runFileHash(lead.teamRun!.id))}>
-                  <span className="dash">—</span>
-                  <span>
-                    {lead.teamRun!.goal ? 'Goal plan' : 'Plan'}{leads.length > 1 ? ` ${i + 1}` : ''}
-                    <span className={`k${lead.teamRun!.state === 'proposed' || lead.teamRun!.state === 'gate' ? ' needsYou' : ''}`}> · {TEAM_STATE[lead.teamRun!.state]}</span>
-                  </span>
-                </button>
-              ))}
-              {old.map((l, i) => (
-                <button key={l.fromId} type="button" className="line planLine" onClick={() => onNavigate(`/artifact/${l.fromId}`)}>
-                  <span className="dash">—</span>
-                  <span>Plan{old.length > 1 ? ` ${i + 1}` : ''}</span>
-                </button>
-              ))}
-            </>
-          )
-        })()}
-
-        <div className="secLabel mute">
-          Sessions <span className="n">{linkedSessions.length}</span>
-        </div>
-        {linkedSessions.length === 0 ? (
-          <div className="asideEmpty">None yet — Dispatch opens one in the matching project; a brief run is one too.</div>
-        ) : (
-          linkedSessions.map(({ s, role }) => {
-            const live = s.status === 'running' || s.status === 'starting'
-            const err = s.status === 'error'
-            return (
-              <a
-                key={s.id}
-                href={`#${s.id}`}
-                className={`card sessCard${live ? ' run' : err ? ' err' : ''}`}
-                onClick={(e) => {
-                  e.preventDefault()
-                  onNavigate(s.id)
-                }}
-              >
-                <div className="top">
-                  <span className="ti">{s.title}</span>
-                  <span className="rs">
-                    {s.teamRun?.role === 'lead' ? (
-                      // A team's lead stands for the run: whether it needs you (a card to approve, a gate), is going, or is done.
-                      <span className={s.teamRun.state === 'proposed' || s.teamRun.state === 'gate' ? 'needsYou' : undefined}>
-                        <span className="role">team lead ·</span> {TEAM_STATE[s.teamRun.state]}
-                      </span>
-                    ) : (
-                      <>
-                        <span className="role">{s.teamRun ? 'team worker' : role} ·</span> {s.status}
-                      </>
-                    )}
-                  </span>
-                </div>
-                <div className="me">
-                  {s.cwd.split('/').pop()}
-                  {checkoutOf(checkouts, s.checkoutId)?.branch ? ` · ${checkoutOf(checkouts, s.checkoutId)?.branch}` : ''}
-                  {s.model ? ` · ${s.model}` : ''}
-                </div>
-                <span className="act">
-                  {role === 'brief' ? 'Open the run' : 'Re-enter session'} <ChevronRight size={12} aria-hidden="true" />
-                  {spend?.bySession[s.id] && (
-                    <span className="spend" title={`${tokens(spend.bySession[s.id].tokens)} tokens over ${spend.bySession[s.id].messages} messages`}>
-                      {money(spend.bySession[s.id].cost)}
-                    </span>
-                  )}
-                </span>
-              </a>
-            )
-          })
-        )}
+        <ItemSessions linkedSessions={linkedSessions} links={links} spend={spend} checkouts={checkouts} onNavigate={onNavigate} />
 
         {/* Outbound actions: what those sessions did that left this machine. */}
         {itemActions.actions.some((a) => !a.hidden) && (
@@ -1033,63 +664,7 @@ export function ItemPage({ id, onDispatch, onGoal, onNavigate, onDirty }: Props)
           </>
         )}
 
-        {/* What the item cost: the ledger, folded over this item's sessions.
-            Deliberately small — the cache share, the daily series and the
-            per-project view stay on Usage. Placements considered:
-            .docs/item-cost-variations.html */}
-        {linkedSessions.length > 0 && !spendFailed && (
-          <div className="costBlock">
-            <div className="head">
-              <span className="lab">Cost</span>
-              <span className="win">last {spend?.days ?? 30}d</span>
-            </div>
-            {spend ? (
-              <>
-                <div className="big" title="Priced at API list prices — on a Pro or Max plan nothing is billed per token">
-                  {money(spend.totals.cost)}
-                  {!spend.totals.priced && <span className="approx">+</span>}
-                </div>
-                <div className="sub">
-                  {tokens(spend.totals.tokens)} tokens · {spend.totals.sessions}
-                  {spend.totals.sessions === 1 ? ' session' : ' sessions'}
-                </div>
-                {/* A single-model item gets no meter — one full bar says nothing.
-                    The legend below always names the models and carries their
-                    values, so identity is never colour alone. */}
-                {split.length > 1 && (
-                  <div
-                    className="meter"
-                    role="img"
-                    aria-label={`Spend by model: ${split.map((m) => `${modelLabel(m.model)} ${money(m.cost)}`).join(', ')}`}
-                  >
-                    {split.map((m) => (
-                      <span
-                        key={m.model}
-                        style={{ width: `${(m.cost / spend.totals.cost) * 100}%`, background: m.color }}
-                        title={`${modelLabel(m.model)} · ${money(m.cost)} · ${tokens(m.tokens)} tokens`}
-                      />
-                    ))}
-                  </div>
-                )}
-                {split.length > 0 && (
-                  <div className="keys">
-                    {split.map((m) => (
-                      <span className="key" key={m.model}>
-                        <i className="sw" style={{ background: m.color }} aria-hidden="true" />
-                        {modelLabel(m.model)} <span className="v">{money(m.cost)}</span>
-                      </span>
-                    ))}
-                  </div>
-                )}
-                <div className="foot">
-                  list-price equivalent{!spend.totals.priced && ' · some tokens unpriced'}
-                </div>
-              </>
-            ) : (
-              <div className="asideEmpty">Reading transcripts…</div>
-            )}
-          </div>
-        )}
+        <CostBlock linkedSessions={linkedSessions} spend={spend} spendFailed={spendFailed} split={split} />
 
         <div className="secLabel mute">Linked</div>
         {item.linked && item.linked.length > 0 ? (
@@ -1111,28 +686,7 @@ export function ItemPage({ id, onDispatch, onGoal, onNavigate, onDirty }: Props)
           <div className="asideEmpty">Nothing else refers to this item yet.</div>
         )}
 
-        <div className="secLabel mute">Timeline</div>
-        {events === null ? (
-          <div className="asideEmpty">Loading…</div>
-        ) : events.length === 0 ? (
-          <div className="asideEmpty">No history recorded.</div>
-        ) : (
-          <div className="tl">
-            {[...events].reverse().map((ev) => {
-              const why = typeof ev.detail?.why === 'string' ? ev.detail.why : undefined
-              const reason = typeof ev.detail?.reason === 'string' ? ev.detail.reason : flowLine(ev)
-              return (
-                <div key={ev.seq} className="tlRow" title={new Date(ev.at).toLocaleString()}>
-                  <span className="when">{relTime(ev.at)}</span>
-                  <span>
-                    {EVENT_LABEL[ev.event] ?? ev.event} <span className="who">· {actorLabel(ev.actor)}</span>
-                    {(why || reason) && <span className="why">{why ?? reason}</span>}
-                  </span>
-                </div>
-              )
-            })}
-          </div>
-        )}
+        <ItemTimeline events={events} />
       </div>
 
       <DueDialog

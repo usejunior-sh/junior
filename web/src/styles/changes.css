@@ -1,0 +1,318 @@
+/* ---------------------------------------------------------------------------
+   Session changes — the drawer between the transcript and the composer, and
+   the diff primitive it shares with the Edit/Write tool cards.
+   --------------------------------------------------------------------------- */
+
+.pl { color: var(--green); }
+.mn { color: var(--red); }
+
+/* --- the diff primitive: one renderer for git patches and tool inputs ----- */
+.diffView { position: relative; }
+.diffBody { font-family: var(--mono); font-size: 0.9231rem; line-height: 19px; }
+
+.dline { display: flex; min-height: 19px; }
+.dline .ln {
+  width: 40px; flex: none; text-align: right; padding-right: 8px;
+  color: var(--stone); font-size: 0.8462rem; user-select: none;
+}
+.dline .sg { width: 14px; flex: none; text-align: center; color: var(--stone); user-select: none; }
+.dline .tx { white-space: pre; color: var(--body); padding-right: 14px; }
+.dline.add { background: var(--tint-green); }
+.dline.add .sg { color: var(--green); }
+.dline.del { background: var(--tint-red); }
+.dline.del .sg { color: var(--red); }
+.dline.hunk { background: var(--wash-1); }
+.dline.hunk .tx { color: var(--stone); }
+.dline.sel { box-shadow: inset 2px 0 0 var(--blue); background: var(--tint-blue); }
+
+.dpair { display: grid; grid-template-columns: 1fr 1fr; }
+.dpair.sel { box-shadow: inset 2px 0 0 var(--blue); }
+.dcell { display: flex; min-height: 19px; border-right: 1px solid var(--hair); overflow: hidden; }
+.dpair .dcell:last-child { border-right: 0; }
+.dcell .ln {
+  width: 40px; flex: none; text-align: right; padding-right: 8px;
+  color: var(--stone); font-size: 0.8462rem; user-select: none;
+}
+.dcell .sg { width: 12px; flex: none; text-align: center; color: var(--stone); user-select: none; }
+.dcell .tx { white-space: pre; color: var(--body); padding-right: 10px; }
+.dcell.add { background: var(--tint-green); }
+.dcell.add .sg { color: var(--green); }
+.dcell.del { background: var(--tint-red); }
+.dcell.del .sg { color: var(--red); }
+.dcell.hunk { background: var(--wash-1); }
+.dcell.hunk .tx { color: var(--stone); }
+.dcell.empty { background: var(--wash-1); }
+
+.diffMore {
+  display: block; width: 100%; padding: 7px 0; border: 0; border-top: 1px solid var(--hair);
+  background: var(--card); color: var(--mute); font-size: 0.9231rem;
+}
+.diffMore:hover { color: var(--ink); background: var(--elev); }
+
+/* the selection bar: only appears once lines are picked */
+.diffSel {
+  position: sticky; bottom: 0; display: flex; align-items: center; gap: 9px; padding: 7px 14px;
+  background: var(--elev); border-top: 1px solid var(--hair-strong); color: var(--body); font-size: 0.9231rem;
+}
+.diffSel .btn { margin-left: auto; }
+
+/* --- Edit/Write tool cards render their own hunk instead of raw JSON ------ */
+.tool .toolNum { margin-left: auto; flex: none; font-size: 0.8462rem; }
+.toolDiff {
+  margin-top: 8px; border: 1px solid var(--hair); border-radius: var(--r-sm);
+  background: var(--deep); overflow: hidden; max-height: 320px; overflow-y: auto;
+}
+.meta .metaText { flex: none; }
+.meta .turnChange {
+  margin-left: 10px; font-family: var(--mono); font-size: 0.8462rem; color: var(--ash);
+  /* The row is nowrap, so this is the one part allowed to shrink: the counts
+     read first and an over-long session name ellipsises rather than pushing
+     the transcript sideways. */
+  min-width: 0; overflow: hidden; text-overflow: ellipsis;
+}
+.meta .turnChange .warn { color: var(--yellow); }
+
+/* Settings → MCP: copyable connection snippets. Code wells, per the design
+   system: mono on the card surface, hairline border, no shadow. */
+.mcpSnip { margin-top: 8px; }
+.mcpSnip .cap { display: block; font-family: var(--mono); font-size: 0.7692rem; color: var(--stone); margin-bottom: 4px; }
+.mcpSnip .row {
+  display: flex; align-items: flex-start; gap: 8px; padding: 9px 10px 9px 12px;
+  background: var(--card); border: 1px solid var(--hair); border-radius: var(--r);
+}
+.mcpSnip code {
+  flex: 1; min-width: 0; font-family: var(--mono); font-size: 0.9231rem; line-height: 1.5;
+  color: var(--body); overflow-wrap: anywhere; white-space: pre-wrap;
+}
+.mcpSnip .iconBtn { flex: none; margin-top: -1px; }
+.mcpBody { margin-top: 14px; }
+.mcpStep { display: flex; gap: 10px; padding: 10px 0; border-top: 1px solid var(--hair-soft); }
+.mcpStep:first-child { border-top: none; }
+.mcpStep .n {
+  flex: none; width: 18px; height: 18px; margin-top: 1px; border-radius: var(--r-full);
+  border: 1px solid var(--hair-strong); font-family: var(--mono); font-size: 0.7692rem; color: var(--ash);
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.mcpStep .b { flex: 1; min-width: 0; color: var(--body); font-size: 0.9615rem; line-height: 1.55; }
+.mcpStep .b b { font-weight: 500; color: var(--ink); }
+.mcpNote { margin-top: 12px; color: var(--ash); font-size: 0.9231rem; line-height: 1.55; }
+.mcpNote + .mcpNote { margin-top: 10px; }
+.mcpNote b { color: var(--body); font-weight: 500; }
+.mcpNote code, .mcpStep .b code { font-family: var(--mono); font-size: 0.9231rem; color: var(--ink); }
+.mcpWarn {
+  display: flex; gap: 9px; padding: 10px 12px; margin-bottom: 4px;
+  background: var(--tint-yellow); border: 1px solid var(--edge-yellow);
+  border-radius: var(--r); color: var(--body); font-size: 0.9231rem; line-height: 1.55;
+}
+.mcpWarn svg { flex: none; margin-top: 3px; color: var(--yellow); }
+
+/* ---------- Changes: every project's uncommitted files ---------- */
+@keyframes spin { to { transform: rotate(360deg); } }
+.iconBtn.spinning svg { animation: spin 0.9s linear infinite; }
+
+.chgGroup .panelGroup.asBtn { gap: 0; }
+.chgGroup .panelGroup .nm { margin-left: 4px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chgGroup .panelGroup .note { margin-left: 8px; color: var(--stone); text-transform: none; letter-spacing: 0; font-size: 0.7692rem; }
+.chgGroup .panelGroup .num { margin-left: auto; padding-right: 10px; font-family: var(--mono); letter-spacing: 0; text-transform: none; }
+
+/* a file row: status letter, name over its folder, counts */
+.prow.chg { height: auto; padding-top: 5px; padding-bottom: 5px; }
+.prow.chg .st { flex: none; width: 10px; font-family: var(--mono); font-size: 0.8462rem; text-align: center; }
+.prow.chg .t { display: flex; flex-direction: column; gap: 1px; }
+.prow.chg .t .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.9231rem; }
+.prow.chg .t .sub { color: var(--stone); font-size: 0.7692rem; font-family: var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.st.modified { color: var(--yellow); }
+.st.added { color: var(--green); }
+.st.deleted { color: var(--red); }
+
+/* the file page: header bar, optional alert, then diff or editor filling the rest */
+.page.chgPage { display: flex; flex-direction: column; overflow: hidden; padding: 0; }
+.chgBar {
+  flex: none; display: flex; align-items: center; gap: 10px; height: 40px; padding: 0 16px;
+  border-bottom: 1px solid var(--hair); color: var(--ash);
+}
+.chgBar .st { flex: none; font-family: var(--mono); font-size: 0.9231rem; }
+.chgBar .crumb { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); font-size: 0.9231rem; }
+.chgBar .crumb .proj { color: var(--ash); margin-right: 8px; font-family: var(--sans); }
+.chgBar .crumb .dir { color: var(--stone); }
+.chgBar .crumb .nm { color: var(--ink); }
+
+/* ---------- Checkouts: a project's main folder and its worktrees (.docs/worktrees-ux.html §0) ---------- */
+/* The chip: main stays quiet (project · branch); a worktree gets the branch
+   glyph and the blue edge; a removed one strikes through. */
+/* Same box as .pill (padding, line-height, type size), so it sits level with the header's other pills. */
+.co {
+  display: inline-flex; align-items: center; gap: 6px; min-width: 0; max-width: 320px; padding: 2px 8px; margin: 0;
+  border: 1px solid var(--hair-strong); border-radius: var(--r-full); background: var(--elev);
+  color: var(--charcoal); font-family: var(--sans); font-size: 0.8462rem; line-height: 1.5; white-space: nowrap; cursor: pointer;
+  transition: border-color 0.1s ease, color 0.1s ease;
+}
+.co:hover, .co[data-state="open"] { border-color: var(--hair-bright); color: var(--ink); }
+.co .pdot { width: 6px; height: 6px; border-radius: var(--r-full); flex: none; }
+.co .pn { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.co .sep { color: var(--stone); }
+.co .b { font-family: var(--mono); font-size: inherit; color: inherit; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.co .x { font-family: var(--mono); font-size: inherit; color: var(--ash); flex: none; }
+.co .g { flex: none; color: var(--blue); }
+.co .chev { flex: none; color: var(--ash); }
+.co.wt { border-color: var(--edge-blue); }
+.co.wt:hover, .co.wt[data-state="open"] { border-color: var(--edge-blue-hi); }
+.co.gone { border-style: dashed; color: var(--stone); }
+.co.gone .b { color: var(--stone); text-decoration: line-through; }
+.co.gone .g { color: var(--stone); }
+#chatHeader .pills .co { flex: none; }
+
+/* Its menu: which checkout, then what to do with it. */
+.uiMenu.coMenu { max-width: 320px; }
+.coMenuCap { display: flex; align-items: baseline; gap: 8px; padding: 6px 9px 7px; border-bottom: 1px solid var(--hair); margin-bottom: 4px; }
+.coMenuCap .b { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); font-size: 0.8462rem; color: var(--ink); }
+.coMenuCap .k { margin-left: auto; flex: none; font-size: 0.7692rem; color: var(--ash); }
+.uiMenuBlurb.coMenuErr { color: var(--red); }
+
+/* A tab in a worktree: its branch slug after the title, yielding to it. */
+.tab .br {
+  display: inline-flex; align-items: center; gap: 3px; flex: 0 2 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+  font-family: var(--mono); font-size: 0.7692rem; color: var(--stone);
+}
+.tab .br svg { flex: none; }
+.tab.active .br { color: var(--ash); }
+.tab .br.gone { text-decoration: line-through; }
+
+/* A session row in a worktree grows a mono sub-line — the Terminals row pattern. */
+.prow.wt { height: auto; padding-top: 6px; padding-bottom: 6px; align-items: flex-start; }
+.prow.wt > .dot { margin-top: 6px; }
+.prow.wt .t { display: flex; flex-direction: column; gap: 2px; white-space: normal; }
+.prow.wt .t .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.prow.wt .t .sub {
+  display: inline-flex; align-items: center; gap: 4px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--stone); font-size: 0.8462rem; font-family: var(--mono);
+}
+.prow.wt .t .sub svg { flex: none; }
+.prow.wt .t .sub.gone .b { text-decoration: line-through; }
+.prow.wt .rowMenu, .prow.wt .pinMark { margin-top: 1px; }
+
+/* Changes: project → checkout. A group's menu sits beside its toggle, shown on hover. */
+.chgHead { display: flex; align-items: center; padding-right: 8px; }
+.chgHead .panelGroup.asBtn { flex: 1; min-width: 0; }
+.chgHead .coBtn { flex: none; width: 22px; height: 22px; opacity: 0; }
+.chgHead:hover .coBtn, .chgHead .coBtn:focus-visible, .chgHead .coBtn[data-state="open"] { opacity: 1; }
+.chgGroup .panelGroup .pdot { width: 6px; height: 6px; margin-left: 4px; border-radius: var(--r-full); flex: none; }
+.chgGroup .panelGroup.coGroup { padding-left: 18px; padding-top: 6px; text-transform: none; letter-spacing: 0; }
+.chgGroup .panelGroup.coGroup:disabled { cursor: default; }
+.chgGroup .panelGroup.coGroup:disabled:hover { color: var(--stone); }
+.chgGroup .panelGroup.coGroup .g { flex: none; margin-left: 4px; color: var(--stone); }
+.chgGroup .panelGroup.coGroup.wt .g { color: var(--blue); }
+.chgGroup .panelGroup.coGroup .br { margin-left: 6px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); font-size: 0.8462rem; color: var(--body); }
+.prow.chg.nested { padding-left: 30px; }
+.chgBar .crumb .wt { display: inline-flex; align-items: center; gap: 4px; margin-right: 8px; color: var(--blue); }
+
+/* The checkout picker in a draft's prompt head: main, a worktree, or a new one with its branch inline. */
+.chip.coPick .g { flex: none; color: var(--ash); }
+.chip.coPick.wt { border-color: var(--edge-blue); }
+.chip.coPick.wt .g { color: var(--blue); }
+.chip.coPick .name { font-family: var(--mono); font-size: 0.8462rem; }
+.uiMenuItem .wtIcon { color: var(--blue); }
+.uiMenuItem .name.mono { font-family: var(--mono); font-size: 0.9231rem; }
+.brInput {
+  min-width: 0; height: 22px; padding: 0 8px; border: 1px solid var(--edge-blue); border-radius: var(--r-sm);
+  background: var(--canvas); color: var(--ink); font-family: var(--mono); font-size: 0.8462rem; outline: none;
+  transition: border-color 0.12s ease;
+}
+.brInput:focus { border-color: var(--edge-blue-hi); }
+.brInput.bad { border-color: var(--edge-red); color: var(--red); }
+.brInput::placeholder { color: var(--stone); }
+.composeError { margin: -10px 0 0; color: var(--red); font-size: 0.9231rem; }
+.composeNote { margin: -10px 0 0; color: var(--ash); font-size: 0.9231rem; }
+/* Making a worktree: three steps, the current one spinning, and the clock. */
+.makingWt { display: flex; align-items: flex-start; gap: 16px; margin-top: -8px; font-size: 0.9231rem; }
+.makingWt ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
+.makingWt li { display: flex; align-items: center; gap: 8px; color: var(--stone); }
+.makingWt li svg { flex: none; }
+.makingWt li.done { color: var(--ash); }
+.makingWt li.done svg { color: var(--green); }
+.makingWt li.now { color: var(--ink); }
+.makingWt .spin { animation: spin 0.9s linear infinite; }
+.makingWt .dotTodo { width: 12px; height: 12px; display: inline-flex; align-items: center; justify-content: center; }
+.makingWt .dotTodo::before { content: ''; width: 4px; height: 4px; border-radius: var(--r-full); background: var(--stone); }
+.makingWt .secs { font-family: var(--mono); font-size: 0.8462rem; color: var(--ash); font-variant-numeric: tabular-nums; }
+@media (prefers-reduced-motion: reduce) { .makingWt .spin, #sendBtn .spin { animation: none; } }
+/* A dispatch asks where it runs: the current folder (picked), the item's worktree, or a new one. */
+.runIn { display: flex; align-items: center; gap: 10px; margin-top: -6px; }
+.runIn .lbl { color: var(--ash); font-size: 0.9231rem; }
+.runIn .segBtn { gap: 6px; cursor: pointer; }
+.runIn .segBtn svg { flex: none; color: var(--ash); }
+.runIn .segBtn.wt svg { color: var(--blue); }
+.runIn .segBtn:focus-visible { outline: none; border-color: var(--hair-bright); }
+
+/* Removing a worktree: what it holds, then the choice. */
+.rmChecks { list-style: none; margin: 4px 0 14px; padding: 10px 12px; border: 1px solid var(--hair); border-radius: var(--r); display: flex; flex-direction: column; gap: 8px; }
+.rmChecks li { display: flex; align-items: center; gap: 9px; font-size: 0.9231rem; color: var(--body); }
+.rmChecks svg { flex: none; }
+.rmChecks .ok { color: var(--green); }
+.rmChecks .warn { color: var(--yellow); }
+.rmChecks .bad { color: var(--red); }
+.rmWorktree .checkLine code { font-family: var(--mono); font-size: 0.8462rem; color: var(--ink); }
+.rmWorktree .row .danger { margin-right: auto; }
+
+/* A session whose worktree is gone: the composer's card, centred — one line saying what happened, the two ways on below. */
+#composer .frame.goneBar { align-items: center; gap: 16px; padding: 20px 20px 18px; text-align: center; }
+.goneBar .d { display: inline-flex; align-items: center; gap: 8px; margin: 0; color: var(--mute); font-size: 0.9615rem; line-height: 1.45; }
+.goneBar .ic { flex: none; color: var(--ash); }
+.goneBar .br { font-family: var(--mono); font-size: 0.8846rem; color: var(--ink); }
+.goneBar .acts { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.goneBar .acts .btn { gap: 6px; }
+.goneBar .err { margin: 0; color: var(--red); font-size: 0.8846rem; }
+.goneBar .spin { animation: spin 0.9s linear infinite; }
+.chgBar .num { flex: none; font-family: var(--mono); font-size: 0.8462rem; }
+.chgBar .sp { margin-left: auto; }
+.chgBar .segBtn { display: inline-flex; align-items: center; gap: 5px; }
+.chgBar .segBtn:disabled { opacity: 0.4; cursor: not-allowed; }
+.chgBar .state { flex: none; min-width: 52px; text-align: right; color: var(--stone); font-size: 0.8462rem; }
+.chgBar .btn { display: inline-flex; align-items: center; gap: 5px; }
+.chgBar .btn .kbd { margin-left: 2px; }
+
+.chgAlert {
+  flex: none; display: flex; align-items: center; gap: 9px; padding: 8px 16px;
+  background: var(--tint-yellow); border-bottom: 1px solid var(--edge-yellow); color: var(--body); font-size: 0.9231rem;
+}
+.chgAlert svg { flex: none; color: var(--yellow); }
+.chgAlert .tx { flex: 1; min-width: 0; }
+
+.chgBody { flex: 1; min-height: 0; overflow: auto; background: var(--deep); }
+.chgBody.editing { display: flex; overflow: hidden; }
+.chgBody .dnote { margin: 0; padding: 14px 16px; color: var(--stone); font-size: 0.9231rem; }
+.chgBody .dnote.err { color: var(--red-ink); font-family: var(--mono); }
+.chgEditor {
+  flex: 1; width: 100%; box-sizing: border-box; resize: none; border: 0; outline: none;
+  background: var(--deep); color: var(--body); padding: 14px 18px;
+  font-family: var(--mono); font-size: 0.9231rem; line-height: 19px; tab-size: 2; white-space: pre; overflow: auto;
+}
+/* Radix collapsible content carries `hidden` when closed; our display rules must not override it. */
+.limitsBody[hidden], .tsTools[hidden] { display: none; }
+
+/* integrations picker: tabs by source, search, bounded scroll (job-spec.md, item 1) */
+.tsBar { display: flex; align-items: center; gap: 10px; padding: 6px 12px; border-bottom: 1px solid var(--hair); flex-wrap: wrap; }
+.tsTabList { display: flex; gap: 2px; }
+.tsTab { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 8px; border: 0; border-radius: var(--r-sm); background: transparent; color: var(--ash); font-size: 0.8846rem; cursor: pointer; }
+.tsTab:hover { color: var(--ink); }
+.tsTab[data-state="active"] { background: var(--elev); color: var(--ink); }
+.tsTab .n { font-family: var(--mono); font-size: 0.7692rem; color: var(--stone); }
+.tsSearch { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 8px; border: 1px solid var(--hair-strong); border-radius: var(--r-sm); color: var(--ash); }
+.tsSearch:focus-within { border-color: var(--ink); }
+.wform .tsSearch input { width: 170px; border: 0; padding: 0; background: transparent; font-size: 0.8846rem; }
+.tsScroll { max-height: 300px; overflow-y: auto; overscroll-behavior: contain; }
+.toolServers .tsEmpty.warnText { color: var(--yellow); display: flex; align-items: center; gap: 6px; border-bottom: 1px solid var(--hair); }
+.toolServers .tsEmpty code { font-family: var(--mono); font-size: 0.8462rem; }
+
+/* ---------- settings → phone: QR pairing ----------
+   The QR card is the one white surface in the pane — the design system's
+   "email card inset": contrast is the elevation, no shadow. */
+.phonePair { display: flex; gap: 20px; align-items: flex-start; margin-bottom: 12px; }
+.phoneQrCard { flex: none; width: 184px; padding: 0; border-radius: var(--r-lg); overflow: hidden; background: #fff; }
+.phoneQr { display: block; width: 100%; height: auto; }
+.phoneSteps { flex: 1; min-width: 0; }
+@media (max-width: 767px), (pointer: coarse) and (max-height: 500px) {
+  .phonePair { flex-direction: column; align-items: stretch; }
+  .phoneQrCard { width: min(240px, 100%); align-self: center; }
+}
+

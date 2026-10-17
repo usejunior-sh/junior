@@ -1,0 +1,203 @@
+/* ---------- lists shared by jobs / projects / connectors ---------- */
+.list { background: var(--card); border: 1px solid var(--hair-strong); border-radius: var(--r-lg); overflow: hidden; }
+.listRow { display: flex; align-items: center; gap: 12px; padding: 10px 14px; font-size: 1rem; transition: background 0.08s ease; }
+.listRow + .listRow { border-top: 1px solid var(--hair); }
+.listRow:hover { background: var(--wash-1); }
+
+/* jobs */
+.jobList, .connList, .projList, .pickerList { background: var(--card); border: 1px solid var(--hair-strong); border-radius: var(--r-lg); overflow: hidden; }
+.projList { margin-bottom: 22px; }
+
+/* connectors */
+.connGroup { margin-bottom: 26px; }
+.connGroup header { display: flex; align-items: baseline; gap: 10px; }
+.connGroup h3 { margin: 0; font-size: 0.8462rem; color: var(--mute); font-weight: 500; letter-spacing: 0.6px; text-transform: uppercase; }
+.connGroup .count { color: var(--stone); font-size: 0.8462rem; font-family: var(--mono); }
+.connGroup .hint { margin: 4px 0 10px; color: var(--ash); font-size: 0.9231rem; }
+.connRow { display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 14px; font-size: 1rem; color: var(--body); }
+.connRow + .connRow { border-top: 1px solid var(--hair); }
+.connRow:hover { background: var(--wash-1); }
+.connDot { width: 6px; height: 6px; border-radius: 50%; background: var(--stone); flex: none; }
+.connDot.connected { background: var(--green); }
+.connDot.needs-auth { background: var(--yellow); }
+.connDot.failed { background: var(--red); }
+.connName { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.connStatus { font-size: 0.8462rem; color: var(--ash); flex: none; }
+.connStatus.connected { color: var(--ash); }
+.connStatus.needs-auth { color: var(--yellow); }
+.connStatus.failed { color: var(--red); }
+.authNote { border: 1px solid var(--hair-strong); border-radius: var(--r); padding: 11px 14px; color: var(--mute); font-size: 0.9231rem; background: var(--card); line-height: 1.55; }
+.authNote b { color: var(--yellow); font-family: var(--mono); font-weight: 500; }
+.authNote code { font-family: var(--mono); font-size: 0.8462rem; background: var(--deep); border: 1px solid var(--hair); border-radius: var(--r-xs); padding: 1px 5px; color: var(--ink); }
+
+/* projects */
+.projRow { display: flex; align-items: center; gap: 14px; height: 40px; padding: 0 14px; font-size: 1rem; }
+.projRow + .projRow { border-top: 1px solid var(--hair); }
+.projRow:hover { background: var(--wash-1); }
+.projName { min-width: 120px; color: var(--ink); display: inline-flex; align-items: center; gap: 8px; }
+.projName .pdot { width: 6px; height: 6px; border-radius: var(--r-full); display: inline-block; }
+.projRepo { font-family: var(--mono); font-size: 0.8462rem; color: var(--blue); min-width: 180px; }
+.projPath { font-family: var(--mono); font-size: 0.8462rem; color: var(--ash); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.projDelete { flex: none; background: none; border: none; color: var(--stone); font-size: 0.9231rem; width: 24px; height: 24px; border-radius: var(--r-xs); transition: color 0.1s, background 0.1s; display: inline-flex; align-items: center; justify-content: center; }
+.projDelete:hover, .projDelete[data-state="open"] { color: var(--ink); background: var(--wash-2); }
+.projActionsGap { flex: none; width: 24px; }
+/* badge-pill: the one default project, named wherever projects are listed. */
+.projDefault { display: inline-flex; align-items: center; height: 18px; padding: 0 8px; margin-left: 6px; border-radius: var(--r-full); background: var(--elev); color: var(--body); font-size: 0.7692rem; letter-spacing: 0.01em; }
+.projModal { width: 460px; }
+/* Add-a-project is Radix-driven (it opens from the settings page), so it
+   centres itself rather than riding the browser's top layer, and sits above
+   the scrim's z-index 80. */
+.projOverlay { position: fixed; inset: 0; z-index: 90; background: var(--scrim); animation: fadeIn 0.14s ease; }
+.projAddDialog { position: fixed; z-index: 91; inset: 50% auto auto 50%; margin: 0; transform: translate(-50%, -50%); }
+.projPickRow { display: flex; align-items: center; gap: 10px; }
+.projPick { flex: none; display: inline-flex; align-items: center; gap: 7px; height: 30px; padding: 0 12px; border-radius: var(--r); font-size: 1rem; background: var(--elev); color: var(--ink); border: 1px solid var(--hair-strong); }
+.projPick:hover:not(:disabled) { border-color: var(--hair-bright); }
+.projPick:disabled { opacity: 0.45; cursor: default; }
+.projPickPath { flex: 1; min-width: 0; font-family: var(--mono); font-size: 0.8846rem; color: var(--body); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.projPickPath.empty { color: var(--stone); font-family: inherit; font-style: italic; }
+.projEmpty { color: var(--ash); font-size: 1rem; padding: 4px 0 22px; }
+.projError { margin-top: 12px; color: var(--red); font-size: 0.9231rem; }
+
+/* repo picker */
+dialog.repoDialog { width: 480px; }
+.pickerSub { margin: 0 0 12px; color: var(--mute); font-size: 0.9615rem; line-height: 1.5; }
+.pickerFilter { margin-bottom: 8px; }
+.pickerList { max-height: 300px; overflow-y: auto; background: var(--canvas); border-radius: var(--r); }
+.pickerRow { display: flex; align-items: center; gap: 10px; padding: 8px 12px; font-size: 0.9615rem; font-family: var(--mono); cursor: pointer; }
+.pickerRow + .pickerRow { border-top: 1px solid var(--hair); }
+.pickerRow:hover { background: var(--elev); }
+.pickerRow input { accent-color: var(--ink); width: auto; flex: none; margin: 0; }
+.pickerRow span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pickerCount { margin-top: 8px; color: var(--ash); font-size: 0.9231rem; font-family: var(--mono); display: flex; gap: 10px; align-items: center; }
+.clearSel { background: none; border: none; color: var(--blue); font: inherit; padding: 0; text-decoration: underline; }
+
+/* item composer (add / edit a manual item) */
+dialog.itemComposer { width: 800px; max-width: calc(100vw - 48px); padding: 0; overflow: hidden; }
+.itemComposer form { display: flex; flex-direction: column; }
+.composerHead { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 13px 16px 9px; }
+.composerHead .crumbs { display: flex; align-items: center; gap: 7px; font-size: 0.9615rem; min-width: 0; }
+.composerHead .crumb { color: var(--ash); white-space: nowrap; }
+.composerHead .crumb.now { color: var(--body); background: var(--elev); border: 1px solid var(--hair-strong); border-radius: var(--r-full); padding: 0 8px; line-height: 20px; }
+.composerHead .crumbSep { color: var(--stone); }
+.composerClose { flex: none; display: flex; align-items: center; justify-content: center; width: 26px; height: 26px; padding: 0; border: none; border-radius: var(--r-sm); background: transparent; color: var(--ash); }
+.composerClose:hover { background: var(--elev); color: var(--ink); }
+.itemComposer .titleInput { width: 100%; border: none !important; background: transparent !important; outline: none; padding: 6px 18px 2px !important; margin: 0; color: var(--ink); font-family: var(--display) !important; font-weight: 400; font-size: 1.8462rem !important; letter-spacing: -0.24px; line-height: 1.2 !important; border-radius: 0 !important; }
+.itemComposer .titleInput::placeholder { color: var(--stone); }
+.itemComposer .descInput { width: 100%; border: none !important; background: transparent !important; outline: none; resize: none; padding: 4px 18px 8px !important; margin: 0; color: var(--body); font-size: 1.0769rem !important; line-height: 1.55 !important; min-height: 190px; max-height: 420px; border-radius: 0 !important; }
+.itemComposer .descInput::placeholder { color: var(--stone); }
+/* Dropping images anywhere on the sheet: the hairline brightens, nothing moves. */
+.itemComposer form.dragging { outline: 1px dashed var(--hair-bright); outline-offset: -5px; }
+.itemComposer .linkRow { display: flex; align-items: center; gap: 8px; margin: 0 18px 4px; padding: 0 10px; height: 30px; border: 1px solid var(--hair-strong); border-radius: var(--r); background: var(--card); }
+.itemComposer .linkRow svg { flex: none; color: var(--ash); }
+.itemComposer .linkRow input { flex: 1; min-width: 0; border: none !important; outline: none; background: transparent !important; padding: 0 !important; color: var(--ink); font-size: 0.9615rem !important; font-family: var(--mono); border-radius: 0 !important; }
+.itemComposer .linkRow input::placeholder { color: var(--stone); font-family: var(--sans); }
+.itemComposer .linkRow:focus-within { border-color: var(--ink); }
+.itemComposer .composerAttachments { padding: 2px 18px 0; }
+.itemComposer .composerAttachments .thumb { width: 64px; height: 64px; }
+/* The quiet line that tells you the big empty box takes screenshots. */
+.itemComposer .dropHint { display: inline-flex; align-items: center; gap: 6px; padding: 0; border: none; background: transparent; color: var(--stone); font-size: 0.9231rem; }
+.itemComposer .dropHint:hover { color: var(--ash); }
+.pillRow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 18px 16px; }
+/* `dialog label` carries a vertical margin; without this the label pills and
+   the button pills in the same row sit on two different baselines. */
+.pillRow .pill { cursor: pointer; height: 24px; padding: 0 10px; margin: 0; }
+/* Setters (priority, project) read as solid; "add a thing" reads as dashed. */
+.pillRow .pill.add { border-style: dashed; color: var(--ash); }
+.pillRow .pill.add:hover { color: var(--body); }
+.pillRow .pill.add.set { color: var(--ink); border-style: solid; }
+.pillRow .pill:hover { border-color: var(--hair-bright); }
+/* Calendar (react-day-picker): its --rdp-* variables mapped onto our tokens —
+   hairlines, no shadows, the selected day is the one off-white fill. */
+.calendar {
+  --rdp-accent-color: var(--ink);
+  --rdp-accent-background-color: var(--hair);
+  --rdp-day-height: 34px;
+  --rdp-day-width: 34px;
+  --rdp-day_button-height: 32px;
+  --rdp-day_button-width: 32px;
+  --rdp-day_button-border-radius: var(--r-sm);
+  --rdp-selected-border: 1px solid var(--ink);
+  --rdp-today-color: var(--yellow);
+  --rdp-nav_button-height: 28px;
+  --rdp-nav_button-width: 28px;
+  --rdp-nav-height: 32px;
+  --rdp-outside-opacity: 0.35;
+  --rdp-weekday-opacity: 1;
+  margin: 0;
+  color: var(--body);
+  font-size: 0.9231rem;
+}
+.calendar .rdp-month_caption { font-family: var(--sans); font-weight: 500; color: var(--ink); font-size: 0.9231rem; }
+.calendar .rdp-weekday { color: var(--ash); font-size: 0.8462rem; font-weight: 400; }
+.calendar .rdp-chevron { fill: var(--ash); }
+.calendar .rdp-button_previous:hover .rdp-chevron, .calendar .rdp-button_next:hover .rdp-chevron { fill: var(--ink); }
+.calendar .rdp-day_button { color: inherit; font: inherit; background: transparent; cursor: pointer; }
+.calendar .rdp-day_button:hover { background: var(--hair); }
+.calendar .rdp-selected .rdp-day_button { background: var(--ink); color: var(--canvas); border-color: var(--ink); }
+.calendar .rdp-day_button:focus-visible { outline: 1px solid var(--hair-bright); outline-offset: 1px; }
+.uiMenu.calendarPop { padding: 10px; width: max-content; }
+/* The item page's stage · turn chip and its override (FlowPopover). */
+.pill.flowPill { cursor: pointer; gap: 6px; }
+.pill.flowPill .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--stone); flex: none; }
+.pill.flowPill.turn-me .dot { background: var(--ink); }
+.pill.flowPill.turn-ai .dot { background: var(--blue); }
+.pill.flowPill.turn-others .dot { background: var(--amber); }
+.pill.flowPill.set { border-style: dashed; }
+.pill.flowPill .ask { color: var(--ash); }
+.uiMenu.flowPop { padding: 6px 10px 10px; width: 340px; display: flex; flex-direction: column; gap: 6px; }
+.uiMenu.flowPop .uiMenuCap { padding: 6px 0 0; }
+.seg.wrap { flex-wrap: wrap; }
+.flowNote {
+  width: 100%; margin-top: 6px; background: var(--canvas); border: 1px solid var(--hair-strong); color: var(--ink);
+  border-radius: var(--r); padding: 7px 10px; font-size: 0.9615rem; outline: none; transition: border-color 0.12s;
+}
+.flowNote:focus { border-color: var(--ink); }
+.flowNote::placeholder { color: var(--stone); }
+.flowPopActs { display: flex; justify-content: flex-end; gap: 6px; margin-top: 4px; }
+.flowPopHint { color: var(--stone); font-size: 0.8462rem; }
+.calendarClear { display: flex; align-items: center; gap: 6px; width: 100%; margin-top: 6px; padding: 6px 4px 0; border: none; border-top: 1px solid var(--hair); background: transparent; color: var(--ash); font-size: 0.8462rem; cursor: pointer; }
+.calendarClear:hover { color: var(--ink); }
+/* The default selected day is bold and larger, and the month sits in a
+   fit-content box; both read as a different component. Fill the width instead. */
+.calendar .rdp-selected { font-weight: inherit; font-size: inherit; }
+.calendar .rdp-months { max-width: none; width: 100%; }
+.calendar .rdp-month_grid { width: 100%; table-layout: fixed; }
+.calendar .rdp-day { width: auto; }
+.calendar .rdp-day_button { margin: 0 auto; }
+.calendar .rdp-chevron { width: 14px; height: 14px; }
+.projModal .calendar { margin: 8px 0 4px; width: 100%; }
+.uiMenu.calendarPop .calendar { width: 266px; }
+/* Pills whose trigger *is* a Select — the inbox compose bar's setters and the
+   Create-brief dialog's knobs. Not scoped to .pillRow: both rows want the same
+   thing, and one rule beats two that must be kept in step.
+   .uiSelect is a 36px full-width form control by default, so the pill variant
+   pulls it back to pill shape; the caret goes — a pill is already an obvious
+   affordance and the row has no room for it. Colour is left to .pill.set and
+   the .prio* rules below. */
+.pill.uiSelect {
+  width: auto; gap: 6px; height: 24px; padding: 0 10px;
+  border-radius: var(--r-full); background: var(--elev);
+  color: var(--charcoal); font-size: 0.8462rem; line-height: 1.5;
+}
+.pill.uiSelect .caret { display: none; }
+.pill.uiSelect > span:first-of-type { max-width: 200px; }
+.pillRow .pill .pdot { width: 7px; height: 7px; border-radius: var(--r-full); flex: none; }
+.pillRow .pill svg { color: var(--ash); }
+.pillRow .pill.set { color: var(--ink); }
+.pillRow .pill.set svg { color: var(--ink); }
+.pillRow .pill.prio1 { color: var(--red); border-color: var(--edge-red); } .pillRow .pill.prio1 svg { color: var(--red); }
+.pillRow .pill.prio2 { color: var(--yellow); border-color: var(--edge-yellow-hi); } .pillRow .pill.prio2 svg { color: var(--yellow); }
+.pillRow .pill.prio3 { color: var(--blue); border-color: var(--edge-blue); } .pillRow .pill.prio3 svg { color: var(--blue); }
+.pillRow .pill.prio4 { color: var(--body); }
+.itemComposer .msg.error { margin: 0 18px 12px; }
+.composerFoot { display: flex; align-items: center; gap: 12px; padding: 11px 16px; border-top: 1px solid var(--hair); background: var(--canvas); }
+.composerFoot .footActions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.composerFoot .footActions .hint { font-family: var(--mono); font-size: 0.8462rem; color: var(--stone); margin-right: 2px; }
+.composerFoot .footActions button { height: 30px; padding: 0 12px; border-radius: var(--r); font-size: 1rem; font-weight: 500; border: 1px solid var(--hair-strong); background: var(--elev); color: var(--ink); }
+.addMore { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.9615rem; color: var(--mute); user-select: none; margin: 0 !important; }
+.addMore input { position: absolute; opacity: 0; width: 0; height: 0; }
+.addMore .switch { position: relative; width: 30px; height: 17px; flex: none; border-radius: var(--r-full); background: var(--elev); border: 1px solid var(--hair-strong); transition: background 0.12s, border-color 0.12s; }
+.addMore .switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 11px; height: 11px; border-radius: 50%; background: var(--ash); transition: transform 0.14s ease, background 0.12s; }
+.addMore input:checked + .switch { background: var(--ink); border-color: var(--ink); }
+.addMore input:checked + .switch::after { transform: translateX(13px); background: var(--on-primary); }
+

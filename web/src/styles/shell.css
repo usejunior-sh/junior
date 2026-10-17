@@ -1,0 +1,393 @@
+/* ---------- primitives ---------- */
+.mono { font-family: var(--mono); }
+.spacer { flex: 1; }
+
+.dot { display: inline-block; width: 6px; height: 6px; border-radius: var(--r-full); background: var(--mute); flex: none; }
+.dot.green { background: var(--green); }
+.dot.red { background: var(--red); }
+.dot.yellow { background: var(--yellow); }
+.dot.blue { background: var(--blue); }
+.dot.orange { background: var(--orange); }
+.dot.stone { background: var(--stone); }
+.dot.live { background: var(--blue); animation: pulse 1.4s ease-in-out infinite; }
+.dot.sm { width: 5px; height: 5px; }
+.dot.lg { width: 8px; height: 8px; }
+
+.kbd {
+  font-family: var(--mono); font-size: 0.8462rem; color: var(--ash); line-height: 18px;
+  border: 1px solid var(--hair-strong); border-radius: var(--r-xs); padding: 0 5px; white-space: nowrap;
+}
+kbd { font-family: var(--mono); font-size: 0.8462rem; color: var(--ash); border: 1px solid var(--hair-strong); border-radius: var(--r-xs); padding: 0 5px; line-height: 18px; }
+
+.pill {
+  display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; min-width: 0;
+  border-radius: var(--r-full); background: var(--elev); border: 1px solid var(--hair-strong);
+  color: var(--charcoal); font-size: 0.8462rem; line-height: 1.5; white-space: nowrap;
+}
+.pill.on, .pill.ink { color: var(--ink); }
+.pill.mute { color: var(--ash); }
+.pill.red { color: var(--red); border-color: var(--edge-red); }
+.pill.yellow { color: var(--yellow); border-color: var(--edge-yellow); }
+.pill.green { color: var(--green); border-color: var(--edge-green); }
+.pill.blue { color: var(--blue); border-color: var(--edge-blue); }
+.pill.mono { font-family: var(--mono); }
+.pill svg { flex: none; }
+.pill .t { overflow: hidden; text-overflow: ellipsis; }
+
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  height: 30px; padding: 0 12px; border-radius: var(--r);
+  border: 1px solid var(--hair-strong); background: var(--elev); color: var(--ink);
+  font-size: 1rem; font-weight: 500; white-space: nowrap;
+  transition: background 0.1s ease, border-color 0.1s ease, color 0.1s ease, opacity 0.1s ease;
+}
+.btn:hover:not(:disabled) { border-color: var(--hair-bright); }
+.btn:disabled { opacity: 0.45; cursor: default; }
+.btn.primary { background: var(--ink); color: var(--on-primary); border-color: var(--ink); }
+.btn.primary:hover:not(:disabled) { background: var(--primary-hover); border-color: var(--primary-hover); }
+.btn.ghost { background: transparent; border-color: transparent; color: var(--mute); }
+.btn.ghost:hover:not(:disabled) { background: var(--elev); color: var(--ink); border-color: transparent; }
+.btn.outline { background: transparent; }
+.btn.danger { color: var(--red); border-color: var(--edge-red); background: transparent; }
+.btn.danger:hover:not(:disabled) { background: var(--tint-red); border-color: var(--edge-red-hi); }
+.btn.sm { height: 26px; padding: 0 10px; font-size: 0.9231rem; }
+.btn.xs { height: 24px; padding: 0 8px; font-size: 0.8462rem; }
+.btn.icon { width: 28px; height: 28px; padding: 0; }
+.btn.icon.sm { width: 24px; height: 24px; }
+.btn.wide { width: 100%; height: 36px; }
+.btn.mono { font-family: var(--mono); font-weight: 400; }
+
+.iconBtn {
+  display: inline-flex; align-items: center; justify-content: center; flex: none;
+  width: 28px; height: 28px; padding: 0; border: 0; border-radius: var(--r);
+  background: transparent; color: var(--mute);
+  transition: background 0.1s ease, color 0.1s ease;
+}
+.iconBtn:hover, .iconBtn[data-state="open"] { background: var(--elev); color: var(--ink); }
+.iconBtn.sm { width: 24px; height: 24px; border-radius: var(--r-sm); }
+.iconBtn.red:hover { color: var(--red); }
+.iconBtn.green:hover { color: var(--green); }
+
+.card { background: var(--card); border: 1px solid var(--hair-strong); border-radius: var(--r-lg); }
+.card.soft { border-color: var(--hair); }
+
+.code { font-family: var(--mono); font-size: 0.9615rem; line-height: 1.6; }
+.well {
+  font-family: var(--mono); font-size: 0.9231rem; line-height: 1.6; color: var(--body);
+  background: var(--deep); border: 1px solid var(--hair); border-radius: var(--r);
+  padding: 8px 12px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; margin: 0;
+}
+
+/* section headers: small caps in mute, used in panels and pages */
+.secLabel {
+  color: var(--stone); font-size: 0.8462rem; letter-spacing: 0.6px; text-transform: uppercase;
+  display: flex; align-items: center; gap: 8px; padding: 6px 2px 0;
+}
+.secLabel .n { font-family: var(--mono); letter-spacing: 0; text-transform: none; }
+.secLabel.mute { color: var(--mute); }
+/* Two-part group heading: the tier name carries weight, the qualifier stays
+   quiet. Tiers step down in brightness so "Blocking" reads as the top of the
+   page and "FYI" recedes. */
+.secLabel .tier { color: var(--ash); font-weight: 500; }
+.secLabel .qual { color: var(--stone); }
+.secLabel .qual::before { content: "·"; margin-right: 8px; color: var(--stone); }
+.secLabel.blocking .tier { color: var(--ink); }
+.secLabel.blocked-stale .tier { color: var(--mute); }
+.secLabel.cycle .tier { color: var(--mute); }
+.secLabel.fyi .tier { color: var(--stone); font-weight: 400; }
+/* Inbox day sections step down the same way: Today reads first, Later recedes. */
+.secLabel.day-today .tier { color: var(--ink); }
+.secLabel.day-next-workday .tier { color: var(--ash); }
+.secLabel.day-this-week .tier { color: var(--mute); }
+.secLabel.day-later .tier { color: var(--stone); font-weight: 400; }
+.secLabel .qual.over { color: var(--yellow); text-transform: none; letter-spacing: 0; }
+
+/* atmospheric glow — one per section, anchored at its top */
+.glow {
+  position: absolute; top: -120px; left: 50%; transform: translateX(-50%);
+  width: 900px; height: 360px; border-radius: var(--r-full); opacity: 0.55; pointer-events: none;
+}
+.glow.blue { background: radial-gradient(closest-side, var(--glow-blue), transparent); }
+.glow.orange { background: radial-gradient(closest-side, var(--glow-orange), transparent); }
+.glow.green { background: radial-gradient(closest-side, var(--glow-green), transparent); }
+.glow.yellow { background: radial-gradient(closest-side, var(--glow-yellow), transparent); }
+.glow.red { background: radial-gradient(closest-side, var(--glow-red), transparent); }
+/* Junior's own pages: the glow takes a little of its colour (--junior, the persona's) over the blue. */
+.glow.junior { background: radial-gradient(closest-side, color-mix(in srgb, var(--junior) 18%, var(--glow-blue)), transparent); opacity: 0.4; }
+
+/* ---------- app shell ---------- */
+.app { height: 100%; display: flex; flex-direction: column; background: var(--canvas); }
+.shell { flex: 1; min-height: 0; display: flex; }
+
+/* top bar */
+.topbar {
+  display: flex; align-items: center; gap: 12px; height: var(--bar-h); flex: none;
+  padding: 0 12px 0 14px; border-bottom: 1px solid var(--hair);
+}
+/* Logo lockup: the brand asset (assets/brand/triage-lockup.svg) painted as a
+   mask filled with currentColor, so the one source file takes the theme's ink. */
+.logo { display: inline-flex; align-items: center; color: var(--ink); line-height: 1; }
+.logo .logoLockup {
+  display: block; height: 24px; aspect-ratio: 353 / 106.4; flex: none;
+  background-color: currentColor;
+  -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+  -webkit-mask-position: left center; mask-position: left center;
+  -webkit-mask-size: contain; mask-size: contain;
+}
+.wsPill {
+  display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 8px;
+  border-radius: var(--r-full); border: 1px solid var(--hair-strong); background: var(--elev);
+  color: var(--charcoal); font-size: 0.8462rem; max-width: 220px;
+  transition: color 0.1s ease, border-color 0.1s ease;
+}
+.wsPill:hover, .wsPill[data-state="open"] { color: var(--ink); border-color: var(--hair-bright); }
+.wsPill .wsDot { width: 6px; height: 6px; border-radius: var(--r-full); flex: none; }
+.wsPill .wsName { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wsPill svg { color: var(--stone); flex: none; }
+/* Which build is running (TopBar.tsx BuildBadge). Loud enough to catch the eye
+   on every glance at the bar, quiet enough to live there all day — a released
+   build renders nothing at all, so seeing one of these is the whole signal. */
+.buildBadge {
+  display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 9px;
+  border-radius: var(--r-full); border: 1px solid currentColor; background: transparent;
+  font-family: var(--mono); font-size: 0.6923rem; letter-spacing: 0.06em; text-transform: uppercase;
+  white-space: nowrap; flex: none; opacity: 0.78; transition: opacity 0.1s ease, background 0.1s ease;
+}
+.buildBadge:hover { opacity: 1; background: color-mix(in srgb, currentColor 12%, transparent); }
+.buildBadge.dev { color: var(--yellow); }
+.buildBadge.preview { color: var(--blue); }
+/* Built with uncommitted changes — these bytes exist nowhere but this machine. */
+.buildBadge .buildDirty { width: 5px; height: 5px; border-radius: var(--r-full); background: currentColor; }
+
+.topIcon {
+  position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  height: 28px; min-width: 28px; padding: 0 6px; border-radius: var(--r); border: 1px solid transparent;
+  background: transparent; color: var(--mute); transition: color 0.1s ease, background 0.1s ease;
+}
+.topIcon:hover { color: var(--ink); background: var(--elev); }
+.topIcon.on { color: var(--ink); background: var(--elev); }
+.topIcon .connDot { position: absolute; right: 4px; top: 4px; width: 6px; height: 6px; border-radius: var(--r-full); background: var(--green); }
+.topIcon .connDot.down { background: var(--red); animation: pulse 1.2s infinite; }
+.topIcon .connDot.connecting { background: var(--yellow); }
+.topIcon:disabled { color: var(--stone); background: transparent; cursor: default; }
+
+/* Triage.app's title bar (desktop.ts): the bar is the window's drag handle,
+   its controls are not. The left zone tracks rail + panel; the traffic lights
+   (trafficLightPosition x 16, desktop/src/main.ts) sit in its 92px inset. */
+/* Set apart from the tabs below by a lifted surface and a lit bottom edge that
+   fades out at the sides (.docs/titlebar-variations.html, 6a) — no shadow. */
+.desktopBar {
+  position: relative; padding: 0; gap: 0; -webkit-app-region: drag; user-select: none;
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.012)), #08080a;
+  border-bottom-color: transparent;
+}
+.desktopBar::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 1px; pointer-events: none;
+  background: linear-gradient(to right, transparent, rgba(255, 255, 255, 0.12) 25%, rgba(255, 255, 255, 0.12) 75%, transparent);
+}
+.desktopBar button, .desktopBar [role="button"] { -webkit-app-region: no-drag; }
+.desktopBar .dbSide {
+  display: flex; align-items: center; gap: 2px; height: 100%; flex: none;
+  width: calc(var(--rail-w) + var(--panel-w)); padding: 0 8px 0 92px;
+  border-right: 1px solid var(--hair);
+}
+.desktopBar .dbMain { flex: 1; min-width: 0; display: flex; align-items: center; gap: 2px; height: 100%; padding: 0 12px; }
+/* The workspace switcher as a labelled title (.docs/titlebar-variations.html, switcher 3). */
+.wsLabelled {
+  display: inline-flex; align-items: center; gap: 8px; height: 28px; padding: 0 8px; margin: 0 8px 0 -4px; max-width: 360px;
+  border: 0; border-radius: var(--r); background: transparent; color: var(--ink); font-size: 1rem; font-weight: 500;
+  transition: background 0.1s ease;
+}
+.wsLabelled:hover, .wsLabelled[data-state="open"] { background: var(--wash-3); }
+.wsLabelled .wsLabel { font: 500 0.7692rem/1 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ash); flex: none; }
+.wsLabelled .wsLabelSep { width: 1px; height: 14px; background: var(--hair-strong); flex: none; }
+.wsLabelled .wsDot { width: 7px; height: 7px; border-radius: var(--r-full); flex: none; }
+.wsLabelled .wsName { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wsLabelled svg { color: var(--ash); flex: none; transition: color 0.1s ease; }
+.wsLabelled:hover svg, .wsLabelled[data-state="open"] svg { color: var(--ink); }
+/* Panel hidden: nothing in the bar moves — the left zone keeps its width and
+   its divider, so the toggle, ← → and the workspace stay where the hand left them. */
+/* Fullscreen hides the traffic lights, so their inset goes too. */
+.desktopBar.fullscreen .dbSide { padding-left: 14px; }
+
+/* rail */
+.rail {
+  width: var(--rail-w); flex: none; display: flex; flex-direction: column; gap: 4px;
+  padding-top: 8px; border-right: 1px solid var(--hair); background: var(--canvas);
+}
+.railBtn {
+  position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px;
+  width: 56px; height: 54px; margin: 0 4px; border-radius: var(--r); border: 0;
+  background: transparent; color: var(--ash); transition: color 0.1s ease, background 0.1s ease;
+}
+.railBtn:hover { color: var(--ink); }
+.railBtn.active { background: var(--elev); color: var(--ink); }
+.railBtn span.label { font-size: 0.7692rem; letter-spacing: 0.2px; line-height: 1; }
+.railBadge {
+  position: absolute; top: 5px; right: 8px; min-width: 14px; height: 14px; padding: 0 4px;
+  border-radius: var(--r-full); background: var(--elev); border: 1px solid var(--hair-strong);
+  color: var(--charcoal); font-size: 0.6923rem; line-height: 12px; text-align: center; font-family: var(--mono);
+}
+.railBtn.active .railBadge { background: var(--canvas); }
+
+/* context panel */
+.panel {
+  width: var(--panel-w); flex: none; display: flex; flex-direction: column; overflow: hidden;
+  background: var(--card); border-right: 1px solid var(--hair);
+}
+.panelSearch { display: flex; align-items: center; gap: 4px; height: var(--bar-h); padding: 0 6px 0 10px; border-bottom: 1px solid var(--hair); flex: none; }
+.searchBtn {
+  flex: 1; display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 10px; min-width: 0;
+  border: 1px solid var(--hair-strong); border-radius: var(--r); color: var(--stone); font-size: 0.9231rem;
+  background: var(--canvas); text-align: left; transition: border-color 0.1s ease, color 0.1s ease;
+}
+.searchBtn:hover { border-color: var(--hair-bright); color: var(--ash); }
+.searchBtn .t { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.searchBtn svg { flex: none; color: var(--stone); }
+.panelBody { flex: 1; min-height: 0; overflow-y: auto; padding-bottom: 8px; }
+.panelHead {
+  display: flex; align-items: center; gap: 6px; height: 32px; padding: 0 8px 0 10px;
+  color: var(--mute); font-size: 0.8462rem; font-weight: 500; letter-spacing: 0.6px; text-transform: uppercase;
+}
+.panelHead .n { color: var(--stone); font-family: var(--mono); letter-spacing: 0; text-transform: none; }
+.panelHead .acts { margin-left: auto; display: flex; gap: 2px; }
+.panelGroup { display: flex; align-items: center; gap: 8px; padding: 10px 16px 4px; color: var(--stone); font-size: 0.8462rem; letter-spacing: 0.4px; text-transform: uppercase; }
+.panelGroup .n { font-family: var(--mono); letter-spacing: 0; }
+.panelGroup.asBtn { gap: 0; width: 100%; padding-left: 4px; border: 0; background: transparent; cursor: pointer; font: inherit; font-size: 0.8462rem; text-transform: uppercase; }
+.panelGroup.asBtn:hover { color: var(--ash); }
+/* Chevron sits in the 16px gutter so the label lines up with every other group head. */
+.panelGroup.asBtn > svg { flex: none; }
+.panelGroup.asBtn .n { margin-left: 8px; }
+.prow {
+  position: relative; display: flex; align-items: center; gap: 8px; height: 30px; margin: 0 6px;
+  padding: 0 10px 0 14px; border-radius: var(--r-sm); color: var(--body); font-size: 1rem; cursor: pointer;
+  border: 0; background: transparent; width: calc(100% - 12px); text-align: left;
+  transition: background 0.08s ease, color 0.08s ease;
+}
+.prow:hover { background: var(--hair-soft); color: var(--ink); }
+.prow.sel { background: var(--elev); color: var(--ink); }
+.prow > svg { flex: none; color: var(--ash); }
+.prow .t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.prow .m { color: var(--ash); font-size: 0.8462rem; font-family: var(--mono); flex: none; }
+.prow .pinMark { flex: none; color: var(--stone); }
+.prow .rowMenu { flex: none; opacity: 0; width: 22px; height: 22px; border-radius: var(--r-xs); }
+.prow:hover .rowMenu, .prow .rowMenu[data-state="open"], .prow.sel .rowMenu { opacity: 1; }
+.prow .renameInput {
+  flex: 1; min-width: 0; padding: 2px 6px; border-radius: var(--r-xs);
+  background: var(--canvas); border: 1px solid var(--hair-bright); color: var(--ink); font-size: 1rem; outline: none;
+}
+.prow .renameInput:focus { border-color: var(--ink); }
+.panelEmpty { padding: 14px 16px; color: var(--stone); font-size: 0.9231rem; line-height: 1.5; }
+.panelFoot {
+  display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--hair);
+  color: var(--stone); font-size: 0.8462rem; flex: none; flex-wrap: wrap;
+}
+.panelFoot .kbd { color: var(--ash); }
+.prow.tabRow.empty { color: var(--ash); }
+.prow.tabRow.empty > svg, .prow.tabRow.empty .m { color: var(--stone); }
+.prow.tabRow.hot-red .m { color: var(--red-ink); }
+.prow.tabRow.hot-red > svg { color: var(--red-ink); }
+.prow.tabRow.hot-amber .m { color: var(--amber); }
+.doneLink {
+  display: block; margin: 6px 6px 0; padding: 4px 14px; border: 0; background: transparent; cursor: pointer;
+  color: var(--stone); font: inherit; font-size: 0.8462rem; text-align: left;
+}
+.doneLink:hover, .doneLink.sel { color: var(--ink); }
+
+/* main + tab band */
+#main { flex: 1; min-width: 0; display: flex; flex-direction: column; position: relative; overflow: hidden; background: var(--canvas); }
+.tabband {
+  --tab-min: 132px;
+  display: flex; align-items: stretch; height: var(--bar-h); flex: none; overflow: hidden;
+  border-bottom: 1px solid var(--hair); background: var(--canvas); position: relative; z-index: 1;
+}
+/* Only the tabs between Inbox and the + scroll. Tabs squeeze to --tab-min
+   first and the strip starts scrolling only once even that stops fitting,
+   so a crowded band degrades in two steps rather than clipping. */
+.tabband > .tab.lead { flex: none; }
+.tabband .strip {
+  display: flex; align-items: stretch; flex: 0 1 auto; min-width: 0;
+  overflow-x: auto; overflow-y: hidden; scrollbar-width: none; overscroll-behavior-x: contain;
+  scroll-behavior: smooth;
+}
+.tabband .strip::-webkit-scrollbar { display: none; }
+/* The fade is the affordance — without it a scrolled strip reads as clipped. */
+.tabband .strip[data-fade="right"] { mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); }
+.tabband .strip[data-fade="left"] { mask-image: linear-gradient(to left, #000 calc(100% - 28px), transparent); }
+.tabband .strip[data-fade="both"] {
+  mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent);
+}
+.tab {
+  position: relative; display: flex; align-items: center; gap: 7px; height: var(--bar-h); max-width: 240px; padding: 0 12px;
+  color: var(--charcoal); font-size: 1rem; white-space: nowrap; border: 0; border-right: 1px solid var(--hair);
+  background: transparent; cursor: pointer; transition: color 0.1s ease, background 0.1s ease;
+}
+/* nowrap text would otherwise hold every tab at its full width. The tab you
+   are actually in keeps a wider floor: the others can go unreadable, it can't. */
+.tabband .strip .tab { flex: 0 1 auto; min-width: var(--tab-min); }
+.tabband .strip .tab.active { min-width: 176px; }
+.tab:hover { color: var(--ink); background: var(--hair-soft); }
+.tab.active { background: var(--card); color: var(--ink); box-shadow: inset 0 1px 0 var(--hair-strong); }
+.tab.dim { color: var(--ash); }
+/* Dragged tab reads as lifted out of the strip; the drop line marks where it
+   would land, drawn absolute so it never widens the flex row under the
+   cursor. */
+.tab.dragging { opacity: 0.45; }
+.tab .dropline { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--blue); pointer-events: none; z-index: 2; }
+.tab .dropline.before { left: -1px; }
+.tab .dropline.after { right: -1px; }
+.tab > svg { flex: none; }
+.tab .t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-flex; align-items: center; gap: 7px; }
+.tab .pdot { display: inline-block; width: 5px; height: 5px; border-radius: var(--r-full); flex: none; }
+.tab .cl {
+  display: inline-flex; align-items: center; justify-content: center; flex: none; margin-left: auto; margin-right: -4px;
+  width: 18px; height: 18px; border-radius: var(--r-xs); color: var(--stone); background: transparent; border: 0; padding: 0;
+}
+.tab .cl:hover { color: var(--ink); background: var(--elev); }
+.tab.active .cl { color: var(--ash); }
+.tabband .add { display: flex; align-items: center; justify-content: center; width: 34px; flex: none; color: var(--ash); background: transparent; border: 0; }
+.tabband .add:hover { color: var(--ink); }
+.tabband .add.showPanel { border-right: 1px solid var(--hair); }
+.content { flex: 1; min-height: 0; position: relative; display: flex; flex-direction: column; }
+
+/* ---------- page shell (inbox / item / jobs / projects / connectors) ---------- */
+.page { flex: 1; min-height: 0; overflow-y: auto; padding: 28px 40px 48px; position: relative; }
+/* width tiers: list pages (.full) fill the pane like Linear — the extra width
+   goes to the title column. Everything else is a centred 1100px column; forms
+   cap themselves narrower (.wform). */
+.page .inner { max-width: 1100px; margin: 0 auto; }
+.page.full .inner { max-width: none; }
+.pageHead { display: flex; align-items: flex-end; gap: 16px; margin-bottom: 18px; }
+.pageHead > div:first-child { min-width: 0; }
+.display { margin: 0; font-family: var(--display); font-weight: 400; font-size: 2.7692rem; line-height: 1; letter-spacing: -0.36px; color: var(--ink); }
+.display .muted { color: var(--mute); }
+/* the count of what's blocking is the one alarming number in the headline —
+   lift it to ink so it reads alongside the day, not with the total. */
+.display .blk { color: var(--ink); }
+.display.md { font-size: 2.4615rem; line-height: 1.05; letter-spacing: -0.32px; }
+.display.sm { font-size: 2.1538rem; line-height: 1.1; letter-spacing: -0.28px; }
+.pageHead .sub, .page p.sub { margin: 8px 0 0; color: var(--mute); font-size: 1rem; line-height: 1.5; max-width: 60ch; }
+.pageMeta { margin-left: auto; color: var(--ash); font-size: 0.9231rem; display: flex; align-items: center; gap: 6px; white-space: nowrap; flex: none; }
+.pageMeta svg { flex: none; }
+.toolRow { display: flex; align-items: center; gap: 6px; margin: 0 0 16px; flex-wrap: wrap; }
+.toolRow .right { margin-left: auto; display: flex; gap: 6px; align-items: center; }
+
+/* segmented filter (Open · Snoozed · Done · Archived) */
+.seg { display: inline-flex; gap: 4px; }
+.segBtn {
+  display: inline-flex; align-items: center; height: 24px; padding: 0 10px; border-radius: var(--r-full);
+  border: 1px solid transparent; background: transparent; color: var(--mute); font-size: 0.9231rem;
+  transition: color 0.1s ease, background 0.1s ease, border-color 0.1s ease;
+}
+.segBtn:hover { color: var(--ink); }
+.segBtn.active { background: var(--elev); border-color: var(--hair-strong); color: var(--ink); }
+
+.probing { display: flex; align-items: center; gap: 10px; color: var(--ash); font-size: 1rem; padding: 24px 0; }
+.probing .pip { width: 7px; height: 7px; border-radius: 50%; background: var(--blue); animation: pulse 1.3s infinite; flex: none; display: inline-block; }
+.probedAt { margin-top: 14px; color: var(--stone); font-size: 0.8462rem; font-family: var(--mono); }
+.notice { border: 1px solid var(--hair-strong); border-radius: var(--r); padding: 9px 12px; margin-bottom: 12px; color: var(--body); font-size: 0.9231rem; font-family: var(--mono); background: var(--card); }
+.inboxEmpty { color: var(--ash); padding: 48px 0; text-align: center; font-size: 1.0769rem; display: flex; flex-direction: column; align-items: center; gap: 16px; }
+.msg.error { background: var(--tint-red); color: var(--red-ink); border: 1px solid var(--edge-red); font-family: var(--mono); font-size: 0.9231rem; padding: 10px 13px; border-radius: var(--r); white-space: pre-wrap; overflow-wrap: anywhere; }
+#empty { flex: 1; display: flex; align-items: center; justify-content: center; color: var(--stone); }
+.pickerLoading { color: var(--ash); font-size: 1rem; padding: 16px 12px; }
+

@@ -1,0 +1,324 @@
+/* =========================================================================
+   Phone layout (≤ 767px — the design system's Mobile Large ceiling — or a
+   touch screen under 500px tall, i.e. a phone on its side; keep in step with
+   MOBILE_QUERY in useMobile.ts). One column: a 48px top bar with a
+   back button, one page, and the rail turned into a bottom tab bar. A
+   section whose list is the panel opens it as a sheet over the page. Touch
+   targets grow to 44px; text sits on a 15px floor; fields hold 16px so iOS
+   never zooms into them on focus.
+   ========================================================================= */
+@media (max-width: 767px), (pointer: coarse) and (max-height: 500px) {
+  :root { --nav-h: 56px; font-size: max(var(--app-font-size, 13px), 15px); }
+  input, textarea, select, [contenteditable="true"] { font-size: 16px !important; }
+  /* Pinned to the whole screen — a home-screen app on iOS reports a viewport
+     shorter than the screen, and sizing to it left a dead band under the tab
+     bar. Only while the keyboard is up does the app shrink to the visible
+     height (--vvh, viewport.ts), so the keys never cover the composer. */
+  #root { position: fixed; inset: 0; width: auto; height: auto; }
+  html.kbOpen #root { top: var(--vvt, 0px); bottom: auto; height: var(--vvh); }
+  html, body { overflow: hidden; overscroll-behavior: none; }
+  .app { padding-top: env(safe-area-inset-top); }
+
+  .topbar.mobile { gap: 4px; height: 48px; padding: 0 max(6px, env(safe-area-inset-right)) 0 max(8px, env(safe-area-inset-left)); }
+  .topbar.mobile .logo { padding-left: 6px; }
+  .topbar.mobile .logo .logoLockup { height: 21px; }
+  .topbar.mobile .topIcon { height: 40px; min-width: 40px; }
+  .topbar.mobile .topIcon .connDot { right: 8px; top: 9px; }
+  .topbar.mobile .back { color: var(--ink); margin-right: -2px; }
+  .topTitle {
+    flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    color: var(--ink); font-size: 1.0667rem; font-weight: 500; letter-spacing: -0.2px;
+  }
+  .topbar.mobile .wsPill { height: 30px; max-width: 136px; padding: 0 10px; }
+  /* With a page title up, the workspace shrinks to its colour dot. */
+  .topTitle ~ .wsPill { padding: 0 9px; gap: 5px; }
+  .topTitle ~ .wsPill .wsName { display: none; }
+
+  .shell.mobile { flex-direction: column; position: relative; }
+  .shell.mobile #main { order: 1; }
+  /* The home indicator's full inset leaves a dead-looking band under the
+     icons; like a native tab bar, the buttons may sit over its top part. */
+  .shell.mobile { --nav-inset: max(0px, env(safe-area-inset-bottom) - 16px); }
+  .shell.mobile .rail {
+    order: 2; width: 100%; height: calc(var(--nav-h) + var(--nav-inset)); flex-direction: row; gap: 0;
+    padding: 0 env(safe-area-inset-right) var(--nav-inset) env(safe-area-inset-left);
+    border-right: 0; border-top: 1px solid var(--hair); z-index: 21;
+  }
+  .shell.mobile .railBtn { flex: 1 1 0; min-width: 0; width: auto; height: var(--nav-h); margin: 0; border-radius: 0; gap: 4px; -webkit-tap-highlight-color: transparent; }
+  .shell.mobile .railBtn.active { background: transparent; }
+  .shell.mobile .railBtn.active::before {
+    content: ""; position: absolute; top: -1px; left: 30%; right: 30%; height: 2px; border-radius: 0 0 2px 2px; background: var(--ink);
+  }
+  .shell.mobile .railBtn span.label { font-size: 0.7333rem; }
+  .shell.mobile .railBadge { top: 5px; right: auto; left: calc(50% + 4px); }
+  .shell.mobile .railBtn.active .railBadge { background: var(--elev); }
+
+  .shell.mobile .panel {
+    position: absolute; inset: 0 0 calc(var(--nav-h) + var(--nav-inset)) 0; width: auto; z-index: 20;
+    border-right: 0; animation: sheetIn 0.16s ease-out;
+  }
+  .panelSearch { height: 52px; padding: 0 12px; }
+  .searchBtn { height: 38px; font-size: 1rem; }
+  .searchBtn .kbd { display: none; }
+  .panelHead { height: 44px; padding: 0 8px 0 14px; }
+  .panelHead .acts .iconBtn { width: 36px; height: 36px; }
+  .prow { height: 46px; margin: 0 8px; width: calc(100% - 16px); font-size: 1.0667rem; }
+  .prow .rowMenu { width: 36px; height: 36px; }
+  .panelFoot { display: none; }
+
+  /* Pointer-only chrome that means nothing under a thumb. */
+  .kbdHint, kbd.hint { display: none; }
+}
+@keyframes sheetIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+/* No hover on a touch screen: anything revealed on hover is always shown. */
+@media (hover: none) {
+  .prow .rowMenu { opacity: 1; }
+  .chgHead .coBtn { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .shell.mobile .panel { animation: none; }
+}
+/* The keyboard is up: the bottom bar would only push the composer off screen. */
+html.kbOpen .shell.mobile .rail { display: none; }
+html.kbOpen .shell.mobile .panel { bottom: 0; }
+
+/* ---------- phone: pages and the inbox ledger ---------- */
+@media (max-width: 767px), (pointer: coarse) and (max-height: 500px) {
+  .page { padding: 20px 16px calc(32px + env(safe-area-inset-bottom)); }
+  /* The atmospheric glows are wider than a phone; they bleed, they never scroll. */
+  .page, .itemPage, .termHome { overflow-x: hidden; }
+  .pageHead { flex-wrap: wrap; align-items: flex-start; gap: 10px; margin-bottom: 16px; }
+  .display { font-size: 2.2rem; }
+  .display.md { font-size: 2rem; }
+  .display.sm { font-size: 1.8rem; }
+  .pageMeta { margin-left: 0; flex: 1 1 100%; min-width: 0; white-space: normal; }
+  /* The filters and the actions each get a line, and scroll sideways rather than wrap. */
+  .toolRow { flex-wrap: nowrap; flex-direction: column; align-items: stretch; gap: 8px; }
+  .toolRow .seg, .toolRow .right { overflow-x: auto; scrollbar-width: none; margin-left: 0; }
+  .toolRow .seg::-webkit-scrollbar, .toolRow .right::-webkit-scrollbar { display: none; }
+  .toolRow .right { margin: 0 -16px; padding: 0 16px; }
+  .toolRow .right .btn { flex: none; }
+  .segBtn { height: 34px; padding: 0 14px; flex: none; }
+  .btn.sm { height: 34px; padding: 0 12px; }
+
+  /* A ledger row on a phone: priority bar, glyph, a title allowed two lines,
+     the age, and the row menu — the full set of actions lives in that menu
+     and on the item page. No checkboxes, no shortcut legend. */
+  .wrow {
+    grid-template-columns: 3px 18px minmax(0, 1fr) auto auto; column-gap: 10px;
+    height: auto; min-height: 56px; padding: 8px 0 8px 2px;
+  }
+  .wrow .check, .wrow .keys { display: none; }
+  .wrow .t { white-space: normal; align-items: center; padding: 4px 0; }
+  .wrow .t .name {
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; white-space: normal;
+    font-size: 1.0667rem; line-height: 1.35;
+  }
+  .wrow .t .why { display: none; }
+  .wrow .meta .c { padding-left: 0; }
+  .wrow .meta .state, .wrow .meta .src { display: none; }
+  .wrow .meta .stage { width: auto; margin-right: 10px; font-size: 0.8462rem; }
+  .wrow .meta, .wrow.sel .meta, .wrow:hover .meta, .wrow:focus-within .meta, .wrow.menu .meta { opacity: 1; }
+  .wrow .acts { position: static; opacity: 1; pointer-events: auto; }
+  .wrow .acts > :not(.more) { display: none; }
+  .wrow .acts .more { width: 36px; height: 36px; color: var(--ash); }
+  .wrow.sel { background: transparent; }
+  .wrow:active { background: var(--wash-2); }
+  .homeList .secLabel { margin-top: 22px; }
+  .selDock { bottom: 8px; }
+  .selBar { max-width: calc(100vw - 24px); overflow-x: auto; }
+}
+
+/* ---------- phone: item page — one column, the actions first ---------- */
+@media (max-width: 767px), (pointer: coarse) and (max-height: 500px) {
+  /* The two columns dissolve into one list, re-ordered for a thumb: what the
+     item is, then what you can do with it, then the brief and the history. */
+  .itemPage {
+    display: flex; flex-direction: column; gap: 14px;
+    padding: 20px 16px calc(32px + env(safe-area-inset-bottom));
+  }
+  .itemMain, .itemAside { display: contents; }
+  .itemMain > * { order: 2; }
+  .itemMain > :nth-child(-n + 3) { order: 0; }
+  .itemAside > * { order: 3; }
+  .itemAside > .asideActions { order: 1; margin: 4px 0 10px; }
+  .itemAside > .secLabel { margin-top: 12px; }
+  .segRow button, .asideActions .btn { height: 44px; }
+  .btnGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* ---------- phone: a session — transcript edge to edge, composer under the thumb ----------
+   Every pixel of height goes to the transcript. The header is one slim line
+   (state, model, project · branch — the top bar already names the session);
+   the composer is a one-line box over a row of icon buttons. Model and
+   permissions are icons here; tapping one opens its picker with the current
+   choice checked. */
+@media (max-width: 767px), (pointer: coarse) and (max-height: 500px) {
+  #chatHeader { height: 34px; padding: 0 12px; gap: 8px; }
+  #chatTitle { display: none; }
+  #chatHeader .pills { flex: 1 1 auto; margin-left: 0; min-width: 0; overflow: hidden; gap: 6px; }
+  #chatHeader .pills .pill { flex: 0 1 auto; min-width: 0; max-width: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #chatHeader .pills .pill.mono { display: inline-block; }
+  #chatHeader .pills .co { flex: 0 1 auto; max-width: none; }
+  /* The model is the one place its name still shows: it keeps its width; the path gives way. */
+  #chatHeader .pills .pill:not(.mono) { flex: none; }
+  #chatHeader .state { font-size: 0.8667rem; }
+
+  #transcript { padding: 12px 14px 0; }
+  #transcript .inner { gap: 14px; }
+
+  #composer { padding: 6px 8px 8px; }
+  #composer .frame { min-width: 0; gap: 6px; padding: 8px 8px 6px 12px; }
+  /* A session's project is fixed and the header shows it; only a new session's composer keeps its head (the project picker). */
+  #composer .frame .cardHead { display: none; }
+  #newSessionHome #composer .frame .cardHead { display: flex; margin: 0 -8px 0 -12px; padding: 8px 12px; overflow: hidden; }
+  #composer .frame { padding-top: 8px; }
+  .cardHead .branch { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .cardHead .path { display: none; }
+  #box, #composer .frame #box { min-height: 24px; max-height: 30vh; padding: 2px 0 0; line-height: 1.4; scrollbar-width: none; }
+  #box::-webkit-scrollbar { display: none; }
+  #newSessionHome #box { min-height: 72px; }
+
+  .statusline { gap: 4px; flex-wrap: nowrap; }
+  .statusline .chip {
+    width: 34px; height: 34px; padding: 0; justify-content: center; flex: none;
+    border-radius: var(--r-full); border-color: transparent; background: transparent;
+  }
+  .statusline .chip svg { width: 17px; height: 17px; }
+  .statusline .chip .name, .statusline .chip .eff, .statusline .chip > svg.lucide-chevron-down { display: none; }
+  .statusline .chip[data-state="open"] { background: var(--elev); border-color: var(--hair-strong); }
+  .statusline .chip.fast.on, .statusline .chip.perm.risk-high, .statusline .chip.sessionMode { border-color: transparent; }
+  .statusline #sendBtn { margin-left: auto; }
+  #sendBtn, #stopBtn { width: 36px; height: 36px; border-radius: var(--r-full); }
+  #composer .hint { display: none; }
+}
+/* ---------- phone: settings fill the screen; the tab list becomes a strip ---------- */
+@media (max-width: 767px), (pointer: coarse) and (max-height: 500px) {
+  .settingsTabs { display: flex; flex-direction: column; }
+  .settingsNav { flex: none; padding: 0; border-right: 0; border-bottom: 1px solid var(--hair); order: 2; }
+  .settingsPane { flex: 1; order: 1; display: contents; }
+  .settingsHead { order: 1; }
+  .settingsBody { order: 3; }
+  /* The dialog's title stays for screen readers; the pane heading is what shows. */
+  .settingsNavHead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); padding: 0; }
+  .settingsNavGroup, .settingsNavFoot { display: none; }
+  .settingsList {
+    flex-direction: row; gap: 4px; overflow-x: auto; overflow-y: hidden; padding: 0 12px 10px;
+    scrollbar-width: none; overscroll-behavior-x: contain;
+  }
+  .settingsList::-webkit-scrollbar { display: none; }
+  .settingsTab, .settingsTabs .settingsTab {
+    flex: none; width: auto; height: 36px; padding: 0 12px; gap: 7px; font-size: 1rem; justify-content: flex-start;
+    border-radius: var(--r-full); white-space: nowrap;
+  }
+  .settingsHead { padding: 14px 12px 10px 16px; border-bottom: 0; gap: 8px; }
+  .settingsHead h2 { font-size: 1.8rem; }
+  .settingsHead p { font-size: 0.9333rem; }
+  .settingsHeadRight .iconBtn { width: 40px; height: 40px; }
+  .settingsBody { padding: 4px 16px calc(40px + env(safe-area-inset-bottom)); }
+  .settingsBody.fill { padding: 12px 16px calc(16px + env(safe-area-inset-bottom)); }
+  .setRow { flex-wrap: wrap; gap: 10px 16px; }
+}
+
+/* ---------- phone: dialogs — full width, pinned near the top so a keyboard never covers them ---------- */
+@media (max-width: 767px), (pointer: coarse) and (max-height: 500px) {
+  dialog, dialog.itemComposer, dialog#palette, dialog#helpOverlay, dialog.repoDialog, dialog.sheet {
+    width: calc(100vw - 16px); max-width: none;
+    margin: calc(env(safe-area-inset-top) + 8px) 8px auto;
+    max-height: calc(var(--vvh, 100dvh) - env(safe-area-inset-top) - 16px); overflow-y: auto;
+  }
+  dialog { padding: 18px 16px; }
+  dialog .row button, dialog button.go, dialog button.cancel, dialog button.danger { height: 44px; padding: 0 16px; }
+  #palette .palList { max-height: none; }
+  #palette .palCancel { display: block; }
+  .palRow { padding: 12px 10px; }
+  .palHint { display: none; }
+  .palLabel { max-width: 100%; }
+
+  .itemComposer .titleInput { font-size: 1.6rem !important; padding: 6px 16px 2px !important; }
+  .itemComposer .descInput { min-height: 120px; padding: 4px 16px 8px !important; }
+  .itemComposer .dropHint { display: none; }
+  .pillRow { padding: 8px 16px 14px; }
+  .pillRow .pill, .pill.uiSelect { height: 34px; padding: 0 12px; }
+  .composerHead .composerClose { width: 40px; height: 40px; }
+  .composerFoot { padding: 10px 12px calc(10px + env(safe-area-inset-bottom)); }
+  .composerFoot .footActions .hint { display: none; }
+  .composerFoot .footActions button { height: 44px; padding: 0 16px; white-space: nowrap; }
+  .addMore { white-space: nowrap; }
+}
+
+/* ---------- phone: the new-session page ---------- */
+@media (max-width: 767px), (pointer: coarse) and (max-height: 500px) {
+  #newSessionHome { padding: 16px 12px; justify-content: flex-start; padding-top: 12vh; overflow-y: auto; overflow-x: hidden; }
+  html.kbOpen #newSessionHome { padding-top: 12px; }
+  #newSessionHome h2 { font-size: 2.2rem; align-self: flex-start; padding: 0 4px; }
+  #newSessionHome #box { min-height: 72px; }
+}
+
+/* ---------- phone: artifacts — title on its own line, tags and age under it ---------- */
+@media (max-width: 767px), (pointer: coarse) and (max-height: 500px) {
+  .artRow { flex-wrap: wrap; row-gap: 6px; padding: 12px 14px; }
+  .artRow .artTitle { flex: 1 1 calc(100% - 40px); white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .artRow .pill { flex: none; }
+  .artRow .artTitle + .pill { margin-left: 26px; }
+  .artRow .artPath { display: none; }
+  .artRow .artWhen { margin-left: auto; }
+  .artTools .root { flex: 1 1 100%; order: 3; }
+}
+
+/* ---------- phone: an artifact — heading, then actions, then the document ---------- */
+@media (max-width: 767px), (pointer: coarse) and (max-height: 500px) {
+  .artBack { display: none; } /* the top bar's back does this */
+  .artHead { flex-direction: column; gap: 12px; }
+  .artHead > div:first-child { width: 100%; }
+  .artHead .actions { justify-content: flex-start; }
+  .artHead .actions .btn.sm { height: 38px; }
+  .artGrid { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+  .artBody { padding: 16px; }
+  .chipRow .pill { max-width: 100%; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .page.artEditPage { padding: 12px 12px calc(12px + env(safe-area-inset-bottom)); }
+  .artEditTitle { font-size: 1.6rem; }
+  .artEditBody { padding: 14px; min-height: 200px; }
+  .artEditBar .crumb { max-width: 100%; }
+  .artEditor .keysHint { display: none; }
+}
+
+/* ---------- phone: jobs — the table becomes one block per job ---------- */
+@media (max-width: 767px), (pointer: coarse) and (max-height: 500px) {
+  .jobHead { flex-wrap: wrap; align-items: center; gap: 10px; }
+  .jobHead .seg { margin: 0; order: 3; flex: 1 1 100%; overflow-x: auto; scrollbar-width: none; }
+  .jobHead .filter { order: 4; margin-left: 0; flex: 1; width: auto; height: 40px; }
+  .jobHead .btn.primary { margin-left: auto; }
+  .wtbl, .wtbl tbody { display: block; }
+  .wtbl thead { display: none; }
+  .wtbl tr { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 12px; border-bottom: 1px solid var(--hair); }
+  .wtbl tbody tr:last-child { border-bottom: 0; }
+  .wtbl td, .wtbl tbody tr:hover td { display: block; height: auto; padding: 0; border: 0; background: none; }
+  .wtbl td.sw { order: 1; width: auto; }
+  .wtbl td.nm { order: 2; flex: 1 1 0; width: auto; min-width: 0; white-space: normal; }
+  .wtbl td.acts { order: 3; width: auto; }
+  .wtbl td.acts .iconBtn { width: 36px; height: 36px; }
+  /* Uses on their own line under the name; then schedule, last run and the run dots. */
+  .wtbl td:nth-child(3) { order: 4; flex: 1 1 100%; padding-left: 50px; white-space: normal; }
+  .wtbl td:nth-child(4) { order: 5; padding-left: 50px; }
+  .wtbl td:nth-child(5), .wtbl td:nth-child(7) { order: 6; }
+  .wtbl td:nth-child(6), .wtbl td:nth-child(8) { display: none; }
+  .wtblFoot { flex-wrap: wrap; gap: 6px 16px; }
+}
+
+/* ---------- phone: a job ---------- */
+@media (max-width: 767px), (pointer: coarse) and (max-height: 500px) {
+  .page .crumbs { display: none; } /* the top bar's back does this */
+  .jobPageHead { flex-direction: column; gap: 12px; }
+  .jobPageHead > div:first-child { min-width: 0; width: 100%; }
+  .jobPageHead .acts { margin-left: 0; padding-top: 0; flex-wrap: wrap; }
+  .jobPageHead .acts .btn { height: 40px; }
+  .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .stat, .stat:nth-child(3) { border-right: 1px solid var(--hair); }
+  .stat:nth-child(2n) { border-right: 0; }
+  .stat:nth-child(n+3) { border-top: 1px solid var(--hair); }
+  .jobTabs { overflow-x: auto; scrollbar-width: none; }
+  .jobTab { flex: none; padding: 10px 12px; }
+  .rtbl { display: block; overflow-x: auto; }
+}
+

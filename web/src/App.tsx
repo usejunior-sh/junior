@@ -1,314 +1,69 @@
-import { CalendarClock, FileDiff, FileText, Globe, Send, Target, Terminal as TerminalIcon } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from 'react'
-import type { CreateStep,
-  DispatchPreviewResponse,
-  EffortLevel,
-  ItemDetailResponse,
-  ImageAttachment,
-  Mention,
-  PermissionBehavior,
-  PermissionMode,
-  Project,
-  ProjectsResponse,
-  QuestionAnswers,
-  ScoredItem,
-  SessionStatus,
-  SessionSummary,
-  TerminalSummary,
-  JobsResponse,
-} from '../../shared/protocol.js'
-import { mentionToken } from '../../shared/protocol.js'
+import { useState, useMemo, useEffect, useRef, useCallback, type CSSProperties } from 'react'
+import type { TerminalSummary } from '../../shared/protocol.js'
 import { CommandPalette } from './components/CommandPalette.js'
 import { useSessionChanges } from './useSessionChanges.js'
 import { ChangePage } from './components/ChangePage.js'
-import { ChangesPanel } from './components/ChangesPanel.js'
-import { changeId, changesStore, useChanges } from './changesStore.js'
-import { branchSlug, checkoutOf } from './checkouts.js'
-import { CheckoutChip } from './components/CheckoutChip.js'
-import { CheckoutMenu } from './components/CheckoutMenu.js'
+import { useChanges, changesStore } from './changesStore.js'
+import { checkoutOf, branchSlug } from './checkouts.js'
 import { GoneCheckoutBar } from './components/GoneCheckoutBar.js'
 import { Composer } from './components/Composer.js'
 import { BrowserPane } from './components/BrowserPane.js'
-import { browserPane, hasBrowser, useBrowserOpen } from './browser.js'
-import { ArtifactsPanel, InboxTabsPanel, NewTerminalMenu, PanelCollapseContext, SessionsPanel, TerminalsPanel } from './components/ContextPanel.js'
-import { resolveTab, tabOfItem, useInboxTabs } from './inboxTabs.js'
+import { useBrowserOpen, hasBrowser } from './browser.js'
+import { PanelCollapseContext, NewTerminalMenu } from './components/ContextPanel.js'
+import { useInboxTabs, resolveTab } from './inboxTabs.js'
 import { HelpOverlay } from './components/HelpOverlay.js'
 import { InboxPage } from './components/InboxPage.js'
 import { JuniorPage } from './components/JuniorPage.js'
-import { startJuniorChat, usePersona, useRailMood } from './junior.js'
+import { usePersona, useRailMood } from './junior.js'
 import { ItemPage } from './components/ItemPage.js'
-import { NewSessionComposer, type NewSession } from './components/NewSessionComposer.js'
-import { Rail, type RailSection } from './components/Rail.js'
+import { NewSessionComposer } from './components/NewSessionComposer.js'
+import { type RailSection, Rail } from './components/Rail.js'
 import { SettingsPage } from './components/SettingsPage.js'
-import { SystemModal, type SystemTab } from './components/SystemModal.js'
-import { TabBand, type OpenTab, type PageTab, type TabKind } from './components/TabBand.js'
-import { dispatchPrompt, dispatchTitle } from './dispatch.js'
-import { composerDrafts } from './composerDrafts.js'
-import { draftStore, draftTitle, useDrafts } from './drafts.js'
+import { type SystemTab, SystemModal } from './components/SystemModal.js'
+import { type OpenTab, TabBand } from './components/TabBand.js'
+import { useDrafts, draftStore, draftTitle } from './drafts.js'
 import { TerminalPage } from './components/TerminalPage.js'
 import { TopBar } from './components/TopBar.js'
 import { isDesktop } from './desktop.js'
-import { SessionCost } from './components/SessionCost.js'
 import { Transcript } from './components/Transcript.js'
-import { AgentBrief, AgentComposer, AgentDock, AgentHeader, AgentOutcome, AgentsMenu } from './components/Agents.js'
-import { agentLabel, buildAgents, spawnerOf, type AgentRun } from './agents.js'
-import { buildShells, type ShellRun } from '../../core/shells/fold.js'
+import { AgentHeader, AgentBrief, AgentOutcome, AgentDock, AgentComposer } from './components/Agents.js'
+import { spawnerOf } from './agents.js'
 import { ShellDock } from './components/Shells.js'
-import { TeamDock, TeamSide, TeamStrip, useTeamRun, type TeamSideTab } from './components/TeamRun.js'
-import { RunHeader, runMarks, RunsViewToggle, TeamFiles, TeamRuns, useRunScroll, type RunsView } from './components/TeamRail.js'
-import { RunFolderPage, runFileHash } from './components/RunFolderPage.js'
+import { TeamStrip, TeamDock, TeamSide } from './components/TeamRun.js'
+import { RunHeader, RunsViewToggle, TeamRuns, TeamFiles } from './components/TeamRail.js'
+import { RunFolderPage } from './components/RunFolderPage.js'
 import { JobsPage } from './components/JobsPage.js'
-import { REFINE_JOB_KEY, JobFormPage } from './components/JobFormPage.js'
+import { JobFormPage } from './components/JobFormPage.js'
 import { JobPage } from './components/JobPage.js'
 import { ArtifactsPage } from './components/ArtifactsPage.js'
 import { ActionsPage } from './components/ActionsPage.js'
 import { GoalPage } from './components/GoalPage.js'
 import { GoalsPage } from './components/GoalsPage.js'
-import { goalHash } from './goals.js'
 import { useTeamGoals } from './teams.js'
 import { usePendingActions } from './actions.js'
 import { ArtifactPage } from './components/ArtifactPage.js'
 import { DefaultProjectGate } from './components/DefaultProjectGate.js'
-import { WorkspaceModal, type WorkspaceModalMode } from './components/WorkspaceModal.js'
-import {
-  itemHash,
-  useBuild,
-  useCheckouts,
-  useConn,
-  useEvents,
-  useHashRoute,
-  useOnboarded,
-  useSessions,
-  useTerminals,
-  useWorkspaceId,
-  useWorkspaces,
-  type Route,
-} from './hooks.js'
-import { inboxStore, useInbox } from './inboxStore.js'
-import { artifactStore, useArtifacts } from './artifactStore.js'
-import { anyDialogOpen, isTypingTarget } from './keys.js'
-import { EFFORT_LABEL, findModel, useModels } from './models.js'
-import { closeSettings, noteReturnHash, noteSettingsTab, openSettings } from './settings.js'
+import { type WorkspaceModalMode, WorkspaceModal } from './components/WorkspaceModal.js'
+import { useConn, useSessions, useTerminals, useCheckouts, useHashRoute, useEvents, useWorkspaces, useBuild, useWorkspaceId, useOnboarded } from './hooks.js'
+import { useInbox, inboxStore } from './inboxStore.js'
+import { useArtifacts, artifactStore } from './artifactStore.js'
+import { useModels, findModel } from './models.js'
+import { noteSettingsTab, noteReturnHash, closeSettings, openSettings } from './settings.js'
 import { store } from './store.js'
 import { usePanelWidth } from './panelWidth.js'
 import { useIsMobile } from './useMobile.js'
-import { projectColor, useLastRoutes, useOpenTabs } from './tabs.js'
-
-/** `/Users/you/Code/x` → `~/Code/x` — display only. */
-const homely = (p: string) => p.replace(/^\/(?:Users|home)\/[^/]+/, '~')
-
-/** `/Users/you/Code/x` → `x` — the header's fallback once the homely path won't fit. */
-const folderName = (p: string) => p.replace(/\/+$/, '').split('/').filter(Boolean).pop() ?? p
-
-/**
- * Whether the folder pill has given up the homely path for just the folder name: true once the
- * header can't fit the full path even with the title shrunk to nothing. Measured each resize
- * against the full path (the hidden `.measure` twin of the pill), so switching back doesn't lag
- * behind the header's real slack the way a latched "we're short" flag would.
- */
-function useNarrowFolder(
-  headerRef: RefObject<HTMLDivElement | null>,
-  shownRef: RefObject<HTMLSpanElement | null>,
-  fullRef: RefObject<HTMLSpanElement | null>,
-  dep: string,
-) {
-  const [short, setShort] = useState(false)
-  useEffect(() => {
-    const header = headerRef.current
-    if (!header) return
-    const read = () => {
-      const extra = (fullRef.current?.scrollWidth ?? 0) - (shownRef.current?.scrollWidth ?? 0)
-      // Sub-pixel layout means scrollWidth can sit a hair above clientWidth with nothing actually hidden.
-      setShort(header.scrollWidth + extra > header.clientWidth + 1)
-    }
-    read()
-    const ro = new ResizeObserver(read)
-    ro.observe(header)
-    return () => ro.disconnect()
-  }, [headerRef, shownRef, fullRef, dep])
-  return short
-}
-
-const STATUS_LABEL: Record<SessionStatus, string> = {
-  starting: 'starting',
-  running: 'working',
-  idle: 'idle',
-  error: 'error',
-}
-
-const PAGE_TABS: Record<'jobs' | 'terminals' | 'artifacts' | 'changes' | 'actions' | 'goals', PageTab> = {
-  terminals: { key: 'page:terminals', label: 'Terminals', icon: TerminalIcon },
-  artifacts: { key: 'page:artifacts', label: 'Artifacts', icon: FileText },
-  changes: { key: 'page:changes', label: 'Changes', icon: FileDiff },
-  jobs: { key: 'page:jobs', label: 'Jobs', icon: CalendarClock },
-  actions: { key: 'page:actions', label: 'Actions', icon: Send },
-  goals: { key: 'page:goals', label: 'Goals', icon: Target },
-}
-
-/** The sections whose list is the panel: on a phone, their bottom-bar tab opens it as a sheet. */
-const MOBILE_SHEETS: readonly RailSection[] = ['inbox', 'sessions', 'terminals', 'changes']
-const SHEET_LABEL: Record<RailSection, string> = {
-  junior: 'Junior',
-  inbox: 'Inbox',
-  sessions: 'Sessions',
-  artifacts: 'Artifacts',
-  changes: 'Changes',
-  terminals: 'Terminals',
-  jobs: 'Jobs',
-  actions: 'Actions',
-  goals: 'Goals',
-}
-
-const termKey = (id: string) => `term:${id}`
-const draftKey = (id: string) => `draft:${id}`
-const draftRoute = (id: string) => `/new/${id}`
-
-/**
- * The tab-band key for a route, or null when the route is not a tab at all
- * (`home` redirects, `settings` is a page of its own, outside the band). Sessions keep the bare id they
- * have always had; everything else is `<kind>:<id>`.
- */
-function tabKeyOf(route: Route): string | null {
-  switch (route.page) {
-    case 'junior':
-      return 'junior'
-    case 'inbox':
-      return 'inbox'
-    case 'session':
-      return route.id
-    case 'draft':
-      return draftKey(route.id)
-    case 'terminal':
-      return termKey(route.id)
-    case 'item':
-      return `item:${route.id}`
-    case 'artifact':
-      return `artifact:${route.id}`
-    case 'run':
-      return `run:${route.runId}`
-    case 'job':
-      return `job:${route.id}`
-    case 'job-form':
-      return `job-form:${route.id ?? 'new'}`
-    case 'goal':
-      return `goal:${route.id}`
-    case 'change':
-      return `change:${changeId(route.checkoutId, route.path)}`
-    case 'changes':
-    case 'artifacts':
-    case 'jobs':
-    case 'terminals':
-    case 'actions':
-    case 'goals':
-      return PAGE_TABS[route.page].key
-    case 'home':
-    case 'settings':
-      return null
-  }
-}
-
-/** The route a tab key points back at — the inverse of `tabKeyOf`. */
-function routeOfKey(key: string): string {
-  const cut = key.indexOf(':')
-  const id = cut === -1 ? '' : key.slice(cut + 1)
-  switch (cut === -1 ? '' : key.slice(0, cut)) {
-    case 'term':
-      return `/terminal/${id}`
-    case 'draft':
-      return draftRoute(id)
-    case 'item':
-      return itemHash(id)
-    case 'artifact':
-      return `/artifact/${id}`
-    case 'run':
-      return runFileHash(id)
-    case 'job':
-      return `/jobs/${encodeURIComponent(id)}`
-    case 'job-form':
-      return id === 'new' ? '/jobs/new' : `/jobs/${encodeURIComponent(id)}/edit`
-    case 'change':
-      return `/change/${id}`
-    case 'goal':
-      return goalHash(id)
-    case 'page':
-      return `/${id}`
-    default:
-      // a bare session id, or the pinned Junior and inbox
-      return key === 'inbox' ? '/inbox' : key === 'junior' ? '/junior' : key
-  }
-}
-
-/** Documents are peeked at; processes are pinned. */
-const DOC_KINDS: readonly TabKind[] = ['item', 'artifact', 'job', 'job-form', 'change', 'goal', 'run']
-
-function kindOfKey(key: string): TabKind | null {
-  const cut = key.indexOf(':')
-  // A session is the one key with no prefix; the pinned Junior and inbox are not kinds.
-  if (cut === -1) return key === 'inbox' || key === 'junior' ? null : 'session'
-  const p = key.slice(0, cut)
-  if (p === 'term') return 'terminal'
-  if (p === 'draft') return 'draft'
-  return DOC_KINDS.includes(p as TabKind) ? (p as TabKind) : null
-}
-
-/** A document is peeked at by default; a process is pinned from the start. */
-function isDocKey(key: string): boolean {
-  const kind = kindOfKey(key)
-  return !!kind && DOC_KINDS.includes(kind)
-}
-
-/** What a document tab is called before its store has caught up. */
-const GENERIC: Record<TabKind, string> = {
-  session: 'Session',
-  terminal: 'Terminal',
-  draft: 'Draft',
-  item: 'Work item',
-  artifact: 'Artifact',
-  job: 'Job',
-  'job-form': 'Job',
-  change: 'File',
-  goal: 'Goal',
-  run: 'Team run',
-}
-
-/**
- * Which rail section a route belongs to: the rail's highlight, and the key
- * rail memory is filed under.
- */
-function sectionOf(route: Route): RailSection | null {
-  switch (route.page) {
-    case 'junior':
-      return 'junior'
-    case 'inbox':
-    case 'item':
-      return 'inbox'
-    case 'home':
-    case 'session':
-    case 'draft':
-    case 'run':
-      return 'sessions'
-    case 'terminal':
-    case 'terminals':
-      return 'terminals'
-    case 'artifact':
-    case 'artifacts':
-      return 'artifacts'
-    case 'change':
-    case 'changes':
-      return 'changes'
-    case 'job':
-    case 'job-form':
-    case 'jobs':
-      return 'jobs'
-    case 'actions':
-      return 'actions'
-    case 'goal':
-    case 'goals':
-      return 'goals'
-    case 'settings':
-      return null
-  }
-}
+import { useOpenTabs, useLastRoutes, projectColor } from './tabs.js'
+import { AppPanel } from './app/AppPanel.js'
+import { ChatHeader, useNarrowFolder } from './app/ChatHeader.js'
+import { MOBILE_SHEETS, PAGE_TABS, SHEET_LABEL, isDocKey, routeOfKey, sectionOf, tabKeyOf } from './app/tabs.js'
+import { useDispatchers } from './app/useDispatchers.js'
+import { useDocumentTabs } from './app/useDocumentTabs.js'
+import { useGlobalHotkeys } from './app/useGlobalHotkeys.js'
+import { useNewSessionFlow } from './app/useNewSessionFlow.js'
+import { useSessionActions } from './app/useSessionActions.js'
+import { useSessionAgents } from './app/useSessionAgents.js'
+import { useTeamRail } from './app/useTeamRail.js'
+import { useTerminalActions } from './app/useTerminalActions.js'
 
 export function App() {
   const conn = useConn()
@@ -379,8 +134,6 @@ export function App() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onboarded, activeWorkspace?.id])
-  // pending "g" prefix for two-key sequences (g i, g s, g j, g p, g c)
-  const goPrefix = useRef<number | undefined>(undefined)
 
   const current = sessions.find((s) => s.id === currentId) ?? null
   // The browser pane beside this session (.docs/browser.md) — Triage.app only, never on a phone.
@@ -390,67 +143,8 @@ export function App() {
   const folderTextRef = useRef<HTMLSpanElement>(null)
   const folderMeasureRef = useRef<HTMLSpanElement>(null)
   const folderShort = useNarrowFolder(chatHeaderRef, folderTextRef, folderMeasureRef, `${current?.cwd}`)
-  // A team run in this session: one fetch shared by the strip, the dock and the details drawer.
-  const teamRun = useTeamRun(current?.teamRun)
-  const [teamSide, setTeamSide] = useState(false)
-  const [teamTab, setTeamTab] = useState<TeamSideTab>('runs')
-  const [runsView, setRunsView] = useState<RunsView>('person')
-  // The run rail (desktop): the team's runs in the drawer beside the transcript, and a run to scroll to once its session is up.
-  const railOn = !!teamRun && !mobile
-  const [teamJump, setTeamJump] = useState<{ sessionId: string; runId: string } | null>(null)
-  // Arriving at a session of a team under way opens the drawer on its runs, unless it's already open.
-  // Once per session, and only once the session has loaded: a drawer you close stays closed.
-  const inRun = !!current?.teamRun && current.teamRun.state !== 'proposed'
-  const sideOpenedFor = useRef<string | null>(null)
-  useEffect(() => {
-    if (!inRun || mobile || !currentId || sideOpenedFor.current === currentId) return
-    sideOpenedFor.current = currentId
-    if (teamSide) return
-    setTeamTab('runs')
-    setTeamSide(true)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentId, inRun])
-  const runScroll = useRunScroll(currentId ?? '', railOn, `${events.length}:${teamRun?.rev ?? 0}`)
-  useEffect(() => {
-    if (!teamJump || teamJump.sessionId !== currentId) return
-    // The divider is there once the history has loaded and the transcript has drawn it.
-    const t = requestAnimationFrame(() => runScroll.jump(teamJump.runId) && setTeamJump(null))
-    return () => cancelAnimationFrame(t)
-  }, [teamJump, currentId, events.length, teamRun?.rev]) // eslint-disable-line react-hooks/exhaustive-deps
-  const openTeamRun = useCallback(
-    (sessionId: string, runId: string | null, newTab?: boolean) => {
-      // ⌘-click: its own tab, behind this one; you stay where you are.
-      if (newTab) return openTab(sessionId)
-      setTeamJump(runId ? { sessionId, runId } : null)
-      if (sessionId !== currentId) navigate(sessionId)
-    },
-    [currentId, openTab], // eslint-disable-line react-hooks/exhaustive-deps
-  )
-  const teamMarks = useMemo(() => (railOn && teamRun && currentId ? runMarks(teamRun, currentId) : undefined), [railOn, teamRun, currentId])
-  const teamCheckoutId = (teamRun && sessions.find((s) => s.id === teamRun.leadSessionId)?.checkoutId) ?? current?.checkoutId ?? null
-  // Subagents: folded from the same events as the transcript. Opening one swaps
-  // the transcript for its slice — remembered per session, so leaving and coming
-  // back finds main again rather than an agent picked long ago.
-  // With no subprocess behind the session, nothing it spawned can still be
-  // running — a daemon restart ends them without a word in the log.
-  const sessionLive = current?.live
-  const agents = useMemo(() => {
-    const runs = buildAgents(events, store.eventTime)
-    if (sessionLive !== false) return runs
-    return runs.map((r) => (r.state === 'running' ? { ...r, state: 'interrupted' as const, waiting: false } : r))
-  }, [events, sessionLive])
-  // Shells too: the transcript's Bash pills and the background dock read these.
-  const shells = useMemo(() => {
-    const runs = buildShells(events, store.eventTime)
-    if (sessionLive !== false) return runs
-    return runs.map((r) => (r.state === 'running' ? { ...r, state: 'interrupted' as const } : r))
-  }, [events, sessionLive])
-  const [agentPick, setAgentPick] = useState<{ sessionId: string; toolUseId: string } | null>(null)
-  const openAgent = agentPick && agentPick.sessionId === currentId ? agents.find((a) => a.toolUseId === agentPick.toolUseId) ?? null : null
-  const showAgent = useCallback(
-    (toolUseId: string | null) => setAgentPick(toolUseId && currentId ? { sessionId: currentId, toolUseId } : null),
-    [currentId],
-  )
+  const { teamRun, teamSide, setTeamSide, teamTab, setTeamTab, runsView, setRunsView, railOn, runScroll, openTeamRun, teamMarks, teamCheckoutId } = useTeamRail({ current, currentId, events, mobile, navigate, openTab, sessions })
+  const { agents, shells, openAgent, showAgent } = useSessionAgents({ events, current, currentId })
   const currentTerminal = terminals.find((t) => t.id === currentTerminalId) ?? null
   const currentDraft = drafts.find((d) => d.id === currentDraftId) ?? null
   // Drafts are per workspace; bind before anything reads them.
@@ -472,86 +166,7 @@ export function App() {
     else if (route.page !== 'home') noteReturnHash(location.hash.slice(1) || '/inbox')
   }, [route])
 
-  // Jobs have no client store; the band needs their titles, so fetch the
-  // (small) list once the first job is in play and keep it.
-  const [jobTitles, setJobTitles] = useState<Map<string, string>>(new Map())
-  const wantJobTitles = sectionOf(route) === 'jobs' || docKeys.some((k) => k.startsWith('job'))
-  useEffect(() => {
-    if (conn !== 'connected' || !wantJobTitles) return
-    void fetch('/api/jobs')
-      .then((r) => r.json() as Promise<JobsResponse>)
-      .then((b) => {
-        if (b.ok) setJobTitles(new Map(b.jobs.map((w) => [w.id, w.title])))
-      })
-      .catch(() => {})
-  }, [conn, wantJobTitles])
-
-  /** The live name for a document tab, or null while its store is still cold. */
-  const liveTitle = useCallback(
-    (key: string): string | null => {
-      const id = key.slice(key.indexOf(':') + 1)
-      if (key.startsWith('item:')) return inbox.items.find((i) => i.id === id)?.title ?? null
-      if (key.startsWith('artifact:')) return artifacts.artifacts.find((a) => a.id === id)?.title ?? null
-      if (key.startsWith('run:')) {
-        const lead = sessions.find((s) => s.teamRun?.id === id && s.teamRun.role === 'lead')
-        return lead ? `Run · ${lead.title}` : null
-      }
-      if (key.startsWith('job:')) return jobTitles.get(id) ?? null
-      if (key.startsWith('job-form:')) return id === 'new' ? 'New job' : jobTitles.get(id) ?? null
-      // Old goals-engine pages keep the title they were opened with.
-      if (key.startsWith('goal:')) return null
-      if (key.startsWith('change:')) {
-        // A file is named by its basename; the path lives in the page header.
-        const file = decodeURIComponent(id.slice(id.indexOf('/') + 1))
-        return file.slice(file.lastIndexOf('/') + 1)
-      }
-      return null
-    },
-    [inbox.items, artifacts.artifacts, jobTitles, sessions],
-  )
-
-  /** A document tab: its best known name, no project dot, nothing running. */
-  const docTab = useCallback(
-    (key: string): OpenTab | null => {
-      const kind = kindOfKey(key)
-      if (!kind) return null
-      return { key, kind, title: (liveTitle(key) ?? titles[key]) || GENERIC[kind], color: 'var(--stone)', running: false }
-    },
-    [liveTitle, titles],
-  )
-
-  /** Commit a peeked document to a real tab — it stops being replaceable. */
-  const pin = useCallback(
-    (key: string, title?: string) => {
-      if (title) remember({ [key]: title })
-      openTab(key)
-    },
-    [openTab, remember],
-  )
-
-  /** Editing what you were only peeking at makes it yours: keep the tab. */
-  const pinCurrent = useCallback(() => {
-    const key = tabKeyOf(route)
-    if (key && isDocKey(key)) openTab(key)
-  }, [route, openTab])
-
-  // The peek slot: opening a document parks it in the band so it survives you
-  // looking at a session.
-  useEffect(() => {
-    const key = tabKeyOf(route)
-    if (key && isDocKey(key)) setPreview(key)
-  }, [route, setPreview])
-
-  // Names arrive after the tab does — stores load, things get renamed. Teach
-  // the band every name it can currently resolve.
-  useEffect(() => {
-    const patch: Record<string, string> = {}
-    for (const k of docKeys) {
-      const t = liveTitle(k)
-      if (t) patch[k] = t
-    }
-    if (Object.keys(patch).length) remember(patch)
-  }, [docKeys, liveTitle, remember])
+  const { docTab, pin, pinCurrent } = useDocumentTabs({ conn, route, docKeys, inbox, artifacts, sessions, titles, openTab, remember, setPreview })
 
   // Rail memory: remember where you were in each section, so leaving and
   // coming back lands on what you were reading rather than the section root.
@@ -576,54 +191,7 @@ export function App() {
     if (conn === 'connected' && wanted) void artifactStore.refresh()
   }, [conn, route.page, docKeys])
 
-  // A session created from this tab becomes the selected one — and when it
-  // came from a draft tab, it takes that tab's slot.
-  const pendingDraft = useRef<string | null>(null)
-  // A send that failed (a worktree git wouldn't make): the draft stays, and says why.
-  const [createError, setCreateError] = useState<{ draftId: string; message: string } | null>(null)
-  // …and while one is being made in a new worktree, which step it's on.
-  const [createStep, setCreateStep] = useState<{ draftId: string; step: CreateStep } | null>(null)
-  useEffect(
-    () =>
-      store.onCreateFailed((message) => {
-        const d = pendingDraft.current
-        pendingDraft.current = null
-        setCreateStep(null)
-        if (d) setCreateError({ draftId: d, message })
-      }),
-    [],
-  )
-  useEffect(
-    () =>
-      store.onCreateProgress((step) => {
-        const d = pendingDraft.current
-        if (d) setCreateStep({ draftId: d, step })
-      }),
-    [],
-  )
-  useEffect(
-    () =>
-      store.onSessionCreated((s) => {
-        const d = pendingDraft.current
-        pendingDraft.current = null
-        setCreateStep(null)
-        if (d) {
-          replaceTab(draftKey(d), s.id)
-          draftStore.remove(d)
-        }
-        navigate(s.id)
-      }),
-    [navigate, replaceTab],
-  )
-  useEffect(() => store.onTerminalCreated((t) => navigate(`/terminal/${t.id}`)), [navigate])
-
-  // A visited terminal or draft gets a tab too.
-  useEffect(() => {
-    if (currentTerminalId) openTab(termKey(currentTerminalId))
-  }, [currentTerminalId, openTab])
-  useEffect(() => {
-    if (currentDraftId) openTab(draftKey(currentDraftId))
-  }, [currentDraftId, openTab])
+  const { pendingDraft, createError, setCreateError, createStep } = useNewSessionFlow({ navigate, replaceTab, openTab, currentTerminalId, currentDraftId })
 
   // Replay the log whenever the selection changes (and after a reconnect);
   // a visited session gets a tab. A team run is one tab: walking from one of
@@ -644,160 +212,9 @@ export function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentId, conn, openTab])
 
-  const respond = useCallback(
-    (requestId: string, behavior: PermissionBehavior, answers?: QuestionAnswers) => {
-      if (currentId)
-        store.send({ type: 'permission_response', sessionId: currentId, requestId, behavior, answers })
-    },
-    [currentId],
-  )
+  const { respond, sendMessage, setPlanning, setModel, setFastMode, setPermissionMode, interrupt, stopAgent, stopShell, backgroundAgent, messageAgent, renameSession, setPinned, deleteSession, newSession, newSessionIn, discardDraft, syncInbox, openItem } = useSessionActions({ currentId, currentDraftId, navigate, closeTab })
 
-  const sendMessage = useCallback(
-    (text: string, images?: ImageAttachment[], mentions?: Mention[], mode?: 'goal', files?: string[]) => {
-      if (currentId) store.send({ type: 'user_message', sessionId: currentId, text, images, ...(files ? { files } : {}), mentions, ...(mode ? { mode } : {}) })
-    },
-    [currentId],
-  )
-
-  const setPlanning = useCallback(
-    (planning: boolean) => {
-      if (currentId) store.send({ type: 'set_session_mode', sessionId: currentId, mode: planning ? 'plan' : 'normal' })
-    },
-    [currentId],
-  )
-
-  const setModel = useCallback(
-    (model: string | undefined, effort: EffortLevel | undefined) => {
-      if (currentId) store.send({ type: 'set_model', sessionId: currentId, model, effort })
-    },
-    [currentId],
-  )
-
-  const setFastMode = useCallback(
-    (fastMode: boolean) => {
-      if (currentId) store.send({ type: 'set_fast_mode', sessionId: currentId, fastMode })
-    },
-    [currentId],
-  )
-
-  const setPermissionMode = useCallback(
-    (mode: PermissionMode) => {
-      if (currentId) store.send({ type: 'set_permission_mode', sessionId: currentId, mode })
-    },
-    [currentId],
-  )
-
-  const interrupt = useCallback(() => {
-    if (currentId) store.send({ type: 'interrupt', sessionId: currentId })
-  }, [currentId])
-
-  const stopAgent = useCallback(
-    (run: AgentRun) => {
-      if (currentId && run.agentId) store.send({ type: 'agent_stop', sessionId: currentId, agentId: run.agentId })
-    },
-    [currentId],
-  )
-
-  // stopTask takes any task id, a shell's as well as an agent's.
-  const stopShell = useCallback(
-    (run: ShellRun) => {
-      if (currentId && run.taskId) store.send({ type: 'agent_stop', sessionId: currentId, agentId: run.taskId })
-    },
-    [currentId],
-  )
-
-  const backgroundAgent = useCallback(
-    (run: AgentRun) => {
-      if (currentId) store.send({ type: 'agent_background', sessionId: currentId, toolUseId: run.toolUseId })
-    },
-    [currentId],
-  )
-
-  const messageAgent = useCallback(
-    (run: AgentRun, text: string) => {
-      if (!currentId || !run.agentId) return
-      store.send({
-        type: 'agent_message',
-        sessionId: currentId,
-        relay: { toolUseId: run.toolUseId, agentId: run.agentId, label: agentLabel(run) },
-        text,
-      })
-    },
-    [currentId],
-  )
-
-  const renameSession = useCallback((sessionId: string, title: string) => {
-    store.send({ type: 'rename_session', sessionId, title })
-  }, [])
-
-  const setPinned = useCallback((sessionId: string, pinned: boolean) => {
-    store.send({ type: 'set_pinned', sessionId, pinned })
-  }, [])
-
-  const deleteSession = useCallback(
-    (sessionId: string) => {
-      store.send({ type: 'delete_session', sessionId })
-      composerDrafts.set(sessionId, '') // no session, no draft to keep
-      closeTab(sessionId)
-      // Deleting what you are looking at leaves nothing to look at.
-      if (sessionId === currentId) navigate('')
-    },
-    [currentId, navigate, closeTab],
-  )
-
-  // New session = a draft tab. An untouched draft is reused rather than
-  // stacking blank tabs; a folder-specific one is always fresh.
-  const newSession = useCallback(() => {
-    const d = draftStore.findEmpty() ?? draftStore.create()
-    navigate(draftRoute(d.id))
-  }, [navigate])
-
-  const newSessionIn = useCallback(
-    (project: Project) => {
-      const d = draftStore.create({ cwd: project.path })
-      navigate(draftRoute(d.id))
-    },
-    [navigate],
-  )
-
-  const discardDraft = useCallback(
-    (id: string) => {
-      draftStore.remove(id)
-      closeTab(draftKey(id))
-      if (id === currentDraftId) navigate('/inbox')
-    },
-    [closeTab, currentDraftId, navigate],
-  )
-
-  const syncInbox = useCallback(() => {
-    void inboxStore.refresh(true).finally(() => navigate('/inbox'))
-  }, [navigate])
-
-  const openItem = useCallback((id: string) => navigate(itemHash(id)), [navigate])
-
-  // Terminals: open in a folder (the server falls back to home), rename, kill.
-  const newTerminal = useCallback((cwd?: string) => {
-    store.send({ type: 'terminal_create', cwd })
-  }, [])
-  const newTerminalIn = useCallback((checkoutId: string) => {
-    store.send({ type: 'terminal_create', checkoutId })
-  }, [])
-  const renameTerminal = useCallback((terminalId: string, title: string) => {
-    store.send({ type: 'terminal_rename', terminalId, title })
-  }, [])
-  const closeTerminal = useCallback(
-    (terminalId: string) => {
-      store.send({ type: 'terminal_close', terminalId })
-      closeTab(termKey(terminalId))
-      if (terminalId === currentTerminalId) {
-        const rest = terminals.filter((t) => t.id !== terminalId)
-        navigate(rest.length ? `/terminal/${rest[rest.length - 1].id}` : '/terminals')
-      }
-    },
-    [closeTab, currentTerminalId, terminals, navigate],
-  )
-  // Where "+" opens a shell: the folder of whatever tab is in front.
-  const terminalCwd = current?.cwd ?? currentTerminal?.cwd ?? currentDraft?.cwd
+  const { newTerminal, newTerminalIn, renameTerminal, closeTerminal, terminalCwd } = useTerminalActions({ closeTab, currentTerminalId, terminals, navigate, current, currentTerminal, currentDraft })
 
   // Back to a section lands on what you were last doing there; clicking the
   // section you are already in pops to its root (Inbox, Artifacts, Jobs).
@@ -880,194 +297,9 @@ export function App() {
     navigate('/inbox')
   }, [tabs, preview, closeAllTabs, navigate])
 
-  // Global hotkeys. ⌘K works everywhere (even in inputs); single keys only
-  // outside text fields and while no dialog is open.
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
-        e.preventDefault()
-        setHelpOpen(false)
-        setPaletteOpen((v) => !v)
-        return
-      }
-      if ((e.metaKey || e.ctrlKey) && e.key === ',') {
-        e.preventDefault()
-        setHelpOpen(false)
-        setPaletteOpen(false)
-        openSettings()
-        return
-      }
-      // ⌘J: a new chat with Junior, from anywhere (no other ⌘J in the app or Triage.app's menus).
-      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'j') {
-        if (anyDialogOpen()) return
-        e.preventDefault()
-        setHelpOpen(false)
-        setPaletteOpen(false)
-        startJuniorChat()
-        return
-      }
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'b') {
-        if (isTypingTarget(e) || anyDialogOpen()) return
-        e.preventDefault()
-        panelSize.toggleCollapsed()
-        return
-      }
-      if (isTypingTarget(e) || anyDialogOpen() || e.metaKey || e.ctrlKey || e.altKey) return
+  useGlobalHotkeys({ route, navigate, newSession, newTerminal, terminalCwd, goTo, currentId, panelSize, setHelpOpen, setPaletteOpen, setComposeSignal })
 
-      if (goPrefix.current !== undefined) {
-        clearTimeout(goPrefix.current)
-        goPrefix.current = undefined
-        if (e.key === 'h') return goTo('junior')
-        if (e.key === 'i') return goTo('inbox')
-        if (e.key === 's') return goTo('sessions')
-        if (e.key === 't') return goTo('terminals')
-        if (e.key === 'c') return openSettings('connectors')
-        if (e.key === 'p') return openSettings('projects')
-        if (e.key === 'j') return goTo('jobs')
-        if (e.key === 'a') return goTo('actions')
-        return // unknown sequence — swallow
-      }
-      if (e.key === 'g') {
-        goPrefix.current = window.setTimeout(() => (goPrefix.current = undefined), 1000)
-        return
-      }
-      if (e.key === 'n') {
-        e.preventDefault()
-        // In the inbox, `n` is "new work item"; among terminals, a new shell;
-        // everywhere else, a new session.
-        if (route.page === 'inbox') setComposeSignal((n) => n + 1)
-        else if (route.page === 'terminal' || route.page === 'terminals') newTerminal(terminalCwd)
-        else if (route.page === 'artifacts' || route.page === 'artifact') navigate('/artifact/new')
-        else newSession()
-      } else if (e.key === '?') {
-        e.preventDefault()
-        setHelpOpen(true)
-      }
-    }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [navigate, newSession, newTerminal, terminalCwd, goTo, currentId, route.page, panelSize])
-
-  const create = useCallback((draftId: string, s: NewSession) => {
-    pendingDraft.current = draftId
-    setCreateError(null)
-    store.send({
-      type: 'create_session',
-      title: s.title,
-      cwd: s.cwd,
-      firstMessage: s.firstMessage || undefined,
-      model: s.model,
-      effort: s.effort,
-      fastMode: s.fastMode,
-      permissionMode: s.permissionMode,
-      ...(s.mode && s.mode !== 'normal' ? { mode: s.mode } : {}),
-      provider: s.provider,
-      images: s.images,
-      ...(s.files ? { files: s.files } : {}),
-      mentions: s.mentions,
-      itemId: s.itemId,
-      checkoutId: s.checkoutId,
-      worktree: s.worktree,
-    })
-  }, [])
-
-  // New job = a chat with Junior, not a form (decisions 4 and 5): an untouched one is reused.
-  const addJob = useCallback(() => {
-    const d = draftStore.findEmptyJob() ?? draftStore.create({ intent: 'job' })
-    navigate(draftRoute(d.id))
-  }, [navigate])
-
-  // An item becomes a goal the same way: a chat with Junior, linked to the item, opening "New goal:".
-  const goalFrom = useCallback(
-    (item: ScoredItem) => {
-      const d = draftStore.create({ intent: 'goal', itemId: item.id, text: `${item.title} (work item ${item.id})` })
-      navigate(draftRoute(d.id))
-    },
-    [navigate],
-  )
-
-  // Thumbs-down on a matched item: the correction lands as appended text on
-  // the job's instruction — the rule stays human-readable.
-  const refineJob = useCallback(
-    (item: ScoredItem) => {
-      if (!item.jobId) return
-      sessionStorage.setItem(REFINE_JOB_KEY, JSON.stringify({ jobId: item.jobId, note: item.title }))
-      navigate(`/jobs/${encodeURIComponent(item.jobId)}/edit`)
-    },
-    [navigate],
-  )
-
-  // Dispatch = a draft tab prefilled by the server (.docs/next-version.md):
-  // the kind's template, the item's description, and the brief as an
-  // `@artifact:` mention when one exists. The old client-side prompt stays
-  // as the fallback when the preview cannot be fetched.
-  const dispatch = useCallback(
-    (item: ScoredItem) => {
-      const openWith = (init: { cwd?: string; text: string; mentions?: Mention[]; branchHint?: string; continueIn?: string }) => {
-        const d = draftStore.create({ label: dispatchTitle(item), itemId: item.id, ...init })
-        navigate(draftRoute(d.id))
-      }
-      void fetch(`/api/dispatch/preview?itemId=${encodeURIComponent(item.id)}`)
-        .then((r) => r.json() as Promise<DispatchPreviewResponse>)
-        .then((b) => {
-          if (!b.ok) throw new Error(b.error)
-          openWith({
-            cwd: b.preview.cwd ?? undefined,
-            text: b.preview.text,
-            mentions: b.preview.mentions,
-            // Where it runs is asked in the draft, never assumed: it starts in the current folder,
-            // with a new worktree (named from the item) or the item's own worktree on offer.
-            ...(b.preview.branch ? { branchHint: b.preview.branch } : {}),
-            ...(b.preview.checkoutId ? { continueIn: b.preview.checkoutId } : {}),
-          })
-        })
-        .catch(() =>
-          fetch('/api/projects')
-            .then((r) => r.json() as Promise<ProjectsResponse>)
-            .then((p) => {
-              const match =
-                p.ok &&
-                ((item.projectId && p.projects.find((x) => x.id === item.projectId)) ||
-                  (item.repo && p.projects.find((x) => x.repo && x.repo === item.repo)))
-              openWith({ cwd: match ? match.path : undefined, text: dispatchPrompt(item) })
-            })
-            .catch(() => openWith({ text: dispatchPrompt(item) })),
-        )
-    },
-    [navigate],
-  )
-
-  // Start on a Junior-owned plan row: the same dispatch as the inbox's, by id —
-  // the row may name an item the open inbox doesn't hold (a to-do made a moment ago).
-  const dispatchById = useCallback(
-    (id: string) => {
-      const ranked = inbox.items.find((i) => i.id === id)
-      if (ranked) return dispatch(ranked)
-      void fetch(`/api/items/detail?id=${encodeURIComponent(id)}`)
-        .then((r) => r.json() as Promise<ItemDetailResponse>)
-        .then((b) => {
-          if (b.ok) dispatch({ ...b.detail.item, score: 0, group: 'cycle', reason: 'on today\u2019s plan', label: 'do' })
-        })
-        .catch(() => {})
-    },
-    [inbox.items, dispatch],
-  )
-
-  // A session whose worktree is gone continues as a new session in the project's
-  // main folder, with the old one attached as an `@session:` mention for context.
-  const continueInMain = useCallback(
-    (s: SessionSummary) => {
-      const main = checkouts.find((c) => c.projectId === s.projectId && c.kind === 'main')
-      const mention: Mention = { kind: 'session', ref: s.id, label: s.title }
-      const d = draftStore.create({
-        cwd: main?.path,
-        text: `Continuing from ${mentionToken(mention)} — its worktree was removed.\n\n`,
-        mentions: [mention],
-      })
-      navigate(draftRoute(d.id))
-    },
-    [checkouts, navigate],
-  )
+  const { create, addJob, goalFrom, refineJob, dispatch, dispatchById, continueInMain } = useDispatchers({ navigate, pendingDraft, setCreateError, inbox, checkouts })
 
   // --- derived shell state -------------------------------------------------
 
@@ -1184,67 +416,37 @@ export function App() {
 
   // The Actions page is a list and a detail side by side: it needs the room, so no panel beside it.
   // Junior's page is one centred column: no panel beside it either.
-  const panel = !panelSection || panelSection === 'actions' || panelSection === 'goals' || panelSection === 'junior' ? null : panelSection === 'terminals' ? (
-      <TerminalsPanel
+  const panel =
+    !panelSection || panelSection === 'actions' || panelSection === 'goals' || panelSection === 'junior' ? null : (
+      <AppPanel
+        panelSection={panelSection}
         terminals={terminals}
-        currentId={currentTerminalId}
-        defaultCwd={terminalCwd}
-        onSelect={(id) => navigate(`/terminal/${id}`)}
-        onNew={newTerminal}
-        onRename={renameTerminal}
-        onClose={closeTerminal}
-        onSearch={() => setPaletteOpen(true)}
-      />
-    ) : panelSection === 'artifacts' ? (
-      <ArtifactsPanel
-        artifacts={artifacts.artifacts}
-        loaded={artifacts.loaded}
-        currentId={route.page === 'artifact' ? route.id : null}
-        onOpen={(id) => navigate(`/artifact/${id}`)}
-        onPin={(id, title) => pin(`artifact:${id}`, title)}
-        onNew={() => navigate('/artifact/new')}
-        onRefresh={() => void fetch('/api/artifacts/reindex', { method: 'POST' }).then(() => artifactStore.refresh())}
-        onSearch={() => setPaletteOpen(true)}
-      />
-    ) : panelSection === 'changes' ? (
-      <ChangesPanel
-        projects={changes.projects}
-        loaded={changes.loaded}
-        loading={changes.loading}
-        current={route.page === 'change' ? { checkoutId: route.checkoutId, path: route.path } : null}
-        onOpen={(checkoutId, path) => navigate(`/change/${changeId(checkoutId, path)}`)}
-        onPin={(checkoutId, path) => pin(`change:${changeId(checkoutId, path)}`)}
-        onNewTerminal={newTerminalIn}
-        onSearch={() => setPaletteOpen(true)}
-      />
-    ) : panelSection === 'inbox' ? (
-      <InboxTabsPanel
-        tabs={inboxTabs}
-        statusCounts={inbox.counts}
-        loaded={inbox.loaded}
-        current={route.page === 'inbox' ? resolveTab(route.tab, inboxTabs.counts) : route.page === 'item' ? tabOfItem(inboxTabs, route.id) : null}
-        onGo={(t) => navigate(`/inbox/${t}`)}
-        onAdd={() => {
-          setComposeSignal((n) => n + 1)
-          if (route.page !== 'inbox') navigate('/inbox')
-        }}
-        onRefresh={() => void inboxStore.refresh(true)}
-        onSearch={() => setPaletteOpen(true)}
-      />
-    ) : (
-      <SessionsPanel
-        sessions={chatSessions}
-        currentId={current?.teamRun?.role === 'worker' && teamRun ? teamRun.leadSessionId : currentId}
+        currentTerminalId={currentTerminalId}
+        terminalCwd={terminalCwd}
+        navigate={navigate}
+        newTerminal={newTerminal}
+        newTerminalIn={newTerminalIn}
+        renameTerminal={renameTerminal}
+        closeTerminal={closeTerminal}
+        setPaletteOpen={setPaletteOpen}
+        setComposeSignal={setComposeSignal}
+        artifacts={artifacts}
+        changes={changes}
+        inbox={inbox}
+        inboxTabs={inboxTabs}
+        route={route}
+        pin={pin}
+        chatSessions={chatSessions}
+        current={current}
+        currentId={currentId}
+        teamRun={teamRun}
         drafts={drafts}
         currentDraftId={currentDraftId}
-        onSelectDraft={(id) => navigate(draftRoute(id))}
-        onDiscardDraft={discardDraft}
-        onSelect={navigate}
-        onNew={newSession}
-        onRename={renameSession}
-        onSetPinned={setPinned}
-        onDelete={deleteSession}
-        onSearch={() => setPaletteOpen(true)}
+        discardDraft={discardDraft}
+        newSession={newSession}
+        renameSession={renameSession}
+        setPinned={setPinned}
+        deleteSession={deleteSession}
       />
     )
 
@@ -1418,79 +620,22 @@ export function App() {
             ) : route.page === 'home' || route.page === 'settings' ? null : current ? (
               <div className={`sessRow${teamRun && teamSide ? ' withSide' : ''}${browserOpen ? ' withBrowser' : ''}`}>
               <div className="sessCol">
-                <div id="chatHeader" ref={chatHeaderRef}>
-                  <span id="chatTitle" title={current.title}>
-                    {current.title}
-                  </span>
-                  <span className="pills">
-                    {modelName && (
-                      <span className="pill" title="Model · effort">
-                        {modelName}
-                        {current.effort ? ` · ${EFFORT_LABEL[current.effort].toLowerCase()}` : ''}
-                      </span>
-                    )}
-                    {currentCheckout ? (
-                      <CheckoutMenu checkout={currentCheckout} onNewTerminal={() => newTerminalIn(currentCheckout.id)}>
-                        <CheckoutChip
-                          checkout={currentCheckout}
-                          projectName={
-                            changes.projects.find((p) => p.project.id === currentCheckout.projectId)?.project.name ??
-                            folderName(currentCheckout.path)
-                          }
-                          color={projectColor(currentCheckout.projectId)}
-                          menu
-                          size="sm"
-                        />
-                      </CheckoutMenu>
-                    ) : (
-                      <span className="pill mono" title={current.cwd}>
-                        <span className="t" ref={folderTextRef}>
-                          {folderShort ? folderName(current.cwd) : homely(current.cwd)}
-                        </span>
-                      </span>
-                    )}
-                    {!currentCheckout && (
-                      <span className="pill mono measure" aria-hidden="true">
-                        <span className="t" ref={folderMeasureRef}>
-                          {homely(current.cwd)}
-                        </span>
-                      </span>
-                    )}
-                  </span>
-                  {agents.length > 0 && (
-                    <AgentsMenu agents={agents} current={openAgent?.toolUseId} onOpen={showAgent}>
-                      <button type="button" className="btn sm ghost agentsBtn" title="Every agent this session has spawned">
-                        Agents <span className="n">{agents.length}</span>
-                        {agents.some((a) => a.state === 'running') && <span className="dot live" aria-hidden="true" />}
-                      </button>
-                    </AgentsMenu>
-                  )}
-                  {hasBrowser && !mobile && (
-                    <button
-                      type="button"
-                      className={`btn sm ghost browserBtn${browserOpen ? ' on' : ''}`}
-                      title={browserOpen ? 'Hide the browser pane' : 'Show this session’s browser — the page the agent checks its work in'}
-                      aria-pressed={browserOpen}
-                      onClick={() => browserPane.set(current.id, !browserOpen)}
-                    >
-                      <Globe size={14} aria-hidden="true" />
-                      Browser
-                    </button>
-                  )}
-                  <SessionCost sessionId={current.id} status={current.status} />
-                  <span className={`state ${current.status}`}>
-                    <span
-                      className={`dot ${
-                        current.status === 'running' || current.status === 'starting'
-                          ? 'live'
-                          : current.status === 'error'
-                            ? 'red'
-                            : 'green'
-                      }`}
-                    />
-                    {STATUS_LABEL[current.status]}
-                  </span>
-                </div>
+                <ChatHeader
+                  current={current}
+                  chatHeaderRef={chatHeaderRef}
+                  folderTextRef={folderTextRef}
+                  folderMeasureRef={folderMeasureRef}
+                  folderShort={folderShort}
+                  modelName={modelName}
+                  currentCheckout={currentCheckout}
+                  newTerminalIn={newTerminalIn}
+                  changes={changes}
+                  agents={agents}
+                  openAgent={openAgent}
+                  showAgent={showAgent}
+                  mobile={mobile}
+                  browserOpen={browserOpen}
+                />
                 {railOn && teamRun ? (
                   <RunHeader
                     run={teamRun}

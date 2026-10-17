@@ -1,0 +1,197 @@
+/* ---------- artifacts (.docs/next-version.md, phase 1) ---------- */
+.artTools { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+.artTools .root { font-family: var(--mono); font-size: 0.8462rem; color: var(--stone); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.artList .artRow { width: 100%; text-align: left; background: transparent; border: 0; border-radius: 0; color: var(--body); cursor: pointer; }
+.artList .artRow + .artRow { border-top: 1px solid var(--hair); }
+.artRow > svg { flex: none; color: var(--ash); }
+.artRow .artTitle { color: var(--ink); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+.artRow .artPath { font-family: var(--mono); font-size: 0.8462rem; color: var(--stone); max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.artRow .artWhen { font-family: var(--mono); font-size: 0.8462rem; color: var(--ash); flex: none; width: 56px; text-align: right; }
+.artBack { display: inline-flex; align-items: center; gap: 4px; color: var(--ash); font-size: 0.9231rem; margin-bottom: 10px; background: none; border: 0; padding: 0; cursor: pointer; }
+.artBack:hover { color: var(--ink); }
+.artHead { display: flex; align-items: flex-start; gap: 16px; margin-bottom: 14px; }
+.artHead > div:first-child { min-width: 0; flex: 1; }
+.artHead .actions { display: flex; gap: 6px; flex: none; flex-wrap: wrap; justify-content: flex-end; }
+.artBody { padding: 20px 24px; }
+.artEdit { display: flex; flex-direction: column; gap: 10px; }
+.artEdit input, .artEdit textarea { width: 100%; background: var(--card); border: 1px solid var(--hair-strong); border-radius: var(--r); color: var(--ink); padding: 8px 12px; font-size: 1rem; outline: none; box-sizing: border-box; }
+.artEdit textarea { min-height: 380px; font-family: var(--mono); font-size: 0.9615rem; line-height: 1.6; resize: vertical; }
+.artEdit input:focus, .artEdit textarea:focus { border-color: var(--ink); }
+.artEdit .row { display: flex; gap: 8px; justify-content: flex-end; }
+.artLinks { display: flex; flex-direction: column; gap: 6px; }
+.artLink { display: flex; align-items: center; gap: 8px; font-size: 1rem; min-width: 0; }
+.artLink > svg { flex: none; color: var(--ash); }
+.artLink .link { color: var(--ink); background: none; border: 0; padding: 0; cursor: pointer; text-align: left; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.artLink .link:hover { color: var(--blue); }
+.artAside { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+.artGrid { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 32px; }
+.artEmpty { color: var(--stone); font-size: 0.9231rem; }
+dialog.artDialog { width: 640px; max-height: 84vh; overflow-y: auto; }
+dialog.artDialog textarea { min-height: 240px; font-family: var(--mono); font-size: 0.9615rem; line-height: 1.6; resize: vertical; }
+
+/* ---------- briefs (.docs/next-version.md, phase 2) ---------- */
+.notice.jobsOff { margin-bottom: 16px; }
+.notice.jobsOff b { color: var(--yellow); font-weight: 500; }
+.briefCard { padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; }
+.briefCard .briefHead { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.briefCard .briefHead .title { font-size: 1.0769rem; color: var(--ink); font-weight: 500; }
+.briefCard .briefHead .right { margin-left: auto; display: flex; gap: 6px; align-items: center; }
+.briefCard .briefBody .md { font-size: 1.0769rem; }
+.briefCard .briefEmpty { color: var(--mute); font-size: 1rem; line-height: 1.55; }
+.briefCard .briefEmpty b { color: var(--body); font-weight: 500; }
+.briefIterate { display: flex; gap: 8px; align-items: flex-end; border-top: 1px solid var(--hair); padding-top: 12px; }
+.briefIterate textarea { flex: 1; min-height: 38px; max-height: 160px; resize: vertical; background: var(--deep); border: 1px solid var(--hair-strong); border-radius: var(--r); color: var(--ink); padding: 8px 12px; font-size: 1rem; outline: none; }
+.briefIterate textarea:focus { border-color: var(--ink); }
+.pill.brief-queued, .pill.brief-running { color: var(--blue); border-color: var(--edge-blue); }
+.pill.brief-running .dot { margin-right: 2px; }
+.pill.brief-ready { color: var(--green); border-color: var(--edge-green); }
+.pill.brief-stale { color: var(--yellow); border-color: var(--edge-yellow); }
+.pill.brief-failed { color: var(--red); border-color: var(--edge-red); }
+.descBlock { display: flex; flex-direction: column; gap: 6px; }
+.descBlock .descText { font-size: 1.0385rem; line-height: 1.6; color: var(--body); white-space: pre-wrap; cursor: text; border-radius: var(--r-sm); padding: 4px 6px; margin: -4px -6px; }
+.descBlock .descText:hover { background: var(--elev); }
+.descBlock .descText.empty { color: var(--stone); font-style: italic; }
+.descBlock textarea { width: 100%; box-sizing: border-box; min-height: 72px; resize: vertical; background: var(--deep); border: 1px solid var(--hair-strong); border-radius: var(--r); color: var(--ink); padding: 8px 12px; font-size: 1.0385rem; line-height: 1.55; outline: none; }
+.descBlock textarea:focus { border-color: var(--ink); }
+.descBlock .row { display: flex; align-items: center; gap: 6px; justify-content: flex-end; }
+.descBlock .row .spacer { flex: 1; }
+.descBlock.dragging { outline: 1px dashed var(--hair-bright); outline-offset: 4px; border-radius: var(--r); }
+/* Screenshots on the item: a contact sheet under the description, click to open full size. */
+.descShots { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+.descShots .shot { display: block; width: 120px; height: 80px; border: 1px solid var(--hair-strong); border-radius: var(--r); overflow: hidden; background: var(--deep); }
+.descShots .shot:hover { border-color: var(--hair-bright); }
+.descShots .shot img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+/* an item's links — source, yours, mentioned — as quiet rows; the whole row opens it */
+.linksBlock { display: flex; flex-direction: column; gap: 2px; }
+.linksBlock .head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+.linkRow { display: flex; align-items: center; gap: 4px; border-radius: var(--r-sm); margin: 0 -6px; }
+.linkRow:hover { background: var(--elev); }
+.linkRow a { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; padding: 5px 6px; color: var(--body); text-decoration: none; font-size: 1rem; }
+.linkRow a > svg { flex: none; color: var(--ash); }
+.linkRow .lab { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.linkRow .origin { flex: none; font-family: var(--mono); font-size: 0.8462rem; letter-spacing: 0.3px; color: var(--stone); }
+.linkRow a .out { color: var(--stone); margin-left: auto; }
+.linkRow:hover a, .linkRow:hover .lab { color: var(--link-hover); }
+.linkRow:hover a .out { color: var(--ash); }
+.linkRow .rm { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; margin-right: 4px; background: none; border: 0; border-radius: var(--r-sm); color: var(--stone); cursor: pointer; opacity: 0; }
+.linkRow:hover .rm, .linkRow .rm:focus-visible { opacity: 1; }
+.linkRow .rm:hover { color: var(--ink); background: var(--wash-2); }
+.linksBlock .addRow { display: flex; align-items: center; gap: 6px; margin-top: 4px; }
+.linksBlock .addRow input { flex: 1; min-width: 0; height: 30px; box-sizing: border-box; background: var(--deep); border: 1px solid var(--hair-strong); border-radius: var(--r); color: var(--ink); padding: 0 10px; font-size: 0.9615rem; outline: none; }
+.linksBlock .addRow input:focus { border-color: var(--ink); }
+/* Floating bulk-action bar (inbox multi-select). The page is the scroller, so
+   sticky-bottom keeps the bar inside the pane — never over the rail or Queue.
+   #inboxPage is a flex column whose inner column grows, so on short lists the
+   dock still lands at the bottom of the pane. A stuck element is clamped to
+   its containing block's content box, so the page's 48px bottom padding is
+   split 16px on the page + 32px on .inner: the bar clears the pane edge by
+   the same 16px whether it is stuck or in flow. Hairline elevation, no shadow. */
+#inboxPage { display: flex; flex-direction: column; padding-bottom: 16px; }
+#inboxPage > .inner { flex: 1 0 auto; width: 100%; padding-bottom: 32px; }
+.selDock { position: sticky; bottom: 0; z-index: 3; display: flex; justify-content: center; pointer-events: none; }
+.selBar {
+  pointer-events: auto; display: inline-flex; align-items: center; gap: 4px; padding: 6px 6px 6px 14px;
+  background: var(--elev); border: 1px solid var(--hair-strong); border-radius: var(--r-full);
+  font-size: 1rem; color: var(--body); white-space: nowrap;
+  animation: selIn 0.16s ease-out;
+}
+.selBar .count { display: inline-flex; align-items: baseline; gap: 5px; }
+.selBar .n { font-family: var(--mono); color: var(--ink); }
+.selBar .sep { width: 1px; height: 16px; background: var(--hair-strong); margin: 0 6px; }
+.selBar .btn.sm { border-radius: var(--r-full); }
+.selBar .btn.ghost { color: var(--body); }
+.selBar .btn.ghost:hover:not(:disabled) { background: var(--wash-2); }
+.selBar .iconBtn.sm { border-radius: var(--r-full); }
+@keyframes selIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+/* The brief composer (BriefComposer.tsx): one box, template above a dashed hairline, note below. */
+.briefComposer { display: flex; flex-direction: column; background: var(--deep); border: 1px solid var(--hair-strong); border-radius: var(--r-lg); overflow: hidden; }
+.briefComposer:focus-within { border-color: var(--hair-bright); }
+.briefComposer .bcHead { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-bottom: 1px solid var(--hair); }
+.briefComposer .bcChip {
+  display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px; border-radius: var(--r-sm);
+  background: var(--card); border: 1px solid var(--hair-strong); color: var(--ink); font-family: var(--mono); font-size: 0.9231rem; cursor: pointer;
+}
+.briefComposer .bcChip:hover { border-color: var(--hair-bright); }
+.briefComposer .bcChip .slash { color: var(--orange); }
+.briefComposer .bcChip .caret { color: var(--ash); font-size: 0.7692rem; }
+.briefComposer .bcLabel { color: var(--mute); font-size: 0.9231rem; }
+.briefComposer .bcHint { margin-left: auto; color: var(--stone); font-size: 0.8462rem; white-space: nowrap; }
+.briefComposer .bcHint kbd { color: var(--ash); }
+/* No resize grips: the box sizes itself and scrolls, and a grip in each corner reads as clutter. */
+.briefComposer textarea {
+  width: 100%; box-sizing: border-box; background: transparent; border: 0; outline: none; color: var(--ink); resize: none;
+  scrollbar-width: thin; scrollbar-color: var(--hair-strong) transparent;
+}
+.briefComposer .bcTemplate { min-height: 220px; max-height: 60vh; padding: 14px 16px; font-family: var(--mono); font-size: 0.9615rem; line-height: 1.6; }
+.briefComposer .bcNote { border-top: 1px dashed var(--hair-strong); padding: 10px 16px 4px; }
+.briefComposer .bcNote label { display: block; margin: 0 0 4px; color: var(--ash); font-family: var(--mono); font-size: 0.8077rem; letter-spacing: 0.6px; text-transform: uppercase; }
+.briefComposer .bcNote textarea { min-height: 56px; max-height: 200px; padding: 0; font-size: 1rem; line-height: 1.5; }
+.briefComposer .bcConfirm { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 12px; background: var(--wash-2); border-bottom: 1px solid var(--hair); color: var(--body); font-size: 0.9231rem; }
+.briefComposer .bcConfirm b { color: var(--ink); font-family: var(--mono); font-weight: 400; }
+.briefComposer .bcConfirm .spacer, .briefComposer .bcFoot .spacer { flex: 1; }
+.briefComposer > .msg.error { margin: 8px 12px 0; }
+.briefComposer .bcFoot { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 12px; border-top: 1px solid var(--hair); }
+.briefComposer .bcFoot kbd { margin-left: 4px; font-size: 0.7692rem; opacity: 0.7; }
+.briefComposer .bcSaved { color: var(--ash); font-family: var(--mono); font-size: 0.8462rem; }
+/* Centred by margin, not transform: the `/` picker renders inside this element as position: fixed,
+   and a transform would make the dialog its containing block — offset, and clipped by the scroll. */
+.briefModal {
+  width: 760px; max-width: calc(100vw - 32px); max-height: calc(100vh - 48px); overflow-y: auto;
+  inset: 0; margin: auto; height: fit-content; transform: none;
+}
+.briefModal .bmItem { margin: 2px 0 14px; color: var(--body); font-size: 1rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.briefModal .bmItem .k { color: var(--ash); font-size: 0.8462rem; margin-right: 6px; }
+.briefModal .briefComposer .bcTemplate { min-height: 280px; max-height: 50vh; }
+.briefModal .bmSub { margin: 10px 0 0; }
+.bcPop { width: 360px; z-index: 95; }
+.bcPop .bcQuery { padding: 8px 14px 0; color: var(--ink); font-family: var(--mono); font-size: 0.9231rem; }
+.bcPop .bcOptWrap { display: contents; }
+.setPlaybook { display: flex; flex-direction: column; gap: 8px; }
+.setPlaybook .head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.setPlaybook textarea { width: 100%; box-sizing: border-box; min-height: 260px; resize: vertical; font-family: var(--mono); font-size: 0.9615rem; line-height: 1.6; background: var(--deep); border: 1px solid var(--hair-strong); border-radius: var(--r); color: var(--ink); padding: 10px 12px; outline: none; }
+.setPlaybook textarea:focus { border-color: var(--ink); }
+.setPlaybook .path { font-family: var(--mono); font-size: 0.8462rem; color: var(--stone); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.setNum { width: 80px; background: var(--card); border: 1px solid var(--hair-strong); border-radius: var(--r); color: var(--ink); padding: 0 10px; height: 30px; font-size: 1rem; outline: none; }
+.setNum:focus { border-color: var(--ink); }
+/* The settings selects. `.setNum` is an input style and was being borrowed by
+   a native <select>; these are Radix triggers, so they get their own class
+   with the same form-control language and an auto width. */
+.setSelect.uiSelect {
+  width: auto; height: 30px; padding: 0 10px; gap: 8px;
+  background: var(--card); border: 1px solid var(--hair-strong); border-radius: var(--r);
+  color: var(--ink); font-size: 1rem;
+}
+.setSelect.uiSelect:hover:not([data-disabled]) { border-color: var(--hair-bright); }
+.setSelect.uiSelect[data-disabled] { opacity: 0.5; }
+.setSelect.uiSelect > span:first-of-type { max-width: 260px; }
+
+/* ---------- artifact editor (full content area) ---------- */
+.page.artEditPage { display: flex; flex-direction: column; overflow: hidden; padding: 20px 28px 16px; }
+.artEditor { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 12px; }
+.artEditBar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.artEditBar .crumb { font-family: var(--mono); font-size: 0.8462rem; color: var(--ash); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 40%; }
+.artEditBar .meta { font-size: 0.8462rem; color: var(--stone); }
+.artEditBar .segBtn { display: inline-flex; align-items: center; gap: 5px; }
+.artEditTitle {
+  width: 100%; box-sizing: border-box; background: transparent; border: 0; border-bottom: 1px solid var(--hair);
+  color: var(--ink); font-family: var(--display); font-size: 2rem; line-height: 1.25; letter-spacing: -0.01em; padding: 6px 2px 10px; outline: none;
+}
+.artEditTitle::placeholder { color: var(--stone); }
+.artEditTitle:focus { border-bottom-color: var(--hair-bright); }
+.artEditPanes { flex: 1; min-height: 0; display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); }
+.artEditPanes.split { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.artEditBody {
+  width: 100%; height: 100%; min-height: 320px; box-sizing: border-box; resize: none;
+  background: var(--deep); border: 1px solid var(--hair-strong); border-radius: var(--r-lg); color: var(--body);
+  font-family: var(--mono); font-size: 1rem; line-height: 1.7; padding: 18px 20px; outline: none; tab-size: 2;
+}
+.artEditBody:focus { border-color: var(--hair-bright); }
+.artEditBody::placeholder { color: var(--stone); }
+.artEditPreview { min-height: 0; overflow-y: auto; background: var(--card); border: 1px solid var(--hair); border-radius: var(--r-lg); padding: 18px 22px; }
+.artEditPanes.preview .artEditPreview { max-width: var(--measure); }
+.artRestored .link { background: none; border: 0; padding: 0; color: var(--blue); cursor: pointer; font: inherit; }
+.artRestored .link:hover { text-decoration: underline; }
+.artEditor .keysHint { font-size: 0.8462rem; color: var(--stone); display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+@media (max-width: 900px) { .artEditPanes.split { grid-template-columns: minmax(0, 1fr); } }
+

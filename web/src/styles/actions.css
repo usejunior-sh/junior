@@ -1,0 +1,168 @@
+/* ---------- Actions (core/actions): what left this machine — or wants to ----------
+   One card everywhere (.docs/action-card-variations.html, C + C2): a stub row —
+   kind glyph, a title that says what happened, a short link, a status pill —
+   that opens to the details. One that needs you opens by default with the
+   draft and the verbs, on a yellow edge; approved, it is a slim blue undo row.
+   The Actions page is P3: a dense list beside the selected card. */
+.actHead { align-items: flex-end; }
+.actTitle { min-width: 0; }
+.actToday { margin: 8px 0 0; color: var(--mute); font-size: 1rem; font-family: var(--mono); letter-spacing: -0.1px; }
+.actSeg { margin: 0 0 14px; }
+.actSeg .segBtn.need:not(.active) { color: var(--yellow); }
+.actFileErr { color: var(--yellow); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.actEmpty { padding: 40px 0; color: var(--ash); max-width: 60ch; line-height: 1.5; }
+
+.dot.need { background: var(--yellow); }
+.dot.wait { background: var(--blue); animation: pulse 1.4s ease-in-out infinite; }
+.dot.off { background: transparent; box-shadow: inset 0 0 0 1px var(--ash); }
+.railBadge.need { color: var(--yellow); border-color: var(--edge-yellow); }
+
+/* the stub */
+.astubs { display: flex; flex-direction: column; gap: 6px; margin: 4px 0 10px; max-width: 620px; }
+.astubs.item { max-width: none; margin: 0; }
+.astub { min-width: 0; background: var(--card); border: 1px solid var(--hair-strong); border-radius: var(--r); }
+.astub.need { border-color: var(--edge-yellow); }
+.astub.fail { border-color: var(--edge-red); }
+.astub.go { border-color: var(--edge-blue); }
+.astub .arow1 { display: flex; align-items: center; gap: 9px; min-width: 0; min-height: 34px; padding-right: 8px; border-radius: var(--r); }
+.astub:not(.pinned) > .arow1:hover { background: var(--wash-1); }
+.astub.go .arow1 { padding: 0 8px 0 12px; }
+.astub .ahead {
+  display: flex; align-items: center; gap: 9px; flex: 1 1 auto; min-width: 0; padding: 7px 0 7px 12px;
+  background: none; border: 0; color: inherit; font: inherit; text-align: left; cursor: pointer;
+}
+.astub.pinned .ahead { cursor: default; }
+.astub .ic { flex: none; color: var(--charcoal); }
+.astub .t1 { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 1rem; font-weight: 500; color: var(--ink); }
+.astub.go .t1 { flex: 1 1 auto; font-weight: 400; color: var(--body); }
+.astub .sp { margin-left: auto; flex: none; font-size: 0.8462rem; color: var(--ash); }
+.astub .lk { display: inline-flex; align-items: center; gap: 5px; flex: 0 1 auto; min-width: 0; font-family: var(--mono); font-size: 0.9231rem; color: var(--ash); }
+.astub .lk span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.astub .lk:hover { color: var(--ink); }
+.astub .arow1 > .pill { flex: none; padding: 1px 8px; background: transparent; font-family: var(--mono); font-size: 0.8077rem; }
+.astub .arow1 > .pill .dot { width: 6px; height: 6px; }
+.astub .quick { display: inline-flex; gap: 4px; flex: none; }
+.astub .quick .btn.ok { color: var(--green); }
+.astub .chev { display: inline-flex; flex: none; padding: 4px; background: none; border: 0; color: var(--stone); cursor: pointer; transition: transform 0.15s ease; }
+.astub .chev:hover { color: var(--ink); }
+.astub[data-state="open"] > .arow1 .chev { transform: rotate(90deg); }
+.astub .abody { border-top: 1px solid var(--hair); padding: 10px 12px 12px; }
+.astub .abody > .astub.go { margin-bottom: 10px; }
+.astubErr { margin-top: 8px; color: var(--red-ink); font-size: 0.9231rem; }
+.astub.go > .astubErr { margin: 0; padding: 0 12px 8px; }
+
+/* the draft: what goes out, word for word */
+.apayload {
+  max-height: 320px; overflow: auto; padding: 10px 12px;
+  background: var(--deep); border: 1px solid var(--hair); border-radius: var(--r);
+  font-size: 1rem; line-height: 1.6; color: var(--body); white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.apayload .atarget { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-bottom: 6px; font-size: 0.8462rem; color: var(--stone); white-space: normal; }
+.apayload .afield.lead { color: var(--ink); font-weight: 500; }
+.apayload .afield + .afield { margin-top: 6px; }
+.ajson { margin: 0; font-family: var(--mono); font-size: 0.8846rem; line-height: 1.55; color: var(--charcoal); white-space: pre-wrap; overflow-wrap: anywhere; }
+.averbs { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }
+.averbs .ameta { display: flex; justify-content: flex-end; flex: 1 1 auto; min-width: 0; margin-left: auto; font-size: 0.8462rem; color: var(--stone); white-space: nowrap; }
+/* The expiry never clips; the tool and origin after it give way first. */
+.averbs .ameta .aexp { flex: none; color: var(--ash); }
+.averbs .ameta .arest { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.averbs .amore { margin-left: auto; }
+.averbs .awarn { flex: 1 1 100%; color: var(--yellow); font-size: 0.9231rem; }
+.aedit textarea, .anote textarea {
+  width: 100%; padding: 8px 10px; resize: vertical; outline: none;
+  background: var(--deep); border: 1px solid var(--hair-strong); border-radius: var(--r);
+  color: var(--ink); font: inherit; font-size: 1rem; line-height: 1.55;
+}
+.aedit textarea:focus, .anote textarea:focus { border-color: var(--ink); }
+.aedit .ajsonEdit { font-family: var(--mono); font-size: 0.8846rem; }
+.afieldEdit { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
+.afieldEdit > span { font-size: 0.8462rem; color: var(--stone); }
+.anote label { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+.anote label > span { font-size: 0.9231rem; color: var(--mute); }
+
+/* the details */
+.akv { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 5px 12px; margin: 0; font-size: 0.9231rem; }
+.akv dt { font-family: var(--mono); font-size: 0.8462rem; color: var(--stone); line-height: 1.6; }
+.akv dd { margin: 0; min-width: 0; color: var(--charcoal); line-height: 1.5; overflow-wrap: anywhere; }
+.akv dd.mono { font-size: 0.8846rem; }
+.akv dd a { color: var(--ash); }
+.akv dd a:hover { color: var(--ink); }
+.akv dd.err { color: var(--red-ink); }
+.akv .ajson { max-height: 240px; overflow: auto; }
+.akv.more { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--hair); }
+.alink { padding: 0; background: none; border: 0; color: var(--body); font: inherit; text-align: left; cursor: pointer; }
+.alink:hover { color: var(--ink); text-decoration: underline; text-decoration-color: var(--stone); text-underline-offset: 3px; }
+.alink.mute { color: var(--ash); }
+.ahist { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.ahist .mono { font-size: 0.8462rem; color: var(--stone); margin-right: 4px; }
+
+/* the page: list + detail */
+.asplit {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); min-height: 360px;
+  border: 1px solid var(--hair); border-radius: var(--r-lg); overflow: hidden;
+}
+.asplit .ls { max-height: calc(100vh - 250px); overflow-y: auto; border-right: 1px solid var(--hair); }
+.asplit .ali {
+  display: grid; grid-template-columns: 8px 16px minmax(0, 1fr) auto auto; align-items: center; gap: 10px;
+  padding: 10px 12px; border-bottom: 1px solid var(--hair-soft); font-size: 1rem; cursor: pointer; outline: none;
+}
+.asplit .ali:hover { background: var(--wash-1); }
+.asplit .ali.sel { background: var(--wash-2); box-shadow: inset 2px 0 0 var(--ink); }
+.ali .ic { color: var(--charcoal); }
+.ali .s { min-width: 0; }
+.ali .s b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; color: var(--ink); }
+.ali .s span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); font-size: 0.8462rem; color: var(--stone); }
+.ali .t { font-size: 0.8462rem; color: var(--stone); }
+.ali.st-needs_you .s span { color: var(--ash); }
+.asplit .dt { max-height: calc(100vh - 250px); overflow-y: auto; padding: 16px; }
+.asplit .dt .keys { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: 16px; font-size: 0.8077rem; color: var(--stone); }
+.asplit .dt .keys kbd { margin-left: 8px; }
+.asplit .dt .keys kbd:first-child { margin-left: 0; }
+
+/* ---------- phone: Actions — the list alone, the card as a sheet ---------- */
+@media (max-width: 767px), (pointer: coarse) and (max-height: 500px) {
+  .actHead .actTitle { order: 1; flex: 1 1 100%; }
+  .actHead .filter { order: 2; }
+  /* One line of tabs that scrolls sideways — `.seg.wrap` would drop "Stopped" to a second line at 390px. */
+  .actSeg.seg.wrap { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; max-width: 100%; }
+  .actSeg .segBtn { flex: none; }
+  .actSeg::-webkit-scrollbar { display: none; }
+  .actFileErr { white-space: normal; }
+  .asplit { grid-template-columns: minmax(0, 1fr); min-height: 0; border: 0; border-radius: 0; }
+  .asplit .ls { max-height: none; border-right: 0; }
+  .asplit .ali { min-height: 58px; padding: 10px 4px; }
+  .ali .s b { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; white-space: normal; line-height: 1.35; }
+  .asplit .ali:active { background: var(--wash-2); }
+  dialog.actSheet {
+    display: flex; flex-direction: column; gap: 12px; padding: 12px;
+    /* Above its own overlay (.projOverlay is z 90), as .projAddDialog is. */
+    position: fixed; z-index: 91; max-height: calc(var(--vvh, 100dvh) - 16px); overflow-y: auto;
+  }
+  .actSheet .astub.pinned { border: 0; background: transparent; }
+  .actSheet .astub.pinned > .arow1 { padding-right: 0; }
+  .actSheet .astub.pinned .ahead { padding-left: 0; }
+  .actSheet .astub .abody { padding: 10px 0 0; }
+  /* Titles wrap rather than clip; the meta line sits on its own line, no rule through it. */
+  .astub .t1 { white-space: normal; }
+  .astub .arow1 { flex-wrap: wrap; }
+  .averbs .btn { height: 36px; padding: 0 14px; }
+  .averbs .ameta { flex: 1 1 100%; justify-content: flex-start; margin-left: 0; }
+  .astub .quick .btn { width: 36px; height: 36px; }
+  .astub .chev { padding: 10px; }
+  .akv { grid-template-columns: 80px minmax(0, 1fr); }
+}
+@media (hover: none) {
+  .asplit .ali:hover { background: transparent; }
+}
+
+/* A job's dry run: what the real run would hold for approval (nothing was sent). */
+.previewQueued { border-top: 1px solid var(--hair); }
+.previewQueued > .t { padding: 10px 14px 2px; color: var(--yellow); font-size: 0.9231rem; }
+
+/* The brief composer on a phone: the hint row would wrap under the chip, and the template needs less height. */
+@media (max-width: 767px) {
+  .briefComposer .bcHint { display: none; }
+  .briefComposer .bcTemplate { min-height: 160px; }
+  .briefComposer .bcFoot .btn.primary { margin-left: auto; }
+  .briefComposer .bcFoot kbd { display: none; }
+}

@@ -1,0 +1,258 @@
+/* =========================================================================
+   triage — workbench design system (.docs/design.md + the "Triage Workbench
+   Final" canvas)
+
+   True-black canvas, translucent-white hairlines instead of shadows, one
+   bright surface per viewport (the white primary button). Editorial serif for
+   the wordmark and page headlines, Geist for UI, Geist Mono for machine data (paths, scores,
+   diffs, code). Accent colours appear only as status dots, diff colouring
+   and atmospheric glows — never as filled controls.
+   ========================================================================= */
+
+:root {
+  /* surfaces */
+  --canvas: #000000;
+  --card: #0a0a0c;
+  --elev: #101012;
+  --deep: #06060a;
+
+  /* lines */
+  --hair: rgba(255, 255, 255, 0.06);
+  --hair-strong: rgba(255, 255, 255, 0.14);
+  --hair-soft: rgba(255, 255, 255, 0.04);
+  --hair-bright: rgba(255, 255, 255, 0.28);
+
+  /* ink */
+  --ink: #fcfdff;
+  --body: rgba(252, 253, 255, 0.86);
+  --charcoal: rgba(252, 253, 255, 0.7);
+  --mute: #a1a4a5;
+  --ash: #888e90;
+  --stone: #464a4d;
+
+  /* accents — status, diff and glow only */
+  --orange: #ff801f;
+  --yellow: #ffc53d;
+  --blue: #3b9eff;
+  --green: #11ff99;
+  --red: #ff2047;
+  --glow-orange: rgba(255, 89, 0, 0.22);
+  --glow-yellow: rgba(255, 197, 61, 0.16);
+  --glow-blue: rgba(0, 117, 255, 0.34);
+  --glow-green: rgba(34, 255, 153, 0.18);
+  --glow-red: rgba(255, 32, 71, 0.34);
+  --tint-red: rgba(255, 32, 71, 0.1);
+  --tint-green: rgba(17, 255, 153, 0.08);
+  --tint-yellow: rgba(255, 197, 61, 0.1);
+  --tint-blue: rgba(59, 158, 255, 0.1);
+
+  /* legacy aliases still referenced by a few components */
+  --text: var(--ink);
+  --text2: var(--body);
+  --dim: var(--ash);
+  --border: var(--hair);
+  --border-hi: var(--hair-strong);
+  --panel: var(--card);
+  --panel-hi: var(--elev);
+  --elevated: var(--elev);
+  --bg: var(--canvas);
+  --bg2: var(--card);
+  --amber: var(--yellow);
+  --accent: var(--ink);
+
+  /* The editorial-serif signature lane (design.md): the wordmark and the page
+     display headline. Everything else stays technical — Geist + Geist Mono. */
+  --serif: "Instrument Serif", "Tiempos Headline", Georgia, serif;
+  --display: var(--serif);
+  --brand: var(--serif);
+  --sans: Geist, Inter, -apple-system, system-ui, sans-serif;
+  --mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --r-xs: 4px;
+  --r-sm: 6px;
+  --r: 8px;
+  --r-lg: 12px;
+  --r-full: 9999px;
+
+  /* The reading column: the transcript and the prompt box share it, so a
+     conversation is one centred strip rather than two left-hugging ones. */
+  --measure: 760px;
+
+  --panel-w: 280px;
+  --rail-w: 64px;
+  --bar-h: 44px;
+  /* the second bar under it: a team session's run header, and the drawer's tabs beside it */
+  --sub-bar-h: 42px;
+
+  /* semantic layer — the seam a light theme overrides (see [data-theme="light"]).
+     on-primary: ink/text sitting on the one bright surface (the primary button,
+     switch thumbs). wash-*: the translucent hover/selected overlays. select: the
+     text-selection highlight. primary-hover: the primary button's hover fill. */
+  --on-primary: #000;
+  --wash-1: rgba(255, 255, 255, 0.03);
+  --wash-2: rgba(255, 255, 255, 0.045);
+  --wash-3: rgba(255, 255, 255, 0.07);
+  --select: rgba(255, 255, 255, 0.18);
+  --primary-hover: #f1f7fe;
+
+  /* lifted surfaces — menus, popovers, dialogs. ring: the 1px separation round
+     a floating panel. drop: the shadow under it. scrim: the overlay behind a
+     modal. On black these are near-opaque black; on white they invert to a
+     faint ink, so the same rule reads right in both themes. */
+  --ring: rgba(0, 0, 0, 0.7);
+  --drop: rgba(0, 0, 0, 0.65);
+  --scrim: rgba(0, 0, 0, 0.6);
+  --scroll-thumb: #2a2c30;
+  --scroll-thumb-hover: #3a3d42;
+
+  /* accent edges — the hairline round a red/yellow chip, derived from the
+     accent so the light theme's darkened accents carry through automatically. */
+  --edge-red: color-mix(in srgb, var(--red) 36%, transparent);
+  --edge-red-hi: color-mix(in srgb, var(--red) 55%, transparent);
+  --edge-yellow: color-mix(in srgb, var(--yellow) 36%, transparent);
+  --edge-yellow-hi: color-mix(in srgb, var(--yellow) 50%, transparent);
+  --edge-green: color-mix(in srgb, var(--green) 32%, transparent);
+  --edge-blue: color-mix(in srgb, var(--blue) 36%, transparent);
+  --edge-blue-hi: color-mix(in srgb, var(--blue) 55%, transparent);
+  /* a link under the pointer: away from the page ink in both themes */
+  --link-hover: #6db6ff;
+  /* red as *reading* text (error bodies) — softer than the status red on black,
+     darker than it on white. */
+  --red-ink: #ff7a92;
+
+  /* project hues — one stable dot colour per codebase (see tabs.ts). Indexed,
+     not named, because the index is hashed from the folder path. */
+  --hue-0: #3b9eff;
+  --hue-1: #11ff99;
+  --hue-2: #ffc53d;
+  --hue-3: #ff801f;
+  --hue-4: #ff2047;
+  --hue-5: #a78bfa;
+  --hue-6: #f472b6;
+  --hue-7: #2dd4bf;
+
+  /* appearance settings apply here (see appearance.ts) */
+  --app-font-size: 13px;
+  color-scheme: dark;
+  /* The Text-size control scales every rem-based font-size in the app off this
+     root size (13px = 1rem). Paddings/dimensions stay in px, so text grows
+     without the layout growing — that is what separates it from browser zoom. */
+  font-size: var(--app-font-size, 13px);
+}
+
+/* Light theme — the whole colour system re-expressed for a white canvas. The
+   app is dark-first (design.md), so this overrides the token layer rather than
+   any component rule; JS resolves "system" and writes the concrete value. */
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  /* surfaces — a light-grey page with white panels floating on it. Unlike the
+     dark theme (where "elevated" is brighter), elevation here reads as a greyer
+     surface, so hover/selected chips and menus stay visible against white. */
+  --canvas: #f6f8fa;
+  --card: #ffffff;
+  --elev: #eceef2;
+  --deep: #e6e9ee;
+
+  /* lines — hairlines go from white-on-black to black-on-white */
+  --hair: rgba(11, 12, 14, 0.1);
+  --hair-strong: rgba(11, 12, 14, 0.16);
+  --hair-soft: rgba(11, 12, 14, 0.06);
+  --hair-bright: rgba(11, 12, 14, 0.3);
+
+  /* ink */
+  --ink: #0b0c0e;
+  --body: rgba(11, 12, 14, 0.84);
+  --charcoal: rgba(11, 12, 14, 0.68);
+  --mute: #5c6166;
+  --ash: #71767b;
+  --stone: #b3b8bd;
+
+  /* accents — the dark theme's neons are darkened for contrast on white */
+  --orange: #c85a00;
+  --yellow: #8a6d1f;
+  --blue: #1f6feb;
+  --green: #0f9d58;
+  --red: #d61f3c;
+  --glow-orange: rgba(200, 90, 0, 0.14);
+  --glow-yellow: rgba(138, 109, 31, 0.12);
+  --glow-blue: rgba(31, 111, 235, 0.16);
+  --glow-green: rgba(15, 157, 88, 0.14);
+  --glow-red: rgba(214, 31, 60, 0.16);
+  --tint-red: rgba(214, 31, 60, 0.08);
+  --tint-green: rgba(15, 157, 88, 0.1);
+  --tint-yellow: rgba(138, 109, 31, 0.12);
+  --tint-blue: rgba(31, 111, 235, 0.1);
+
+  /* semantic layer */
+  --on-primary: #ffffff;
+  --wash-1: rgba(11, 12, 14, 0.03);
+  --wash-2: rgba(11, 12, 14, 0.05);
+  --wash-3: rgba(11, 12, 14, 0.08);
+  --select: rgba(31, 111, 235, 0.18);
+  --primary-hover: #23262b;
+
+  /* lifted surfaces — a black ring round a white menu is a bruise, so the ring
+     becomes a hairline and the drop a soft grey. */
+  --ring: rgba(11, 12, 14, 0.14);
+  --drop: rgba(11, 12, 14, 0.14);
+  --scrim: rgba(11, 12, 14, 0.32);
+  --scroll-thumb: rgba(11, 12, 14, 0.2);
+  --scroll-thumb-hover: rgba(11, 12, 14, 0.32);
+
+  /* --edge-* derive from --red/--yellow/--green/--blue above, so they darken
+     with them. */
+  --red-ink: #b3172f;
+  --link-hover: #0a4fb5;
+
+  /* project hues — the neons vanish on a white canvas, so each is re-picked at
+     a weight that still reads as a 6px dot. */
+  --hue-0: #1f6feb;
+  --hue-1: #0f9d58;
+  --hue-2: #a97a00;
+  --hue-3: #c85a00;
+  --hue-4: #d61f3c;
+  --hue-5: #7c3aed;
+  --hue-6: #db2777;
+  --hue-7: #0f8b80;
+
+  /* accent is the primary ink; keep it dark so the primary button stays dark */
+  --accent: var(--ink);
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--canvas);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 1rem;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+/* No app-level zoom: CSS `zoom` skews xterm.js's mouse→cell mapping (terminal
+   selection drifts rows). Browser zoom (⌘+/⌘−) scales everything correctly. */
+#root { width: 100vw; height: 100vh; }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+a { color: var(--blue); text-decoration: none; }
+a:hover { color: var(--link-hover); }
+::selection { background: var(--select); }
+
+* { scrollbar-width: thin; scrollbar-color: var(--scroll-thumb) transparent; }
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-thumb { background: var(--scroll-thumb); border: 2px solid transparent; background-clip: padding-box; border-radius: 8px; }
+*::-webkit-scrollbar-thumb:hover { background: var(--scroll-thumb-hover); background-clip: padding-box; }
+*::-webkit-scrollbar-track { background: transparent; }
+
+button:focus-visible, a:focus-visible, summary:focus-visible, [tabindex]:focus-visible {
+  outline: 1px solid var(--ink); outline-offset: 2px;
+}
+/* Focus rings are for the keyboard. After a click, a menu or dialog handing
+   focus back to its trigger shouldn't ring it (inputModality.ts). */
+html[data-input="pointer"] :focus-visible { outline: none !important; }
+@keyframes pulse { 50% { opacity: 0.35; } }
+@keyframes caret { 50% { opacity: 0; } }
+

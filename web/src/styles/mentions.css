@@ -1,0 +1,102 @@
+/* ---------- @ mentions: picker, tray chips, transcript chips ---------- */
+.mnPop {
+  z-index: 60; width: 520px; max-width: calc(100vw - 24px); background: var(--elev); border: 1px solid var(--hair-strong); border-radius: var(--r-lg);
+  box-shadow: 0 0 0 1px var(--ring); color: var(--body); font-size: 1rem; overflow: hidden; outline: none;
+  transform-origin: var(--radix-popover-content-transform-origin);
+}
+.mnPop[data-state="open"] { animation: menuIn 0.12s ease; }
+.mnTabs { display: flex; align-items: center; gap: 3px; padding: 6px; border-bottom: 1px solid var(--hair); overflow-x: auto; scrollbar-width: none; }
+.mnTabs::-webkit-scrollbar { display: none; }
+.mnTab {
+  display: inline-flex; align-items: center; gap: 5px; flex: none; height: 24px; padding: 0 9px; border-radius: var(--r-full);
+  border: 1px solid transparent; background: transparent; color: var(--mute); font-size: 0.8846rem; white-space: nowrap; cursor: pointer;
+  transition: color 0.1s ease, background 0.1s ease, border-color 0.1s ease;
+}
+.mnTab svg { color: var(--stone); }
+.mnTab:hover { color: var(--ink); background: var(--wash-2); }
+.mnTab.active { background: var(--elev); border-color: var(--hair-strong); color: var(--ink); }
+.mnTab.active svg { color: var(--ink); }
+.mnList { display: flex; flex-direction: column; gap: 2px; padding: 6px; max-height: 300px; overflow-y: auto; }
+.mnGroup { display: flex; flex-direction: column; gap: 1px; }
+.mnGroup + .mnGroup { margin-top: 4px; padding-top: 4px; border-top: 1px solid var(--hair); }
+.mnHead { padding: 4px 8px 3px; color: var(--stone); font-size: 0.8077rem; letter-spacing: 0.6px; text-transform: uppercase; }
+.mnOpt { display: flex; align-items: center; gap: 9px; width: 100%; height: 30px; padding: 0 8px; border: 0; border-radius: var(--r-sm); background: transparent; color: var(--body); text-align: left; font-size: 1rem; cursor: pointer; }
+.mnOpt svg { flex: none; color: var(--ash); }
+.mnOpt:hover, .mnOpt.sel { background: var(--wash-3); color: var(--ink); outline: none; }
+.mnOpt.sel svg { color: var(--ink); }
+.mnOpt .n { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: none; max-width: 60%; }
+.mnOpt .d { margin-left: auto; color: var(--ash); font-family: var(--mono); font-size: 0.8462rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; direction: rtl; text-align: right; }
+.mnEmpty { padding: 10px 8px; color: var(--ash); font-size: 0.9231rem; }
+.mnFoot { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 7px 10px; border-top: 1px solid var(--hair); color: var(--stone); font-size: 0.8462rem; }
+.mnFoot kbd { color: var(--ash); font-size: 0.7692rem; }
+
+.attachments .mchips, .msg.user .msgMentions { display: flex; flex-wrap: wrap; gap: 6px; }
+.msg.user .msgMentions { margin-top: 8px; }
+.mchip {
+  display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 8px 0 7px; max-width: 280px;
+  background: var(--card); border: 1px solid var(--hair-strong); border-radius: var(--r-full);
+  font-family: var(--mono); font-size: 0.8462rem; color: var(--body); white-space: nowrap;
+}
+.mchip svg { flex: none; color: var(--ash); }
+.mchip .n { overflow: hidden; text-overflow: ellipsis; }
+.mchip.muted { color: var(--ash); border-style: dashed; }
+.mchip .x { border: 0; background: transparent; color: var(--stone); font-size: 1rem; line-height: 1; padding: 0 0 0 2px; cursor: pointer; }
+.mchip .x:hover { color: var(--ink); }
+.msg.user .mtok { color: var(--ink); font-family: var(--mono); font-size: 0.9615rem; background: var(--wash-2); border-radius: var(--r-xs); padding: 1px 5px; }
+/* A mention that names something the app can open: the token in the text and
+   its chip below both open it. */
+.msg.user .mtok.open {
+  display: inline-block; max-width: 320px; vertical-align: bottom; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  border: 0; text-align: left; cursor: pointer; line-height: inherit;
+}
+.msg.user .mtok.open:hover { background: var(--wash-1); text-decoration: underline; text-decoration-color: var(--hair-strong); text-underline-offset: 3px; }
+.mchip.open { cursor: pointer; }
+.mchip.open:hover { color: var(--ink); border-color: var(--ash); }
+.mchip.open:hover svg { color: var(--ink); }
+button.refLink { font: inherit; line-height: inherit; }
+
+/* An entity reference the agent dropped into prose, resolved to its name and
+   made clickable — reads as the same object as the @ chip that attaches it. */
+.refLink {
+  display: inline-flex; align-items: baseline; gap: 4px; max-width: 320px; vertical-align: baseline;
+  padding: 0 5px 1px; border-radius: var(--r-xs); background: var(--wash-2);
+  border: 1px solid var(--hair); color: var(--body); cursor: pointer; text-decoration: none;
+}
+.refLink svg { flex: none; align-self: center; color: var(--ash); }
+.refLink .n { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.refLink:hover { color: var(--ink); border-color: var(--hair-strong); background: var(--wash-1); }
+.refLink:hover svg { color: var(--ink); }
+
+/* ---------- / commands: the picker, and what a local command printed ---------- */
+/* Narrower than the @ picker: one line per command, no tabs, no groups. */
+.slPop { width: 560px; }
+.slOpt { gap: 8px; }
+.slOpt .n { font-family: var(--mono); font-size: 0.9231rem; color: var(--ink); max-width: none; }
+.slOpt .args { font-family: var(--mono); font-size: 0.8462rem; color: var(--stone); flex: none; }
+/* The alias that matched, so a hit on /cost explains why /usage is the row. */
+.slOpt .via { font-family: var(--mono); font-size: 0.8077rem; color: var(--ash); flex: none; }
+.slOpt .plug {
+  flex: none; padding: 0 6px; height: 17px; line-height: 17px; border-radius: var(--r-full);
+  background: var(--wash-2); color: var(--stone); font-size: 0.7692rem; letter-spacing: 0.3px;
+}
+.slOpt .desc { margin-left: auto; color: var(--ash); font-size: 0.8846rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.slOpt.sel .desc { color: var(--mute); }
+
+/* The lit pill behind a recognized /command. Sits under a transparent-
+   background textarea, so the command's own glyphs read straight through it —
+   nothing is drawn twice and the caret is never occluded. */
+.boxWrap { position: relative; display: flex; flex-direction: column; }
+.cmdPill {
+  position: absolute; pointer-events: none; z-index: 0; border-radius: var(--r-xs);
+  background: var(--wash-3); box-shadow: inset 0 0 0 1px var(--hair);
+}
+.boxWrap #box { position: relative; z-index: 1; }
+
+/* Output a command produced locally — already formatted by the CLI, so it is
+   shown verbatim rather than re-flowed as markdown. */
+.msg.commandOut {
+  align-self: stretch; margin: 0; padding: 12px 14px; background: var(--wash-2); border: 1px solid var(--hair);
+  border-radius: var(--r-sm); font-family: var(--mono); font-size: 0.9231rem; line-height: 1.6; color: var(--body);
+  white-space: pre-wrap; overflow-x: auto;
+}
+
