@@ -3323,6 +3323,7 @@ dialog.artDialog textarea { min-height: 240px; font-family: var(--mono); font-si
 .descBlock textarea:focus { border-color: var(--ink); }
 .descBlock .row { display: flex; align-items: center; gap: 6px; justify-content: flex-end; }
 .descBlock .row .spacer { flex: 1; }
+.descBlock.dragging { outline: 1px dashed var(--hair-bright); outline-offset: 4px; border-radius: var(--r); }
 /* Screenshots on the item: a contact sheet under the description, click to open full size. */
 .descShots { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
 .descShots .shot { display: block; width: 120px; height: 80px; border: 1px solid var(--hair-strong); border-radius: var(--r); overflow: hidden; background: var(--deep); }

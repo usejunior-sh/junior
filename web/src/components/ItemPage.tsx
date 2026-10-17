@@ -141,6 +141,7 @@ export function ItemPage({ id, onDispatch, onGoal, onNavigate, onDirty }: Props)
   /** the files the editor is holding, the same way */
   const [fileDraft, setFileDraft] = useState<FileRef[] | null>(null)
   const attach = useAttachments()
+  const [descDragging, setDescDragging] = useState(false)
   const filePicker = useRef<HTMLInputElement>(null)
   const [feedback, setFeedback] = useState('')
   const [busy, setBusy] = useState<string | null>(null)
@@ -370,6 +371,7 @@ export function ItemPage({ id, onDispatch, onGoal, onNavigate, onDirty }: Props)
     setDescDraft(null)
     setImgDraft(null)
     setFileDraft(null)
+    setDescDragging(false)
     attach.clear()
   }
 
@@ -391,8 +393,15 @@ export function ItemPage({ id, onDispatch, onGoal, onNavigate, onDirty }: Props)
       })
       const b = (await res.json()) as { ok: boolean; error?: string }
       if (!b.ok) {
-        setNotice(b.error ?? 'could not save')
+        setNotice(`Description not saved: ${b.error ?? 'could not save'}`)
         return
+      }
+      // The text is in; if a later part fails the editor stays open with the rest.
+      const textSaved = (i: ScoredItem) => (i.id === item.id ? { ...i, description: description || undefined } : i)
+      const partial = (what: string, why: string) => {
+        inboxStore.patch((items) => items.map(textSaved))
+        setOther((o) => (o?.item ? { ...o, item: textSaved(o.item) } : o))
+        setNotice(`Description saved, but ${what} were not: ${why}`)
       }
       let images = item.images
       if (imagesChanged) {
@@ -404,7 +413,7 @@ export function ItemPage({ id, onDispatch, onGoal, onNavigate, onDirty }: Props)
         })
         const ib = (await r.json()) as ItemImagesResponse
         if (!ib.ok) {
-          setNotice(ib.error)
+          partial('the images', ib.error)
           return
         }
         images = ib.images.length > 0 ? ib.images : undefined
@@ -418,7 +427,7 @@ export function ItemPage({ id, onDispatch, onGoal, onNavigate, onDirty }: Props)
         })
         const fb = (await r.json()) as ItemFilesResponse
         if (!fb.ok) {
-          setNotice(fb.error)
+          partial('the files', fb.error)
           return
         }
         files = fb.files.length > 0 ? fb.files : undefined
@@ -539,7 +548,23 @@ export function ItemPage({ id, onDispatch, onGoal, onNavigate, onDirty }: Props)
 
         {/* Description — the human's intent, in their words (and their
             screenshots). Never written by a run; both go to the brief. */}
-        <div className="descBlock">
+        <div
+          className={`descBlock${descDragging ? ' dragging' : ''}`}
+          onDragOver={(e) => {
+            if (descDraft === null || !e.dataTransfer.types.includes('Files')) return
+            e.preventDefault()
+            setDescDragging(true)
+          }}
+          onDragLeave={(e) => {
+            if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDescDragging(false)
+          }}
+          onDrop={(e) => {
+            if (descDraft === null || !e.dataTransfer.types.includes('Files')) return
+            e.preventDefault()
+            setDescDragging(false)
+            void attach.add(e.dataTransfer.files)
+          }}
+        >
           <div className="secLabel mute">Description</div>
           {descDraft !== null ? (
             <>

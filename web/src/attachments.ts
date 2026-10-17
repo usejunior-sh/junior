@@ -96,6 +96,7 @@ export function useAttachments(key?: string) {
     const inline: PendingImage[] = []
     const uploads: Array<{ file: File; entry: PendingFile }> = []
     let rejected: string | null = null
+    // Early filter against the tray as it is now; the real cap is applied at commit below.
     const room = {
       images: MAX_IMAGES_PER_MESSAGE - (trays.get(k) ?? EMPTY).images.length,
       files: MAX_FILES_PER_MESSAGE - (trays.get(k) ?? EMPTY).files.length,
@@ -129,14 +130,26 @@ export function useAttachments(key?: string) {
       }
       uploads.push({ file, entry: { id: uuid(), name: file.name || 'file', bytes: file.size } })
     }
-    update((t) => ({
-      images: [...t.images, ...inline],
-      files: [...t.files, ...uploads.map((u) => u.entry)],
-      error: rejected,
-    }))
+    // Another add may have landed while images were being read: the room is
+    // taken from the tray at this instant (no await between read and write), so
+    // overlapping adds can never overfill it.
+    let accepted: Array<{ file: File; entry: PendingFile }> = uploads
+    update((t) => {
+      const imageRoom = Math.max(0, MAX_IMAGES_PER_MESSAGE - t.images.length)
+      const fileRoom = Math.max(0, MAX_FILES_PER_MESSAGE - t.files.length)
+      for (const dropped of inline.slice(imageRoom)) URL.revokeObjectURL(dropped.url)
+      if (inline.length > imageRoom) rejected = `Up to ${MAX_IMAGES_PER_MESSAGE} images per message`
+      if (uploads.length > fileRoom) rejected = `Up to ${MAX_FILES_PER_MESSAGE} files per message`
+      accepted = uploads.slice(0, fileRoom)
+      return {
+        images: [...t.images, ...inline.slice(0, imageRoom)],
+        files: [...t.files, ...accepted.map((u) => u.entry)],
+        error: rejected,
+      }
+    })
     // Each upload settles on its own: the chip gains its id, or goes with the reason.
     await Promise.all(
-      uploads.map(async ({ file, entry }) => {
+      accepted.map(async ({ file, entry }) => {
         const res = await upload(file)
         update((t) => {
           // Removed (or the message sent) while it was on its way: nothing to settle.
