@@ -205,11 +205,11 @@ export const TOOLS = [
     description: "Take a work item off today's plan. The item itself is untouched: it stays in the inbox, at its status.",
     inputSchema: { type: 'object', properties: { itemId: { type: 'string' } }, required: ['itemId'] },
   },
-  // Artifacts: markdown notes/briefs beside the inbox (.docs/next-version.md).
+  // Artifacts: files beside the inbox (.docs/next-version.md): notes, briefs, pages, tables, images.
   {
     name: 'list_artifacts',
     description:
-      "List the workspace's artifacts — markdown notes and briefs kept beside the work items — with id, title, author (human|model), refs, path and links.",
+      "List the workspace's artifacts — files kept beside the work items (notes, briefs, pages, tables, images) — with id, title, format, version, author (human|model), refs, path and links.",
     inputSchema: {
       type: 'object',
       properties: { all: { type: 'boolean', description: 'include briefs of finished items (hidden by default)' } },
@@ -217,45 +217,66 @@ export const TOOLS = [
   },
   {
     name: 'read_artifact',
-    description: 'Read one artifact by id: title, author, refs, path on disk and the full markdown body.',
-    inputSchema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
+    description:
+      'Read one artifact by id: title, format, version, author, refs, path on disk and the full text (markdown without its frontmatter). A pdf or image has no text here: you get the header and the path. Pass version to read an older one.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string' },
+        version: { type: 'number', description: 'an older version; omit for the current one' },
+      },
+      required: ['id'],
+    },
   },
   {
     name: 'write_artifact',
     description:
-      'Create a new model-authored artifact (markdown note), optionally linked to a work item or session as context. Returns its id.',
+      "Publish a file as an artifact: a document, page, table, image or other output the user should open. Every version is kept. Text formats (md, html, csv, txt, json, svg): pass title, body and format. Binary or script-made files (pdf, png, jpg, gif, webp, or anything big): make the file, then pass from with its absolute path, inside the system temp folder (triage copies it). To change an artifact you already published, call update_artifact with its id. Never write report-v2.html. Files over 25 MB are refused. Returns the id and version.",
     inputSchema: {
       type: 'object',
       properties: {
         title: { type: 'string' },
-        body: { type: 'string', description: 'markdown' },
+        format: {
+          type: 'string',
+          enum: ['md', 'html', 'csv', 'txt', 'json', 'svg', 'pdf', 'png', 'jpg', 'gif', 'webp'],
+          description: 'md (default), html, csv, txt, json or svg: send them as body. pdf, png, jpg, gif, webp, or any big or script-made file: use from.',
+        },
+        body: { type: 'string', description: 'the content, for md html csv txt json svg. Up to 2 MB; bigger goes through from.' },
+        from: {
+          type: 'string',
+          description: 'absolute path of a file you made, in the temp folder. triage copies it; later edits to the original do not change the artifact.',
+        },
+        note: { type: 'string', description: 'one line about this version (500 characters at most)' },
         refs: { type: 'array', items: { type: 'string' }, description: 'PR/issue URLs or Linear keys it is about' },
         links: {
           type: 'array',
+          description: 'extra links. Pass { kind: "session", id, role: "output" } to show it under a session.',
           items: {
             type: 'object',
             properties: {
               kind: { type: 'string', enum: ['item', 'session'] },
               id: { type: 'string' },
-              role: { type: 'string', enum: ['brief', 'context', 'dispatch'] },
+              role: { type: 'string', enum: ['brief', 'context', 'dispatch', 'output'] },
             },
             required: ['kind', 'id', 'role'],
           },
         },
       },
-      required: ['title', 'body'],
+      required: ['title'],
     },
   },
   {
     name: 'update_artifact',
     description:
-      'Rewrite a model-authored artifact in place (title, body, refs). Human-authored artifacts are refused — propose the change to the user instead.',
+      'Publish a new version of a model-authored artifact: same id, history kept. Pass the new body (text formats) or from (a file path), and a note: one line on what changed. Use this instead of writing a second artifact such as report-v2.html. The format cannot change. For non-markdown files, a title or refs change alone does not make a new version. Human-authored artifacts are refused — propose the change to the user instead.',
     inputSchema: {
       type: 'object',
       properties: {
         id: { type: 'string' },
         title: { type: 'string' },
         body: { type: 'string' },
+        from: { type: 'string', description: 'absolute path of a file you made, in the temp folder; triage copies it' },
+        note: { type: 'string', description: 'one line on what changed in this version (500 characters at most)' },
         refs: { type: 'array', items: { type: 'string' } },
       },
       required: ['id'],
@@ -263,14 +284,14 @@ export const TOOLS = [
   },
   {
     name: 'link_artifact',
-    description: 'Link an existing artifact to a work item or session with a role (usually "context").',
+    description: 'Link an existing artifact to a work item or session with a role (usually "context"; "output" for a file a session published).',
     inputSchema: {
       type: 'object',
       properties: {
         artifactId: { type: 'string' },
         kind: { type: 'string', enum: ['item', 'session'] },
         id: { type: 'string' },
-        role: { type: 'string', enum: ['brief', 'context', 'dispatch'] },
+        role: { type: 'string', enum: ['brief', 'context', 'dispatch', 'output'] },
       },
       required: ['artifactId', 'kind', 'id', 'role'],
     },
@@ -410,28 +431,39 @@ export async function callTool(
   }
   if (name === 'read_artifact') {
     if (typeof args.id !== 'string' || !args.id) return { text: 'rejected: need an artifact id', isError: true }
-    const body = (await api(`/api/artifacts/content?id=${encodeURIComponent(args.id)}`)) as {
+    const v = typeof args.version === 'number' && Number.isInteger(args.version) && args.version >= 1 ? `&v=${args.version}` : ''
+    const body = (await api(`/api/artifacts/content?id=${encodeURIComponent(args.id)}${v}`)) as {
       ok: boolean
-      artifact?: { title: string; id: string; author: string; refs: string[] }
+      artifact?: { title: string; id: string; author: string; refs: string[]; format?: string; version?: number }
       body?: string
       abs?: string
+      version?: number
+      latest?: boolean
+      binary?: boolean
+      truncated?: boolean
       error?: string
     }
     if (!body.ok || !body.artifact) return { text: `failed: ${body.error ?? 'no such artifact'}`, isError: true }
     const a = body.artifact
-    const head = [`title: ${a.title}`, `id: ${a.id}`, `author: ${a.author}`, `path: ${body.abs ?? ''}`]
+    const head = [`title: ${a.title}`, `id: ${a.id}`]
+    if (a.format) head.push(`format: ${a.format}`)
+    if (body.version) head.push(`version: ${body.version}${body.latest === false ? ` (current is v${a.version})` : ''}`)
+    head.push(`author: ${a.author}`, `path: ${body.abs ?? ''}`)
     if (a.refs.length) head.push(`refs: ${a.refs.join(', ')}`)
+    if (body.truncated) head.push('note: the text is cut at 2 MB')
+    if (body.binary) return { text: [...head, 'note: binary file, no text here; open the path'].join('\n'), isError: false }
     return { text: `${head.join('\n')}\n\n${body.body ?? ''}`, isError: false }
   }
   if (name === 'write_artifact') {
     // An external agent writes as the model, never as the user.
     const body = (await api('/api/artifacts', { ...args, author: 'model' })) as {
       ok: boolean
-      artifact?: { id: string; path: string }
+      artifact?: { id: string; path: string; format?: string }
+      version?: number
       error?: string
     }
     return body.ok && body.artifact
-      ? { text: `ok: created ${body.artifact.id} at ${body.artifact.path}`, isError: false }
+      ? { text: `ok: created ${body.artifact.id} (${body.artifact.format ?? 'md'}, v${body.version ?? 1}) at ${body.artifact.path}`, isError: false }
       : { text: `rejected: ${body.error}`, isError: true }
   }
   if (name === 'update_artifact') {
@@ -440,9 +472,16 @@ export async function callTool(
     const body = (await api(`/api/artifacts?id=${encodeURIComponent(id)}&by=model`, patch, 'PUT')) as {
       ok: boolean
       artifact?: { path: string }
+      action?: string
+      version?: number
       error?: string
     }
-    return body.ok ? { text: `ok: updated ${body.artifact?.path ?? id}`, isError: false } : { text: `rejected: ${body.error}`, isError: true }
+    if (!body.ok) return { text: `rejected: ${body.error}`, isError: true }
+    const where = `${id} (v${body.version ?? '?'}) ${body.artifact?.path ?? ''}`.trimEnd()
+    return {
+      text: body.action === 'unchanged' ? `ok: unchanged ${where} — no new version: identical content` : `ok: updated ${where}`,
+      isError: false,
+    }
   }
   if (name === 'link_artifact') {
     const body = (await api('/api/links', {

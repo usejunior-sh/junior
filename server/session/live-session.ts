@@ -140,7 +140,7 @@ export class LiveSession {
       // that can't host in-process servers (Codex) gets none of them: it
       // reaches triage through its own configured `triage` MCP instead.
       mcpServers: {
-        ...(this.provider.capabilities.inProcessMcp ? { triage: rt.triageMcp(), ...(extras.mcp ?? {}) } : {}),
+        ...(this.provider.capabilities.inProcessMcp ? { triage: rt.triageMcp(row.id), ...(extras.mcp ?? {}) } : {}),
         ...((extras.externalMcp ?? {}) as McpServers),
       },
       ...(extras.tools ? { tools: extras.tools } : {}),

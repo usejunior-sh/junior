@@ -1,4 +1,4 @@
-import type { ArtifactAuthor, ArtifactContentResponse, ArtifactResponse, ArtifactsResponse, BriefJobsResponse, BriefResponse, ItemFilesResponse, ItemImagesResponse, ItemStateResponse, ItemUrlsResponse, UploadResponse } from '../../shared/protocol.js'
+import type { ArtifactAuthor, ArtifactResponse, ArtifactsResponse, BriefJobsResponse, BriefResponse, ItemFilesResponse, ItemImagesResponse, ItemStateResponse, ItemUrlsResponse, UploadResponse } from '../../shared/protocol.js'
 import { handleUpload, readItemFile } from '../attachments.js'
 import { readItemImage } from '../itemImages.js'
 import { log } from '../log.js'
@@ -8,7 +8,7 @@ import { readJsonBody } from './http-util.js'
 import { ANY_ITEM_ID_RE, MAX_ITEM_BODY_BYTES } from '../validate.js'
 import { invalidateInbox } from '../ws/send.js'
 import { itemFilePlan, itemImageEdits, itemUrls, setItemFilesOp, setItemImagesOp } from '../items-ops.js'
-import { createArtifactOp, linksFor, listArtifactsOp, type OkBody, openInEditor, updateArtifactOp } from '../artifacts-ops.js'
+import { createArtifactOp, listArtifactsOp, type OkBody, updateArtifactOp } from '../artifacts-ops.js'
 import type { ScopedCtx } from './ctx.js'
 
 export async function briefRoutes({ req, res, url, json, rt }: ScopedCtx): Promise<boolean> {
@@ -209,30 +209,22 @@ export async function briefRoutes({ req, res, url, json, rt }: ScopedCtx): Promi
     json(body.ok ? 200 : 500, body)
     return true
   }
-  if (url.pathname === '/api/artifacts/content' && req.method === 'GET') {
-    let body: ArtifactContentResponse
-    try {
-      const id = url.searchParams.get('id') ?? ''
-      const a = id ? await rt.artifacts.read(id) : null
-      if (!a) throw new Error('no such artifact')
-      body = { ok: true, artifact: a.artifact, body: a.body, links: await linksFor(rt, 'artifact', id), abs: a.abs }
-    } catch (err) {
-      body = { ok: false, error: errText(err) }
-    }
-    json(body.ok ? 200 : 404, body)
-    return true
-  }
   if (url.pathname === '/api/artifacts' && (req.method === 'POST' || req.method === 'PUT')) {
     let body: ArtifactResponse
     try {
-      const parsed = await readJsonBody(req)
-      if (req.method === 'POST') body = { ok: true, artifact: await createArtifactOp(rt, parsed, 'human') }
-      else {
+      // The op allows a 2 MB body, which JSON-escaped is more than readJsonBody's default.
+      const parsed = await readJsonBody(req, 5_000_000)
+      // No calling session here: a `from:` over HTTP resolves under the temp folder only.
+      if (req.method === 'POST') {
+        const r = await createArtifactOp(rt, parsed, 'human')
+        body = { ok: true, artifact: r.artifact, action: r.action, version: r.version }
+      } else {
         const id = url.searchParams.get('id') ?? ''
         if (!id) throw new Error('need an artifact id')
         // The stdio shim edits as the model (`?by=model`) and is held to the model's rule.
         const by: ArtifactAuthor = url.searchParams.get('by') === 'model' ? 'model' : 'human'
-        body = { ok: true, artifact: await updateArtifactOp(rt, id, parsed, by) }
+        const r = await updateArtifactOp(rt, id, parsed, by)
+        body = { ok: true, artifact: r.artifact, action: r.action, version: r.version }
       }
     } catch (err) {
       body = { ok: false, error: errText(err) }
@@ -263,22 +255,6 @@ export async function briefRoutes({ req, res, url, json, rt }: ScopedCtx): Promi
       body = { ok: false, error: errText(err) }
     }
     json(body.ok ? 200 : 500, body)
-    return true
-  }
-  // Open the file in the user's own editor. The server runs on their machine.
-  if (url.pathname === '/api/artifacts/open' && req.method === 'POST') {
-    let body: OkBody
-    try {
-      const parsed = (await readJsonBody(req)) as { id?: unknown } | null
-      const id = typeof parsed?.id === 'string' ? parsed.id : ''
-      const a = id ? await rt.artifacts.read(id) : null
-      if (!a) throw new Error('no such artifact')
-      await openInEditor(a.abs)
-      body = { ok: true }
-    } catch (err) {
-      body = { ok: false, error: errText(err) }
-    }
-    json(body.ok ? 200 : 400, body)
     return true
   }
   return false

@@ -11,12 +11,17 @@ import { addToTodayOp, ensureToday, removeFromTodayOp, savePersonaOp, todayJson,
 import { errText } from './errors.js'
 import { workspaceInfo } from './workspace/wiring.js'
 import { draftJobOp, draftJobText, tryJobOp } from './jobs/ops.js'
-import { addLinkOp, createArtifactOp, listArtifactsOp, updateArtifactOp } from './artifacts-ops.js'
+import { addLinkOp, createArtifactOp, listArtifactsOp, toolResult, updateArtifactOp } from './artifacts-ops.js'
 
 export const okResult = (text: string) => ({ content: [{ type: 'text' as const, text }] })
 export const errResult = (text: string) => ({ content: [{ type: 'text' as const, text }], isError: true })
 
-export function makeTriageMcp(rt: WorkspaceRuntime) {
+/**
+ * `sessionId` is the chat this server instance belongs to (one instance per
+ * session, see WorkspaceRuntime.triageMcp). The artifact writes use it to link
+ * what the session publishes to the session, so the model never has to pass it.
+ */
+export function makeTriageMcp(rt: WorkspaceRuntime, sessionId?: string) {
   return createSdkMcpServer({
     name: 'triage',
     version: VERSION,
@@ -274,12 +279,12 @@ export function makeTriageMcp(rt: WorkspaceRuntime) {
           }
         },
       ),
-      // Artifacts: the user's markdown notes and briefs beside the inbox
-      // (.docs/next-version.md). Reads are auto-allowed; writes prompt like
+      // Artifacts: files kept beside the inbox (.docs/next-version.md): notes,
+      // pages, tables, images. Reads are auto-allowed; writes prompt like
       // every other triage write, and the model may only rewrite its own.
       tool(
         'list_artifacts',
-        "List this workspace's artifacts — markdown notes and briefs kept beside the work items — with id, title, author (human|model), refs, path and links. Read one with read_artifact.",
+        "List this workspace's artifacts — files kept beside the work items (notes, briefs, pages, tables, images) — with id, title, format, version, author (human|model), refs, path and links. Read one with read_artifact.",
         { all: z.boolean().optional().describe('include briefs of finished (done/archived) items, hidden by default') },
         async (args) => {
           try {
@@ -292,20 +297,28 @@ export function makeTriageMcp(rt: WorkspaceRuntime) {
       ),
       tool(
         'read_artifact',
-        'Read one artifact by id: title, author, refs, its path on disk, and the full markdown body.',
-        { id: z.string().describe('the artifact id from list_artifacts') },
+        'Read one artifact by id: title, format, version, author, refs, its path on disk, and the full text (markdown without its frontmatter). A pdf or image has no text here: you get the header and the path. Pass version to read an older one.',
+        {
+          id: z.string().describe('the artifact id from list_artifacts'),
+          version: z.number().int().min(1).optional().describe('an older version; omit for the current one'),
+        },
         async (args) => {
           try {
-            const a = await rt.artifacts.read(args.id)
-            if (!a) return errResult('no such artifact')
+            const t = await rt.artifacts.readText(args.id, args.version)
+            if (!t) return errResult('no such artifact')
+            const a = t.artifact
             const head = [
-              `title: ${a.artifact.title}`,
-              `id: ${a.artifact.id}`,
-              `author: ${a.artifact.author}`,
-              `path: ${a.abs}`,
-              a.artifact.refs.length ? `refs: ${a.artifact.refs.join(', ')}` : undefined,
+              `title: ${a.title}`,
+              `id: ${a.id}`,
+              `format: ${a.format}`,
+              `version: ${t.version}${t.latest ? '' : ` (current is v${a.version})`}`,
+              `author: ${a.author}`,
+              `path: ${t.abs}`,
+              a.refs.length ? `refs: ${a.refs.join(', ')}` : undefined,
+              t.truncated ? 'note: the text is cut at 2 MB' : undefined,
+              t.binary ? 'note: binary file, no text here; open the path' : undefined,
             ].filter((l): l is string => typeof l === 'string')
-            return okResult(`${head.join('\n')}\n\n${a.body}`)
+            return okResult(t.binary ? head.join('\n') : `${head.join('\n')}\n\n${t.text}`)
           } catch (err) {
             return errResult(errText(err))
           }
@@ -313,26 +326,34 @@ export function makeTriageMcp(rt: WorkspaceRuntime) {
       ),
       tool(
         'write_artifact',
-        'Create a new artifact (a markdown note authored by you, the model) in the workspace, optionally linked to a work item or session as context. Returns its id. Use update_artifact to change it later.',
+        'Publish a file as an artifact: a document, page, table, image or other output the user should open. It shows up as a card in this chat, in this session\'s Artifacts and in the Artifacts tab, and every version is kept. Use it for finished work the user will read or share: a report, a chart, a CSV, a PDF. Do not use it for code that belongs in the repo (use Write or Edit; those show under Changes) or for notes to yourself. Text formats (md, html, csv, txt, json, svg): pass title, body and format. Binary or script-made files (pdf, png, jpg, gif, webp, or anything big): make the file, then pass from with its absolute path. To change an artifact you already published, call update_artifact with its id. Never write report-v2.html. Files over 25 MB are refused. Returns JSON with the id and version.',
         {
           title: z.string().describe('a short title'),
-          body: z.string().describe('the markdown body'),
+          format: z
+            .enum(['md', 'html', 'csv', 'txt', 'json', 'svg', 'pdf', 'png', 'jpg', 'gif', 'webp'])
+            .optional()
+            .describe('md (default), html, csv, txt, json or svg: send them as body. pdf, png, jpg, gif, webp, or any big or script-made file: use from.'),
+          body: z.string().optional().describe('the content, for md html csv txt json svg. Up to 2 MB; bigger goes through from.'),
+          from: z
+            .string()
+            .optional()
+            .describe('absolute path of a file you made, in the project folder or the temp folder. triage copies it; later edits to the original do not change the artifact.'),
+          note: z.string().max(500).optional().describe('one line about this version'),
           refs: z.array(z.string()).optional().describe('GitHub PR/issue URLs or Linear keys this note is about'),
           links: z
             .array(
               z.object({
                 kind: z.enum(['item', 'session']),
                 id: z.string(),
-                role: z.enum(['brief', 'context', 'dispatch']),
+                role: z.enum(['brief', 'context', 'dispatch', 'output']),
               }),
             )
             .optional()
-            .describe('attach to a work item or session; role is usually "context"'),
+            .describe('extra links. This session is linked as the output on its own; you do not need to pass it.'),
         },
         async (args) => {
           try {
-            const a = await createArtifactOp(rt, args, 'model')
-            return okResult(`ok: created ${a.id} at ${a.path}`)
+            return okResult(JSON.stringify(toolResult(await createArtifactOp(rt, args, 'model', { sessionId }))))
           } catch (err) {
             return errResult(errText(err))
           }
@@ -340,18 +361,19 @@ export function makeTriageMcp(rt: WorkspaceRuntime) {
       ),
       tool(
         'update_artifact',
-        'Rewrite an artifact you (the model) authored, in place: any of title, body, refs. Human-authored artifacts are refused — propose the change to the user instead.',
+        'Publish a new version of an artifact you wrote: same id, same card, history kept. Pass the new body (text formats) or from (a file path), and a note: one line on what changed. Use this instead of writing a second artifact such as report-v2.html. The format cannot change; publish a new artifact for that. For non-markdown files, a title or refs change alone does not make a new version. Human-authored artifacts are refused: propose the change in chat.',
         {
           id: z.string(),
           title: z.string().optional(),
           body: z.string().optional(),
+          from: z.string().optional().describe('absolute path of a file you made, in the project folder or the temp folder; triage copies it'),
+          note: z.string().max(500).optional().describe('one line on what changed in this version'),
           refs: z.array(z.string()).optional(),
         },
         async (args) => {
           try {
             const { id, ...patch } = args
-            const a = await updateArtifactOp(rt, id, patch, 'model')
-            return okResult(`ok: updated ${a.path}`)
+            return okResult(JSON.stringify(toolResult(await updateArtifactOp(rt, id, patch, 'model', { sessionId }))))
           } catch (err) {
             return errResult(errText(err))
           }
@@ -364,7 +386,7 @@ export function makeTriageMcp(rt: WorkspaceRuntime) {
           artifactId: z.string(),
           kind: z.enum(['item', 'session']),
           id: z.string(),
-          role: z.enum(['brief', 'context', 'dispatch']),
+          role: z.enum(['brief', 'context', 'dispatch', 'output']),
         },
         async (args) => {
           try {

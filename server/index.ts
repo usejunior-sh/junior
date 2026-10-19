@@ -44,6 +44,7 @@ import { itemRoutes } from './routes/items.js'
 import { itemWriteRoutes } from './routes/items-write.js'
 import { settingsRoutes } from './routes/settings.js'
 import { libraryRoutes } from './routes/library.js'
+import { artifactFileRoutes } from './routes/artifact-files.js'
 import { briefRoutes } from './routes/briefs.js'
 import { actionRoutes } from './routes/actions.js'
 import type { RouteCtx, ScopedCtx } from './routes/ctx.js'
@@ -77,6 +78,7 @@ const server = http.createServer(async (req, res) => {
   if (await itemWriteRoutes(scoped)) return
   if (await settingsRoutes(scoped)) return
   if (await libraryRoutes(scoped)) return
+  if (await artifactFileRoutes(scoped)) return
   if (await briefRoutes(scoped)) return
   if (await actionRoutes(scoped)) return
   await serveWeb(url.pathname, res)

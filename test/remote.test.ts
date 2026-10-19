@@ -19,6 +19,7 @@ import {
   tryPairCode,
   type RemoteConfig,
 } from '../server/remote.js'
+import { ARTIFACT_RAW_PATH, openDenied } from '../server/artifact-serve.js'
 
 const TOKEN = 'a'.repeat(32)
 const on: RemoteConfig = { enabled: true, token: TOKEN, tunnel: false }
@@ -121,4 +122,12 @@ test('codesAllowed: a direct local-network socket only — never through a tunne
   assert.equal(codesAllowed(req('192.168.1.40', {})), true)
   assert.equal(codesAllowed(req('127.0.0.1', { 'x-forwarded-for': '192.168.1.40', host: 'abc.ngrok-free.app' })), false)
   assert.equal(codesAllowed(req('8.8.8.8', {})), false)
+})
+
+test('artifact files: the raw route is under /api/ so the gate covers it, and only this machine opens editors', () => {
+  // gateRoutes answers 401 to a denied device for everything under /api/
+  assert.ok(ARTIFACT_RAW_PATH.startsWith('/api/'))
+  assert.equal(openDenied('local'), null)
+  assert.match(openDenied('paired') ?? '', /editors open on the Mac/)
+  assert.match(openDenied('denied') ?? '', /editors open on the Mac/)
 })

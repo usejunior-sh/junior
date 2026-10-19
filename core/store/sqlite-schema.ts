@@ -90,6 +90,16 @@ export function ensureDurableSchema(db: DatabaseSync) {
     if (!have.has(col)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${decl}`)
   }
 
+  // Artifacts of any format, with versions: `format` is what the file is (md for every row before),
+  // `version` the commits that touched it (backfilled from git on the first index), `history` 0 for a
+  // file over 10 MB kept without history. Here and not in a numbered migration: an ALTER there breaks
+  // a DB wound back to an earlier version (test/session-provider.test.ts does that).
+  const a = cols('artifacts')
+  ensure('artifacts', 'format', "format TEXT NOT NULL DEFAULT 'md'", a)
+  ensure('artifacts', 'version', 'version INTEGER NOT NULL DEFAULT 1', a)
+  ensure('artifacts', 'history', 'history INTEGER NOT NULL DEFAULT 1', a)
+  db.exec('CREATE INDEX IF NOT EXISTS idx_artifacts_format ON artifacts(format)')
+
   const s = cols('sessions')
   ensure('sessions', 'kind', 'kind TEXT', s)
   ensure('sessions', 'job_id', 'job_id TEXT', s)

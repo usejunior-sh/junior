@@ -1,7 +1,7 @@
 import { stat } from 'node:fs/promises'
 import path from 'node:path'
 import os from 'node:os'
-import { MAX_INLINE_FILE_BYTES, MAX_INLINE_TOTAL_BYTES, type Mention, type ResolvedMention, type SdkMessage } from '../../shared/protocol.js'
+import { isTextFormat, MAX_INLINE_FILE_BYTES, MAX_INLINE_TOTAL_BYTES, type Mention, type ResolvedMention, type SdkMessage } from '../../shared/protocol.js'
 import { resolveFileMention } from '../files.js'
 import { WorkspaceRuntime } from '../workspace/runtime.js'
 import { summarize } from './summaries.js'
@@ -150,8 +150,14 @@ export async function resolveMentions(
         blocks.push(attachmentTag('artifact', { id: m.ref, note: 'could not be attached: no such artifact in this workspace' }))
         continue
       }
-      const bytes = Buffer.byteLength(a.body, 'utf8')
       const attrs = { id: a.artifact.id, title: a.artifact.title, author: a.artifact.author, path: a.abs }
+      if (!isTextFormat(a.artifact.format)) {
+        // a pdf or image has no text to inline; the path is what the model can open
+        resolved.push({ ...m, label: a.artifact.title, bytes: a.artifact.size, inlined: false, error: 'binary file' })
+        blocks.push(attachmentTag('artifact', { ...attrs, format: a.artifact.format, bytes: a.artifact.size, note: 'binary file, read it from disk' }))
+        continue
+      }
+      const bytes = Buffer.byteLength(a.body, 'utf8')
       if (bytes > MAX_INLINE_FILE_BYTES || bytes > budget) {
         const error = bytes > MAX_INLINE_FILE_BYTES ? `too large to inline (${Math.round(bytes / 1024)} KB)` : 'over the per-message inline budget'
         resolved.push({ ...m, label: a.artifact.title, bytes, inlined: false, error })

@@ -99,8 +99,10 @@ export class WorkspaceRuntime {
    * transport, so a second concurrent session handed the same object loses
    * its connect and lands `status: "failed"` in system/init: a chat with no
    * mcp__triage__* tools whenever another session in the workspace is live.
+   * `sessionId` is the session it serves: it is how write_artifact knows which
+   * session to link a published file to.
    */
-  readonly triageMcp: () => ReturnType<typeof createSdkMcpServer>
+  readonly triageMcp: (sessionId?: string) => ReturnType<typeof createSdkMcpServer>
   /** Junior's persona here (core/junior/persona.ts): loaded at boot, replaced on every save */
   persona: Persona = DEFAULT_PERSONA
   /** the coding agent this workspace's sessions, runs and probes go through (its meta names it) */
@@ -228,7 +230,7 @@ export class WorkspaceRuntime {
     void ensureWorkspacePlugin(this.libraryDir).catch((err) => log('warn', 'library', `could not set up ${this.libraryDir}: ${errText(err)}`))
     this.jobFiles = new JobFiles(workspaceDir(meta.id))
     this.actionsFile = new ActionsFile(workspaceDir(meta.id))
-    this.triageMcp = () => makeTriageMcp(this)
+    this.triageMcp = (sessionId) => makeTriageMcp(this, sessionId)
     this.terminals = new TerminalManager(
       (msg) => broadcast(this, msg),
       (level, msg) => log(level, 'terminal', msg, { workspace: meta.id }),

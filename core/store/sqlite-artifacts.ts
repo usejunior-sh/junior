@@ -1,6 +1,6 @@
 import { DatabaseSync } from 'node:sqlite'
 import { randomUUID } from 'node:crypto'
-import { type Artifact, isArtifactAuthor, type Link, isLinkKind, isLinkRole, type LinkKind, type BriefJob, type BriefStatus } from '../../shared/protocol.js'
+import { type Artifact, isArtifactAuthor, isArtifactFormat, type Link, isLinkKind, isLinkRole, type LinkKind, type BriefJob, type BriefStatus } from '../../shared/protocol.js'
 import type { ArtifactStore, LinkStore, NewLink, BriefJobStore, NewBriefJob } from './types.js'
 
 type ArtifactRow = {
@@ -15,6 +15,9 @@ type ArtifactRow = {
   size: number
   indexed_at: number
   warning: string | null
+  format: string
+  version: number
+  history: number
 }
 
 const toArtifact = (r: ArtifactRow): Artifact => ({
@@ -34,6 +37,9 @@ const toArtifact = (r: ArtifactRow): Artifact => ({
   updated: r.updated,
   mtime: r.mtime,
   size: r.size,
+  format: isArtifactFormat(r.format) ? r.format : 'md',
+  version: r.version >= 1 ? r.version : 1,
+  history: r.history !== 0,
   ...(r.warning ? { warning: r.warning } : {}),
 })
 
@@ -46,14 +52,18 @@ export class SqliteArtifacts implements ArtifactStore {
     this.db.prepare('DELETE FROM artifacts WHERE path = ? AND id != ?').run(a.path, a.id)
     this.db
       .prepare(
-        `INSERT INTO artifacts (id, path, title, author, refs, created, updated, mtime, size, indexed_at, warning)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `INSERT INTO artifacts (id, path, title, author, refs, created, updated, mtime, size, indexed_at, warning, format, version, history)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET
            path = excluded.path, title = excluded.title, author = excluded.author, refs = excluded.refs,
            created = excluded.created, updated = excluded.updated, mtime = excluded.mtime,
-           size = excluded.size, indexed_at = excluded.indexed_at, warning = excluded.warning`,
+           size = excluded.size, indexed_at = excluded.indexed_at, warning = excluded.warning,
+           format = excluded.format, version = excluded.version, history = excluded.history`,
       )
-      .run(a.id, a.path, a.title, a.author, JSON.stringify(a.refs), a.created, a.updated, a.mtime, a.size, Date.now(), a.warning ?? null)
+      .run(
+        a.id, a.path, a.title, a.author, JSON.stringify(a.refs), a.created, a.updated, a.mtime, a.size, Date.now(), a.warning ?? null,
+        a.format, a.version, a.history ? 1 : 0,
+      )
   }
 
   async get(id: string): Promise<Artifact | null> {

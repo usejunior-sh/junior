@@ -384,7 +384,7 @@ async function seedArtifacts(store: Store, ws: string, now: number): Promise<voi
     )
     const st = statSync(file)
     at(updated)
-    await store.artifacts.upsert({ id: a.id, path: a.path, title: a.title, author: a.author, refs: a.refs, created: updated - 3 * MIN, updated, mtime: st.mtimeMs, size: st.size })
+    await store.artifacts.upsert({ id: a.id, path: a.path, title: a.title, author: a.author, refs: a.refs, created: updated - 3 * MIN, updated, mtime: st.mtimeMs, size: st.size, format: 'md', version: 1, history: true })
     if (!a.link) continue
     await store.links.add({ fromKind: 'artifact', fromId: a.id, toKind: 'item', toId: a.link.itemId, role: a.link.role })
     if (a.playbook) {

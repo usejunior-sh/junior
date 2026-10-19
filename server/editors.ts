@@ -83,6 +83,13 @@ export async function openFolderIn(folder: string, editor: string): Promise<void
   await pExecFile('open', ['-b', known.bundleId, folder])
 }
 
+/** Show one file in the file manager, selected: `open -R` on a Mac. */
+export async function revealFile(file: string): Promise<void> {
+  if (process.platform === 'darwin') await pExecFile('open', ['-R', file])
+  else if (process.platform === 'win32') await pExecFile('explorer', [`/select,${file}`]).catch(() => {}) // explorer exits 1 on success
+  else await pExecFile('xdg-open', [path.dirname(file)])
+}
+
 /**
  * Open one file in `editor` when it is installed here, else in the first
  * editor found (Cursor leads the list), else in whatever the OS opens it with.
@@ -99,7 +106,13 @@ export async function openFileIn(file: string, editor?: string): Promise<void> {
  * under one of `roots`. Both sides are resolved through symlinks, so neither
  * `..` nor a link pointing out of a project gets a file outside it opened.
  */
-export async function openableFile(file: string, cwd: string, roots: readonly string[]): Promise<string> {
+export async function openableFile(
+  file: string,
+  cwd: string,
+  roots: readonly string[],
+  /** what to say about a file outside every root (the artifact `from:` rule words it its own way) */
+  outside = "that file is outside this session's project",
+): Promise<string> {
   if (!file) throw new Error('need a file')
   let real: string
   try {
@@ -114,5 +127,5 @@ export async function openableFile(file: string, cwd: string, roots: readonly st
       return real
     }
   }
-  throw new Error("that file is outside this session's project")
+  throw new Error(outside)
 }
