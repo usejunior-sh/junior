@@ -16,7 +16,8 @@ import {
   claudeLoginCommand,
   claudeTranscriptDir,
 } from './claude-config.js'
-import type { AccountStatus, AgentSession, Provider, ToolVeto, UserTurn } from './types.js'
+import type { AccountStatus, AgentSession, Provider, ProviderEvent, SpawnEnv, ToolVeto, UserTurn } from './types.js'
+import { noteClaudeStart } from '../usage/login-ledger.js'
 
 // The permission modes the SDK understands and can be handed straight through.
 // 'gated' and 'default' are absent: 'default' is the SDK's own baseline (pinning
@@ -76,6 +77,17 @@ async function withProbe<T>(options: Parameters<typeof query>[0]['options'], ask
   }
 }
 
+/** The key a spawn with `env` bills to, if any: its own env, else the daemon's, which it inherits. */
+const spawnKey = (env: SpawnEnv): string | undefined => (env ?? process.env)[CLAUDE_API_KEY_VAR]
+
+/** The stream as it is, each spawn's login noted for the usage ledger on the way past. */
+async function* noted(events: AsyncGenerator<ProviderEvent>, env: SpawnEnv): AsyncGenerator<ProviderEvent> {
+  for await (const ev of events) {
+    if (ev.kind === 'started') void noteClaudeStart(ev.record as object, spawnKey(env))
+    yield ev
+  }
+}
+
 export const claude: Provider = {
   id: 'claude',
   label: 'Claude Code',
@@ -131,7 +143,7 @@ export const claude: Provider = {
         canUseTool: (toolName, toolInput, opts) => spec.approve(toolName, toolInput, opts),
       },
     })
-    const events = claudeEvents(q)
+    const events = noted(claudeEvents(q), spec.env)
     return {
       [Symbol.asyncIterator]: () => events,
       setModel: (model) => q.setModel(model),
@@ -180,7 +192,7 @@ export const claude: Provider = {
         ...(spec.env ? { env: spec.env } : {}),
       },
     })
-    return claudeEvents(q)
+    return noted(claudeEvents(q), spec.env)
   },
 
   mcpStatus({ cwd, env, servers }) {
@@ -286,6 +298,7 @@ export const claude: Provider = {
       })
       for await (const msg of q) {
         const m = msg as unknown as SdkMessage & { subtype?: string; result?: string }
+        if (m.type === 'system' && m.subtype === 'init') void noteClaudeStart(m, spawnKey(env))
         if (m.type === 'result') {
           if (m.subtype === 'success') return { ok: true }
           return { ok: false, error: typeof m.result === 'string' && m.result ? m.result : `auth check failed (${m.subtype})` }

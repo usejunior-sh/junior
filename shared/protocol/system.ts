@@ -148,7 +148,34 @@ export type UsageSummary = {
   scan: { files: number; reread: number; ms: number }
 }
 
-export type UsageResponse = { ok: true; usage: UsageSummary } | { ok: false; error: string }
+/**
+ * One login Claude Code ran on, for the Usage tab's filter (`&login=<id>`).
+ * `account` is a claude.ai login, one per Claude config dir; `api-key` is one
+ * per distinct key, however many workspaces share it. Every login a workspace
+ * has set up is listed, spent or not, so the filter holds still across windows.
+ */
+export type UsageLogin = {
+  /** `machine`, `dir:<workspace>`, `key:<fingerprint>` or `key:unknown`. */
+  id: string
+  kind: 'account' | 'api-key'
+  /** "you@example.com", "API key …abcd". */
+  label: string
+  /** "Max · includes terminal sessions", or the workspaces on a key. */
+  detail?: string
+  cost: number
+  tokens: number
+  messages: number
+}
+
+export type UsageResponse =
+  | {
+      ok: true
+      usage: UsageSummary
+      logins: UsageLogin[]
+      /** The login `usage` is for; null = every login. An unknown id asked for reads as null. */
+      login: string | null
+    }
+  | { ok: false; error: string }
 
 // Per-session spend (GET /api/usage/sessions?ids=…&days=…)
 //

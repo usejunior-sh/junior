@@ -6,7 +6,7 @@ import { summarize as summarizeUsage } from '../../core/usage/summary.js'
 import type { ProviderId } from '../providers/types.js'
 import { log } from '../log.js'
 import { WorkspaceRuntime } from './runtime.js'
-import { claudeProjectRoots } from '../jobs/scheduler.js'
+import { claudeProjectRoots, usageByLogin, workspaceLogin } from '../usage/logins.js'
 
 /** Every agent this build knows, as the workspace has it set up, the primary first. */
 export function wireProviders(meta: WorkspaceMeta): WorkspaceProvider[] {
@@ -31,7 +31,7 @@ const PROVIDER_STATUS_TTL_MS = 2 * 60_000
  * Each connected agent's account, plan windows and recent use, read from the
  * agent itself. A throwaway subprocess apiece, so cached for a couple of
  * minutes and shared by concurrent askers. Claude's recent spend is the Usage
- * tab's ledger (this machine's transcripts); Codex reports its own.
+ * tab's ledger, narrowed to the login this workspace runs on; Codex reports its own.
  */
 export function readProviderStatus(rt: WorkspaceRuntime, refresh = false): Promise<ProviderStatus[]> {
   if (!refresh && rt.providerStatus && Date.now() - rt.providerStatus.at < PROVIDER_STATUS_TTL_MS) {
@@ -44,7 +44,7 @@ export function readProviderStatus(rt: WorkspaceRuntime, refresh = false): Promi
       connected.map(async ({ id }): Promise<ProviderStatus> => {
         const [status, recent] = await Promise.all([
           providerFor(id).account(rt.envFor(id)),
-          id === 'claude' ? claudeRecent(30).catch(() => undefined) : Promise.resolve(undefined),
+          id === 'claude' ? claudeRecent(rt.meta, 30).catch(() => undefined) : Promise.resolve(undefined),
         ])
         return { id, ...status, ...(recent ? { recent } : {}), checkedAt: Date.now() }
       }),
@@ -56,14 +56,15 @@ export function readProviderStatus(rt: WorkspaceRuntime, refresh = false): Promi
   return run
 }
 
-/** What Claude Code spent on this machine over the last `days` days. */
-async function claudeRecent(days: number): Promise<ProviderStatus['recent']> {
+/** What Claude Code spent over the last `days` days on the login this workspace runs on. */
+async function claudeRecent(meta: WorkspaceMeta, days: number): Promise<ProviderStatus['recent']> {
   const now = Date.now()
   const start = new Date(now)
   start.setHours(0, 0, 0, 0)
   const since = start.getTime() - (days - 1) * 86_400_000
   const { entries } = await scanUsage(claudeProjectRoots(), since)
-  const { totals } = summarizeUsage(entries, since, now)
+  const { groups } = await usageByLogin(entries)
+  const { totals } = summarizeUsage(groups.get(workspaceLogin(meta)) ?? [], since, now)
   return { days, tokens: totals.tokens, costUsd: totals.cost }
 }
 

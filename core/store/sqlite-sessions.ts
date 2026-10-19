@@ -1,6 +1,6 @@
 import { DatabaseSync } from 'node:sqlite'
 import { type EffortLevel, type PermissionMode, type ProviderId, isProviderId, type SessionEvent, type InboxSnapshot } from '../../shared/protocol.js'
-import type { StoredSession, SessionStore, NewSession, SessionKind, JobRunRecord, StoredTurn, TurnStore, EventStore, StoredEvent, InboxStore, ConfigStore } from './types.js'
+import type { StoredSession, SessionStore, NewSession, SessionKind, JobRunRecord, StoredTurn, TurnStore, EventStore, StoredEvent, SdkInit, InboxStore, ConfigStore } from './types.js'
 import { toRunStatus, toTrigger } from './sqlite-jobs.js'
 
 type SessionRow = {
@@ -319,6 +319,27 @@ export class SqliteEvents implements EventStore {
       .prepare('SELECT COALESCE(MAX(seq), 0) AS s FROM session_events WHERE session_id = ?')
       .get(sessionId) as { s: number }
     return r.s
+  }
+
+  async sdkInits(after: number, page = 4000): Promise<{ next: number; done: boolean; inits: SdkInit[] }> {
+    const { m } = this.db.prepare('SELECT COALESCE(MAX(rowid), 0) AS m FROM session_events').get() as { m: number }
+    const upTo = Math.min(after + page, m)
+    // instr() before json_extract(): only an init line pays for the parse.
+    const rows = this.db
+      .prepare(
+        `SELECT created_at AS at,
+                json_extract(payload, '$.message.session_id') AS sid,
+                json_extract(payload, '$.message.apiKeySource') AS src
+           FROM session_events
+          WHERE rowid > ? AND rowid <= ? AND kind = 'sdk'
+            AND instr(payload, '"subtype":"init"') > 0
+            AND json_extract(payload, '$.message.subtype') = 'init'`,
+      )
+      .all(after, upTo) as { at: number; sid: unknown; src: unknown }[]
+    const inits = rows.flatMap((r) =>
+      typeof r.sid === 'string' && typeof r.src === 'string' ? [{ sessionId: r.sid, at: r.at, apiKeySource: r.src }] : [],
+    )
+    return { next: upTo, done: upTo >= m, inits }
   }
 }
 

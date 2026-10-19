@@ -43,6 +43,8 @@ export type UsageEntry = TokenCounts & {
   fast: boolean
   /** Spent by a subagent of `sessionId`, not by the session's own agent. */
   subagent: boolean
+  /** The `projects/` root the transcript sits under: which Claude config dir, so which login. */
+  root: string
 }
 
 type FileCache = { size: number; mtimeMs: number; entries: UsageEntry[] }
@@ -56,7 +58,7 @@ const MAX_ENTRIES_PER_FILE = 200_000
 const num = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? v : 0)
 
 /** Pull the usage out of one transcript line, or `null` if it carries none. */
-function entryFrom(line: string): UsageEntry | null {
+function entryFrom(line: string, root: string): UsageEntry | null {
   let row: Record<string, any>
   try {
     row = JSON.parse(line)
@@ -87,6 +89,7 @@ function entryFrom(line: string): UsageEntry | null {
     sessionId: typeof row.sessionId === 'string' ? row.sessionId : '',
     fast: usage.speed === 'fast',
     subagent: row.isSidechain === true,
+    root,
     input: num(usage.input_tokens),
     output: num(usage.output_tokens),
     cacheWrite5m: fiveMin,
@@ -95,7 +98,7 @@ function entryFrom(line: string): UsageEntry | null {
   }
 }
 
-async function readFileEntries(path: string): Promise<UsageEntry[]> {
+async function readFileEntries(path: string, root: string): Promise<UsageEntry[]> {
   const entries: UsageEntry[] = []
   const rl = createInterface({ input: createReadStream(path, { encoding: 'utf8' }), crlfDelay: Infinity })
   try {
@@ -103,7 +106,7 @@ async function readFileEntries(path: string): Promise<UsageEntry[]> {
       // Cheap gate: only assistant lines carry a usage block, and they are a
       // small minority of a transcript.
       if (!line.includes('"usage"')) continue
-      const e = entryFrom(line)
+      const e = entryFrom(line, root)
       if (e) entries.push(e)
       if (entries.length >= MAX_ENTRIES_PER_FILE) break
     }
@@ -170,10 +173,10 @@ export type ScanResult = {
  * transcript last written months ago.
  */
 export async function scanUsage(roots: string[], since: number): Promise<ScanResult> {
-  const paths = (await Promise.all(roots.map(transcripts))).flat()
+  const paths = (await Promise.all(roots.map(async (root) => (await transcripts(root)).map((path) => ({ path, root }))))).flat()
   let reread = 0
 
-  const perFile = await mapLimit(paths, 8, async (path) => {
+  const perFile = await mapLimit(paths, 8, async ({ path, root }) => {
     let info
     try {
       info = await stat(path)
@@ -188,7 +191,7 @@ export async function scanUsage(roots: string[], since: number): Promise<ScanRes
     const hit = cache.get(path)
     if (hit && hit.size === info.size && hit.mtimeMs === info.mtimeMs) return hit.entries
     reread++
-    const entries = await readFileEntries(path)
+    const entries = await readFileEntries(path, root)
     cache.set(path, { size: info.size, mtimeMs: info.mtimeMs, entries })
     return entries
   })

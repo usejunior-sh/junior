@@ -120,6 +120,9 @@ export type StoredEvent = {
   createdAt: number
 }
 
+/** A Claude spawn's `system`/`init` as the event log kept it: which login it started on. */
+export type SdkInit = { sessionId: string; at: number; apiKeySource: string }
+
 export interface SessionStore {
   create(s: NewSession): Promise<StoredSession>
   get(id: string): Promise<StoredSession | null>
@@ -200,6 +203,12 @@ export interface EventStore {
   read(sessionId: string, afterSeq?: number): Promise<StoredEvent[]>
   /** The highest seq for a session, or 0 if none. */
   lastSeq(sessionId: string): Promise<number>
+  /**
+   * Claude spawn inits logged past the cursor `after`, across every session,
+   * one page of the log at a time so a big log never holds the loop for long.
+   * Ask again from `next` until `done`.
+   */
+  sdkInits(after: number, page?: number): Promise<{ next: number; done: boolean; inits: SdkInit[] }>
 }
 
 export interface InboxStore {

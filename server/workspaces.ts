@@ -221,7 +221,7 @@ function readEnvFile(id: string): Record<string, string> {
   return out
 }
 
-const storedApiKey = (meta: Pick<WorkspaceMeta, 'id' | 'provider'>, provider: ProviderId = meta.provider): string | undefined =>
+export const storedApiKey = (meta: Pick<WorkspaceMeta, 'id' | 'provider'>, provider: ProviderId = meta.provider): string | undefined =>
   readEnvFile(meta.id)[providerFor(provider).auth.apiKeyVar]
 
 /** "key set (…abcd)" material for the UI; the key itself never leaves disk. */

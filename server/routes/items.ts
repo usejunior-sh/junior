@@ -16,7 +16,8 @@ import { errText } from '../errors.js'
 import { jobFileReference, jobSpecFrom, saveJobText } from '../jobs/ops.js'
 import { jobLibrary } from '../session/changes.js'
 import { enqueueJob } from '../jobs/queue.js'
-import { claudeProjectRoots, systemStatus } from '../jobs/scheduler.js'
+import { systemStatus } from '../jobs/scheduler.js'
+import { claudeProjectRoots, usageByLogin } from '../usage/logins.js'
 import type { ScopedCtx } from './ctx.js'
 
 export async function itemRoutes({ req, url, json, rt }: ScopedCtx): Promise<boolean> {
@@ -250,9 +251,10 @@ export async function itemRoutes({ req, url, json, rt }: ScopedCtx): Promise<boo
   // What Claude Code has spent on this machine, read from its own transcripts.
   // Machine-wide on purpose: a session started in a terminal costs the same
   // money as one started here, and the user asked what they are spending.
+  // `login` narrows it to one login's share.
   if (url.pathname === '/api/usage' && req.method === 'GET') {
-    const asked = Number(url.searchParams.get('days'))
-    const days = USAGE_WINDOWS.includes(asked as (typeof USAGE_WINDOWS)[number]) ? asked : 30
+    const windowDays = Number(url.searchParams.get('days'))
+    const days = USAGE_WINDOWS.includes(windowDays as (typeof USAGE_WINDOWS)[number]) ? windowDays : 30
     const now = Date.now()
     // From the start of the day `days - 1` ago, so "7 days" is seven columns.
     const start = new Date(now)
@@ -262,9 +264,12 @@ export async function itemRoutes({ req, url, json, rt }: ScopedCtx): Promise<boo
     let body: UsageResponse
     try {
       const { entries, files, reread } = await scanUsage(claudeProjectRoots(), since)
-      const usage = summarizeUsage(entries, since, now)
+      const { logins, groups } = await usageByLogin(entries)
+      const asked = url.searchParams.get('login')
+      const login = asked && logins.some((l) => l.id === asked) ? asked : null
+      const usage = summarizeUsage(login ? (groups.get(login) ?? []) : entries, since, now)
       usage.scan = { files, reread, ms: Date.now() - began }
-      body = { ok: true, usage }
+      body = { ok: true, usage, logins, login }
     } catch (err) {
       body = { ok: false, error: err instanceof Error ? err.message : String(err) }
     }

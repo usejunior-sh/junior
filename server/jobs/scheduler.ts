@@ -1,7 +1,6 @@
 import type { Job } from '../../core/job/types.js'
 import { isOverdue, scheduleOf } from '../../core/job/schedule.js'
-import { claude } from '../providers/claude.js'
-import { dbFileFor, envOverridesFor, loadRegistry } from '../workspaces.js'
+import { dbFileFor } from '../workspaces.js'
 import type { SystemStatus } from '../../shared/protocol.js'
 import { launchAgentInstalled } from '../launchd.js'
 import { logFilePath } from '../log.js'
@@ -28,22 +27,6 @@ export async function overdueJobs(rt: WorkspaceRuntime, jobs: Job[], now: number
 }
 
 /** The daemon's live status for one workspace, for the System modal. */
-/**
- * Where Claude Code keeps its transcripts. The user's own `~/.claude` (or
- * whatever `CLAUDE_CONFIG_DIR` points at), plus the private config dir of
- * every Claude workspace on the `config-dir` auth backend. Those sessions are
- * the user's spend too, and they log somewhere else. Claude's only: the usage
- * ledger reads Claude Code's transcript format.
- */
-export function claudeProjectRoots(): string[] {
-  const roots = new Set<string>()
-  roots.add(claude.discovery.transcriptDir(undefined))
-  for (const ws of loadRegistry().workspaces) {
-    if (ws.provider === 'claude' && ws.authBackend === 'config-dir') roots.add(claude.discovery.transcriptDir(envOverridesFor(ws)))
-  }
-  return [...roots]
-}
-
 export async function systemStatus(rt: WorkspaceRuntime): Promise<SystemStatus> {
   const now = Date.now()
   const jobs = await rt.store.jobs.list()

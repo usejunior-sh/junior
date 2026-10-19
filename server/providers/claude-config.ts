@@ -53,6 +53,20 @@ async function readJson(file: string): Promise<Record<string, unknown> | null> {
 const objectOf = (v: unknown): Record<string, unknown> | null => (v && typeof v === 'object' ? (v as Record<string, unknown>) : null)
 
 /**
+ * Who a spawn with `env` is signed in as, from `.claude.json`'s `oauthAccount`:
+ * no subprocess, so cheap enough for a label. `null` when nobody is.
+ * `claude_max` reads as "Max".
+ */
+export async function claudeSignedIn(env: SpawnEnv): Promise<{ email?: string; plan?: string } | null> {
+  const account = objectOf((await readJson(claudeJsonFile(env)))?.oauthAccount)
+  if (!account) return null
+  const email = typeof account.emailAddress === 'string' ? account.emailAddress : undefined
+  const type = typeof account.organizationType === 'string' ? account.organizationType.replace(/^claude_/, '') : ''
+  const plan = type ? type.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase()) : undefined
+  return { ...(email ? { email } : {}), ...(plan ? { plan } : {}) }
+}
+
+/**
  * MCP servers from Claude Code's config files: the folder's shared `.mcp.json`
  * and every folder's private (local-scope) servers from `.claude.json`.
  */

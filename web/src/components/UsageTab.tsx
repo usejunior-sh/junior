@@ -5,11 +5,14 @@
  * this covers every session on the machine, not only the ones started here.
  * Cost is derived from API list prices: on a subscription it is what the same
  * tokens would have cost, which the footnote says out loud rather than
- * dressing an estimate up as a bill.
+ * dressing an estimate up as a bill. The login filter narrows it to one
+ * claude.ai login or one API key (server/usage/logins.ts says how a session
+ * is matched to its login).
  */
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { USAGE_WINDOWS, type UsageResponse, type UsageSummary } from '../../../shared/protocol.js'
+import { USAGE_WINDOWS, type UsageLogin, type UsageResponse, type UsageSummary } from '../../../shared/protocol.js'
 import { MAX_SERIES, OTHER, OTHER_KEY, SERIES, modelLabel, money, tokens } from '../usageFormat.js'
+import { Select, SelectGroup, SelectItem, SelectLabel, SelectSeparator } from '../ui/Select.js'
 
 type Metric = 'cost' | 'tokens'
 
@@ -27,9 +30,31 @@ function dayLabel(date: string): string {
 /** `/Users/you/Code/x` → `~/Code/x`. */
 const homely = (p: string) => p.replace(/^\/(?:Users|home)\/[^/]+/, '~')
 
+/** The login last picked, '' = all of them. */
+const LOGIN_KEY = 'triage.usageLogin'
+
+function readLogin(): string {
+  try {
+    return localStorage.getItem(LOGIN_KEY) ?? ''
+  } catch {
+    return ''
+  }
+}
+
+function saveLogin(id: string) {
+  try {
+    if (id) localStorage.setItem(LOGIN_KEY, id)
+    else localStorage.removeItem(LOGIN_KEY)
+  } catch {
+    // private mode: the pick lasts this visit
+  }
+}
+
 export function UsageTab({ refreshNonce }: { refreshNonce: number }) {
   const [days, setDays] = useState<number>(30)
   const [metric, setMetric] = useState<Metric>('cost')
+  const [login, setLogin] = useState(readLogin)
+  const [logins, setLogins] = useState<UsageLogin[]>([])
   const [usage, setUsage] = useState<UsageSummary | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -38,19 +63,27 @@ export function UsageTab({ refreshNonce }: { refreshNonce: number }) {
     let live = true
     setLoading(true)
     setError(null)
-    void fetch(`/api/usage?days=${days}`)
+    void fetch(`/api/usage?days=${days}${login ? `&login=${encodeURIComponent(login)}` : ''}`)
       .then((r) => r.json() as Promise<UsageResponse>)
       .then((b) => {
         if (!live) return
-        if (b.ok) setUsage(b.usage)
-        else setError(b.error)
+        if (!b.ok) return setError(b.error)
+        setUsage(b.usage)
+        setLogins(b.logins)
+        // A login that no longer exists (its workspace went) reads as all of them.
+        if ((b.login ?? '') !== login) pickLogin(b.login ?? '')
       })
       .catch((e: unknown) => live && setError(e instanceof Error ? e.message : String(e)))
       .finally(() => live && setLoading(false))
     return () => {
       live = false
     }
-  }, [days, refreshNonce])
+  }, [days, login, refreshNonce])
+
+  function pickLogin(id: string) {
+    setLogin(id)
+    saveLogin(id)
+  }
 
   // Colour is owned by the model, in one fixed order, a narrower window that
   // drops a model must not repaint the ones that remain. Past the sixth hue
@@ -73,6 +106,9 @@ export function UsageTab({ refreshNonce }: { refreshNonce: number }) {
   if (!usage) return null
 
   const { totals } = usage
+  const picked = logins.find((l) => l.id === login)
+  const accounts = logins.filter((l) => l.kind === 'account')
+  const keys = logins.filter((l) => l.kind === 'api-key')
   const perDay = totals.cost / Math.max(usage.days, 1)
   const cacheShare =
     totals.cacheRead + totals.input + totals.cacheWrite > 0
@@ -113,13 +149,35 @@ export function UsageTab({ refreshNonce }: { refreshNonce: number }) {
             Tokens
           </button>
         </div>
+        {logins.length > 1 && (
+          <Select className="usageLogin" contentClassName="usageLoginMenu" value={login} onValueChange={pickLogin} aria-label="Login">
+            <SelectItem value="">All logins</SelectItem>
+            <SelectSeparator />
+            {[
+              { cap: 'claude.ai logins', rows: accounts },
+              { cap: 'API keys', rows: keys },
+            ].map(
+              ({ cap, rows }) =>
+                rows.length > 0 && (
+                  <SelectGroup key={cap}>
+                    <SelectLabel>{cap}</SelectLabel>
+                    {rows.map((l) => (
+                      <SelectItem key={l.id} value={l.id} description={[l.detail, money(l.cost)].filter(Boolean).join(' · ')}>
+                        {l.label}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                ),
+            )}
+          </Select>
+        )}
         <span className="usageRange">
           {loading ? 'refreshing…' : `${dayLabel(usage.from)} – ${dayLabel(usage.to)}`}
         </span>
       </div>
 
       {totals.messages === 0 ? (
-        <div className="usageEmpty">No Claude Code usage in this window.</div>
+        <div className="usageEmpty">{picked ? 'Nothing ran on this login in this window.' : 'No Claude Code usage in this window.'}</div>
       ) : (
         <>
           <div className="tiles">
@@ -200,9 +258,23 @@ export function UsageTab({ refreshNonce }: { refreshNonce: number }) {
       )}
 
       <p className="usageFoot">
-        Read from Claude Code’s own transcripts, so this counts every session on this machine — including
-        ones started outside Triage. Cost is calculated from API list prices; on a Pro or Max plan nothing
-        is billed per token, so read it as what the same work would have cost on the API.
+        {picked?.kind === 'api-key' ? (
+          <>
+            Only sessions on this API key. Cost is at API list prices, which is how a key is billed. Older
+            sessions count under the key their workspace uses now.
+          </>
+        ) : picked ? (
+          <>
+            Only sessions on this claude.ai login{picked.id === 'machine' ? ', including ones started outside Triage' : ''}.
+            Cost is the API list price of the same work, not a bill.
+          </>
+        ) : (
+          <>
+            Read from Claude Code’s own transcripts, so this counts every session on this machine — including
+            ones started outside Triage. Cost is calculated from API list prices; on a Pro or Max plan nothing
+            is billed per token, so read it as what the same work would have cost on the API.
+          </>
+        )}
         {usage.unpricedModels.length > 0 && (
           <>
             {' '}

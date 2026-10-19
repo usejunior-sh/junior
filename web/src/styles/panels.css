@@ -164,6 +164,12 @@
 .themePreview .dots b { width: 5px; height: 5px; border-radius: var(--r-full); }
 .themePreview .btnPill { width: 22px; height: 8px; border-radius: var(--r-full); }
 .usageRange { margin-left: auto; font-family: var(--mono); font-size: 0.8462rem; color: var(--stone); }
+/* The login filter: same 28px pill as the segmented controls beside it. */
+.usageLogin.uiSelect {
+  width: auto; max-width: 260px; height: 28px; padding: 0 11px; gap: 8px;
+  border-radius: var(--r-full); background: var(--card); color: var(--ink); font-size: 0.8846rem;
+}
+.usageLoginMenu { min-width: 300px; }
 
 .tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
 .tile { display: flex; flex-direction: column; gap: 3px; padding: 13px 15px; background: var(--card); border: 1px solid var(--hair); border-radius: var(--r-lg); min-width: 0; }
