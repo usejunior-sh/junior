@@ -214,6 +214,20 @@ button.chip:hover:not(:disabled), .chip[data-state="open"] { color: var(--ink); 
   /* the head's project and branch pickers match the row below */
   .cardHead .chip.pick { height: 28px; padding: 0 10px; font-size: 0.9231rem; }
   .cardHead .chip.pick svg { width: 13px; height: 13px; }
+  /* A narrow column (a drawer open beside the chat): the knobs on the left shrink and their labels
+     ellipsize (Autonomy's first: its meter still says it), so Fast, Stop and Send stay inside the box. */
+  .statusline { container: composerRow / inline-size; }
+  .statusline > .chip.model, .statusline > .chip.sessionMode, .statusline > .modePicker, .statusline > .permPicker { flex: 0 1 auto; min-width: 0; }
+  .statusline > .modePicker > .chip, .statusline > .permPicker > .chip { flex: 0 1 auto; min-width: 0; max-width: 100%; }
+  .statusline > .permPicker { flex-shrink: 3; }
+  .statusline .chip .name { min-width: 0; }
+  .statusline > .chip.attachBtn, .statusline > .chip.fast { flex: none; }
+  /* Narrower still, the knobs drop what the tooltip already says: effort, chevrons, Fast's word. */
+  @container composerRow (max-width: 600px) {
+    .chip.model .eff, .chip > svg.lucide-chevron-down { display: none; }
+    .chip.fast { position: relative; width: 28px; padding: 0; justify-content: center; }
+    .chip.fast .name { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  }
 }
 .chip .name { overflow: hidden; text-overflow: ellipsis; }
 .chip.model { color: var(--ink); }
