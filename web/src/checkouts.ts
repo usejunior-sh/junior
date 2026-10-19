@@ -1,9 +1,10 @@
 /**
  * Checkouts on the client: a project's folders (main + worktrees), named by
- * id from sessions and terminals, plus the editors "Open in…" can use.
+ * id from sessions and terminals, plus the editors "Open in…" can use — and
+ * opening one file a session wrote in the last of them.
  */
 import { useEffect, useSyncExternalStore } from 'react'
-import type { Checkout, Editor, EditorsResponse, OpenCheckoutResponse } from '../../shared/protocol.js'
+import type { Checkout, Editor, EditorsResponse, OpenCheckoutResponse, OpenFileResponse } from '../../shared/protocol.js'
 
 export const checkoutOf = (checkouts: readonly Checkout[], id: string | undefined | null): Checkout | undefined =>
   id ? checkouts.find((c) => c.id === id) : undefined
@@ -86,6 +87,25 @@ export async function openCheckout(checkoutId: string, editor: string): Promise<
       }
     }
     return null
+  } catch (err) {
+    return String(err)
+  }
+}
+
+/**
+ * Open a file a session wrote in the editor "Open in…" last used; the daemon
+ * falls back to the first editor it finds, then the OS default. Resolves to an
+ * error message, or null.
+ */
+export async function openSessionFile(sessionId: string, file: string): Promise<string | null> {
+  try {
+    const res = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/open-file`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ path: file, editor: lastEditor() ?? undefined }),
+    })
+    const b = (await res.json()) as OpenFileResponse
+    return b.ok ? null : b.error
   } catch (err) {
     return String(err)
   }

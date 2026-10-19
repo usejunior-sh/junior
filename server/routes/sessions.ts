@@ -1,16 +1,16 @@
-import type { EditorsResponse, FileSearchResponse, OpenCheckoutResponse, ProjectFileResponse, RemovalCheckResponse, RemoveCheckoutResponse, SaveProjectFileResponse, SessionChangesResponse, SessionDiffResponse, ShellOutputResponse, WorkflowAgentResponse, WorkflowDetailResponse, WorkingChangesResponse, WorkingDiffResponse } from '../../shared/protocol.js'
+import type { EditorsResponse, FileSearchResponse, OpenCheckoutResponse, OpenFileResponse, ProjectFileResponse, RemovalCheckResponse, RemoveCheckoutResponse, SaveProjectFileResponse, SessionChangesResponse, SessionDiffResponse, ShellOutputResponse, WorkflowAgentResponse, WorkflowDetailResponse, WorkingChangesResponse, WorkingDiffResponse } from '../../shared/protocol.js'
 import { shellOutput } from '../shell-output.js'
 import { workflowAgentOp, workflowDetailOp } from '../workflows.js'
 import { worktreePatch } from '../git.js'
 import { readProjectFile, writeProjectFile } from '../files.js'
 import { sameOrigin } from '../remote.js'
 import { log } from '../log.js'
-import { detectEditors, openFolderIn } from '../editors.js'
+import { detectEditors, openableFile, openFileIn, openFolderIn } from '../editors.js'
 import { checkRemoval, prepareWorktree, recreateWorktree, removeWorktree } from '../worktrees.js'
 import { summaries } from '../session/summaries.js'
 import { errText } from '../errors.js'
 import { computeSessionChanges, projectChanges, sessionFilePatch } from '../session/changes.js'
-import { checkoutById, mainCheckout, runningIn, syncCheckouts } from '../session/checkouts.js'
+import { checkoutById, checkoutList, mainCheckout, runningIn, syncCheckouts } from '../session/checkouts.js'
 import { readJsonBody } from './http-util.js'
 import { broadcastSessionList } from '../ws/send.js'
 import { expandHome } from '../folders.js'
@@ -271,6 +271,35 @@ export async function sessionRoutes({ req, url, json, access, rt }: ScopedCtx): 
         const editor = typeof parsed?.editor === 'string' ? parsed.editor : ''
         if (!editor) throw new Error('need an editor')
         await openFolderIn(checkout.path, editor)
+        body = { ok: true }
+      } catch (err) {
+        body = { ok: false, error: errText(err) }
+      }
+    }
+    json(body.ok ? 200 : 400, body)
+    return true
+  }
+
+  // A file a session wrote, opened in the user's editor. Only files inside the
+  // session's project: its own folder and every checkout of its project.
+  const openFileMatch = /^\/api\/sessions\/([^/]+)\/open-file$/.exec(url.pathname)
+  if (openFileMatch && req.method === 'POST') {
+    let body: OpenFileResponse
+    if (access !== 'local') {
+      body = { ok: false, error: 'editors open on the Mac — use it there' }
+    } else if (!sameOrigin(req, access)) {
+      json(403, { ok: false, error: 'cross-origin requests are not accepted' })
+      return true
+    } else {
+      try {
+        const id = decodeURIComponent(openFileMatch[1])
+        const row = rt.rows.get(id) ?? (await rt.store.sessions.get(id))
+        if (!row) throw new Error('no such session')
+        const parsed = (await readJsonBody(req)) as { path?: unknown; editor?: unknown } | null
+        const projectId = row.projectId ?? checkoutById(rt, row.checkoutId)?.projectId
+        const checkouts = projectId ? checkoutList(rt).filter((c) => c.projectId === projectId && c.state === 'active') : []
+        const file = await openableFile(typeof parsed?.path === 'string' ? parsed.path : '', row.cwd, [row.cwd, ...checkouts.map((c) => c.path)])
+        await openFileIn(file, typeof parsed?.editor === 'string' ? parsed.editor : undefined)
         body = { ok: true }
       } catch (err) {
         body = { ok: false, error: errText(err) }

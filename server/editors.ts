@@ -2,10 +2,11 @@
  * "Open in…": the editors installed on this Mac, found by bundle id, never
  * configured. Spotlight (`mdfind`) answers first; the usual Applications
  * folders back it up when indexing is off. macOS only: elsewhere the list is
- * empty and only "Reveal" is offered.
+ * empty and only "Reveal" is offered. A single file a session wrote opens the
+ * same way, in the editor last used here.
  */
 import { execFile } from 'node:child_process'
-import { stat } from 'node:fs/promises'
+import { realpath, stat } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { promisify } from 'node:util'
@@ -67,15 +68,51 @@ export async function detectEditors(): Promise<Editor[]> {
   return (await detect()).map(({ id, name }) => ({ id, name }))
 }
 
+/** Whatever the OS opens `target` with: the file manager for a folder, the default app for a file. */
+async function osOpen(target: string): Promise<void> {
+  if (process.platform === 'darwin') await pExecFile('open', [target])
+  else if (process.platform === 'win32') await pExecFile('explorer', [target]).catch(() => {}) // explorer exits 1 on success
+  else await pExecFile('xdg-open', [target])
+}
+
 /** Open `folder` in an editor found above, or reveal it in the file manager (`finder`). */
 export async function openFolderIn(folder: string, editor: string): Promise<void> {
-  if (editor === 'finder') {
-    if (process.platform === 'darwin') await pExecFile('open', [folder])
-    else if (process.platform === 'win32') await pExecFile('explorer', [folder]).catch(() => {}) // explorer exits 1 on success
-    else await pExecFile('xdg-open', [folder])
-    return
-  }
+  if (editor === 'finder') return osOpen(folder)
   const known = (await detect()).find((e) => e.id === editor)
   if (!known) throw new Error(`${editor} isn't installed on this machine`)
   await pExecFile('open', ['-b', known.bundleId, folder])
+}
+
+/**
+ * Open one file in `editor` when it is installed here, else in the first
+ * editor found (Cursor leads the list), else in whatever the OS opens it with.
+ */
+export async function openFileIn(file: string, editor?: string): Promise<void> {
+  const found = await detect()
+  const known = found.find((e) => e.id === editor) ?? found[0]
+  if (known) await pExecFile('open', ['-b', known.bundleId, file])
+  else await osOpen(file)
+}
+
+/**
+ * `file` (absolute, or relative to `cwd`) as a real path, when it is a file
+ * under one of `roots`. Both sides are resolved through symlinks, so neither
+ * `..` nor a link pointing out of a project gets a file outside it opened.
+ */
+export async function openableFile(file: string, cwd: string, roots: readonly string[]): Promise<string> {
+  if (!file) throw new Error('need a file')
+  let real: string
+  try {
+    real = await realpath(path.resolve(cwd, file))
+  } catch {
+    throw new Error('that file is gone')
+  }
+  for (const root of roots) {
+    const realRoot = await realpath(root).catch(() => null)
+    if (realRoot && real.startsWith(realRoot + path.sep)) {
+      if (!(await stat(real)).isFile()) throw new Error('that is a folder, not a file')
+      return real
+    }
+  }
+  throw new Error("that file is outside this session's project")
 }

@@ -617,7 +617,7 @@ const Item = memo(function Item({
     case 'tool':
       return (
         <>
-          <ToolCard item={item} />
+          <ToolCard sessionId={sessionId} item={item} />
           <ActionNotes tools={[item]} byCall={actionByCall} onNavigate={onRef} />
           <DraftJobLinks tools={[item]} onRef={onRef} />
           <BrowserShots sessionId={sessionId} tools={[item]} />

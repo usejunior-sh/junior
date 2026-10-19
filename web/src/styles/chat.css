@@ -61,6 +61,10 @@
 .tool .glyph.busy { color: var(--blue); animation: pulse 1.2s infinite; }
 .tool .toolName { color: var(--ink); font-weight: 500; flex: none; }
 .tool .toolHint { color: var(--ash); font-family: var(--mono); font-size: 0.9231rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tool .toolFile { all: unset; color: inherit; cursor: pointer; text-decoration: underline dotted; text-underline-offset: 3px; }
+.tool .toolFile:hover { color: var(--ink); text-decoration-style: solid; }
+.tool .toolFile:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; border-radius: 2px; }
+.tool .toolOpenErr { color: var(--red-ink); font-size: 0.9231rem; flex: none; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tool .well { margin-top: 8px; max-height: 240px; }
 .tool .well.result { color: var(--charcoal); }
 .tool .well.fail { color: var(--red-ink); }

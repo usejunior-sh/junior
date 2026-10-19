@@ -66,6 +66,14 @@ export type OpenCheckoutResponse = { ok: true } | { ok: false; error: string }
 // (so its sessions resume), node_modules and .env copied in again. Answers as OpenCheckoutResponse.
 
 /**
+ * POST /api/sessions/:id/open-file with `{ path, editor? }`: a file the
+ * session wrote, opened in `editor` (the last one "Open in…" used), else the
+ * first editor found, else the OS default. Only files inside the session's
+ * project; from the Mac only.
+ */
+export type OpenFileResponse = { ok: true } | { ok: false; error: string }
+
+/**
  * GET /api/checkouts/:id/removal: what removing a worktree would lose, read
  * before asking. `safe` = nothing: merged, clean, nothing running in it.
  */
