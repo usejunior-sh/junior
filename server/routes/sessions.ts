@@ -1,5 +1,6 @@
-import type { EditorsResponse, FileSearchResponse, OpenCheckoutResponse, ProjectFileResponse, RemovalCheckResponse, RemoveCheckoutResponse, SaveProjectFileResponse, SessionChangesResponse, SessionDiffResponse, ShellOutputResponse, WorkingChangesResponse, WorkingDiffResponse } from '../../shared/protocol.js'
+import type { EditorsResponse, FileSearchResponse, OpenCheckoutResponse, ProjectFileResponse, RemovalCheckResponse, RemoveCheckoutResponse, SaveProjectFileResponse, SessionChangesResponse, SessionDiffResponse, ShellOutputResponse, WorkflowAgentResponse, WorkflowDetailResponse, WorkingChangesResponse, WorkingDiffResponse } from '../../shared/protocol.js'
 import { shellOutput } from '../shell-output.js'
+import { workflowAgentOp, workflowDetailOp } from '../workflows.js'
 import { worktreePatch } from '../git.js'
 import { readProjectFile, writeProjectFile } from '../files.js'
 import { sameOrigin } from '../remote.js'
@@ -29,6 +30,23 @@ export async function sessionRoutes({ req, url, json, access, rt }: ScopedCtx): 
       let body: ShellOutputResponse
       try {
         body = await shellOutput((id) => rt.store.events.read(id), decodeURIComponent(m[1]), decodeURIComponent(m[2]))
+      } catch (err) {
+        body = { ok: false, error: errText(err) }
+      }
+      json(body.ok ? 200 : 404, body)
+      return true
+    }
+  }
+
+  // An Ultracode Workflow run's files on disk, and one of its agents' transcripts.
+  // Polled by the run panel while the run goes on.
+  {
+    const m = /^\/api\/sessions\/([^/]+)\/workflows\/([\w-]+)(?:\/agents\/([^/]+))?$/.exec(url.pathname)
+    if (m && req.method === 'GET') {
+      const [sessionId, taskId] = [decodeURIComponent(m[1]), m[2]]
+      let body: WorkflowDetailResponse | WorkflowAgentResponse
+      try {
+        body = m[3] === undefined ? await workflowDetailOp(rt, sessionId, taskId) : await workflowAgentOp(rt, sessionId, taskId, decodeURIComponent(m[3]))
       } catch (err) {
         body = { ok: false, error: errText(err) }
       }

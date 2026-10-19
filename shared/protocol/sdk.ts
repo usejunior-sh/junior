@@ -1,5 +1,6 @@
 import type { SlashCommandInfo } from './catalog.js'
 import type { FastModeDisabledReason, FastModeState } from './session.js'
+import type { WorkflowProgressEntry } from './workflows.js'
 
 // Agent SDK payloads
 //
@@ -96,5 +97,15 @@ export type SdkMessage = {
   /** `task_notification`: the report a subagent handed back with SubagentHandback */
   handback_report?: { text?: string }
   /** `task_updated`: the fields that changed */
-  patch?: { status?: string; is_backgrounded?: boolean; error?: string }
+  patch?: { status?: string; is_backgrounded?: boolean; error?: string; end_time?: number }
+  /** `task_started` for a 'local_workflow': meta.name from the script */
+  workflow_name?: string
+  /** `task_progress` for a 'local_workflow': the run's phases and agents, a full snapshot each time (not on every frame) */
+  workflow_progress?: WorkflowProgressEntry[]
+  /**
+   * `user` messages carrying a tool_result: the tool's structured result. A
+   * Workflow launch answers with `{ status: 'async_launched', taskId, runId,
+   * workflowName, summary, transcriptDir, scriptPath }`.
+   */
+  tool_use_result?: unknown
 }
