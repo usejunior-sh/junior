@@ -55,6 +55,11 @@ export type SdkMessage = {
   total_cost_usd?: number
   duration_ms?: number
   num_turns?: number
+  /** result only: cumulative for the subprocess, like total_cost_usd */
+  duration_api_ms?: number
+  is_error?: boolean
+  /** result only: cumulative use per model since the subprocess's counters started */
+  modelUsage?: Record<string, { inputTokens?: number; outputTokens?: number; cacheReadInputTokens?: number; cacheCreationInputTokens?: number; costUSD?: number }>
   /** Carried on init and result messages; the session's fast-mode reality. */
   fast_mode_state?: FastModeState
   fast_mode_disabled_reason?: FastModeDisabledReason
