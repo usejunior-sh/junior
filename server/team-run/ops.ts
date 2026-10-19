@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { rm } from 'node:fs/promises'
-import { approve, cardFrom, type CheckResult, continueGate, editTasks, goalFrom, MAX_RUN_BUDGET_USD, pause as pauseRun, planMessage, recipeFromRun, resume, runSpent, settleRevision, type Action as TeamAction, type TeamRun, turnEnded } from '../../core/teams/engine.js'
+import { approve, bookPlanning, cardFrom, type CheckResult, continueGate, editTasks, goalFrom, MAX_RUN_BUDGET_USD, pause as pauseRun, planMessage, recipeFromRun, resume, runSpent, settleRevision, type Action as TeamAction, type TeamRun, turnEnded } from '../../core/teams/engine.js'
 import { agentFrom, detectChecks, isLibraryName } from '../teams.js'
 import { repoRoot, snapshotTree } from '../git.js'
 import { log } from '../log.js'
@@ -10,7 +10,7 @@ import { requireVeto } from '../providers/capabilities.js'
 import { itemImageAttachments } from '../itemImages.js'
 import { pExec } from '../config.js'
 import { WorkspaceRuntime } from '../workspace/runtime.js'
-import { applyTeamActions, indexTeamRun, runDirOf, saveTeamRuns, schedulePlanSync, sessionNotice, teamRunChanged, teamRunDir, teamRunOf, usd, withTeamRun } from './state.js'
+import { applyTeamActions, indexTeamRun, leadPlanning, runDirOf, saveTeamRuns, schedulePlanSync, sessionNotice, teamRunChanged, teamRunDir, teamRunOf, usd, withTeamRun } from './state.js'
 import { errText } from '../errors.js'
 import { createManualOp, itemFilesForSession } from '../items-ops.js'
 import { linkSessionToItem, projectFor } from '../settings-ops.js'
@@ -275,6 +275,8 @@ export async function proposeTeamOp(rt: WorkspaceRuntime, sessionId: string, raw
     resumes: [],
     ...(existing?.state === 'proposed' && existing.planArtifactId ? { planArtifactId: existing.planArtifactId } : {}),
   }
+  // What the lead spent getting here is the run's too. The turn it's in now books itself when it ends.
+  bookPlanning(run, await leadPlanning(rt, sessionId))
   if (existing && existing.id !== run.id) rt.teamRuns.delete(existing.id)
   rt.teamRuns.set(run.id, run)
   indexTeamRun(rt, run)

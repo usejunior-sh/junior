@@ -35,7 +35,7 @@ import { bump, changeIndex, clip, criteriaFor, currentStep, currentTask, editTas
 import type { Action, CheckResult, CriterionReport, CriterionStatus, DiffScope, Finding, Handoff, LedgerKind, Resolution, Slice, TaskStatus, TeamCard, TeamRun, Worker, WorkerRun } from './engine-types.js'
 
 export type { Slice, Severity, Finding, FindingStatus, Resolution, CriterionStatus, CriterionReport, LedgerKind, LedgerEntry, CardStep, PlanTask, TeamCard, RunAgent, Worker, CheckResult, Handoff, WorkerRun, ResumeBy, RunResume, GoalHorizonKind, RunGoalHorizon, GoalQuestion, GoalVerdict, RunGoal, TaskStatus, TaskState, PlanNote, RunState, TeamRun, DiffScope, Action } from './engine-types.js'
-export { runSpent, currentStep, workerById, currentTask, normalizeRun, MAX_CRITERIA, MAX_TASKS, MAX_RUN_BUDGET_USD, leadSlices, tasksFrom, cardFrom, endOfDay, goalFrom, horizonText, goalOverdue, editTasks, recipeFromRun, renderCard, renderTaskList, outputsOf, criteriaFor, openFindings } from './engine-plan.js'
+export { runSpent, sessionSpend, bookPlanning, currentStep, workerById, currentTask, normalizeRun, MAX_CRITERIA, MAX_TASKS, MAX_RUN_BUDGET_USD, leadSlices, tasksFrom, cardFrom, endOfDay, goalFrom, horizonText, goalOverdue, editTasks, recipeFromRun, renderCard, renderTaskList, outputsOf, criteriaFor, openFindings } from './engine-plan.js'
 export { MAX_GOAL_WAIT_MINUTES, MAX_GOAL_QUESTIONS } from './engine-judge.js'
 export { goalVerdict, unstick, wakeDue, wake, askYou, answerQuestion, acceptGoal, reopenGoal } from './engine-goal.js'
 export type { GoalVerdictInput } from './engine-goal.js'

@@ -2,7 +2,7 @@ import path from 'node:path'
 import { statSync } from 'node:fs'
 import { mkdir, writeFile } from 'node:fs/promises'
 import os from 'node:os'
-import { backfillRuns, checksDone, normalizeRun, runSpent, stampRun, STEP_MESSAGE, type Action as TeamAction, type TeamRun, type Worker, workerById } from '../../core/teams/engine.js'
+import { backfillRuns, bookPlanning, checksDone, normalizeRun, runSpent, sessionSpend, stampRun, STEP_MESSAGE, type Action as TeamAction, type TeamRun, type Worker, workerById } from '../../core/teams/engine.js'
 import { log } from '../log.js'
 import type { AgentCan, EffortLevel, SessionEvent, SessionTeamRun, TeamRunFolderFile, TeamRunView } from '../../shared/protocol.js'
 import { LEAD } from '../../core/teams/recipe.js'
@@ -38,8 +38,31 @@ export async function loadTeamRuns(rt: WorkspaceRuntime): Promise<void> {
       await backfillTeamRuns(rt, run).catch((err) => log('warn', 'teams', `could not backfill runs: ${err}`, { teamId: run.id, workspace: rt.meta.id }))
       backfilled = true
     }
+    // A run proposed before planning was booked. Only once it's over, so a live
+    // run's budget doesn't move under it.
+    if (run.planningUsd === undefined && (run.state === 'done' || run.state === 'stopped')) {
+      await leadPlanning(rt, run.leadSessionId, run.createdAt).then(
+        (usd) => bookPlanning(run, usd),
+        (err) => log('warn', 'teams', `could not book planning: ${err}`, { teamId: run.id, workspace: rt.meta.id }),
+      )
+      backfilled = true
+    }
   }
   if (backfilled) await saveTeamRuns(rt)
+}
+
+/** A run this session led before ended here, and booked what the session spent up to it. */
+const RUN_ENDED = /^(Team done|Team stopped|Goal done)\b/
+
+/**
+ * What the lead spent planning a run: its spend from where the last run it led
+ * ended up to the proposal. `before` is the proposal's time, for a run proposed
+ * earlier; the turn that proposed was booked by the run itself.
+ */
+export async function leadPlanning(rt: WorkspaceRuntime, leadSessionId: string, before = Infinity): Promise<number> {
+  const events = (await rt.store.events.read(leadSessionId)).filter((e) => e.createdAt < before)
+  const ended = events.findLastIndex((e) => e.event.kind === 'notice' && RUN_ENDED.test(e.event.text))
+  return Math.max(0, sessionSpend(events) - sessionSpend(events.slice(0, ended + 1)))
 }
 
 /** A run from before runs were recorded: find where each step arrived in its session's log. */

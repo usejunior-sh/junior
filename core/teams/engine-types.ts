@@ -214,6 +214,8 @@ export type TeamRun = {
   unresolved: string | null
   /** USD per session id (the lead's included) */
   spend: Record<string, number>
+  /** what the lead spent before it proposed, booked into its `spend`; absent on runs not yet backfilled */
+  planningUsd?: number
   budgetUsd: number
   /** bumps on every change: the client's cue to refetch */
   rev: number

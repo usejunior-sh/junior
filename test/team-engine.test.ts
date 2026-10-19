@@ -11,6 +11,8 @@ import { runFiles } from '../core/teams/files.js'
 import {
   approve,
   backfillRuns,
+  bookPlanning,
+  sessionSpend,
   STEP_MESSAGE,
   cardFrom,
   editTasks,
@@ -441,6 +443,35 @@ test('runs: one per step sent (task, round, fresh), stamped by the server, close
   assert.deepEqual([t2.id, t2.task, t2.round, t2.fresh], ['build:T2:1#0', 'T2', 0, true])
   assert.equal(sid(run, t2.workerId), sid(run, 'build:T1:1'), 'every implementer run lands in one session')
   assert.equal(runStatus(run, run.workerRuns[0]), 'done', 'an earlier run keeps its handoff')
+})
+
+test('planning: what the lead spent before it proposed goes on the run, under the lead', () => {
+  const result = (usd: number) => ({ event: { kind: 'sdk' as const, message: { type: 'result', total_cost_usd: usd } } })
+  const log = [
+    result(1.3),
+    result(1.8),
+    // A revival that spends more than the last process had still starts from zero.
+    { event: { kind: 'subprocess' as const } },
+    result(2.5),
+    // A drop with no marker is a new process too.
+    result(0.4),
+    { event: { kind: 'notice' as const, text: 'Team approved' } },
+  ]
+  assert.equal(Math.round(sessionSpend(log) * 100) / 100, 4.7)
+  assert.equal(sessionSpend([]), 0)
+
+  const run = runOf(recipeOf('solo'))
+  spawn(run, approve(run, run.card))
+  const leadRun = run.workerRuns.find((r) => sid(run, r.workerId) === LEAD_SID)!
+  stampRun(run, leadRun.workerId, { startSeq: 3, at: 10, spendAtStart: 0.5 })
+  run.spend = { [LEAD_SID]: 2, other: 3 }
+  bookPlanning(run, 1.3)
+  assert.deepEqual([run.planningUsd, run.spend[LEAD_SID], run.spend.other], [1.3, 3.3, 3])
+  assert.equal(leadRun.spendAtStart, 1.8, "a lead step already stamped keeps its own cost")
+
+  const none = runOf(recipeOf('solo'))
+  bookPlanning(none, 0)
+  assert.deepEqual([none.planningUsd, none.spend], [0, {}], 'nothing spent: marked, nothing booked')
 })
 
 test('backfill: a run stored before runs were recorded gets the same runs, placed at the step messages in each session', () => {

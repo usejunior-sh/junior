@@ -1,7 +1,39 @@
 import { type RecipeStep, type TeamRecipe, taskLoop, CHECKS, isTeamPermissions, LEAD } from './recipe.js'
 import type { CardStep, Finding, GoalHorizonKind, Handoff, PlanTask, ResumeBy, RunGoal, RunGoalHorizon, Slice, TaskStatus, TeamCard, TeamRun, Worker } from './engine-types.js'
+import type { SessionEvent } from '../../shared/protocol.js'
 
 export const runSpent = (run: TeamRun): number => Object.values(run.spend).reduce((a, b) => a + b, 0)
+
+/**
+ * What a session spent, read from its log (or the start of it). A result's
+ * total_cost_usd is cumulative for its subprocess, and a `subprocess` event
+ * starts the next one from zero.
+ */
+export function sessionSpend(events: { event: SessionEvent }[]): number {
+  let total = 0
+  let seen = 0
+  for (const { event: ev } of events) {
+    if (ev.kind === 'subprocess') seen = 0
+    else if (ev.kind === 'sdk' && ev.message.type === 'result' && typeof ev.message.total_cost_usd === 'number') {
+      const cost = ev.message.total_cost_usd
+      // A drop is a new subprocess the log never marked.
+      total += cost >= seen ? cost - seen : cost
+      seen = cost
+    }
+  }
+  return total
+}
+
+/** What the lead spent before it proposed the run goes on the run, under the lead. */
+export function bookPlanning(run: TeamRun, usd: number): void {
+  run.planningUsd = usd
+  if (usd <= 0) return
+  run.spend[run.leadSessionId] = (run.spend[run.leadSessionId] ?? 0) + usd
+  // A lead step already stamped took its spendAtStart without it.
+  for (const r of run.workerRuns) {
+    if (r.spendAtStart !== null && workerById(run, r.workerId)?.sessionId === run.leadSessionId) r.spendAtStart += usd
+  }
+}
 export const currentStep = (run: TeamRun): RecipeStep | undefined => run.recipe.steps[run.step]
 export const workerById = (run: TeamRun, id: string): Worker | undefined => run.workers.find((w) => w.id === id)
 export const currentTask = (run: TeamRun): PlanTask | undefined => (run.task === null ? undefined : run.card.tasks[run.task])
