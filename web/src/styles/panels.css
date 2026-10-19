@@ -18,6 +18,9 @@
 .prow.term .t .sub { color: var(--stone); font-size: 0.8462rem; font-family: var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .prow.term.off .t { color: var(--ash); }
 .prow.term .rowMenu { margin-top: 1px; }
+/* an Ultracode session: a quiet orange mark beside the pin */
+.prow .ucMark { flex: none; color: var(--orange); opacity: 0.85; }
+.prow.wt .ucMark { margin-top: 1px; }
 .termHome { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; padding: 40px; position: relative; text-align: center; }
 .termHome p { margin: 0; color: var(--mute); font-size: 1rem; max-width: 46ch; }
 .termHome .choices { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }

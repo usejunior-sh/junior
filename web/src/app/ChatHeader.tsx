@@ -10,6 +10,7 @@ import { SessionCost } from '../components/SessionCost.js'
 import { AgentsMenu } from '../components/Agents.js'
 import type { AgentRun } from '../agents.js'
 import { EFFORT_LABEL } from '../models.js'
+import { shownStatus } from '../sessionModes.js'
 import { projectColor } from '../tabs.js'
 
 /** `/Users/you/Code/x` → `~/Code/x`: display only. */
@@ -85,6 +86,7 @@ export function ChatHeader({
   mobile: boolean
   browserOpen: boolean
 }) {
+  const shown = shownStatus(current)
   return (
     <div id="chatHeader" ref={chatHeaderRef}>
       <span id="chatTitle" title={current.title}>
@@ -145,18 +147,18 @@ export function ChatHeader({
           Browser
         </button>
       )}
-      <SessionCost sessionId={current.id} status={current.status} />
-      <span className={`state ${current.status}`}>
+      <SessionCost sessionId={current.id} status={current.status} workflows={current.workflows} />
+      <span className={`state ${shown.status}`} title={shown.title}>
         <span
           className={`dot ${
-            current.status === 'running' || current.status === 'starting'
+            shown.status === 'running' || shown.status === 'starting'
               ? 'live'
-              : current.status === 'error'
+              : shown.status === 'error'
                 ? 'red'
                 : 'green'
           }`}
         />
-        {STATUS_LABEL[current.status]}
+        {STATUS_LABEL[shown.status]}
       </span>
     </div>
   )

@@ -4,6 +4,7 @@ import type { RunState, Link, SessionsUsage } from '../../../../shared/protocol.
 import { tokens, money } from '../../usageFormat.js'
 import { useCheckouts } from '../../hooks.js'
 import { checkoutOf } from '../../checkouts.js'
+import { isWorking } from '../../sessionModes.js'
 import type { LinkedSession } from './types.js'
 
 const TEAM_STATE: Record<RunState, string> = {
@@ -60,7 +61,7 @@ export function ItemSessions({ linkedSessions, links, spend, checkouts, onNaviga
         <div className="asideEmpty">None yet — Dispatch opens one in the matching project; a brief run is one too.</div>
       ) : (
         linkedSessions.map(({ s, role }) => {
-          const live = s.status === 'running' || s.status === 'starting'
+          const live = isWorking(s)
           const err = s.status === 'error'
           return (
             <a

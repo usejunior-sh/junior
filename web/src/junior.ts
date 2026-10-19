@@ -20,6 +20,7 @@ import { railMood, type Mood } from '../../core/junior/mood.js'
 import { draftStore } from './drafts.js'
 import { useInbox } from './inboxStore.js'
 import { store } from './store.js'
+import { isWorking } from './sessionModes.js'
 
 export function usePersona(): Persona {
   return useSyncExternalStore(store.subscribeStructural, store.getPersona)
@@ -237,7 +238,7 @@ export function useRailMood(pendingActions: number): Mood {
     return railMood({
       needs: blocked + teams + pendingActions,
       stuck: stuckAlerts || sessions.some((s) => s.status === 'error'),
-      working: sessions.some((s) => s.status === 'running' || s.status === 'starting'),
+      working: sessions.some(isWorking),
     })
   }, [sessions, pendingActions, stuckAlerts])
 }

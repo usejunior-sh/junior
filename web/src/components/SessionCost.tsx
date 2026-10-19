@@ -5,7 +5,9 @@
  * Same ledger and vocabulary as the item page's cost block (`/api/usage/sessions`,
  * `usageFormat.ts`), so the two never disagree. The transcript is the source,
  * so a running session's figure is a floor: it is refetched a beat after each
- * assistant message lands and again when the session settles.
+ * assistant message lands and again when the session settles. Ultracode runs
+ * spend with no main-agent reply, so while one is going it refetches every few
+ * seconds, and once more when the last one ends.
  */
 import * as Popover from '@radix-ui/react-popover'
 import { useEffect, useRef, useState, type PointerEvent } from 'react'
@@ -17,15 +19,25 @@ import { MAX_SERIES, OTHER, SERIES, modelLabel, money, tokens } from '../usageFo
 const DAYS = 90
 /** Claude Code appends to its transcript a moment after the SDK emits the message. */
 const SETTLE_MS = 1500
+/** While a workflow runs, its agents spend between replies: poll no faster than this. */
+const WORKFLOW_POLL_MS = 5000
 const HOVER_OPEN_MS = 120
 const HOVER_CLOSE_MS = 160
 
 /** The last figure per session, so landing on one shows it at once and refreshes behind. */
 const lastSeen = new Map<string, SessionsUsage>()
 
-export function SessionCost({ sessionId, status }: { sessionId: string; status: SessionStatus }) {
+/**
+ * `workflows`: the summary's count of runs still going. Only a live subprocess
+ * counts any, so a run the log never saw end (a restart, a crash) can't keep
+ * the pill polling.
+ */
+export function SessionCost({ sessionId, status, workflows = 0 }: { sessionId: string; status: SessionStatus; workflows?: number }) {
   const events = useEvents(sessionId)
   const replies = events.reduce((n, ev) => (ev.kind === 'sdk' && ev.message.type === 'assistant' ? n + 1 : n), 0)
+  const workflowRunning = workflows > 0
+  /** Bumped every WORKFLOW_POLL_MS while a run is going: each bump is a refetch. */
+  const [tick, setTick] = useState(0)
   const [usage, setUsage] = useState<SessionsUsage | null>(() => lastSeen.get(sessionId) ?? null)
   const [open, setOpen] = useState(false)
   /** The session the ledger has answered for, until then, a skeleton holds the pill's place. */
@@ -41,8 +53,8 @@ export function SessionCost({ sessionId, status }: { sessionId: string; status: 
 
   useEffect(() => {
     let live = true
-    // Landing on a session fetches straight away; only a new reply or a status
-    // change waits for Claude Code to finish writing its transcript.
+    // Landing on a session fetches straight away; a new reply, a status change,
+    // a workflow tick or a run ending waits for Claude Code to finish writing.
     const first = fetchedFor.current !== sessionId
     const t = setTimeout(
       () => {
@@ -67,7 +79,13 @@ export function SessionCost({ sessionId, status }: { sessionId: string; status: 
       live = false
       clearTimeout(t)
     }
-  }, [sessionId, replies, status])
+  }, [sessionId, replies, status, workflowRunning, tick])
+
+  useEffect(() => {
+    if (!workflowRunning) return
+    const t = setInterval(() => setTick((n) => n + 1), WORKFLOW_POLL_MS)
+    return () => clearInterval(t)
+  }, [workflowRunning])
 
   useEffect(() => () => clearTimeout(hover.current), [])
 
@@ -90,7 +108,10 @@ export function SessionCost({ sessionId, status }: { sessionId: string; status: 
   const prompt = spend.input + spend.cacheWrite + spend.cacheRead
   const hit = prompt > 0 ? Math.round((spend.cacheRead / prompt) * 100) : 0
   const models = (usage?.models ?? []).filter((m) => m.tokens > 0)
-  const running = status === 'running' || status === 'starting'
+  const running = status === 'running' || status === 'starting' || workflowRunning
+  // Who spent it: the main agent, its subagents, and Ultracode runs' agents, each a disjoint share.
+  const sub = spend.subagents && spend.subagents.messages > 0 ? spend.subagents : undefined
+  const wf = spend.workflows && spend.workflows.messages > 0 ? spend.workflows : undefined
 
   const rows: Array<[string, number, string?]> = [
     ['Input', spend.input],
@@ -149,22 +170,33 @@ export function SessionCost({ sessionId, status }: { sessionId: string; status: 
             </dl>
           )}
 
-          {/* Who spent it: subagents bill from their own transcripts, folded in here. */}
-          {spend.subagents && spend.subagents.messages > 0 && (
+          {/* Who spent it: subagents and workflow agents bill from their own transcripts, folded in here. */}
+          {(sub || wf) && (
             <dl className="split who">
               <div>
                 <dt>Main agent</dt>
-                <dd>{money(Math.max(0, spend.cost - spend.subagents.cost))}</dd>
+                <dd>{money(Math.max(0, spend.cost - (sub?.cost ?? 0) - (wf?.cost ?? 0)))}</dd>
               </div>
-              <div>
-                <dt>Subagents</dt>
-                <dd>
-                  <span className="note">
-                    {spend.subagents.messages} {spend.subagents.messages === 1 ? 'call' : 'calls'}
-                  </span>
-                  {money(spend.subagents.cost)}
-                </dd>
-              </div>
+              {sub && (
+                <div>
+                  <dt>Subagents</dt>
+                  <dd>
+                    <span className="note">
+                      {sub.messages} {sub.messages === 1 ? 'call' : 'calls'}
+                    </span>
+                    {money(sub.cost)}
+                  </dd>
+                </div>
+              )}
+              {wf && (
+                <div>
+                  <dt>Workflow agents</dt>
+                  <dd>
+                    <span className="note">{tokens(wf.tokens)} tokens</span>
+                    {money(wf.cost)}
+                  </dd>
+                </div>
+              )}
             </dl>
           )}
 

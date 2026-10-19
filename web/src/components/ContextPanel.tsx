@@ -34,6 +34,7 @@ import {
   Terminal,
   Trash2,
   Users,
+  Workflow,
   X,
 } from 'lucide-react'
 import { createContext, useContext, useEffect, useRef, useState } from 'react'
@@ -44,6 +45,7 @@ import { checkoutOf } from '../checkouts.js'
 import { draftTitle, type Draft } from '../drafts.js'
 import { useCheckouts } from '../hooks.js'
 import { MOD_LABEL } from '../keys.js'
+import { isWorking, shownStatus } from '../sessionModes.js'
 import { rowOpen } from '../tabs.js'
 import { Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from '../ui/Menu.js'
 
@@ -297,7 +299,7 @@ export function SessionsPanel({
 
   const pinned = sessions.filter((s) => s.pinned)
   const rest = sessions.filter((s) => !s.pinned)
-  const running = sessions.filter((s) => s.status === 'running' || s.status === 'starting').length
+  const running = sessions.filter(isWorking).length
 
   const row = (s: SessionSummary) => (
     <SessionRow
@@ -447,6 +449,9 @@ function SessionRow({ session: s, active, renaming, onSelect, onStartRename, onE
   // Only a worktree row grows a second line; the main folder needs no saying.
   const co = checkoutOf(useCheckouts(), s.checkoutId)
   const wt = co?.kind === 'worktree' ? co : null
+  // Ultracode runs going after the turn ended still read as working.
+  const shown = shownStatus(s)
+  const dot = <span className={`dot sm ${STATUS_DOT[shown.status]}`} title={shown.title} aria-hidden="true" />
 
   useEffect(() => {
     if (renaming) input.current?.select()
@@ -455,7 +460,7 @@ function SessionRow({ session: s, active, renaming, onSelect, onStartRename, onE
   if (renaming) {
     return (
       <div className={`prow${active ? ' sel' : ''}`}>
-        <span className={`dot sm ${STATUS_DOT[s.status]}`} aria-hidden="true" />
+        {dot}
         <input
           ref={input}
           className="renameInput"
@@ -478,7 +483,7 @@ function SessionRow({ session: s, active, renaming, onSelect, onStartRename, onE
       className={`prow${active ? ' sel' : ''}${wt ? ' wt' : ''}`}
       role="button"
       tabIndex={0}
-      title={wt ? `${s.title}\n${wt.path}` : s.title}
+      title={[s.title, wt?.path, shown.title].filter(Boolean).join('\n')}
       onClick={onSelect}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
@@ -487,7 +492,7 @@ function SessionRow({ session: s, active, renaming, onSelect, onStartRename, onE
         }
       }}
     >
-      <span className={`dot sm ${STATUS_DOT[s.status]}`} aria-hidden="true" />
+      {dot}
       {wt ? (
         <span className="t">
           <span className="nm">{s.title}</span>
@@ -500,6 +505,7 @@ function SessionRow({ session: s, active, renaming, onSelect, onStartRename, onE
       ) : (
         <span className="t">{s.title}</span>
       )}
+      {s.ultracode && <Workflow className="ucMark" size={11} aria-label="Ultracode" />}
       {s.pinned && <Pin className="pinMark" size={11} aria-label="Pinned" />}
       <Menu>
         <MenuTrigger asChild>
