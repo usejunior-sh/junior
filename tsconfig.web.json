@@ -27,6 +27,8 @@
     "core/work/types.ts",
     "core/teams/recipe.ts",
     "core/shells/fold.ts",
+    "core/workflows",
+    "core/usage/turn-cost.ts",
     "core/teams/engine.ts",
     "core/teams/engine-*.ts",
     "core/work/state.ts",

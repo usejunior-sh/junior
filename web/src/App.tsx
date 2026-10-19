@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef, useCallback, type CSSProperties } from 'react'
-import type { TerminalSummary } from '../../shared/protocol.js'
+import type { TerminalSummary, WorkflowAgent, WorkflowRun } from '../../shared/protocol.js'
 import { CommandPalette } from './components/CommandPalette.js'
 import { useSessionChanges } from './useSessionChanges.js'
 import { ChangePage } from './components/ChangePage.js'
@@ -29,6 +29,9 @@ import { Transcript } from './components/Transcript.js'
 import { AgentHeader, AgentBrief, AgentOutcome, AgentDock, AgentComposer } from './components/Agents.js'
 import { spawnerOf } from './agents.js'
 import { ShellDock } from './components/Shells.js'
+import { WorkflowDock } from './components/ultracode/WorkflowDock.js'
+import { WorkflowSide } from './components/ultracode/WorkflowSide.js'
+import { WorkflowAgentView } from './components/ultracode/WorkflowAgentView.js'
 import { TeamStrip, TeamDock, TeamSide } from './components/TeamRun.js'
 import { RunHeader, RunsViewToggle, TeamRuns, TeamFiles } from './components/TeamRail.js'
 import { RunFolderPage } from './components/RunFolderPage.js'
@@ -63,6 +66,8 @@ import { useNewSessionFlow } from './app/useNewSessionFlow.js'
 import { useSessionActions } from './app/useSessionActions.js'
 import { useSessionAgents } from './app/useSessionAgents.js'
 import { useTeamRail } from './app/useTeamRail.js'
+import { useWorkflowRail } from './app/useWorkflows.js'
+import { isWorking } from './sessionModes.js'
 import { useTerminalActions } from './app/useTerminalActions.js'
 
 export function App() {
@@ -144,7 +149,44 @@ export function App() {
   const folderMeasureRef = useRef<HTMLSpanElement>(null)
   const folderShort = useNarrowFolder(chatHeaderRef, folderTextRef, folderMeasureRef, `${current?.cwd}`)
   const { teamRun, teamSide, setTeamSide, teamTab, setTeamTab, runsView, setRunsView, railOn, runScroll, openTeamRun, teamMarks, teamCheckoutId } = useTeamRail({ current, currentId, events, mobile, navigate, openTab, sessions })
-  const { agents, shells, openAgent, showAgent } = useSessionAgents({ events, current, currentId })
+  const { agents, shells, workflows, openAgent, showAgent } = useSessionAgents({ events, current, currentId })
+  // Ultracode runs: the run panel shares the team drawer's slot, so opening one closes the other.
+  const wf = useWorkflowRail({ currentId, workflows, mobile, onOpenSide: () => setTeamSide(false) })
+  const { closeSide: closeWfSide, closeAgent: closeWfAgent, openAgent: openWfAgentRaw, openRun: openWfRun } = wf
+  useEffect(() => {
+    if (teamSide) closeWfSide()
+  }, [teamSide, closeWfSide])
+  // A workflow agent's view and a subagent's take the same place: one at a time.
+  useEffect(() => {
+    if (openAgent) closeWfAgent()
+  }, [openAgent?.toolUseId, closeWfAgent]) // eslint-disable-line react-hooks/exhaustive-deps
+  const openWfAgent = useCallback(
+    (toolUseId: string, agent: WorkflowAgent) => {
+      showAgent(null)
+      // On a phone the panel covers the page: get it out of the way of the agent's view.
+      if (mobile) closeWfSide()
+      openWfAgentRaw(toolUseId, agent)
+    },
+    [showAgent, mobile, closeWfSide, openWfAgentRaw],
+  )
+  const onOpenWorkflow = useCallback(
+    (toolUseId: string, agent?: WorkflowAgent) => (agent ? openWfAgent(toolUseId, agent) : openWfRun(toolUseId)),
+    [openWfAgent, openWfRun],
+  )
+  // Back from a workflow agent to main, with its run's panel open.
+  const backToRun = useCallback(
+    (toolUseId: string) => {
+      closeWfAgent()
+      openWfRun(toolUseId)
+    },
+    [closeWfAgent, openWfRun],
+  )
+  const stopWorkflow = useCallback(
+    (run: WorkflowRun) => {
+      if (currentId && run.taskId) store.send({ type: 'agent_stop', sessionId: currentId, agentId: run.taskId })
+    },
+    [currentId],
+  )
   const currentTerminal = terminals.find((t) => t.id === currentTerminalId) ?? null
   const currentDraft = drafts.find((d) => d.id === currentDraftId) ?? null
   // Drafts are per workspace; bind before anything reads them.
@@ -212,7 +254,7 @@ export function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentId, conn, openTab])
 
-  const { respond, sendMessage, setPlanning, setModel, setFastMode, setPermissionMode, interrupt, stopAgent, stopShell, backgroundAgent, messageAgent, renameSession, setPinned, deleteSession, newSession, newSessionIn, discardDraft, syncInbox, openItem } = useSessionActions({ currentId, currentDraftId, navigate, closeTab })
+  const { respond, sendMessage, setPlanning, setUltracode, setModel, setFastMode, setPermissionMode, interrupt, stopAgent, stopShell, backgroundAgent, messageAgent, renameSession, setPinned, deleteSession, newSession, newSessionIn, discardDraft, syncInbox, openItem } = useSessionActions({ currentId, currentDraftId, navigate, closeTab })
 
   const { newTerminal, newTerminalIn, renameTerminal, closeTerminal, terminalCwd } = useTerminalActions({ closeTab, currentTerminalId, terminals, navigate, current, currentTerminal, currentDraft })
 
@@ -342,7 +384,7 @@ export function App() {
                 kind: 'session',
                 title: s.title,
                 color: projectColor(s.projectId ?? s.cwd),
-                running: s.status === 'running' || s.status === 'starting',
+                running: isWorking(s),
                 ...worktreeTag(s.checkoutId),
               },
             ]
@@ -411,7 +453,7 @@ export function App() {
   // or goal: the Sessions panel and the palette list only chats.
   // A team's workers live under their lead (the run rail), not in the list: one row per team, not one per member.
   const chatSessions = useMemo(() => sessions.filter((s) => s.kind !== 'brief' && s.kind !== 'goal' && s.teamRun?.role !== 'worker'), [sessions])
-  const runningCount = chatSessions.filter((s) => s.status === 'running' || s.status === 'starting').length
+  const runningCount = chatSessions.filter(isWorking).length
   const modelName = current ? findModel(models, current.model)?.name ?? current.model : undefined
 
   // The Actions page is a list and a detail side by side: it needs the room, so no panel beside it.
@@ -618,7 +660,7 @@ export function App() {
                 <div id="empty">This draft was discarded.</div>
               )
             ) : route.page === 'home' || route.page === 'settings' ? null : current ? (
-              <div className={`sessRow${teamRun && teamSide ? ' withSide' : ''}${browserOpen ? ' withBrowser' : ''}`}>
+              <div className={`sessRow${(teamRun && teamSide) || wf.sideRun ? ' withSide' : ''}${browserOpen ? ' withBrowser' : ''}`}>
               <div className="sessCol">
                 <ChatHeader
                   current={current}
@@ -659,6 +701,21 @@ export function App() {
                     onNavigate={navigate}
                   />
                 )}
+                {wf.agentView ? (
+                  <WorkflowAgentView
+                    key={`${current.id}:${wf.agentView.run.toolUseId}:${wf.agentView.index}`}
+                    sessionId={current.id}
+                    run={wf.agentView.run}
+                    index={wf.agentView.index}
+                    agentId={wf.agentView.agentId}
+                    events={events}
+                    onRespond={respond}
+                    onBack={closeWfAgent}
+                    onOpenRun={backToRun}
+                    onNavigate={navigate}
+                  />
+                ) : (
+                <>
                 {openAgent && (
                   <AgentHeader run={openAgent} agents={agents} onOpen={showAgent} onStop={stopAgent} onBackground={backgroundAgent} />
                 )}
@@ -677,9 +734,12 @@ export function App() {
                   tail={openAgent && <AgentOutcome run={openAgent} to={spawnerOf(agents, openAgent)} />}
                   marks={openAgent ? undefined : teamMarks}
                   speaker={!openAgent && (current.provider ?? 'claude') === 'claude' ? { status: current.status } : undefined}
+                  workflows={workflows}
+                  onOpenWorkflow={onOpenWorkflow}
                 />
                 {!openAgent && <AgentDock agents={agents} onOpen={showAgent} onStop={stopAgent} />}
                 {!openAgent && <ShellDock sessionId={current.id} shells={shells} onStop={stopShell} />}
+                {!openAgent && <WorkflowDock workflows={workflows} onDetails={openWfRun} onStop={stopWorkflow} />}
                 {teamRun && current.teamRun?.role === 'lead' && !openAgent && <TeamDock run={teamRun} onDetails={() => setTeamSide((o) => !o)} onNavigate={navigate} />}
                 {openAgent ? (
                   <AgentComposer key={`agent-composer-${openAgent.toolUseId}`} run={openAgent} onSend={(text) => messageAgent(openAgent, text)} />
@@ -700,18 +760,35 @@ export function App() {
                   fastModeDisabledReason={current.fastModeDisabledReason}
                   permissionMode={current.permissionMode}
                   planning={current.planning}
+                  ultracode={current.ultracode}
                   provider={current.provider ?? 'claude'}
                   onSend={sendMessage}
                   onPlanningChange={setPlanning}
+                  onUltracodeChange={setUltracode}
+                  ultracodeEver={!!current.ultracode || workflows.length > 0 || events.some((e) => e.kind === 'notice' && e.text.startsWith('Ultracode'))}
                   onInterrupt={interrupt}
                   onModelChange={setModel}
                   onFastModeChange={setFastMode}
                   onPermissionModeChange={setPermissionMode}
                 />
                 )}
+                </>
+                )}
               </div>
               {browserOpen && <BrowserPane key={current.id} sessionId={current.id} />}
-              {teamRun && teamSide && (
+              {wf.sideRun && (
+                <WorkflowSide
+                  sessionId={current.id}
+                  run={wf.sideRun}
+                  runs={workflows}
+                  tab={wf.tab}
+                  onTab={wf.setTab}
+                  onPick={openWfRun}
+                  onClose={closeWfSide}
+                  onOpenAgent={(run, agent) => openWfAgent(run.toolUseId, agent)}
+                />
+              )}
+              {teamRun && teamSide && !wf.sideRun && (
                 <TeamSide
                   run={teamRun}
                   lead={current.teamRun?.role === 'lead'}

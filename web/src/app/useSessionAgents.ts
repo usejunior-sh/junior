@@ -2,6 +2,7 @@ import { useMemo, useState, useCallback } from 'react'
 import type { SessionSummary } from '../../../shared/protocol.js'
 import { buildAgents } from '../agents.js'
 import { buildShells } from '../../../core/shells/fold.js'
+import { buildWorkflows } from '../../../core/workflows/fold.js'
 import { useEvents } from '../hooks.js'
 import { store } from '../store.js'
 
@@ -27,6 +28,20 @@ export function useSessionAgents({ events, current, currentId }: {
     if (sessionLive !== false) return runs
     return runs.map((r) => (r.state === 'running' ? { ...r, state: 'interrupted' as const } : r))
   }, [events, sessionLive])
+  // Ultracode workflow runs: the transcript's cards, the dock and the run panel read these.
+  const workflows = useMemo(() => {
+    const runs = buildWorkflows(events, store.eventTime)
+    if (sessionLive !== false) return runs
+    return runs.map((r) =>
+      r.state === 'running'
+        ? {
+            ...r,
+            state: 'interrupted' as const,
+            agents: r.agents.map((a) => (a.state === 'running' || a.state === 'queued' ? { ...a, state: 'interrupted' as const } : a)),
+          }
+        : r,
+    )
+  }, [events, sessionLive])
   const [agentPick, setAgentPick] = useState<{ sessionId: string; toolUseId: string } | null>(null)
   const openAgent = agentPick && agentPick.sessionId === currentId ? agents.find((a) => a.toolUseId === agentPick.toolUseId) ?? null : null
   const showAgent = useCallback(
@@ -34,5 +49,5 @@ export function useSessionAgents({ events, current, currentId }: {
     [currentId],
   )
 
-  return { agents, shells, openAgent, showAgent }
+  return { agents, shells, workflows, openAgent, showAgent }
 }

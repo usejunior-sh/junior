@@ -188,6 +188,9 @@ html.kbOpen .shell.mobile .panel { bottom: 0; }
   .statusline .chip .name, .statusline .chip .eff, .statusline .chip > svg.lucide-chevron-down { display: none; }
   .statusline .chip[data-state="open"] { background: var(--elev); border-color: var(--hair-strong); }
   .statusline .chip.fast.on, .statusline .chip.perm.risk-high, .statusline .chip.sessionMode { border-color: transparent; }
+  /* a running session's Planning / Ultracode chip: icon and X in a tinted pill, too wide for the 34px circle */
+  .statusline .chip.sessionMode.planning, .statusline .chip.sessionMode.ultracodeOn, .statusline .chip.sessionMode.ultracodeOff { width: auto; padding: 0 10px; gap: 4px; }
+  .statusline .chip.sessionMode.planning > svg.lucide-x, .statusline .chip.sessionMode.ultracodeOn > svg.lucide-chevron-down, .statusline .chip.sessionMode.ultracodeOff > svg.lucide-chevron-down { width: 13px; height: 13px; }
   .statusline #sendBtn { margin-left: auto; }
   #sendBtn, #stopBtn { width: 36px; height: 36px; border-radius: var(--r-full); }
   #composer .hint { display: none; }

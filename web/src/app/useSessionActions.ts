@@ -38,6 +38,14 @@ export function useSessionActions({ currentId, currentDraftId, navigate, closeTa
     [currentId],
   )
 
+  // Ultracode on or off for every turn after; Workflow runs already going carry on.
+  const setUltracode = useCallback(
+    (on: boolean) => {
+      if (currentId) store.send({ type: 'set_ultracode', sessionId: currentId, on })
+    },
+    [currentId],
+  )
+
   const setModel = useCallback(
     (model: string | undefined, effort: EffortLevel | undefined) => {
       if (currentId) store.send({ type: 'set_model', sessionId: currentId, model, effort })
@@ -147,5 +155,5 @@ export function useSessionActions({ currentId, currentDraftId, navigate, closeTa
 
   const openItem = useCallback((id: string) => navigate(itemHash(id)), [navigate])
 
-  return { respond, sendMessage, setPlanning, setModel, setFastMode, setPermissionMode, interrupt, stopAgent, stopShell, backgroundAgent, messageAgent, renameSession, setPinned, deleteSession, newSession, newSessionIn, discardDraft, syncInbox, openItem }
+  return { respond, sendMessage, setPlanning, setUltracode, setModel, setFastMode, setPermissionMode, interrupt, stopAgent, stopShell, backgroundAgent, messageAgent, renameSession, setPinned, deleteSession, newSession, newSessionIn, discardDraft, syncInbox, openItem }
 }

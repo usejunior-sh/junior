@@ -8,6 +8,8 @@ import {
   type SessionEvent,
   type SessionStatus,
   type SessionTurnSummary,
+  type WorkflowAgent,
+  type WorkflowRun,
 } from '../../../shared/protocol.js'
 import type { Mood } from '../../../core/junior/mood.js'
 import { parseQuestions } from '../askQuestions.js'
@@ -18,8 +20,11 @@ import { artifactStore, useArtifacts } from '../artifactStore.js'
 import { mentionHash, useRefIndex, type RefIndex } from '../refs.js'
 import { agentLabel, type AgentRun } from '../agents.js'
 import type { ShellRun } from '../../../core/shells/fold.js'
+import { WORKFLOW_TOOL } from '../../../core/workflows/fold.js'
 import { buildTranscript, eventIndexOf, formatDuration, toolLine, type TranscriptItem } from '../transcript.js'
 import { AgentCard } from './Agents.js'
+import { WorkflowCard } from './ultracode/WorkflowCard.js'
+import { WorkflowApproval } from './ultracode/WorkflowApproval.js'
 import { AskCard } from './AskCard.js'
 import { InitCard } from './InitCard.js'
 import { ChatFace, type Say } from './JuniorLabel.js'
@@ -58,15 +63,24 @@ type Props = {
   marks?: readonly TranscriptMark[]
   /** Junior is the one talking (a Claude session's main view): each of its turns opens with its face and name. */
   speaker?: { status: SessionStatus }
+  /** The session's Ultracode runs (buildWorkflows); with them, each Workflow call is drawn as its card. */
+  workflows?: readonly WorkflowRun[]
+  /** Open a run's panel, or one of its agents. */
+  onOpenWorkflow?: (toolUseId: string, agent?: WorkflowAgent) => void
+  /** When each event happened. Defaults to the store's clock; fetched events bring their own. */
+  timeOf?: (ev: SessionEvent) => number | undefined
+  /** Leave out the streaming line: the events aren't the session's main stream (a workflow agent's). */
+  noLive?: boolean
 }
 
 export type TranscriptMark = { at: number; key: string; node: ReactNode }
 const NO_MARKS: readonly TranscriptMark[] = []
 
 const NO_AGENTS: readonly AgentRun[] = []
+const NO_WORKFLOWS: readonly WorkflowRun[] = []
 
 /** What Junior says or does in a turn. Anything else (your messages, markers, CLI output) isn't its. */
-const JUNIOR_KINDS = new Set<TranscriptItem['kind']>(['assistant', 'thinking', 'tool', 'toolGroup', 'agent', 'permission', 'error'])
+const JUNIOR_KINDS = new Set<TranscriptItem['kind']>(['assistant', 'thinking', 'tool', 'toolGroup', 'agent', 'workflow', 'permission', 'error'])
 
 /** A word for what a call is doing, for the working face's bubble ("Editing Transcript.tsx…"). */
 const DOING: Record<string, string> = {
@@ -86,20 +100,26 @@ const DOING: Record<string, string> = {
 
 type Turn = { mood: Mood; say: Say }
 
+/** The sign-off word on a turn whose Workflow run is still going: the turn ended, the work didn't. */
+const RUN_GOING = 'agents at work'
+
 const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? '' : 's'}`
 
 /**
  * Which items open a Junior turn, the mood each turn's face shows, and what
  * its speech bubble says. A turn is the run of Junior's items between your
  * messages and turn markers. Needs you while a prompt in it waits, working
- * while it is the live one, stuck when it errored, done otherwise.
- * `thinking` = live with nothing from Junior yet.
+ * while it is the live one or a run it launched is still going, stuck when it
+ * errored, done otherwise. `thinking` = live with nothing from Junior yet.
+ * `going` = the turn markers of turns whose run is still going, so their
+ * sign-off doesn't say "done".
  */
 function speakerTurns(
   items: readonly TranscriptItem[],
   live: boolean,
   turns: readonly SessionTurnSummary[] | undefined,
-): { at: Map<string, Turn>; thinking: boolean } {
+  runningCalls: ReadonlySet<string>,
+): { at: Map<string, Turn>; thinking: boolean; going: Set<string> } {
   type Seg = { first?: string; items: TranscriptItem[]; end?: Extract<TranscriptItem, { kind: 'meta' }> }
   const segs: Seg[] = []
   let seg: Seg = { items: [] }
@@ -118,7 +138,10 @@ function speakerTurns(
   if (open) segs.push(open)
 
   const at = new Map<string, Turn>()
+  const going = new Set<string>()
   for (const s of segs) {
+    const runGoing = s.items.some((it) => it.kind === 'workflow' && runningCalls.has(it.toolUseId))
+    if (runGoing && s.end) going.add(s.end.key)
     const pending = s.items.findLast((it) => it.kind === 'permission' && !it.resolved && !it.agentId)
     const tools = s.items.flatMap((it) => (it.kind === 'tool' ? [it] : it.kind === 'toolGroup' ? it.members.filter((m) => m.kind === 'tool') : []))
     let turn: Turn
@@ -129,14 +152,18 @@ function speakerTurns(
       const last = s.items[s.items.length - 1]
       const call = tools[tools.length - 1]
       if (last?.kind === 'assistant') turn = { mood: 'working', say: { line: 'On it', sub: 'writing to you…' } }
+      else if (last?.kind === 'workflow') turn = { mood: 'working', say: { line: 'On it', sub: 'handing out work to agents…' } }
       else if (call && call.kind === 'tool') {
         const { verb, target } = toolLine(call.name, call.input)
         turn = { mood: 'working', say: { line: 'On it', sub: `${DOING[call.name] ?? verb}${target ? ` ${target}` : ''}…` } }
       } else turn = { mood: 'working', say: { line: 'On it', sub: 'working…' } }
     } else if (s.items.some((it) => it.kind === 'error')) {
       turn = { mood: 'stuck', say: { line: 'That failed', sub: 'the error’s below' } }
+    } else if (runGoing) {
+      // The Workflow call answers at once, so the turn ends while its agents work on.
+      turn = { mood: 'working', say: { line: 'On it', sub: `${RUN_GOING}…` } }
     } else {
-      const files = s.end?.turn ? (turns?.find((t) => t.seq === s.end!.turn)?.files ?? 0) : 0
+      const files = s.end?.changes ? (turns?.find((t) => t.seq === s.end!.changes)?.files ?? 0) : 0
       const facts: string[] = []
       if (tools.length) facts.push(plural(tools.length, 'step'))
       if (files) facts.push(`${plural(files, 'file')} changed`)
@@ -144,7 +171,7 @@ function speakerTurns(
     }
     at.set(s.first!, turn)
   }
-  return { at, thinking: live && !open }
+  return { at, thinking: live && !open, going }
 }
 
 /** Scroll to the newest card still waiting on you, where the needs-you face points. */
@@ -177,12 +204,12 @@ function Speaker({ mood, say, at }: { mood: Mood; say: Say; at?: number }) {
 }
 
 /** A turn's end as Junior's sign-off: "done · 32.2s · 9 turns · $0.80", the word in Junior's colour. */
-function SignOff({ stats }: { stats: string }) {
+function SignOff({ stats, word = 'done' }: { stats: string; word?: string }) {
   const persona = usePersona()
   return (
     <span className="metaText">
       <span className="soDone" style={{ color: persona.colour }}>
-        done
+        {word}
       </span>{' '}
       · {stats}
     </span>
@@ -217,11 +244,31 @@ export function Transcript({
   tail,
   marks = NO_MARKS,
   speaker,
+  workflows = NO_WORKFLOWS,
+  onOpenWorkflow,
+  timeOf = store.eventTime,
+  noLive,
 }: Props) {
-  const items = useMemo(() => buildTranscript(events, store.eventTime, { scope, agents, shells }), [events, scope, agents, shells])
+  const items = useMemo(() => buildTranscript(events, timeOf, { scope, agents, shells }), [events, timeOf, scope, agents, shells])
   const byCall = useMemo(() => new Map(agents.map((a) => [a.toolUseId, a])), [agents])
   const byAgentId = useMemo(() => new Map(agents.filter((a) => a.agentId).map((a) => [a.agentId!, a])), [agents])
   const openAgent = useCallback((id: string | null) => onOpenAgent?.(id), [onOpenAgent])
+  const runByCall = useMemo(() => new Map(workflows.map((r) => [r.toolUseId, r])), [workflows])
+  // A workflow agent can raise a prompt too: by its id, the run and agent it is.
+  const wfByAgentId = useMemo(() => {
+    const m = new Map<string, WfAsker>()
+    for (const run of workflows) for (const agent of run.agents) if (agent.agentId) m.set(agent.agentId, { run, agent })
+    return m
+  }, [workflows])
+  // By the agent's id, else the run the server named, else (an agent no progress
+  // frame has named yet, and no subagent either) the run going on now.
+  const wfAskerOf = (agentId: string, taskId: string | undefined): WfAsker | undefined => {
+    const known = wfByAgentId.get(agentId)
+    if (known) return known
+    const run = (taskId ? workflows.find((r) => r.taskId === taskId) : undefined) ?? workflows.findLast((r) => r.state === 'running')
+    return run ? { run } : undefined
+  }
+  const openWorkflow = useCallback((id: string, agent?: WorkflowAgent) => onOpenWorkflow?.(id, agent), [onOpenWorkflow])
   // Outbound actions this session took, by the tool call that made each one, 
   // drawn as a line under that call (a collapsed push names several calls).
   const { actions } = useActions({ session: sessionId })
@@ -244,10 +291,11 @@ export function Transcript({
   useLayoutEffect(scrollToBottom, [items, scrollToBottom])
 
   const live = speaker?.status === 'running' || speaker?.status === 'starting'
-  const moods = useMemo(() => (speaker ? speakerTurns(items, live, turns) : null), [items, live, turns, !!speaker])
+  const runningCalls = useMemo(() => new Set(workflows.filter((r) => r.state === 'running').map((r) => r.toolUseId)), [workflows])
+  const moods = useMemo(() => (speaker ? speakerTurns(items, live, turns, runningCalls) : null), [items, live, turns, runningCalls, !!speaker])
   const timeAt = (item: TranscriptItem) => {
     const ev = events[eventIndexOf(item)]
-    return ev ? store.eventTime(ev) : undefined
+    return ev ? timeOf(ev) : undefined
   }
 
   // Each mark goes before the first item at or past its event; one past every item goes last.
@@ -272,7 +320,7 @@ export function Transcript({
           {moods?.at.has(item.key) && <Speaker {...moods.at.get(item.key)!} at={timeAt(item)} />}
           <Item
             item={item}
-            turn={item.kind === 'meta' && item.turn ? turns?.find((t) => t.seq === item.turn) : undefined}
+            turn={item.kind === 'meta' && item.changes ? turns?.find((t) => t.seq === item.changes) : undefined}
             agent={
               item.kind === 'agent'
                 ? byCall.get(item.toolUseId)
@@ -283,19 +331,22 @@ export function Transcript({
                     : undefined
             }
             onOpenAgent={openAgent}
+            workflow={item.kind === 'workflow' ? runByCall.get(item.toolUseId) : undefined}
+            wfAsker={item.kind === 'permission' && item.agentId && !byAgentId.has(item.agentId) ? wfAskerOf(item.agentId, item.workflowTaskId) : undefined}
+            onOpenWorkflow={onOpenWorkflow ? openWorkflow : undefined}
             onRespond={onRespond}
             refs={refs}
             onRef={onNavigate}
             sessionId={sessionId}
             actionByCall={actionByCall}
-            signoff={!!speaker}
+            signoff={!speaker ? undefined : moods?.going.has(item.key) ? RUN_GOING : 'done'}
           />
           </Fragment>
         ))}
         {marksBefore.tailMarks.map((x) => <Fragment key={x.key}>{x.node}</Fragment>)}
         {/* The streaming line is the main agent's; an agent's view shows its messages as they commit. */}
         {moods?.thinking && <Speaker mood="think" say={{ line: 'Thinking…', sub: 'reading your message' }} />}
-        {!scope && <LiveLine sessionId={sessionId} onGrow={scrollToBottom} />}
+        {!scope && !noLive && <LiveLine sessionId={sessionId} onGrow={scrollToBottom} />}
         {tail}
       </div>
     </div>
@@ -400,11 +451,16 @@ function mentionOpener(m: ResolvedMention, onRef: (hash: string) => void): (() =
   return hash === null ? undefined : () => onRef(hash)
 }
 
+type WfAsker = { run: WorkflowRun; agent?: WorkflowAgent }
+
 const Item = memo(function Item({
   item,
   turn,
   agent,
   onOpenAgent,
+  workflow,
+  wfAsker,
+  onOpenWorkflow,
   onRespond,
   refs,
   onRef,
@@ -417,18 +473,26 @@ const Item = memo(function Item({
   /** The subagent this item is about: an Agent call's run, a prompt's asker, a relay's recipient. */
   agent?: AgentRun
   onOpenAgent: (toolUseId: string | null) => void
+  /** A Workflow call's run. */
+  workflow?: WorkflowRun
+  /** A prompt raised by a workflow agent: which run and agent. */
+  wfAsker?: WfAsker
+  /** Absent where a run can't be opened (inside one of its agents' views). */
+  onOpenWorkflow?: (toolUseId: string, agent?: WorkflowAgent) => void
   onRespond: Props['onRespond']
   refs: RefIndex
   onRef: (hash: string) => void
   sessionId: string
   /** this session's outbound actions, by tool_use id */
   actionByCall: ReadonlyMap<string, ActionView>
-  /** a turn's end reads as Junior's sign-off ("done · 32s · …") rather than "turn done" */
-  signoff?: boolean
+  /** a turn's end reads as Junior's sign-off ("done · 32s · …") rather than "turn done": the word it opens with */
+  signoff?: string
 }) {
   switch (item.kind) {
     case 'agent':
       return <AgentCard run={agent} onOpen={onOpenAgent} />
+    case 'workflow':
+      return <WorkflowCard sessionId={sessionId} run={workflow} onOpen={onOpenWorkflow} />
     case 'relay':
       return (
         <button type="button" className="relayRow" onClick={() => onOpenAgent(item.relay.toolUseId)} title="Open this agent">
@@ -519,10 +583,15 @@ const Item = memo(function Item({
       return (
         <div className={`meta${signoff && item.stats ? ' signoff' : ''}`}>
           {signoff && item.stats ? (
-            <SignOff stats={item.stats} />
+            <SignOff stats={item.stats} word={signoff} />
           ) : (
             <span className="metaText" title={item.text}>
               {item.text}
+            </span>
+          )}
+          {item.workflowSpend && (
+            <span className="metaWf" title="Workflow agents worked during this turn. Its cost may include some of theirs.">
+              incl. workflow agents
             </span>
           )}
           {turn && turn.files > 0 && (
@@ -575,11 +644,28 @@ const Item = memo(function Item({
         <AskCard item={item} questions={questions} onRespond={onRespond} junior={junior} />
       ) : plan !== null ? (
         <PlanCard item={item} plan={plan} refs={refs} onRef={onRef} onRespond={onRespond} junior={junior} />
+      ) : item.toolName === WORKFLOW_TOOL ? (
+        <WorkflowApproval item={item} onRespond={onRespond} junior={junior} />
       ) : (
         <PermissionCard item={item} onRespond={onRespond} junior={junior} />
       )
       // A subagent's prompt says who is asking, answering it here or in its view is the same answer.
       if (!item.agentId) return card
+      if (!agent && wfAsker) {
+        const who = `${wfAsker.run.name} · ${wfAsker.agent?.label ?? 'a workflow agent'} asks`
+        return (
+          <div className="agentAsks">
+            {onOpenWorkflow ? (
+              <button type="button" className="aaFrom" onClick={() => onOpenWorkflow(wfAsker.run.toolUseId, wfAsker.agent)} title={wfAsker.agent ? 'Open this workflow agent' : 'Open this run'}>
+                {who}
+              </button>
+            ) : (
+              <span className="aaFrom static">{who}</span>
+            )}
+            {card}
+          </div>
+        )
+      }
       return (
         <div className="agentAsks">
           <button type="button" className="aaFrom" onClick={() => agent && onOpenAgent(agent.toolUseId)} disabled={!agent}>

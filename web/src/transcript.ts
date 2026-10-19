@@ -13,6 +13,9 @@
  */
 import { AGENT_TOOLS, HANDBACK_TOOL, type AgentRun } from './agents.js'
 import { buildShells, type ShellRun } from '../../core/shells/fold.js'
+import { WORKFLOW_TOOL } from '../../core/workflows/fold.js'
+import { WorkflowTurns } from '../../core/workflows/tasks.js'
+import { costStep, type CostMark } from '../../core/usage/turn-cost.js'
 import {
   isTextBlock,
   isThinkingBlock,
@@ -70,6 +73,8 @@ export type TranscriptItem =
   | { key: string; kind: 'relay'; text: string; relay: AgentRelay; delivery?: RelayDelivery }
   /** An Agent/Task call: the subagent it started, drawn as one card. */
   | { key: string; kind: 'agent'; toolUseId: string }
+  /** A Workflow call: the Ultracode run it launched, drawn as one card (core/workflows/fold.ts). */
+  | { key: string; kind: 'workflow'; toolUseId: string }
   | { key: string; kind: 'assistant'; text: string }
   | ThinkingItem
   | { key: string; kind: 'error'; text: string }
@@ -77,12 +82,16 @@ export type TranscriptItem =
       key: string
       kind: 'meta'
       text: string
-      /** 1-based turn this marker ends, for the changeset line */
+      /** 1-based turn this marker ends: one per result */
       turn?: number
+      /** The server's changeset this marker closes (its turn seq), for the files line. Absent = it closes none. */
+      changes?: number
       /** a turn's end, without the frame: "32.2s · 9 turns · $0.8007", for Junior's sign-off */
       stats?: string
       /** how long the turn took, for Junior's "Done in 32s" */
       ms?: number
+      /** Workflow agents spent while this turn was open: its cost (cumulative at the result) includes some of theirs. */
+      workflowSpend?: boolean
     }
   | { key: string; kind: 'init'; model?: string; toolCount: number; servers: McpServerInfo[]; mcpTools: string[] }
   /** What a local command (`/usage`, `/context`) printed, not the model talking. */
@@ -104,6 +113,8 @@ export type TranscriptItem =
       answers?: QuestionAnswers
       /** A subagent's call: that agent's id. */
       agentId?: string
+      /** A workflow agent's call: its run's task id. */
+      workflowTaskId?: string
     }
 
 export type TranscriptScope = {
@@ -129,12 +140,28 @@ export function buildTranscript(
   // the init that follows it names the model the new process runs.
   let initSeen = false
   let resumed = false
-  // A result's total_cost_usd is cumulative for its subprocess, so a turn's own
-  // cost is the step from the last one. A new subprocess starts from zero.
-  let costSeen = 0
-  // Turns are counted the way the server counts them: one per `result`, so a
-  // marker can be matched to the snapshot pair that bracketed it.
+  // A result's total_cost_usd is cumulative, so a turn's own cost is the step
+  // from the last one. A revival may carry the counters on or start them over:
+  // costStep tells which, and a subprocess marked fresh surely starts over.
+  let costSeen: CostMark | null = null
   let turnSeq = 0
+  // Changesets are counted the way the server counts them (live-session.ts):
+  // your message opens one unless one is open, and a result closes it, unless
+  // a Workflow run holds it (WorkflowTurns): one still going, or one that ended
+  // in this turn, whose wake-up turn then closes it. Or the subprocess ending
+  // does. A turn with no message (a wake-up) opens none.
+  let changeSeq = 0
+  let changeOpen = false
+  let changeHeld = false
+  const wfTurns = new WorkflowTurns()
+  // Workflow agents' spend lands in whichever result follows it. A turn says
+  // its cost may include theirs when its window saw their token count grow, or
+  // when it closed with a run still going: an agent's call can land in the
+  // result before any progress frame reports it (and the log thins those frames).
+  // A task_notification repeats the final total, so it is never growth.
+  const workflowTasks = new Set<string>()
+  const wfTokens = new Map<string, number>()
+  let wfSpent = false
   // Items are rebuilt on every append, so late-arriving results and permission
   // verdicts are patched onto the item objects created earlier in this pass.
   const toolsById = new Map<string, ToolItem>()
@@ -149,6 +176,10 @@ export function buildTranscript(
   events.forEach((ev, i) => {
     switch (ev.kind) {
       case 'local_user': {
+        if (!changeOpen) {
+          changeOpen = true
+          changeSeq += 1
+        }
         if (ev.relay) {
           let mark: (d: RelayDelivery, sent: string) => void = () => {}
           if (!scope) {
@@ -174,7 +205,10 @@ export function buildTranscript(
         break
       case 'subprocess':
         resumed = true
-        costSeen = 0
+        if (ev.fresh) costSeen = null
+        // The old subprocess took its runs with it, and closed the changeset they held.
+        wfTurns.clear()
+        if (changeHeld) changeOpen = changeHeld = false
         break
       case 'permission_request': {
         // Main shows every prompt (that's where the reader usually is); an agent's view, only its own.
@@ -189,6 +223,7 @@ export function buildTranscript(
           canAlwaysAllow: ev.canAlwaysAllow,
           effect: ev.effect,
           agentId: ev.agentId,
+          ...(ev.workflowTaskId ? { workflowTaskId: ev.workflowTaskId } : {}),
         }
         permsById.set(ev.id, item)
         items.push(item)
@@ -213,6 +248,15 @@ export function buildTranscript(
             const [r] = relays.splice(at, 1)
             const sent = typeof b.input.message === 'string' ? b.input.message : ''
             r.mark(sent.trim() === r.text.trim() ? 'verbatim' : 'reworded', sent)
+          }
+        }
+        wfTurns.note(m)
+        if (m.type === 'system' && m.task_id) {
+          if (m.subtype === 'task_started' && m.task_type === 'local_workflow') workflowTasks.add(m.task_id)
+          const used = m.usage?.total_tokens
+          if (workflowTasks.has(m.task_id) && typeof used === 'number' && used > (wfTokens.get(m.task_id) ?? 0)) {
+            wfTokens.set(m.task_id, used)
+            wfSpent = true
           }
         }
         // A subagent's messages belong to its own view; main's, to main's.
@@ -251,6 +295,8 @@ export function buildTranscript(
               items.push({ key: `t${i}.${j}`, kind: 'thinking', text: truncate(b.thinking, 400) })
             } else if (isToolUseBlock(b) && (agentCalls.has(b.id) || AGENT_TOOLS.has(b.name))) {
               items.push({ key: `c${i}.${j}`, kind: 'agent', toolUseId: b.id })
+            } else if (isToolUseBlock(b) && b.name === WORKFLOW_TOOL) {
+              items.push({ key: `c${i}.${j}`, kind: 'workflow', toolUseId: b.id })
             } else if (isToolUseBlock(b) && b.name === HANDBACK_TOOL) {
               // The agent's report: its view shows it as the hand-back card, not as a step.
             } else if (isToolUseBlock(b)) {
@@ -276,13 +322,15 @@ export function buildTranscript(
             item.endedAt = timeOf(ev)
           }
         } else if (m.type === 'result') {
-          // A drop means a new subprocess the log never marked (one from before the marker existed).
-          const total = m.total_cost_usd
-          const turnCost = total == null ? null : total >= costSeen ? total - costSeen : total
-          if (total != null) costSeen = total
-          const cost = turnCost != null ? ` · $${turnCost.toFixed(4)}` : ''
+          const step = costStep(m, costSeen)
+          costSeen = step.seen
+          const cost = typeof m.total_cost_usd === 'number' ? ` · $${step.delta.toFixed(4)}` : ''
           const secs = ((m.duration_ms ?? 0) / 1000).toFixed(1)
           turnSeq += 1
+          const hold = wfTurns.holdAtResult()
+          changeHeld = changeOpen && hold
+          const closes = changeOpen && !changeHeld
+          if (closes) changeOpen = false
           const stats = `${secs}s · ${m.num_turns ?? 0} turns${cost}`
           items.push({
             key: `r${i}`,
@@ -291,7 +339,10 @@ export function buildTranscript(
             text: `— turn done · ${stats} —`,
             stats,
             ms: m.duration_ms ?? undefined,
+            ...(wfSpent || wfTurns.running.size > 0 ? { workflowSpend: true } : {}),
+            ...(closes ? { changes: changeSeq } : {}),
           })
+          wfSpent = false
         }
         break
       }
