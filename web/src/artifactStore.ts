@@ -22,6 +22,8 @@ export type ArtifactsSnapshot = {
 let snap: ArtifactsSnapshot = { artifacts: [], root: '', all: false, loaded: false, loading: false }
 const listeners = new Set<() => void>()
 let inflight: Promise<void> | null = null
+/** a change arrived while a fetch was out: that fetch may predate it, so load once more when it lands */
+let dirty = false
 
 function notify() {
   for (const fn of listeners) fn()
@@ -54,6 +56,10 @@ export const artifactStore = {
       })
       .finally(() => {
         inflight = null
+        if (dirty) {
+          dirty = false
+          void artifactStore.refresh()
+        }
       })
     return inflight
   },
@@ -61,7 +67,8 @@ export const artifactStore = {
 
 // Once loaded, stay current: the server broadcasts every index change.
 store.onArtifactsChanged(() => {
-  if (snap.loaded) void artifactStore.refresh()
+  if (inflight) dirty = true
+  else if (snap.loaded) void artifactStore.refresh()
 })
 
 export function useArtifacts(): ArtifactsSnapshot {

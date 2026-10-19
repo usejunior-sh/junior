@@ -18,6 +18,8 @@
     "test",
     "scripts/demo",
     "web/src/agents.ts",
+    "web/src/artifactView.ts",
+    "web/src/diff.ts",
     "web/src/transcript.ts",
     "vite.config.ts"
   ]
