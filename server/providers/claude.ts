@@ -49,6 +49,19 @@ function vetoHook(veto: ToolVeto): HookCallback {
   }
 }
 
+/**
+ * The Workflow tool's receipt ends "Use /workflows to watch live progress", a
+ * terminal command that doesn't exist in triage. A note right after the
+ * receipt outweighs the system prompt; the receipt itself stays untouched,
+ * since the run card reads it.
+ */
+const WORKFLOW_NOTE =
+  'Note from triage: /workflows does not exist here. The user watches this run in triage: its card in the chat opens a panel with every agent, its transcript and its cost, and Stop in the dock above the composer ends it. Point them there.'
+const workflowNoteHook: HookCallback = async (input) =>
+  input.hook_event_name === 'PostToolUse' && input.tool_name === 'Workflow'
+    ? { hookSpecificOutput: { hookEventName: 'PostToolUse', additionalContext: WORKFLOW_NOTE } }
+    : {}
+
 type Window = { utilization: number | null; resets_at?: string | null } | null | undefined
 
 /** One claude.ai plan window as a limit; a window it doesn't report is skipped. */
@@ -129,8 +142,9 @@ export const claude: Provider = {
         // layer and only when it is explicitly true, a user/project setting is
         // ignored in the Agent SDK ('sdk_opt_in_required'), so it is set at
         // spawn here and cleared, not set false, when turned off.
-        ...(spec.fastMode || spec.settings
-          ? { settings: { ...(spec.settings ?? {}), ...(spec.fastMode ? { fastMode: true } : {}) } }
+        // Ultracode rides the same layer: a session-scoped flag setting.
+        ...(spec.fastMode || spec.ultracode || spec.settings
+          ? { settings: { ...(spec.settings ?? {}), ...(spec.fastMode ? { fastMode: true } : {}), ...(spec.ultracode ? { ultracode: true } : {}) } }
           : {}),
         ...(spec.maxBudgetUsd ? { maxBudgetUsd: spec.maxBudgetUsd } : {}),
         ...(spec.planning ? { permissionMode: 'plan' as const } : sdkMode(spec.permissionMode) ? { permissionMode: sdkMode(spec.permissionMode) } : {}),
@@ -139,16 +153,25 @@ export const claude: Provider = {
         ...(spec.additionalDirectories?.length ? { additionalDirectories: spec.additionalDirectories } : {}),
         ...(spec.resume ? { resume: spec.resume } : {}),
         ...(spec.plugins?.length ? { plugins: spec.plugins.map((p) => ({ type: 'local' as const, path: p })) } : {}),
-        ...(spec.veto ? { hooks: { PreToolUse: [{ hooks: [vetoHook(spec.veto)] }] } } : {}),
+        hooks: {
+          ...(spec.veto ? { PreToolUse: [{ hooks: [vetoHook(spec.veto)] }] } : {}),
+          PostToolUse: [{ matcher: 'Workflow', hooks: [workflowNoteHook] }],
+        },
         canUseTool: (toolName, toolInput, opts) => spec.approve(toolName, toolInput, opts),
       },
     })
     const events = noted(claudeEvents(q), spec.env)
+    // An effort change sent without an `ultracode` key turns ultracode off, so it travels with one.
+    let ultracode = spec.ultracode === true
     return {
       [Symbol.asyncIterator]: () => events,
       setModel: (model) => q.setModel(model),
       setEffort: async (effort) => {
-        await q.applyFlagSettings({ effortLevel: effort })
+        await q.applyFlagSettings({ effortLevel: effort, ...(ultracode ? { ultracode: true } : {}) })
+      },
+      setUltracode: async (on) => {
+        await q.applyFlagSettings({ ultracode: on ? true : null })
+        ultracode = on
       },
       setFastMode: async (on) => {
         await q.applyFlagSettings({ fastMode: on ? true : null })

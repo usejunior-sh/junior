@@ -88,8 +88,14 @@ export function handleConnection(ws: WebSocket, req: http.IncomingMessage): void
             msg.effort ?? null,
             msg.fastMode === true,
             msg.permissionMode ?? null,
-            // Plan mode is Claude's; another agent starts normally.
-            { projectId: project.id, checkoutId: checkout?.id, provider: msg.provider, planning: msg.mode === 'plan' && (msg.provider ?? 'claude') === 'claude' },
+            // Plan mode and Ultracode are Claude's; another agent starts normally.
+            {
+              projectId: project.id,
+              checkoutId: checkout?.id,
+              provider: msg.provider,
+              planning: msg.mode === 'plan' && (msg.provider ?? 'claude') === 'claude',
+              ultracode: msg.mode === 'ultracode' && (msg.provider ?? 'claude') === 'claude',
+            },
           )
           // Dispatched from an item: the link is what the item page shows as "sessions".
           if (msg.itemId) await linkSessionToItem(rt, row.id, msg.itemId, 'dispatch').catch(() => {})
@@ -182,6 +188,19 @@ export function handleConnection(ws: WebSocket, req: http.IncomingMessage): void
           const session = rt.live.get(row.id)
           if (session && !(await session.setPlanning(planning))) session.stop()
           if (session) session.notice(planning ? 'Plan mode — Junior reads and writes a plan, and edits nothing until you approve it.' : 'Plan mode off.')
+          broadcastSessionList(rt)
+          break
+        }
+        case 'set_ultracode': {
+          const row = rt.rows.get(msg.sessionId)
+          if (!row || row.provider !== 'claude' || row.kind !== 'chat' || row.ultracode === msg.on) break
+          row.ultracode = msg.on
+          await rt.store.sessions.setUltracode(row.id, msg.on)
+          // Switched in place, so runs already going carry on; a subprocess that can't is revived with the new row.
+          const session = rt.live.get(row.id)
+          const revived = !!session && !(await session.setUltracode(msg.on))
+          if (session && revived) session.stop()
+          await sessionNotice(rt, row.id, msg.on ? 'Ultracode on.' : revived ? 'Ultracode off.' : 'Ultracode off. Runs already going carry on.')
           broadcastSessionList(rt)
           break
         }

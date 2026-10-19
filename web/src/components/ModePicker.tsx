@@ -1,16 +1,16 @@
-import { Check, ChevronDown, ListChecks, Signpost, Target } from 'lucide-react'
+import { Check, ChevronDown, ListChecks, Signpost, Target, Workflow } from 'lucide-react'
 import { Fragment } from 'react'
 import type { SessionMode } from '../../../shared/protocol.js'
 import { usePersona } from '../junior.js'
 import { findSessionMode, SESSION_MODE_INFO } from '../sessionModes.js'
 import { Menu, MenuContent, MenuItem, MenuTrigger } from '../ui/Menu.js'
 
-const ICON: Record<SessionMode, typeof Signpost> = { normal: Signpost, plan: ListChecks, goal: Target }
+const ICON: Record<SessionMode, typeof Signpost> = { normal: Signpost, plan: ListChecks, goal: Target, ultracode: Workflow }
 
 /**
  * What Junior does before it starts: an override, not a choice: "Junior
- * decides" by default, and a forced Plan first or Goal takes its colour.
- * New sessions only: a running session shows plan mode as a status chip instead.
+ * decides" by default, and a forced Plan first, Goal or Ultracode takes its colour.
+ * New sessions only: a running session shows Planning / Ultracode as status chips instead.
  */
 export function ModePicker({ mode, onChange, disabled }: { mode?: SessionMode; onChange: (mode: SessionMode) => void; disabled?: boolean }) {
   const persona = usePersona()
@@ -46,7 +46,8 @@ export function ModePicker({ mode, onChange, disabled }: { mode?: SessionMode; o
                   </span>
                   {m.id === selected.id && <Check className="check" size={14} aria-hidden="true" />}
                 </MenuItem>
-                {m.id === 'normal' && <div className="uiMenuSep" />}
+                {/* Junior decides | Plan first, Goal | Ultracode, which changes the whole session */}
+                {(m.id === 'normal' || m.id === 'goal') && <div className="uiMenuSep" />}
               </Fragment>
             )
           })}

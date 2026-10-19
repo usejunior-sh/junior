@@ -212,7 +212,7 @@ export function NewSessionComposer({ draft, onChange, onCreate, error, step }: P
   // "New job" / "New goal": a chat with Junior that sets one up. No checkout to pick, it names its own project.
   // Opened as one, or picked from the starters under the box.
   const [job, setJob] = useState(draft.intent === 'job')
-  // Mode (Normal / Plan / Goal): "Turn into a goal" opens on Goal. A goal's first message goes out marked
+  // Mode (Normal / Plan / Goal / Ultracode): "Turn into a goal" opens on Goal. A goal's first message goes out marked
   // as one (the server says so to the model), so it carries no "New goal:" prefix of its own.
   const [mode, setMode] = useState<SessionMode>(draft.intent === 'goal' ? 'goal' : 'normal')
   const goal = mode === 'goal'
@@ -419,15 +419,17 @@ export function NewSessionComposer({ draft, onChange, onCreate, error, step }: P
         placeholder={
           job
             ? 'What should it do, how often, and what must it never do? e.g. “Every weekday at 9, find PRs waiting on my review”'
-            : goal
+            : !onClaude
+              ? 'Describe what you want to work on — a bug, a feature, a question…'
+              : goal
               ? 'What is the outcome, and how will we know it’s done? e.g. “CI green on main, the flaky test fixed”'
               : mode === 'plan'
-                ? 'What should Junior plan? It reads and plans, and edits nothing until you approve the plan.'
-                : onClaude
-                ? draft.label
-                  ? `Tell ${persona.name} what to work on — a bug, a feature, a question…`
-                  : `Try: ${example}`
-                : 'Describe what you want to work on — a bug, a feature, a question…'
+                ? `What should ${persona.name} plan? It reads and plans, and edits nothing until you approve the plan.`
+                : mode === 'ultracode'
+                ? `Describe a big job. ${persona.name} splits it across agents and checks the results.`
+                : draft.label
+                ? `Tell ${persona.name} what to work on — a bug, a feature, a question…`
+                : `Try: ${example}`
         }
         focusKey={draft.id}
         sendTitle="Start the session (Enter)"

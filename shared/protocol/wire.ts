@@ -34,8 +34,9 @@ export type SessionEvent =
    * revival after the last one ended). Whatever the old one had running,
    * subagents, background shells, ended with it. Written by triage, because
    * the SDK's own `init` arrives at the start of every turn, not once per process.
+   * `fresh`: started without resume, so its cost counters start from zero.
    */
-  | { kind: 'subprocess' }
+  | { kind: 'subprocess'; fresh?: boolean }
   | {
       kind: 'permission_request'
       id: string
@@ -52,6 +53,8 @@ export type SessionEvent =
       effect?: ToolEffect
       /** Set when a subagent made the call: its agent id (a `task_*` message's task_id). */
       agentId?: string
+      /** Set when the agent asking is one of an Ultracode Workflow run's: that run's task id. */
+      workflowTaskId?: string
       /** The tool_use this prompt is about: how an action record learns who allowed it. Absent on older logs. */
       toolUseId?: string
     }
@@ -151,7 +154,7 @@ export type ClientMessage =
       model?: string
       effort?: EffortLevel
       permissionMode?: PermissionMode
-      /** Plan: start in plan mode. Goal: the first message is a goal. Omitted = normal. */
+      /** Plan: start in plan mode. Goal: the first message is a goal. Ultracode: the session runs with ultracode on. Omitted = normal. */
       mode?: SessionMode
       fastMode?: boolean
       /** The agent to run on, for the session's whole life. Omitted = 'claude'. */
@@ -165,8 +168,10 @@ export type ClientMessage =
   | { type: 'set_fast_mode'; sessionId: string; fastMode: boolean }
   /** Switch how much a session asks: mid-session, and for every turn after. */
   | { type: 'set_permission_mode'; sessionId: string; mode: PermissionMode }
-  /** Plan mode on or off, mid-session. (Goal rides on the message: user_message.mode.) */
-  | { type: 'set_session_mode'; sessionId: string; mode: Exclude<SessionMode, 'goal'> }
+  /** Plan mode on or off, mid-session. (Goal rides on the message: user_message.mode; Ultracode has set_ultracode.) */
+  | { type: 'set_session_mode'; sessionId: string; mode: Exclude<SessionMode, 'goal' | 'ultracode'> }
+  /** Ultracode on or off, mid-session, for every turn after. Runs already going carry on. */
+  | { type: 'set_ultracode'; sessionId: string; on: boolean }
   /** Give a session a new title. */
   | { type: 'rename_session'; sessionId: string; title: string }
   /** Pin a session to the top of the list, or unpin it. */

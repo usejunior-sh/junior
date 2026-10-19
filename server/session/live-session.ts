@@ -1,7 +1,7 @@
 import { createSdkMcpServer } from '@anthropic-ai/claude-agent-sdk'
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
-import type { AgentRelay, EffortLevel, FastModeDisabledReason, FastModeState, FileRef, ImageAttachment, Mention, PermissionBehavior, PermissionMode, QuestionAnswers, SessionEvent, SessionStatus } from '../../shared/protocol.js'
+import type { AgentRelay, EffortLevel, FastModeDisabledReason, FastModeState, FileRef, ImageAttachment, Mention, PermissionBehavior, PermissionMode, QuestionAnswers, SdkMessage, SessionEvent, SessionStatus } from '../../shared/protocol.js'
 import type { AgentSession, FastModeVerdict, McpServers, PermissionResult, PermissionUpdate, Provider, ToolCall, UserTurn } from '../providers/types.js'
 import type { StoredSession } from '../../core/store/types.js'
 import { providerFor } from '../providers/registry.js'
@@ -9,7 +9,8 @@ import { snapshotTree } from '../git.js'
 import { log } from '../log.js'
 import { attachedFilesNote } from '../attachments.js'
 import { frameTeamMessage, isCheckCommand } from '../teams.js'
-import { GOAL_MODE_MARK } from '../../shared/triageContext.js'
+import { GOAL_MODE_MARK, ULTRACODE_OFF_NOTE, ULTRACODE_ON_NOTE } from '../../shared/triageContext.js'
+import { WORKFLOW_TOOL } from '../../core/workflows/fold.js'
 import { browserCallAllowed } from '../../core/browser/policy.js'
 import { readOnlyCommand } from '../../core/actions/commands.js'
 import { frameAgentRelay } from '../../core/agents/relay.js'
@@ -30,6 +31,8 @@ import { resolveMentions } from './mentions.js'
 import { classifyEffect, sessionScoped, TEAM_TOOLS, TRIAGE_READ_TOOLS } from './effects.js'
 import { teamRunOf } from '../team-run/state.js'
 import { noteActionEvent } from './actions-record.js'
+import { endedTask, owedProgress, type ProgressPending, snapshotAgentIds, throttleProgress, WorkflowTurns } from './workflow-tasks.js'
+import { costStep, lastResultMark, type CostMark } from '../../core/usage/turn-cost.js'
 
 /**
  * Spawn-time extras for special-purpose sessions (briefs): text appended to
@@ -78,8 +81,27 @@ export class LiveSession {
     }
   >()
   private readonly q: AgentSession
-  /** The subprocess's cumulative cost at its last result, turn cost is the difference. */
-  private costSeen = 0
+  /** The subprocess's cumulative counters at its last result, turn cost is the difference (core/usage/turn-cost.ts). */
+  private costSeen: CostMark | null = null
+  /** costSeen seeded from the log: a resumed subprocess's counters may carry on from there. */
+  private readonly costSeeded: Promise<void>
+  /** Workflow runs (Ultracode) this subprocess still has going, by task id, and whether a result holds the turn for them. */
+  private readonly workflowTurns = new WorkflowTurns()
+  private get workflowTasks(): ReadonlySet<string> {
+    return this.workflowTurns.running
+  }
+  /** Per running workflow: the last progress frame the log kept, and what it still owes. */
+  private readonly progressMarks = new Map<string, ProgressPending>()
+  /** Workflow agent ids seen in progress snapshots, to the run's task id. */
+  private readonly workflowAgents = new Map<string, string>()
+  /** A result came while runs were going, so the turn was left open for them. */
+  private turnHeld = false
+  /** Spawned with Ultracode on: its system prompt carries the Ultracode note. */
+  private readonly spawnedUltracode: boolean
+  /** Said once per subprocess (and per switch) when the model has no Workflow tool. */
+  private ultracodeChecked = false
+  /** Ultracode switched in place: the next message tells the agent, its system prompt can't. */
+  private modeNote: string | null = null
   /** This turn wrote a skill or agent file, reload them everywhere when it ends. */
   private libraryTouched = false
   /** Whether this subprocess was spawned able to bypass permission checks. */
@@ -96,6 +118,15 @@ export class LiveSession {
   ) {
     this.seq = lastSeq
     this.bypassArmed = row.permissionMode === 'bypassPermissions'
+    this.spawnedUltracode = row.ultracode
+    this.costSeeded = resumeSdkSessionId
+      ? rt.store.events.read(row.id).then(
+          (evs) => {
+            this.costSeen = lastResultMark(evs)
+          },
+          () => {},
+        )
+      : Promise.resolve()
     this.provider = providerFor(row.provider)
     this.q = this.provider.openSession(this.input, {
       cwd: row.cwd,
@@ -125,6 +156,8 @@ export class LiveSession {
       // Fast mode: the same model at up to ~2.5x output speed, priced higher.
       // Set at spawn and cleared, not set false, when turned off (see setFastMode).
       ...(row.fastMode ? { fastMode: true } : {}),
+      // Ultracode: big jobs go out as Workflow runs (.docs/ultracode.md). Claude chats only, set at creation.
+      ...(row.ultracode ? { ultracode: true } : {}),
       ...(extras.settings ? { settings: extras.settings } : {}),
       // A team member's backstop: the agent stops mid-turn past it, where our
       // own accounting (per result) would only notice afterwards.
@@ -154,7 +187,8 @@ export class LiveSession {
     })
     // A session with history getting a fresh subprocess: mark the boundary, since
     // nothing in the SDK's stream says "new process" (init comes every turn).
-    if (lastSeq > 0) this.emit({ kind: 'subprocess' }, true)
+    // Without resume its cost counters start from zero, which the transcript can't tell.
+    if (lastSeq > 0) this.emit({ kind: 'subprocess', ...(resumeSdkSessionId ? {} : { fresh: true }) }, true)
     void this.pump()
   }
 
@@ -235,6 +269,7 @@ export class LiveSession {
           // The subprocess already knows what `/` offers in this folder.
           // Take it rather than make the composer pay for its own probe.
           void this.refreshCommands()
+          this.checkUltracode(ev.tools)
           this.setStatus('idle')
         }
         // Skills can be discovered mid-run (the agent walks into a subdirectory
@@ -249,12 +284,23 @@ export class LiveSession {
         }
         // stream deltas are broadcast live but not persisted (recoverable
         // from the committed assistant message, and the only high-volume thing)
-        this.emit({ kind: 'sdk', message: slimToolImages(ev.record) }, ev.kind !== 'stream')
+        const event: SessionEvent = { kind: 'sdk', message: slimToolImages(ev.record) }
+        this.emit(event, ev.kind !== 'stream' && this.logFrame(ev.record, event))
+        if (this.workflowTurns.note(ev.record)) broadcastSessionList(this.rt)
         if (ev.kind === 'result') {
           this.setStatus('idle')
-          const turnStart = this.rt.openTurns.get(this.row.id)?.startedAt
-          if (turnStart != null) void noteBrowserTurn(this.rt, this.row, turnStart, ev.record)
-          void this.endTurn()
+          // A Workflow run outlives the turn that launched it and goes on editing
+          // files, so the turn stays open while one is going, and through the
+          // turn it ended in. The SDK's own wake-up turn after it closes it, or
+          // the subprocess ending does. A message sent meanwhile folds into that
+          // open turn (beginTurn keeps its pre-tree): its edits and the run's
+          // land in one changeset, since nothing can tell them apart.
+          this.turnHeld = this.workflowTurns.holdAtResult() && this.rt.openTurns.has(this.row.id)
+          if (!this.turnHeld) {
+            const turnStart = this.rt.openTurns.get(this.row.id)?.startedAt
+            if (turnStart != null) void noteBrowserTurn(this.rt, this.row, turnStart, ev.record)
+            void this.endTurn()
+          }
           void this.rt.store.sessions.touch(this.row.id)
           void syncCheckouts(this.rt)
           // The turn may have created files: the next `@` search relists.
@@ -271,10 +317,14 @@ export class LiveSession {
           // Team spend: total_cost_usd is cumulative for this subprocess, so
           // the turn's cost is the difference from the last result it sent.
           // Tracked for every session, so a chat that becomes a lead mid-way
-          // books only what it spends from then on.
-          const cost = ev.costUsd ?? null
-          const delta = cost === null ? 0 : Math.max(0, cost - this.costSeen)
-          if (cost !== null) this.costSeen = cost
+          // books what it spends from then on (what came before, proposeTeamOp
+          // read from its log).
+          // A resumed subprocess may carry on from the log's last result
+          // (costSeeded), or start over: costStep tells which.
+          await this.costSeeded
+          const step = costStep(ev.record, this.costSeen)
+          this.costSeen = step.seen
+          const delta = step.delta
           if (this.rt.sessionTeam.has(this.row.id)) void noteTeamSpend(this.rt, this.row.id, delta, ev.overBudget)
           // A goal session is one turn too: the run loop books its spend and moves the goal on.
           if (this.rt.goalRuns.has(this.row.id)) void endGoalSession(this.rt, this.row.id, null, delta)
@@ -287,6 +337,15 @@ export class LiveSession {
     } finally {
       // The subprocess is gone; any unanswered prompt can never be answered.
       this.expirePendingPermissions()
+      // Its runs went with it: keep where they got to, and close the turn they held open.
+      for (const mark of this.progressMarks.values()) for (const owed of owedProgress(mark)) this.persist(owed)
+      this.progressMarks.clear()
+      this.workflowTurns.clear()
+      this.workflowAgents.clear()
+      if (this.turnHeld) {
+        this.turnHeld = false
+        void this.endTurn()
+      }
       // A fresh-context replacement may already hold the slot; only clear our own.
       if (this.rt.live.get(this.row.id) === this) this.rt.live.delete(this.row.id)
       broadcastSessionList(this.rt)
@@ -301,6 +360,7 @@ export class LiveSession {
    * settings layer both apply live, so an in-flight session doesn't restart.
    */
   async setModel(model: string | null, effort: EffortLevel | null) {
+    this.ultracodeChecked = false
     await this.q.setModel(model ?? undefined)
     await this.q.setEffort(effort)
   }
@@ -340,6 +400,40 @@ export class LiveSession {
     if (changed) broadcastSessionList(this.rt)
   }
 
+  /** Ultracode needs a model with the Workflow tool: say so once, rather than fail quietly. */
+  private checkUltracode(tools: string[] | undefined) {
+    if (!this.row.ultracode || this.ultracodeChecked || !tools) return
+    this.ultracodeChecked = true
+    if (!tools.includes(WORKFLOW_TOOL)) this.notice("Ultracode isn't available on this model. Switch to Opus or Sonnet to use it.")
+  }
+
+  /**
+   * Whether the log keeps this frame. A Workflow run's task_progress carries a
+   * full snapshot and comes often: every frame goes out live, the log keeps
+   * fewer (throttleProgress), and what it skipped goes in when the run ends.
+   */
+  private logFrame(m: SdkMessage, event: SessionEvent): boolean {
+    const id = m.task_id
+    if (m.type !== 'system' || !id) return true
+    if (m.subtype === 'task_progress' && this.workflowTasks.has(id)) {
+      for (const agentId of snapshotAgentIds(m)) this.workflowAgents.set(agentId, id)
+      const { keep, before, next } = throttleProgress(this.progressMarks.get(id), m, event, Date.now())
+      for (const owed of before) this.persist(owed)
+      this.progressMarks.set(id, next)
+      return keep
+    }
+    if (endedTask(m) === id) {
+      for (const owed of owedProgress(this.progressMarks.get(id))) this.persist(owed)
+      this.progressMarks.delete(id)
+    }
+    return true
+  }
+
+  /** Workflow runs still going in the background. */
+  get workflows(): number {
+    return this.workflowTasks.size
+  }
+
   /** A pending permission prompt is waiting on the user. */
   get waiting(): boolean {
     return this.pendingPermissions.size > 0
@@ -375,7 +469,9 @@ export class LiveSession {
       ...(attached?.blocks ?? []).map((t) => ({ type: 'text' as const, text: t })),
       // Files go in as a path: Read opens them (pdf, csv, notebook, image) without a prompt.
       ...(filesNote ? [{ type: 'text' as const, text: filesNote }] : []),
+      ...(this.modeNote ? [{ type: 'text' as const, text: this.modeNote }] : []),
     ]
+    this.modeNote = null
     this.input.push({ content })
   }
 
@@ -498,6 +594,8 @@ export class LiveSession {
           effect,
           // A subagent's call says whose it is, so the card (and its agent's dock row) can.
           ...(opts.agentID ? { agentId: opts.agentID } : {}),
+          // A Workflow run's agent: which run, so the card can answer for it.
+          ...(opts.agentID && this.workflowAgents.has(opts.agentID) ? { workflowTaskId: this.workflowAgents.get(opts.agentID) } : {}),
           // Which call this is: the action record's "who allowed it" keys on it.
           ...(opts.toolUseID ? { toolUseId: opts.toolUseID } : {}),
         },
@@ -556,6 +654,23 @@ export class LiveSession {
     } catch {
       return false
     }
+  }
+
+  /**
+   * Ultracode on or off for every turn from here on; runs already going carry
+   * on. Returns false when the subprocess can't switch (it is revived instead).
+   */
+  async setUltracode(on: boolean): Promise<boolean> {
+    if (!this.q.setUltracode) return false
+    try {
+      await this.q.setUltracode(on)
+    } catch {
+      return false
+    }
+    if (on) this.ultracodeChecked = false
+    // The system prompt was fixed at spawn: when it says the opposite, the next message says what changed.
+    this.modeNote = on === this.spawnedUltracode ? null : on ? ULTRACODE_ON_NOTE : ULTRACODE_OFF_NOTE
+    return true
   }
 
   /**
@@ -673,14 +788,17 @@ export class LiveSession {
   }
 
   private emit(event: SessionEvent, persist: boolean) {
-    if (persist) {
-      this.seq += 1
-      this.rt.store.events.append(this.row.id, this.seq, event).catch((err) => {
-        log('error', 'session', `failed to persist event for ${this.row.id}: ${err}`)
-      })
-      // What the log keeps, the actions record reads: one fold, live or backfilled.
-      noteActionEvent(this.rt, this.row, event)
-    }
+    if (persist) this.persist(event)
     broadcast(this.rt, { type: 'session_event', sessionId: this.row.id, event, at: Date.now() })
+  }
+
+  /** Write an event to the log only: one already broadcast, or one that never needed to be. */
+  private persist(event: SessionEvent) {
+    this.seq += 1
+    this.rt.store.events.append(this.row.id, this.seq, event).catch((err) => {
+      log('error', 'session', `failed to persist event for ${this.row.id}: ${err}`)
+    })
+    // What the log keeps, the actions record reads: one fold, live or backfilled.
+    noteActionEvent(this.rt, this.row, event)
   }
 }

@@ -75,6 +75,7 @@ export async function extrasFor(rt: WorkspaceRuntime, row: StoredSession): Promi
     artifactsRoot: rt.artifacts.root,
     libraryRoot: rt.libraryDir,
     juniorName: rt.persona.name,
+    ...(row.ultracode ? { ultracode: true } : {}),
   })
   const run = teamRunOf(rt, row.id)
   const worker = run && run.leadSessionId !== row.id ? [...run.workers].reverse().find((w) => w.sessionId === row.id) : undefined

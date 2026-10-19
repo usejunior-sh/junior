@@ -100,6 +100,8 @@ export function ensureDurableSchema(db: DatabaseSync) {
   ensure('sessions', 'run_cost_usd', 'run_cost_usd REAL', s)
   // Plan mode (Session mode: Normal / Plan / Goal): the session plans before it codes.
   ensure('sessions', 'planning', 'planning INTEGER NOT NULL DEFAULT 0', s)
+  // Ultracode: Claude Code runs with settings.ultracode, big jobs fan out as Workflow runs.
+  ensure('sessions', 'ultracode', 'ultracode INTEGER NOT NULL DEFAULT 0', s)
 
   const w = cols('jobs')
   ensure('jobs', 'last_run_status', 'last_run_status TEXT', w)

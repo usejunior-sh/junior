@@ -60,6 +60,8 @@ export type StoredSession = {
   fastMode: boolean
   /** Plan mode: the session reads and plans, edits nothing, until you approve its plan. */
   planning: boolean
+  /** Ultracode: Claude Code runs with settings.ultracode, so big jobs fan out as Workflow runs. */
+  ultracode: boolean
   /** How much the session asks before acting; null = 'default' (ask). */
   permissionMode: PermissionMode | null
   /** The agent the session runs on, fixed at creation; rows from before providers are 'claude'. */
@@ -106,6 +108,7 @@ export type NewSession = {
   effort?: EffortLevel | null
   fastMode?: boolean
   planning?: boolean
+  ultracode?: boolean
   permissionMode?: PermissionMode | null
   /** omitted = 'claude' */
   provider?: ProviderId
@@ -139,6 +142,8 @@ export interface SessionStore {
   setFastMode(id: string, fastMode: boolean): Promise<void>
   /** Persist plan mode on or off, so a revived session is still planning. */
   setPlanning(id: string, planning: boolean): Promise<void>
+  /** Persist Ultracode on or off, so a revived session keeps it. */
+  setUltracode(id: string, on: boolean): Promise<void>
   /** Persist a permission-mode switch, so a revived session keeps the choice. */
   setPermissionMode(id: string, mode: PermissionMode | null): Promise<void>
   /** Give a session a new title. */

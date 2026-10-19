@@ -126,6 +126,9 @@ export function parseClientMessage(raw: unknown): ClientMessage | null {
       return typeof m.sessionId === 'string' && (m.mode === 'normal' || m.mode === 'plan')
         ? { type: 'set_session_mode', sessionId: m.sessionId, mode: m.mode }
         : null
+    case 'set_ultracode':
+      // Like fast mode, the mode that costs more has to be asked for exactly.
+      return typeof m.sessionId === 'string' ? { type: 'set_ultracode', sessionId: m.sessionId, on: m.on === true } : null
     case 'rename_session':
       return typeof m.sessionId === 'string'
         ? { type: 'rename_session', sessionId: m.sessionId, title: str(m.title) }

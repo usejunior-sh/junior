@@ -59,6 +59,7 @@ export function claudeEvent(msg: unknown): ProviderEvent {
           ...(m.session_id ? { sessionId: m.session_id } : {}),
           ...(m.model ? { model: m.model } : {}),
           ...(m.terminal_slash_commands ? { terminalCommands: m.terminal_slash_commands } : {}),
+          ...(Array.isArray(m.tools) ? { tools: m.tools } : {}),
         }
       }
       if (m.subtype === 'commands_changed' && m.commands) {

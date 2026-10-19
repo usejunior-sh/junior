@@ -26,6 +26,9 @@ export function summarize(rt: WorkspaceRuntime, row: StoredSession): SessionSumm
     fastModeDisabledReason: l?.fastModeDisabledReason,
     permissionMode: row.permissionMode ?? undefined,
     planning: row.planning || undefined,
+    ultracode: row.ultracode || undefined,
+    // Runs outlive the turn that launched them: the session is still working while one goes on.
+    ...(l?.workflows ? { workflows: l.workflows } : {}),
     ...(row.provider !== DEFAULT_PROVIDER ? { provider: row.provider } : {}),
     pinned: row.pinned || undefined,
     ...(row.checkoutId ? { checkoutId: row.checkoutId } : {}),

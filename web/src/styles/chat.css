@@ -242,19 +242,27 @@ button.chip:hover:not(:disabled), .chip[data-state="open"] { color: var(--ink); 
 .chip.perm.risk-high svg { color: var(--red); }
 .chip.cwd.pick { cursor: pointer; }
 .modelPicker, .permPicker, .modePicker { position: relative; flex: none; display: flex; }
-/* Session mode (ModePicker): "Junior decides" is quiet; a forced Plan first or Goal says it changes what happens next. */
+/* Session mode (ModePicker): "Junior decides" is quiet; a forced Plan first, Goal or Ultracode says it changes what happens next. */
 .chip.sessionMode.normal { color: var(--ash); }
 .chip.sessionMode.plan { color: var(--blue); border-color: var(--edge-blue); }
 .chip.sessionMode.goal { color: var(--yellow); border-color: var(--edge-yellow); }
 .chip.sessionMode.plan svg { color: var(--blue); }
 .chip.sessionMode.goal svg { color: var(--yellow); }
+.chip.sessionMode.ultracode { color: var(--orange); border-color: var(--edge-orange); }
+.chip.sessionMode.ultracode svg { color: var(--orange); }
 /* a running session's Planning chip: status with a way out, not a picker */
 .chip.sessionMode.planning { cursor: pointer; background: var(--tint-blue); }
 .chip.sessionMode.planning:hover { color: var(--blue); border-color: var(--edge-blue-hi); }
+/* a running session's Ultracode chip, the same: on for the session, X turns it off */
+.chip.sessionMode.ultracodeOn { cursor: pointer; background: var(--tint-orange); }
+.chip.sessionMode.ultracodeOn:hover { color: var(--orange); border-color: var(--edge-orange-hi); }
+.chip.sessionMode.ultracodeOff { cursor: pointer; }
+.chip.sessionMode.ultracodeOff:hover { color: var(--body); border-color: var(--hair-bright); }
 /* icons sit on the name's line, not centred on the two-line row */
 .uiMenu .modeIcon { flex: none; align-self: flex-start; margin-top: 3px; color: var(--ash); }
 .uiMenuItem.mode-plan .modeIcon { color: var(--blue); }
 .uiMenuItem.mode-goal .modeIcon { color: var(--yellow); }
+.uiMenuItem.mode-ultracode .modeIcon { color: var(--orange); }
 /* Autonomy's meter: four rising bars, lit up to the level; neutral until "Never asks", which is all red. */
 .meter { display: inline-flex; align-items: flex-end; gap: 2px; height: 11px; flex: none; }
 .meter i { width: 3px; border-radius: 1px; background: var(--hair-strong); }

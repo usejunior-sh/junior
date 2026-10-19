@@ -45,6 +45,7 @@
   --tint-green: rgba(17, 255, 153, 0.08);
   --tint-yellow: rgba(255, 197, 61, 0.1);
   --tint-blue: rgba(59, 158, 255, 0.1);
+  --tint-orange: rgba(255, 128, 31, 0.1);
 
   /* legacy aliases still referenced by a few components */
   --text: var(--ink);
@@ -114,6 +115,8 @@
   --edge-green: color-mix(in srgb, var(--green) 32%, transparent);
   --edge-blue: color-mix(in srgb, var(--blue) 36%, transparent);
   --edge-blue-hi: color-mix(in srgb, var(--blue) 55%, transparent);
+  --edge-orange: color-mix(in srgb, var(--orange) 36%, transparent);
+  --edge-orange-hi: color-mix(in srgb, var(--orange) 55%, transparent);
   /* a link under the pointer: away from the page ink in both themes */
   --link-hover: #6db6ff;
   /* red as *reading* text (error bodies): softer than the status red on black,
@@ -183,6 +186,7 @@
   --tint-green: rgba(15, 157, 88, 0.1);
   --tint-yellow: rgba(138, 109, 31, 0.12);
   --tint-blue: rgba(31, 111, 235, 0.1);
+  --tint-orange: rgba(200, 90, 0, 0.1);
 
   /* semantic layer */
   --on-primary: #ffffff;
@@ -200,8 +204,8 @@
   --scroll-thumb: rgba(11, 12, 14, 0.2);
   --scroll-thumb-hover: rgba(11, 12, 14, 0.32);
 
-  /* --edge-* derive from --red/--yellow/--green/--blue above, so they darken
-     with them. */
+  /* --edge-* derive from --red/--yellow/--green/--blue/--orange above, so they
+     darken with them. */
   --red-ink: #b3172f;
   --link-hover: #0a4fb5;
 

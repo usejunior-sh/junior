@@ -29,7 +29,8 @@ async function flowSignals(rt: WorkspaceRuntime): Promise<Map<string, FlowSignal
     if (!row || row.kind !== 'chat') continue
     const live = rt.live.get(row.id)
     const sig: SessionSignal = {
-      running: live?.status === 'running' || live?.status === 'starting',
+      // A Workflow run going in the background is Junior's turn too, after its launching turn ended.
+      running: live?.status === 'running' || live?.status === 'starting' || (live?.workflows ?? 0) > 0,
       waiting: !!live?.waiting,
       error: live?.status === 'error',
       at: row.updatedAt,
@@ -149,7 +150,7 @@ export function noteDispatchedSessions(rt: WorkspaceRuntime): void {
     .filter((sid) => rt.rows.get(sid)?.kind === 'chat')
     .map((sid) => {
       const l = rt.live.get(sid)
-      return `${sid}:${l?.status ?? '-'}:${l?.waiting ? 1 : 0}`
+      return `${sid}:${l?.status ?? '-'}:${l?.waiting ? 1 : 0}:${l?.workflows ? 1 : 0}`
     })
     .concat([...rt.teamRuns.values()].map((r) => `team:${r.id}:${r.state}`))
     .join('|')

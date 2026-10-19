@@ -60,10 +60,10 @@ type Props = {
   onProviderChange?: (provider: ProviderId) => void
   onFastModeChange: (fastMode: boolean) => void
   onPermissionModeChange: (mode: PermissionMode) => void
-  /** What Junior does before it starts (Junior decides / Plan first / Goal), new sessions only; with it, Shift+Tab cycles this instead of the permission mode. */
+  /** What Junior does before it starts (Junior decides / Plan first / Goal / Ultracode), new sessions only; with it, Shift+Tab cycles this instead of the permission mode. */
   mode?: SessionMode
   onModeChange?: (mode: SessionMode) => void
-  /** A read-only chip where the mode picker would be, a running session's "Planning". */
+  /** Status chips where the mode picker would be: a running session's "Planning" and "Ultracode". */
   status?: ReactNode
   /** A turn is in flight: offer the interrupt button. */
   running?: boolean

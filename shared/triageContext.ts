@@ -45,6 +45,8 @@ export type TriageSessionIdentity = {
   libraryRoot?: string
   /** what the user calls their junior engineer here (the persona's name); absent = Junior */
   juniorName?: string
+  /** the session runs with Ultracode on: big jobs go out as Workflow runs */
+  ultracode?: boolean
 }
 
 /**
@@ -68,7 +70,7 @@ was opened for and which artifacts are attached to it; get_work_item follows any
   return `${head}
 When the user says to write something down, note it, or attach it here, that means write_artifact — with
 \`links\` naming this session ({ kind: "session", id: "${id.sessionId}", role: "context" }) and the work item
-too when there is one, so the note comes back with the work rather than getting lost in the transcript.${kind === 'chat' ? jobsSection(id.juniorName ?? 'Junior') + GOALS_SECTION : ''}${id.libraryRoot ? librarySection(id.libraryRoot) : ''}`
+too when there is one, so the note comes back with the work rather than getting lost in the transcript.${kind === 'chat' ? jobsSection(id.juniorName ?? 'Junior') + GOALS_SECTION + (id.ultracode ? ULTRACODE_SECTION : '') : ''}${id.libraryRoot ? librarySection(id.libraryRoot) : ''}`
 }
 
 /**
@@ -123,7 +125,35 @@ says "our goal today is…", "get X done", or a message starts "New goal:":
 The composer has a Mode the user picks before you start: Normal (start right away), Plan (you read and write a
 plan, edit nothing, and they approve it before you code) and Goal. When a hand-off in Normal mode looks bigger
 than a small task — several files, an unclear approach, or work that waits on something outside — say so in one
-line before starting and suggest Plan (or Goal, when it needs more than one round or a team), with your pick.`
+line before starting and suggest Plan (or Goal, when it needs more than one round or a team), with your pick.
+A fourth Mode, Ultracode, fans one big job out to many agents at once and checks their work against each
+other; it costs more and is picked when a session starts. When a hand-off is big and splits into many
+independent parts (a sweep across many files or packages, a review from several angles), suggest a new session
+in Ultracode in that same line.`
+
+/**
+ * The session runs with Ultracode on (.docs/ultracode.md): the Workflow tool
+ * fans a big job out to many agents in the background. What triage holds a
+ * run to, on top of Claude Code's own guidance for the tool.
+ */
+export const ULTRACODE_SECTION = `
+
+Ultracode is on in this session: for a big job you may launch a Workflow run that fans the work out to many agents.
+- Before launching a big run, say in one sentence what you will fan out and roughly how many agents.
+- Workflow agents work on this machine only. They must not push, open or edit PRs, comment, move tickets or send
+  messages. Anything outbound stays with you, in the main thread, where the user approves it first.
+- The run goes on in the background and you are woken when it ends. Then report the result briefly: what was
+  done, what failed, and what needs the user.
+- The user watches a run in triage, not a terminal. The Workflow tool's result says "Use /workflows to watch live
+  progress": ignore that line, /workflows doesn't exist here. Say instead that the run's card in this chat opens
+  its panel (every agent, its transcript and its cost), and that Stop in the dock above the composer ends it.
+- Small or sequential work doesn't need a run: do it directly.`
+
+/** Sent with the next message when Ultracode is switched on in a subprocess spawned without it. */
+export const ULTRACODE_ON_NOTE = `[Ultracode on]${ULTRACODE_SECTION}`
+
+/** Sent with the next message when Ultracode is switched off in a subprocess spawned with it. */
+export const ULTRACODE_OFF_NOTE = '[Ultracode off] Do not launch new Workflow runs unless the user asks. Runs already going carry on.'
 
 /**
  * Where a skill or agent the user asks for should go. Triage reloads skills

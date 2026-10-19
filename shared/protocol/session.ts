@@ -32,9 +32,11 @@ export type PermissionMode = 'default' | 'acceptEdits' | 'auto' | 'bypassPermiss
  * - `plan`: reads and writes a plan, edits nothing, until you approve the plan (the SDK's `plan`
  *   mode); then it codes in the same session at its permission mode. Stored on the session.
  * - `goal`: the message is a goal, Junior proposes a team run with a done-when. One message at a time.
+ * - `ultracode`: Claude Code's ultracode for the whole session (`settings.ultracode`): big jobs are
+ *   orchestrated as Workflow runs that fan out to many agents (.docs/ultracode.md). Stored on the session.
  */
-export type SessionMode = 'normal' | 'plan' | 'goal'
-export const SESSION_MODES: readonly SessionMode[] = ['normal', 'plan', 'goal']
+export type SessionMode = 'normal' | 'plan' | 'goal' | 'ultracode'
+export const SESSION_MODES: readonly SessionMode[] = ['normal', 'plan', 'goal', 'ultracode']
 export const isSessionMode = (v: unknown): v is SessionMode => SESSION_MODES.includes(v as SessionMode)
 
 /**
@@ -105,6 +107,10 @@ export type SessionSummary = {
   permissionMode?: PermissionMode
   /** Plan mode: reading and planning until you approve the plan. Absent = not planning. */
   planning?: boolean
+  /** Ultracode: big jobs run as multi-agent Workflow runs. Absent = off. */
+  ultracode?: boolean
+  /** Workflow runs still going in the background, after the turn that launched them ended. Absent = none. */
+  workflows?: number
   /** The agent this session runs on. Absent = 'claude'. */
   provider?: ProviderId
   /** Pinned to the top of the sidebar. Absent = not pinned. */

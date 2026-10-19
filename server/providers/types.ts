@@ -73,7 +73,7 @@ export type ProviderEvent = {
   fastMode?: FastModeVerdict
 } & (
   /** the agent is up: its own session id (the key for resume) and what it runs */
-  | { kind: 'started'; sessionId?: string; model?: string; terminalCommands?: string[] }
+  | { kind: 'started'; sessionId?: string; model?: string; terminalCommands?: string[]; tools?: string[] }
   /** an in-flight piece of a message: broadcast live, never persisted */
   | { kind: 'stream' }
   /** a committed turn message (the agent's, or a tool result fed back to it) */
@@ -153,6 +153,8 @@ export type SessionSpec = {
   model?: string
   effort?: EffortLevel
   fastMode?: boolean
+  /** Ultracode: big jobs run as Workflow runs that fan out to many agents (Claude only) */
+  ultracode?: boolean
   /** extra inline settings, adapter-specific (e.g. a compaction window) */
   settings?: Record<string, unknown>
   /** a hard stop: the agent ends the run past this spend */
@@ -180,6 +182,8 @@ export interface AgentSession extends AsyncIterable<ProviderEvent> {
   setPermissionMode(mode: PermissionMode): Promise<void>
   /** In or out of plan mode; out, the session goes back to `mode`. Absent where the agent has no plan mode. */
   setPlanning?(on: boolean, mode: PermissionMode): Promise<void>
+  /** Ultracode on or off for every turn after; runs already going carry on. Absent where the agent has none. */
+  setUltracode?(on: boolean): Promise<void>
   commands(): Promise<CommandEntry[]>
   interrupt(): Promise<void>
   /** stop one subagent */
