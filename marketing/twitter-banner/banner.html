@@ -1,0 +1,149 @@
+<!doctype html>
+<!-- X/Twitter header, 1500×500 (render at 2x). ?theme=light for the light one.
+     Junior's halftone face is the site's JuniorDots (triage-web app/home/v7), drawn once.
+     The bottom-left third stays empty: the profile photo covers it. -->
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist+Pixel:ELSH@0..100&family=Geist:wght@400..600&family=Geist+Mono:wght@400..500&display=block">
+<style>
+  :root {
+    --bg: #1a1714; --ink: #f3eee9; --muted: #8f877e; --violet: #b4a0f4;
+    --field: #423b34; --hair: rgba(243, 238, 233, 0.14); --plus: #4a423b;
+  }
+  :root.light {
+    --bg: #fbfaf8; --ink: #131311; --muted: #8a887f; --violet: #5534be;
+    --field: #d6d2c8; --hair: rgba(19, 19, 17, 0.12); --plus: #cfcabf;
+  }
+  * { margin: 0; box-sizing: border-box; }
+  html, body { width: 1500px; height: 500px; overflow: hidden; background: var(--bg); }
+  canvas { position: absolute; inset: 0; width: 1500px; height: 500px; }
+  .copy { position: absolute; left: 84px; top: 82px; color: var(--ink); font-family: Geist, sans-serif; }
+  .logo { height: 34px; display: block; margin-left: -6px; }
+  h1 { margin-top: 30px; font-size: 64px; font-weight: 600; letter-spacing: -0.035em; line-height: 1.02; }
+  h2 {
+    margin-top: 6px; font-family: "Geist Pixel", monospace; font-variation-settings: "ELSH" 25;
+    font-weight: 400; font-size: 58px; line-height: 1.1; color: var(--violet); letter-spacing: -0.01em;
+  }
+  .url {
+    position: absolute; right: 72px; bottom: 50px; display: flex; gap: 14px; align-items: center;
+    font-family: "Geist Mono", monospace; font-size: 17px; color: var(--muted);
+  }
+  .url b { color: var(--ink); font-weight: 500; }
+  .url i { width: 4px; height: 4px; border-radius: 50%; background: var(--muted); }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="copy">
+  <img class="logo" id="logo" src="triage-lockup.svg" alt="triage">
+  <h1>Triage finds the work.</h1>
+  <h2>Junior finishes it.</h2>
+</div>
+<div class="url"><b>usetriage.sh</b><i></i>Open source<i></i>Runs on your Mac</div>
+<script>
+const light = new URLSearchParams(location.search).get("theme") === "light";
+if (light) {
+  document.documentElement.classList.add("light");
+  document.getElementById("logo").src = "triage-lockup-black.svg";
+}
+
+const W = 1500, H = 500, DPR = 2, CELL = 6.5;
+const css = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+// field, body, underside, eyes, brows, plus marks
+const INKS = [css("--field"), "#a493f2", "#5534be", "#131311", "#5a45b8"];
+
+const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((n) => (n + 0.5) / 16);
+function hash(x, y) {
+  let h = (x * 374761393 + y * 668265263) | 0;
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967295;
+}
+const fade = (t) => t * t * (3 - 2 * t);
+function noise(x, y) {
+  const xi = Math.floor(x), yi = Math.floor(y), u = fade(x - xi), v = fade(y - yi);
+  const a = hash(xi, yi), b = hash(xi + 1, yi), c = hash(xi, yi + 1), d = hash(xi + 1, yi + 1);
+  return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
+}
+const fbm = (x, y) => noise(x, y) * 0.55 + noise(x * 2.1 + 7.3, y * 2.1 + 1.7) * 0.3 + noise(x * 4.3 + 3.1, y * 4.3 + 9.2) * 0.15;
+const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+
+const FRONT = new Path2D("M17 9 C39 5 65 5 83 11 C92 14 94 23 94 39 C94 57 93 73 87 82 C83 89 73 90 53 90 C33 90 19 90 12 84 C6 78 5 62 5 44 C5 26 7 13 17 9 Z");
+const BACK = new Path2D("M22 15 C44 11 70 11 88 17 C97 20 99 30 99 46 C99 64 98 80 92 89 C88 96 78 97 58 97 C38 97 24 97 17 91 C11 85 10 69 10 51 C10 33 12 19 22 15 Z");
+
+// "hello", glancing a little toward the headline
+const EYES = [{ x: 37, y: 56, w: 13, h: 16 }, { x: 63, y: 56, w: 13, h: 16 }];
+const BROWS = [[29, 41, 44, 40, -2], [56, 40, 71, 41, -2]];
+const GX = -0.45, GY = 0.1;
+function curve(x1, y1, cx, cy, x2, y2, n = 9) {
+  return Array.from({ length: n }, (_, k) => {
+    const t = k / (n - 1);
+    return [(1 - t) ** 2 * x1 + 2 * (1 - t) * t * cx + t * t * x2, (1 - t) ** 2 * y1 + 2 * (1 - t) * t * cy + t * t * y2];
+  });
+}
+const browPts = BROWS.map(([x1, y1, x2, y2, bend]) => curve(x1, y1, (x1 + x2) / 2, (y1 + y2) / 2 + bend, x2, y2));
+const near = (pts, x, y, r) => pts.some(([px, py]) => (x - px) ** 2 + (y - py) ** 2 < r * r);
+
+const SIZE = 410, OX = 1195 - SIZE / 2, OY = 232 - SIZE / 2;
+const probe = document.createElement("canvas").getContext("2d");
+
+function sample(x, y) {
+  const fx = ((x - OX) / SIZE) * 112 - 4;
+  const fy = ((y - OY) / SIZE) * 112 - 4;
+  if (probe.isPointInPath(FRONT, fx, fy)) {
+    const qx = fx - GX * 10, qy = fy - GY * 7;
+    for (const e of EYES) {
+      const r = Math.min(e.w, e.h) / 2;
+      const dx = Math.max(Math.abs(qx - e.x) - (e.w / 2 - r), 0);
+      const dy = Math.max(Math.abs(qy - e.y) - (e.h / 2 - r), 0);
+      if (dx * dx + dy * dy <= r * r) return [1, 3];
+    }
+    for (const pts of browPts) if (near(pts, qx, qy, 2.4)) return [1, 4];
+    return [0.2 + 0.58 * ((fx + fy) / 185) + (fbm(fx * 0.09 + 4, fy * 0.09) - 0.5) * 0.55, 1];
+  }
+  if (probe.isPointInPath(BACK, fx, fy)) return [0.92, 2];
+
+  // the grey field, cleared behind the words and the profile photo
+  const n = fbm(x * 0.0036 + 3, y * 0.0042 + 2.1);
+  let v = 0.07 + smooth(0.45, 0.85, n) * 0.6;
+  const tx = (x - 470) / 560, ty = (y - 190) / 190;
+  v *= 0.15 + 0.85 * smooth(0.55, 1.15, Math.sqrt(tx * tx + ty * ty));
+  const ux = (x - 1220) / 600, uy = (y - 470) / 60;
+  v *= 0.3 + 0.7 * smooth(0.6, 1.1, Math.sqrt(ux * ux + uy * uy));
+  // a soft shadow under the slab
+  const sx = (x - (OX + SIZE * 0.53)) / (SIZE * 0.55);
+  const sy = (y - (OY + SIZE * 0.95)) / (SIZE * 0.1);
+  const sh = Math.max(0, 1 - sx * sx - sy * sy);
+  if (sh > 0) v = Math.min(1, v + sh * 0.5);
+  return [v, 0];
+}
+
+const canvas = document.getElementById("c");
+canvas.width = W * DPR; canvas.height = H * DPR;
+const ctx = canvas.getContext("2d");
+ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+
+const r = CELL * 0.5;
+const paths = INKS.map(() => new Path2D());
+for (let j = 0; j < Math.ceil(H / CELL) + 1; j++) {
+  const y = j * CELL + r;
+  for (let i = 0; i < Math.ceil(W / CELL) + 1; i++) {
+    const x = i * CELL + r;
+    const [v, c] = sample(x, y);
+    if (v <= 0.02) continue;
+    if (v < 0.5 && v < BAYER[(j & 3) * 4 + (i & 3)] * 0.55) continue;
+    const rad = r * Math.min(1, Math.sqrt(v)) * 0.92;
+    paths[c].moveTo(x + rad, y);
+    paths[c].arc(x, y, rad, 0, Math.PI * 2);
+  }
+}
+paths.forEach((p, k) => { ctx.fillStyle = INKS[k]; ctx.fill(p); });
+
+// registration marks, like the site's grid
+ctx.strokeStyle = css("--plus"); ctx.lineWidth = 1;
+for (const [px, py] of [[60, 50], [300, 50], [780, 50], [1460, 50], [880, 300], [1460, 300], [1460, 440], [880, 440]]) {
+  ctx.beginPath(); ctx.moveTo(px - 5, py); ctx.lineTo(px + 5, py); ctx.moveTo(px, py - 5); ctx.lineTo(px, py + 5); ctx.stroke();
+}
+</script>
+</body>
+</html>
