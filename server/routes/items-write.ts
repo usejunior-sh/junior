@@ -79,6 +79,12 @@ export async function itemWriteRoutes({ req, url, json, rt }: ScopedCtx): Promis
               sub.cost += row.subagents.cost
               sub.messages += row.subagents.messages
             }
+            if (row.workflows) {
+              const wf = (totals.workflows ??= { cost: 0, messages: 0, tokens: 0 })
+              wf.cost += row.workflows.cost
+              wf.messages += row.workflows.messages
+              wf.tokens += row.workflows.tokens
+            }
             totals.sessions++
           }
         }

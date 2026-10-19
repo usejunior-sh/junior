@@ -22,6 +22,8 @@
  * Subagents write their own transcripts, a level down,
  * `<slug>/<session>/subagents/agent-<id>.jsonl`, with the parent's
  * `sessionId` on every line, so they fold into the session that spawned them.
+ * Workflow agents (Ultracode) sit two levels further down, at
+ * `<session>/subagents/workflows/<runId>/agent-<id>.jsonl`, and fold the same way.
  */
 import { createReadStream } from 'node:fs'
 import { readdir, stat } from 'node:fs/promises'
@@ -43,6 +45,8 @@ export type UsageEntry = TokenCounts & {
   fast: boolean
   /** Spent by a subagent of `sessionId`, not by the session's own agent. */
   subagent: boolean
+  /** Spent by an agent of one of the session's Workflow runs (also a `subagent`). */
+  workflow?: true
   /** The `projects/` root the transcript sits under: which Claude config dir, so which login. */
   root: string
 }
@@ -58,7 +62,7 @@ const MAX_ENTRIES_PER_FILE = 200_000
 const num = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? v : 0)
 
 /** Pull the usage out of one transcript line, or `null` if it carries none. */
-function entryFrom(line: string, root: string): UsageEntry | null {
+export function usageEntryFrom(line: string, root: string): UsageEntry | null {
   let row: Record<string, any>
   try {
     row = JSON.parse(line)
@@ -98,7 +102,7 @@ function entryFrom(line: string, root: string): UsageEntry | null {
   }
 }
 
-async function readFileEntries(path: string, root: string): Promise<UsageEntry[]> {
+async function readFileEntries(path: string, root: string, workflow: boolean): Promise<UsageEntry[]> {
   const entries: UsageEntry[] = []
   const rl = createInterface({ input: createReadStream(path, { encoding: 'utf8' }), crlfDelay: Infinity })
   try {
@@ -106,8 +110,8 @@ async function readFileEntries(path: string, root: string): Promise<UsageEntry[]
       // Cheap gate: only assistant lines carry a usage block, and they are a
       // small minority of a transcript.
       if (!line.includes('"usage"')) continue
-      const e = entryFrom(line, root)
-      if (e) entries.push(e)
+      const e = usageEntryFrom(line, root)
+      if (e) entries.push(workflow ? { ...e, workflow: true } : e)
       if (entries.length >= MAX_ENTRIES_PER_FILE) break
     }
   } finally {
@@ -116,15 +120,23 @@ async function readFileEntries(path: string, root: string): Promise<UsageEntry[]
   return entries
 }
 
-/** Every `*.jsonl` under a `projects/` root: each project slug's sessions, and each session's subagents. */
-async function transcripts(root: string): Promise<string[]> {
+type Transcript = { path: string; workflow: boolean }
+
+/** A Workflow run's agent transcripts; its folder also holds journal.jsonl and *.meta.json. */
+export const isWorkflowAgentFile = (name: string) => /^agent-[^/]+\.jsonl$/.test(name)
+
+/**
+ * Every `*.jsonl` under a `projects/` root: each project slug's sessions, each
+ * session's subagents, and each of its Workflow runs' agents.
+ */
+async function transcripts(root: string): Promise<Transcript[]> {
   let slugs: string[]
   try {
     slugs = await readdir(root)
   } catch {
     return []
   }
-  const out: string[] = []
+  const out: Transcript[] = []
   const subagentDirs: string[] = []
   for (const slug of slugs) {
     const dir = join(root, slug)
@@ -135,19 +147,45 @@ async function transcripts(root: string): Promise<string[]> {
       continue
     }
     for (const d of names) {
-      if (d.isFile() && d.name.endsWith('.jsonl')) out.push(join(dir, d.name))
+      if (d.isFile() && d.name.endsWith('.jsonl')) out.push({ path: join(dir, d.name), workflow: false })
       else if (d.isDirectory()) subagentDirs.push(join(dir, d.name, 'subagents'))
     }
   }
   // Most session folders hold only tool results; a missing subagents/ is the common case.
-  const nested = await mapLimit(subagentDirs, 16, async (sub) => {
+  const nested = await mapLimit(subagentDirs, 16, async (sub): Promise<Transcript[]> => {
+    let names: Dirent[]
     try {
-      return (await readdir(sub)).filter((n) => n.endsWith('.jsonl')).map((n) => join(sub, n))
+      names = await readdir(sub, { withFileTypes: true })
     } catch {
       return []
     }
+    const found: Transcript[] = names.filter((d) => d.name.endsWith('.jsonl')).map((d) => ({ path: join(sub, d.name), workflow: false }))
+    if (names.some((d) => d.isDirectory() && d.name === 'workflows')) found.push(...(await workflowAgentFiles(join(sub, 'workflows'))))
+    return found
   })
   return out.concat(nested.flat())
+}
+
+/** `subagents/workflows/<runId>/agent-*.jsonl`, one folder per run. */
+async function workflowAgentFiles(dir: string): Promise<Transcript[]> {
+  let runs: Dirent[]
+  try {
+    runs = await readdir(dir, { withFileTypes: true })
+  } catch {
+    return []
+  }
+  const perRun = await Promise.all(
+    runs
+      .filter((d) => d.isDirectory())
+      .map(async (d) => {
+        try {
+          return (await readdir(join(dir, d.name))).filter(isWorkflowAgentFile).map((n) => ({ path: join(dir, d.name, n), workflow: true }))
+        } catch {
+          return []
+        }
+      }),
+  )
+  return perRun.flat()
 }
 
 async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
@@ -173,10 +211,10 @@ export type ScanResult = {
  * transcript last written months ago.
  */
 export async function scanUsage(roots: string[], since: number): Promise<ScanResult> {
-  const paths = (await Promise.all(roots.map(async (root) => (await transcripts(root)).map((path) => ({ path, root }))))).flat()
+  const paths = (await Promise.all(roots.map(async (root) => (await transcripts(root)).map((t) => ({ ...t, root }))))).flat()
   let reread = 0
 
-  const perFile = await mapLimit(paths, 8, async ({ path, root }) => {
+  const perFile = await mapLimit(paths, 8, async ({ path, root, workflow }) => {
     let info
     try {
       info = await stat(path)
@@ -191,7 +229,7 @@ export async function scanUsage(roots: string[], since: number): Promise<ScanRes
     const hit = cache.get(path)
     if (hit && hit.size === info.size && hit.mtimeMs === info.mtimeMs) return hit.entries
     reread++
-    const entries = await readFileEntries(path, root)
+    const entries = await readFileEntries(path, root, workflow)
     cache.set(path, { size: info.size, mtimeMs: info.mtimeMs, entries })
     return entries
   })

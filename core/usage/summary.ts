@@ -169,7 +169,13 @@ export function summarizeBySession(entries: UsageEntry[]): Map<string, SessionSp
     row.cacheWrite += e.cacheWrite5m + e.cacheWrite1h
     row.cacheRead += e.cacheRead
     row.messages++
-    if (e.subagent) {
+    // Workflow agents are sidechains too, but get their own row: disjoint from subagents.
+    if (e.workflow) {
+      const wf = (row.workflows ??= { cost: 0, messages: 0, tokens: 0 })
+      wf.cost += cost ?? 0
+      wf.messages++
+      wf.tokens += e.input + e.output + e.cacheWrite5m + e.cacheWrite1h + e.cacheRead
+    } else if (e.subagent) {
       const sub = (row.subagents ??= { cost: 0, messages: 0 })
       sub.cost += cost ?? 0
       sub.messages++

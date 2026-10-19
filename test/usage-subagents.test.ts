@@ -61,3 +61,41 @@ test('a message written over several lines counts once, at its fullest output', 
   assert.equal(entries.length, 1)
   assert.equal(entries[0].output, 840)
 })
+
+test("a session's spend includes its workflow agents', split out from its subagents", async () => {
+  const root = await mkdtemp(join(tmpdir(), 'usage-'))
+  const slug = join(root, '-repo')
+  const run = join(slug, 'sess-1', 'subagents', 'workflows', 'wf_1')
+  await mkdir(run, { recursive: true })
+  await writeFile(join(slug, 'sess-1.jsonl'), line('m1'))
+  await writeFile(join(slug, 'sess-1', 'subagents', 'agent-a1.jsonl'), line('s1', { isSidechain: true, agentId: 'a1' }))
+  await writeFile(join(run, 'agent-w1.jsonl'), [line('w1', { isSidechain: true, agentId: 'w1' }), line('w2', { isSidechain: true, agentId: 'w1' })].join('\n'))
+  await writeFile(join(run, 'agent-w2.jsonl'), line('w3', { isSidechain: true, agentId: 'w2' }))
+  // The journal and meta files sit beside them and are not transcripts.
+  await writeFile(join(run, 'journal.jsonl'), JSON.stringify({ type: 'result', agentId: 'w1', result: 'ok' }))
+  await writeFile(join(run, 'agent-w1.meta.json'), JSON.stringify({ description: 'w1' }))
+  resetUsageCache()
+  const { entries } = await scanUsage([root], 0)
+  assert.equal(entries.length, 5)
+  assert.equal(entries.filter((e) => e.workflow).length, 3)
+  const spend = summarizeBySession(entries).get('sess-1')!
+  assert.equal(spend.messages, 5)
+  assert.equal(spend.subagents?.messages, 1)
+  assert.equal(spend.workflows?.messages, 3)
+  assert.equal(spend.workflows?.tokens, 3 * 2000)
+  assert.ok(Math.abs(spend.workflows!.cost - (spend.cost * 3) / 5) < 1e-9)
+})
+
+test('a session with no workflow runs has no workflow split', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'usage-'))
+  const slug = join(root, '-repo')
+  await mkdir(join(slug, 'sess-1', 'subagents'), { recursive: true })
+  await writeFile(join(slug, 'sess-1.jsonl'), line('m1'))
+  await writeFile(join(slug, 'sess-1', 'subagents', 'agent-a1.jsonl'), line('s1', { isSidechain: true }))
+  resetUsageCache()
+  const { entries } = await scanUsage([root], 0)
+  assert.ok(entries.every((e) => !('workflow' in e)))
+  const spend = summarizeBySession(entries).get('sess-1')!
+  assert.equal(spend.workflows, undefined)
+  assert.equal(spend.subagents?.messages, 1)
+})

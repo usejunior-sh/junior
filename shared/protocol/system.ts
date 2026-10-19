@@ -195,8 +195,10 @@ export type SessionSpend = {
   cacheRead: number
   /** False when some of the spend came from a model with no price row. */
   priced: boolean
-  /** The part of it the session's subagents spent (their own transcripts). Absent = none. */
+  /** The part of it the session's subagents spent (their own transcripts), workflow agents excluded. Absent = none. */
   subagents?: { cost: number; messages: number }
+  /** The part of it the agents of the session's Ultracode Workflow runs spent. Absent = none. */
+  workflows?: { cost: number; messages: number; tokens: number }
 }
 
 /** One model's share of a spend total, for the split meter under it. */
