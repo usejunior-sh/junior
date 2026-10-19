@@ -230,7 +230,7 @@ export function Transcript({
     for (const a of actions) for (const c of a.calls) m.set(c, a)
     return m
   }, [actions])
-  const { ref, scrollToBottom } = useStickToBottom()
+  const { ref, scrollToBottom } = useStickToBottom(`${sessionId}:${scope ?? ''}`)
   const refs = useRefIndex()
   // Reference chips resolve against the artifacts index, which isn't otherwise
   // loaded while a chat is in front, pull it once so names appear.
@@ -613,24 +613,39 @@ function LiveLine({ sessionId, onGrow }: { sessionId: string; onGrow: () => void
   )
 }
 
+/** Where the reader left each transcript they scrolled up in, so coming back lands there. */
+const scrolledTo = new Map<string, number>()
+
 /** Follows new output, unless the reader has scrolled up to look at something. */
-function useStickToBottom() {
+function useStickToBottom(memo: string) {
   const ref = useRef<HTMLDivElement>(null)
-  const stuck = useRef(true)
+  const restore = useRef(scrolledTo.get(memo) ?? null)
+  const stuck = useRef(restore.current === null)
 
   useEffect(() => {
     const el = ref.current
     if (!el) return
     const onScroll = () => {
+      restore.current = null
       stuck.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80
+      if (stuck.current) scrolledTo.delete(memo)
+      else scrolledTo.set(memo, el.scrollTop)
     }
     el.addEventListener('scroll', onScroll, { passive: true })
     return () => el.removeEventListener('scroll', onScroll)
-  }, [])
+  }, [memo])
 
   const scrollToBottom = useCallback(() => {
     const el = ref.current
-    if (el && stuck.current) el.scrollTop = el.scrollHeight
+    if (!el) return
+    if (restore.current !== null) {
+      // The events may still be loading: hold the spot until there is room for it.
+      if (el.scrollHeight - el.clientHeight < restore.current) return
+      el.scrollTop = restore.current
+      restore.current = null
+      return
+    }
+    if (stuck.current) el.scrollTop = el.scrollHeight
   }, [])
 
   return { ref, scrollToBottom }
