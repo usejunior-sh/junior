@@ -8,6 +8,7 @@ import { CheckoutMenu } from '../components/CheckoutMenu.js'
 import { hasBrowser, browserPane } from '../browser.js'
 import { SessionCost } from '../components/SessionCost.js'
 import { AgentsMenu } from '../components/Agents.js'
+import { ArtifactsMenu } from '../components/SessionArtifacts.js'
 import type { AgentRun } from '../agents.js'
 import { EFFORT_LABEL } from '../models.js'
 import { shownStatus } from '../sessionModes.js'
@@ -70,6 +71,7 @@ export function ChatHeader({
   showAgent,
   mobile,
   browserOpen,
+  onNavigate,
 }: {
   current: SessionSummary
   chatHeaderRef: RefObject<HTMLDivElement | null>
@@ -85,6 +87,7 @@ export function ChatHeader({
   showAgent: (toolUseId: string | null) => void
   mobile: boolean
   browserOpen: boolean
+  onNavigate: (hash: string) => void
 }) {
   const shown = shownStatus(current)
   return (
@@ -135,6 +138,7 @@ export function ChatHeader({
           </button>
         </AgentsMenu>
       )}
+      <ArtifactsMenu sessionId={current.id} onNavigate={onNavigate} />
       {hasBrowser && !mobile && (
         <button
           type="button"

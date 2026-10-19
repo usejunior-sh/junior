@@ -677,6 +677,7 @@ export function App() {
                   showAgent={showAgent}
                   mobile={mobile}
                   browserOpen={browserOpen}
+                  onNavigate={navigate}
                 />
                 {railOn && teamRun ? (
                   <RunHeader

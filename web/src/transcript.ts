@@ -17,10 +17,13 @@ import { WORKFLOW_TOOL } from '../../core/workflows/fold.js'
 import { WorkflowTurns } from '../../core/workflows/tasks.js'
 import { costStep, type CostMark } from '../../core/usage/turn-cost.js'
 import {
+  ARTIFACT_TOOLS,
+  parseArtifactResult,
   isTextBlock,
   isThinkingBlock,
   isToolResultBlock,
   isToolUseBlock,
+  type ArtifactToolResult,
   type FileRef,
   type ImageAttachment,
   type AgentRelay,
@@ -51,6 +54,29 @@ export type ToolItem = {
 }
 
 export type ThinkingItem = { key: string; kind: 'thinking'; text: string }
+
+/** The in-process triage MCP's two publishing tools: a session declares an artifact by calling one. */
+export const ARTIFACT_TOOL_NAMES: ReadonlySet<string> = new Set(ARTIFACT_TOOLS.map((leaf) => `mcp__triage__${leaf}`))
+
+/** How much of a body the card keeps for its preview. */
+export const ARTIFACT_BODY_KEEP = 4000
+
+/** One published artifact, drawn as a card where Junior made it; later calls on the same id in the turn fold in. */
+export type ArtifactItem = {
+  /** key of the FIRST call folded into the card (`c<i>.<j>`), so it stays mounted */
+  key: string
+  kind: 'artifact'
+  /** the latest call folded in: its input and result */
+  call: ToolItem
+  /** what the latest successful call published; undefined while the call is still out */
+  pub?: ArtifactToolResult
+  /** the first call folded in created it: "New", else "Updated" */
+  created: boolean
+  /** calls folded into this card, >= 1 */
+  calls: number
+  /** text to preview: the input.body of the latest folded call that sent one, cut at 4000 chars */
+  body?: string
+}
 
 /** Did main pass a relayed message on, and as written? Unknown until its SendMessage call shows up. */
 export type RelayDelivery = 'verbatim' | 'reworded'
@@ -97,6 +123,7 @@ export type TranscriptItem =
   /** What a local command (`/usage`, `/context`) printed, not the model talking. */
   | { key: string; kind: 'command'; text: string }
   | ToolItem
+  | ArtifactItem
   /** A run of back-to-back tool calls (and the thinking between them), drawn as one row. */
   | { key: string; kind: 'toolGroup'; members: Array<ToolItem | ThinkingItem> }
   | {
@@ -349,7 +376,80 @@ export function buildTranscript(
     }
   })
 
-  return groupToolRuns(items)
+  return groupToolRuns(foldArtifacts(items))
+}
+
+const OK_CREATED = /^ok: created (\S+) at (.+)$/
+const OK_UPDATED = /^ok: updated (.+)$/
+
+/** What a call published, read from its result: the JSON envelope, else the older `ok: …` line, else null. */
+function publishedBy(t: ToolItem): ArtifactToolResult | null {
+  const text = t.result?.text.trim() ?? ''
+  const pub = parseArtifactResult(text)
+  if (pub) return pub
+  // Logs written before the envelope say `ok: created <id> at <path>` or `ok: updated <path>`:
+  // no version, and an update's id is in its input. They were all markdown.
+  const made = OK_CREATED.exec(text)
+  const edited = made ? null : OK_UPDATED.exec(text)
+  const path = made?.[2] ?? edited?.[1]
+  const id = made?.[1] ?? (typeof t.input.id === 'string' ? t.input.id : '')
+  if (!path || !id) return null
+  const title = typeof t.input.title === 'string' && t.input.title ? t.input.title : basename(path)
+  return { triage: 'artifact', action: made ? 'created' : 'updated', id, title, format: 'md', version: 0, size: 0, history: true, path, abs: '' }
+}
+
+/**
+ * Turns each successful write_artifact / update_artifact call into an artifact
+ * card. A call still out is a card without `pub` (it may be waiting on your OK); a failed
+ * one stays a tool card; a result nothing can read stays one too. Calls on the
+ * same id with no message of yours or Junior's between them are one card, its
+ * position and key those of the first call, showing the latest.
+ */
+function foldArtifacts(items: TranscriptItem[]): TranscriptItem[] {
+  const out: TranscriptItem[] = []
+  const open = new Map<string, { card: ArtifactItem; epoch: number }>()
+  // Bumped by anything that breaks a stretch of work apart: prose, a message, a turn's end.
+  let epoch = 0
+  for (const it of items) {
+    if (it.kind === 'assistant' || it.kind === 'user' || it.kind === 'relay' || (it.kind === 'meta' && it.turn)) epoch += 1
+    if (it.kind !== 'tool' || !ARTIFACT_TOOL_NAMES.has(it.name)) {
+      out.push(it)
+      continue
+    }
+    const created = it.name.endsWith('write_artifact')
+    const sent = typeof it.input.body === 'string' ? it.input.body : undefined
+    const body = sent === undefined ? undefined : sent.slice(0, ARTIFACT_BODY_KEEP)
+    if (!it.result) {
+      out.push({ key: it.key, kind: 'artifact', call: it, created, calls: 1, ...(body !== undefined ? { body } : {}) })
+      continue
+    }
+    if (it.result.isError) {
+      out.push(it)
+      continue
+    }
+    const pub = publishedBy(it)
+    if (!pub) {
+      out.push(it)
+      continue
+    }
+    const hit = open.get(pub.id)
+    if (hit && hit.epoch === epoch) {
+      const card = hit.card
+      // An old log's update names no title: keep the one the card already has.
+      const untitled = pub.version === 0 && !(typeof it.input.title === 'string' && it.input.title)
+      card.call = it
+      card.pub = untitled && card.pub ? { ...pub, title: card.pub.title } : pub
+      card.calls += 1
+      // A later call that sent a file instead leaves the old body stale: the card reads the file's text.
+      if (body !== undefined) card.body = body
+      else if (typeof it.input.from === 'string') delete card.body
+      continue
+    }
+    const card: ArtifactItem = { key: it.key, kind: 'artifact', call: it, pub, created, calls: 1, ...(body !== undefined ? { body } : {}) }
+    open.set(pub.id, { card, epoch })
+    out.push(card)
+  }
+  return out
 }
 
 /** Edit-shaped tools stay a card of their own: the diff is the point of them. */

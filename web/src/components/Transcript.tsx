@@ -33,6 +33,7 @@ import { MentionChip, MentionIcon } from './MentionPicker.js'
 import { Markdown } from './Markdown.js'
 import { PermissionCard, PlanCard } from './PermissionCard.js'
 import { ToolCard } from './ToolCard.js'
+import { ArtifactCard } from './ArtifactCard.js'
 import { BrowserShots } from './BrowserShots.js'
 import { FileChip } from './AttachmentStrip.js'
 import { ToolGroup } from './ToolGroup.js'
@@ -80,7 +81,7 @@ const NO_AGENTS: readonly AgentRun[] = []
 const NO_WORKFLOWS: readonly WorkflowRun[] = []
 
 /** What Junior says or does in a turn. Anything else (your messages, markers, CLI output) isn't its. */
-const JUNIOR_KINDS = new Set<TranscriptItem['kind']>(['assistant', 'thinking', 'tool', 'toolGroup', 'agent', 'workflow', 'permission', 'error'])
+const JUNIOR_KINDS = new Set<TranscriptItem['kind']>(['assistant', 'thinking', 'tool', 'toolGroup', 'agent', 'workflow', 'artifact', 'permission', 'error'])
 
 /** A word for what a call is doing, for the working face's bubble ("Editing Transcript.tsx…"). */
 const DOING: Record<string, string> = {
@@ -143,7 +144,7 @@ function speakerTurns(
     const runGoing = s.items.some((it) => it.kind === 'workflow' && runningCalls.has(it.toolUseId))
     if (runGoing && s.end) going.add(s.end.key)
     const pending = s.items.findLast((it) => it.kind === 'permission' && !it.resolved && !it.agentId)
-    const tools = s.items.flatMap((it) => (it.kind === 'tool' ? [it] : it.kind === 'toolGroup' ? it.members.filter((m) => m.kind === 'tool') : []))
+    const tools = s.items.flatMap((it) => (it.kind === 'tool' ? [it] : it.kind === 'artifact' ? [it.call] : it.kind === 'toolGroup' ? it.members.filter((m) => m.kind === 'tool') : []))
     let turn: Turn
     if (pending && pending.kind === 'permission') {
       const what = pending.toolName === 'AskUserQuestion' ? 'your answer' : pending.toolName === 'ExitPlanMode' ? 'you to review the plan' : 'your OK'
@@ -491,6 +492,8 @@ const Item = memo(function Item({
   switch (item.kind) {
     case 'agent':
       return <AgentCard run={agent} onOpen={onOpenAgent} />
+    case 'artifact':
+      return <ArtifactCard item={item} onOpen={onRef} />
     case 'workflow':
       return <WorkflowCard sessionId={sessionId} run={workflow} onOpen={onOpenWorkflow} />
     case 'relay':
