@@ -1,0 +1,116 @@
+/* Artifact page viewers (.artView*, .artChips, .artVer*, .artCsv*, .artHtml*, .artPdf*). One surface per file,
+   hairlines and no shadows. The phone block is at the end, behind #artifactPage so it outranks phone.css. */
+
+.artViewWrap { min-width: 0; overflow: hidden; align-self: start; }
+.artView { min-width: 0; }
+.artViewMd { padding: 20px 24px; }
+.artViewEmpty { padding: 28px 16px; text-align: center; }
+.artViewNote { padding: 8px 14px; color: var(--stone); font-size: 0.8462rem; }
+.artViewErr { color: var(--red-ink); font-size: 0.8462rem; }
+.artViewBar {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 12px;
+  border-bottom: 1px solid var(--hair); background: var(--deep);
+}
+.artViewBar .artCsvInfo { margin-right: auto; }
+.artViewMissing { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 40px 20px; text-align: center; color: var(--ash); }
+.artViewMissing > svg { color: var(--stone); }
+.artViewMissing p { margin: 0; max-width: 46ch; }
+.artViewMissing .artViewNote { padding: 0; }
+
+.artCode {
+  margin: 0; padding: 14px 16px; max-height: 75vh; overflow: auto; background: transparent;
+  font-family: var(--mono); font-size: 0.9615rem; line-height: 1.6; color: var(--body); white-space: pre-wrap; overflow-wrap: anywhere; tab-size: 2;
+}
+
+/* images sit on the deepest surface, fit to the width, never stretched past their own size */
+.artViewImg { display: flex; justify-content: center; padding: 16px; background: var(--deep); }
+.artViewImg img { display: block; max-width: 100%; max-height: 75vh; height: auto; width: auto; object-fit: contain; }
+
+.artViewPdf .artViewBar { background: var(--card); }
+.artPdfEmbed { display: block; width: 100%; height: 75vh; border: 0; background: var(--deep); }
+
+/* html: a plain warning above a sandboxed frame. The frame is white on purpose: a generated page assumes a light page. */
+.artHtmlBar { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--hair); background: var(--deep); }
+.artHtmlBar.on { background: var(--tint-yellow); }
+.artHtmlBar > svg { flex: none; color: var(--yellow); }
+.artHtmlBar p { margin: 0; flex: 1; min-width: 0; color: var(--body); font-size: 0.9231rem; line-height: 1.45; }
+.artHtmlRun { display: inline-flex; align-items: center; gap: 8px; flex: none; color: var(--mute); font-size: 0.9231rem; cursor: pointer; }
+.artHtmlFrame { display: block; width: 100%; height: 70vh; border: 0; background: #fff; }
+
+/* csv: a table with a sticky header and a row-number gutter, scrolling inside its own box */
+.artCsvInfo { color: var(--ash); font-size: 0.8462rem; font-family: var(--mono); }
+.artCsvScroll { overflow: auto; max-height: 70vh; }
+.artCsvTable { border-collapse: separate; border-spacing: 0; min-width: 100%; font-family: var(--mono); font-size: 0.9231rem; }
+.artCsvTable th, .artCsvTable td {
+  padding: 5px 12px; text-align: left; white-space: nowrap; max-width: 320px; overflow: hidden; text-overflow: ellipsis;
+  border-bottom: 1px solid var(--hair);
+}
+.artCsvTable th { position: sticky; top: 0; z-index: 2; background: var(--elev); color: var(--mute); font-weight: 500; border-bottom-color: var(--hair-strong); }
+.artCsvTable td { color: var(--body); }
+.artCsvTable tbody tr:hover td { background: var(--wash-1); }
+.artCsvTable .gut { position: sticky; left: 0; z-index: 1; width: 44px; min-width: 44px; padding: 5px 10px; text-align: right; color: var(--stone); background: var(--card); border-right: 1px solid var(--hair); }
+.artCsvTable th.gut { z-index: 3; background: var(--elev); }
+.artCsvRaw { max-height: 70vh; }
+
+/* a text diff of two versions */
+.artViewDiff .diffView { max-height: 75vh; overflow: auto; }
+.artDiffCount { font-family: var(--mono); font-size: 0.8462rem; }
+.artDiffCount .add { color: var(--green); }
+.artDiffCount .del { color: var(--red); }
+
+/* the version bar: a ledger line between the header and the file */
+.artVer { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0 0 14px; padding: 8px 0; border-top: 1px solid var(--hair); border-bottom: 1px solid var(--hair); }
+.artVer .spacer { flex: 1; }
+.artVerQuiet { color: var(--stone); font-size: 0.8462rem; }
+.artVerIcon { flex: none; color: var(--ash); }
+.artVerNote { color: var(--ash); font-size: 0.8462rem; }
+.artVer .link, .artVerBack { padding: 0; background: none; border: 0; color: var(--blue); font: inherit; font-size: 0.9231rem; cursor: pointer; }
+.artVer .link:hover { text-decoration: underline; }
+.artVerSelect.uiSelect { width: auto; height: 28px; padding: 0 10px; gap: 8px; min-width: 0; max-width: min(520px, 100%); font-size: 0.9231rem; }
+.artVerSelect.uiSelect > span:first-of-type { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.artVerMenu { min-width: 300px; max-width: min(520px, 92vw); }
+
+.artChips .artFrom { cursor: pointer; font-family: inherit; max-width: 100%; }
+.artChips .artFrom:hover { border-color: var(--hair-bright); color: var(--ink); }
+.artChips .pill { max-width: 100%; }
+.artChips .artFrom .t { max-width: 280px; }
+
+@media (max-width: 767px) {
+  /* the Artifacts ledger: title and age on one line, the tags under it. phone.css has older rules for .artRow, hence the id. */
+  #artifactsPage .artHdr { display: none; }
+  #artifactsPage .artList .artRow {
+    grid-template-columns: 24px minmax(0, 1fr) auto; grid-template-areas: "icon title when" ". meta meta";
+    row-gap: 6px; column-gap: 10px; align-items: start; padding: 12px 14px; min-height: 44px;
+  }
+  #artifactsPage .artRow .artIcon { grid-area: icon; }
+  #artifactsPage .artRow .artTitleCell { grid-area: title; }
+  #artifactsPage .artRow .artTitle { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; flex: 0 1 auto; margin: 0; }
+  #artifactsPage .artRow .artTitleCell .pill { margin: 0; }
+  #artifactsPage .artRow .artPath, #artifactsPage .artRow .cLinks { display: none; }
+  #artifactsPage .artRow .cWhen { grid-area: when; }
+  #artifactsPage .artRow .artMeta { grid-area: meta; display: flex; align-items: center; gap: 8px; min-width: 0; overflow: hidden; }
+  #artifactsPage .artRow .artMeta > * { flex: none; }
+  #artifactsPage .artRow .artMeta .cFrom { flex: 0 1 auto; min-width: 0; }
+  #artifactsPage .artChipsBar.seg { flex-wrap: nowrap; overflow-x: auto; max-width: 100%; scrollbar-width: none; }
+  #artifactsPage .artChipsBar .segBtn { flex: none; }
+  #artifactsPage .artSessionSelect.uiSelect { height: 34px; max-width: 100%; flex: 1 1 160px; }
+  #artifactsPage .artTools + .artTools { margin-top: 0; }
+
+  /* the artifact page: version dropdown full width, the file full width, nothing wider than the screen */
+  #artifactPage .artVer { gap: 8px; }
+  #artifactPage .artVerSelect.uiSelect { width: 100%; max-width: none; flex: 1 1 100%; height: 40px; }
+  #artifactPage .artVer .btn.xs, #artifactPage .artVer .segBtn { height: 34px; }
+  #artifactPage .artVer .spacer { display: none; }
+  #artifactPage .artChips .artFrom .t { max-width: 200px; }
+  #artifactPage .artViewMd { padding: 16px; }
+  #artifactPage .artViewWrap { border-radius: var(--r); }
+  #artifactPage .artHtmlBar { flex-wrap: wrap; }
+  #artifactPage .artHtmlBar p { flex: 1 1 calc(100% - 28px); }
+  #artifactPage .artHtmlRun { width: 100%; justify-content: space-between; min-height: 40px; }
+  #artifactPage .artHtmlFrame { height: 65vh; }
+  #artifactPage .artCsvScroll, #artifactPage .artCsvRaw { max-height: 65vh; }
+  #artifactPage .artViewBar { padding: 8px 10px; }
+  #artifactPage .artViewBar .btn.sm, #artifactPage .artViewBar .segBtn { height: 38px; }
+  #artifactPage .artViewImg { padding: 10px; }
+  #artifactPage .artViewDiff .diffView, #artifactPage .artCode { max-height: 65vh; }
+}

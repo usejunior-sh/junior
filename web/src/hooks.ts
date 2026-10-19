@@ -130,7 +130,7 @@ function parseRoute(hash: string): Route {
       }
     }
   }
-  if (hash === '/artifacts') return { page: 'artifacts' }
+  if (hash === '/artifacts' || hash.startsWith('/artifacts?')) return { page: 'artifacts' }
   if (hash.startsWith('/artifact/')) return { page: 'artifact', id: hash.slice('/artifact/'.length) }
   {
     const m = /^\/run\/([^/]+)(?:\/(.+))?$/.exec(hash)

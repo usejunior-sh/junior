@@ -41,6 +41,7 @@ import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import type { ArtifactWithLinks, Project, ProjectsResponse, SessionSummary, TerminalSummary } from '../../../shared/protocol.js'
 import { OPEN_TABS, TAB_TITLE, type InboxTab } from '../../../core/work/inbox-tabs.js'
 import type { Tabs } from '../inboxTabs.js'
+import { FormatIcon } from '../artifactFormat.js'
 import { checkoutOf } from '../checkouts.js'
 import { draftTitle, type Draft } from '../drafts.js'
 import { useCheckouts } from '../hooks.js'
@@ -177,12 +178,14 @@ function ago(ms: number): string {
   return `${Math.round(m / 1440)}d`
 }
 
-/** Notes you wrote, then briefs the model wrote, two groups, each newest first. */
+/** Files Junior made in sessions, then its briefs and plans, then notes you wrote: three groups, each newest first. */
 export function ArtifactsPanel({ artifacts, loaded, currentId, onOpen, onPin, onNew, onRefresh, onSearch }: ArtifactsProps) {
   const visible = artifacts.filter((a) => !a.hidden)
+  const fromSession = (a: ArtifactWithLinks) => a.links.some((l) => l.role === 'output')
   const groups: Array<[string, ArtifactWithLinks[]]> = [
-    ['Notes', visible.filter((a) => a.author === 'human')],
-    ['Briefs', visible.filter((a) => a.author === 'model')],
+    ['From sessions', visible.filter(fromSession)],
+    ['Briefs and plans', visible.filter((a) => a.author === 'model' && !fromSession(a))],
+    ['Your notes', visible.filter((a) => a.author === 'human' && !fromSession(a))],
   ]
   return (
     <aside className="panel" aria-label="Artifacts">
@@ -219,7 +222,7 @@ export function ArtifactsPanel({ artifacts, loaded, currentId, onOpen, onPin, on
                     () => onPin(a.id, a.title),
                   )}
                 >
-                  <FileText size={13} aria-hidden="true" />
+                  <FormatIcon format={a.format} size={13} />
                   <span className="t">{a.title}</span>
                   {a.links.length > 0 && <span className="dot sm blue" aria-hidden="true" title="linked" />}
                   <span className="m">{ago(a.updated)}</span>

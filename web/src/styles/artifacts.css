@@ -1,12 +1,50 @@
 /* ---------- artifacts (.docs/next-version.md, phase 1) ---------- */
 .artTools { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
 .artTools .root { font-family: var(--mono); font-size: 0.8462rem; color: var(--stone); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The Artifacts ledger: one aligned grid per row, the header row on the same columns. `.artMeta` is
+   display: contents on a wide screen, so its four cells are columns too; the phone gives it a line of its own. */
+.artList { container-type: inline-size; container-name: artledger; }
+.artHdr, .artList .artRow {
+  --artCols: 24px minmax(0, 1fr) 56px 58px 40px minmax(0, 170px) 56px 36px;
+  display: grid; grid-template-columns: var(--artCols); align-items: center; column-gap: 12px;
+}
+.artHdr {
+  padding: 7px 14px; border-bottom: 1px solid var(--hair); color: var(--stone);
+  font-family: var(--mono); font-size: 0.7692rem; letter-spacing: 0.6px; text-transform: uppercase; white-space: nowrap;
+}
+.artMeta { display: contents; }
 .artList .artRow { width: 100%; text-align: left; background: transparent; border: 0; border-radius: 0; color: var(--body); cursor: pointer; }
 .artList .artRow + .artRow { border-top: 1px solid var(--hair); }
-.artRow > svg { flex: none; color: var(--ash); }
-.artRow .artTitle { color: var(--ink); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
-.artRow .artPath { font-family: var(--mono); font-size: 0.8462rem; color: var(--stone); max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.artRow .artWhen { font-family: var(--mono); font-size: 0.8462rem; color: var(--ash); flex: none; width: 56px; text-align: right; }
+.artIcon { width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; color: var(--ash); }
+.artThumb { width: 24px; height: 24px; object-fit: cover; border-radius: var(--r-xs); border: 1px solid var(--hair); background: var(--deep); display: block; }
+.artTitleCell { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.artRow .artTitle {
+  flex: 1 1 auto; min-width: 0; padding: 0; background: none; border: 0; color: var(--ink); font: inherit; text-align: left; cursor: pointer;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.artRow .artTitle:focus-visible { outline: 1px solid var(--hair-bright); outline-offset: 3px; border-radius: var(--r-xs); }
+.artTitleCell .pill { flex: none; }
+.artRow .artPath { flex: 0 1 220px; min-width: 0; font-family: var(--mono); font-size: 0.8462rem; color: var(--stone); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.artRow .cVer, .artHdr .cVer { font-family: var(--mono); font-size: 0.8462rem; color: var(--ash); }
+.artRow .cFmt .pill, .artRow .cBy .pill { padding: 0 7px; }
+.artRow .cFrom, .artHdr .cFrom { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.artFromBtn { max-width: 100%; padding: 0; background: none; border: 0; color: var(--mute); font: inherit; font-size: 0.9231rem; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
+.artFromBtn:hover { color: var(--blue); }
+.artFromGone, .artFromNone { color: var(--stone); font-size: 0.9231rem; }
+.artRow .cLinks, .artHdr .cLinks { font-size: 0.8462rem; color: var(--stone); white-space: nowrap; text-align: right; }
+.artRow .cWhen, .artHdr .cWhen { font-family: var(--mono); font-size: 0.8462rem; color: var(--ash); text-align: right; white-space: nowrap; }
+.artHdr .cWhen { color: var(--stone); font-size: inherit; }
+@container artledger (max-width: 880px) {
+  .artRow .artPath { display: none; }
+}
+@container artledger (max-width: 720px) {
+  .artHdr, .artList .artRow { --artCols: 24px minmax(0, 1fr) 56px 58px 40px minmax(0, 130px) 36px; }
+  .artHdr .cLinks, .artRow .cLinks { display: none; }
+}
+.artTools + .artTools { margin-top: -6px; }
+.artSessionSelect.uiSelect { height: 26px; padding: 0 10px; gap: 6px; max-width: 240px; font-size: 0.9231rem; }
+.artSessionSelect.uiSelect > span:first-of-type { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.artSessionMenu { max-width: min(360px, 92vw); }
 .artBack { display: inline-flex; align-items: center; gap: 4px; color: var(--ash); font-size: 0.9231rem; margin-bottom: 10px; background: none; border: 0; padding: 0; cursor: pointer; }
 .artBack:hover { color: var(--ink); }
 .artHead { display: flex; align-items: flex-start; gap: 16px; margin-bottom: 14px; }

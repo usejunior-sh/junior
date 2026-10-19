@@ -1,0 +1,71 @@
+/* The artifact page header, its ⋯ menu and the file's frame (.ap*): web/src/components/artifact/ArtifactHeader.tsx.
+   One quiet meta line instead of a row of pills; the file takes the rest of the screen. Hairlines, no shadows. */
+
+#artifactPage { --artH: max(420px, calc(100vh - 290px)); }
+#artifactPage .inner { max-width: 1180px; }
+
+.apHead { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+.apTitleRow { display: flex; align-items: flex-start; gap: 16px; min-width: 0; }
+.apTitle { flex: 1; min-width: 0; margin: 0; overflow-wrap: anywhere; }
+.apActions { display: flex; align-items: center; gap: 6px; flex: none; padding-top: 4px; }
+.apActions .btn svg { flex: none; }
+.apActions .btn.icon { width: 30px; height: 30px; }
+.apActions .btn.icon[data-state="open"] { background: var(--elev); color: var(--ink); }
+.apConfirm { margin-right: 6px; color: var(--mute); font-size: 0.9231rem; }
+
+/* what it is, in one line: PDF · 114 KB · v3 · Junior · 12 min ago · from <session> */
+.apMeta { display: flex; align-items: center; flex-wrap: wrap; row-gap: 4px; min-width: 0; color: var(--ash); font-size: 0.9231rem; }
+.apMeta > * + *::before { content: '·'; margin: 0 8px; color: var(--stone); }
+.apFmt { font-family: var(--mono); font-size: 0.8462rem; color: var(--ink); letter-spacing: 0.02em; }
+.apMeta time, .apMeta span { white-space: nowrap; }
+.apFrom {
+  display: inline-flex; align-items: center; gap: 5px; min-width: 0; max-width: 300px; padding: 0; background: none; border: 0;
+  color: var(--mute); font: inherit; cursor: pointer;
+}
+.apFrom:hover { color: var(--blue); }
+.apFrom .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.apFrom svg { flex: none; }
+.apRef { font-family: var(--mono); font-size: 0.8462rem; color: var(--mute); }
+.apWarn { color: var(--yellow); }
+
+/* the ⋯ menu */
+.uiMenu.apMenu { min-width: 248px; }
+.apMenuItem { display: flex; align-items: center; gap: 9px; text-decoration: none; }
+.apMenuItem .name { flex: 1; min-width: 0; }
+.apMenuItem svg { flex: none; color: var(--ash); }
+.apMenuItem.apDanger, .apMenuItem.apDanger svg { color: var(--red-ink); }
+
+/* a note reads at a book's line length, centred in its frame */
+#artifactPage .artViewMd { max-width: 78ch; margin: 0 auto; padding: 28px 24px 36px; }
+
+/* the file: one frame, full width; height follows the screen for the viewers that scroll inside themselves */
+#artifactPage .artViewWrap { align-self: auto; }
+/* a PDF page is fitted to a readable width, centred on the deep surface, instead of blown up to the whole frame */
+#artifactPage .artViewPdf { background: var(--deep); }
+#artifactPage .artPdfEmbed { height: var(--artH); width: 100%; max-width: 820px; margin: 0 auto; }
+#artifactPage .artViewPdf .artViewFoot { background: var(--card); }
+#artifactPage .artHtmlFrame { height: var(--artH); }
+#artifactPage .artCsvScroll, #artifactPage .artCsvRaw { max-height: var(--artH); }
+#artifactPage .artCode, #artifactPage .artViewDiff .diffView { max-height: var(--artH); }
+#artifactPage .artViewImg img { max-height: var(--artH); }
+.artViewFoot { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 8px 14px; border-top: 1px solid var(--hair); color: var(--stone); font-size: 0.8462rem; }
+.artViewFoot .link { padding: 0; background: none; border: 0; color: var(--mute); font: inherit; cursor: pointer; text-decoration: underline; text-decoration-color: var(--hair-bright); text-underline-offset: 3px; }
+.artViewFoot .link:hover { color: var(--ink); }
+
+/* the version line: only there when there is more than one version to pick */
+#artifactPage .artVer { margin: 0 0 12px; padding: 0; border: 0; }
+
+@media (max-width: 767px) {
+  .apTitleRow { flex-direction: column; gap: 10px; }
+  .apActions { width: 100%; padding-top: 0; flex-wrap: wrap; }
+  .apActions .btn.sm { height: 40px; }
+  .apActions .btn.icon { width: 40px; height: 40px; margin-left: auto; }
+  .apConfirm { flex: 1 1 100%; }
+  /* a wrapped line must not start with a separator: links get a line each */
+  .apMeta > .apFrom { flex: 1 1 100%; max-width: 100%; }
+  .apMeta > .apFrom::before { content: none; }
+  .apMenuItem { min-height: 44px; }
+  #artifactPage .artPdfEmbed, #artifactPage .artHtmlFrame, #artifactPage .artCsvScroll, #artifactPage .artCsvRaw { max-height: 65vh; }
+  #artifactPage .artHtmlFrame { height: 65vh; }
+  #artifactPage .artViewMd { padding: 16px; }
+}
