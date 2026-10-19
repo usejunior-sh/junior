@@ -62,7 +62,9 @@
   margin-top: 8px; border: 1px solid var(--hair); border-radius: var(--r-sm);
   background: var(--deep); overflow: hidden; max-height: 320px; overflow-y: auto;
 }
-.meta .metaText { flex: none; }
+/* A long marker ("Task T1 of 6: …") ellipsises inside the column; the rules either side keep a stub. */
+.meta .metaText { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.meta::before, .meta::after { min-width: 24px; }
 .meta .turnChange {
   margin-left: 10px; font-family: var(--mono); font-size: 0.8462rem; color: var(--ash);
   /* The row is nowrap, so this is the one part allowed to shrink: the counts

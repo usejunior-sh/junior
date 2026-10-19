@@ -521,7 +521,9 @@ const Item = memo(function Item({
           {signoff && item.stats ? (
             <SignOff stats={item.stats} />
           ) : (
-            <span className="metaText">{item.text}</span>
+            <span className="metaText" title={item.text}>
+              {item.text}
+            </span>
           )}
           {turn && turn.files > 0 && (
             <span className="turnChange">
