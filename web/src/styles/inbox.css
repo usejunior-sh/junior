@@ -315,10 +315,10 @@
 
 .itemTabs { margin-top: 10px; }
 .itemTabList { display: flex; gap: 2px; border-bottom: 1px solid var(--hair-strong); overflow-x: auto; scrollbar-width: none; }
-.itemTab { display: inline-flex; align-items: center; gap: 7px; background: none; border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px; padding: 9px 12px; color: var(--ash); font: inherit; font-weight: 500; cursor: pointer; white-space: nowrap; }
+.itemTab { border-radius: 0; display: inline-flex; align-items: center; gap: 7px; background: none; border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px; padding: 9px 12px; color: var(--ash); font: inherit; font-weight: 500; cursor: pointer; white-space: nowrap; }
 .itemTab:hover { color: var(--charcoal); }
 .itemTab:focus { outline: none; }
-.itemTab:focus-visible { outline: 1px solid var(--hair-bright); outline-offset: -4px; border-radius: var(--r-sm); }
+.itemTab:focus-visible { outline: 1px solid var(--hair-bright); outline-offset: -4px; }
 .itemTab[data-state="active"] { color: var(--ink); border-bottom-color: var(--ink); }
 .itemTab .n { font-family: var(--mono); font-size: 0.8462rem; color: var(--ash); background: var(--hair); border-radius: var(--r-full); padding: 0 6px; line-height: 17px; }
 .itemTab .n.hot { color: var(--yellow); background: var(--tint-yellow); }
