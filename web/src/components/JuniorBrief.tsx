@@ -16,6 +16,9 @@ const SHOWN = 5
 
 type Props = { day: JuniorDay; onNavigate: (hash: string) => void }
 
+/** `rest`: under the Suggested tab, only what's due and what happened; the people waiting and reviews are suggestions there. */
+type BriefProps = Props & { only?: 'rest' }
+
 function age(since: number, now: number): string {
   const m = Math.max(0, Math.floor((now - since) / 60_000))
   if (m < 60) return `${Math.max(1, m)}m`
@@ -25,14 +28,15 @@ function age(since: number, now: number): string {
 
 const clock = (ms: number) => new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 
-export function JuniorBrief({ day, onNavigate }: Props) {
+export function JuniorBrief({ day, onNavigate, only }: BriefProps) {
   const b = day.morning
   const now = Date.now()
   const open = (r: MorningRow) => onNavigate(itemHash(r.itemId))
-  const empty = !b.people.length && !b.due.length && !b.review.length
+  const rest = only === 'rest'
+  const empty = !rest && !b.people.length && !b.due.length && !b.review.length
   return (
     <div className="jrBriefTab">
-      {b.start && (
+      {!rest && b.start && (
         <button type="button" className="jrStart" onClick={() => onNavigate(itemHash(b.start!.itemId))}>
           <span>
             Start with <b>{b.start.title}</b>: {b.start.why}.
@@ -48,7 +52,7 @@ export function JuniorBrief({ day, onNavigate }: Props) {
         </p>
       )}
 
-      <Section title="People waiting on you" hot rows={b.people} aside="longest wait first" onNavigate={onNavigate}>
+      <Section title="People waiting on you" hot rows={rest ? [] : b.people} aside="longest wait first" onNavigate={onNavigate}>
         {(r) => (
           <button key={r.itemId} type="button" className="jrBr" onClick={() => open(r)}>
             <span className={`w${now - r.since > 86_400_000 ? ' late' : ''}`}>{age(r.since, now)}</span>
@@ -76,7 +80,7 @@ export function JuniorBrief({ day, onNavigate }: Props) {
         )}
       </Section>
 
-      <Section title="To review" rows={b.review} onNavigate={onNavigate}>
+      <Section title="To review" rows={rest ? [] : b.review} onNavigate={onNavigate}>
         {(r) => (
           <button key={r.itemId} type="button" className="jrBr" onClick={() => open(r)}>
             <span className="src">{r.ref}</span>

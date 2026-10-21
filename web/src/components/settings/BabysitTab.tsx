@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import * as Switch from '@radix-ui/react-switch'
 import type { BabysitSettings } from '../../../../core/babysit/settings.js'
 import { usePickableModels } from '../../models.js'
 import { Select, SelectItem } from '../../ui/Select.js'
@@ -7,7 +6,7 @@ import { Row, Section } from './shared.js'
 
 type Resp = { ok: true; settings: BabysitSettings } | { ok: false; error: string }
 
-// Babysitting your PRs and first-pass reviews: on or off, the model per kind of task, and what it may spend.
+// Babysitting your PRs and first-pass reviews: the model per kind of task, and what it may spend. What it works on is what you hand off.
 
 export function BabysitTab() {
   const [s, setS] = useState<BabysitSettings | null>(null)
@@ -59,24 +58,10 @@ export function BabysitTab() {
   return (
     <>
       <Section
-        title="Your PRs"
-        hint="Junior watches every PR you open in this workspace’s repos. It fixes red CI and bot comments, rebases, and pushes to your PR branch. It asks before requesting a reviewer."
+        title="What Junior works on"
+        hint="Only the PRs you hand off. Press Babysit on your PR, or First pass on a review request. Both are on the Junior page and on each PR’s page. Junior fixes red CI and bot comments, rebases, and pushes to your PR branch. It asks before it requests a reviewer or posts a review. Pause a PR to stop it."
       >
-        <Row label="Babysit my PRs" hint="Off: nothing is read and nothing runs.">
-          <Switch.Root className="uiSwitch" checked={s?.enabled ?? false} disabled={!s} onCheckedChange={(on) => save({ enabled: on })} aria-label="Babysit my PRs">
-            <Switch.Thumb className="uiSwitchThumb" />
-          </Switch.Root>
-        </Row>
-      </Section>
-      <Section
-        title="Reviews"
-        hint="When someone asks for your review, Junior reads the PR first: a verdict, a summary and suggested comments. Nothing is posted until you OK it."
-      >
-        <Row label="First-pass reviews" hint="Only requests to you, not to a team. Off: nothing is read and nothing runs.">
-          <Switch.Root className="uiSwitch" checked={s?.reviews ?? false} disabled={!s} onCheckedChange={(on) => save({ reviews: on })} aria-label="First-pass reviews">
-            <Switch.Thumb className="uiSwitchThumb" />
-          </Switch.Root>
-        </Row>
+        {null}
       </Section>
       <Section title="Models" hint="Each task is a short session on the model its kind calls for.">
         <Row label="CI and bot fixes" hint="Reading a failing log and fixing it.">

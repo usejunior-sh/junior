@@ -11,6 +11,7 @@ import { type TabEntry, isHumanAsk, waitedFor } from '../../../../core/work/inbo
 import type { InboxRoute } from '../../../../core/work/inbox-views.js'
 import { waitingText } from '../../inboxTabs.js'
 import { DUE_KEY_OF, signalsText } from './rowHelpers.js'
+import { SnoozeMenu, SnoozeSub } from '../SnoozeMenu.js'
 import type { RowActions } from './SelectionBar.js'
 
 export const EMPTY_TEXT: Record<InboxRoute, string> = {
@@ -306,9 +307,11 @@ export function WorkRow({
             <button type="button" className="iconBtn sm green" title="Mark done (e)" onClick={() => onDone(item)}>
               <Check size={14} aria-hidden="true" />
             </button>
-            <button type="button" className="iconBtn sm" title="Snooze until tomorrow 9am (z)" onClick={() => onSnooze(item)}>
-              <AlarmClock size={13} aria-hidden="true" />
-            </button>
+            <SnoozeMenu onSnooze={(until) => onSnooze(item, until)}>
+              <button type="button" className="iconBtn sm" title="Snooze (z: until tomorrow 9am)">
+                <AlarmClock size={13} aria-hidden="true" />
+              </button>
+            </SnoozeMenu>
           </>
         )}
         <Menu open={menuOpen} onOpenChange={setMenuOpen}>
@@ -344,9 +347,7 @@ export function WorkRow({
                 <MenuItem onSelect={() => onDone(item)}>
                   <Check size={13} aria-hidden="true" /> Mark done<span className="k">e</span>
                 </MenuItem>
-                <MenuItem onSelect={() => onSnooze(item)}>
-                  <AlarmClock size={13} aria-hidden="true" /> Snooze to tomorrow<span className="k">z</span>
-                </MenuItem>
+                <SnoozeSub onSnooze={(until) => onSnooze(item, until)} />
                 <MenuSeparator />
                 <div className="uiMenuCap">Due</div>
                 {SECTION_ORDER.map((s) => (

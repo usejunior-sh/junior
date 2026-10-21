@@ -3,7 +3,15 @@ import type { ScoredItem } from '../../../../shared/protocol.js'
 import type { ItemTask } from '../../../../core/work/tasks.js'
 import type { Verdict } from '../../../../core/work/verdict.js'
 import { relTime } from '../../itemUi.js'
+import { handoff } from '../../handoff.js'
+import { useInbox } from '../../inboxStore.js'
 import { taskVerb } from './useItemTasks.js'
+
+/** Your PR and a review request are worked by their watches: one button each (server/handoff-ops.ts). */
+const WATCHED: Record<string, { label: string; line: string }> = {
+  'your-pr': { label: 'Babysit', line: 'Junior fixes red CI and bot comments, and rebases. It asks before a reviewer.' },
+  'review-requested': { label: 'First pass', line: 'Junior reads it first and drafts notes. Nothing is posted without you.' },
+}
 
 /** The playbooks the hand-off bar offers (core/rules/rules.ts STARTABLE); a drafted reply goes to Slack only. */
 const HANDOFFS: { playbook: 'answer' | 'investigate' | 'debug-fix'; label: string; fits: (i: ScoredItem) => boolean }[] = [
@@ -33,19 +41,25 @@ export function ItemVerdict({ item, verdict, tasks, action, onChat, onChanged }:
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const open = (item.status ?? 'open') === 'open'
+  const watched = WATCHED[item.reason]
+  // the draft PR Junior opened from this item, while it isn't babysat yet
+  const snap = useInbox()
+  const prId = item.junior?.pr
+  const pr = prId ? snap.items.find((i) => i.id === prId) : undefined
+  const prWaits = !!pr && pr.handoff !== 'on'
 
-  async function handOff(playbook = pick) {
+  async function run(verb: 'start' | 'pause' | 'resume', id = item.id, playbook?: string) {
     setBusy(true)
     setError(null)
     try {
-      const r = await fetch('/api/playbooks/start', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ itemId: item.id, playbook }) })
-      const b = (await r.json().catch(() => ({ ok: false, error: `HTTP ${r.status}` }))) as { ok: boolean; error?: string }
-      if (!b.ok) setError(b.error ?? 'could not hand it off')
+      const err = await handoff(verb, id, playbook)
+      if (err) setError(err)
       onChanged()
     } finally {
       setBusy(false)
     }
   }
+  const handOff = () => run('start', item.id, watched ? undefined : pick)
 
   const mine = tasks.filter((t) => t.owner === 'junior')
   const running = mine.find((t) => t.state === 'running')
@@ -78,15 +92,19 @@ export function ItemVerdict({ item, verdict, tasks, action, onChat, onChanged }:
           <div className="handoffBar">
             <span className="jrMark" aria-hidden="true">J</span>
             <span className="hlabel">Hand it to Junior</span>
-            <span className="hpicks" role="radiogroup" aria-label="What Junior should do">
-              {offers.map((h) => (
-                <button key={h.playbook} type="button" role="radio" aria-checked={pick === h.playbook} className={`hpick${pick === h.playbook ? ' on' : ''}`} onClick={() => setPick(h.playbook)}>
-                  {h.label}
-                </button>
-              ))}
-            </span>
+            {watched ? (
+              <span className="hline">{watched.line}</span>
+            ) : (
+              <span className="hpicks" role="radiogroup" aria-label="What Junior should do">
+                {offers.map((h) => (
+                  <button key={h.playbook} type="button" role="radio" aria-checked={pick === h.playbook} className={`hpick${pick === h.playbook ? ' on' : ''}`} onClick={() => setPick(h.playbook)}>
+                    {h.label}
+                  </button>
+                ))}
+              </span>
+            )}
             <button type="button" className="btn xs primary" disabled={busy} onClick={() => void handOff()}>
-              {busy ? 'Handing off…' : 'Hand off'}
+              {busy ? 'Handing off…' : (watched?.label ?? 'Hand off')}
             </button>
           </div>
           <div className="vline">
@@ -118,6 +136,22 @@ export function ItemVerdict({ item, verdict, tasks, action, onChat, onChanged }:
               : `Junior’s last task didn’t finish${last.endedAt ? ` (${relTime(last.endedAt)})` : ''}: ${last.title}. Retry it under Sessions.`}
         </div>
       ) : null}
+      {open && item.handoff && (
+        <div className="vline">
+          {item.handoff === 'paused' ? 'You paused Junior here.' : watched ? (item.reason === 'your-pr' ? 'Junior is babysitting this PR.' : 'Junior does a first pass on each request.') : 'Handed to Junior.'}
+          <button type="button" className="linkBtn" disabled={busy} onClick={() => void run(item.handoff === 'paused' ? 'resume' : 'pause')}>
+            {item.handoff === 'paused' ? 'Resume' : 'Pause'}
+          </button>
+        </div>
+      )}
+      {open && prWaits && (
+        <div className="vline">
+          Junior opened a draft PR: {pr?.title}.
+          <button type="button" className="linkBtn" disabled={busy} onClick={() => void run('start', prId)}>
+            Babysit it
+          </button>
+        </div>
+      )}
       {error && <div className="notice">{error}</div>}
     </div>
   )

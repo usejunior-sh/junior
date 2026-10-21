@@ -159,7 +159,7 @@ export function InboxPage({ view, tabs, views, onDispatch, onRefineJob, onOpenIt
     [removeLocally],
   )
 
-  const snooze1d = useCallback((item: ScoredItem) => void setItemState(item, 'snoozed', tomorrow9()), [setItemState])
+  const snooze1d = useCallback((item: ScoredItem, until?: number) => void setItemState(item, 'snoozed', until ?? tomorrow9()), [setItemState])
 
   // Whose turn, when the rules can't see it. The row moves tab on the refetch
   // the server's inbox_changed brings.

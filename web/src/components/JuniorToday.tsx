@@ -1,7 +1,7 @@
 /**
- * The Junior page's two working tabs: Today's plan (one list, every row with
- * an owner, ending in "Also today…") and Blocked on you (what holds Junior
- * until you answer). On a first open, no plan yet, nothing used, Junior
+ * The Junior page's Today's plan tab (one list, every row with an owner,
+ * ending in "Also today…"), and the Needs-you row the With Junior tab lists
+ * what holds Junior with. On a first open, no plan yet, nothing used, Junior
  * says what it can see and offers work instead (JuniorFirstOpen).
  */
 import { X } from 'lucide-react'
@@ -43,31 +43,8 @@ export function JuniorGoals({ day, onNavigate, onDispatch }: Props) {
 }
 
 /** Blocked on you: what holds Junior until you answer. People waiting on you are in the brief. */
-export function JuniorBlocked({ day, onNavigate }: Pick<Props, 'day' | 'onNavigate'>) {
-  if (day.needs.length === 0)
-    return (
-      <p className="jrQuiet">
-        <JuniorFace mood="hello" size={18} motion="still" decorative />
-        Nothing is blocking me. I'll put anything I can't go on without here, with my best guess.
-      </p>
-    )
-  return (
-    <section aria-label="Blocked on you">
-      <h2 className="jrLh">
-        Blocked on you <span className="n">{day.needs.length}</span>
-        <span className="aside">only what stops me · people waiting on you are in the brief</span>
-      </h2>
-      <div className="jrRows">
-        {day.needs.map((r) => (
-          <NeedsLine key={r.key} row={r} onNavigate={onNavigate} />
-        ))}
-      </div>
-    </section>
-  )
-}
-
 /** A Needs-you row: a small orange dot, what it is, where from, and the verb. */
-function NeedsLine({ row, onNavigate }: { row: NeedsRow; onNavigate: (hash: string) => void }) {
+export function NeedsLine({ row, onNavigate }: { row: NeedsRow; onNavigate: (hash: string) => void }) {
   const go = () => onNavigate(row.target.kind === 'session' ? row.target.id : '/junior/log')
   return (
     <button type="button" className="jrRow need" onClick={go}>

@@ -1,10 +1,12 @@
 /**
- * The Junior page (.docs/junior-goals-teams/junior-home-v2.html, variation J):
- * Junior on the left, the day on the right. The sidebar is Junior's card:
- * Chat (⌘J), right now, what it can see, what it can do, Customize. The
- * right side is a two-tone serif headline over three tabs: Morning brief,
- * Today's plan, Blocked on you. "What I can do" in full and the persona open
- * in a sheet over the page.
+ * The Junior page (.docs/junior-goals-teams/junior-home-v2.html, variation J;
+ * hand-offs, Phase 1, artifact f335b876): Junior on the left, the day on the
+ * right. The sidebar is Junior's card: Chat (⌘J), right now, what it can see,
+ * what it can do, Customize. The right side is a two-tone serif headline over
+ * the tabs: Suggested (with what's due and what happened), My PRs, Reviews,
+ * With Junior (blocked on you folds in here), Today's plan, Log. Junior works
+ * only what you hand it. "What I can do" in full and the persona open in a
+ * sheet over the page.
  */
 import * as Dialog from '@radix-ui/react-dialog'
 import * as Tabs from '@radix-ui/react-tabs'
@@ -14,29 +16,27 @@ import type { JuniorDay } from '../../../shared/protocol.js'
 import { headline } from '../../../core/junior/greeting.js'
 import { overdueCount } from '../../../core/junior/morning.js'
 import { pageMood } from '../../../core/junior/mood.js'
-import { useWorkspaceId } from '../hooks.js'
+import { useWorkspaceId, type JuniorTab } from '../hooks.js'
 import { useAwayWindow, useJuniorDay, usePersona } from '../junior.js'
 import { JuniorAbout } from './JuniorAbout.js'
-import { JuniorBrief } from './JuniorBrief.js'
 import { JuniorCanDo } from './JuniorCanDo.js'
 import { JuniorSide } from './JuniorSide.js'
-import { JuniorBlocked, JuniorFirstOpen, JuniorGoals } from './JuniorToday.js'
-import { JuniorPrs } from './JuniorPrs.js'
+import { JuniorFirstOpen, JuniorGoals } from './JuniorToday.js'
+import { JuniorMyPrs, JuniorReviews, JuniorSuggested, JuniorWith, useHandoffCounts } from './JuniorHandoff.js'
 import { JuniorLog } from './JuniorLog.js'
 import { useLogUnread } from '../juniorLog.js'
-import { useInbox } from '../inboxStore.js'
 
 /** What the sheet over the page shows: every capability, or the persona. */
 export type JuniorView = 'can' | 'me'
 
-type Tab = 'brief' | 'goals' | 'blocked' | 'prs' | 'log'
+type Tab = 'suggested' | 'prs' | 'reviews' | 'with' | 'goals' | 'log'
 
 type Props = {
   onNavigate: (hash: string) => void
   /** Start on a Junior-owned plan row: the inbox's own dispatch */
   onDispatch: (itemId: string) => void
-  /** `#/junior/log`: open on the Log tab */
-  initialTab?: 'log'
+  /** `#/junior/<tab>`: open on that tab */
+  initialTab?: JuniorTab
 }
 
 export function JuniorPage({ onNavigate, onDispatch, initialTab }: Props) {
@@ -44,7 +44,8 @@ export function JuniorPage({ onNavigate, onDispatch, initialTab }: Props) {
   const persona = usePersona()
   const win = useAwayWindow(workspaceId)
   const { day, error, reload } = useJuniorDay(win)
-  const [tab, setTab] = useState<Tab>(initialTab ?? 'brief')
+  const [tab, setTab] = useState<Tab>(initialTab === 'plan' ? 'goals' : (initialTab ?? 'suggested'))
+  const counts = useHandoffCounts(day)
   const [sheet, setSheet] = useState<JuniorView | null>(null)
   const unread = useLogUnread()
   // The clock the headline reads; the page re-reads it on every fetch.
@@ -107,34 +108,40 @@ export function JuniorPage({ onNavigate, onDispatch, initialTab }: Props) {
           <Tabs.Root className="jrTabs" value={tab} onValueChange={(v) => setTab(v as Tab)}>
             <div className="jrBar">
               <Tabs.List className="jrViews" aria-label={persona.name}>
-                <Tabs.Trigger className="jrView" value="brief">
-                  Morning brief <Count day={day} of="brief" />
-                </Tabs.Trigger>
-                <Tabs.Trigger className="jrView" value="goals">
-                  Today's plan <Count day={day} of="goals" />
-                </Tabs.Trigger>
-                <Tabs.Trigger className="jrView" value="blocked">
-                  Blocked on you <Count day={day} of="blocked" />
+                <Tabs.Trigger className="jrView" value="suggested">
+                  Suggested {counts.suggested > 0 && <span className="c hot">{counts.suggested}</span>}
                 </Tabs.Trigger>
                 <Tabs.Trigger className="jrView" value="prs">
-                  My PRs <PrCount />
+                  My PRs <Count n={counts.prs} />
+                </Tabs.Trigger>
+                <Tabs.Trigger className="jrView" value="reviews">
+                  Reviews <Count n={counts.reviews} />
+                </Tabs.Trigger>
+                <Tabs.Trigger className="jrView" value="with">
+                  With Junior {counts.with[1] > 0 ? <span className="c hot">{counts.with[1]} for you</span> : counts.with[0] > 0 && <span className="c">{counts.with[0]}</span>}
+                </Tabs.Trigger>
+                <Tabs.Trigger className="jrView" value="goals">
+                  Today's plan {day && day.plan.total > 0 && <span className="c">{`${day.plan.done} of ${day.plan.total}`}</span>}
                 </Tabs.Trigger>
                 <Tabs.Trigger className="jrView" value="log">
                   Log {unread && <span className="c dot" aria-label="new" />}
                 </Tabs.Trigger>
               </Tabs.List>
             </div>
-            <Tabs.Content value="brief" className="jrPane">
-              {day ? <JuniorBrief day={day} onNavigate={onNavigate} /> : <Loading />}
+            <Tabs.Content value="suggested" className="jrPane">
+              <JuniorSuggested day={day} onNavigate={onNavigate} />
+            </Tabs.Content>
+            <Tabs.Content value="prs" className="jrPane">
+              <JuniorMyPrs onNavigate={onNavigate} />
+            </Tabs.Content>
+            <Tabs.Content value="reviews" className="jrPane">
+              <JuniorReviews onNavigate={onNavigate} />
+            </Tabs.Content>
+            <Tabs.Content value="with" className="jrPane">
+              <JuniorWith day={day} onNavigate={onNavigate} />
             </Tabs.Content>
             <Tabs.Content value="goals" className="jrPane">
               {day ? <JuniorGoals day={day} onNavigate={onNavigate} onDispatch={onDispatch} /> : <Loading />}
-            </Tabs.Content>
-            <Tabs.Content value="blocked" className="jrPane">
-              {day ? <JuniorBlocked day={day} onNavigate={onNavigate} /> : <Loading />}
-            </Tabs.Content>
-            <Tabs.Content value="prs" className="jrPane">
-              <JuniorPrs onNavigate={onNavigate} />
             </Tabs.Content>
             <Tabs.Content value="log" className="jrPane">
               <JuniorLog active={tab === 'log'} onNavigate={onNavigate} />
@@ -175,24 +182,10 @@ export function JuniorPage({ onNavigate, onDispatch, initialTab }: Props) {
   )
 }
 
-/** The count on a tab: people waiting on the brief (orange), the plan's progress, what blocks Junior (orange). */
-function Count({ day, of }: { day: JuniorDay | null; of: Tab }) {
-  if (!day) return null
-  if (of === 'brief') {
-    const n = day.morning.people.length
-    return n ? <span className="c hot">{n} waiting</span> : null
-  }
-  if (of === 'goals') return day.plan.total ? <span className="c">{`${day.plan.done} of ${day.plan.total}`}</span> : null
-  return day.needs.length ? <span className="c hot">{day.needs.length}</span> : null
-}
-
-/** The PR tab's count: what needs you on your PRs (orange), else how many are open. */
-function PrCount() {
-  const snap = useInbox()
-  const needs = snap.items.filter((i) => (i.tasks?.needsYou ?? 0) > 0).length
-  if (needs) return <span className="c hot">{needs}</span>
-  const mine = snap.items.filter((i) => i.reason === 'your-pr').length
-  return mine ? <span className="c">{mine}</span> : null
+/** A tab's count: how many (grey), or how many need you (orange) when any do. */
+function Count({ n: [all, hot] }: { n: [number, number] }) {
+  if (hot) return <span className="c hot">{hot}</span>
+  return all ? <span className="c">{all}</span> : null
 }
 
 const Loading = () => (

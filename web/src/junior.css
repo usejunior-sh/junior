@@ -158,6 +158,7 @@ a.jrRef { overflow-wrap: anywhere; }
 .jrLead { margin: 22px 0 8px; color: var(--mute); font-size: 0.9615rem; max-width: 64ch; }
 .jrEmpty { margin: 0; padding: 12px 0; border-top: 1px solid var(--hair); color: var(--mute); font-size: 0.9615rem; }
 .jrPlan .jrEmpty { border-top: 0; border-bottom: 1px solid var(--hair); }
+.jrEmpty:has(svg) { display: flex; align-items: center; gap: 10px; }
 .jrErr { margin: 10px 0 0; color: var(--red-ink); font-size: 0.9231rem; }
 
 /* Needs you: rows with a small orange dot, not a bar */
@@ -320,6 +321,45 @@ button.jlTitle:hover { text-decoration: underline; text-decoration-color: var(--
 /* The rail's dot on Junior: something new in the log. */
 .railDot { position: absolute; top: 6px; right: 12px; width: 7px; height: 7px; border-radius: 50%; background: var(--blue); border: 1.5px solid var(--canvas); }
 
+/* ---------- hand-offs: Suggested, My PRs, Reviews, With Junior ---------- */
+/* a row: dot or kind icon · what it is · where it stands or what Junior would do · the verbs */
+.hoRows { border-top: 1px solid var(--hair); }
+.hoRow {
+  display: grid; grid-template-columns: 18px minmax(0, 1fr) minmax(0, 260px) 220px; align-items: center; gap: 14px;
+  min-height: 56px; padding: 6px 2px; border-bottom: 1px solid var(--hair);
+}
+.hoRow:hover { background: var(--wash-2); }
+.hoRow .k { display: grid; place-items: center; color: var(--ash); }
+.hoRow .tx { display: flex; flex-direction: column; min-width: 0; padding: 0; border: 0; background: none; font: inherit; color: inherit; text-align: left; cursor: pointer; }
+.hoRow .t { color: var(--ink); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hoRow .tx:hover .t { text-decoration: underline; text-decoration-color: var(--hair-bright); text-underline-offset: 3px; }
+.hoRow .m { margin-top: 2px; color: var(--ash); font-size: 0.9231rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hoRow .m .red { color: var(--red-ink); }
+.hoRow .mid { min-width: 0; font-size: 0.9231rem; color: var(--charcoal); line-height: 1.4; }
+.hoRow .would .l { display: block; font-family: var(--mono); font-size: 0.8077rem; color: var(--ash); }
+.hoRow .state { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+.hoRow .state.off { color: var(--mute); }
+.hoRow .state .sub { color: var(--ash); font-size: 0.8462rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.hoRow .acts { display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
+.hoRow .chip { height: 20px; padding: 0 8px; font-size: 0.8077rem; }
+.hoRow .chip.need { color: var(--orange); background: var(--tint-orange); border-color: transparent; }
+.hoRow .chip.paused { color: var(--yellow); background: var(--tint-yellow); border-color: transparent; }
+.hoRow .chip.v-request_changes { color: var(--red-ink); background: var(--tint-red); border-color: transparent; }
+.hoRow .chip.v-approve { color: var(--green); background: var(--tint-green); border-color: transparent; }
+.hoRow .chip.v-comment { color: var(--mute); }
+.hoRow .chipSl { padding: 0 7px; border: 1px solid var(--hair-strong); border-radius: var(--r-full); font-size: 0.8077rem; color: var(--charcoal); }
+.jrDot.need { background: var(--orange); }
+.jrDot.paused { background: var(--yellow); }
+.jrDot.ok { background: var(--green); }
+/* plan → approve → work → draft PR → babysit: five bars, whose move in colour */
+.hoRow .pipe { display: flex; flex-direction: column; gap: 5px; }
+.hoRow .pipe .bars { display: flex; gap: 4px; }
+.hoRow .pipe i { width: 24px; height: 4px; border-radius: 2px; background: var(--hair-strong); }
+.hoRow .pipe i.done { background: color-mix(in srgb, var(--junior, var(--ink)) 70%, transparent); }
+.hoRow .pipe i.now { background: var(--blue); }
+.hoRow .pipe i.you { background: var(--orange); }
+.hoRow .pipe .pl { font-family: var(--mono); font-size: 0.8077rem; color: var(--ash); }
+
 @media (prefers-reduced-motion: reduce) {
   .jrDot.live, .jrPlanRow.fresh { animation: none; }
 }
@@ -358,6 +398,12 @@ button.jlTitle:hover { text-decoration: underline; text-decoration-color: var(--
   .shell.mobile .railBtn { padding: 0; }
   .shell.mobile .railBtn span.label { max-width: 100%; font-size: 0.6667rem; letter-spacing: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .jrRow { grid-template-columns: minmax(0, 1fr) auto; min-height: 48px; }
+  /* a hand-off row: what it is, then what Junior would do, then the verbs under it */
+  .hoRow { grid-template-columns: 18px minmax(0, 1fr); gap: 4px 10px; padding: 10px 0; }
+  .hoRow .k { align-self: start; padding-top: 3px; }
+  .hoRow .mid, .hoRow .acts { grid-column: 2; }
+  .hoRow .acts { justify-content: flex-start; margin-top: 4px; }
+  .hoRow .btn.xs { height: 32px; }
   .jrRow .m, .jrRow .go { display: none; }
   .jrCards { grid-template-columns: 1fr; }
   .jrMe .mrow { grid-template-columns: 1fr; gap: 4px; }
