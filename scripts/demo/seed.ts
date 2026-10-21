@@ -425,7 +425,7 @@ async function seedActions(store: Store, now: number): Promise<void> {
       args: {
         channel_id: 'C04ENGPAY',
         thread_ts: '1760440200.123',
-        text: "Yes, Friday works. The retry PR is approved with CI green, and the dead-letter queue it needs merged yesterday. I'll merge Thursday morning so we get a day on staging first. Failed deliveries retry 5 times over ~2h, then land in the DLQ.",
+        message: "Yes, Friday works. The retry PR is approved with CI green, and the dead-letter queue it needs merged yesterday. I'll merge Thursday morning so we get a day on staging first. Failed deliveries retry 5 times over ~2h, then land in the DLQ.",
       },
       status: 'needs_you',
       link: null,
@@ -438,7 +438,7 @@ async function seedActions(store: Store, now: number): Promise<void> {
         args: {
           channel_id: 'C04ENGPAY',
           thread_ts: '1760440200.123',
-          text: "Yes, Friday works. The retry PR is approved with CI green, and the dead-letter queue it needs merged yesterday. I'll merge Thursday morning so we get a day on staging first. Failed deliveries retry 5 times over ~2h, then land in the DLQ.",
+          message: "Yes, Friday works. The retry PR is approved with CI green, and the dead-letter queue it needs merged yesterday. I'll merge Thursday morning so we get a day on staging first. Failed deliveries retry 5 times over ~2h, then land in the DLQ.",
         },
         queuedAt: t(34 * MIN),
         expiresAt: now + 7 * DAY,
