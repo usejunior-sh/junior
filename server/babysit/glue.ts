@@ -6,6 +6,7 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { BABYSIT_QUERY } from '../../core/babysit/pr.js'
+import { learnedFresh, pickReviewer, REVIEWERS_KEY, REVIEWERS_QUERY, reviewersSearch, type LearnedReviewer } from '../../core/babysit/reviewer.js'
 import { BABYSIT_SETTINGS_KEY, babysitSettingsFrom, type BabysitSettings } from '../../core/babysit/settings.js'
 import { ghLogin } from '../../core/sources/github.js'
 import type { ItemTask } from '../../core/work/tasks.js'
@@ -19,7 +20,7 @@ import { babysitTickOp, type BabysitDeps, type BabysitSource } from './watch.js'
 
 const pExec = promisify(execFile)
 
-async function gh(args: string[]): Promise<string> {
+export async function gh(args: string[]): Promise<string> {
   try {
     return (await pExec('gh', args, { maxBuffer: 32 * 1024 * 1024 })).stdout
   } catch (err) {
@@ -43,6 +44,23 @@ export async function babysitSettings(rt: WorkspaceRuntime): Promise<BabysitSett
   return babysitSettingsFrom(await rt.store.config.get(BABYSIT_SETTINGS_KEY))
 }
 
+/** The reviewer Junior suggests for a repo: yours if you picked one, else learned from your merged PRs (a day's cache). */
+export async function reviewerFor(rt: WorkspaceRuntime, repo: string, now = Date.now()): Promise<string | null> {
+  const all = (await rt.store.config.get<Record<string, LearnedReviewer>>(REVIEWERS_KEY)) ?? {}
+  const fresh = learnedFresh(all[repo], now)
+  if (fresh) return fresh
+  const me = await ghLogin()
+  const login = pickReviewer(JSON.parse(await gh(['api', 'graphql', '-f', `query=${REVIEWERS_QUERY}`, '-f', `q=${reviewersSearch(me, repo)}`])), me)
+  if (login) await rt.store.config.set(REVIEWERS_KEY, { ...all, [repo]: { login, at: now, by: 'junior' } satisfies LearnedReviewer })
+  return login
+}
+
+/** You picked a reviewer for a repo: Junior suggests them from now on. */
+export async function rememberReviewer(rt: WorkspaceRuntime, repo: string, login: string): Promise<void> {
+  const all = (await rt.store.config.get<Record<string, LearnedReviewer>>(REVIEWERS_KEY)) ?? {}
+  await rt.store.config.set(REVIEWERS_KEY, { ...all, [repo]: { login, at: Date.now(), by: 'you' } satisfies LearnedReviewer })
+}
+
 /** Hooks the runner and notifications attach to: a task was added. */
 const addedHooks: ((rt: WorkspaceRuntime, task: ItemTask, stuck: boolean) => void)[] = []
 export function onTaskAdded(fn: (rt: WorkspaceRuntime, task: ItemTask, stuck: boolean) => void): void {
@@ -62,7 +80,7 @@ export function babysitDeps(rt: WorkspaceRuntime): BabysitDeps {
     settings: () => babysitSettings(rt),
     repos: () => connectedRepos(rt),
     upsertItem: async (item) => void (await upsertItem(rt, item)),
-    reviewerFor: async () => null,
+    reviewerFor: (repo) => reviewerFor(rt, repo),
     added: (task, stuck) => {
       for (const fn of addedHooks) {
         try {
