@@ -7,6 +7,8 @@
  *               waits for your OK                      → Needs you
  *   Junior's    a Junior task is queued or running, or a dispatched session
  *               is working (flow turn "ai")           → Sessions
+ *   my move     the item's own flow says it's your turn ("read brief",
+ *               "review result"): its next step, in words
  *   not handed  nobody has it: the item's own ask is the one thing that
  *   off         needs you                             → Needs you
  *
@@ -66,11 +68,33 @@ function ownAsk(item: VerdictItem): string {
   }
 }
 
-export function verdictOf(item: VerdictItem, tasks: readonly VerdictTask[], held: number): Verdict {
+/** The flow's next step on your turn (core/work/flow.ts), as a sentence; null when it says nothing new. */
+const FLOW_SAY: Record<string, string> = {
+  'read brief': 'The brief is ready. Read it.',
+  'review result': 'Junior finished. Review what it did.',
+  'accept the result': 'Junior’s team finished. Accept the result.',
+  'answer Junior': 'Junior asked you something in its chat.',
+  'answer the session': 'Junior asked you something in its chat.',
+  'answer the goal': 'Junior asked you something about the goal.',
+  'approve the team': 'Junior’s team waits for your OK to start.',
+  'approve the step': 'A team step waits for your OK.',
+  'resume the team': 'Junior’s team is paused. Resume it.',
+  'review the plan': 'Junior’s plan waits for your review.',
+  merge: 'Approved. Merge it.',
+  'fix CI': 'CI is failing.',
+  'resolve conflicts': 'It conflicts with its base branch.',
+}
+/** Moves you make in Junior's chat or team run: Sessions is where you make them. */
+const IN_SESSIONS = /answer|review result|accept|team|step/
+
+/** Chats dispatched on the item (not brief runs): how many, and how many are mid-turn. */
+export type VerdictChats = { total: number; running: number }
+
+export function verdictOf(item: VerdictItem, tasks: readonly VerdictTask[], held: number, chats: VerdictChats = { total: 0, running: 0 }): Verdict {
   const waiting = tasks.filter((t) => t.state === 'waiting')
   const running = tasks.filter((t) => t.owner === 'junior' && t.state === 'running')
-  const busy = running.length > 0 || tasks.some((t) => t.owner === 'junior' && t.state === 'queued') || item.flow?.turn === 'ai'
-  const handedOff = tasks.some((t) => t.owner === 'junior') || item.flow?.turn === 'ai'
+  const busy = running.length > 0 || chats.running > 0 || tasks.some((t) => t.owner === 'junior' && t.state === 'queued') || item.flow?.turn === 'ai'
+  const handedOff = tasks.some((t) => t.owner === 'junior') || chats.total > 0 || item.flow?.turn === 'ai'
   const base = { handedOff }
 
   if (item.status === 'done' || item.status === 'archived')
@@ -94,6 +118,19 @@ export function verdictOf(item: VerdictItem, tasks: readonly VerdictTask[], held
       return { ...base, turn: 'you', needs, say: held === 1 ? 'One send waits for your OK.' : `${count(held)} sends wait for your OK.`, sub: rest, tab: 'needs' }
     return { ...base, turn: 'you', needs, say: needs === 1 ? 'One thing needs your call.' : `${count(needs)} things need your call.`, sub: rest, tab: 'needs' }
   }
+
+  const next = item.flow?.turn === 'me' ? item.flow.next : undefined
+  const flowSay = next ? FLOW_SAY[next] : undefined
+  // A question or an OK Junior waits on beats "Junior is on it": its chat runs, but it's stopped on you.
+  if (flowSay && (!busy || /^(answer|approve|resume)/.test(next!)))
+    return {
+      ...base,
+      turn: 'you',
+      needs: handedOff ? 0 : 1,
+      say: flowSay,
+      sub: handedOff ? (item.flow?.broken ? `${item.flow.broken[0]!.toUpperCase()}${item.flow.broken.slice(1)}.` : 'Nothing else is moving.') : 'Hand it to Junior, or do it yourself.',
+      tab: handedOff && IN_SESSIONS.test(next!) ? 'sessions' : 'needs',
+    }
 
   if (busy)
     return {

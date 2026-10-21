@@ -14,7 +14,7 @@ const todo: VerdictItem = { kind: 'manual', source: 'manual', author: '', status
 const jr = (state: VerdictTask['state'], step = 'fix-thread', title = 'Fix Bugbot comment on api.ts'): VerdictTask => ({ owner: 'junior', state, step, title })
 const you = (step: string, title = 'Send reply to Niraj'): VerdictTask => ({ owner: 'you', state: 'waiting', step, title })
 
-type Row = [name: string, item: VerdictItem, tasks: VerdictTask[], held: number, want: Partial<Verdict>]
+type Row = [name: string, item: VerdictItem, tasks: VerdictTask[], held: number, want: Partial<Verdict>, chats?: { total: number; running: number }]
 
 const ROWS: Row[] = [
   // #3235, the three states of the mockup
@@ -43,11 +43,19 @@ const ROWS: Row[] = [
     { turn: 'junior', handedOff: true, tab: 'sessions', sub: 'You’ll hear from it if something needs you.' }],
   ['Junior finished, nothing waits', pr, [jr('done'), jr('failed')], 0,
     { turn: 'idle', say: 'Junior’s done for now. Nothing needs you.', tab: 'sessions' }],
+  // chats dispatched on the item count as handing it off
+  ['to-do: a team ran on it, brief ready', { ...todo, flow: { stage: 'ready', turn: 'me', next: 'read brief', since: 0 } }, [], 0,
+    { turn: 'you', handedOff: true, needs: 0, say: 'The brief is ready. Read it.', sub: 'Nothing else is moving.', tab: 'needs' }, { total: 2, running: 0 }],
+  ['to-do: a chat mid-turn', todo, [], 0, { turn: 'junior', handedOff: true, tab: 'sessions' }, { total: 1, running: 1 }],
+  ['to-do: Junior’s chat asked you', { ...todo, flow: { stage: 'working', turn: 'me', next: 'answer the session', since: 0 } }, [], 0,
+    { say: 'Junior asked you something in its chat.', tab: 'sessions' }, { total: 1, running: 1 }],
+  ['own PR, CI red, nobody watching', { ...pr, flow: { stage: 'review', turn: 'me', next: 'fix CI', broken: 'CI failing', since: 0 } }, [], 0,
+    { say: 'CI is failing.', needs: 1, sub: 'Hand it to Junior, or do it yourself.', tab: 'needs' }],
 ]
 
-for (const [name, item, tasks, held, want] of ROWS) {
+for (const [name, item, tasks, held, want, chats] of ROWS) {
   test(`verdict: ${name}`, () => {
-    const got = verdictOf(item, tasks, held)
+    const got = verdictOf(item, tasks, held, chats)
     for (const [k, v] of Object.entries(want)) assert.deepEqual(got[k as keyof Verdict], v, `${name}: ${k}`)
   })
 }
