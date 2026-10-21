@@ -18,10 +18,10 @@ export const CARD_LAYOUTS: readonly CardLayout[] = ['message', 'email', 'ticket'
 
 /**
  * How one field edits. line: one line of text · text / markdown: a text box ·
- * number · boolean · json: an object or a list, as JSON · a list: one of a
+ * list: a list of words, comma-separated · number · boolean · json: an object or a list, as JSON · a list: one of a
  * fixed set of options (a switch), strings or numbers as the tool takes them.
  */
-export type FieldEdit = 'line' | 'text' | 'markdown' | 'number' | 'boolean' | 'json' | ReadonlyArray<string | number>
+export type FieldEdit = 'line' | 'text' | 'markdown' | 'list' | 'number' | 'boolean' | 'json' | ReadonlyArray<string | number>
 
 export type CardSpec = {
   /** the file's name without `.json`, or the built-in's id: "slack.send_message" */
@@ -54,7 +54,7 @@ export type CardSpec = {
 }
 
 const SPEC_KEYS = ['tool', 'layout', 'kind', 'verb', 'name', 'title', 'target', 'chips', 'subject', 'body', 'edit', 'labels'] as const
-const EDIT_WORDS = ['line', 'text', 'markdown', 'number', 'boolean', 'json'] as const
+const EDIT_WORDS = ['line', 'text', 'markdown', 'list', 'number', 'boolean', 'json'] as const
 
 const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v)
 const isStrList = (v: unknown): v is string[] => Array.isArray(v) && v.every((x) => typeof x === 'string' && x.length > 0)
@@ -160,6 +160,9 @@ const BODY_KEYS = ['text', 'body', 'message', 'markdown', 'content', 'comment', 
 
 const hasValue = (v: unknown) => v !== undefined && v !== null && !(typeof v === 'string' && !v.trim())
 
+/** A list of plain words (labels, assignees): edits as one comma-separated line. */
+const isWordList = (v: unknown): v is string[] => Array.isArray(v) && v.every((x) => typeof x === 'string' && !x.includes(','))
+
 /** A fixed set of options, not a word. */
 export const isOptions = (e: FieldEdit): e is ReadonlyArray<string | number> => Array.isArray(e)
 
@@ -169,6 +172,7 @@ export function inferEdit(v: unknown): FieldEdit {
   if (typeof v === 'boolean') return 'boolean'
   if (typeof v === 'string') return v.includes('\n') || v.length > 80 ? 'text' : 'line'
   if (v === null || v === undefined) return 'line'
+  if (isWordList(v)) return 'list'
   return 'json'
 }
 
@@ -239,8 +243,11 @@ export function planCard(tool: string, args: Record<string, unknown>, specs: rea
 
   const target = take(spec ? spec.target : TARGET_KEYS.filter((k) => present(k)).slice(0, 3))
   const chips = take(spec?.chips)
-  const subject = takeOne(spec ? (spec.subject ? [spec.subject] : []) : firstOf(SUBJECT_KEYS.filter((k) => typeof args[k] === 'string')))
-  const body = takeOne(spec ? (spec.body ? [spec.body] : []) : firstOf(BODY_KEYS.filter((k) => typeof args[k] === 'string')))
+  // A spec's subject or body the call doesn't carry falls back to the generic pick, so the text
+  // a person reads never hides under "All fields" because a connector named its arg differently.
+  const byName = (list: readonly string[]) => firstOf(list.filter((k) => typeof args[k] === 'string' && !taken.has(k)))
+  const subject = takeOne(spec?.subject && present(spec.subject) ? [spec.subject] : spec && !spec.subject ? [] : byName(SUBJECT_KEYS))
+  const body = takeOne(spec?.body && present(spec.body) ? [spec.body] : spec && !spec.body ? [] : byName(BODY_KEYS))
   const rest = keys.filter((k) => !taken.has(k))
 
   const edit: Record<string, FieldEdit> = {}
@@ -275,6 +282,7 @@ export function planCard(tool: string, args: Record<string, unknown>, specs: rea
 function editFits(e: FieldEdit, v: unknown): boolean {
   if (isOptions(e)) return v === undefined || v === null || e.some((o) => typeof o === typeof v)
   if (e === 'line' || e === 'text' || e === 'markdown') return v === undefined || v === null || typeof v === 'string'
+  if (e === 'list') return v === undefined || v === null || isWordList(v)
   if (e === 'number') return typeof v === 'number'
   if (e === 'boolean') return typeof v === 'boolean'
   return typeof v === 'object'
@@ -306,6 +314,8 @@ export function applyEdits(
     } else if (e === 'boolean') {
       if (text !== 'true' && text !== 'false') return { ok: false, error: `"${k}" is true or false` }
       next[k] = text === 'true'
+    } else if (e === 'list') {
+      next[k] = text.split(',').map((x) => x.trim()).filter(Boolean)
     } else if (e === 'json') {
       try {
         next[k] = JSON.parse(text) as unknown

@@ -210,3 +210,29 @@ test('numeric options come back as numbers', () => {
   assert.ok(r.ok)
   assert.equal(r.args.priority, 3)
 })
+
+test("a spec's body the call doesn't carry falls back to the generic pick", () => {
+  const args = { channel_id: 'C1', text: 'the reply' }
+  const plan = planCard(SLACK, args, BUILTIN_SPECS)
+  assertEachArgOnce(plan, args)
+  assert.equal(plan.body, 'text')
+  assert.deepEqual(plan.rest, [])
+  // A spec that names no body never gets one.
+  const noBody = planCard('mcp__x__y', { text: 'hi' }, [{ id: 's', tool: 'mcp__x__y', layout: 'ticket', subject: 'title' }])
+  assert.equal(noBody.body, null)
+  assert.equal(noBody.subject, null)
+  assert.deepEqual(noBody.rest, ['text'])
+})
+
+test('a list of words edits as one comma-separated line and comes back a list', () => {
+  const plan = planCard('mcp__x__y', { labels: ['bug', 'payments'], ids: [1, 2] }, [])
+  assert.equal(plan.edit.labels, 'list')
+  assert.equal(plan.edit.ids, 'json', 'numbers stay JSON')
+  assert.equal(editText(['bug', 'payments'], 'list'), 'bug, payments')
+  const r = applyEdits({ labels: ['bug'] }, { labels: 'list' }, { labels: 'bug, p1 ,, ' })
+  assert.ok(r.ok)
+  assert.deepEqual(r.args.labels, ['bug', 'p1'])
+  const same = applyEdits({ labels: ['bug', 'payments'] }, { labels: 'list' }, { labels: 'bug, payments' })
+  assert.ok(same.ok)
+  assert.deepEqual(same.args.labels, ['bug', 'payments'])
+})

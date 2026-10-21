@@ -34,6 +34,7 @@ import {
   whoText,
 } from '../actions.js'
 import { shortAge } from '../itemUi.js'
+import { CardBody, CardEdit } from './CardView.js'
 import type { TranscriptItem } from '../transcript.js'
 
 /** A verb the Actions page's keyboard asks the open card to start (E edit, R reject, B send back). */
@@ -197,10 +198,17 @@ function NeedsYou({ a, mode, setMode, busy, now, run }: { a: ActionView; mode: M
   const expires = a.queue ? a.queue.expiresAt - now : 0
   const expiry = expires > 0 ? `expires ${countdownText(expires)}` : 'expired'
   const meta = `${toolText(a.tool)} · ${originText(a)}`
-  if (mode === 'edit') return <EditArgs args={args} busy={busy} onCancel={() => setMode('view')} onApprove={(next) => void run('approve', { args: next })} />
+  if (mode === 'edit') {
+    const onApprove = (next: Record<string, unknown>) => void run('approve', { args: next })
+    return a.card ? (
+      <CardEdit plan={a.card} args={args} busy={busy} onCancel={() => setMode('view')} onApprove={onApprove} />
+    ) : (
+      <EditArgs args={args} busy={busy} onCancel={() => setMode('view')} onApprove={onApprove} />
+    )
+  }
   return (
     <>
-      <Payload args={args} />
+      {a.card ? <CardBody plan={a.card} args={args} /> : <Payload args={args} />}
       {mode === 'send_back' || mode === 'reject' ? (
         <NoteForm
           key={mode}
@@ -215,7 +223,7 @@ function NeedsYou({ a, mode, setMode, busy, now, run }: { a: ActionView; mode: M
       ) : (
         <div className="averbs">
           <button type="button" className="btn sm primary" disabled={busy} onClick={() => void run('approve')}>
-            <Check size={12} aria-hidden="true" /> Approve
+            <Check size={12} aria-hidden="true" /> {a.card?.verb ?? 'Approve'}
           </button>
           <button type="button" className="btn sm outline" disabled={busy} onClick={() => setMode('edit')}>
             Edit
@@ -452,7 +460,15 @@ function Details({
         )}
         <dt>{command ? 'command' : 'tool'}</dt>
         <dd className="mono">{command ?? toolText(a.tool)}</dd>
-        {!command && Object.keys(args).length > 0 && (
+        {a.card && Object.keys(args).length > 0 && (
+          <>
+            <dt>{a.status === 'succeeded' || a.status === 'attempted' ? 'sent' : 'draft'}</dt>
+            <dd>
+              <CardBody plan={a.card} args={args} />
+            </dd>
+          </>
+        )}
+        {!command && !a.card && Object.keys(args).length > 0 && (
           <>
             <dt>args</dt>
             <dd className="mono">

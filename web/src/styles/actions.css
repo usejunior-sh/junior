@@ -80,6 +80,38 @@
 .anote label { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
 .anote label > span { font-size: 0.9231rem; color: var(--mute); }
 
+/* a send by its card spec (core/cards): the layout the spec picked, args in their slots */
+.cBody {
+  max-height: 360px; overflow: auto; padding: 10px 12px;
+  background: var(--deep); border: 1px solid var(--hair); border-radius: var(--r);
+  font-size: 1rem; line-height: 1.6; color: var(--body); overflow-wrap: anywhere;
+}
+.cBody .cWhere { font-size: 0.8077rem; color: var(--stone); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 4px; }
+.cBody .cTarget { display: flex; flex-wrap: wrap; gap: 2px 14px; margin-bottom: 8px; font-size: 0.8462rem; color: var(--ash); }
+.cBody .cLabel { color: var(--stone); }
+.cBody .cChips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 8px; }
+.cBody .cChip { font-size: 0.8077rem; color: var(--charcoal); background: var(--elev); border: 1px solid var(--hair); border-radius: var(--r-sm); padding: 0 7px; }
+.cBody .cSubject { color: var(--ink); font-weight: 500; margin-bottom: 4px; }
+.cBody .cText { display: block; white-space: pre-wrap; }
+.cBody .cMsg { padding-left: 10px; border-left: 2px solid var(--hair-strong); margin-bottom: 4px; }
+.cBody.l-message .cChips { margin: 8px 0 0; }
+.cBody .cRest { margin-top: 8px; }
+.cBody .cMore, .cEdit .cMore { font-family: var(--mono); font-size: 0.8462rem; }
+.cBody .cRows { margin-top: 8px; }
+.cBody.l-generic .cRows { margin-top: 2px; }
+.cRow { display: contents; }
+.cBody .akv .ajson { max-height: 180px; }
+.akv dd .cBody { max-height: 280px; }
+.aedit input {
+  width: 100%; height: 32px; padding: 0 10px; outline: none;
+  background: var(--deep); border: 1px solid var(--hair-strong); border-radius: var(--r);
+  color: var(--ink); font: inherit; font-size: 1rem;
+}
+.aedit input:focus { border-color: var(--ink); }
+.cEdit .afieldEdit > span { font-size: 0.8077rem; color: var(--ash); }
+.cEdit .segBtn[data-state="checked"] { background: var(--elev); border-color: var(--hair-strong); color: var(--ink); }
+.cEdit .cMore { margin: 2px 0 8px; }
+
 /* the details */
 .akv { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 5px 12px; margin: 0; font-size: 0.9231rem; }
 .akv dt { font-family: var(--mono); font-size: 0.8462rem; color: var(--stone); line-height: 1.6; }
