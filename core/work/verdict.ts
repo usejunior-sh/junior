@@ -34,7 +34,7 @@ export interface Verdict {
   tab: ItemTab
 }
 
-export type VerdictItem = Pick<WorkItem, 'kind' | 'author' | 'source'> & Partial<Pick<WorkItem, 'ask' | 'status'>> & { flow?: ItemFlow }
+export type VerdictItem = Pick<WorkItem, 'kind' | 'author' | 'source'> & Partial<Pick<WorkItem, 'ask' | 'status' | 'handoff'>> & { flow?: ItemFlow }
 export type VerdictTask = Pick<ItemTask, 'owner' | 'state' | 'step' | 'title'>
 
 const WORDS = ['No', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten']
@@ -94,7 +94,7 @@ export function verdictOf(item: VerdictItem, tasks: readonly VerdictTask[], held
   const waiting = tasks.filter((t) => t.state === 'waiting')
   const running = tasks.filter((t) => t.owner === 'junior' && t.state === 'running')
   const busy = running.length > 0 || chats.running > 0 || tasks.some((t) => t.owner === 'junior' && t.state === 'queued') || item.flow?.turn === 'ai'
-  const handedOff = tasks.some((t) => t.owner === 'junior') || chats.total > 0 || item.flow?.turn === 'ai'
+  const handedOff = item.handoff !== undefined || tasks.some((t) => t.owner === 'junior') || chats.total > 0 || item.flow?.turn === 'ai'
   const base = { handedOff }
 
   if (item.status === 'done' || item.status === 'archived')
@@ -148,6 +148,10 @@ export function verdictOf(item: VerdictItem, tasks: readonly VerdictTask[], held
   }
 
   if (!handedOff) return { ...base, turn: 'you', needs: 1, say: ownAsk(item), sub: 'Hand it to Junior, or do it yourself.', tab: 'needs' }
+
+  if (item.handoff === 'paused') return { ...base, turn: 'you', needs: 0, say: 'You paused Junior on this.', sub: 'Nothing of Junior’s runs on it until you resume.', tab: 'activity' }
+  if (item.kind.startsWith('own-pr') && item.handoff === 'on')
+    return { ...base, turn: 'junior', needs: 0, say: 'Junior is babysitting it. Nothing needs you.', sub: 'It fixes red CI and bot comments as they come.', tab: 'sessions' }
 
   return { ...base, turn: 'idle', needs: 0, say: 'Junior’s done for now. Nothing needs you.', sub: 'It picks this up again when something changes.', tab: 'sessions' }
 }

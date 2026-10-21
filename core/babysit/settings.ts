@@ -1,14 +1,13 @@
 /**
- * Babysitting's settings, per workspace (Settings → Babysit): on or off, the
- * model per kind of task, and the money it may spend. First-pass reviews of
- * PRs that ask for yours (core/review) share the runner, so they live here too. Stored in config under
- * `babysit.settings`; anything missing or invalid reads as the default.
+ * Babysitting's settings, per workspace (Settings → Babysit): the model per
+ * kind of task, and the money it may spend. First-pass reviews of PRs that ask
+ * for yours (core/review) share the runner, so they live here too. There is no
+ * on/off: Junior works only the PRs you hand it (core/work/handoff.ts). Stored
+ * in config under `babysit.settings`; anything missing or invalid reads as the
+ * default.
  */
 
 export type BabysitSettings = {
-  enabled: boolean
-  /** a first pass on every PR that asks for your review */
-  reviews: boolean
   models: {
     /** CI and bot-comment fixes */
     fix: string
@@ -32,8 +31,6 @@ export type BabysitSettings = {
 export const BABYSIT_SETTINGS_KEY = 'babysit.settings'
 
 export const DEFAULT_BABYSIT: BabysitSettings = {
-  enabled: false,
-  reviews: false,
   models: { fix: 'opus', rebase: 'sonnet', review: 'sonnet' },
   budget: { perTaskUsd: 3, perDayUsd: 20, perReviewUsd: 1 },
   maxRunning: 2,
@@ -56,8 +53,6 @@ export function babysitSettingsFrom(raw: unknown): BabysitSettings {
   const d = DEFAULT_BABYSIT
   const running = typeof r.maxRunning === 'number' && Number.isInteger(r.maxRunning) && r.maxRunning >= 1 && r.maxRunning <= 4 ? r.maxRunning : d.maxRunning
   return {
-    enabled: typeof r.enabled === 'boolean' ? r.enabled : d.enabled,
-    reviews: typeof r.reviews === 'boolean' ? r.reviews : d.reviews,
     models: { fix: model(m.fix, d.models.fix), rebase: model(m.rebase, d.models.rebase), review: model(m.review, d.models.review) },
     budget: { perTaskUsd: usd(b.perTaskUsd, d.budget.perTaskUsd), perDayUsd: usd(b.perDayUsd, d.budget.perDayUsd), perReviewUsd: usd(b.perReviewUsd, d.budget.perReviewUsd) },
     maxRunning: running,
@@ -76,12 +71,3 @@ export function capFor(step: string | undefined, s: BabysitSettings): number {
   return step === 'review' ? s.budget.perReviewUsd : s.budget.perTaskUsd
 }
 
-/**
- * Whether the runner may start a task with this step: its playbook is
- * switched on. A rule's playbook (answer, investigate, debug-fix) is switched
- * by its rule (core/rules), so its tasks only exist when it is on.
- */
-export function stepOn(step: string | undefined, s: BabysitSettings): boolean {
-  if (isItemStep(step)) return true
-  return step === 'review' ? s.reviews : s.enabled
-}

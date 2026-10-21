@@ -8,9 +8,10 @@ import { EMPTY_RULES, offerFor, ruleFor, ruleLine, rulesConfigFrom, rulesOf, sta
 
 const all = rulesOf(EMPTY_RULES)
 
-test('the built-ins: a question asked gets an answer alone, a bug is offered debug-fix', () => {
+test('the built-ins only suggest: a question asked is offered an answer, a bug debug-fix', () => {
+  assert.ok(all.filter((r) => r.builtin).every((r) => r.start === 'suggest'))
   assert.equal(ruleFor({ reason: 'asked', label: 'question' }, all)?.playbook, 'answer')
-  assert.equal(ruleFor({ reason: 'asked', label: 'question' }, all)?.start, 'auto')
+  assert.equal(ruleFor({ reason: 'asked', label: 'question' }, all)?.start, 'suggest')
   assert.equal(ruleFor({ reason: 'found', label: 'bug' }, all)?.playbook, 'debug-fix')
   assert.equal(ruleFor({ reason: 'found', label: 'bug' }, all)?.start, 'suggest')
   assert.equal(ruleFor({ reason: 'assigned', label: 'improvement' }, all)?.playbook, 'investigate')
@@ -19,13 +20,13 @@ test('the built-ins: a question asked gets an answer alone, a bug is offered deb
   assert.equal(ruleFor({ reason: 'found', label: 'idea' }, all), null)
 })
 
-test('your switches stick; the watch rows follow Settings → Babysit', () => {
-  const cfg = rulesConfigFrom({ builtins: { 'found-bug': { on: false }, 'asked-question': { start: 'suggest' }, 'your-pr': { on: false }, nope: { on: false } } })
-  assert.deepEqual(Object.keys(cfg.builtins).sort(), ['asked-question', 'found-bug'])
-  const rules = rulesOf(cfg, { babysit: false, reviews: true })
+test('your on/off sticks; a stored "auto" on a built-in is dropped; the watch rows stay on', () => {
+  const cfg = rulesConfigFrom({ builtins: { 'found-bug': { on: false }, 'asked-question': { start: 'auto' }, 'your-pr': { on: false }, nope: { on: false } } })
+  assert.deepEqual(cfg.builtins, { 'found-bug': { on: false } })
+  const rules = rulesOf(cfg)
   assert.equal(ruleFor({ reason: 'found', label: 'bug' }, rules), null)
   assert.equal(ruleFor({ reason: 'asked', label: 'question' }, rules)?.start, 'suggest')
-  assert.equal(rules.find((r) => r.id === 'your-pr')?.on, false)
+  assert.equal(rules.find((r) => r.id === 'your-pr')?.on, true)
   assert.equal(rules.find((r) => r.id === 'review-requested')?.on, true)
 })
 
@@ -53,8 +54,8 @@ test('stored rules that are not rules are dropped, never repaired', () => {
   assert.deepEqual(cfg.mine.map((r) => r.id), ['ok'])
 })
 
-test('"only show" turns an auto rule into an offer', () => {
-  const r = ruleFor({ reason: 'asked', label: 'question' }, all)!
+test('"only show" turns an auto rule of yours into an offer', () => {
+  const r: Rule = { id: 'r9', when: { reason: 'asked', label: 'question' }, playbook: 'answer', start: 'auto', on: true, builtin: false }
   assert.equal(startFor(r, 'start'), 'auto')
   assert.equal(startFor(r, 'show'), 'suggest')
 })

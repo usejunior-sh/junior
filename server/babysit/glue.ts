@@ -1,6 +1,7 @@
 /**
  * Babysitting, wired to a workspace: the `gh` source, the settings in config,
- * the repos the workspace tracks, and the minute tick. The rules are in
+ * the repos the workspace tracks, the minute tick, and the one-time carry-over
+ * of the PRs Junior was already working when hand-offs came in. The rules are in
  * core/babysit, the tick's logic in ./watch.ts.
  */
 import { execFile } from 'node:child_process'
@@ -10,6 +11,8 @@ import { learnedFresh, pickReviewer, REVIEWERS_KEY, REVIEWERS_QUERY, reviewersSe
 import { BABYSIT_SETTINGS_KEY, babysitSettingsFrom, type BabysitSettings } from '../../core/babysit/settings.js'
 import { ghLogin } from '../../core/sources/github.js'
 import type { ItemTask } from '../../core/work/tasks.js'
+import { reasonOf } from '../../core/work/fields.js'
+import { legacyHandoffs } from '../../core/work/handoff.js'
 import { log } from '../log.js'
 import { errText } from '../errors.js'
 import { connectedRepos } from '../inbox/sync.js'
@@ -91,7 +94,6 @@ export function babysitDeps(rt: WorkspaceRuntime): BabysitDeps {
   return {
     store: rt.store,
     source: ghBabysitSource,
-    settings: () => babysitSettings(rt),
     repos: () => connectedRepos(rt),
     upsertItem: async (item) => void (await upsertItem(rt, item)),
     reviewerFor: (repo) => reviewerFor(rt, repo),
@@ -100,12 +102,33 @@ export function babysitDeps(rt: WorkspaceRuntime): BabysitDeps {
   }
 }
 
+/** Set once the carry-over ran: it never runs twice. */
+const CARRIED_KEY = 'handoff.carried'
+
+/**
+ * Hand-offs came in: the PRs Junior was already working under the old
+ * switches (babysit on, first-pass reviews on) stay handed off. Once.
+ */
+export async function carryOverHandoffs(rt: WorkspaceRuntime): Promise<void> {
+  if (await rt.store.config.get(CARRIED_KEY)) return
+  const raw = ((await rt.store.config.get<Record<string, unknown>>(BABYSIT_SETTINGS_KEY)) ?? {}) as { enabled?: unknown; reviews?: unknown }
+  const was = { babysit: raw.enabled === true, reviews: raw.reviews === true }
+  if (was.babysit || was.reviews) {
+    const items = (await rt.store.items.list('open')).map((i) => ({ id: i.id, reason: reasonOf(i), ...(i.handoff ? { handoff: i.handoff } : {}) }))
+    const ids = legacyHandoffs(items, await rt.store.tasks.forItems(items.map((i) => i.id)), was)
+    for (const id of ids) await rt.store.items.setFields(id, { handoff: 'on' })
+    if (ids.length) log('info', 'babysit', `kept ${ids.length} PR(s) Junior was already working handed off`, { ids, workspace: rt.meta.id })
+  }
+  await rt.store.config.set(CARRIED_KEY, { at: Date.now() })
+}
+
 /** One pass per workspace at a time. */
 const ticking = new WeakSet<WorkspaceRuntime>()
 export async function babysitTick(rt: WorkspaceRuntime, force = false): Promise<void> {
   if (ticking.has(rt)) return
   ticking.add(rt)
   try {
+    await carryOverHandoffs(rt)
     const r = await babysitTickOp(babysitDeps(rt), Date.now(), force)
     if (r && (r.added || r.stopped)) invalidateInbox(rt)
   } finally {

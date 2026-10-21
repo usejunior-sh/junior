@@ -1,6 +1,7 @@
 import { fetchGitHub, fetchGitHubClosed, listAffiliatedRepos } from '../../core/sources/github.js'
 import { log } from '../log.js'
 import { taskSummary } from '../../core/work/tasks.js'
+import { withJunior } from './junior.js'
 import type { InboxSnapshot } from '../../shared/protocol.js'
 import { buildInbox } from '../../core/work/inbox.js'
 import { startOfDay } from '../../core/work/due.js'
@@ -146,6 +147,7 @@ export function syncInbox(rt: WorkspaceRuntime): Promise<InboxSnapshot> {
         const sum = taskSummary(tasks.get(i.id) ?? [])
         if (sum) i.tasks = sum
       }
+      await withJunior(rt, ranked, tasks)
       const [landedToday, alerts, counts] = await Promise.all([
         rt.store.items.countDoneSince(startOfDay(now)),
         inboxAlerts(rt),

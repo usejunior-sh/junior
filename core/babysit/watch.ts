@@ -18,6 +18,7 @@
 import { MAX_FIX_ATTEMPTS } from '../goals/types.js'
 import { fingerprint, looksFlaky, type PrCheck, type PrThread } from '../goals/shepherd.js'
 import type { NewTask } from '../work/tasks.js'
+import type { PrSeen } from '../work/handoff.js'
 import type { BabysitPr } from './pr.js'
 
 export { MAX_FIX_ATTEMPTS }
@@ -36,6 +37,19 @@ export type BabysitWatch = {
   botPrints: string[]
   /** the threads those came from: one still open is the same comment, not one that came back */
   botThreads?: string[]
+  /** what the last poll saw, for a PR's suggestion; kept whether or not you handed it off */
+  seen?: PrSeen
+}
+
+export function seenOf(pr: BabysitPr): PrSeen {
+  const open = pr.threads.filter((t) => !t.resolved)
+  return {
+    red: pr.checks.filter((c) => c.status === 'failure').map((c) => c.name),
+    bots: open.filter((t) => t.isBot).length,
+    people: open.filter((t) => !t.isBot).length,
+    rebase: pr.mergeable === 'CONFLICTING' ? 'conflict' : pr.behind ? 'behind' : null,
+    draft: pr.isDraft,
+  }
 }
 
 export const newBabysitWatch = (): BabysitWatch => ({ headSha: null, fixes: {}, reruns: [], botPrints: [] })

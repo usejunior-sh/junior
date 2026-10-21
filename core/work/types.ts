@@ -127,6 +127,10 @@ export interface WorkItem {
   playbook?: import('./fields.js').Playbook
   /** plan · decisions, read and written by every task. Never touched by ingestion. */
   memory?: import('./fields.js').ItemMemory
+  /** you handed it to Junior (on) or paused it; absent = not handed off. Never touched by ingestion. */
+  handoff?: import('./fields.js').Handoff
+  /** "Not this one": the `updatedAt` it had then. Suggested again only once it changes. */
+  notNow?: string
 }
 
 export interface ScoredItem extends WorkItem {
@@ -148,4 +152,10 @@ export interface ScoredItem extends WorkItem {
   flow?: import('./flow.js').ItemFlow
   /** its tasks, summed up (tasks.ts); absent when it has none */
   tasks?: import('./tasks.js').TaskSummary
+  /** where it stands with Junior (handoff.ts); absent when it isn't handed off */
+  junior?: import('./handoff.js').JuniorWork
+  /** what Junior could take on it (core/junior/suggest.ts); absent when nothing */
+  suggestion?: import('../junior/suggest.js').Suggestion
+  /** the babysit watch's last read of your PR: what Junior would take on */
+  seen?: import('./handoff.js').PrSeen
 }

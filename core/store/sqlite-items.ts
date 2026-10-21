@@ -187,7 +187,7 @@ export class SqliteWorkItems implements WorkItemStore {
       this.db
         .prepare(
           `UPDATE work_items SET kind = ?, source_updated_at = ?, payload = ?, status = 'open',
-             status_at = ?, returned = 1, updated_at = ? WHERE id = ?`,
+             status_at = ?, snooze_until = NULL, returned = 1, updated_at = ? WHERE id = ?`,
         )
         .run(item.kind, incoming, payloadOf(stored), now, now, item.id)
       this.appendEvent(item.id, now, actor, 'reopened', { sourceUpdatedAt: incoming, ...evDetail(provenance) })
@@ -440,7 +440,7 @@ export class SqliteWorkItems implements WorkItemStore {
 
   async setFields(id: string, patch: ItemFieldsPatch): Promise<void> {
     this.patchPayload(id, (next) => {
-      for (const k of ['reason', 'label', 'parent', 'playbook'] as const) {
+      for (const k of ['reason', 'label', 'parent', 'playbook', 'handoff', 'notNow'] as const) {
         if (!(k in patch)) continue
         const v = patch[k]
         if (v == null) delete next[k]

@@ -42,7 +42,7 @@ import type { Gate, Goal, GoalEvent, GoalLogEntry, GoalState, GoalStepState } fr
 import type { NewJob, NewJobSlotRun, Job, JobRunResult, JobRunStart, JobRunStatus, JobRunTrigger, JobSlotFinish, JobSlotRun } from '../job/types.js'
 import type { TodayDay, TodayEntry } from '../junior/today.js'
 import type { AdvanceApproval } from '../approvals/approvals.js'
-import type { Decision, ItemLabel, Playbook, Reason } from '../work/fields.js'
+import type { Decision, Handoff, ItemLabel, Playbook, Reason } from '../work/fields.js'
 import type { ItemTask, NewTask, TaskState } from '../work/tasks.js'
 
 export type StoredSession = {
@@ -403,7 +403,7 @@ export interface WorkItemStore {
   /** Give every item without a project the one `assign` picks; returns how many were set. */
   backfillProjects(assign: (item: WorkItem) => string | null): Promise<number>
   /**
-   * Set or clear (null) reason · label · parent · playbook (core/work/fields.ts).
+   * Set or clear (null) reason · label · parent · playbook · handoff · notNow (core/work/fields.ts).
    * Absent keys are left alone. Never touched by ingestion.
    */
   setFields(id: string, patch: ItemFieldsPatch): Promise<void>
@@ -418,6 +418,8 @@ export type ItemFieldsPatch = {
   label?: ItemLabel | null
   parent?: string | null
   playbook?: Playbook | null
+  handoff?: Handoff | null
+  notNow?: string | null
 }
 
 /**

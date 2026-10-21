@@ -4,12 +4,14 @@ import { readJsonBody } from './http-util.js'
 import { postReviewOp, reviewAgainOp, reviewHeadOp } from '../review/post.js'
 import { approvePlanOp, changePlanOp, sendReplyOp } from '../playbooks/ops.js'
 import { startPlaybookOp } from '../rules-ops.js'
+import { handoffOp, isHandoffVerb } from '../handoff-ops.js'
 import type { ScopedCtx } from './ctx.js'
 
 /**
  * Tasks on items (POST /api/tasks/<verb> {id, …}), first-pass reviews
  * (post-review, review-again, the head the watch last read), the item playbooks
- * (start one, send its reply, approve or send back its plan) and babysitting's
+ * (start one, send its reply, approve or send back its plan), hand-offs
+ * (start, pause, resume, not this one) and babysitting's
  * settings (GET/POST /api/babysit/settings). Every answer is { ok, … }.
  */
 export async function taskRoutes({ req, url, json, rt }: ScopedCtx): Promise<boolean> {
@@ -41,6 +43,16 @@ export async function taskRoutes({ req, url, json, rt }: ScopedCtx): Promise<boo
       if (typeof body.id !== 'string' || !body.id) throw new Error('id required')
       const task = pb === 'send-reply' ? await sendReplyOp(rt, body.id, body) : pb === 'approve-plan' ? await approvePlanOp(rt, body.id, body) : await changePlanOp(rt, body.id, body)
       json(200, { ok: true, task })
+    } catch (err) {
+      json(400, { ok: false, error: errText(err) })
+    }
+    return true
+  }
+  // Hand-offs (server/handoff-ops.ts): hand an item to Junior, pause it, resume it, or not this one.
+  const ho = /^\/api\/handoff\/(start|pause|resume|not-now)$/.exec(url.pathname)?.[1]
+  if (ho && isHandoffVerb(ho) && req.method === 'POST') {
+    try {
+      json(200, { ok: true, item: await handoffOp(rt, ho, (await readJsonBody(req)) ?? {}) })
     } catch (err) {
       json(400, { ok: false, error: errText(err) })
     }

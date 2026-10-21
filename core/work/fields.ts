@@ -38,6 +38,13 @@ export interface ItemMemory {
   decisions: Decision[]
 }
 
+/**
+ * Whether you handed the item to Junior (Phase 1, artifact f335b876): on, or
+ * paused. Absent = never handed off: Junior suggests, it doesn't touch.
+ */
+export type Handoff = 'on' | 'paused'
+export const isHandoff = (v: unknown): v is Handoff => v === 'on' || v === 'paused'
+
 export const isReason = (v: unknown): v is Reason => typeof v === 'string' && (REASONS as readonly string[]).includes(v)
 export const isItemLabel = (v: unknown): v is ItemLabel => typeof v === 'string' && (ITEM_LABELS as readonly string[]).includes(v)
 export const isPlaybook = (v: unknown): v is Playbook => typeof v === 'string' && (PLAYBOOKS as readonly string[]).includes(v)

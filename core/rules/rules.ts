@@ -4,12 +4,13 @@
  * this label, work it with this playbook", started alone (auto) or offered to
  * you (suggest). Plan artifact cb50520f, "Rules".
  *
- * The built-in rules ship on. You turn them off, move them between auto and
- * suggest, and add your own (in chat, from a Rule card). Junior proposes new
- * ones from its track record (./proposals.ts).
+ * The built-in rules ship on, and only ever suggest (hand-offs, Phase 1,
+ * artifact f335b876): nothing starts until you hand it off. You turn them off,
+ * and add your own (in chat, from a Rule card); a rule you added may start
+ * alone. Junior proposes new ones from its track record (./proposals.ts).
  *
  * Your PRs and review requests are worked by their own watches (core/babysit,
- * core/review) and switched in Settings → Babysit; their rows here only say so.
+ * core/review), only once you hand the PR off; their rows here only say so.
  *
  * Pure and browser-safe.
  */
@@ -27,18 +28,18 @@ export type Rule = {
   on: boolean
   /** triage shipped it; you can switch it, not delete it */
   builtin: boolean
-  /** worked by a watch, switched in Settings → Babysit: listed, not edited here */
+  /** worked by a watch on the PRs you hand off: listed, not edited here */
   watch?: boolean
   /** who added it: you, or Junior's proposal you took */
   by?: 'you' | 'junior'
   createdAt?: number
 }
 
-/** The built-in table (cb50520f "Rules"), on by default. Epics (plan) come later. */
+/** The built-in table (cb50520f "Rules"), on by default, all suggest. Epics (plan) come later. */
 export const BUILTIN_RULES: readonly Rule[] = [
-  { id: 'your-pr', when: { reason: 'your-pr' }, playbook: 'babysit', start: 'auto', on: true, builtin: true, watch: true },
-  { id: 'review-requested', when: { reason: 'review-requested' }, playbook: 'review', start: 'auto', on: true, builtin: true, watch: true },
-  { id: 'asked-question', when: { reason: 'asked', label: 'question' }, playbook: 'answer', start: 'auto', on: true, builtin: true },
+  { id: 'your-pr', when: { reason: 'your-pr' }, playbook: 'babysit', start: 'suggest', on: true, builtin: true, watch: true },
+  { id: 'review-requested', when: { reason: 'review-requested' }, playbook: 'review', start: 'suggest', on: true, builtin: true, watch: true },
+  { id: 'asked-question', when: { reason: 'asked', label: 'question' }, playbook: 'answer', start: 'suggest', on: true, builtin: true },
   { id: 'asked-bug', when: { reason: 'asked', label: 'bug' }, playbook: 'debug-fix', start: 'suggest', on: true, builtin: true },
   { id: 'assigned-bug', when: { reason: 'assigned', label: 'bug' }, playbook: 'debug-fix', start: 'suggest', on: true, builtin: true },
   { id: 'found-bug', when: { reason: 'found', label: 'bug' }, playbook: 'debug-fix', start: 'suggest', on: true, builtin: true },
@@ -51,7 +52,8 @@ export const RULES_KEY = 'rules'
 /** What config holds: your switches on the built-ins, your own rules, and the proposals you said never to. */
 export type RulesConfig = {
   version: 1
-  builtins: Record<string, { on?: boolean; start?: RuleStart }>
+  /** a built-in's on/off; a `start` stored before hand-offs is dropped on read: built-ins only suggest */
+  builtins: Record<string, { on?: boolean }>
   mine: Rule[]
   /** proposal keys (./proposals.ts) Junior must not raise again */
   neverAsk: string[]
@@ -92,23 +94,16 @@ export function rulesConfigFrom(raw: unknown): RulesConfig {
   for (const [id, v] of Object.entries(obj(r.builtins))) {
     if (!BUILTIN_RULES.some((b) => b.id === id && !b.watch)) continue
     const o = obj(v)
-    builtins[id] = { ...(typeof o.on === 'boolean' ? { on: o.on } : {}), ...(isRuleStart(o.start) ? { start: o.start } : {}) }
+    if (typeof o.on === 'boolean') builtins[id] = { on: o.on }
   }
   const mine = (Array.isArray(r.mine) ? r.mine : []).map(ruleFrom).filter((x): x is Rule => x !== null)
   const neverAsk = (Array.isArray(r.neverAsk) ? r.neverAsk : []).filter((x): x is string => typeof x === 'string')
   return { version: 1, builtins, mine, neverAsk }
 }
 
-/**
- * Every rule as it stands: the built-ins with your switches, then yours.
- * `watchOn` says whether Settings → Babysit has each watch on.
- */
-export function rulesOf(cfg: RulesConfig, watchOn: { babysit: boolean; reviews: boolean } = { babysit: true, reviews: true }): Rule[] {
-  const builtins = BUILTIN_RULES.map((b) => {
-    if (b.watch) return { ...b, on: b.playbook === 'babysit' ? watchOn.babysit : watchOn.reviews }
-    const o = cfg.builtins[b.id] ?? {}
-    return { ...b, on: o.on ?? b.on, start: o.start ?? b.start }
-  })
+/** Every rule as it stands: the built-ins with your switches, then yours. The watch rows are always on. */
+export function rulesOf(cfg: RulesConfig): Rule[] {
+  const builtins = BUILTIN_RULES.map((b) => (b.watch ? b : { ...b, on: cfg.builtins[b.id]?.on ?? b.on }))
   return [...builtins, ...cfg.mine]
 }
 

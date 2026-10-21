@@ -5,7 +5,6 @@
  */
 import { randomUUID } from 'node:crypto'
 import {
-  isRuleStart,
   PLAYBOOK_NAME,
   PLAYBOOK_START,
   ruleFor,
@@ -25,7 +24,6 @@ import {
 import { isPlaybook, reasonOf, type Playbook } from '../core/work/fields.js'
 import type { ItemTask, TaskWhy } from '../core/work/tasks.js'
 import type { WorkItem } from '../core/work/types.js'
-import { babysitSettings } from './babysit/glue.js'
 import { errText } from './errors.js'
 import { log } from './log.js'
 import { pumpTasks, tasksChanged } from './tasks/runner.js'
@@ -35,10 +33,9 @@ export async function rulesConfig(rt: WorkspaceRuntime): Promise<RulesConfig> {
   return rulesConfigFrom(await rt.store.config.get(RULES_KEY))
 }
 
-/** Every rule as it stands, the watch rows following Settings → Babysit. */
+/** Every rule as it stands. */
 export async function currentRules(rt: WorkspaceRuntime): Promise<Rule[]> {
-  const [cfg, s] = await Promise.all([rulesConfig(rt), babysitSettings(rt)])
-  return rulesOf(cfg, { babysit: s.enabled, reviews: s.reviews })
+  return rulesOf(await rulesConfig(rt))
 }
 
 async function saveRules(rt: WorkspaceRuntime, cfg: RulesConfig): Promise<Rule[]> {
@@ -80,7 +77,7 @@ export async function startPlaybookOp(rt: WorkspaceRuntime, raw: unknown): Promi
   return t
 }
 
-async function startPlaybook(rt: WorkspaceRuntime, item: WorkItem, playbook: Playbook, why: TaskWhy, whyDetail: string, key: string): Promise<ItemTask | null> {
+export async function startPlaybook(rt: WorkspaceRuntime, item: WorkItem, playbook: Playbook, why: TaskWhy, whyDetail: string, key: string): Promise<ItemTask | null> {
   const start = PLAYBOOK_START[playbook]
   if (!start) return null
   const t = await rt.store.tasks.add(
@@ -88,7 +85,8 @@ async function startPlaybook(rt: WorkspaceRuntime, item: WorkItem, playbook: Pla
     Date.now(),
   )
   if (!t) return null
-  if (item.playbook !== playbook) await rt.store.items.setFields(item.id, { playbook })
+  // started = handed off: the With Junior tab lists it, Pause can stop it
+  await rt.store.items.setFields(item.id, { playbook, handoff: 'on', notNow: null })
   log('info', 'rules', `${why === 'you' ? 'you started' : 'started'} ${PLAYBOOK_NAME[playbook]} on ${item.id}`, { task: t.id, workspace: rt.meta.id })
   tasksChanged(rt)
   void pumpTasks(rt)
@@ -97,20 +95,16 @@ async function startPlaybook(rt: WorkspaceRuntime, item: WorkItem, playbook: Pla
 
 // Settings → Rules, and the Rule card in chat.
 
-/** Switch a built-in on or off, or between starting alone and offering. */
+/** Switch a built-in on or off. Built-ins only suggest: starting alone is for a rule you add. */
 export async function setBuiltinRuleOp(rt: WorkspaceRuntime, raw: unknown): Promise<Rule[]> {
   const r = (raw ?? {}) as Record<string, unknown>
   const id = typeof r.id === 'string' ? r.id : ''
   const cfg = await rulesConfig(rt)
   const rule = (await currentRules(rt)).find((x) => x.id === id)
   if (!rule?.builtin) throw new Error('no such built-in rule')
-  if (rule.watch) throw new Error('this rule is switched in Settings → Babysit')
-  const prev = cfg.builtins[id] ?? {}
-  const next = {
-    ...prev,
-    ...(typeof r.on === 'boolean' ? { on: r.on } : {}),
-    ...(isRuleStart(r.start) ? { start: r.start } : {}),
-  }
+  if (rule.watch) throw new Error('this rule follows the PRs you hand off')
+  if (r.start === 'auto') throw new Error('a built-in rule only suggests: add a rule of your own to start alone')
+  const next = { ...(cfg.builtins[id] ?? {}), ...(typeof r.on === 'boolean' ? { on: r.on } : {}) }
   log('info', 'rules', `built-in ${id}: ${JSON.stringify(next)}`, { workspace: rt.meta.id })
   return saveRules(rt, { ...cfg, builtins: { ...cfg.builtins, [id]: next } })
 }

@@ -78,17 +78,18 @@ export function eventForStatus(status: ItemStatus): ItemEventKind {
 
 /**
  * The reopen rule (deterministic). A run/upsert touches a thread whose item is
- * `done` and the source has a message newer than the moment it was marked done
- * → the item returns to `open`, marked `returned`. Archived items never reopen.
- * Snoozed items are woken by the snooze timer, not this rule. Never decided from
- * an LLM-reported timestamp: the caller passes the stored `done` time.
+ * `done` or `snoozed`, and the source has activity newer than the moment it
+ * was marked so → the item returns to `open`, marked `returned`. A snooze
+ * ends early when something changes (CI, a comment, a ping); otherwise the
+ * snooze timer wakes it. Archived items never reopen. Never decided from an
+ * LLM-reported timestamp: the caller passes the stored status time.
  */
 export function shouldReopen(
   status: ItemStatus,
   incomingSourceUpdatedAt: number,
   statusAt: number,
 ): boolean {
-  return status === 'done' && incomingSourceUpdatedAt > statusAt
+  return (status === 'done' || status === 'snoozed') && incomingSourceUpdatedAt > statusAt
 }
 
 /** Project the stored lifecycle fields onto the rendered item. */

@@ -15,7 +15,8 @@ import { createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk'
 import { z } from 'zod'
 import { taskPrompt, type TaskPr } from '../../core/babysit/brief.js'
 import type { TaskRunScope } from '../../core/babysit/policy.js'
-import { capFor, modelFor, stepOn, type BabysitSettings } from '../../core/babysit/settings.js'
+import { capFor, modelFor, type BabysitSettings } from '../../core/babysit/settings.js'
+import { heldBy } from '../../core/work/handoff.js'
 import { MAX_COMMENTS, passLine, passMarkdown, reviewPrompt, VERDICT_LABEL, type FirstPass, type ReviewCtx } from '../../core/review/brief.js'
 import { POST_REVIEW_STEP, REVIEW_STEP } from '../../core/review/watch.js'
 import { isStale } from '../../core/babysit/watch.js'
@@ -123,8 +124,8 @@ async function pumpOnce(rt: WorkspaceRuntime): Promise<void> {
   const s = await babysitSettings(rt)
   const now = Date.now()
   const spent = await rt.store.tasks.spentSince(dayStart(now))
-  // Only what its playbook's switch allows: babysit off doesn't hold back reviews, and the other way round.
-  const queued = (await rt.store.tasks.inState(['queued'])).filter((t) => t.owner === 'junior' && stepOn(t.step, s))
+  // A task on an item you paused, or a watch's task on a PR you didn't hand off, is stopped when it comes up (startTask).
+  const queued = (await rt.store.tasks.inState(['queued'])).filter((t) => t.owner === 'junior')
   if (queued.length === 0) return
   if (spent >= s.budget.perDayUsd) {
     if (rt.taskBudgetHitOn !== dayKey(now)) {
@@ -210,6 +211,9 @@ async function reviewCtx(pr: { repo: string; number: number }): Promise<ReviewCt
 async function startTask(rt: WorkspaceRuntime, t: ItemTask, s: BabysitSettings): Promise<void> {
   const item = await rt.store.items.get(t.itemId)
   if (!item) return void (await finish(rt, t.id, 'stopped', { error: 'the item is gone' }))
+  // Junior works only what you handed it, and nothing you paused (core/work/handoff.ts).
+  const held = heldBy(t.step, item.handoff)
+  if (held) return void (await finish(rt, t.id, 'stopped', { error: held }))
   if (isItemStep(t.step)) return startItemTask(rt, t, s, item)
   const ref = prOfItem(item.id)
   const review = t.step === REVIEW_STEP
@@ -395,10 +399,10 @@ export function unhandedNote(said: string): string {
 }
 
 /** Stop a task: a running one's session ends, a queued or waiting one never runs. */
-export async function stopTaskOp(rt: WorkspaceRuntime, taskId: string, by: 'you' | 'junior' = 'you'): Promise<ItemTask> {
+export async function stopTaskOp(rt: WorkspaceRuntime, taskId: string, by: 'you' | 'junior' = 'you', error?: string): Promise<ItemTask> {
   const t = await rt.store.tasks.get(taskId)
   if (!t) throw new Error('no such task')
-  const moved = await rt.store.tasks.move(taskId, 'stopped', { error: `stopped by ${by === 'you' ? 'you' : 'Junior'}` }, Date.now())
+  const moved = await rt.store.tasks.move(taskId, 'stopped', { error: error ?? `stopped by ${by === 'you' ? 'you' : 'Junior'}` }, Date.now())
   if (!moved) throw new Error(`a ${t.state} task can't be stopped`)
   const run = [...rt.taskRuns.values()].find((r) => r.taskId === taskId)
   if (run) await endTaskSession(rt, run.sessionId, 'stopped')

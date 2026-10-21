@@ -11,7 +11,6 @@ import path from 'node:path'
 import { openSqliteStore } from '../core/store/sqlite.js'
 import type { Store } from '../core/store/types.js'
 import type { ItemTask } from '../core/work/tasks.js'
-import { DEFAULT_BABYSIT } from '../core/babysit/settings.js'
 import { latestRequest, parseReview, reviewSearch } from '../core/review/pr.js'
 import { reviewTask } from '../core/review/watch.js'
 import { REVIEW_WATCH_KEY, reviewTickOp, type ReviewDeps, type ReviewWatchState } from '../server/review/watch.js'
@@ -58,7 +57,8 @@ test('the task is keyed on the request, or on the head when no request shows', (
   assert.equal(reviewTask({ ...pr!, request: null }).key, 'review:aaa111')
 })
 
-async function harness(fn: (h: { store: Store; deps: ReviewDeps; nodes: unknown[]; added: ItemTask[] }) => Promise<void>) {
+/** `handAll`: every PR is handed off as it is filed, as if you'd pressed First pass on each. */
+async function harness(fn: (h: { store: Store; deps: ReviewDeps; nodes: unknown[]; added: ItemTask[] }) => Promise<void>, handAll = true) {
   const dir = mkdtempSync(path.join(tmpdir(), 'triage-review-'))
   const store = openSqliteStore(path.join(dir, 'triage.db'))
   const nodes: unknown[] = []
@@ -66,9 +66,11 @@ async function harness(fn: (h: { store: Store; deps: ReviewDeps; nodes: unknown[
   const deps: ReviewDeps = {
     store,
     source: { login: async () => 'samar', search: async () => ({ data: { prs: { nodes } } }) },
-    settings: async () => ({ ...DEFAULT_BABYSIT, reviews: true }),
     repos: async () => ['acme/api'],
-    upsertItem: async (item) => void (await store.items.upsert(item)),
+    upsertItem: async (item) => {
+      await store.items.upsert(item)
+      if (handAll && !(await store.items.get(item.id))?.handoff) await store.items.setFields(item.id, { handoff: 'on' })
+    },
     added: (t) => void added.push(t),
     log: () => {},
   }
@@ -80,11 +82,20 @@ async function harness(fn: (h: { store: Store; deps: ReviewDeps; nodes: unknown[
   }
 }
 
-test('off, or no repos: nothing is read', () =>
+test('no repos: nothing is read', () =>
   harness(async ({ deps }) => {
-    assert.equal(await reviewTickOp({ ...deps, settings: async () => DEFAULT_BABYSIT }, T0), null)
     assert.equal(await reviewTickOp({ ...deps, repos: async () => [] }, T0), null)
   }))
+
+test('a request nobody handed off is filed, with no first pass until you hand it off', () =>
+  harness(async ({ store, deps, nodes, added }) => {
+    nodes.push(prNode())
+    assert.deepEqual(await reviewTickOp(deps, T0), { polled: 1, added: 0, stopped: 0 })
+    assert.ok(await store.items.get(ID))
+    assert.equal(added.length, 0)
+    await store.items.setFields(ID, { handoff: 'on' })
+    assert.equal((await reviewTickOp(deps, T0 + 1000, true))?.added, 1)
+  }, false))
 
 test('a request becomes one first pass; reading it again adds nothing; a re-request adds another', () =>
   harness(async ({ store, deps, nodes, added }) => {

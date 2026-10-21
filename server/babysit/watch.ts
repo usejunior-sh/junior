@@ -1,8 +1,10 @@
 /**
  * The babysit watch's tick (core/babysit/watch.ts carries the rules): read all
- * your open PRs in one search, file or refresh their items, and turn what's
- * new on each into tasks. No model runs here. A rerun is the one write, and
- * it's yours to do anyway: a check GitHub already ran, run again.
+ * your open PRs in one search, file or refresh their items, note what each
+ * shows, and on the PRs you handed off turn what's new into tasks
+ * (core/work/handoff.ts). No model runs here. A rerun is the one write, and
+ * it's yours to do anyway: a check GitHub already ran, run again. A PR you
+ * didn't hand off is read, never touched.
  *
  * Every minute while something moves (a check running, a task queued or
  * running), every 5 minutes otherwise. A PR that left the search was merged
@@ -13,8 +15,7 @@ import type { WorkItem } from '../../core/work/types.js'
 import type { ItemTask } from '../../core/work/tasks.js'
 import type { PrCheck } from '../../core/goals/shepherd.js'
 import { babysitSearch, BABYSIT_QUERY, parseBabysit, type BabysitPr } from '../../core/babysit/pr.js'
-import { afterDecision, BABYSIT_FAST_MS, BABYSIT_SLOW_MS, babysitEvents, decide, newBabysitWatch, pollSoon, type BabysitWatch } from '../../core/babysit/watch.js'
-import type { BabysitSettings } from '../../core/babysit/settings.js'
+import { afterDecision, BABYSIT_FAST_MS, BABYSIT_SLOW_MS, babysitEvents, decide, newBabysitWatch, pollSoon, seenOf, type BabysitWatch } from '../../core/babysit/watch.js'
 
 /** The watch's memory, one JSON blob in config: the next poll and each PR's watch, by item id. */
 export const BABYSIT_WATCH_KEY = 'babysit.watch'
@@ -32,7 +33,6 @@ export interface BabysitSource {
 export interface BabysitDeps {
   store: Store
   source: BabysitSource
-  settings(): Promise<BabysitSettings>
   repos(): Promise<string[]>
   /** file or refresh the PR's item (projects assigned like any scan) */
   upsertItem(item: WorkItem): Promise<void>
@@ -45,10 +45,8 @@ export interface BabysitDeps {
 
 export type BabysitTickResult = { polled: number; added: number; reruns: number; stopped: number } | null
 
-/** One pass. Null = not due, off, or no repos. */
+/** One pass. Null = not due, or no repos. */
 export async function babysitTickOp(d: BabysitDeps, now: number, force = false): Promise<BabysitTickResult> {
-  const settings = await d.settings()
-  if (!settings.enabled) return null
   const state = (await d.store.config.get<BabysitWatchState>(BABYSIT_WATCH_KEY)) ?? { nextPollAt: 0, prs: {} }
   if (!force && now < state.nextPollAt) return null
   const repos = await d.repos()
@@ -63,8 +61,9 @@ export async function babysitTickOp(d: BabysitDeps, now: number, force = false):
     await d.upsertItem(item)
     const stored = await d.store.items.get(item.id)
     if (stored && !stored.playbook) await d.store.items.setFields(item.id, { playbook: 'babysit' })
-    let w: BabysitWatch = { ...(state.prs[item.id] ?? newBabysitWatch()), headSha: pr.headSha, headRef: pr.headRef, baseRef: pr.baseRef }
-    w = await actOn(d, item.id, pr, w, out, now)
+    let w: BabysitWatch = { ...(state.prs[item.id] ?? newBabysitWatch()), headSha: pr.headSha, headRef: pr.headRef, baseRef: pr.baseRef, seen: seenOf(pr) }
+    // Read, not worked: only a PR you handed off gets tasks.
+    if (stored?.handoff === 'on') w = await actOn(d, item.id, pr, w, out, now)
     prs[item.id] = w
   }
 

@@ -1,11 +1,11 @@
 /**
- * First-pass reviews, wired to a workspace: the `gh` source, the settings
- * (Settings → Babysit), the repos the workspace tracks, and the minute tick.
+ * First-pass reviews, wired to a workspace: the `gh` source, the repos the
+ * workspace tracks, and the minute tick.
  * The rules are in core/review, the tick's logic in ./watch.ts.
  */
 import { REVIEW_QUERY } from '../../core/review/pr.js'
 import { ghLogin } from '../../core/sources/github.js'
-import { babysitSettings, gh, runTickHooks, taskAdded } from '../babysit/glue.js'
+import { gh, runTickHooks, taskAdded } from '../babysit/glue.js'
 import { connectedRepos } from '../inbox/sync.js'
 import { log } from '../log.js'
 import { upsertItem } from '../settings-ops.js'
@@ -22,7 +22,6 @@ export function reviewDeps(rt: WorkspaceRuntime): ReviewDeps {
   return {
     store: rt.store,
     source: ghReviewSource,
-    settings: () => babysitSettings(rt),
     repos: () => connectedRepos(rt),
     upsertItem: async (item) => void (await upsertItem(rt, item)),
     added: (task) => taskAdded(rt, task, false),
