@@ -1,5 +1,5 @@
 import * as RadioGroup from '@radix-ui/react-radio-group'
-import { CalendarCheck, Check, Folder, GitBranch, ListChecks, LoaderCircle, Plus, Repeat, Target, X } from 'lucide-react'
+import { CalendarCheck, Check, Folder, GitBranch, LoaderCircle, Plus, Repeat, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import {
   MAX_MENTIONS_PER_MESSAGE,
@@ -212,8 +212,8 @@ export function NewSessionComposer({ draft, onChange, onCreate, error, step }: P
   // "New job" / "New goal": a chat with Junior that sets one up. No checkout to pick, it names its own project.
   // Opened as one, or picked from the starters under the box.
   const [job, setJob] = useState(draft.intent === 'job')
-  // Mode (Normal / Plan / Goal / Ultracode): "Turn into a goal" opens on Goal. A goal's first message goes out marked
-  // as one (the server says so to the model), so it carries no "New goal:" prefix of its own.
+  // How it works: Solo or Ultracode. A draft opened as a goal (the engine's, not offered in the UI) still starts as one;
+  // its first message goes out marked (the server says so to the model), so it carries no "New goal:" prefix of its own.
   const [mode, setMode] = useState<SessionMode>(draft.intent === 'goal' ? 'goal' : 'normal')
   const goal = mode === 'goal'
   const prefix = job ? 'New job: ' : ''
@@ -517,7 +517,7 @@ export function NewSessionComposer({ draft, onChange, onCreate, error, step }: P
         {...(job ? {} : { mode, onModeChange: setMode })}
       />
       {onClaude && !draft.itemId && !hasText && !handoff && !making && (
-        // Starters, not modes: each only sets up the box (a job chat, Plan first, a goal) or fills it in.
+        // Starters, not modes: each only sets up the box (a job chat) or fills it in.
         // Any session can still become any of these from what you say.
         <div className="nsStarters">
           <button type="button" className={job ? 'on job' : undefined} aria-pressed={job} onClick={() => {
@@ -525,18 +525,6 @@ export function NewSessionComposer({ draft, onChange, onCreate, error, step }: P
             setMode('normal')
           }}>
             <Repeat size={12} aria-hidden="true" /> Set up a job
-          </button>
-          <button type="button" className={goal ? 'on goal' : undefined} aria-pressed={goal} onClick={() => {
-            setJob(false)
-            setMode(goal ? 'normal' : 'goal')
-          }}>
-            <Target size={12} aria-hidden="true" /> Start a goal
-          </button>
-          <button type="button" className={mode === 'plan' ? 'on plan' : undefined} aria-pressed={mode === 'plan'} onClick={() => {
-            setJob(false)
-            setMode(mode === 'plan' ? 'normal' : 'plan')
-          }}>
-            <ListChecks size={12} aria-hidden="true" /> Plan something
           </button>
           <button type="button" onClick={() => onChange({ text: 'Pick up the next item on today’s plan' })}>
             <CalendarCheck size={12} aria-hidden="true" /> Pick up today’s next item

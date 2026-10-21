@@ -60,7 +60,7 @@ type Props = {
   onProviderChange?: (provider: ProviderId) => void
   onFastModeChange: (fastMode: boolean) => void
   onPermissionModeChange: (mode: PermissionMode) => void
-  /** What Junior does before it starts (Junior decides / Plan first / Goal / Ultracode), new sessions only; with it, Shift+Tab cycles this instead of the permission mode. */
+  /** How a new chat works (Solo / Ultracode), new sessions only; with it, Shift+Tab cycles this instead of the permission mode. */
   mode?: SessionMode
   onModeChange?: (mode: SessionMode) => void
   /** Status chips where the mode picker would be: a running session's "Planning" and "Ultracode". */

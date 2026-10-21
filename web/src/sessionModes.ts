@@ -1,27 +1,24 @@
 /**
- * What Junior does before it starts, as the new-session composer's Mode chip
- * describes it. Separate from Autonomy, which is how much it asks while it
- * works. 'normal' is "Junior decides": it starts small tasks and suggests a
- * plan or a goal when the hand-off looks bigger (shared/triageContext.ts), so
- * the others are overrides, not a choice you must make. Ultracode is the odd
- * one out: not how a job starts but how big jobs run for the whole session
- * (.docs/ultracode.md). Order is the Shift+Tab cycle.
+ * How a new chat works, the one choice New chat offers: Solo (Junior works
+ * alone) or Ultracode (it fans big jobs out to subagents, .docs/ultracode.md).
+ * Chosen once, at the start. "Plan first" is something you say, and the
+ * protocol's 'plan' and 'goal' modes stay for the engine but are not offered
+ * here (Triage for engineers, M0). Separate from Autonomy, which is how much
+ * it asks while it works. Order is the Shift+Tab cycle.
  */
 import type { SessionMode, SessionStatus, SessionSummary } from '../../shared/protocol.js'
 
 export type SessionModeInfo = { id: SessionMode; name: string; description: string }
 
 export const SESSION_MODE_INFO: SessionModeInfo[] = [
-  { id: 'normal', name: 'Junior decides', description: 'Starts small tasks right away. Suggests a plan or a goal when it looks bigger.' },
-  { id: 'plan', name: 'Plan first', description: 'Reads and writes a plan, edits nothing. You approve it, then it codes.' },
-  { id: 'goal', name: 'Goal', description: 'Proposes a team with a done-when. It keeps going, round after round, until it’s done.' },
+  { id: 'normal', name: 'Solo', description: 'Works alone, one step at a time.' },
   { id: 'ultracode', name: 'Ultracode', description: 'Fans big jobs out to many agents at once, then checks their work. Costs more.' },
 ]
 
 export const findSessionMode = (id: SessionMode | undefined): SessionModeInfo => SESSION_MODE_INFO.find((m) => m.id === id) ?? SESSION_MODE_INFO[0]
 
 export function nextSessionMode(id: SessionMode | undefined): SessionMode {
-  const i = SESSION_MODE_INFO.findIndex((m) => m.id === (id ?? 'normal'))
+  const i = Math.max(0, SESSION_MODE_INFO.findIndex((m) => m.id === (id ?? 'normal')))
   return SESSION_MODE_INFO[(i + 1) % SESSION_MODE_INFO.length].id
 }
 

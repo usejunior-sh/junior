@@ -1,20 +1,16 @@
-import { Check, ChevronDown, ListChecks, Signpost, Target, Workflow } from 'lucide-react'
-import { Fragment } from 'react'
+import { Check, ChevronDown, ListChecks, Signpost, Target, User, Workflow } from 'lucide-react'
 import type { SessionMode } from '../../../shared/protocol.js'
-import { usePersona } from '../junior.js'
 import { findSessionMode, SESSION_MODE_INFO } from '../sessionModes.js'
 import { Menu, MenuContent, MenuItem, MenuTrigger } from '../ui/Menu.js'
 
-const ICON: Record<SessionMode, typeof Signpost> = { normal: Signpost, plan: ListChecks, goal: Target, ultracode: Workflow }
+const ICON: Record<SessionMode, typeof Signpost> = { normal: User, plan: ListChecks, goal: Target, ultracode: Workflow }
 
 /**
- * What Junior does before it starts: an override, not a choice: "Junior
- * decides" by default, and a forced Plan first, Goal or Ultracode takes its colour.
- * New sessions only: a running session shows Planning / Ultracode as status chips instead.
+ * How a new chat works: Solo or Ultracode, picked once before the first
+ * message. New sessions only: a running session shows Planning / Ultracode as
+ * status chips instead.
  */
 export function ModePicker({ mode, onChange, disabled }: { mode?: SessionMode; onChange: (mode: SessionMode) => void; disabled?: boolean }) {
-  const persona = usePersona()
-  const name = (m: SessionMode) => (m === 'normal' ? `${persona.name} decides` : findSessionMode(m).name)
   const selected = findSessionMode(mode)
   const Icon = ICON[selected.id]
   return (
@@ -25,11 +21,11 @@ export function ModePicker({ mode, onChange, disabled }: { mode?: SessionMode; o
             type="button"
             className={`chip sessionMode ${selected.id}`}
             disabled={disabled}
-            title={`${name(selected.id)} — ${selected.description}`}
-            aria-label={`Mode: ${name(selected.id)}`}
+            title={`${selected.name} — ${selected.description}`}
+            aria-label={`Way of working: ${selected.name}`}
           >
             <Icon size={13} aria-hidden="true" />
-            <span className="name">{name(selected.id)}</span>
+            <span className="name">{selected.name}</span>
             <ChevronDown size={12} aria-hidden="true" />
           </button>
         </MenuTrigger>
@@ -37,18 +33,14 @@ export function ModePicker({ mode, onChange, disabled }: { mode?: SessionMode; o
           {SESSION_MODE_INFO.map((m) => {
             const I = ICON[m.id]
             return (
-              <Fragment key={m.id}>
-                <MenuItem className={`wrap mode-${m.id}${m.id === selected.id ? ' on' : ''}`} onSelect={() => onChange(m.id)}>
-                  <I className="modeIcon" size={14} aria-hidden="true" />
-                  <span className="text">
-                    <span className="name">{name(m.id)}</span>
-                    <span className="desc">{m.description}</span>
-                  </span>
-                  {m.id === selected.id && <Check className="check" size={14} aria-hidden="true" />}
-                </MenuItem>
-                {/* Junior decides | Plan first, Goal | Ultracode, which changes the whole session */}
-                {(m.id === 'normal' || m.id === 'goal') && <div className="uiMenuSep" />}
-              </Fragment>
+              <MenuItem key={m.id} className={`wrap mode-${m.id}${m.id === selected.id ? ' on' : ''}`} onSelect={() => onChange(m.id)}>
+                <I className="modeIcon" size={14} aria-hidden="true" />
+                <span className="text">
+                  <span className="name">{m.name}</span>
+                  <span className="desc">{m.description}</span>
+                </span>
+                {m.id === selected.id && <Check className="check" size={14} aria-hidden="true" />}
+              </MenuItem>
             )
           })}
         </MenuContent>
