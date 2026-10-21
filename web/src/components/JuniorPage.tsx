@@ -3,8 +3,9 @@
  * hand-offs, Phase 1, artifact f335b876): Junior on the left, the day on the
  * right. The sidebar is Junior's card: Chat (⌘J), right now, what it can see,
  * what it can do, Customize. The right side is a two-tone serif headline over
- * the tabs: Suggested (with what's due and what happened), My PRs, Reviews,
- * With Junior (blocked on you folds in here), Today's plan, Log. Junior works
+ * the tabs: Suggested (with FYI, what's due and what happened), My PRs,
+ * Reviews, People, My work, With Junior (blocked on you folds in here),
+ * Today's plan, Log. Junior works
  * only what you hand it. "What I can do" in full and the persona open in a
  * sheet over the page.
  */
@@ -22,14 +23,14 @@ import { JuniorAbout } from './JuniorAbout.js'
 import { JuniorCanDo } from './JuniorCanDo.js'
 import { JuniorSide } from './JuniorSide.js'
 import { JuniorFirstOpen, JuniorGoals } from './JuniorToday.js'
-import { JuniorMyPrs, JuniorReviews, JuniorSuggested, JuniorWith, useHandoffCounts } from './JuniorHandoff.js'
+import { JuniorMyPrs, JuniorMyWork, JuniorPeople, JuniorReviews, JuniorSuggested, JuniorWith, useHandoffCounts } from './JuniorHandoff.js'
 import { JuniorLog } from './JuniorLog.js'
 import { useLogUnread } from '../juniorLog.js'
 
 /** What the sheet over the page shows: every capability, or the persona. */
 export type JuniorView = 'can' | 'me'
 
-type Tab = 'suggested' | 'prs' | 'reviews' | 'with' | 'goals' | 'log'
+type Tab = 'suggested' | 'prs' | 'reviews' | 'people' | 'work' | 'with' | 'goals' | 'log'
 
 type Props = {
   onNavigate: (hash: string) => void
@@ -117,6 +118,12 @@ export function JuniorPage({ onNavigate, onDispatch, initialTab }: Props) {
                 <Tabs.Trigger className="jrView" value="reviews">
                   Reviews <Count n={counts.reviews} />
                 </Tabs.Trigger>
+                <Tabs.Trigger className="jrView" value="people">
+                  People <Count n={counts.people} />
+                </Tabs.Trigger>
+                <Tabs.Trigger className="jrView" value="work">
+                  My work <Count n={counts.work} />
+                </Tabs.Trigger>
                 <Tabs.Trigger className="jrView" value="with">
                   With Junior {counts.with[1] > 0 ? <span className="c hot">{counts.with[1]} for you</span> : counts.with[0] > 0 && <span className="c">{counts.with[0]}</span>}
                 </Tabs.Trigger>
@@ -136,6 +143,12 @@ export function JuniorPage({ onNavigate, onDispatch, initialTab }: Props) {
             </Tabs.Content>
             <Tabs.Content value="reviews" className="jrPane">
               <JuniorReviews onNavigate={onNavigate} />
+            </Tabs.Content>
+            <Tabs.Content value="people" className="jrPane">
+              <JuniorPeople onNavigate={onNavigate} />
+            </Tabs.Content>
+            <Tabs.Content value="work" className="jrPane">
+              <JuniorMyWork onNavigate={onNavigate} />
             </Tabs.Content>
             <Tabs.Content value="with" className="jrPane">
               <JuniorWith day={day} onNavigate={onNavigate} />

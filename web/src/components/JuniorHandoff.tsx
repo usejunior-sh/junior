@@ -2,10 +2,15 @@
  * The Junior page's hand-off tabs (Phase 1, artifact f335b876): Junior works
  * only what you hand it.
  *
- *   Suggested    what Junior could take, with why: hand off, snooze, or not this one
+ *   Suggested    what Junior could take, with why: hand off, snooze, or not this one;
+ *                then FYI (you were mentioned), what's due and what happened
  *   My PRs       every PR you have open, and whether Junior babysits it
  *   Reviews      every PR asking for your review (a Slack ask folded in), and Junior's first pass
+ *   People       people waiting on you: a question, changes requested
+ *   My work      assigned to you, or anything you started or handed off
  *   With Junior  everything handed off, by where it stands
+ *
+ * Which tab an item sits on is core/junior/sections.ts.
  *
  * Read straight off the inbox snapshot: each item carries its hand-off, its
  * suggestion and where it stands with Junior (server/inbox/junior.ts).
@@ -14,7 +19,8 @@ import { X, ChevronDown } from 'lucide-react'
 import { useEffect, useState, type ReactNode } from 'react'
 import type { JuniorDay, ScoredItem } from '../../../shared/protocol.js'
 import type { Verdict } from '../../../core/review/brief.js'
-import { bySuggestion, SUGGEST_SHOWN, type Suggestion } from '../../../core/junior/suggest.js'
+import { bySuggestion, STARTS, SUGGEST_SHOWN, type Suggestion } from '../../../core/junior/suggest.js'
+import { sectionOf } from '../../../core/junior/sections.js'
 import { PIPELINE_STEPS, type Pipeline } from '../../../core/work/handoff.js'
 import { itemHash } from '../hooks.js'
 import { handoff, snoozeItem, VERB, type HandoffVerb } from '../handoff.js'
@@ -91,7 +97,7 @@ function prSignals(i: ScoredItem): ReactNode[] {
 }
 
 /** "acme/web#3312 · draft · CI red: lint" */
-const joined = (parts: ReactNode[]) => parts.flatMap((p, n) => (n ? [' · ', p] : [p]))
+const joined = (parts: ReactNode[]) => parts.filter((p) => p !== '' && p != null).flatMap((p, n) => (n ? [' · ', p] : [p]))
 
 /** Who else asked for it in Slack: one row per PR, the ask folded in. */
 const slackAsks = (i: ScoredItem) => [...new Set((i.linked ?? []).filter((l) => l.source === 'slack').map((l) => l.author).filter(Boolean))]
@@ -176,6 +182,7 @@ export function JuniorSuggested({ day, onNavigate }: { day: JuniorDay | null } &
           </p>
         )}
       </section>
+      <Fyi items={items} onNavigate={onNavigate} />
       {day && <JuniorBrief day={day} onNavigate={onNavigate} only="rest" />}
     </>
   )
@@ -325,6 +332,128 @@ export function JuniorReviews({ onNavigate }: Nav) {
   )
 }
 
+// ---------- People · My work · FYI ----------
+
+/** Where an item that isn't a PR stands with Junior, in a line and a sub-line. */
+function itemState(i: ScoredItem): { tone?: 'live' | 'need' | 'paused' | 'ok'; label: ReactNode; sub: string } {
+  const w = i.junior
+  if (i.handoff === 'paused') return { tone: 'paused', label: <span className="chip paused">Paused</span>, sub: 'Nothing runs until you resume.' }
+  if (w?.stage === 'needs-you') return { tone: 'need', label: <span className="chip need">Needs you</span>, sub: i.tasks?.next?.title ?? 'Open it to see.' }
+  if (w?.stage === 'working') return { tone: 'live', label: 'Junior is on it', sub: i.tasks?.line ?? 'Working on it.' }
+  if (w) return { tone: 'ok', label: 'Handed in', sub: i.tasks?.lastDone ?? 'Done for now.' }
+  const started = i.flow && (i.flow.stage === 'working' || i.flow.stage === 'review')
+  return { label: 'Not handed off', sub: started ? `You’re on it${i.flow!.next ? ` · next: ${i.flow!.next}` : ''}.` : i.peopleWaiting > 0 ? `Waiting ${shortAge(i.createdAt)}.` : 'Yours.' }
+}
+
+/** The playbook a hand-off starts: the suggestion's, else a reply on Slack, a fix for a bug, else a look into it. */
+const playbookOf = (i: ScoredItem): string => i.suggestion?.playbook ?? (i.reason === 'asked' && i.source === 'slack' ? 'answer' : i.label === 'bug' ? 'debug-fix' : 'investigate')
+
+const ITEM_ORDER = (i: ScoredItem) => (i.junior?.stage === 'needs-you' ? 0 : !i.handoff && !i.junior ? 1 : i.junior?.stage === 'working' ? 2 : i.handoff === 'paused' ? 3 : 4)
+
+/** People and My work: the same rows, hand off · snooze · pause. */
+function ItemList({ section, title, aside, empty, onNavigate }: { section: 'people' | 'work'; title: string; aside: string; empty: string } & Nav) {
+  const items = useItems()
+  const { busy, error, act } = useAct()
+  const rows = items.filter((i) => sectionOf(i) === section).sort((a, b) => ITEM_ORDER(a) - ITEM_ORDER(b) || b.score - a.score)
+  return (
+    <section aria-label={title}>
+      <h2 className="jrLh">
+        {title} <span className="n">{rows.length}</span>
+        <span className="aside">{aside}</span>
+      </h2>
+      {rows.length === 0 ? (
+        <p className="jrEmpty">{empty}</p>
+      ) : (
+        <div className="hoRows">
+          {rows.map((i) => {
+            const st = itemState(i)
+            const handed = !!i.handoff || !!i.junior
+            const pb = playbookOf(i)
+            return (
+              <Row
+                key={i.id}
+                item={i}
+                lead={<Dot {...(st.tone ? { tone: st.tone } : {})} />}
+                meta={joined([refOf(i), ...(i.author ? [i.author] : []), ...(i.label ? [i.label] : []), `${shortAge(i.updatedAt)} ago`])}
+                mid={
+                  i.suggestion ? (
+                    <span className="would">
+                      <span className="l">{i.suggestion.head}</span>
+                      {i.suggestion.would}
+                    </span>
+                  ) : (
+                    <span className={`state${handed ? '' : ' off'}`}>
+                      {st.label}
+                      <span className="sub">{st.sub}</span>
+                    </span>
+                  )
+                }
+                onNavigate={onNavigate}
+              >
+                {i.handoff === 'paused' ? (
+                  <button type="button" className="btn xs" disabled={busy === i.id} onClick={() => act('resume', i.id)}>
+                    Resume
+                  </button>
+                ) : i.junior?.stage === 'working' ? (
+                  <button type="button" className="btn xs" disabled={busy === i.id} onClick={() => act('pause', i.id)}>
+                    Pause
+                  </button>
+                ) : handed ? (
+                  <button type="button" className={`btn xs${i.junior?.stage === 'needs-you' ? ' primary' : ''}`} onClick={() => onNavigate(itemHash(i.id))}>
+                    Open
+                  </button>
+                ) : (
+                  <>
+                    <button type="button" className={`btn xs${i.suggestion ? ' primary' : ''}`} title={STARTS[pb as keyof typeof STARTS]?.would} disabled={busy === i.id} onClick={() => act('start', i.id, pb)}>
+                      Hand off
+                    </button>
+                    <SnoozeButton item={i} />
+                  </>
+                )}
+              </Row>
+            )
+          })}
+        </div>
+      )}
+      <Err error={error} />
+    </section>
+  )
+}
+
+export const JuniorPeople = ({ onNavigate }: Nav) => (
+  <ItemList section="people" title="People waiting on you" aside="questions and asks to you" empty="Nobody is waiting on you." onNavigate={onNavigate} />
+)
+
+export const JuniorMyWork = ({ onNavigate }: Nav) => (
+  <ItemList section="work" title="My work" aside="assigned to you, or started" empty="Nothing assigned to you or started. Your backlog is in the inbox." onNavigate={onNavigate} />
+)
+
+/** FYI: you were mentioned, nothing is asked. Read it, or snooze it. */
+function Fyi({ items, onNavigate }: { items: ScoredItem[] } & Nav) {
+  const rows = items.filter((i) => sectionOf(i) === 'fyi').sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))
+  if (rows.length === 0) return null
+  return (
+    <section aria-label="FYI">
+      <h2 className="jrLh">
+        FYI <span className="n">{rows.length}</span>
+        <span className="aside">you were mentioned · nothing is asked of you</span>
+      </h2>
+      <div className="hoRows">
+        {rows.slice(0, SUGGEST_SHOWN).map((i) => (
+          <Row key={i.id} item={i} meta={joined([refOf(i), ...(i.author ? [i.author] : []), `${shortAge(i.updatedAt)} ago`])} mid={i.why ? <span className="state off">{i.why}</span> : null} onNavigate={onNavigate}>
+            <SnoozeButton item={i} />
+          </Row>
+        ))}
+        {rows.length > SUGGEST_SHOWN && (
+          <button type="button" className="jrMore" onClick={() => onNavigate('/inbox')}>
+            {rows.length - SUGGEST_SHOWN} more in your inbox
+          </button>
+        )}
+      </div>
+    </section>
+  )
+}
+
 // ---------- With Junior ----------
 
 /** Plan → approve → work → draft PR → babysit, as five bars and a line. */
@@ -426,9 +555,11 @@ export function JuniorWith({ day, onNavigate }: { day: JuniorDay | null } & Nav)
 }
 
 /** The tab counts: [shown, hot]. */
-export function useHandoffCounts(day: JuniorDay | null): { suggested: number; prs: [number, number]; reviews: [number, number]; with: [number, number] } {
+export function useHandoffCounts(day: JuniorDay | null): { suggested: number; prs: [number, number]; reviews: [number, number]; people: [number, number]; work: [number, number]; with: [number, number] } {
   const snap = useInbox()
   const items = snap.items as ScoredItem[]
+  const people = items.filter((i) => sectionOf(i) === 'people')
+  const work = items.filter((i) => sectionOf(i) === 'work')
   const prs = items.filter((i) => i.reason === 'your-pr')
   const reviews = items.filter((i) => i.reason === 'review-requested')
   const mine = items.filter((i) => i.junior)
@@ -436,6 +567,9 @@ export function useHandoffCounts(day: JuniorDay | null): { suggested: number; pr
     suggested: items.filter((i) => i.suggestion).length,
     prs: [prs.length, prs.filter((i) => i.junior?.stage === 'needs-you').length],
     reviews: [reviews.length, reviews.filter((i) => !i.handoff && !i.tasks?.review).length],
+    // people waiting are hot until someone (you or Junior) is on it
+    people: [people.length, people.filter((i) => !i.handoff && !i.junior).length],
+    work: [work.length, work.filter((i) => i.junior?.stage === 'needs-you').length],
     with: [mine.length, mine.filter((i) => i.junior!.stage === 'needs-you').length + (day?.needs.length ?? 0)],
   }
 }

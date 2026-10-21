@@ -58,7 +58,8 @@ export type SuggestInput = {
   rule: { playbook: Playbook | null; start: 'auto' | 'suggest' } | null
 }
 
-const STARTS: Partial<Record<Playbook, { head: string; would: string }>> = {
+/** What each startable playbook would do, as a suggestion says it. */
+export const STARTS: Partial<Record<Playbook, { head: string; would: string }>> = {
   answer: { head: 'I’d draft a reply', would: 'Read the thread and the code, draft a reply for you.' },
   'debug-fix': { head: 'I’d plan a fix', would: 'Find the cause, plan the fix, wait for your OK.' },
   investigate: { head: 'I’d look into it', would: 'Dig in and write up the options.' },

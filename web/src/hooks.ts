@@ -83,7 +83,7 @@ export type Route =
 
 /** The hash for a work item: ids carry `:` `/` `#`, so they travel encoded. */
 /** The Junior page's tabs that have a link of their own. */
-export type JuniorTab = 'prs' | 'reviews' | 'with' | 'plan' | 'log'
+export type JuniorTab = 'prs' | 'reviews' | 'people' | 'work' | 'with' | 'plan' | 'log'
 
 export const itemHash = (id: string) => `/item/${encodeURIComponent(id)}`
 
@@ -92,7 +92,7 @@ function parseRoute(hash: string): Route {
   if (hash === '/junior') return { page: 'junior' }
   // The Actions page folded into Junior's log (M2): its old links open the log.
   if (hash === '/actions') return { page: 'junior', tab: 'log' }
-  const jr = /^\/junior\/(prs|reviews|with|plan|log)$/.exec(hash)?.[1]
+  const jr = /^\/junior\/(prs|reviews|people|work|with|plan|log)$/.exec(hash)?.[1]
   if (jr) return { page: 'junior', tab: jr as JuniorTab }
   if (hash === '/inbox') return { page: 'inbox' }
   if (hash.startsWith('/inbox/')) {

@@ -10,6 +10,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { babysitLine, bySuggestion, suggestionFor, type SuggestInput } from '../core/junior/suggest.js'
+import { sectionOf } from '../core/junior/sections.js'
 import { openSqliteStore } from '../core/store/sqlite.js'
 import { handedOff, heldBy, juniorWork, legacyHandoffs, openedPr, PAUSED_ERROR, prItemIn } from '../core/work/handoff.js'
 import { snoozeClock, snoozeUntil } from '../core/work/snooze.js'
@@ -187,4 +188,15 @@ test('the store keeps a hand-off through ingestion, and wakes a snoozed item tha
     await store.close()
     rmSync(dir, { recursive: true, force: true })
   }
+})
+
+test('the Junior page tab an item sits on: one per reason; a to-do waits in the inbox until started', () => {
+  assert.equal(sectionOf({ reason: 'your-pr' }), 'prs')
+  assert.equal(sectionOf({ reason: 'review-requested' }), 'reviews')
+  assert.equal(sectionOf({ reason: 'asked' }), 'people')
+  assert.equal(sectionOf({ reason: 'mentioned' }), 'fyi')
+  assert.equal(sectionOf({ reason: 'assigned' }), 'work')
+  assert.equal(sectionOf({ reason: 'you-added' }), null)
+  assert.equal(sectionOf({ reason: 'found', handoff: 'on' }), 'work')
+  assert.equal(sectionOf({ reason: 'you-added', flow: { stage: 'working', turn: 'me' } as never }), 'work')
 })
