@@ -430,6 +430,8 @@ export interface ItemTaskStore {
   get(id: string): Promise<ItemTask | null>
   /** One item's tasks, oldest first. */
   list(itemId: string): Promise<ItemTask[]>
+  /** Several items' tasks, oldest first, grouped by item. */
+  forItems(itemIds: readonly string[]): Promise<Map<string, ItemTask[]>>
   /** Every task in these states, oldest first, across items: the runner's queue. */
   inState(states: readonly TaskState[]): Promise<ItemTask[]>
   /** The task with this key on this item, if any. */

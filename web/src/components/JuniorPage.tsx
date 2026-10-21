@@ -21,11 +21,13 @@ import { JuniorBrief } from './JuniorBrief.js'
 import { JuniorCanDo } from './JuniorCanDo.js'
 import { JuniorSide } from './JuniorSide.js'
 import { JuniorBlocked, JuniorFirstOpen, JuniorGoals } from './JuniorToday.js'
+import { JuniorPrs } from './JuniorPrs.js'
+import { useInbox } from '../inboxStore.js'
 
 /** What the sheet over the page shows: every capability, or the persona. */
 export type JuniorView = 'can' | 'me'
 
-type Tab = 'brief' | 'goals' | 'blocked'
+type Tab = 'brief' | 'goals' | 'blocked' | 'prs'
 
 type Props = {
   onNavigate: (hash: string) => void
@@ -109,6 +111,9 @@ export function JuniorPage({ onNavigate, onDispatch }: Props) {
                 <Tabs.Trigger className="jrView" value="blocked">
                   Blocked on you <Count day={day} of="blocked" />
                 </Tabs.Trigger>
+                <Tabs.Trigger className="jrView" value="prs">
+                  My PRs <PrCount />
+                </Tabs.Trigger>
               </Tabs.List>
             </div>
             <Tabs.Content value="brief" className="jrPane">
@@ -119,6 +124,9 @@ export function JuniorPage({ onNavigate, onDispatch }: Props) {
             </Tabs.Content>
             <Tabs.Content value="blocked" className="jrPane">
               {day ? <JuniorBlocked day={day} onNavigate={onNavigate} /> : <Loading />}
+            </Tabs.Content>
+            <Tabs.Content value="prs" className="jrPane">
+              <JuniorPrs onNavigate={onNavigate} />
             </Tabs.Content>
           </Tabs.Root>
         )}
@@ -165,6 +173,15 @@ function Count({ day, of }: { day: JuniorDay | null; of: Tab }) {
   }
   if (of === 'goals') return day.plan.total ? <span className="c">{`${day.plan.done} of ${day.plan.total}`}</span> : null
   return day.needs.length ? <span className="c hot">{day.needs.length}</span> : null
+}
+
+/** The PR tab's count: what needs you on your PRs (orange), else how many are open. */
+function PrCount() {
+  const snap = useInbox()
+  const needs = snap.items.filter((i) => (i.tasks?.needsYou ?? 0) > 0).length
+  if (needs) return <span className="c hot">{needs}</span>
+  const mine = snap.items.filter((i) => i.reason === 'your-pr').length
+  return mine ? <span className="c">{mine}</span> : null
 }
 
 const Loading = () => (

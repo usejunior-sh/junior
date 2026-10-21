@@ -279,3 +279,33 @@
 .sessCard:hover .act .spend { color: var(--ink); }
 .sessCard.run .act .spend { color: var(--blue); }
 
+
+/* ---------- item tasks: a dense ledger, one row per task, no boxes ---------- */
+.taskList { display: flex; flex-direction: column; gap: 2px; }
+.taskList .secLabel { margin-bottom: 4px; }
+.taskRow { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 8px; padding: 7px 8px; border-radius: var(--r-sm); border-top: 1px solid var(--hair-soft); }
+.taskRow:first-of-type { border-top: 0; }
+.taskRow:hover { background: var(--wash-1); }
+.taskRow .mk { font-family: var(--mono); color: var(--ash); text-align: center; line-height: 1.5; }
+.taskRow.st-done .mk { color: var(--green); }
+.taskRow.st-running .mk { color: var(--blue); }
+.taskRow.st-waiting .mk { color: var(--yellow); }
+.taskRow.st-failed .mk { color: var(--red); }
+.taskRow.st-skipped, .taskRow.st-stopped { opacity: 0.6; }
+.taskRow .body { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.taskRow .top { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.taskRow .ti { color: var(--ink); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.taskRow .why { color: var(--ash); font-size: 0.8462rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.taskRow .sw { margin-left: auto; color: var(--ash); font-size: 0.8462rem; font-family: var(--mono); white-space: nowrap; }
+.taskRow.st-waiting .sw, .taskRow.st-failed .sw { color: var(--yellow); }
+.taskRow .out { color: var(--charcoal); font-size: 0.9231rem; }
+.taskRow .out .sha { font-family: var(--mono); color: var(--ash); }
+.taskRow .err { color: var(--yellow); font-size: 0.9231rem; }
+.taskRow.st-failed .err { color: var(--red); }
+.taskRow .ask { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 2px; }
+.taskRow .ask .reviewer { height: 24px; width: 140px; padding: 0 8px; background: var(--elev); border: 1px solid var(--hair-strong); border-radius: var(--r-sm); color: var(--ink); font: inherit; font-size: 0.8462rem; }
+.taskRow .ask .cmds { flex-basis: 100%; font-family: var(--mono); font-size: 0.7692rem; color: var(--ash); overflow-wrap: anywhere; }
+.taskRow .acts { display: flex; align-items: center; gap: 4px; }
+.taskRow .acts:empty { display: none; }
+.taskRow .acts a { color: var(--mute); font-size: 0.8462rem; text-decoration: none; margin-right: 4px; }
+.taskRow .acts a:hover { color: var(--ink); }

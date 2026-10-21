@@ -28,6 +28,7 @@ import { CostBlock } from './item/CostBlock.js'
 import { BriefCard, ItemDetails, ReportCard } from './item/ItemCards.js'
 import { ItemSessions } from './item/ItemSessions.js'
 import { ItemTimeline } from './item/ItemTimeline.js'
+import { ItemTasks } from './item/ItemTasks.js'
 
 type Props = {
   id: string
@@ -596,6 +597,9 @@ export function ItemPage({ id, onDispatch, onNavigate, onDirty }: Props) {
             setOther((o) => (o?.item ? { ...o, item: patch(o.item) } : o))
           }}
         />
+
+        {/* What Junior did, is doing, and waits on you for (core/work/tasks.ts). */}
+        <ItemTasks itemId={item.id} onNavigate={onNavigate} />
 
         {report && <ReportCard report={report} onNavigate={onNavigate} />}
 

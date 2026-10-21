@@ -146,4 +146,6 @@ export interface ScoredItem extends WorkItem {
   linked?: { id: string; title: string; source: WorkSource; url: string; repo: string; author: string }[]
   /** stage and turn (flow.ts): where the item is, and whose move it is */
   flow?: import('./flow.js').ItemFlow
+  /** its tasks, summed up (tasks.ts); absent when it has none */
+  tasks?: import('./tasks.js').TaskSummary
 }

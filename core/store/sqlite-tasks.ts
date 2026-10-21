@@ -98,6 +98,22 @@ export class SqliteItemTasks implements ItemTaskStore {
     return rows.map(toTask)
   }
 
+  async forItems(itemIds: readonly string[]): Promise<Map<string, ItemTask[]>> {
+    const out = new Map<string, ItemTask[]>()
+    // chunks keep under SQLite's bound-parameter limit
+    for (let i = 0; i < itemIds.length; i += 500) {
+      const ids = itemIds.slice(i, i + 500)
+      const rows = this.db
+        .prepare(`SELECT * FROM item_tasks WHERE item_id IN (${ids.map(() => '?').join(', ')}) ORDER BY created_at, rowid`)
+        .all(...ids) as TaskRow[]
+      for (const r of rows) {
+        const t = toTask(r)
+        out.set(t.itemId, [...(out.get(t.itemId) ?? []), t])
+      }
+    }
+    return out
+  }
+
   async inState(states: readonly TaskState[]): Promise<ItemTask[]> {
     if (states.length === 0) return []
     const rows = this.db

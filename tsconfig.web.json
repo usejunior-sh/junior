@@ -35,6 +35,8 @@
     "core/work/asks.ts",
     "core/work/fields.ts",
     "core/work/tasks.ts",
+    "core/babysit/reviewer.ts",
+    "core/babysit/settings.ts",
     "core/work/due.ts",
     "core/work/fade.ts",
     "core/work/flow.ts",

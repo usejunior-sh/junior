@@ -118,3 +118,34 @@ export function progressLine(tasks: readonly ItemTask[]): string | null {
   if (queued) return `${head} · next: ${queued.title}`
   return head
 }
+
+/** What the inbox row and the Junior tab need of an item's tasks. */
+export type TaskSummary = {
+  /** progressLine: "2 of 3 · fixing Bugbot comment" */
+  line: string | null
+  running: boolean
+  queued: number
+  /** tasks waiting on you, and Junior's failures since its last finished task */
+  needsYou: number
+  /** the newest task waiting on you, for its button */
+  next: Pick<ItemTask, 'id' | 'title' | 'step' | 'owner' | 'error'> | null
+  /** the newest done task's line, for "Fix lint ✓" */
+  lastDone: string | null
+}
+
+export function taskSummary(tasks: readonly ItemTask[]): TaskSummary | null {
+  if (tasks.length === 0) return null
+  const lastDoneAt = Math.max(0, ...tasks.filter((t) => t.state === 'done').map((t) => t.endedAt ?? t.createdAt))
+  const waiting = tasks.filter((t) => t.state === 'waiting')
+  const failed = tasks.filter((t) => t.state === 'failed' && t.createdAt > lastDoneAt)
+  const asks = [...waiting, ...failed].sort((a, b) => b.createdAt - a.createdAt)
+  const done = [...tasks].reverse().find((t) => t.state === 'done')
+  return {
+    line: progressLine(tasks),
+    running: tasks.some((t) => t.state === 'running'),
+    queued: tasks.filter((t) => t.state === 'queued' && t.owner === 'junior').length,
+    needsYou: asks.length,
+    next: asks[0] ? { id: asks[0].id, title: asks[0].title, owner: asks[0].owner, ...(asks[0].step ? { step: asks[0].step } : {}), ...(asks[0].error ? { error: asks[0].error } : {}) } : null,
+    lastDone: done ? `${done.title} \u2713${done.output?.summary ? ` · ${done.output.summary}` : ''}` : null,
+  }
+}

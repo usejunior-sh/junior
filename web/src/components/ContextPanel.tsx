@@ -300,9 +300,11 @@ export function SessionsPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentId])
 
-  const pinned = sessions.filter((s) => s.pinned)
-  const rest = sessions.filter((s) => !s.pinned)
-  const running = sessions.filter(isWorking).length
+  // Junior's task sessions (one per babysit fix) live on their item's page, not here, unless open.
+  const listed = sessions.filter((s) => s.kind !== 'task' || s.id === currentId)
+  const pinned = listed.filter((s) => s.pinned)
+  const rest = listed.filter((s) => !s.pinned)
+  const running = listed.filter(isWorking).length
 
   const row = (s: SessionSummary) => (
     <SessionRow

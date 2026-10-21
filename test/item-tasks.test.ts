@@ -12,7 +12,7 @@ import { openSqliteStore } from '../core/store/sqlite.js'
 import type { Store } from '../core/store/types.js'
 import type { WorkItem } from '../core/work/types.js'
 import { memoryBlock, reasonOf } from '../core/work/fields.js'
-import { canMove, progressLine, type ItemTask } from '../core/work/tasks.js'
+import { canMove, progressLine, taskSummary, type ItemTask } from '../core/work/tasks.js'
 import { scoreItem } from '../core/work/score.js'
 
 async function withStore(fn: (store: Store) => Promise<void>) {
@@ -154,4 +154,20 @@ test('memory reads as a prompt section, empty when there is nothing', () => {
   const b = memoryBlock({ plan: 'Keep it green.', decisions: [{ at: Date.UTC(2026, 9, 21), by: 'you', text: 'No force-push.' }] })
   assert.match(b, /### Plan\nKeep it green\./)
   assert.match(b, /- 2026-10-21 \(you\): No force-push\./)
+})
+
+test('the summary: progress, what waits on you, the last thing done', () => {
+  const t = (title: string, state: ItemTask['state'], createdAt: number, over: Partial<ItemTask> = {}): ItemTask => ({ ...task(title, state), id: title, createdAt, ...over })
+  assert.equal(taskSummary([]), null)
+  const s = taskSummary([
+    t('Fix lint', 'failed', 1, { error: 'over budget' }),
+    t('Fix lint', 'done', 2, { endedAt: 5, output: { summary: 'removed the unused import' } }),
+    t('Request anirudha', 'waiting', 6, { owner: 'you', step: 'request-review' }),
+  ])!
+  assert.equal(s.lastDone, 'Fix lint ✓ · removed the unused import')
+  assert.equal(s.needsYou, 1, 'a failure before the last done no longer needs you')
+  assert.deepEqual(s.next, { id: 'Request anirudha', title: 'Request anirudha', owner: 'you', step: 'request-review' })
+  assert.equal(s.line, '1 of 3 · waiting on you: Request anirudha')
+  const busy = taskSummary([t('Fix lint', 'running', 1), t('Rebase on main', 'queued', 2)])!
+  assert.deepEqual([busy.running, busy.queued, busy.needsYou], [true, 1, 0])
 })
