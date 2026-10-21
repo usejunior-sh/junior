@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { chatPermissionMode } from '../../core/actions/policy.js'
 import { rm } from 'node:fs/promises'
 import { approve, bookPlanning, cardFrom, type CheckResult, continueGate, editTasks, goalFrom, MAX_RUN_BUDGET_USD, pause as pauseRun, planMessage, recipeFromRun, resume, runSpent, settleRevision, type Action as TeamAction, type TeamRun, turnEnded } from '../../core/teams/engine.js'
 import { agentFrom, detectChecks, isLibraryName } from '../teams.js'
@@ -460,7 +461,7 @@ export async function planTeamOp(rt: WorkspaceRuntime, raw: unknown): Promise<st
   const entry = typeof r.team === 'string' && r.team ? (await rt.teamLibrary.list()).teams.find((t) => t.name === r.team) : null
   if (r.team && !entry?.recipe) throw new Error(entry ? `teams/${entry.name}.md has errors: ${entry.errors.join('; ')}` : `no team named "${r.team}"`)
   const recipe = entry?.recipe ?? null
-  const row = await createSession(rt, `${recipe?.label ?? 'Team'} · ${item.title}`.slice(0, 80), project.path, recipe?.lead.model ?? null, recipe?.lead.effort ?? null, false, null, { spawn: false, projectId: project.id })
+  const row = await createSession(rt, `${recipe?.label ?? 'Team'} · ${item.title}`.slice(0, 80), project.path, recipe?.lead.model ?? null, recipe?.lead.effort ?? null, false, chatPermissionMode('claude'), { spawn: false, projectId: project.id })
   await linkSessionToItem(rt, row.id, item.id, 'dispatch')
   const live = await getOrRevive(rt, row.id)
   if (!live) throw new Error('could not start the lead session')

@@ -5,11 +5,9 @@ import type { SystemStatus, SystemResponse } from '../../../../shared/protocol.j
 import { modelSupportsFastMode, FAST_MODE_BLURB } from '../../fastMode.js'
 import { SHORTCUTS } from '../../keys.js'
 import { useModels } from '../../models.js'
-import { type SessionDefaults, readSessionDefaults, readAllowNever, writeSessionDefaults, writeAllowNever } from '../../sessionDefaults.js'
+import { type SessionDefaults, readSessionDefaults, writeSessionDefaults } from '../../sessionDefaults.js'
 import { setSettingsTab } from '../../settings.js'
 import { ModelPopover } from '../ModelPopover.js'
-import { AutonomyPicker } from '../AutonomyPicker.js'
-import { DEFAULT_MODE } from '../../permissionModes.js'
 import type { SystemTab } from '../SystemModal.js'
 import { Loading, Row, Section } from './shared.js'
 
@@ -17,7 +15,6 @@ import { Loading, Row, Section } from './shared.js'
 
 export function SessionsTab() {
   const [d, setD] = useState<SessionDefaults>(() => readSessionDefaults())
-  const [allowNever, setAllowNever] = useState(readAllowNever)
   const models = useModels()
   const fastOk = modelSupportsFastMode(models, d.model)
 
@@ -49,29 +46,13 @@ export function SessionsTab() {
             <Switch.Thumb className="uiSwitchThumb" />
           </Switch.Root>
         </Row>
-        <Row label="Autonomy" hint="When Junior checks in with you in a new session.">
-          <AutonomyPicker mode={d.permissionMode ?? DEFAULT_MODE} onChange={(permissionMode) => update({ permissionMode })} />
-        </Row>
-        <Row label="Allow “Never asks”" hint="Offers the level where Junior runs and sends anything without asking. Off keeps it out of every Autonomy menu.">
-          <Switch.Root
-            className="uiSwitch"
-            checked={allowNever}
-            onCheckedChange={(on) => {
-              writeAllowNever(on)
-              setAllowNever(on)
-            }}
-            aria-label="Allow Never asks"
-          >
-            <Switch.Thumb className="uiSwitchThumb" />
-          </Switch.Root>
-        </Row>
       </Section>
       <Section title="Reset">
-        <Row label="Forget these defaults" hint="New sessions go back to Claude Code’s defaults and ask before commands.">
+        <Row label="Forget these defaults" hint="New sessions go back to Claude Code’s defaults.">
           <button
             type="button"
             className="btn"
-            onClick={() => update({ model: undefined, effort: undefined, fastMode: false, permissionMode: undefined })}
+            onClick={() => update({ model: undefined, effort: undefined, fastMode: false })}
           >
             Reset
           </button>

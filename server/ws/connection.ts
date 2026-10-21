@@ -1,4 +1,5 @@
 import path from 'node:path'
+import { chatPermissionMode } from '../../core/actions/policy.js'
 import http from 'node:http'
 import { WebSocket } from 'ws'
 import { accessOf } from '../remote.js'
@@ -87,7 +88,8 @@ export function handleConnection(ws: WebSocket, req: http.IncomingMessage): void
             msg.model ?? null,
             msg.effort ?? null,
             msg.fastMode === true,
-            msg.permissionMode ?? null,
+            // One policy (core/actions/policy.ts): no level to pick.
+            chatPermissionMode(msg.provider),
             // Plan mode and Ultracode are Claude's; another agent starts normally.
             {
               projectId: project.id,
@@ -157,24 +159,6 @@ export function handleConnection(ws: WebSocket, req: http.IncomingMessage): void
           // Same shape as set_model: the row is what a revival reads, and a
           // live subprocess is switched in place.
           await rt.live.get(row.id)?.setFastMode(row.fastMode)
-          broadcastSessionList(rt)
-          break
-        }
-        case 'set_permission_mode': {
-          const row = rt.rows.get(msg.sessionId)
-          if (!row) break
-          row.permissionMode = msg.mode
-          await rt.store.sessions.setPermissionMode(row.id, msg.mode)
-          // Same shape as set_model: the row is the source of truth for a
-          // revival, and a live subprocess is switched in place where it can
-          // be. Where it cannot (arming a bypass needs a spawn-time flag), the
-          // subprocess is retired so the next turn brings up one that can.
-          const session = rt.live.get(row.id)
-          // Planning, the new level waits for the plan's approval, switching the subprocess now would end plan mode.
-          // (Arming a bypass still needs a fresh subprocess; it comes back up in plan mode.)
-          if (row.planning) {
-            if (session && msg.mode === 'bypassPermissions') session.stop()
-          } else if (session && !(await session.setPermissionMode(msg.mode))) session.stop()
           broadcastSessionList(rt)
           break
         }

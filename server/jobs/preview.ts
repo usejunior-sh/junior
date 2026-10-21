@@ -266,8 +266,8 @@ export async function runJobPreview(rt: WorkspaceRuntime, pv: JobPreview, spec: 
     // (a connector write, an outbound command) is refused and listed instead.
     const fence = previewSpec.veto
     if (fence) {
-      previewSpec.veto = (toolName, input, ctx) => {
-        const d = fence(toolName, input, ctx)
+      previewSpec.veto = async (toolName, input, ctx) => {
+        const d = await fence(toolName, input, ctx)
         if (!d.allow) return d
         const args = isArgsObject(input) ? input : {}
         let sorted = null

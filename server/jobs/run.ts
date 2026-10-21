@@ -148,8 +148,8 @@ export async function runJob(
     // (core/actions/queue.ts). Dry runs (previews) never hold: they record nothing.
     const fence = runSpec.veto
     if (fence) {
-      runSpec.veto = (toolName, input, ctx) => {
-        const d = fence(toolName, input, ctx)
+      runSpec.veto = async (toolName, input, ctx) => {
+        const d = await fence(toolName, input, ctx)
         return d.allow ? holdIfAction(rt, session, toolName, input, ctx) : d
       }
     }

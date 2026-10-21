@@ -1,11 +1,12 @@
 /**
- * Two checks on a shell command, for the Autonomy levels (.docs/junior-goals-teams/modes-autonomy-goals.md):
+ * Two checks on a shell command (one policy, core/actions/policy.ts):
  *
- *   readOnlyCommand     runs alone at "Asks before commands", a short list of
- *                       read verbs, no shell metacharacters at all, so nothing
- *                       can be chained, redirected or substituted onto it
- *   destructiveCommand  still asks at "Asks before sending", work you can't
- *                       get back; every simple command in the line is checked
+ *   readOnlyCommand     runs alone in a session that asks before commands, a
+ *                       short list of read verbs, no shell metacharacters at
+ *                       all, so nothing can be chained, redirected or
+ *                       substituted onto it
+ *   destructiveCommand  still asks in a chat, work you can't get back; every
+ *                       simple command in the line is checked
  *
  * Pure and browser-safe.
  */

@@ -136,8 +136,8 @@ function continueJobRun(rt: WorkspaceRuntime, row: StoredSession, text: string, 
       )
       const fence = spec.veto
       if (!fence) throw new Error('no fence for this job run')
-      spec.veto = (toolName, input, ctx) => {
-        const d = fence(toolName, input, ctx)
+      spec.veto = async (toolName, input, ctx) => {
+        const d = await fence(toolName, input, ctx)
         return d.allow ? holdIfAction(rt, row, toolName, input, ctx) : d
       }
       spec.prompt = frameTeamMessage('triage', text)

@@ -105,8 +105,6 @@ export class LiveSession {
   private modeNote: string | null = null
   /** This turn wrote a skill or agent file, reload them everywhere when it ends. */
   private libraryTouched = false
-  /** Whether this subprocess was spawned able to bypass permission checks. */
-  private readonly bypassArmed: boolean
   /** The agent this session runs on: its own, not the workspace's. */
   readonly provider: Provider
 
@@ -118,7 +116,6 @@ export class LiveSession {
     readonly extras: SessionExtras = {},
   ) {
     this.seq = lastSeq
-    this.bypassArmed = row.permissionMode === 'bypassPermissions'
     this.spawnedUltracode = row.ultracode
     this.costSeeded = resumeSdkSessionId
       ? rt.store.events.read(row.id).then(
@@ -508,12 +505,13 @@ export class LiveSession {
         return Promise.resolve({ behavior: 'allow', updatedInput: toolInput })
       }
     }
-    // The level you picked on the team card. Outbound calls have already met the veto
-    // (held, or refused from the shell), so under `local` what reaches here stays on this
-    // machine: except a connector write nothing recognised as an action, which still asks.
+    // The level on the team card. Outbound calls have already met the veto (held, or
+    // free under the one policy), so what reaches here stays on this machine: except a
+    // connector write nothing recognised as an action, which still asks. `everything`
+    // is read as `local`: a send always waits for you.
     if (run && run.leadSessionId !== this.row.id) {
-      const level = run.card.permissions ?? 'ask'
-      if (level === 'everything' || (level === 'local' && (toolName === 'Bash' || effect !== 'external-write'))) {
+      const level = run.card.permissions ?? 'local'
+      if (level !== 'ask' && (toolName === 'Bash' || effect !== 'external-write')) {
         return Promise.resolve({ behavior: 'allow', updatedInput: toolInput })
       }
     }
@@ -573,11 +571,10 @@ export class LiveSession {
             },
       )
     }
-    // Autonomy (.docs/junior-goals-teams/modes-autonomy-goals.md). Reads and
-    // lookups never ask: 'gated' is "Asks before any change", and the old
-    // 'default' (or no mode) reads the same. The subprocess runs at the SDK
-    // default there, so this is the one gate it can't skip. "Asks before
-    // commands" ('acceptEdits') adds read-only shell; the SDK lets edits through.
+    // The session's mode. Reads and lookups never ask. A chat runs at 'auto' (one
+    // policy, core/actions/policy.ts: the veto has held its sends already); a
+    // Codex chat at 'gated', where this is the one gate it can't skip. A team
+    // worker at 'acceptEdits' adds read-only shell; the SDK lets edits through.
     if (effect === 'read') return Promise.resolve({ behavior: 'allow', updatedInput: toolInput })
     const mode = this.row.permissionMode ?? 'default'
     if ((mode === 'acceptEdits' || mode === 'auto') && toolName === 'Bash' && readOnlyCommand(String(toolInput.command ?? ''))) {
@@ -709,29 +706,6 @@ export class LiveSession {
       this.notice(`Plan approved — kept as ${artifact.path}. Coding at the session's own permission level.`)
     } catch (err) {
       log('warn', 'sessions', `could not save the plan: ${errText(err)}`, { session: this.row.id, workspace: this.rt.meta.id })
-    }
-  }
-
-  /**
-   * Switch how much this session asks, for every turn from here on.
-   *
-   * Returns false when the running subprocess cannot take the switch. The
-   * caller has already persisted it, so the fix is to end this subprocess and
-   * let the next turn revive one built for the new mode. That is the case for
-   * 'bypassPermissions': its opt-in is a spawn-time CLI flag, so a subprocess
-   * started without it can never be talked into bypassing.
-   */
-  async setPermissionMode(mode: PermissionMode): Promise<boolean> {
-    if (mode === 'bypassPermissions' && !this.bypassArmed) return false
-    try {
-      // 'gated' (and 'default') run the subprocess at the SDK's baseline; the
-      // gate lives in requestPermission, which reads the live row's mode. The
-      // row is already updated by the caller, so this switch takes effect at
-      // once without a restart.
-      await this.q.setPermissionMode(mode)
-      return true
-    } catch {
-      return false
     }
   }
 

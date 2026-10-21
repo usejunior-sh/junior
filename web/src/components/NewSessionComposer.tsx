@@ -9,7 +9,6 @@ import {
   type EffortLevel,
   type ImageAttachment,
   type Mention,
-  type PermissionMode,
   type Project,
   type ProjectsResponse,
   type ProviderId,
@@ -19,7 +18,6 @@ import { branchFromTitle, plausibleBranch } from '../../../shared/branch.js'
 import type { Draft } from '../drafts.js'
 import { useCheckouts, useSessions } from '../hooks.js'
 import { readSessionDefaults, writeSessionDefaults } from '../sessionDefaults.js'
-import { DEFAULT_MODE } from '../permissionModes.js'
 import { PromptBox } from './PromptBox.js'
 import { defaultProjectOf } from './ProjectPicker.js'
 import { CheckoutPicker } from './CheckoutPicker.js'
@@ -121,7 +119,6 @@ export type NewSession = {
   model?: string
   effort?: EffortLevel
   fastMode?: boolean
-  permissionMode?: PermissionMode
   /** What Junior does before it starts; absent = normal */
   mode?: SessionMode
   /** The agent the session runs on for life; absent = Claude. */
@@ -249,7 +246,6 @@ export function NewSessionComposer({ draft, onChange, onCreate, error, step }: P
   const [model, setModel] = useState<string | undefined>(defaults.model)
   const [effort, setEffort] = useState<EffortLevel | undefined>(defaults.effort)
   const [fastMode, setFastMode] = useState(defaults.fastMode)
-  const [permissionMode, setPermissionMode] = useState<PermissionMode | undefined>(defaults.permissionMode ?? DEFAULT_MODE)
   // Every draft starts on Claude. The saved defaults are Claude's (its model
   // ids, its fast mode), so they are neither carried into another agent nor
   // overwritten by a pick made there.
@@ -467,7 +463,6 @@ export function NewSessionComposer({ draft, onChange, onCreate, error, step }: P
               model,
               effort,
               fastMode: onClaude && fastMode,
-              permissionMode,
               ...(onClaude && !job && mode !== 'normal' ? { mode } : {}),
               ...(onClaude ? {} : { provider }),
               images,
@@ -492,7 +487,6 @@ export function NewSessionComposer({ draft, onChange, onCreate, error, step }: P
         model={model}
         effort={effort}
         fastMode={fastMode}
-        permissionMode={permissionMode}
         onModelChange={(m, e) => {
           setModel(m)
           setEffort(e)
@@ -509,10 +503,6 @@ export function NewSessionComposer({ draft, onChange, onCreate, error, step }: P
         onFastModeChange={(on) => {
           setFastMode(on)
           writeSessionDefaults({ fastMode: on })
-        }}
-        onPermissionModeChange={(m) => {
-          setPermissionMode(m)
-          writeSessionDefaults({ permissionMode: m })
         }}
         {...(job ? {} : { mode, onModeChange: setMode })}
       />

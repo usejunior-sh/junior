@@ -3,8 +3,8 @@
  * alone) or Ultracode (it fans big jobs out to subagents, .docs/ultracode.md).
  * Chosen once, at the start. "Plan first" is something you say, and the
  * protocol's 'plan' and 'goal' modes stay for the engine but are not offered
- * here (Triage for engineers, M0). Separate from Autonomy, which is how much
- * it asks while it works. Order is the Shift+Tab cycle.
+ * here (Triage for engineers, M0). How much it asks is not a choice: one
+ * policy (core/actions/policy.ts) for every chat. Order is the Shift+Tab cycle.
  */
 import type { SessionMode, SessionStatus, SessionSummary } from '../../shared/protocol.js'
 

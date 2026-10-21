@@ -1,16 +1,13 @@
 import path from 'node:path'
-import { type ClientMessage, type EffortLevel, type ImageAttachment, isEffortLevel, isImageMediaType, isMentionKind, isProviderId, isSessionMode, MAX_IMAGE_BYTES, MAX_IMAGES_PER_MESSAGE, MAX_MENTIONS_PER_MESSAGE, type Mention, type PermissionMode, type QuestionAnswers } from '../../shared/protocol.js'
+import { type ClientMessage, type EffortLevel, type ImageAttachment, isEffortLevel, isImageMediaType, isMentionKind, isProviderId, isSessionMode, MAX_IMAGE_BYTES, MAX_IMAGES_PER_MESSAGE, MAX_MENTIONS_PER_MESSAGE, type Mention, type QuestionAnswers } from '../../shared/protocol.js'
 
 const effort = (v: unknown): EffortLevel | undefined => (isEffortLevel(v) ? v : undefined)
 
-const PERMISSION_MODES: PermissionMode[] = ['default', 'acceptEdits', 'auto', 'bypassPermissions', 'gated']
 
 /**
  * Unrecognized modes fall through to `undefined`, i.e. ask. A frame the
  * server does not understand must never widen what a session may do.
  */
-const permissionMode = (v: unknown): PermissionMode | undefined =>
-  PERMISSION_MODES.includes(v as PermissionMode) ? (v as PermissionMode) : undefined
 
 /**
  * AskUserQuestion answers off the socket: a flat string→string map, or nothing.
@@ -100,7 +97,6 @@ export function parseClientMessage(raw: unknown): ClientMessage | null {
         model: model(m.model),
         effort: effort(m.effort),
         fastMode: m.fastMode === true,
-        permissionMode: permissionMode(m.permissionMode),
         mode: isSessionMode(m.mode) ? m.mode : undefined,
         // An agent this build doesn't know is dropped: the session runs on Claude.
         provider: isProviderId(m.provider) ? m.provider : undefined,
@@ -116,12 +112,6 @@ export function parseClientMessage(raw: unknown): ClientMessage | null {
       return typeof m.sessionId === 'string'
         ? { type: 'set_fast_mode', sessionId: m.sessionId, fastMode: m.fastMode === true }
         : null
-    case 'set_permission_mode': {
-      const mode = permissionMode(m.mode)
-      return typeof m.sessionId === 'string' && mode
-        ? { type: 'set_permission_mode', sessionId: m.sessionId, mode }
-        : null
-    }
     case 'set_session_mode':
       return typeof m.sessionId === 'string' && (m.mode === 'normal' || m.mode === 'plan')
         ? { type: 'set_session_mode', sessionId: m.sessionId, mode: m.mode }

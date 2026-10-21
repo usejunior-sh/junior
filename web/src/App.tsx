@@ -252,7 +252,7 @@ export function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentId, conn, openTab])
 
-  const { respond, sendMessage, setPlanning, setUltracode, setModel, setFastMode, setPermissionMode, interrupt, stopAgent, stopShell, backgroundAgent, messageAgent, renameSession, setPinned, deleteSession, newSession, newSessionIn, discardDraft, syncInbox, openItem } = useSessionActions({ currentId, currentDraftId, navigate, closeTab })
+  const { respond, sendMessage, setPlanning, setUltracode, setModel, setFastMode, interrupt, stopAgent, stopShell, backgroundAgent, messageAgent, renameSession, setPinned, deleteSession, newSession, newSessionIn, discardDraft, syncInbox, openItem } = useSessionActions({ currentId, currentDraftId, navigate, closeTab })
 
   const { newTerminal, newTerminalIn, renameTerminal, closeTerminal, terminalCwd } = useTerminalActions({ closeTab, currentTerminalId, terminals, navigate, current, currentTerminal, currentDraft })
 
@@ -752,7 +752,6 @@ export function App() {
                   fastMode={current.fastMode}
                   fastModeState={current.fastModeState}
                   fastModeDisabledReason={current.fastModeDisabledReason}
-                  permissionMode={current.permissionMode}
                   planning={current.planning}
                   ultracode={current.ultracode}
                   provider={current.provider ?? 'claude'}
@@ -763,7 +762,6 @@ export function App() {
                   onInterrupt={interrupt}
                   onModelChange={setModel}
                   onFastModeChange={setFastMode}
-                  onPermissionModeChange={setPermissionMode}
                 />
                 )}
                 </>

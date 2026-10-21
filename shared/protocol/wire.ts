@@ -153,7 +153,6 @@ export type ClientMessage =
       mentions?: Mention[]
       model?: string
       effort?: EffortLevel
-      permissionMode?: PermissionMode
       /** Plan: start in plan mode. Goal: the first message is a goal. Ultracode: the session runs with ultracode on. Omitted = normal. */
       mode?: SessionMode
       fastMode?: boolean
@@ -166,8 +165,6 @@ export type ClientMessage =
   | { type: 'set_model'; sessionId: string; model?: string; effort?: EffortLevel }
   /** Turn fast mode on or off: mid-session, and for every turn after. */
   | { type: 'set_fast_mode'; sessionId: string; fastMode: boolean }
-  /** Switch how much a session asks: mid-session, and for every turn after. */
-  | { type: 'set_permission_mode'; sessionId: string; mode: PermissionMode }
   /** Plan mode on or off, mid-session. (Goal rides on the message: user_message.mode; Ultracode has set_ultracode.) */
   | { type: 'set_session_mode'; sessionId: string; mode: Exclude<SessionMode, 'goal' | 'ultracode'> }
   /** Ultracode on or off, mid-session, for every turn after. Runs already going carry on. */

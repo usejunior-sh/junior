@@ -57,7 +57,7 @@ export function normalizeRun(run: TeamRun): TeamRun {
   run.card.tasks ??= []
   run.card.decisions ??= []
   // Runs from before the choice existed ran as `ask` does now.
-  run.card.permissions ??= run.state === 'proposed' ? null : 'ask'
+  run.card.permissions ??= 'local'
   run.recipe.permissions ??= null
   run.recipe.fast ??= null
   run.card.fast ??= false
@@ -162,7 +162,8 @@ export function cardFrom(raw: unknown, recipe: TeamRecipe, prev?: TeamCard): Tea
     decisions: strList(r.decisions, 20),
     steps,
     budgetUsd: Number.isFinite(b) && b > 0 ? Math.min(Math.round(b * 100) / 100, MAX_RUN_BUDGET_USD) : recipe.budgetUsd,
-    permissions: isTeamPermissions(r.permissions) ? r.permissions : prev?.permissions ?? recipe.permissions ?? null,
+    // One policy (core/actions/policy.ts): local work runs, sends wait for you, unless the card says ask first.
+    permissions: isTeamPermissions(r.permissions) ? r.permissions : prev?.permissions ?? recipe.permissions ?? 'local',
     fast: typeof r.fast === 'boolean' ? r.fast : prev?.fast ?? recipe.fast ?? false,
     note: typeof r.note === 'string' ? r.note.trim().slice(0, 2000) : '',
   }

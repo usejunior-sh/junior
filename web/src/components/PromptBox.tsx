@@ -8,7 +8,6 @@ import {
   type ImageAttachment,
   type Mention,
   type MentionKind,
-  type PermissionMode,
   type SessionMode,
   type ProviderId,
 } from '../../../shared/protocol.js'
@@ -23,14 +22,12 @@ import {
   useMentions,
   type MentionHit,
 } from '../mentions.js'
-import { nextMode } from '../permissionModes.js'
 import { AttachmentStrip } from './AttachmentStrip.js'
 import { FastModeToggle } from './FastModeToggle.js'
 import { MentionPicker, flatHits } from './MentionPicker.js'
 import { CommandPill } from './CommandPill.js'
 import { SlashPicker } from './SlashPicker.js'
 import { ModelPopover } from './ModelPopover.js'
-import { AutonomyPicker } from './AutonomyPicker.js'
 import { ModePicker } from './ModePicker.js'
 import { nextSessionMode } from '../sessionModes.js'
 
@@ -52,15 +49,13 @@ type Props = {
   fastMode?: boolean
   fastModeState?: FastModeState
   fastModeDisabledReason?: FastModeDisabledReason
-  permissionMode?: PermissionMode
   onModelChange: (model: string | undefined, effort: EffortLevel | undefined) => void
   /** The agent this box sends to; shows the agent rail in the model picker. */
   provider?: ProviderId
   /** A draft can switch agents; a live session's rail is locked (omit this). */
   onProviderChange?: (provider: ProviderId) => void
   onFastModeChange: (fastMode: boolean) => void
-  onPermissionModeChange: (mode: PermissionMode) => void
-  /** How a new chat works (Solo / Ultracode), new sessions only; with it, Shift+Tab cycles this instead of the permission mode. */
+  /** How a new chat works (Solo / Ultracode), new sessions only; with it, Shift+Tab cycles this. */
   mode?: SessionMode
   onModeChange?: (mode: SessionMode) => void
   /** Status chips where the mode picker would be: a running session's "Planning" and "Ultracode". */
@@ -109,12 +104,10 @@ export function PromptBox({
   fastMode,
   fastModeState,
   fastModeDisabledReason,
-  permissionMode,
   onModelChange,
   provider,
   onProviderChange,
   onFastModeChange,
-  onPermissionModeChange,
   mode,
   onModeChange,
   status,
@@ -403,13 +396,12 @@ export function PromptBox({
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault()
                     submit()
-                  } else if (e.key === 'Tab' && e.shiftKey) {
+                  } else if (e.key === 'Tab' && e.shiftKey && modeOn) {
                     // Claude Code's own gesture, and the composer is where the
                     // hands already are, so it lives here rather than in the
                     // global map, which ignores keys typed into a text field.
                     e.preventDefault()
-                    if (modeOn) onModeChange!(nextSessionMode(mode))
-                    else onPermissionModeChange(nextMode(permissionMode, (provider ?? 'claude') === 'claude'))
+                    onModeChange!(nextSessionMode(mode))
                   }
                 }}
               />
@@ -446,7 +438,6 @@ export function PromptBox({
           />
           {modeOn && <ModePicker mode={mode} onChange={onModeChange!} />}
           {status}
-          <AutonomyPicker mode={permissionMode} onChange={onPermissionModeChange} hooks={(provider ?? 'claude') === 'claude'} />
           <span className="spacer" />
           {/* Fast mode is a Claude serving tier; other agents have no such switch. */}
           {(provider ?? 'claude') === 'claude' && (

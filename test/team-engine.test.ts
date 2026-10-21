@@ -506,15 +506,13 @@ test('backfill: a run stored before runs were recorded gets the same runs, place
   )
 })
 
-test('permissions: no run starts until you pick them; the team file can preselect; the lead\'s re-proposal keeps your pick', () => {
+test('permissions: local unless picked (one policy); the team file can preselect; the lead\'s re-proposal keeps your pick', () => {
   const run = runOf(recipeOf('build'), { permissions: undefined })
-  assert.equal(run.card.permissions, null, 'no default: the shipped teams leave it to you')
-  assert.throws(() => approve(run, run.card), /pick what the team may do without asking/)
-  assert.equal(run.state, 'proposed')
+  assert.equal(run.card.permissions, 'local', 'one policy: local work runs, sends wait for you')
   const picked = cardFrom({ ...run.card, permissions: 'ask' }, run.recipe, run.card)
   assert.equal(picked.permissions, 'ask')
   assert.equal(cardFrom({ goal: 'g', criteria: ['c'] }, run.recipe, picked).permissions, 'ask', 'kept across an edit that leaves it out')
-  assert.equal(cardFrom({ goal: 'g', criteria: ['c'], permissions: 'nonsense' }, run.recipe).permissions, null)
+  assert.equal(cardFrom({ goal: 'g', criteria: ['c'], permissions: 'nonsense' }, run.recipe).permissions, 'local')
   const preset = parseRecipe('build', SHIPPED_RECIPES.build.replace(/^budget: .*$/m, (l) => `${l}\npermissions: local`)).recipe!
   assert.equal(preset.permissions, 'local')
   assert.equal(cardFrom({ goal: 'g', criteria: ['c'] }, preset).permissions, 'local')

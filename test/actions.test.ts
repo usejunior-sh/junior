@@ -275,9 +275,9 @@ const ask = (id: string, toolName: string, input: Record<string, unknown>, toolU
 const answer = (id: string, behavior: 'allow' | 'allow_always' | 'deny' | 'expired'): SessionEvent => ({ kind: 'permission_resolved', id, behavior })
 
 test('fold: a PR via Bash — attempted, then succeeded with its link; reads are ignored', () => {
-  const t = tracker({ permissionMode: 'bypassPermissions', itemId: 'github:acme/app#7' })
+  const t = tracker({ permissionMode: 'auto', itemId: 'github:acme/app#7' })
   assert.deepEqual(t.feed(use('r1', 'Read', { file_path: '/x' }), 1), [])
-  const [a] = t.feed(use('t1', 'Bash', { command: 'gh pr create --title "Fix login" --fill' }), 10)
+  const [a] = t.feed(use('t1', 'Bash', { command: 'gh pr create --draft --title "Fix login" --fill' }), 10)
   assert.equal(a.op, 'attempt')
   assert.equal(a.op === 'attempt' && a.record.status, 'attempted')
   assert.equal(a.op === 'attempt' && a.record.id, 's1:t1')
@@ -287,8 +287,8 @@ test('fold: a PR via Bash — attempted, then succeeded with its link; reads are
     status: 'succeeded',
     link: 'https://github.com/acme/app/pull/42',
     error: null,
-    allowedBy: 'mode',
-    allowedDetail: 'autonomy: never asks',
+    allowedBy: 'policy',
+    allowedDetail: 'free: a draft PR',
     settledAt: 20,
   })
 })

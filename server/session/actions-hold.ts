@@ -4,10 +4,13 @@ import type { StoredSession } from '../../core/store/types.js'
 import { type RoleFence, roleFenceDecision } from '../../core/goals/fence.js'
 import { roleWrites } from '../../core/goals/run.js'
 import { goalDir } from '../../core/goals/types.js'
-import type { ToolVeto } from '../providers/types.js'
+import type { ToolVeto, VetoDecision } from '../providers/types.js'
 import { log } from '../log.js'
 import { type ActionMove, canonJson, heldEntry, heldRecord, holdable, isArgsObject, move, queuedMessage, sendDelay } from '../../core/actions/queue.js'
 import { destructiveCommand } from '../../core/actions/commands.js'
+import { type BranchScope, chatBashVerdict, mayBeFree } from '../../core/actions/policy.js'
+import { currentBranch } from '../git.js'
+import { defaultBranch } from '../worktrees.js'
 import { taskRunVerdict } from '../../core/babysit/policy.js'
 import { joinHeldCall, recordFor } from '../../core/actions/track.js'
 import { goalActionHeldOp } from '../goals.js'
@@ -21,12 +24,12 @@ import { errText } from '../errors.js'
 import { invalidateInbox } from '../ws/send.js'
 import { deliverSendBack, dispatchAction } from './actions-send.js'
 
-// Queued actions (core/actions/queue.ts). In a job
-// run or a team worker, a connector call that sorts as an action is held, not
-// run: the agent is told "queued as #a1b2c3", and the call waits on the
-// Actions page for approve / edit / send back / reject. An approved one goes
-// out 15s later through a headless one-tool run fenced to the approved args:
-// the daemon never calls an MCP server itself. Chats keep asking now.
+// Queued actions (core/actions/queue.ts). One policy (core/actions/policy.ts):
+// in a chat, a job run, a team's sessions or a task run, a call that sorts as
+// an action is held, not run: the agent is told "queued as #a1b2c3", and the
+// call waits on a card for approve / edit / send back / reject. An approved
+// one goes out through a headless one-tool run fenced to the approved args:
+// the daemon never calls an MCP server itself.
 
 /** The model that sends approved actions: cheap, and it only copies JSON into one call. */
 export const DISPATCH_MODEL = 'haiku'
@@ -38,21 +41,18 @@ export const isTeamWorker = (rt: WorkspaceRuntime, sessionId: string): boolean =
   return !!run && run.leadSessionId !== sessionId
 }
 
-/**
- * A chat at "Asks before sending" ('auto'): local work runs, sends are held.
- * Read off the live row each call, so switching the level mid-session holds the very next send.
- */
-const chatHoldsSends = (rt: WorkspaceRuntime, row: StoredSession): boolean =>
-  row.provider === 'claude' && row.kind === 'chat' && !teamRunOf(rt, row.id) && (rt.rows.get(row.id) ?? row).permissionMode === 'auto'
+/** Every Claude chat, a team's lead and workers included: local work runs, sends are held. */
+const chatHoldsSends = (row: StoredSession): boolean => row.provider === 'claude' && row.kind === 'chat'
 
-/** Does this session hold its outbound calls for approval? Job runs, team workers, and chats at "Asks before sending" do. */
+/** Does this session hold its outbound calls for approval? Chats, job runs, goal workers and task runs do. */
 const holdsActions = (rt: WorkspaceRuntime, row: StoredSession): boolean =>
-  row.provider === 'claude' &&
-  (row.kind === 'job-run' ||
-    (isTeamWorker(rt, row.id) && teamRunOf(rt, row.id)?.card.permissions !== 'everything') ||
-    (rt.goalRuns.get(row.id)?.role ?? 'lead') !== 'lead' ||
-    rt.taskRuns.has(row.id) ||
-    chatHoldsSends(rt, row))
+  row.provider === 'claude' && (row.kind === 'job-run' || (rt.goalRuns.get(row.id)?.role ?? 'lead') !== 'lead' || rt.taskRuns.has(row.id) || chatHoldsSends(row))
+
+/** The branch a chat's shell is on and the repo's default one: what a free push is judged against. */
+async function branchScope(cwd: string): Promise<BranchScope> {
+  const [current, def] = await Promise.all([currentBranch(cwd), defaultBranch(cwd).catch(() => null)])
+  return { current, defaultBranch: def }
+}
 
 /**
  * The role fence a session runs under (core/goals/fence.ts), or null: a team
@@ -76,11 +76,7 @@ function roleFenceOf(rt: WorkspaceRuntime, row: StoredSession): RoleFence | null
   return { write: writes, role: (worker.agent || 'worker').toLowerCase() }
 }
 
-/**
- * A session's PreToolUse veto: its role fence first, then the hold. None for a
- * session with neither, except a chat, which always gets one: its Autonomy
- * level can change mid-session and the hook is only installed at spawn.
- */
+/** A session's PreToolUse veto: its role fence first, then the hold. None for a session with neither. */
 export function sessionVeto(rt: WorkspaceRuntime, row: StoredSession): { veto?: ToolVeto } {
   const fence = roleFenceOf(rt, row)
   const chat = row.kind === 'chat' && row.provider === 'claude'
@@ -92,9 +88,8 @@ export function sessionVeto(rt: WorkspaceRuntime, row: StoredSession): { veto?: 
         log('info', 'fence', `refused ${toolName} in a read-only session: ${d.reason}`, { session: row.id, workspace: rt.meta.id })
         return d
       }
-      // "Asks before sending" lets Claude's auto mode run local work; a command
-      // that destroys work still comes to you.
-      if (toolName === 'Bash' && chatHoldsSends(rt, row) && isArgsObject(input)) {
+      // Claude's auto mode runs local work; a command that destroys work still comes to you.
+      if (toolName === 'Bash' && chatHoldsSends(row) && isArgsObject(input)) {
         const why = destructiveCommand(String(input.command ?? ''))
         if (why) return { allow: false, ask: true, reason: `This command ${why}, so it needs your OK.` }
       }
@@ -105,18 +100,11 @@ export function sessionVeto(rt: WorkspaceRuntime, row: StoredSession): { veto?: 
 
 /**
  * The veto a holding session gets: an MCP call or a Bash command that sorts
- * as an action is refused with "queued as #…" and filed for approval;
- * except a team worker's outbound shell command, which is refused outright (a
- * team hands work in and you send it); everything else passes. A held command
- * is sent from the session's folder.
+ * as an action is refused with "queued as #…" and filed for approval, unless
+ * the policy makes it free (a push to your own branch, a draft PR);
+ * everything else passes. A held command is sent from the session's folder.
  */
-export function holdIfAction(
-  rt: WorkspaceRuntime,
-  row: StoredSession,
-  toolName: string,
-  input: unknown,
-  ctx?: { toolUseId?: string },
-): { allow: true } | { allow: false; reason: string } {
+export async function holdIfAction(rt: WorkspaceRuntime, row: StoredSession, toolName: string, input: unknown, ctx?: { toolUseId?: string }): Promise<VetoDecision> {
   if (!holdable(toolName) || !holdsActions(rt, row)) return { allow: true }
   const args = isArgsObject(input) ? input : {}
   // A babysit task's shell (core/babysit/policy.ts): pushes to its PR's branch and
@@ -137,20 +125,18 @@ export function holdIfAction(
     }
     if (v.verdict === 'allow') return { allow: true }
   }
-  // A team worker's push, PR or comment from the shell: refused, not filed, a team hands
-  // work in and you send it. (A job's Bash isn't held in this phase: sending needs its folder.)
-  // A chat's is held like any send, and sent from the chat's folder.
-  if (toolName === 'Bash' && !chatHoldsSends(rt, row) && !taskRun) {
-    if (!isTeamWorker(rt, row.id)) return { allow: true }
-    let out
+  // A chat's shell: a push to your own branch and a draft PR run; any other send is held,
+  // and sent from the chat's folder. (A job's Bash isn't held in this phase: sending needs its folder.)
+  if (toolName === 'Bash' && !taskRun) {
+    if (!chatHoldsSends(row)) return { allow: true }
+    const command = String(args.command ?? '')
+    const sort = sortForWorkspace(rt)
     try {
-      out = sortForWorkspace(rt)(toolName, args)
-    } catch {
-      return { allow: true }
+      const scope = mayBeFree(command) ? await branchScope(row.cwd) : { current: null, defaultBranch: null }
+      if (chatBashVerdict(command, scope, (part) => sort('Bash', { command: part })).verdict === 'allow') return { allow: true }
+    } catch (err) {
+      log('warn', 'actions', `could not judge a command against the policy, holding it: ${errText(err)}`, { session: row.id, workspace: rt.meta.id })
     }
-    return out
-      ? { allow: false, reason: `\`${out.summary}\` leaves this machine, and a team never sends anything. Finish your step without it and say in your handoff what should be sent — the user sends it.` }
-      : { allow: true }
   }
   if (!toolName.startsWith('mcp__') && toolName !== 'Bash') return { allow: true }
   let sorted

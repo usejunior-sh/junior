@@ -6,7 +6,6 @@ import type {
   Mention,
   FastModeDisabledReason,
   FastModeState,
-  PermissionMode,
   Project,
   ProviderId,
   ProjectsResponse,
@@ -30,7 +29,6 @@ type Props = {
   fastMode?: boolean
   fastModeState?: FastModeState
   fastModeDisabledReason?: FastModeDisabledReason
-  permissionMode?: PermissionMode
   /** Plan mode is on: Junior plans, edits nothing, until you approve the plan. */
   planning?: boolean
   /** Ultracode is on: big jobs run as Workflow runs across many agents. */
@@ -48,7 +46,6 @@ type Props = {
   onInterrupt: () => void
   onModelChange: (model: string | undefined, effort: EffortLevel | undefined) => void
   onFastModeChange: (fastMode: boolean) => void
-  onPermissionModeChange: (mode: PermissionMode) => void
 }
 
 /**
@@ -66,7 +63,6 @@ export function Composer({
   fastMode,
   fastModeState,
   fastModeDisabledReason,
-  permissionMode,
   planning,
   ultracode,
   provider,
@@ -77,7 +73,6 @@ export function Composer({
   onInterrupt,
   onModelChange,
   onFastModeChange,
-  onPermissionModeChange,
 }: Props) {
   // The unsent draft lives in a per-session store, not local state, so leaving
   // this session for another tab and coming back keeps what you had typed.
@@ -173,11 +168,9 @@ export function Composer({
       fastMode={fastMode}
       fastModeState={fastModeState}
       fastModeDisabledReason={fastModeDisabledReason}
-      permissionMode={permissionMode}
       onModelChange={onModelChange}
       provider={provider}
       onFastModeChange={onFastModeChange}
-      onPermissionModeChange={onPermissionModeChange}
       running={running}
       onInterrupt={onInterrupt}
     />

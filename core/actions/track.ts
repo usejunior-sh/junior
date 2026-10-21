@@ -238,14 +238,15 @@ export class ActionTracker {
     }
   }
 
-  /** You, through a prompt; else the session's mode, a job's grants, a brief's policy, or an allow rule. */
+  /** You, through a prompt; else the one policy (core/actions/policy.ts), a job's grants, a brief's policy, or an allow rule. */
   private allowedBy(p: Pending): [ActionAllowedBy, string | null] {
     if (p.prompt) return ['prompt', p.prompt.behavior === 'allow_always' ? 'always, for this session' : null]
     if (this.ctx.sessionKind === 'job-run') return ['rule', 'the job’s grants']
     if (this.ctx.sessionKind === 'brief') return ['policy', 'brief sessions']
     const mode = this.ctx.permissionMode
-    // Named as the Autonomy chip names the level.
-    if (mode === 'bypassPermissions' || mode === 'auto') return ['mode', mode === 'auto' ? 'autonomy: asks before sending' : 'autonomy: never asks']
+    // A chat's send that ran without a card: the policy made it free.
+    if (mode === 'auto') return ['policy', p.sorted.kind === 'push' ? 'free: a push to your own branch' : p.sorted.kind === 'pr' ? 'free: a draft PR' : 'free']
+    if (mode === 'bypassPermissions') return ['mode', 'never asks']
     return ['rule', mode === 'acceptEdits' ? 'an allow rule (accept-edits mode)' : 'an allow rule']
   }
 }

@@ -43,7 +43,7 @@ async function* sdkTurns(input: AsyncIterable<UserTurn>): AsyncGenerator<SDKUser
 function vetoHook(veto: ToolVeto): HookCallback {
   return async (input, toolUseID) => {
     if (input.hook_event_name !== 'PreToolUse') return {}
-    const d = veto(input.tool_name, input.tool_input, { toolUseId: input.tool_use_id ?? toolUseID })
+    const d = await veto(input.tool_name, input.tool_input, { toolUseId: input.tool_use_id ?? toolUseID })
     if (d.allow) return {}
     return { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: d.ask ? 'ask' : 'deny', permissionDecisionReason: d.reason } }
   }

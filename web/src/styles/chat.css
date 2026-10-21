@@ -219,11 +219,10 @@ button.chip:hover:not(:disabled), .chip[data-state="open"] { color: var(--ink); 
   .cardHead .chip.pick { height: 28px; padding: 0 10px; font-size: 0.9231rem; }
   .cardHead .chip.pick svg { width: 13px; height: 13px; }
   /* A narrow column (a drawer open beside the chat): the knobs on the left shrink and their labels
-     ellipsize (Autonomy's first: its meter still says it), so Fast, Stop and Send stay inside the box. */
+     ellipsize, so Fast, Stop and Send stay inside the box. */
   .statusline { container: composerRow / inline-size; }
-  .statusline > .chip.model, .statusline > .chip.sessionMode, .statusline > .modePicker, .statusline > .permPicker { flex: 0 1 auto; min-width: 0; }
-  .statusline > .modePicker > .chip, .statusline > .permPicker > .chip { flex: 0 1 auto; min-width: 0; max-width: 100%; }
-  .statusline > .permPicker { flex-shrink: 3; }
+  .statusline > .chip.model, .statusline > .chip.sessionMode, .statusline > .modePicker { flex: 0 1 auto; min-width: 0; }
+  .statusline > .modePicker > .chip { flex: 0 1 auto; min-width: 0; max-width: 100%; }
   .statusline .chip .name { min-width: 0; }
   .statusline > .chip.attachBtn, .statusline > .chip.fast { flex: none; }
   /* Narrower still, the knobs drop what the tooltip already says: effort, chevrons, Fast's word. */
@@ -242,10 +241,8 @@ button.chip:hover:not(:disabled), .chip[data-state="open"] { color: var(--ink); 
 .chip.fast.on { color: var(--yellow); border-color: var(--edge-yellow-hi); }
 .chip.fast.on svg { color: var(--yellow); fill: currentColor; }
 .chip.fast.blocked { color: var(--red); border-color: var(--edge-red); }
-.chip.perm.risk-high { color: var(--red); border-color: var(--edge-red); }
-.chip.perm.risk-high svg { color: var(--red); }
 .chip.cwd.pick { cursor: pointer; }
-.modelPicker, .permPicker, .modePicker { position: relative; flex: none; display: flex; }
+.modelPicker, .modePicker { position: relative; flex: none; display: flex; }
 /* Session mode (ModePicker): "Junior decides" is quiet; a forced Plan first, Goal or Ultracode says it changes what happens next. */
 .chip.sessionMode.normal { color: var(--ash); }
 .chip.sessionMode.plan { color: var(--blue); border-color: var(--edge-blue); }
@@ -267,21 +264,6 @@ button.chip:hover:not(:disabled), .chip[data-state="open"] { color: var(--ink); 
 .uiMenuItem.mode-plan .modeIcon { color: var(--blue); }
 .uiMenuItem.mode-goal .modeIcon { color: var(--yellow); }
 .uiMenuItem.mode-ultracode .modeIcon { color: var(--orange); }
-/* Autonomy's meter: four rising bars, lit up to the level; neutral until "Never asks", which is all red. */
-.meter { display: inline-flex; align-items: flex-end; gap: 2px; height: 11px; flex: none; }
-.meter i { width: 3px; border-radius: 1px; background: var(--hair-strong); }
-.meter i:nth-child(1) { height: 5px; }
-.meter i:nth-child(2) { height: 7px; }
-.meter i:nth-child(3) { height: 9px; }
-.meter i:nth-child(4) { height: 11px; }
-.meter[data-bars="1"] i:nth-child(-n+1),
-.meter[data-bars="2"] i:nth-child(-n+2),
-.meter[data-bars="3"] i:nth-child(-n+3) { background: var(--charcoal); }
-.meter[data-bars="4"] i { background: var(--red); }
-.chip.perm:hover .meter[data-bars="1"] i:nth-child(-n+1),
-.chip.perm:hover .meter[data-bars="2"] i:nth-child(-n+2),
-.chip.perm:hover .meter[data-bars="3"] i:nth-child(-n+3) { background: var(--ink); }
-.uiMenuItem .meter { margin-top: 3px; align-self: flex-start; }
 #sendBtn, #stopBtn {
   display: inline-flex; align-items: center; justify-content: center; flex: none;
   width: 30px; height: 30px; padding: 0; border-radius: var(--r); border: 1px solid transparent;

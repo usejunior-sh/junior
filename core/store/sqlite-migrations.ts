@@ -507,4 +507,7 @@ export const MIGRATIONS: string[] = [
   TODAY_SCHEMA,
   // 33: tasks on items (core/work/tasks.ts). Also converged by ensureDurableSchema.
   TASKS_SCHEMA,
+  // 34: one policy (core/actions/policy.ts): the Autonomy levels are gone. Every
+  // Claude chat holds its sends; another agent asks before every change.
+  `UPDATE sessions SET permission_mode = CASE WHEN provider = 'claude' THEN 'auto' ELSE 'gated' END WHERE kind IS NULL OR kind NOT IN ('job-run', 'brief', 'goal')`,
 ]
