@@ -5,19 +5,25 @@
  * budgets (Settings → Babysit). A session is one turn: it hands in with
  * submit_task, and its result ends the run (like a goal worker's).
  *
- * Today the only tasks Junior runs are the babysit playbook's (fix-ci,
- * fix-thread, rebase). The pure rules are core/babysit and core/work/tasks.ts.
+ * Junior runs the babysit playbook's tasks (fix-ci, fix-thread, rebase) and
+ * the review playbook's first pass (review: read-only, hands in with
+ * submit_review). The pure rules are core/babysit, core/review and
+ * core/work/tasks.ts.
  */
 import { existsSync } from 'node:fs'
 import { createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk'
 import { z } from 'zod'
 import { taskPrompt, type TaskPr } from '../../core/babysit/brief.js'
 import type { TaskRunScope } from '../../core/babysit/policy.js'
-import { modelFor, type BabysitSettings } from '../../core/babysit/settings.js'
+import { capFor, modelFor, stepOn, type BabysitSettings } from '../../core/babysit/settings.js'
+import { MAX_COMMENTS, passLine, passMarkdown, reviewPrompt, VERDICT_LABEL, type FirstPass, type ReviewCtx } from '../../core/review/brief.js'
+import { POST_REVIEW_STEP, REVIEW_STEP } from '../../core/review/watch.js'
 import { isStale } from '../../core/babysit/watch.js'
 import type { ItemTask } from '../../core/work/tasks.js'
 import type { Checkout, Project } from '../../shared/protocol.js'
 import { BABYSIT_WATCH_KEY, type BabysitWatchState } from '../babysit/watch.js'
+import { REVIEW_WATCH_KEY, type ReviewWatchState } from '../review/watch.js'
+import { createArtifactOp } from '../artifacts-ops.js'
 import { babysitSettings, ghBabysitSource, onBabysitTick, onTaskAdded } from '../babysit/glue.js'
 import { pExecFile, VERSION } from '../config.js'
 import { errText } from '../errors.js'
@@ -40,6 +46,10 @@ export type TaskRun = {
   taskId: string
   itemId: string
   sessionId: string
+  /** the task's step: which hand-in tool the session gets */
+  step?: string
+  /** the head the session works on */
+  headSha: string
   scope: TaskRunScope
   perTaskUsd: number
   release: () => void
@@ -94,10 +104,11 @@ async function pumpOnce(rt: WorkspaceRuntime): Promise<void> {
     if (back.length) log('info', 'tasks', `requeued ${back.length} task(s) a stopped daemon left running`, { workspace: rt.meta.id })
   }
   const s = await babysitSettings(rt)
-  if (!s.enabled) return
+  if (!s.enabled && !s.reviews) return
   const now = Date.now()
   const spent = await rt.store.tasks.spentSince(dayStart(now))
-  const queued = (await rt.store.tasks.inState(['queued'])).filter((t) => t.owner === 'junior')
+  // Only what its playbook's switch allows: babysit off doesn't hold back reviews, and the other way round.
+  const queued = (await rt.store.tasks.inState(['queued'])).filter((t) => t.owner === 'junior' && stepOn(t.step, s))
   if (queued.length === 0) return
   if (spent >= s.budget.perDayUsd) {
     if (rt.taskBudgetHitOn !== dayKey(now)) {
@@ -133,33 +144,68 @@ async function git(dir: string, args: string[]): Promise<string> {
   return (await pExecFile('git', args, { cwd: dir, maxBuffer: 16 * 1024 * 1024 })).stdout
 }
 
-/** The item's worktree, at the PR's head as GitHub has it now. Made on its first task, reused after. */
-async function taskCheckout(rt: WorkspaceRuntime, project: Project, itemId: string, pr: TaskPr): Promise<Checkout> {
-  await git(project.path, ['fetch', 'origin', pr.headRef])
+/**
+ * The item's worktree, at the PR's head as GitHub has it now. Made on its
+ * first task, reused after. Your PR's branch is on origin; a PR you review
+ * may come from a fork, so its head is fetched as GitHub's pull ref.
+ */
+async function taskCheckout(rt: WorkspaceRuntime, project: Project, itemId: string, pr: TaskPr, review: boolean): Promise<{ co: Checkout; sha: string }> {
+  const ref = review ? `pull/${pr.number}/head` : pr.headRef
+  await git(project.path, ['fetch', 'origin', ref])
+  const sha = (await git(project.path, ['rev-parse', 'FETCH_HEAD'])).trim()
   let co = checkoutList(rt).find((c) => c.itemId === itemId && c.kind === 'worktree' && existsSync(c.path))
   if (!co) {
-    const branch = `babysit/${pr.repo.split('/')[1]}-${pr.number}`.replace(/[^\w./-]+/g, '-')
-    co = await makeWorktree(rt, project, branch, itemId, undefined, `origin/${pr.headRef}`)
+    const branch = `${review ? 'review' : 'babysit'}/${pr.repo.split('/')[1]}-${pr.number}`.replace(/[^\w./-]+/g, '-')
+    co = await makeWorktree(rt, project, branch, itemId, undefined, sha)
   }
   // Junior's own folder: whatever an earlier task left is dropped for the PR as it is now.
-  await git(co.path, ['reset', '--hard', `origin/${pr.headRef}`])
+  await git(co.path, ['reset', '--hard', sha])
   await git(co.path, ['clean', '-fd'])
-  return co
+  return { co, sha }
+}
+
+/** The PR an item's task works on, as its playbook's watch last read it. */
+async function watchedPr(rt: WorkspaceRuntime, itemId: string, step: string | undefined): Promise<{ headSha: string | null; headRef?: string; baseRef?: string } | undefined> {
+  if (step === REVIEW_STEP) return (await rt.store.config.get<ReviewWatchState>(REVIEW_WATCH_KEY))?.prs[itemId]
+  return (await rt.store.config.get<BabysitWatchState>(BABYSIT_WATCH_KEY))?.prs[itemId]
+}
+
+const ghOut = (args: string[]) => pExecFile('gh', args, { maxBuffer: 16 * 1024 * 1024 }).then((r) => r.stdout, () => '')
+
+/** What a first pass reads before it starts: the PR's words and its diff. */
+async function reviewCtx(pr: { repo: string; number: number }): Promise<ReviewCtx> {
+  const [view, diff] = await Promise.all([
+    ghOut(['pr', 'view', String(pr.number), '-R', pr.repo, '--json', 'title,body,author,files']),
+    ghOut(['pr', 'diff', String(pr.number), '-R', pr.repo]),
+  ])
+  let v: { title?: string; body?: string; author?: { login?: string }; files?: { path: string; additions: number; deletions: number }[] } = {}
+  try {
+    v = JSON.parse(view)
+  } catch {}
+  return {
+    title: v.title ?? '',
+    body: v.body ?? '',
+    author: v.author?.login ?? 'someone',
+    diff,
+    files: (v.files ?? []).map((f) => `- ${f.path} (+${f.additions} −${f.deletions})`).join('\n'),
+  }
 }
 
 async function startTask(rt: WorkspaceRuntime, t: ItemTask, s: BabysitSettings): Promise<void> {
   const item = await rt.store.items.get(t.itemId)
   if (!item) return void (await finish(rt, t.id, 'stopped', { error: 'the item is gone' }))
   const ref = prOfItem(item.id)
-  const watch = (await rt.store.config.get<BabysitWatchState>(BABYSIT_WATCH_KEY))?.prs[item.id]
-  if (!ref || !watch?.headRef || !watch.baseRef) throw new Error('this task needs a PR the babysitter is watching')
+  const review = t.step === REVIEW_STEP
+  const watch = await watchedPr(rt, item.id, t.step)
+  if (!ref || !watch?.headRef || !watch.baseRef) throw new Error(review ? 'this review needs a PR that asks for your review' : 'this task needs a PR the babysitter is watching')
   if (isStale(t, watch.headSha)) return void (await finish(rt, t.id, 'skipped', { error: 'the PR moved on since: a fresh task comes if it still needs one' }))
   const project = item.projectId ? (await rt.store.projects.list()).find((p) => p.id === item.projectId) : undefined
   if (!project) throw new Error(`no project folder holds ${ref.repo}: add it as a project so Junior can work on it`)
 
   const pr: TaskPr = { ...ref, url: item.url, headRef: watch.headRef, baseRef: watch.baseRef }
-  const checkout = await taskCheckout(rt, project, item.id, pr)
+  const { co: checkout, sha } = await taskCheckout(rt, project, item.id, pr, review)
   const ctx: { log?: string; diff?: string } = {}
+  const rctx = review ? await reviewCtx(pr) : null
   if (t.step === 'fix-ci') {
     const runId = typeof t.input?.runId === 'number' ? t.input.runId : null
     const check = { name: String(t.input?.check ?? ''), status: 'failure' as const, id: '', runId, url: null, conclusion: null }
@@ -178,8 +224,15 @@ async function startTask(rt: WorkspaceRuntime, t: ItemTask, s: BabysitSettings):
     taskId: t.id,
     itemId: item.id,
     sessionId: row.id,
-    scope: { headRef: pr.headRef, defaultBranch: (await defaultBranch(project.path).catch(() => null)) ?? pr.baseRef, threadId: t.step === 'fix-thread' ? String(t.input?.threadId ?? '') || null : null },
-    perTaskUsd: s.budget.perTaskUsd,
+    ...(t.step ? { step: t.step } : {}),
+    headSha: sha,
+    scope: {
+      headRef: pr.headRef,
+      defaultBranch: (await defaultBranch(project.path).catch(() => null)) ?? pr.baseRef,
+      threadId: t.step === 'fix-thread' ? String(t.input?.threadId ?? '') || null : null,
+      ...(review ? { readOnly: true } : {}),
+    },
+    perTaskUsd: capFor(t.step, s),
     // The Mac stays awake while a task runs: a sleeping Mac hangs a headless run.
     release: power.hold(`task ${t.id}`),
     timer: setTimeout(() => void endTaskSession(rt, row.id, `timed out after ${TASK_SESSION_TIMEOUT_MS / 60_000} minutes`), TASK_SESSION_TIMEOUT_MS),
@@ -198,7 +251,7 @@ async function startTask(rt: WorkspaceRuntime, t: ItemTask, s: BabysitSettings):
     await linkSessionToItem(rt, row.id, item.id, 'dispatch')
     const live = await getOrRevive(rt, row.id)
     if (!live) throw new Error('could not start the session')
-    await live.sendUserMessage(taskPrompt(moved, pr, item.memory, ctx))
+    await live.sendUserMessage(rctx ? reviewPrompt(moved, pr, item.memory, rctx) : taskPrompt(moved, pr, item.memory, ctx))
     log('info', 'tasks', `started "${t.title}" on ${pr.repo}#${pr.number} (${model})`, { task: t.id, session: row.id, workspace: rt.meta.id })
   } catch (err) {
     await endTaskSession(rt, row.id, errText(err))
@@ -263,11 +316,12 @@ export async function skipTaskOp(rt: WorkspaceRuntime, taskId: string): Promise<
  * spawn (one instance connects to one transport).
  */
 export function makeTaskMcp(rt: WorkspaceRuntime, sessionId: string) {
+  const review = rt.taskRuns.get(sessionId)?.step === REVIEW_STEP
   return createSdkMcpServer({
     name: 'task',
     version: VERSION,
     alwaysLoad: true,
-    tools: [
+    tools: review ? [submitReviewTool(rt, sessionId)] : [
       tool(
         'submit_task',
         "Hand in this session's task, once, at the end: done (what you changed, in one line, and the commit you pushed) or blocked (the question the user must answer). Then end your turn.",
@@ -293,9 +347,89 @@ export function makeTaskMcp(rt: WorkspaceRuntime, sessionId: string) {
   })
 }
 
+/**
+ * A first pass's one tool: the verdict, the summary and the comments. The
+ * pass becomes the Review artifact on the item and the task's line, and
+ * posting it becomes a task on you, held for your OK.
+ */
+function submitReviewTool(rt: WorkspaceRuntime, sessionId: string) {
+  return tool(
+    'submit_review',
+    'Hand in your first-pass review, once, at the end: the verdict, a 2–4 line summary, and the comments you suggest. Nothing is posted: the user reads it first. Then end your turn.',
+    {
+      verdict: z.enum(['approve', 'comment', 'request_changes']),
+      summary: z.string().min(1).max(1200).describe('2–4 plain lines: what the PR does, and what matters most in your read'),
+      comments: z
+        .array(
+          z.object({
+            path: z.string().min(1).max(400).describe('file path from the repo root'),
+            line: z.number().int().positive().describe('line in the new file (or the old one, with side LEFT)'),
+            side: z.enum(['LEFT', 'RIGHT']).optional(),
+            body: z.string().min(1).max(2000).describe('the comment as you would post it'),
+          }),
+        )
+        .max(MAX_COMMENTS)
+        .default([]),
+      skipped: z.string().max(500).optional().describe('what you did not read, on a big PR'),
+      decisions: z.array(z.string().min(1).max(500)).max(10).optional().describe('what a later pass on this PR should know'),
+    },
+    async (a) => {
+      const run = rt.taskRuns.get(sessionId)
+      if (!run) return errResult('This session has no task running (it ended or was stopped).')
+      const t = await rt.store.tasks.get(run.taskId)
+      if (!t || t.state !== 'running') return errResult(`This task is ${t?.state ?? 'gone'}: nothing to hand in.`)
+      const item = await rt.store.items.get(run.itemId)
+      const ref = prOfItem(run.itemId)
+      if (!item || !ref) return errResult('The PR this review was for is gone.')
+      const pass: FirstPass = { verdict: a.verdict, summary: a.summary.trim(), comments: a.comments, ...(a.skipped?.trim() ? { skipped: a.skipped.trim() } : {}), sha: run.headSha }
+      const at = Date.now()
+      try {
+        const { artifact } = await createArtifactOp(
+          rt,
+          {
+            title: `Review: ${ref.repo}#${ref.number}`,
+            format: 'md',
+            body: passMarkdown({ ...ref, url: item.url, title: item.title, author: item.author }, pass),
+            note: `First pass at ${pass.sha.slice(0, 7)}: ${VERDICT_LABEL[pass.verdict]}`,
+            refs: [item.url],
+            links: [{ kind: 'item', id: item.id, role: 'context' }],
+          },
+          'model',
+          { sessionId },
+        )
+        for (const text of a.decisions ?? []) await rt.store.items.addDecision(run.itemId, { at, by: 'junior', text, taskId: t.id })
+        await finish(rt, t.id, 'done', { output: { summary: passLine(pass), artifactId: artifact.id, sha: pass.sha, verdict: pass.verdict } })
+        const post = await rt.store.tasks.add(
+          {
+            itemId: run.itemId,
+            title: 'Post review',
+            owner: 'you',
+            state: 'waiting',
+            why: 'playbook',
+            whyDetail: `Junior's pass: ${VERDICT_LABEL[pass.verdict]}`,
+            step: POST_REVIEW_STEP,
+            key: `post:${t.id}`,
+            input: { pass, artifactId: artifact.id, reviewTaskId: t.id },
+          },
+          Date.now(),
+        )
+        if (post) taskNeedsYou(rt, { kind: 'post-review', task: post, verdict: pass.verdict })
+        tasksChanged(rt)
+        return okResult('Handed in. End your turn now.')
+      } catch (err) {
+        return errResult(`Could not save the review: ${errText(err)}`)
+      }
+    },
+  )
+}
+
 /** The system prompt's last word for a task session. */
 export const TASK_SYSTEM_APPEND = `
 This is a headless task session: nobody reads this chat while it runs. Do the one task in the first message, then call submit_task and stop. Don't ask questions in chat: hand in blocked with the question instead.`
+
+/** The same for a first-pass review: read-only, and it hands in with submit_review. */
+export const REVIEW_SYSTEM_APPEND = `
+This is a headless review session: nobody reads this chat while it runs. Read the PR in the first message, change nothing, then call submit_review once and stop. Don't ask questions in chat: put what you are unsure of in the summary or a comment.`
 
 onTaskAdded((rt, task, stuck) => {
   if (stuck) taskNeedsYou(rt, { kind: 'stuck', task })

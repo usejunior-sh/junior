@@ -9,6 +9,9 @@
  *   held     every other send (a comment, a reviewer request, a merge):
  *            it waits for your OK like any action
  *
+ * A first-pass review (core/review) is read-only: every send is refused,
+ * since posting the review is a task on you, not something it does.
+ *
  * Pure: the command is sorted part by part by the caller's rules.
  */
 import { pushTarget, splitCommand, unwrap, type CommandPart } from '../actions/bash.js'
@@ -21,6 +24,8 @@ export type TaskRunScope = {
   defaultBranch: string
   /** the bot review thread this task is about, when it is one */
   threadId?: string | null
+  /** a first-pass review: nothing may be sent at all, not even a push */
+  readOnly?: boolean
 }
 
 export type RunVerdict = { verdict: 'allow' } | { verdict: 'hold' } | { verdict: 'refuse'; reason: string }
@@ -63,6 +68,7 @@ export function taskRunVerdict(command: string, s: TaskRunScope, sortPart: (part
   for (const part of splitCommand(command)) {
     const sorted = sortPart(part.join(' '))
     if (!sorted) continue
+    if (s.readOnly) return { verdict: 'refuse', reason: 'A first-pass review is read-only: nothing is pushed or sent from here. Hand in with submit_review; posting is the user’s call.' }
     const v = sorted.kind === 'push' ? pushVerdict(part, s) : sorted.kind === 'other' || sorted.kind === 'comment' || sorted.kind === 'update' ? threadVerdict(part, s) : { verdict: 'hold' as const }
     if (v.verdict === 'refuse') return v
     if (v.verdict === 'hold') held = true

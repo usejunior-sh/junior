@@ -28,7 +28,8 @@ import { ANY_ITEM_ID_RE } from './validate.js'
 import { createSession, getOrRevive } from './session/sessions.js'
 import { BRIEF_TIMEOUT_MS, linkSessionToItem, projectFor, readSettings } from './settings-ops.js'
 import { itemFilesForSession } from './items-ops.js'
-import { makeTaskMcp, TASK_SYSTEM_APPEND } from './tasks/runner.js'
+import { makeTaskMcp, REVIEW_SYSTEM_APPEND, TASK_SYSTEM_APPEND } from './tasks/runner.js'
+import { REVIEW_STEP } from '../core/review/watch.js'
 
 /** The artifact linked to an item as its brief, with the body on disk. */
 export async function currentBrief(rt: WorkspaceRuntime, itemId: string): Promise<{ artifact: Artifact; body: string } | null> {
@@ -125,7 +126,17 @@ export async function extrasFor(rt: WorkspaceRuntime, row: StoredSession): Promi
   // A babysit task's session: its submit_task tool, its per-task budget, the headless contract last.
   const taskRun = rt.taskRuns.get(row.id)
   // Strict: none of ~/.claude's connectors and plugins, whose schemas would ride every call.
-  if (taskRun) return { systemAppend: `${identity}\n${TASK_SYSTEM_APPEND}`, mcp: { task: makeTaskMcp(rt, row.id) }, strictMcpConfig: true, maxBudgetUsd: taskRun.perTaskUsd }
+  if (taskRun) {
+    const review = taskRun.step === REVIEW_STEP
+    return {
+      systemAppend: `${identity}\n${review ? REVIEW_SYSTEM_APPEND : TASK_SYSTEM_APPEND}`,
+      mcp: { task: makeTaskMcp(rt, row.id) },
+      strictMcpConfig: true,
+      maxBudgetUsd: taskRun.perTaskUsd,
+      // A first pass reads; it never edits.
+      ...(review ? { disallowedTools: [...EDIT_TOOLS] } : {}),
+    }
+  }
   // A goal's lead: the drafting contract last, like a brief's.
   if (row.kind === 'goal') return { systemAppend: `${identity}\n${LEAD_DRAFT_APPEND}` }
   if (row.kind !== 'brief') return { systemAppend: identity }

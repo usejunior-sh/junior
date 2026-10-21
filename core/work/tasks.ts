@@ -19,8 +19,10 @@ export interface TaskOutput {
   summary: string
   /** a longer write-up, when there is one */
   artifactId?: string
-  /** the commit it pushed, when it pushed one */
+  /** the commit it pushed, when it pushed one; a review's: the head it read */
   sha?: string
+  /** a first-pass review's verdict (core/review/brief.ts) */
+  verdict?: 'approve' | 'comment' | 'request_changes'
 }
 
 export interface ItemTask {
@@ -92,6 +94,7 @@ const ING: Record<string, string> = {
   rerun: 'rerunning',
   request: 'requesting',
   review: 'reviewing',
+  post: 'posting',
   check: 'checking',
   answer: 'answering',
   plan: 'planning',

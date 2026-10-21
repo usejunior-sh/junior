@@ -1,6 +1,6 @@
 /**
  * Mac notifications for tasks: only when you have to act (plan artifact
- * cb50520f, "Notifications"). A reviewer request waiting for your OK, Junior
+ * cb50520f, "Notifications"). A reviewer request or a first-pass review waiting for your OK, Junior
  * stuck on a task, the daily budget spent. Routine work (a fix pushed, a
  * rebase done) shows in the item's task list, never here.
  *
@@ -8,6 +8,7 @@
  * not Triage.app is open. macOS only; elsewhere, the log line is all.
  */
 import type { ItemTask } from '../../core/work/tasks.js'
+import { VERDICT_LABEL, type Verdict } from '../../core/review/brief.js'
 import { pExecFile } from '../config.js'
 import { errText } from '../errors.js'
 import { log } from '../log.js'
@@ -16,6 +17,7 @@ import type { WorkspaceRuntime } from '../workspace/runtime.js'
 export type NeedsYou =
   | { kind: 'review'; task: ItemTask }
   | { kind: 'stuck'; task: ItemTask }
+  | { kind: 'post-review'; task: ItemTask; verdict: Verdict }
   | { kind: 'budget'; spent: number; limit: number; waiting: number }
 
 /** The notification's title and line, or null for one that shouldn't ping. Pure. */
@@ -23,6 +25,8 @@ export function needsYouText(n: NeedsYou, pr: string | null): { title: string; b
   switch (n.kind) {
     case 'review':
       return { title: `${pr ?? 'Your PR'} is green`, body: `${n.task.title}? Junior waits for your OK.` }
+    case 'post-review':
+      return { title: `Review ready: ${pr ?? 'a PR'}`, body: `Junior's first pass: ${VERDICT_LABEL[n.verdict]}. Nothing is posted until you OK it.` }
     case 'stuck':
       return { title: `Junior is stuck${pr ? ` on ${pr}` : ''}`, body: n.task.error ? `${n.task.title}: ${n.task.error}` : n.task.title }
     case 'budget':

@@ -51,3 +51,13 @@ test('local work is not an action', () => {
   assert.equal(v('npm run lint -- --fix && git commit -am "lint"'), 'allow')
   assert.equal(v('gh pr diff 12'), 'allow')
 })
+
+test('a first-pass review is read-only: every send is refused, reading still runs', () => {
+  const ro = { headRef: 'drew/cache', defaultBranch: 'main', readOnly: true }
+  const r = (cmd: string) => taskRunVerdict(cmd, ro, sort).verdict
+  assert.equal(r('git push origin HEAD:drew/cache'), 'refuse')
+  assert.equal(r('gh pr review 40 --approve'), 'refuse')
+  assert.equal(r('gh pr comment 40 --body "lgtm"'), 'refuse')
+  assert.equal(r('gh pr diff 40 && git log -5'), 'allow')
+  assert.equal(r('rg "token" src'), 'allow')
+})
