@@ -42,6 +42,13 @@ function actorLabel(actor: string): string {
   return actor
 }
 
+/** One event as words: what happened, who did it, and why, for the timeline and the Activity tab. */
+export function eventText(ev: ItemEvent): { label: string; who: string; why?: string } {
+  const why = typeof ev.detail?.why === 'string' ? ev.detail.why : undefined
+  const reason = typeof ev.detail?.reason === 'string' ? ev.detail.reason : flowLine(ev)
+  return { label: EVENT_LABEL[ev.event] ?? ev.event, who: actorLabel(ev.actor), ...(why || reason ? { why: why ?? reason } : {}) }
+}
+
 export function ItemTimeline({ events }: { events: ItemEvent[] | null }) {
   return (
     <>

@@ -28,7 +28,14 @@ import { CostBlock } from './item/CostBlock.js'
 import { BriefCard, ItemDetails, ReportCard } from './item/ItemCards.js'
 import { ItemSessions } from './item/ItemSessions.js'
 import { ItemTimeline } from './item/ItemTimeline.js'
-import { ItemTasks } from './item/ItemTasks.js'
+import * as Tabs from '@radix-ui/react-tabs'
+import { verdictOf, type ItemTab } from '../../../core/work/verdict.js'
+import { isOwnTool } from '../../../core/actions/own.js'
+import { useItemTasks } from './item/useItemTasks.js'
+import { ItemVerdict } from './item/ItemVerdict.js'
+import { NeedsYou } from './item/NeedsYou.js'
+import { ItemSessionsTab } from './item/ItemSessionsTab.js'
+import { ItemActivity, sendsOf } from './item/ItemActivity.js'
 
 type Props = {
   id: string
@@ -40,6 +47,12 @@ type Props = {
 
 const OTHER_STATUSES: ItemStatus[] = ['snoozed', 'done', 'archived']
 
+/** The tab you last picked on each item, for this window: coming back finds it where you left it. */
+const pickedTab = new Map<string, ItemTab>()
+/** Items whose brief or links you opened under the description, the same way. */
+const openedBrief = new Set<string>()
+const openedLinks = new Set<string>()
+
 export function ItemPage({ id, onDispatch, onNavigate, onDirty }: Props) {
   const snap = useInbox()
   const sessions = useSessions()
@@ -47,6 +60,17 @@ export function ItemPage({ id, onDispatch, onNavigate, onDirty }: Props) {
   const briefs = useBriefs()
   // What sessions working this item sent out: PRs, comments, pushes (core/actions).
   const itemActions = useActions({ item: id })
+  const { tasks: loadedTasks, reload: reloadTasks } = useItemTasks(id)
+  const [tab, setTab] = useState<ItemTab | null>(pickedTab.get(id) ?? null)
+  const [briefShown, setBriefShown] = useState(openedBrief.has(id))
+  const [linksShown, setLinksShown] = useState(openedLinks.has(id))
+  const [descMore, setDescMore] = useState(false)
+  useEffect(() => {
+    setTab(pickedTab.get(id) ?? null)
+    setBriefShown(openedBrief.has(id))
+    setLinksShown(openedLinks.has(id))
+    setDescMore(false)
+  }, [id])
   const open = snap.items.find((i) => i.id === id)
   // Not in the open inbox → it may be snoozed, done or archived.
   const [other, setOther] = useState<{ id: string; item: ScoredItem | null } | null>(null)
@@ -430,6 +454,27 @@ export function ItemPage({ id, onDispatch, onNavigate, onDirty }: Props) {
   const project = item.projectId ? projects.find((p) => p.id === item.projectId) : undefined
   const settled = !job || job.status === 'ready' || job.status === 'failed'
   const pill = briefPill(job, brief?.stale ?? false)
+  const tasks = loadedTasks ?? []
+  const held = itemActions.actions.filter((a) => !a.hidden && a.status === 'needs_you' && !isOwnTool(a.tool))
+  const chats = linkedSessions.filter(({ s }) => s.kind !== 'task')
+  // Dispatched chats and team runs hand the item off too; a brief run only reads it.
+  const dispatched = chats.filter(({ s, role }) => role !== 'brief' && s.kind !== 'brief')
+  const verdict = verdictOf(item, tasks, held.length, { total: dispatched.length, running: dispatched.filter(({ s }) => s.status === 'running').length })
+  const shownTab = tab ?? verdict.tab
+  const juniorTasks = tasks.filter((t) => t.owner === 'junior' && t.state !== 'skipped')
+  const juniorLive = juniorTasks.some((t) => t.state === 'running') || chats.some(({ s }) => s.status === 'running')
+  const linkCount = item.urls?.length ?? 0
+  const longDesc = (item.description?.length ?? 0) > 220 || (item.description?.split('\n').length ?? 0) > 3
+  const toggleBrief = () => {
+    if (briefShown) openedBrief.delete(item.id)
+    else openedBrief.add(item.id)
+    setBriefShown(!briefShown)
+  }
+  const toggleLinks = () => {
+    if (linksShown) openedLinks.delete(item.id)
+    else openedLinks.add(item.id)
+    setLinksShown(!linksShown)
+  }
 
   return (
     <div className="itemPage">
@@ -552,15 +597,20 @@ export function ItemPage({ id, onDispatch, onNavigate, onDirty }: Props) {
           ) : (
             <>
               <div
-                className={`descText${item.description ? '' : ' empty'}`}
+                className={`descText${item.description ? '' : ' empty'}${item.description && longDesc && !descMore ? ' clamp' : ''}`}
                 role="button"
                 tabIndex={0}
                 title="Click to edit"
                 onClick={editDescription}
                 onKeyDown={(e) => e.key === 'Enter' && editDescription()}
               >
-                {item.description ?? 'Add a description — your intent, in your words. The brief and dispatched sessions read it.'}
+                {item.description ?? 'Add a description: your intent, in your words. Junior reads it before it starts.'}
               </div>
+              {longDesc && (
+                <button type="button" className="linkBtn descMore" onClick={() => setDescMore(!descMore)}>
+                  {descMore ? 'Show less' : 'Show more'}
+                </button>
+              )}
               {item.images && item.images.length > 0 && (
                 <div className="descShots">
                   {item.images.map((img) => (
@@ -588,22 +638,41 @@ export function ItemPage({ id, onDispatch, onNavigate, onDirty }: Props) {
           )}
         </div>
 
-        <ItemLinks
-          item={item}
-          onDirty={onDirty}
-          onSaved={(urls) => {
-            const patch = (i: ScoredItem) => (i.id === item.id ? { ...i, urls: urls.length > 0 ? urls : undefined } : i)
-            inboxStore.patch((items) => items.map(patch))
-            setOther((o) => (o?.item ? { ...o, item: patch(o.item) } : o))
-          }}
-        />
+        {/* Brief and links: one quiet row under the description, each opens in place. */}
+        <div className="descMeta">
+          {item.kind !== 'digest' && (
+            <span>
+              Brief · {pill ? pill.label : 'none'} ·{' '}
+              {brief?.artifact || job ? (
+                <button type="button" className="linkBtn" onClick={toggleBrief}>{briefShown ? 'Hide' : 'Show'}</button>
+              ) : (
+                <button type="button" className="linkBtn" onClick={() => setBriefOpen(true)}>Create</button>
+              )}
+            </span>
+          )}
+          <span>
+            Links · {linkCount} ·{' '}
+            <button type="button" className="linkBtn" onClick={toggleLinks}>{linksShown ? 'Hide' : linkCount ? 'Show' : 'Add'}</button>
+          </span>
+          <span className="spacer" />
+          {descDraft === null && (
+            <button type="button" className="linkBtn" onClick={editDescription}>Edit</button>
+          )}
+        </div>
 
-        {/* What Junior did, is doing, and waits on you for (core/work/tasks.ts). */}
-        <ItemTasks itemId={item.id} onNavigate={onNavigate} />
+        {linksShown && (
+          <ItemLinks
+            item={item}
+            onDirty={onDirty}
+            onSaved={(urls) => {
+              const patch = (i: ScoredItem) => (i.id === item.id ? { ...i, urls: urls.length > 0 ? urls : undefined } : i)
+              inboxStore.patch((items) => items.map(patch))
+              setOther((o) => (o?.item ? { ...o, item: patch(o.item) } : o))
+            }}
+          />
+        )}
 
-        {report && <ReportCard report={report} onNavigate={onNavigate} />}
-
-        {item.kind !== 'digest' && (
+        {briefShown && item.kind !== 'digest' && (
           <BriefCard
             item={item}
             job={job}
@@ -620,9 +689,69 @@ export function ItemPage({ id, onDispatch, onNavigate, onDirty }: Props) {
           />
         )}
 
+        {report && <ReportCard report={report} onNavigate={onNavigate} />}
+
+        <ItemVerdict
+          item={item}
+          verdict={verdict}
+          tasks={tasks}
+          {...(item.flow?.next === 'read brief' && !briefShown && item.kind !== 'digest' ? { action: { label: 'Read the brief', run: toggleBrief } } : {})}
+          onChat={() => onDispatch(item)}
+          onChanged={() => {
+            reloadTasks()
+            itemActions.refresh()
+          }}
+        />
+
         {notice && <div className="notice">{notice}</div>}
 
-        <ItemDetails item={item} jobTitles={jobTitles} />
+        {/* Needs you · Sessions · Activity: the order never changes; the one that opens follows whose turn it is. */}
+        <Tabs.Root
+          className="itemTabs"
+          value={shownTab}
+          onValueChange={(v) => {
+            pickedTab.set(item.id, v as ItemTab)
+            setTab(v as ItemTab)
+          }}
+        >
+          <Tabs.List className="itemTabList" aria-label="This item">
+            <Tabs.Trigger className="itemTab" value="needs">
+              Needs you <span className={`n${verdict.needs > 0 ? ' hot' : ''}`}>{verdict.needs}</span>
+            </Tabs.Trigger>
+            <Tabs.Trigger className="itemTab" value="sessions">
+              Sessions <span className="n">{juniorTasks.length + chats.length}</span>
+              {juniorLive && <span className="dot live sm" aria-hidden="true" />}
+            </Tabs.Trigger>
+            <Tabs.Trigger className="itemTab" value="activity">
+              Activity
+            </Tabs.Trigger>
+          </Tabs.List>
+          <Tabs.Content className="itemTabPanel" value="needs">
+            <NeedsYou
+              item={item}
+              verdict={verdict}
+              tasks={tasks}
+              held={held}
+              onChanged={() => {
+                reloadTasks()
+                itemActions.refresh()
+              }}
+              onNavigate={onNavigate}
+              onSnooze={snooze1d}
+            />
+          </Tabs.Content>
+          <Tabs.Content className="itemTabPanel" value="sessions">
+            <ItemSessionsTab tasks={tasks} chats={chats} handedOff={verdict.handedOff} onChanged={reloadTasks} onNavigate={onNavigate} />
+          </Tabs.Content>
+          <Tabs.Content className="itemTabPanel" value="activity">
+            <ItemActivity
+              actions={sendsOf(itemActions.actions)}
+              events={events}
+              tasks={tasks}
+              footer={<ItemDetails item={item} jobTitles={jobTitles} />}
+            />
+          </Tabs.Content>
+        </Tabs.Root>
       </div>
 
       <div className="itemAside">
