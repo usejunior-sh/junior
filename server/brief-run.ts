@@ -28,6 +28,7 @@ import { ANY_ITEM_ID_RE } from './validate.js'
 import { createSession, getOrRevive } from './session/sessions.js'
 import { BRIEF_TIMEOUT_MS, linkSessionToItem, projectFor, readSettings } from './settings-ops.js'
 import { itemFilesForSession } from './items-ops.js'
+import { makeTaskMcp, TASK_SYSTEM_APPEND } from './tasks/runner.js'
 
 /** The artifact linked to an item as its brief, with the body on disk. */
 export async function currentBrief(rt: WorkspaceRuntime, itemId: string): Promise<{ artifact: Artifact; body: string } | null> {
@@ -121,6 +122,9 @@ export async function extrasFor(rt: WorkspaceRuntime, row: StoredSession): Promi
       disallowedTools: GOAL_RUN_DISALLOWED_TOOLS.filter((t) => spec.writes || !EDIT_TOOLS.has(t)),
     }
   }
+  // A babysit task's session: its submit_task tool, its per-task budget, the headless contract last.
+  const taskRun = rt.taskRuns.get(row.id)
+  if (taskRun) return { systemAppend: `${identity}\n${TASK_SYSTEM_APPEND}`, mcp: { task: makeTaskMcp(rt, row.id) }, maxBudgetUsd: taskRun.perTaskUsd }
   // A goal's lead: the drafting contract last, like a brief's.
   if (row.kind === 'goal') return { systemAppend: `${identity}\n${LEAD_DRAFT_APPEND}` }
   if (row.kind !== 'brief') return { systemAppend: identity }

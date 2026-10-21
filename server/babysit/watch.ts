@@ -63,7 +63,7 @@ export async function babysitTickOp(d: BabysitDeps, now: number, force = false):
     await d.upsertItem(item)
     const stored = await d.store.items.get(item.id)
     if (stored && !stored.playbook) await d.store.items.setFields(item.id, { playbook: 'babysit' })
-    let w: BabysitWatch = { ...(state.prs[item.id] ?? newBabysitWatch()), headSha: pr.headSha }
+    let w: BabysitWatch = { ...(state.prs[item.id] ?? newBabysitWatch()), headSha: pr.headSha, headRef: pr.headRef, baseRef: pr.baseRef }
     w = await actOn(d, item.id, pr, w, out, now)
     prs[item.id] = w
   }

@@ -8,6 +8,7 @@ import type { ToolVeto } from '../providers/types.js'
 import { log } from '../log.js'
 import { type ActionMove, canonJson, heldEntry, heldRecord, holdable, isArgsObject, move, queuedMessage, sendDelay } from '../../core/actions/queue.js'
 import { destructiveCommand } from '../../core/actions/commands.js'
+import { taskRunVerdict } from '../../core/babysit/policy.js'
 import { joinHeldCall, recordFor } from '../../core/actions/track.js'
 import { goalActionHeldOp } from '../goals.js'
 import { shortActionId } from '../../core/actions/view.js'
@@ -50,6 +51,7 @@ const holdsActions = (rt: WorkspaceRuntime, row: StoredSession): boolean =>
   (row.kind === 'job-run' ||
     (isTeamWorker(rt, row.id) && teamRunOf(rt, row.id)?.card.permissions !== 'everything') ||
     (rt.goalRuns.get(row.id)?.role ?? 'lead') !== 'lead' ||
+    rt.taskRuns.has(row.id) ||
     chatHoldsSends(rt, row))
 
 /**
@@ -117,10 +119,28 @@ export function holdIfAction(
 ): { allow: true } | { allow: false; reason: string } {
   if (!holdable(toolName) || !holdsActions(rt, row)) return { allow: true }
   const args = isArgsObject(input) ? input : {}
+  // A babysit task's shell (core/babysit/policy.ts): pushes to its PR's branch and
+  // its bot thread's reply and resolve run; force and other branches are refused;
+  // any other send falls through and is held like a chat's.
+  const taskRun = rt.taskRuns.get(row.id)
+  if (taskRun && toolName === 'Bash') {
+    const sort = sortForWorkspace(rt)
+    let v
+    try {
+      v = taskRunVerdict(String(args.command ?? ''), taskRun.scope, (part) => sort('Bash', { command: part }))
+    } catch {
+      v = { verdict: 'hold' as const }
+    }
+    if (v.verdict === 'refuse') {
+      log('info', 'tasks', `refused in a task session: ${v.reason}`, { session: row.id, workspace: rt.meta.id })
+      return { allow: false, reason: v.reason }
+    }
+    if (v.verdict === 'allow') return { allow: true }
+  }
   // A team worker's push, PR or comment from the shell: refused, not filed, a team hands
   // work in and you send it. (A job's Bash isn't held in this phase: sending needs its folder.)
   // A chat's is held like any send, and sent from the chat's folder.
-  if (toolName === 'Bash' && !chatHoldsSends(rt, row)) {
+  if (toolName === 'Bash' && !chatHoldsSends(rt, row) && !taskRun) {
     if (!isTeamWorker(rt, row.id)) return { allow: true }
     let out
     try {

@@ -444,6 +444,8 @@ export interface ItemTaskStore {
   addCost(id: string, usd: number): Promise<void>
   /** Running tasks left over from a daemon that stopped: back to queued. Returns their ids. */
   requeueRunning(): Promise<string[]>
+  /** What tasks started at or after `since` have spent, in USD: the daily budget's meter. */
+  spentSince(since: number): Promise<number>
 }
 
 export type TaskMovePatch = Partial<Pick<ItemTask, 'output' | 'error' | 'sessionId' | 'model'>>

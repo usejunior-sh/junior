@@ -27,6 +27,7 @@ import { noteBrowserTurn, slimToolImages } from './summaries.js'
 import { syncCheckouts } from './checkouts.js'
 import { onBriefSessionEnded, onBriefTurnDone } from '../brief-run.js'
 import { noteTeamSpend } from '../team-run/ops.js'
+import { endTaskSession } from '../tasks/runner.js'
 import { resolveMentions } from './mentions.js'
 import { classifyEffect, sessionScoped, TEAM_TOOLS, TRIAGE_READ_TOOLS } from './effects.js'
 import { teamRunOf } from '../team-run/state.js'
@@ -328,6 +329,8 @@ export class LiveSession {
           if (this.rt.sessionTeam.has(this.row.id)) void noteTeamSpend(this.rt, this.row.id, delta, ev.overBudget)
           // A goal session is one turn too: the run loop books its spend and moves the goal on.
           if (this.rt.goalRuns.has(this.row.id)) void endGoalSession(this.rt, this.row.id, null, delta)
+          // A task session is one turn too: it handed in (or didn't), the runner settles it.
+          if (this.rt.taskRuns.has(this.row.id)) void endTaskSession(this.rt, this.row.id, null, delta, !!ev.overBudget)
         }
       }
       this.setStatus('idle')
@@ -352,6 +355,7 @@ export class LiveSession {
       if (this.row.kind === 'brief') void onBriefSessionEnded(this.rt, this.row.id)
       if (this.row.kind === 'goal') void settleGoalLead(this.rt, this.row.id, 'the lead session ended before it proposed a plan')
       if (this.rt.goalRuns.has(this.row.id)) void endGoalSession(this.rt, this.row.id, 'the session ended before its turn finished')
+      if (this.rt.taskRuns.has(this.row.id)) void endTaskSession(this.rt, this.row.id, 'the session ended before its turn finished')
     }
   }
 
@@ -534,6 +538,18 @@ export class LiveSession {
         allowed
           ? { behavior: 'allow', updatedInput: toolInput }
           : { behavior: 'deny', message: `This is a goal's headless ${goalRun.role}: that tool isn't open to it. Note what you needed in goal_log_append.` },
+      )
+    }
+    // A task session is headless: the push policy and the hold have vetoed already,
+    // so it may edit inside its worktree, run the shell, and hand in.
+    if (this.rt.taskRuns.has(this.row.id)) {
+      const inTree = (p: unknown) => typeof p === 'string' && !path.relative(this.row.cwd, path.resolve(this.row.cwd, p)).startsWith('..')
+      const allowed =
+        toolName.startsWith('mcp__task__') || effect === 'read' || toolName === 'Bash' || (EDIT_TOOLS.has(toolName) && inTree(toolInput.file_path ?? toolInput.notebook_path))
+      return Promise.resolve(
+        allowed
+          ? { behavior: 'allow', updatedInput: toolInput }
+          : { behavior: 'deny', message: "This is a headless task session: that tool isn't open to it. If the task needs it, hand in blocked and say why." },
       )
     }
     if (this.row.kind === 'goal') {

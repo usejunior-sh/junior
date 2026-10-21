@@ -137,4 +137,9 @@ export class SqliteItemTasks implements ItemTaskStore {
     this.db.prepare("UPDATE item_tasks SET state = 'queued' WHERE state = 'running'").run()
     return rows.map((r) => r.id)
   }
+
+  async spentSince(since: number): Promise<number> {
+    const r = this.db.prepare('SELECT COALESCE(SUM(cost_usd), 0) AS usd FROM item_tasks WHERE started_at >= ?').get(since) as { usd: number }
+    return r.usd
+  }
 }

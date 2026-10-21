@@ -25,6 +25,9 @@ export { MAX_FIX_ATTEMPTS }
 /** What the watch remembers about one PR between polls. */
 export type BabysitWatch = {
   headSha: string | null
+  /** the PR's branches, as of the last poll: the runner checks out and pushes these */
+  headRef?: string
+  baseRef?: string
   /** fix tasks added per check name */
   fixes: Record<string, number>
   /** `check@sha` reruns spent: one each */

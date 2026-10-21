@@ -127,7 +127,7 @@ export type WorkspaceVerifyResponse =
  * filters these out of the chat list. `goal` = a goal's headless lead,
  * drafting or revising its plan (server/goals.ts).
  */
-export type SessionKind = 'chat' | 'job-run' | 'brief' | 'goal'
+export type SessionKind = 'chat' | 'job-run' | 'brief' | 'goal' | 'task'
 
 /**
  * The coding agent a session runs on, fixed for its life. Chats can pick;

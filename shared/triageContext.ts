@@ -32,7 +32,7 @@ export const TRIAGE_MCP_INSTRUCTIONS = `Triage is a local work inbox for one eng
 
 list_work_items, get_work_item, get_session_context, list_artifacts, read_artifact and get_today are free reads — use them rather than guessing. Every other tool writes, and the user is asked first.`
 
-export type TriageSessionKind = 'chat' | 'job-run' | 'brief' | 'goal'
+export type TriageSessionKind = 'chat' | 'job-run' | 'brief' | 'goal' | 'task'
 
 export type TriageSessionIdentity = {
   /** the triage session id: the handle for get_session_context and `links` */
@@ -65,7 +65,7 @@ Nothing about the current state of the inbox is in this prompt, because it would
 you read it. Look it up instead: get_session_context with this session's id says which work item this session
 was opened for and which artifacts are attached to it; get_work_item follows any item id, at any status.`
 
-  if (kind === 'brief' || kind === 'goal') return head
+  if (kind === 'brief' || kind === 'goal' || kind === 'task') return head
 
   return `${head}
 When the user says to write something down, note it, or attach it here, that means write_artifact. This

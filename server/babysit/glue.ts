@@ -49,6 +49,12 @@ export function onTaskAdded(fn: (rt: WorkspaceRuntime, task: ItemTask, stuck: bo
   addedHooks.push(fn)
 }
 
+/** Hooks run after every tick: the runner's pump. */
+const tickHooks: ((rt: WorkspaceRuntime) => void)[] = []
+export function onBabysitTick(fn: (rt: WorkspaceRuntime) => void): void {
+  tickHooks.push(fn)
+}
+
 export function babysitDeps(rt: WorkspaceRuntime): BabysitDeps {
   return {
     store: rt.store,
@@ -80,5 +86,7 @@ export async function babysitTick(rt: WorkspaceRuntime, force = false): Promise<
     if (r && (r.added || r.stopped)) invalidateInbox(rt)
   } finally {
     ticking.delete(rt)
+    // Queued tasks a full budget or a restart held back get their chance every tick, even when GitHub didn't answer.
+    for (const fn of tickHooks) fn(rt)
   }
 }

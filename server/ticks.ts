@@ -12,6 +12,8 @@ import { SCHEDULER_TICK_MS } from './jobs/scheduler.js'
 import { sweepGates, watchPrs } from './goal-glue.js'
 import { INBOX_KEEP_WARM_MS, syncInbox } from './inbox/sync.js'
 import { babysitTick } from './babysit/glue.js'
+// the runner registers its hooks on the babysit tick when loaded
+import './tasks/runner.js'
 import { BABYSIT_FAST_MS } from '../core/babysit/watch.js'
 
 /** when the scheduler last ticked: daemon-wide, surfaced in the System status. */

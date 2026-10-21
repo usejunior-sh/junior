@@ -27,6 +27,7 @@ import { LiveSession, type SessionExtras } from '../session/live-session.js'
 import type { QueuedRun } from '../jobs/queue.js'
 import type { JobPreview } from '../jobs/preview.js'
 import { goalEngineFor, type GoalLead, type GoalRun } from '../goal-glue.js'
+import type { TaskRun } from '../tasks/runner.js'
 import type { OpenTurn } from '../session/changes.js'
 import { errText } from '../errors.js'
 import { broadcast, invalidateInbox } from '../ws/send.js'
@@ -137,6 +138,12 @@ export class WorkspaceRuntime {
   readonly goalRuns = new Map<string, GoalRun>()
   /** actions a goal's workers queued, across sessions and restarts (server/goals.ts GoalHeldIndex) */
   readonly goalHeld = new GoalHeldIndex()
+  /** the sessions the task runner started, one per running task, by session id (server/tasks/runner.ts) */
+  readonly taskRuns = new Map<string, TaskRun>()
+  taskPumping = false
+  taskPumpAgain = false
+  /** the local day the daily babysit budget ran out on, so it's said once */
+  taskBudgetHitOn: string | null = null
   /** jobs whose run has called write_brief at least once */
   readonly briefWrote = new Set<string>()
   /** session id → the work item it was dispatched for or briefs (mirrors `links`) */
