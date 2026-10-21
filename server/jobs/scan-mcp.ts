@@ -16,6 +16,10 @@ import { errResult, okResult } from '../triage-mcp.js'
 import { upsertItem } from '../settings-ops.js'
 import { invalidateInbox } from '../ws/send.js'
 import { briefFiledItem } from '../brief-run.js'
+import { DEFAULT_FILING, labelsOf, type JobFiling } from '../../core/job/filing.js'
+import { isItemLabel, isReason, type ItemLabel, type Reason } from '../../core/work/fields.js'
+import { isTier, type Tier } from '../../core/rules/rules.js'
+import { applyRules } from '../rules-ops.js'
 
 /**
  * Identity for a filed item, derived from the link the scanner saw, never from
@@ -52,7 +56,7 @@ function webHost(url: string): string {
 }
 
 /** The upsert tool's arguments: shared by the real run and the dry run so the prompt fits both. */
-export const UPSERT_SHAPE = {
+const UPSERT_SHAPE = {
   url: z.string().describe('the canonical link: Slack permalink, Linear issue URL or key, GitHub PR/issue URL, or the web page URL'),
   title: z.string().describe('a one-line summary'),
   place: z.string().optional().describe('where it lives: "#channel", "@dm", a Linear team key, "owner/repo", or the site name'),
@@ -63,6 +67,32 @@ export const UPSERT_SHAPE = {
   due: z.string().optional().describe('only when the content states a deadline for the user: the day, ISO 8601 (e.g. 2026-10-12)'),
   refs: z.array(z.string()).optional().describe('other GitHub PR/issue URLs or Linear keys in the content'),
 }
+/**
+ * The upsert tool's arguments for one job: the base shape, plus the label
+ * (from the labels it may pick), the reason when it may pick one, and the
+ * tier when it has tiers (core/job/filing.ts).
+ */
+export function upsertShape(filing: JobFiling | undefined) {
+  const f = filing ?? DEFAULT_FILING
+  const labels = labelsOf(f) as [ItemLabel, ...ItemLabel[]]
+  return {
+    ...UPSERT_SHAPE,
+    label: z.enum(labels).optional().describe('what it is'),
+    ...(f.reasons.length > 1 ? { reason: z.enum(f.reasons as [Reason, ...Reason[]]).optional().describe('why it is here') } : {}),
+    ...(f.tiers ? { tier: z.enum(['start', 'show']).optional().describe('"start": Junior may start on it alone; "show": only for the user to see') } : {}),
+  }
+}
+
+/** A row's reason, label and tier, checked against what the job allows; anything else reads as the default. */
+export function rowFiling(filing: JobFiling | undefined, args: { reason?: unknown; label?: unknown; tier?: unknown }): { reason: Reason; label?: ItemLabel; tier: Tier } {
+  const f = filing ?? DEFAULT_FILING
+  const reason = isReason(args.reason) && f.reasons.includes(args.reason) ? args.reason : f.reasons[0]!
+  const label = isItemLabel(args.label) && labelsOf(f).includes(args.label) ? args.label : undefined
+  // a job with tiers files "show" unless the run said "start"; one without leaves it to the rules
+  const tier: Tier = f.tiers ? (isTier(args.tier) ? args.tier : 'show') : 'start'
+  return { reason, ...(label ? { label } : {}), tier }
+}
+
 export const DIGEST_SHAPE = {
   title: z.string().describe('a short name for this edition, e.g. "AI news · 12 Sep"'),
   body: z.string().describe('the whole digest as markdown'),
@@ -85,7 +115,7 @@ export function makeScanMcp(rt: WorkspaceRuntime, job: Job, runId: string, onUps
       tool(
         'upsert_work_item',
         'Record ONE match as a work item. Call once per match; the server derives the id from the link and stamps provenance.',
-        UPSERT_SHAPE,
+        upsertShape(job.filing),
         async (args) => {
           try {
             // Cost guard, enforced here not just in the prompt.
@@ -98,6 +128,7 @@ export function makeScanMcp(rt: WorkspaceRuntime, job: Job, runId: string, onUps
             const now = Date.now()
             const when = safeWhen(args.lastActivity, now)
             const refs = canonicalizeRefs(args.refs)
+            const filed = rowFiling(job.filing, args)
             const item: CoreWorkItem = {
               id: ident.id,
               source: ident.source,
@@ -106,10 +137,13 @@ export function makeScanMcp(rt: WorkspaceRuntime, job: Job, runId: string, onUps
               url: ident.url,
               repo: args.place?.trim() || ident.home,
               author: args.from ?? '',
-              peopleWaiting: 0,
+              // someone asked: a person waits on you
+              peopleWaiting: filed.reason === 'asked' ? 1 : 0,
               createdAt: when,
               updatedAt: when,
               ask: args.ask,
+              reason: filed.reason,
+              ...(filed.label ? { label: filed.label } : {}),
               ...(parseDue(args.due) != null ? { dueAt: parseDue(args.due)! } : {}),
               ...(refs ? { refs } : {}),
             }
@@ -119,6 +153,8 @@ export function makeScanMcp(rt: WorkspaceRuntime, job: Job, runId: string, onUps
             invalidateInbox(rt)
             // The job briefs what it files: the item arrives ready, your turn.
             if (job.brief && (outcome === 'inserted' || reopened)) briefFiledItem(rt, job, item.id, runId)
+            // The rules decide what Junior does with it (core/rules).
+            if (outcome === 'inserted' || reopened) void applyRules(rt, item.id, filed.tier)
             log('info', 'job', `filed (${outcome}): ${item.title}`, {
               id: item.id,
               jobId: job.id,

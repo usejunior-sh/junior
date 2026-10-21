@@ -170,12 +170,14 @@ export function parseFrontmatter(text: string): Frontmatter {
 }
 
 const NEEDS_QUOTES = /^$|^[\s"'[\]{}#&*!|>%@`-]|[:#]|\s$/
-const quote = (v: string) => (NEEDS_QUOTES.test(v) ? `"${v.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"` : v)
+const quoted = (v: string) => `"${v.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`
+const quote = (v: string) => (NEEDS_QUOTES.test(v) ? quoted(v) : v)
 
 export function serializeFrontmatter(data: Record<string, FrontmatterValue>, body: string): string {
   const lines = ['---']
   for (const [k, v] of Object.entries(data)) {
-    if (Array.isArray(v)) lines.push(`${k}: [${v.map(quote).join(', ')}]`)
+    // a comma inside a list item would split it on the way back in
+    if (Array.isArray(v)) lines.push(`${k}: [${v.map((x) => (x.includes(',') ? quoted(x) : quote(x))).join(', ')}]`)
     else lines.push(`${k}: ${quote(v)}`)
   }
   lines.push('---')

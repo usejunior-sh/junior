@@ -35,6 +35,7 @@ import {
   type JobToolGrant,
 } from '../core/job/tools.js'
 import { JOB_NOTIFY, type JobBrief, type JobNotify, type JobOutput } from '../core/job/types.js'
+import { FILING_KEYS, filingFrom, filingKeys, type JobFiling } from '../core/job/filing.js'
 import type { LibrarySource } from '../shared/protocol.js'
 import { parseFrontmatter, serializeFrontmatter, type FrontmatterValue } from './artifacts.js'
 import { WORKSPACE_PLUGIN } from './library.js'
@@ -65,6 +66,8 @@ export type JobFileSpec = {
   skills?: string[]
   /** subagents a run may hand work to, named the same way */
   agents?: string[]
+  /** how it files: reason, labels, tiers (core/job/filing.ts) */
+  filing?: JobFiling
   instruction: string
 }
 
@@ -72,6 +75,7 @@ export const JOB_FILE_KEYS = [
   'id', 'title', 'schedule', 'project', 'tools', 'skills', 'agents', 'model', 'output', 'catch_up',
   'timeout', 'budget_usd', 'daily_budget_usd', 'notify', 'enabled',
   'brief', 'brief_model', 'brief_template', 'draft',
+  ...FILING_KEYS,
 ] as const
 
 /** A skill or agent name as Claude calls it: `name`, or `namespace:name` for a plugin's (the workspace library is `triage:`). */
@@ -209,6 +213,9 @@ export function parseJobFile(name: string, text: string): ParsedJobFile {
       ? { ...(briefModel ? { model: briefModel } : {}), ...(briefTemplate && PLAYBOOK_RE.test(briefTemplate) ? { template: briefTemplate } : {}) }
       : undefined
 
+  const filing = filingFrom({ reason: d.reason, labels: d.labels, start_alone: d.start_alone, only_show: d.only_show, ignore: d.ignore }, errors)
+  if (filing && output === 'digest') errors.push('reason, labels and tiers work with output: items — a digest files no items')
+
   const draftRaw = str(d.draft) || 'false'
   if (draftRaw !== 'true' && draftRaw !== 'false') errors.push('draft must be true or false')
 
@@ -230,6 +237,7 @@ export function parseJobFile(name: string, text: string): ParsedJobFile {
     enabled: enabledRaw !== 'false',
     ...(brief ? { brief } : {}),
     ...(draftRaw === 'true' ? { draft: true } : {}),
+    ...(filing ? { filing } : {}),
     instruction,
   }
   return { spec, errors, hadId: Boolean(id) }
@@ -262,6 +270,7 @@ export function serializeJobFile(s: JobFileSpec): string {
     if (s.brief.template) data.brief_template = s.brief.template
   }
   if (s.draft) data.draft = 'true'
+  Object.assign(data, filingKeys(s.filing))
   return serializeFrontmatter(data, `\n${s.instruction.trim()}\n`)
 }
 

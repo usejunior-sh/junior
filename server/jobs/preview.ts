@@ -21,7 +21,8 @@ import { probeConnectors } from '../workspace/probes.js'
 import { jobLibrary } from '../session/changes.js'
 import { broadcast } from '../ws/send.js'
 import { VERSION } from '../config.js'
-import { DIGEST_SHAPE, identityFromUrl, UPSERT_SHAPE } from './scan-mcp.js'
+import { DIGEST_SHAPE, identityFromUrl, rowFiling, upsertShape } from './scan-mcp.js'
+import type { JobFiling } from '../../core/job/filing.js'
 import { errResult, okResult } from '../triage-mcp.js'
 import { sortForWorkspace } from '../session/actions-record.js'
 
@@ -49,6 +50,8 @@ type RunSpec = {
   /** the skills and agents the job names, as Claude calls them */
   skills?: string[]
   agents?: string[]
+  /** how it files: reason, labels, tiers */
+  filing?: JobFiling
 }
 
 type PreviewSpec = Omit<RunSpec, 'project'> & { projectId: string }
@@ -149,6 +152,7 @@ export async function jobQuery(
     ...(spec.lateness ? { lateness: spec.lateness } : {}),
     ...(spec.skills?.length ? { skills: spec.skills } : {}),
     ...(spec.agents?.length ? { agents: spec.agents } : {}),
+    ...(spec.filing ? { filing: spec.filing } : {}),
   })
   // A job's skills and agents: only the ones it names load, checked again
   // here: the library may have changed since the file was. The workspace
@@ -231,7 +235,7 @@ export async function runJobPreview(rt: WorkspaceRuntime, pv: JobPreview, spec: 
             }),
           ]
         : [
-            tool('upsert_work_item', 'Record ONE match as a work item. Call once per match; the server derives the id from the link.', UPSERT_SHAPE, async (args) => {
+            tool('upsert_work_item', 'Record ONE match as a work item. Call once per match; the server derives the id from the link.', upsertShape(spec.filing), async (args) => {
               if (rows.length >= MAX_ROWS_PER_RUN) return errResult(`row cap reached (${MAX_ROWS_PER_RUN}) — stop calling this tool`)
               const ident = identityFromUrl(args.url)
               if (!ident) return errResult('url must be a Slack permalink, a Linear issue URL or key, a GitHub PR/issue URL, or a web page URL')
@@ -246,6 +250,7 @@ export async function runJobPreview(rt: WorkspaceRuntime, pv: JobPreview, spec: 
                 lastActivity: safeWhen(args.lastActivity, Date.now()),
                 why: args.why,
                 ask: args.ask,
+                ...rowFiling(spec.filing, args),
               })
               return okResult(existing ? `already filed, ${existing.status}: ${ident.id}` : `new: filed ${ident.id}`)
             }),

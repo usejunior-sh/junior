@@ -1,6 +1,7 @@
 import { rmdir } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import { type Job, JOB_OUTPUTS, type JobBrief, type JobOutput } from '../../core/job/types.js'
+import type { JobFiling } from '../../core/job/filing.js'
 import { type JobToolGrant, presetGrant, RESERVED_SERVER } from '../../core/job/tools.js'
 import { log } from '../log.js'
 import { checkGrants, checkLibrary, grantsFromLines, type JobFileSpec, type JobLibrary, parseJobFile, serializeJobFile, withKey } from '../job-files.js'
@@ -108,6 +109,7 @@ function jobConfigFrom(spec: JobFileSpec, file: string) {
     draft: !!spec.draft,
     skills: spec.skills ?? null,
     agents: spec.agents ?? null,
+    filing: spec.filing ?? null,
     file,
   }
 }
@@ -133,12 +135,13 @@ export function jobSpecFrom(w: Job): JobFileSpec {
     ...(w.draft && !w.enabled ? { draft: true } : {}),
     ...(w.skills?.length ? { skills: w.skills } : {}),
     ...(w.agents?.length ? { agents: w.agents } : {}),
+    ...(w.filing ? { filing: w.filing } : {}),
     instruction: w.instruction,
   }
 }
 
 type JobConfig = ReturnType<typeof jobConfigFrom>
-const configKey = (w: Pick<Job, Exclude<keyof JobConfig, 'catchUpWindow' | 'timeoutMs' | 'maxBudgetUsd' | 'dailyBudgetUsd' | 'brief' | 'draft' | 'skills' | 'agents'>> & {
+const configKey = (w: Pick<Job, Exclude<keyof JobConfig, 'catchUpWindow' | 'timeoutMs' | 'maxBudgetUsd' | 'dailyBudgetUsd' | 'brief' | 'draft' | 'skills' | 'agents' | 'filing'>> & {
   catchUpWindow?: string | null
   timeoutMs?: number | null
   maxBudgetUsd?: number | null
@@ -147,12 +150,13 @@ const configKey = (w: Pick<Job, Exclude<keyof JobConfig, 'catchUpWindow' | 'time
   draft?: boolean
   skills?: string[] | null
   agents?: string[] | null
+  filing?: JobFiling | null
 }) =>
   JSON.stringify([
     w.title, w.instruction, w.schedule, w.tools, w.projectId || '', w.model ?? null, w.output, w.catchUpWindow ?? null,
     w.timeoutMs ?? null, w.maxBudgetUsd ?? null, w.dailyBudgetUsd ?? null, w.notify, w.enabled, w.file ?? null,
     w.brief ? [w.brief.model ?? null, w.brief.template ?? null] : null, !!w.draft,
-    w.skills?.length ? w.skills : null, w.agents?.length ? w.agents : null,
+    w.skills?.length ? w.skills : null, w.agents?.length ? w.agents : null, w.filing ?? null,
   ])
 
 /**
@@ -222,6 +226,7 @@ async function syncJobFilesNow(rt: WorkspaceRuntime, { force = false, deferFirst
         brief: cfg.brief ?? undefined,
         skills: cfg.skills ?? undefined,
         agents: cfg.agents ?? undefined,
+        filing: cfg.filing ?? undefined,
         ...(configError ? { configError } : {}),
         // never run → due at once ("run once now"), unless the creator said wait
         ...(deferFirstRun === spec.id ? { lastRunStartedAt: now } : {}),
@@ -419,6 +424,7 @@ export async function tryJobOp(rt: WorkspaceRuntime, raw: unknown): Promise<stri
     schedule: scheduleOf(job),
     skills: job.skills,
     agents: job.agents,
+    filing: job.filing,
   })
   if (pv.status !== 'ready' || !pv.result) throw new Error(pv.error ?? 'the trial run ended without a result')
   const res = pv.result
@@ -429,7 +435,7 @@ export async function tryJobOp(rt: WorkspaceRuntime, raw: unknown): Promise<stri
         ? [`It would write the digest “${res.digest.title}”:`, '', res.digest.body.slice(0, 4000)]
         : ['It wrote no digest.']
       : res.rows.length
-        ? [`It would file ${res.rows.length} item(s):`, ...res.rows.map((x) => `- ${x.title} — ${x.url} (${x.ask}) — ${x.why}`)]
+        ? [`It would file ${res.rows.length} item(s):`, ...res.rows.map((x) => `- ${x.title} — ${x.url} (${[x.ask, x.reason, x.label, x.tier].filter(Boolean).join(', ')}) — ${x.why}`)]
         : ['It found nothing to file.']
   return [
     `ok: trial run of “${job.title}” finished (${cost}). Nothing was filed or sent.`,

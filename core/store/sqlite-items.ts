@@ -87,6 +87,15 @@ function mergeProvenance(existing: Provenance[] | undefined, add?: Provenance): 
   return list.slice(-10)
 }
 
+/**
+ * A find may fill reason and label (a job files them, core/job/filing.ts),
+ * never overwrite them: once set, they are yours to change.
+ */
+const fieldsFill = (base: WorkItem, item: WorkItem): Pick<WorkItem, 'reason' | 'label'> => ({
+  ...(base.reason ?? item.reason ? { reason: base.reason ?? item.reason } : {}),
+  ...(base.label ?? item.label ? { label: base.label ?? item.label } : {}),
+})
+
 /** Who an ingestion transition is attributed to. */
 function upsertActor(p: Provenance | undefined): string {
   if (p?.runId) return `job:${p.runId}`
@@ -168,10 +177,11 @@ export class SqliteWorkItems implements WorkItemStore {
           refs: item.refs ?? base.refs,
           why: provenance?.why ?? item.why ?? base.why,
           ask: item.ask ?? base.ask,
+          ...fieldsFill(base, item),
           foundBy,
         }
       : // a re-find re-judges: its why and ask replace the last find's
-        { ...base, why: provenance?.why ?? base.why, ask: item.ask ?? base.ask, foundBy }
+        { ...base, why: provenance?.why ?? base.why, ask: item.ask ?? base.ask, ...fieldsFill(base, item), foundBy }
 
     if (reopened) {
       this.db

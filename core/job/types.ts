@@ -158,6 +158,8 @@ export interface Job {
   skills?: string[]
   /** subagents a run may hand work to, named the same way; omitted = none */
   agents?: string[]
+  /** how it files: reason, labels, tiers (filing.ts); omitted = found, any label, no tiers */
+  filing?: import('./filing.js').JobFiling
   createdAt: number
   updatedAt: number
 }
@@ -179,6 +181,8 @@ export type NewJob = Pick<Job, 'title' | 'instruction' | 'schedule' | 'createsIt
   /** null or [] = none */
   skills?: string[] | null
   agents?: string[] | null
+  /** null = the default filing */
+  filing?: import('./filing.js').JobFiling | null
   /** legacy; defaults to a coarse bucket when omitted */
   cadence?: JobCadence
   windowStart?: string
@@ -230,6 +234,10 @@ export interface JobPreviewRow {
   why: string
   /** the label the run picked (core/work/labels.ts) */
   ask: string
+  /** how the job files it (filing.ts) */
+  reason?: string
+  label?: string
+  tier?: string
 }
 
 /** What a dry run returns: the would-be items or the would-be digest, and what it cost. Nothing is saved. */

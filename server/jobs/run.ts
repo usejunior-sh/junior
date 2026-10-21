@@ -139,7 +139,7 @@ export async function runJob(
     }, runLimits.timeoutMs)
     const runSpec = await jobQuery(
       rt,
-      { instruction: job.instruction, tools: job.tools, project, model: job.model, output: job.output, schedule: scheduleOf(job), scope: job.scope, lateness, skills: job.skills, agents: job.agents },
+      { instruction: job.instruction, tools: job.tools, project, model: job.model, output: job.output, schedule: scheduleOf(job), scope: job.scope, lateness, skills: job.skills, agents: job.agents, filing: job.filing },
       scanMcp,
       abort,
       runLimits,

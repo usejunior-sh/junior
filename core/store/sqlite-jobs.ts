@@ -2,6 +2,7 @@ import { DatabaseSync } from 'node:sqlite'
 import { randomUUID } from 'node:crypto'
 import { type JobConnector, type JobRunStatus, JOB_RUN_STATUSES, type JobRunTrigger, type JobBrief, type Job, JOB_NOTIFY, type JobNotify, type JobCadence, type NewJob, type JobRunStart, type JobRunResult, type NewJobSlotRun, type JobSlotFinish, type JobSlotRun, type JobSlotStatus } from '../job/types.js'
 import { cronFromCadence } from '../job/cron.js'
+import { filingFromJson } from '../job/filing.js'
 import { type JobToolGrant, grantsFrom, grantsFromLegacy } from '../job/tools.js'
 import type { JobStore, JobStatePatch, JobRunLedger } from './types.js'
 
@@ -45,6 +46,7 @@ type JobRow = {
   draft?: number | null
   skills?: string | null
   agents?: string | null
+  filing?: string | null
   created_at: number
   updated_at: number
 }
@@ -149,6 +151,7 @@ const toJob = (r: JobRow): Job => ({
   ...(r.draft ? { draft: true } : {}),
   ...(toNames(r.skills).length ? { skills: toNames(r.skills) } : {}),
   ...(toNames(r.agents).length ? { agents: toNames(r.agents) } : {}),
+  ...(filingFromJson(r.filing) ? { filing: filingFromJson(r.filing)! } : {}),
   createdAt: r.created_at,
   updatedAt: r.updated_at,
 })
@@ -172,8 +175,8 @@ export class SqliteJobs implements JobStore {
         `INSERT INTO jobs (id, source, title, scope, instruction, cadence, window_start, window_day,
            schedule, enabled, creates_items, cursor, last_run_at, last_run_tokens, last_run_matches, template_id,
            tools, project_id, model, output, catch_up_window, timeout_ms, max_budget_usd, daily_budget_usd, file, notify,
-           config_error, last_run_started_at, consecutive_failures, brief, draft, skills, agents, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?)`,
+           config_error, last_run_started_at, consecutive_failures, brief, draft, skills, agents, filing, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         w.id, w.source, w.title, w.scope, w.instruction, w.cadence,
@@ -185,7 +188,7 @@ export class SqliteJobs implements JobStore {
         w.catchUpWindow ?? null, w.timeoutMs ?? null, w.maxBudgetUsd ?? null, w.dailyBudgetUsd ?? null, w.file ?? null, w.notify,
         w.configError ?? null, w.lastRunStartedAt ?? null,
         w.brief ? JSON.stringify(w.brief) : null, w.draft ? 1 : 0,
-        fromNames(w.skills), fromNames(w.agents),
+        fromNames(w.skills), fromNames(w.agents), w.filing ? JSON.stringify(w.filing) : null,
         w.createdAt, w.updatedAt,
       )
   }
@@ -201,7 +204,7 @@ export class SqliteJobs implements JobStore {
         `UPDATE jobs SET title = ?, scope = ?, instruction = ?, cadence = ?, window_start = ?,
            window_day = ?, schedule = ?, enabled = ?, creates_items = ?, tools = ?, project_id = ?, model = ?, output = ?,
            catch_up_window = ?, timeout_ms = ?, max_budget_usd = ?, daily_budget_usd = ?, file = ?, notify = ?,
-           brief = ?, draft = ?, skills = ?, agents = ?, updated_at = ? WHERE id = ?`,
+           brief = ?, draft = ?, skills = ?, agents = ?, filing = ?, updated_at = ? WHERE id = ?`,
       )
       .run(
         next.title, next.scope ?? '', next.instruction, next.cadence,
@@ -211,7 +214,7 @@ export class SqliteJobs implements JobStore {
         JSON.stringify(next.tools), next.projectId || null, next.model ?? null, next.output ?? 'items',
         opt(next.catchUpWindow), opt(next.timeoutMs), opt(next.maxBudgetUsd), opt(next.dailyBudgetUsd), next.file ?? null, next.notify ?? 'on_failure',
         next.brief ? JSON.stringify(next.brief) : null, next.draft ? 1 : 0,
-        fromNames(next.skills), fromNames(next.agents),
+        fromNames(next.skills), fromNames(next.agents), next.filing ? JSON.stringify(next.filing) : null,
         Date.now(), id,
       )
   }

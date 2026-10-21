@@ -11,6 +11,7 @@ import { humanSpan } from './schedule.js'
 import { MAX_WEB_FETCHES, grantLabel, runDeferredTools, serverLabel, type JobToolGrant } from './tools.js'
 import type { JobOutput } from './types.js'
 import { askGuide } from '../work/asks.js'
+import { filingPrompt, type JobFiling } from './filing.js'
 
 export { MAX_WEB_FETCHES } from './tools.js'
 
@@ -56,6 +57,8 @@ export function composeRunPrompt(w: {
   skills?: string[]
   /** subagents the job names: the only ones the Agent tool will start */
   agents?: string[]
+  /** how it files: reason, labels, tiers */
+  filing?: JobFiling
 }): string {
   const deferred = runDeferredTools(w.tools)
   const span = humanSpan(w.lookbackMs)
@@ -97,7 +100,8 @@ Do not file individual items. If there is nothing new in the window, do not call
 ${askGuide()}
   Pick review, reply or decide only when a person is waiting on the user. When unsure, pick read.
 - due: only when the content states a deadline for the user ("by EOD", "before Friday's release", a ticket due date): that day as YYYY-MM-DD. Omit otherwise; never guess one
-- refs: any other GitHub PR/issue URLs or Linear keys visible in the content (omit if none)`,
+- refs: any other GitHub PR/issue URLs or Linear keys visible in the content (omit if none)
+${filingPrompt(w.filing)}`,
           `The tool tells you when something is already filed. An "already filed and open" reply means the user has it: do not count it as new, move on to the next candidate.`,
           `Call upsert_work_item at most ${MAX_ROWS_PER_RUN} times. It is the ONLY triage write tool you may use. If nothing matches, do not call it — just finish with a one-line summary of what you looked at. If you cannot access any of the integration tools at all, reply with exactly no-connector-tools and stop.`,
         ]),

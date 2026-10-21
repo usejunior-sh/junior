@@ -129,7 +129,7 @@ export function ensureDurableSchema(db: DatabaseSync) {
     ['consecutive_failures', 'consecutive_failures INTEGER NOT NULL DEFAULT 0'],
     ['last_run_started_at', 'last_run_started_at INTEGER'], ['last_run_new', 'last_run_new INTEGER'], ['last_run_trigger', 'last_run_trigger TEXT'],
     ['brief', 'brief TEXT'], ['draft', 'draft INTEGER NOT NULL DEFAULT 0'],
-    ['skills', 'skills TEXT'], ['agents', 'agents TEXT'],
+    ['skills', 'skills TEXT'], ['agents', 'agents TEXT'], ['filing', 'filing TEXT'],
   ]) ensure('jobs', col, decl, w)
   ensure('sessions', 'run_trigger', 'run_trigger TEXT', s)
   ensure('sessions', 'run_new', 'run_new INTEGER', s)
