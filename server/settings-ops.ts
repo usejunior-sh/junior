@@ -21,9 +21,22 @@ const CUSTOM_MODELS_KEY = 'models.custom'
 const DEFAULT_BRIEF_CAP = 20
 export const BRIEF_TIMEOUT_MS = 300_000
 
-/** The global jobs switch. Off by default: 0.7 is pull-before-push. */
+/** The global jobs switch: on for a workspace made since M4 (its Slack job ships on), as you left it before. */
 export async function jobsEnabled(rt: WorkspaceRuntime): Promise<boolean> {
   return (await rt.store.config.get<boolean>(JOBS_ENABLED_KEY)) === true
+}
+
+/**
+ * Boot: a workspace that never set the switch gets it written down. A new
+ * one (no sessions, no items) starts with jobs on, so the seeded Slack job
+ * runs; one from before keeps jobs off, so an upgrade never starts spending
+ * on its own.
+ */
+export async function settleJobsSwitch(rt: WorkspaceRuntime): Promise<void> {
+  if ((await rt.store.config.get<boolean>(JOBS_ENABLED_KEY)) != null) return
+  const fresh = (await rt.store.sessions.list()).length === 0 && (await rt.store.items.listAll()).length === 0
+  await rt.store.config.set(JOBS_ENABLED_KEY, fresh)
+  log('info', 'job', `jobs ${fresh ? 'on (a new workspace)' : 'left off (a workspace from before)'}`, { workspace: rt.meta.id })
 }
 
 export async function readSettings(rt: WorkspaceRuntime): Promise<WorkspaceSettings> {

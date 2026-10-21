@@ -571,6 +571,25 @@ export class JobFiles {
     }
     if (changed) await this.saveManifest(m)
   }
+
+  /**
+   * Take shipped templates out: one still exactly as triage wrote it goes; one
+   * you edited (turned on, reworded) is yours and stays.
+   */
+  async retire(names: string[]): Promise<void> {
+    const m = await this.manifest()
+    let changed = false
+    for (const name of names) {
+      const entry = m.files[`${name}.md`]
+      if (!entry?.hash || entry.removed) continue
+      const file = this.pathOf(name)
+      if (existsSync(file) && hash(await readFile(file, 'utf8')) !== entry.hash) continue
+      await rm(file, { force: true })
+      entry.removed = true
+      changed = true
+    }
+    if (changed) await this.saveManifest(m)
+  }
 }
 
 async function atomicWrite(file: string, content: string): Promise<void> {

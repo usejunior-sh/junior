@@ -63,3 +63,15 @@ test('the prompt asks for a label always, a reason when there is a choice, a tie
   assert.match(slack, /Never file anything matching: #alerts/)
   assert.doesNotMatch(slack, /idea:/)
 })
+
+test('the seeded Slack job parses clean: asked or mentioned, three tiers, on', async () => {
+  const { SLACK_TEMPLATE } = await import('../server/jobs/ops.js')
+  const text = serializeJobFile({ id: 'template-slack', project: 'p1', ...SLACK_TEMPLATE })
+  const { spec, errors } = parseJobFile('slack', text)
+  assert.deepEqual(errors, [])
+  assert.equal(spec.enabled, true)
+  assert.equal(spec.schedule, '*/15 8-18 * * 1-5')
+  assert.deepEqual(spec.filing?.reasons, ['asked', 'mentioned'])
+  assert.equal(spec.filing?.tiers?.start.length, 2)
+  assert.equal(spec.filing?.tiers?.ignore.length, 2)
+})

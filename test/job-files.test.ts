@@ -133,6 +133,17 @@ test('seeding: written once, untouched ones follow upgrades, edits and deletions
     assert.deepEqual(await files.scan(), [])
   }))
 
+test('retiring: an untouched shipped template goes, an edited one stays yours', () =>
+  withDir(async (_root, files) => {
+    await files.seed({ old: { ...spec, id: 'template-old', enabled: false, project: '' }, kept: { ...spec, id: 'template-kept', enabled: false, project: '' } })
+    writeFileSync(files.pathOf('kept'), readFileSync(files.pathOf('kept'), 'utf8').replace('enabled: false', 'enabled: true'))
+    await files.retire(['old', 'kept', 'never-seeded'])
+    assert.deepEqual((await files.scan()).map((f) => f.name), ['kept'])
+    // retired stays retired: a later seed of the same name doesn't bring it back
+    await files.seed({ old: { ...spec, id: 'template-old', enabled: false, project: '' } })
+    assert.deepEqual((await files.scan()).map((f) => f.name), ['kept'])
+  }))
+
 test('the starter file parses clean, comments and all, and names the first project', () => {
   const p = parseJobFile('new', starterJobFile([{ id: 'p-1', name: 'Novus' }, { id: 'p-2', name: 'Other' }]))
   assert.deepEqual(p.errors, [])

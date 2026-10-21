@@ -7,6 +7,8 @@ import { broadcast, invalidateInbox } from '../ws/send.js'
 import { expandHome, pickNativeFolder } from '../folders.js'
 import { addProject } from '../session/sessions.js'
 import { checkoutList } from '../session/checkouts.js'
+import { jobsEnabled } from '../settings-ops.js'
+import { seedJobTemplates } from '../jobs/ops.js'
 import type { ScopedCtx } from './ctx.js'
 
 export async function inboxRoutes({ req, url, json, access, rt }: ScopedCtx): Promise<boolean> {
@@ -63,6 +65,8 @@ export async function inboxRoutes({ req, url, json, access, rt }: ScopedCtx): Pr
           const project = await addProject(rt, rawPath, name, repo)
           if (makeDefault && !project.isDefault) await rt.store.projects.setDefault(project.id)
         }
+        // the Slack job runs in the default project: one held for lack of a project picks it up now
+        if (await jobsEnabled(rt)) await seedJobTemplates(rt)
       } else if (req.method === 'DELETE') {
         const id = url.searchParams.get('id')
         if (id) {

@@ -17,32 +17,38 @@ import { type JobPreview, runJobPreview } from './preview.js'
 import { invalidateInbox } from '../ws/send.js'
 
 /**
- * Pre-installed job templates (.docs/jobs-v2.md): the old built-in Slack
- * rules, shipped as data and seeded as editable copies on first run. A user can
- * disable, edit, or duplicate them; a `templateId` marks the origin.
+ * The Slack job (M4): seeded on, the way Slack work reaches the inbox. One
+ * scan every 15 minutes in working hours, with the three tiers: what Junior
+ * may start on alone, what it only shows you, and what it never files. A
+ * question asked of you becomes a People waiting item with a draft reply
+ * (the answer rule); a mention is FYI.
  */
-const JOB_TEMPLATES: Array<
-  Pick<Job, 'title' | 'instruction' | 'schedule' | 'cadence' | 'createsItems' | 'tools'> & { templateId: string }
-> = [
-  {
-    templateId: 'unread-dms',
-    title: 'Unread DMs',
-    tools: [presetGrant('claude.ai Slack')!],
-    instruction: 'Look through my unread Slack direct messages. File each unanswered one that asks something of me.',
-    schedule: '0 * * * *',
-    cadence: 'hourly',
-    createsItems: true,
+export const SLACK_JOB_INSTRUCTION = `Find the Slack messages that need me: direct messages and threads where someone asks me something I have not answered yet, and channel messages that mention me. Skip anything I already answered, and anything where the latest message is mine. One item per thread.`
+
+export const SLACK_TEMPLATE: Omit<JobFileSpec, 'id' | 'project'> = {
+  title: 'Slack',
+  schedule: '*/15 8-18 * * 1-5',
+  tools: [presetGrant('claude.ai Slack')!],
+  model: 'sonnet',
+  output: 'items',
+  budgetUsd: 0.5,
+  dailyBudgetUsd: 5,
+  notify: 'on_failure',
+  enabled: true,
+  filing: {
+    reasons: ['asked', 'mentioned'],
+    labels: [],
+    tiers: {
+      start: ['direct messages to me that ask me something', 'threads I am in where the latest message asks me something'],
+      show: ['channel messages that mention me without asking me anything'],
+      ignore: ['bot and alert channels', 'messages from bots and integrations'],
+    },
   },
-  {
-    templateId: 'mentions',
-    title: 'Mentions',
-    tools: [presetGrant('claude.ai Slack')!],
-    instruction: 'Find Slack messages where I am mentioned or tagged and my reply is still awaited. File each one.',
-    schedule: '0 * * * *',
-    cadence: 'hourly',
-    createsItems: true,
-  },
-]
+  instruction: SLACK_JOB_INSTRUCTION,
+}
+
+/** Templates from before M4, retired once the Slack job covers them: removed only if you never touched them. */
+const RETIRED_TEMPLATES = ['mentions', 'unread-dms']
 
 const NEEDS_PROJECT = 'pick the project this job runs in'
 
@@ -68,21 +74,24 @@ export async function migrateJobProjects(rt: WorkspaceRuntime): Promise<void> {
   }
 }
 
-/** The built-in templates as job files: paused, asking for a project. */
-const JOB_TEMPLATE_FILES: Record<string, JobFileSpec> = Object.fromEntries(
-  JOB_TEMPLATES.map((t) => [
-    t.templateId,
-    { id: `template-${t.templateId}`, title: t.title, schedule: t.schedule, project: '', tools: t.tools, output: 'items', notify: 'on_failure', enabled: false, instruction: t.instruction },
-  ]),
-)
+/**
+ * The shipped templates as job files. The Slack job runs in the workspace's
+ * default project (where Junior reads code to answer); with none yet it is
+ * held, asking for one, and picks one up once a project is added.
+ */
+async function jobTemplateFiles(rt: WorkspaceRuntime): Promise<Record<string, JobFileSpec>> {
+  const project = await defaultProject(rt)
+  return { slack: { id: 'template-slack', project: project?.id ?? '', ...SLACK_TEMPLATE } }
+}
 
 /**
  * Install the built-in templates as files in `jobs/`, tracked in its
  * `.seeded.json` (teams' pattern): an untouched one follows upgrades, an edited
- * one is the user's, a deleted one stays deleted.
+ * one is the user's, a deleted one stays deleted. Retired ones go if untouched.
  */
 export async function seedJobTemplates(rt: WorkspaceRuntime): Promise<void> {
-  await rt.jobFiles.seed(JOB_TEMPLATE_FILES)
+  await rt.jobFiles.seed(await jobTemplateFiles(rt))
+  await rt.jobFiles.retire(RETIRED_TEMPLATES)
   await syncJobFiles(rt, { force: true })
 }
 
