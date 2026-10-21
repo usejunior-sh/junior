@@ -134,6 +134,39 @@ export type TaskSummary = {
   next: Pick<ItemTask, 'id' | 'title' | 'step' | 'owner' | 'error'> | null
   /** the newest done task's line, for "Fix lint ✓" */
   lastDone: string | null
+  /** a PR that asks for your review: where Junior's first pass is (core/review) */
+  review?: ReviewState
+}
+
+/**
+ * Where the latest first-pass review stands: queued, reviewing, ready (its
+ * review waits for your OK), posted, or set aside. `verdict` and `line` are
+ * the latest finished pass's.
+ */
+export type ReviewState = {
+  state: 'queued' | 'reviewing' | 'ready' | 'posted' | 'skipped' | 'failed'
+  verdict: TaskOutput['verdict'] | null
+  line: string | null
+}
+
+/** The review playbook's state, read off its tasks; null when the item has no review tasks. */
+export function reviewState(tasks: readonly ItemTask[]): ReviewState | null {
+  const passes = tasks.filter((t) => t.step === 'review')
+  if (passes.length === 0) return null
+  const last = passes[passes.length - 1]!
+  const done = [...passes].reverse().find((t) => t.state === 'done')
+  const post = done ? tasks.find((t) => t.step === 'post-review' && t.key === `post:${done.id}`) : undefined
+  const verdict = post?.state === 'done' ? (post.output?.verdict ?? done?.output?.verdict ?? null) : (done?.output?.verdict ?? null)
+  const line = post?.state === 'done' ? (post.output?.summary ?? null) : (done?.output?.summary ?? null)
+  const state: ReviewState['state'] =
+    last.state === 'queued' ? 'queued'
+    : last.state === 'running' ? 'reviewing'
+    : last.state === 'failed' || last.state === 'waiting' ? 'failed'
+    : last !== done ? 'skipped'
+    : post?.state === 'done' ? 'posted'
+    : post?.state === 'waiting' || post?.state === 'queued' ? 'ready'
+    : 'skipped'
+  return { state, verdict, line }
 }
 
 export function taskSummary(tasks: readonly ItemTask[]): TaskSummary | null {
@@ -143,6 +176,7 @@ export function taskSummary(tasks: readonly ItemTask[]): TaskSummary | null {
   const failed = tasks.filter((t) => t.state === 'failed' && t.createdAt > lastDoneAt)
   const asks = [...waiting, ...failed].sort((a, b) => b.createdAt - a.createdAt)
   const done = [...tasks].reverse().find((t) => t.state === 'done')
+  const review = reviewState(tasks)
   return {
     line: progressLine(tasks),
     running: tasks.some((t) => t.state === 'running'),
@@ -150,5 +184,6 @@ export function taskSummary(tasks: readonly ItemTask[]): TaskSummary | null {
     needsYou: asks.length,
     next: asks[0] ? { id: asks[0].id, title: asks[0].title, owner: asks[0].owner, ...(asks[0].step ? { step: asks[0].step } : {}), ...(asks[0].error ? { error: asks[0].error } : {}) } : null,
     lastDone: done ? `${done.title} \u2713${done.output?.summary ? ` · ${done.output.summary}` : ''}` : null,
+    ...(review ? { review } : {}),
   }
 }

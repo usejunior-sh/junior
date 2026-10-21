@@ -12,7 +12,7 @@ import { openSqliteStore } from '../core/store/sqlite.js'
 import type { Store } from '../core/store/types.js'
 import type { WorkItem } from '../core/work/types.js'
 import { memoryBlock, reasonOf } from '../core/work/fields.js'
-import { canMove, progressLine, taskSummary, type ItemTask } from '../core/work/tasks.js'
+import { canMove, progressLine, reviewState, taskSummary, type ItemTask } from '../core/work/tasks.js'
 import { scoreItem } from '../core/work/score.js'
 
 async function withStore(fn: (store: Store) => Promise<void>) {
@@ -170,4 +170,19 @@ test('the summary: progress, what waits on you, the last thing done', () => {
   assert.equal(s.line, '1 of 3 · waiting on you: Request anirudha')
   const busy = taskSummary([t('Fix lint', 'running', 1), t('Rebase on main', 'queued', 2)])!
   assert.deepEqual([busy.running, busy.queued, busy.needsYou], [true, 1, 0])
+})
+
+test('a review’s state: queued, reviewing, ready with its verdict, posted, read again', () => {
+  const t = (id: string, state: ItemTask['state'], createdAt: number, over: Partial<ItemTask> = {}): ItemTask => ({ ...task(id, state), id, createdAt, ...over })
+  const pass = (state: ItemTask['state'], over: Partial<ItemTask> = {}) => t('p1', state, 1, { step: 'review', ...over })
+  const ready = { summary: 'Request changes · 2 comments · Never expires', verdict: 'request_changes' as const }
+  assert.equal(reviewState([t('Fix lint', 'done', 1)]), null)
+  assert.deepEqual(reviewState([pass('queued')]), { state: 'queued', verdict: null, line: null })
+  assert.deepEqual(reviewState([pass('running')]), { state: 'reviewing', verdict: null, line: null })
+  assert.deepEqual(reviewState([pass('failed')]), { state: 'failed', verdict: null, line: null })
+  const post = (state: ItemTask['state'], over: Partial<ItemTask> = {}) => t('post', state, 2, { owner: 'you', step: 'post-review', key: 'post:p1', ...over })
+  assert.deepEqual(reviewState([pass('done', { output: ready }), post('waiting')]), { state: 'ready', verdict: 'request_changes', line: ready.summary })
+  assert.deepEqual(reviewState([pass('done', { output: ready }), post('done', { output: { summary: 'Posted: Comment · 1 comment', verdict: 'comment' } })]), { state: 'posted', verdict: 'comment', line: 'Posted: Comment · 1 comment' })
+  assert.deepEqual(reviewState([pass('done', { output: ready }), post('skipped'), t('p2', 'queued', 3, { step: 'review' })]), { state: 'queued', verdict: 'request_changes', line: ready.summary })
+  assert.equal(taskSummary([pass('done', { output: ready }), post('waiting')])!.review?.state, 'ready')
 })

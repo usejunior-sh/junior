@@ -177,6 +177,9 @@ a.jrRef { overflow-wrap: anywhere; }
 .jrRow .r { color: var(--ash); font-size: 0.8462rem; text-align: right; white-space: nowrap; font-family: var(--mono); }
 .jrRow .go { justify-self: end; font-size: 0.8462rem; color: var(--mute); }
 .jrRow:hover .go { color: var(--ink); }
+.jrRow .r.verdict.v-approve { color: var(--green); }
+.jrRow .r.verdict.v-request_changes { color: var(--red); }
+.jrRow .r.verdict.v-comment { color: var(--mute); }
 
 /* Our plan for today */
 .jrPlan { border-top: 1px solid var(--hair); }
