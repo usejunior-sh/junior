@@ -59,9 +59,12 @@ export type Snapshot = { text: string; nodes: number; truncated: number }
 
 /**
  * Fold the tree into text. `rootUid` scopes it to one element's subtree;
- * `maxNodes` caps the lines, with a closing note on how many were left out.
+ * `find` keeps only the elements whose name or value contains the text (any
+ * case), with what is inside them and the path down to them, so a page far
+ * past the cap (a mail inbox, a dashboard) can still be searched; `maxNodes`
+ * caps the lines, with a closing note on how many were left out.
  */
-export function formatSnapshot(all: AXNode[], opts: { rootUid?: number; maxNodes?: number } = {}): Snapshot {
+export function formatSnapshot(all: AXNode[], opts: { rootUid?: number; maxNodes?: number; find?: string } = {}): Snapshot {
   const maxNodes = opts.maxNodes ?? 400
   const byId = new Map(all.map((n) => [n.nodeId, n]))
   let root: AXNode | undefined
@@ -69,16 +72,33 @@ export function formatSnapshot(all: AXNode[], opts: { rootUid?: number; maxNodes
   else root = all.find((n) => !n.parentId) ?? all[0]
   if (!root) return { text: opts.rootUid != null ? `uid=${opts.rootUid} is not on the page — take a fresh snapshot.` : '(empty page)', nodes: 0, truncated: 0 }
 
+  // find: the matches, and every node on the way down to one
+  const want = opts.find?.trim().toLowerCase()
+  const matched = new Set<string>()
+  const onPath = new Set<string>()
+  if (want) {
+    const parentOf = new Map<string, string>()
+    for (const n of all) for (const c of n.childIds ?? []) parentOf.set(c, n.nodeId)
+    for (const n of all) {
+      if (n.ignored || !`${str(n.name)}\u0000${str(n.value)}`.toLowerCase().includes(want)) continue
+      matched.add(n.nodeId)
+      for (let id: string | undefined = n.nodeId; id && !onPath.has(id); id = parentOf.get(id) ?? byId.get(id)?.parentId) onPath.add(id)
+    }
+    if (!matched.size) return { text: `Nothing on the page matches "${opts.find!.trim()}".`, nodes: 0, truncated: 0 }
+  }
+
   const lines: string[] = []
   let truncated = 0
 
-  const walk = (n: AXNode, depth: number, parentName: string) => {
+  const walk = (n: AXNode, depth: number, parentName: string, inMatch = !want) => {
+    if (!inMatch && !onPath.has(n.nodeId)) return
+    const inside = inMatch || matched.has(n.nodeId)
     const role = str(n.role)
     const name = clip(str(n.name))
     const kids = (n.childIds ?? []).map((id) => byId.get(id)).filter((c): c is AXNode => !!c)
     const lift = n.ignored || (TRANSPARENT.has(role) && !name) || role === ''
     if (lift) {
-      for (const k of kids) walk(k, depth, parentName)
+      for (const k of kids) walk(k, depth, parentName, inside)
       return
     }
     if (TEXT_ROLES.has(role)) {
@@ -100,11 +120,12 @@ export function formatSnapshot(all: AXNode[], opts: { rootUid?: number; maxNodes
       if (states.length) parts.push(`[${states.join(', ')}]`)
       lines.push(`${'  '.repeat(depth)}${parts.filter(Boolean).join(' ')}`)
     }
-    for (const k of kids) walk(k, depth + 1, name)
+    for (const k of kids) walk(k, depth + 1, name, inside)
   }
   walk(root, 0, '')
+  if (want && !lines.length) return { text: `Nothing in uid=${opts.rootUid} matches "${opts.find!.trim()}".`, nodes: 0, truncated: 0 }
 
-  if (truncated) lines.push(`… ${truncated} more nodes — pass a uid to snapshot just that part of the page.`)
+  if (truncated) lines.push(`… ${truncated} more nodes — pass a uid${want ? '' : ', or find some text,'} to snapshot just that part of the page.`)
   return { text: lines.join('\n'), nodes: lines.length, truncated }
 }
 

@@ -1,4 +1,5 @@
-import type { TabState } from '../../core/browser/wire.js'
+import type { PageDialog, TabState } from '../../core/browser/wire.js'
+import { profileOfSigninTab } from '../../core/browser/profiles.js'
 import { formatLogs } from '../../core/browser/logs.js'
 import { ShotStore, viewportLabel } from './evidence.js'
 import { BrowserHub } from './hub.js'
@@ -12,21 +13,69 @@ export type BrowserToolContext = {
   sessionId: string
   /** the session's folder: file: URLs inside it count as local */
   projectRoot: string
+  /** a chat asks before risky steps; a job run is unattended and is refused them */
+  mode: 'chat' | 'job'
+  /** a job's `browser_sites`: browser_open outside them is refused */
+  sites?: string[]
 }
 
 type ToolResult = { content: ({ type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string })[]; isError?: boolean }
 export const text = (t: string): ToolResult => ({ content: [{ type: 'text', text: t }] })
 export const fail = (t: string): ToolResult => ({ content: [{ type: 'text', text: t }], isError: true })
 
-/** Wrap a tool body: errors become a plain sentence the agent can act on, and a page you moved is announced. */
-export function guarded(ctx: BrowserToolContext, body: (d: PageDriver) => Promise<ToolResult>): () => Promise<ToolResult> {
+export const SIGNIN_TAB_REFUSAL = "That is a profile's sign-in tab: only the user uses it. Use this session's own tab."
+
+export const HELD_BY_USER = 'The user took over the browser. Wait for them to hand it back, or ask what they want.'
+
+/** What the agent hears when a dialog blocks the page. */
+export const dialogNote = (x: PageDialog) =>
+  `A ${x.type} dialog is open: "${x.message}". The page waits until it is answered: use browser_act with action "dialog" and text "accept" or "dismiss".`
+
+/**
+ * Run page work, but stop waiting the moment a JavaScript dialog opens: the
+ * input that opened it (a click, an Enter) doesn't return until the dialog is
+ * answered, and neither does anything else that touches the page.
+ */
+export async function unlessDialog<T>(d: PageDriver, work: () => Promise<T>): Promise<{ value: T } | { dialog: PageDialog }> {
+  const m = d.memory
+  if (m.dialog) return { dialog: m.dialog }
+  let off = () => {}
+  const opened = new Promise<{ dialog: PageDialog }>((resolve) => {
+    const fn = (x: PageDialog) => resolve({ dialog: x })
+    m.dialogWaiters.add(fn)
+    off = () => m.dialogWaiters.delete(fn)
+  })
+  const done = work().then((value) => ({ value }))
+  // left behind when the dialog wins: it settles once the dialog is answered, or times out
+  done.catch(() => {})
+  try {
+    return await Promise.race([done, opened])
+  } finally {
+    off()
+  }
+}
+
+/**
+ * Wrap a tool body: errors become a plain sentence the agent can act on, and
+ * a page you moved is announced. While you hold the tab, or a dialog blocks
+ * the page, the body doesn't run: it would only wait (`duringDialog` for the
+ * tools that work anyway: the one that answers it, and the logs).
+ */
+export function guarded(ctx: BrowserToolContext, body: (d: PageDriver) => Promise<ToolResult>, opts: { duringDialog?: boolean } = {}): () => Promise<ToolResult> {
   return async () => {
+    // A profile's sign-in tab is yours alone: no tool ever drives it.
+    if (profileOfSigninTab(ctx.sessionId)) return fail(SIGNIN_TAB_REFUSAL)
     const d = new PageDriver(ctx.hub, ctx.sessionId)
+    if (d.memory.heldByUser) return fail(HELD_BY_USER)
+    if (d.memory.dialog && !opts.duringDialog) return text(dialogNote(d.memory.dialog))
     try {
       const touched = d.memory.touched
       d.memory.touched = false
       const r = await body(d)
       if (touched) r.content.unshift({ type: 'text', text: 'Note: the user used this tab since your last call — the page may not be where you left it.' })
+      if (d.revived) r.content.unshift({ type: 'text', text: `Reopened ${d.revived}: the tab had closed.` })
+      const notes = pageNotes(d)
+      if (notes) r.content.push({ type: 'text', text: notes })
       return r
     } catch (err) {
       return fail(err instanceof Error ? err.message : String(err))
@@ -79,6 +128,24 @@ export async function pressKey(d: PageDriver, combo: string) {
     ...(textOut ? { text: textOut, unmodifiedText: textOut } : {}),
   })
   await d.cdp('Input.dispatchKeyEvent', { type: 'keyUp', key, code: k.code, windowsVirtualKeyCode: k.keyCode, modifiers })
+}
+
+/** What else is going on with the tab: a sign-in window, a dialog, downloads (each said once). */
+export function pageNotes(d: PageDriver): string {
+  const m = d.memory
+  const out: string[] = []
+  if (m.popup) out.push(`A sign-in window is open (${m.popup.url}). Junior can't use it: ask the user to finish signing in, then carry on.`)
+  if (m.dialog) out.push(dialogNote(m.dialog))
+  for (const dl of m.downloads.splice(0)) {
+    out.push(
+      dl.state === 'completed'
+        ? `Downloaded ${dl.file} (${Math.max(1, Math.round(dl.bytes / 1024))} KB) to ${dl.path}.`
+        : dl.state === 'refused'
+          ? `The page tried to download ${dl.file}; that kind of file is refused.`
+          : `The download of ${dl.file} ${dl.state === 'cancelled' ? 'was cancelled' : 'failed'}.`,
+    )
+  }
+  return out.join('\n')
 }
 
 /** After an action: let it land, wait out a navigation it started, and say what changed. */
@@ -220,4 +287,4 @@ export const lineDiff = (before: string, after: string) => {
   return { added, removed }
 }
 
-export const VERIFY_LOOP = `Use this to check UI work before you call it done: open the page → browser_snapshot to find elements (uids) → browser_act on uids → browser_screenshot at desktop AND mobile (browser_viewport) → browser_logs for errors. Before your first UI edit, browser_checkpoint; after, browser_compare. Never claim a visual change you did not screenshot.`
+export const VERIFY_LOOP = `Use this to check UI work before you call it done: open the page → browser_snapshot to find elements (uids) → browser_act on uids → browser_screenshot at desktop AND mobile (browser_viewport; a new tab fits the user's pane, which is no particular size) → browser_logs for errors. Before your first UI edit, browser_checkpoint; after, browser_compare. Never claim a visual change you did not screenshot.`

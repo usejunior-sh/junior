@@ -21,6 +21,8 @@
     "web/src/artifactView.ts",
     "web/src/diff.ts",
     "web/src/transcript.ts",
+    "web/src/browserUrl.ts",
+    "web/src/components/browser/steps.ts",
     "vite.config.ts"
   ]
 }

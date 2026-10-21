@@ -9,7 +9,9 @@ import type { UpsertResult } from '../core/store/types.js'
 import { WorkspaceRuntime } from './workspace/runtime.js'
 import { JOB_BUDGET_KEY, JOB_TIMEOUT_KEY } from './jobs/queue.js'
 import { seedJobTemplates } from './jobs/ops.js'
-import { broadcastSessionList, invalidateInbox } from './ws/send.js'
+import { broadcast, broadcastSessionList, invalidateInbox } from './ws/send.js'
+import { browserProfiles } from './browser/profiles.js'
+import { DEFAULT_PROFILE } from '../core/browser/profiles.js'
 
 // settings, briefs and dispatch
 
@@ -18,8 +20,23 @@ const BRIEFS_CAP_KEY = 'briefs.dailyCap'
 const BRIEFS_MODEL_KEY = 'briefs.defaultModel'
 const HIDDEN_MODELS_KEY = 'models.hidden'
 const CUSTOM_MODELS_KEY = 'models.custom'
+const BROWSER_PROFILE_KEY = 'browser.profile'
 const DEFAULT_BRIEF_CAP = 20
 export const BRIEF_TIMEOUT_MS = 300_000
+
+/** The browser profile this workspace's sessions use unless one picks another; a deleted one reads as Default. */
+export async function workspaceBrowserProfile(rt: WorkspaceRuntime): Promise<string> {
+  const id = await rt.store.config.get<string>(BROWSER_PROFILE_KEY)
+  return typeof id === 'string' && browserProfiles().get(id) ? id : DEFAULT_PROFILE
+}
+
+/** Set it, by id or name. Returns the id. */
+export async function setWorkspaceBrowserProfile(rt: WorkspaceRuntime, ref: unknown): Promise<string> {
+  const p = typeof ref === 'string' ? browserProfiles().find(ref) : null
+  if (!p) throw new Error(`no browser profile ${typeof ref === 'string' ? `"${ref}"` : 'given'}`)
+  await rt.store.config.set(BROWSER_PROFILE_KEY, p.id)
+  return p.id
+}
 
 /** The global jobs switch: on for a workspace made since M4 (its Slack job ships on), as you left it before. */
 export async function jobsEnabled(rt: WorkspaceRuntime): Promise<boolean> {
@@ -53,6 +70,7 @@ export async function readSettings(rt: WorkspaceRuntime): Promise<WorkspaceSetti
     hiddenModels: await readIdList(rt, HIDDEN_MODELS_KEY),
     customModels: await readIdList(rt, CUSTOM_MODELS_KEY),
     goalsMaxTeam: await goalMaxTeam(rt.goalDeps),
+    browserProfile: await workspaceBrowserProfile(rt),
   }
 }
 
@@ -102,6 +120,10 @@ export async function writeSettings(rt: WorkspaceRuntime, raw: unknown): Promise
     const n = r.goalsMaxTeam
     if (typeof n !== 'number' || !Number.isInteger(n) || n < 1 || n > MAX_GOAL_TEAM) throw new Error(`goalsMaxTeam must be a whole number from 1 to ${MAX_GOAL_TEAM}`)
     await rt.store.config.set(GOALS_MAX_TEAM_KEY, n)
+  }
+  if (r.browserProfile !== undefined) {
+    const id = await setWorkspaceBrowserProfile(rt, r.browserProfile)
+    broadcast(rt, { type: 'browser_profiles', profiles: browserProfiles().list(), workspaceDefault: id })
   }
   invalidateInbox(rt)
   return readSettings(rt)

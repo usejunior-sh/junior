@@ -42,6 +42,7 @@ import type { Gate, Goal, GoalEvent, GoalLogEntry, GoalState, GoalStepState } fr
 import type { NewJob, NewJobSlotRun, Job, JobRunResult, JobRunStart, JobRunStatus, JobRunTrigger, JobSlotFinish, JobSlotRun } from '../job/types.js'
 import type { TodayDay, TodayEntry } from '../junior/today.js'
 import type { AdvanceApproval } from '../approvals/approvals.js'
+import type { ColorScheme, Viewport } from '../browser/wire.js'
 import type { Decision, Handoff, ItemLabel, Playbook, Reason } from '../work/fields.js'
 import type { ItemTask, NewTask, TaskState } from '../work/tasks.js'
 
@@ -666,6 +667,31 @@ export interface ApprovalStore {
   used(id: string, at: number): Promise<void>
 }
 
+/**
+ * The browser pane's memory of one session's tab (.docs/browser.md →
+ * Profiles). Written as the tab moves, read when it has to come back.
+ */
+export type BrowserTabRow = {
+  sessionId: string
+  /** the profile picked for this session; null = follow the default */
+  profile: string | null
+  url: string
+  title: string
+  /** null = fit the pane */
+  viewport: Viewport | null
+  colorScheme: ColorScheme
+  updatedAt: number
+}
+
+export interface BrowserTabStore {
+  get(sessionId: string): Promise<BrowserTabRow | null>
+  /** Upsert: fields left out keep their value (a new row starts empty, following the default). */
+  put(sessionId: string, patch: Partial<Omit<BrowserTabRow, 'sessionId' | 'updatedAt'>>, at: number): Promise<void>
+  remove(sessionId: string): Promise<void>
+  /** The sessions put in this profile (a deleted profile's go back to the default). */
+  withProfile(profile: string): Promise<string[]>
+}
+
 export interface Store {
   sessions: SessionStore
   events: EventStore
@@ -685,5 +711,6 @@ export interface Store {
   today: TodayStore
   tasks: ItemTaskStore
   approvals: ApprovalStore
+  browserTabs: BrowserTabStore
   close(): Promise<void>
 }

@@ -21,6 +21,7 @@ import { SqliteConfig, SqliteEvents, SqliteInbox, SqliteSessions, SqliteTurns } 
 import { SqliteItemTasks } from './sqlite-tasks.js'
 import { SqliteToday } from './sqlite-today.js'
 import { SqliteApprovals } from './sqlite-approvals.js'
+import { SqliteBrowserTabs } from './sqlite-browser-tabs.js'
 
 export function openSqliteStore(file: string): Store {
   if (file !== ':memory:') mkdirSync(path.dirname(file), { recursive: true })
@@ -51,6 +52,7 @@ export function openSqliteStore(file: string): Store {
     today: new SqliteToday(db),
     tasks: new SqliteItemTasks(db),
     approvals: new SqliteApprovals(db),
+    browserTabs: new SqliteBrowserTabs(db),
     close: async () => db.close(),
   }
 }

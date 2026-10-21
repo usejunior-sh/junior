@@ -1,6 +1,7 @@
 import type { TabState } from '../../core/browser/wire.js'
 import { type AXNode, formatSnapshot } from '../../core/browser/snapshot.js'
 import { BrowserHub, FULL_PAGE_MAX_CSS } from './hub.js'
+import { viewportLabel } from './evidence.js'
 
 // One session's page, driven: the CDP sequences every tool is built from.
 
@@ -11,6 +12,9 @@ type LayoutMetrics = {
 }
 
 export const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
+
+/** An element as the gate sees it (core/browser/policy.ts → commitVerdict). */
+export type ElementInfo = { role: string; name: string; tag: string; type: string; inForm: boolean; editable: boolean }
 
 export class PageDriver {
   constructor(
@@ -30,11 +34,40 @@ export class PageDriver {
     return this.hub.call<TabState>(this.sessionId, { verb: 'state' })
   }
 
-  /** The tab, or a plain error telling the agent to open a page first. */
+  /**
+   * The tab, or a plain error telling the agent to open a page first. A tab
+   * that closed (idle, or the app restarted) comes back at the page it was
+   * on, and `revived` says so, for the tool to tell the agent.
+   */
   async requirePage(): Promise<TabState> {
     const s = await this.state()
-    if (!s.exists) throw new Error('No page is open in this session yet — call browser_open with a URL first.')
-    return s
+    if (s.exists) return s
+    const was = await this.hub.remembered(this.sessionId)
+    if (!was) throw new Error('No page is open in this session yet — call browser_open with a URL first.')
+    await this.hub.open(this.sessionId, null, 'idle')
+    this.revived = was
+    return this.state()
+  }
+
+  /** The URL a closed tab was reopened at by requirePage, for the result's first line. */
+  revived: string | null = null
+
+  /** The tab's viewport as the agent reads it: a tab that fits the pane says how big the pane makes it. */
+  async viewportText(s: TabState): Promise<string> {
+    if (s.viewport) return viewportLabel(s.viewport)
+    const fit = await this.evalValue<{ width: number; height: number }>('({ width: innerWidth, height: innerHeight })').catch(() => null)
+    return viewportLabel(null, fit)
+  }
+
+  /** What an element is, for the gate: its role and name, and whether it is a password field or inside a form. */
+  async describe(uid: number): Promise<ElementInfo> {
+    const ax = await this.cdp<{ nodes: AXNode[] }>('Accessibility.getPartialAXTree', { backendNodeId: uid, fetchRelatives: false }).catch(() => ({ nodes: [] as AXNode[] }))
+    const node = ax.nodes.find((n) => n.backendDOMNodeId === uid) ?? ax.nodes[0]
+    const dom = await this.onElement<{ tag: string; type: string; inForm: boolean; editable: boolean }>(
+      uid,
+      `function(){ const t = (this.tagName || '').toLowerCase(); return { tag: t, type: (this.getAttribute && this.getAttribute('type') || '').toLowerCase(), inForm: !!(this.closest && this.closest('form')), editable: t === 'input' || t === 'textarea' || !!this.isContentEditable } }`,
+    )
+    return { role: String(node?.role?.value ?? ''), name: String(node?.name?.value ?? ''), ...dom }
   }
 
   async evalValue<T = unknown>(expression: string): Promise<T> {
@@ -99,9 +132,9 @@ export class PageDriver {
     await this.cdp('Input.dispatchMouseEvent', { type, x, y, ...(type === 'mouseMoved' || type === 'mouseWheel' ? {} : { button: 'left', clickCount: 1 }), ...extra })
   }
 
-  async snapshot(rootUid?: number): Promise<string> {
+  async snapshot(rootUid?: number, find?: string): Promise<string> {
     const { nodes } = await this.cdp<{ nodes: AXNode[] }>('Accessibility.getFullAXTree', {}, 20_000)
-    return formatSnapshot(nodes, { ...(rootUid != null ? { rootUid } : {}) }).text
+    return formatSnapshot(nodes, { ...(rootUid != null ? { rootUid } : {}), ...(find?.trim() ? { find } : {}) }).text
   }
 
   /**

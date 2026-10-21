@@ -4,8 +4,12 @@ import path from 'node:path'
 import type { Viewport } from '../../core/browser/wire.js'
 import { type Shot, type ShotKind, VIEWPORTS } from './hub.js'
 
-export const viewportLabel = (v: Viewport | null): string => {
-  if (!v) return 'fit to pane'
+/**
+ * How a viewport reads to the agent. null is a tab that fits the pane (where
+ * new tabs start): its size is the pane's, so it is given when known.
+ */
+export const viewportLabel = (v: Viewport | null, fit?: { width: number; height: number } | null): string => {
+  if (!v) return fit ? `fits the pane, ${fit.width}×${fit.height}` : 'fits the pane'
   const name = Object.entries(VIEWPORTS).find(([, p]) => p.width === v.width && p.height === v.height)?.[0]
   return `${v.width}×${v.height}${name ? ` ${name}` : v.mobile ? ' mobile' : ''}`
 }

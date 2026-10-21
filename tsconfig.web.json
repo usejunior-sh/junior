@@ -66,6 +66,8 @@
     "core/goals/machine.ts",
     "core/goals/review.ts",
     "core/goals/blocks.ts",
-    "core/junior"
+    "core/junior",
+    "core/browser/profiles.ts",
+    "core/browser/wire.ts"
   ]
 }

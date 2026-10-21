@@ -19,8 +19,10 @@ export async function deleteSession(rt: WorkspaceRuntime, sessionId: string): Pr
   await removeSessionFiles(rt.attachmentsDir, sessionId)
   // Its actions stay on record: they happened; only the tracker goes.
   rt.actionTrackers.delete(sessionId)
-  // Its tab closes; its evidence stays on disk. The Verification note points at it.
+  // Its tab closes and its profile and last page are forgotten; its evidence
+  // stays on disk. The Verification note points at it.
   browserHub.forget(sessionId)
+  await rt.store.browserTabs.remove(sessionId)
   rt.live.delete(sessionId)
   rt.rows.delete(sessionId)
   const run = teamRunOf(rt, sessionId)

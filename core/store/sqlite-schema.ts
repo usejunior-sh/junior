@@ -1,5 +1,5 @@
 import { DatabaseSync } from 'node:sqlite'
-import { APPROVALS_SCHEMA, GOALS_SCHEMA, MIGRATIONS, TASKS_SCHEMA, TODAY_SCHEMA } from './sqlite-migrations.js'
+import { APPROVALS_SCHEMA, BROWSER_TABS_SCHEMA, GOALS_SCHEMA, MIGRATIONS, TASKS_SCHEMA, TODAY_SCHEMA } from './sqlite-migrations.js'
 
 /**
  * Converge the durable-inbox schema regardless of migration-version state.
@@ -129,7 +129,7 @@ export function ensureDurableSchema(db: DatabaseSync) {
     ['consecutive_failures', 'consecutive_failures INTEGER NOT NULL DEFAULT 0'],
     ['last_run_started_at', 'last_run_started_at INTEGER'], ['last_run_new', 'last_run_new INTEGER'], ['last_run_trigger', 'last_run_trigger TEXT'],
     ['brief', 'brief TEXT'], ['draft', 'draft INTEGER NOT NULL DEFAULT 0'],
-    ['skills', 'skills TEXT'], ['agents', 'agents TEXT'], ['filing', 'filing TEXT'],
+    ['skills', 'skills TEXT'], ['agents', 'agents TEXT'], ['filing', 'filing TEXT'], ['browser', 'browser TEXT'],
   ]) ensure('jobs', col, decl, w)
   ensure('sessions', 'run_trigger', 'run_trigger TEXT', s)
   ensure('sessions', 'run_new', 'run_new INTEGER', s)
@@ -219,6 +219,7 @@ export function ensureDurableSchema(db: DatabaseSync) {
   db.exec(TODAY_SCHEMA)
   db.exec(TASKS_SCHEMA)
   db.exec(APPROVALS_SCHEMA)
+  db.exec(BROWSER_TABS_SCHEMA)
 }
 
 /*

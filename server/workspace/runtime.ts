@@ -12,7 +12,7 @@ import { FileIndexes } from '../files.js'
 import { ArtifactIndex } from '../artifacts.js'
 import { GoalLedger } from '../../core/goals/ledger.js'
 import { type GoalDeps, GoalHeldIndex, onGoalEvent } from '../goals.js'
-import { BrowserHub, makeBrowserMcp, ShotStore } from '../browser.js'
+import { BrowserHub, browserGate, makeBrowserMcp, ShotStore, type BrowserGate } from '../browser.js'
 import { TeamLibrary } from '../teams.js'
 import { JobFiles, renameLegacyFolders } from '../job-files.js'
 import type { Action as TeamAction, TeamRun } from '../../core/teams/engine.js'
@@ -277,7 +277,21 @@ export const runtimes = new Map<string, WorkspaceRuntime>()
  * session's tools and evidence stay in its own workspace.
  */
 export const browserHub = new BrowserHub()
-export const browserMcpFor = (rt: WorkspaceRuntime, row: StoredSession) =>
-  makeBrowserMcp({ hub: browserHub, shots: rt.shots, sessionId: row.id, projectRoot: row.cwd })
+/**
+ * What a session's browser tools are bound to. A chat (the default) asks
+ * before leaving the machine and before a commit click; a job run is
+ * unattended: it opens only `sites` (when given), in its job's `profile`, and
+ * is refused what a chat would ask.
+ */
+export type BrowserMcpOpts = { mode?: 'chat' | 'job'; sites?: string[]; profile?: string }
+
+export const browserMcpFor = (rt: WorkspaceRuntime, row: Pick<StoredSession, 'id' | 'cwd'>, opts: BrowserMcpOpts = {}) => {
+  if (opts.profile) browserHub.fallbackProfile(row.id, opts.profile)
+  return makeBrowserMcp({ hub: browserHub, shots: rt.shots, sessionId: row.id, projectRoot: row.cwd, mode: opts.mode ?? 'chat', ...(opts.sites?.length ? { sites: opts.sites } : {}) })
+}
+
+/** The browser's step in a veto chain, for the same session and mode as its tools. */
+export const browserGateFor = (row: Pick<StoredSession, 'id' | 'cwd'>, opts: Omit<BrowserMcpOpts, 'profile'> = {}): BrowserGate => (toolName, input) =>
+  browserGate({ hub: browserHub, sessionId: row.id, projectRoot: row.cwd, mode: opts.mode ?? 'chat', ...(opts.sites?.length ? { sites: opts.sites } : {}) }, toolName, input)
 
 export const defaultRuntime = (): WorkspaceRuntime => runtimes.get(registry.defaultId)!

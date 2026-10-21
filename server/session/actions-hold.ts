@@ -17,7 +17,7 @@ import { goalActionHeldOp } from '../goals.js'
 import { shortActionId } from '../../core/actions/view.js'
 import type { ActionRecord } from '../../core/actions/types.js'
 import type { ActionVerb } from '../../shared/protocol.js'
-import { WorkspaceRuntime } from '../workspace/runtime.js'
+import { browserGateFor, WorkspaceRuntime } from '../workspace/runtime.js'
 import { teamRunOf, workerSpec } from '../team-run/state.js'
 import { actionContext, actionsChanged, sortForWorkspace } from './actions-record.js'
 import { errText } from '../errors.js'
@@ -84,7 +84,7 @@ export function sessionVeto(rt: WorkspaceRuntime, row: StoredSession): { veto?: 
   const chat = row.kind === 'chat' && row.provider === 'claude'
   if (!fence && !chat && !holdsActions(rt, row)) return {}
   return {
-    veto: (toolName, input, ctx) => {
+    veto: async (toolName, input, ctx) => {
       const d = fence ? roleFenceDecision(fence, toolName, input) : { allow: true as const }
       if (!d.allow) {
         log('info', 'fence', `refused ${toolName} in a read-only session: ${d.reason}`, { session: row.id, workspace: rt.meta.id })
@@ -99,6 +99,9 @@ export function sessionVeto(rt: WorkspaceRuntime, row: StoredSession): { veto?: 
         const why = destructiveCommand(String(input.command ?? ''))
         if (why) return { allow: false, ask: true, reason: `This command ${why}, so it needs your OK.` }
       }
+      // The browser on a signed-in site: a commit click asks, a password is refused (server/browser/gate.ts).
+      const gate = await browserGateFor(row, { mode: 'chat' })(toolName, input)
+      if (gate) return gate
       return holdIfAction(rt, row, toolName, input, ctx)
     },
   }

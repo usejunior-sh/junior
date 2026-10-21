@@ -142,7 +142,8 @@ test('shots and the Verification note', async () => {
 
 test('viewport labels', () => {
   assert.equal(viewportLabel(VIEWPORTS.mobile!), '390×844 mobile')
-  assert.equal(viewportLabel(null), 'fit to pane')
+  assert.equal(viewportLabel(null), 'fits the pane')
+  assert.equal(viewportLabel(null, { width: 812, height: 640 }), 'fits the pane, 812×640')
   assert.equal(viewportLabel({ width: 1000, height: 700, deviceScaleFactor: 1, mobile: false }), '1000×700')
 })
 

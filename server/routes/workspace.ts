@@ -1,10 +1,8 @@
-import { readFile } from 'node:fs/promises'
-import { type BrowserPickResponse, type BrowserShotsResponse, isProviderId, type ProvidersStatusResponse, type ProviderVerifyResponse, type WorkspaceResponse } from '../../shared/protocol.js'
-import { describePicked } from '../browser.js'
+import { isProviderId, type ProvidersStatusResponse, type ProviderVerifyResponse, type WorkspaceResponse } from '../../shared/protocol.js'
 import { isConnected, saveRegistry, toAuthBackend } from '../workspaces.js'
 import { providerFor } from '../providers/registry.js'
 import { applyAuthChange, wireWorkspace, workspaceInfo } from '../workspace/wiring.js'
-import { browserHub, registry } from '../workspace/runtime.js'
+import { registry } from '../workspace/runtime.js'
 import { readJsonBody } from './http-util.js'
 import { errText } from '../errors.js'
 import { applyProviderChange, readProviderStatus, saveProviderKey } from '../workspace/providers.js'
@@ -17,45 +15,6 @@ export async function workspaceRoutes({ req, res, url, json, rt }: ScopedCtx): P
   // TRIAGE_WORKSPACE matched or silently fell back to the default).
   if (url.pathname === '/api/workspace' && req.method === 'GET') {
     json(200, { ok: true, ...workspaceInfo(rt) })
-    return true
-  }
-
-  // the browser pane (.docs/browser.md): host status, evidence, the picker
-  if (url.pathname === '/api/browser/status' && req.method === 'GET') {
-    json(200, { ok: true, ...browserHub.status })
-    return true
-  }
-  const shotRoute = /^\/api\/browser\/shots\/([\w-]+)(?:\/(\d+))?$/.exec(url.pathname)
-  if (shotRoute && req.method === 'GET') {
-    const [, sessionId, n] = shotRoute
-    if (!n) {
-      const body: BrowserShotsResponse = { ok: true, shots: rt.shots.list(sessionId) }
-      json(200, body)
-      return true
-    }
-    const f = rt.shots.file(sessionId, Number(n))
-    try {
-      if (!f) throw new Error('no such shot')
-      const bytes = await readFile(f.path)
-      // Shots are numbered and never rewritten: cache hard.
-      res.writeHead(200, { 'content-type': f.mime, 'content-length': String(bytes.length), 'cache-control': 'private, max-age=31536000, immutable' })
-      res.end(bytes)
-    } catch {
-      json(404, { ok: false, error: 'no such shot' })
-    }
-    return true
-  }
-  if (url.pathname === '/api/browser/pick' && req.method === 'POST') {
-    let body: BrowserPickResponse
-    try {
-      const b = (await readJsonBody(req, 10_000)) as { sessionId?: unknown; uid?: unknown } | null
-      const row = typeof b?.sessionId === 'string' ? rt.rows.get(b.sessionId) : undefined
-      if (!row || typeof b?.uid !== 'number') throw new Error('need a session of this workspace and a uid')
-      body = { ok: true, ...(await describePicked({ hub: browserHub, shots: rt.shots, sessionId: row.id, projectRoot: row.cwd }, b.uid)) }
-    } catch (err) {
-      body = { ok: false, error: errText(err) }
-    }
-    json(body.ok ? 200 : 400, body)
     return true
   }
 

@@ -37,6 +37,8 @@ import { handleConnection } from './ws/connection.js'
 import { resolveRuntime } from './routes/http-util.js'
 import { gateRoutes, workspaceListRoutes } from './routes/daemon.js'
 import { workspaceRoutes } from './routes/workspace.js'
+import { browserRoutes } from './routes/browser.js'
+import { installBrowserOwners } from './browser/owners.js'
 import { sessionRoutes } from './routes/sessions.js'
 import { inboxRoutes } from './routes/inbox.js'
 import { jobRoutes } from './routes/jobs.js'
@@ -73,6 +75,7 @@ const server = http.createServer(async (req, res) => {
   const rt = resolveRuntime(req, url)
   const scoped: ScopedCtx = { ...ctx, rt }
   if (await workspaceRoutes(scoped)) return
+  if (await browserRoutes(scoped)) return
   if (await sessionRoutes(scoped)) return
   if (await inboxRoutes(scoped)) return
   if (await jobRoutes(scoped)) return
@@ -141,6 +144,7 @@ wss.on('connection', handleConnection)
 // Boot: one runtime per registered workspace, each with its own store, seeds,
 // cached snapshot, and background probes.
 for (const meta of registry.workspaces) runtimes.set(meta.id, new WorkspaceRuntime(meta))
+installBrowserOwners()
 for (const rt of runtimes.values()) await initRuntime(rt)
 
 // The wss wraps the http server and re-emits its errors, so the handler has

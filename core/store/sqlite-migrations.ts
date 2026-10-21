@@ -172,6 +172,22 @@ export const GOALS_SCHEMA = `CREATE TABLE IF NOT EXISTS goals (
    );`
 
 // Numbered, append-only. A new migration is a new entry, never edit an old one.
+/**
+ * The browser pane's memory of each session's tab (.docs/browser.md →
+ * Profiles): which profile it was put in (NULL = follow the default), and
+ * where it was, so it comes back after the app or the daemon restarts. IF
+ * NOT EXISTS: migration 36 and ensureDurableSchema both run it.
+ */
+export const BROWSER_TABS_SCHEMA = `CREATE TABLE IF NOT EXISTS browser_tabs (
+     session_id   TEXT PRIMARY KEY,
+     profile      TEXT,
+     url          TEXT NOT NULL DEFAULT '',
+     title        TEXT NOT NULL DEFAULT '',
+     viewport     TEXT,
+     color_scheme TEXT,
+     updated_at   INTEGER NOT NULL
+   );`
+
 export const MIGRATIONS: string[] = [
   `CREATE TABLE sessions (
      id             TEXT PRIMARY KEY,
@@ -535,4 +551,6 @@ export const MIGRATIONS: string[] = [
   `UPDATE sessions SET permission_mode = CASE WHEN provider = 'claude' THEN 'auto' ELSE 'gated' END WHERE kind IS NULL OR kind NOT IN ('job-run', 'brief', 'goal', 'task')`,
   // 35: advance approvals (core/approvals/approvals.ts). Also converged by ensureDurableSchema.
   APPROVALS_SCHEMA,
+  // 36: the browser pane's tabs: profile and last page per session. Also converged by ensureDurableSchema.
+  BROWSER_TABS_SCHEMA,
 ]

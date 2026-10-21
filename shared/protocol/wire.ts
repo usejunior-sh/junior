@@ -269,4 +269,10 @@ export type ServerMessage =
   | { type: 'persona'; persona: import('../../core/junior/persona.js').Persona }
   /** Today's plan changed (a row added or removed, the day drafted), refetch. */
   | { type: 'today_changed' }
+  /** The browser profiles changed (machine-wide: sent to every workspace): the whole list. */
+  | { type: 'browser_profiles'; profiles: import('./browser.js').BrowserProfile[]; workspaceDefault: string }
+  /** A session's tab moved: its profile, URL or title (what the pane's chip and revive state show). */
+  | { type: 'browser_tab'; tab: import('./browser.js').BrowserTabInfo }
+  /** A session's tab downloaded a file (or refused one). */
+  | { type: 'browser_download'; download: import('./browser.js').BrowserDownload }
   | { type: 'error'; message: string }

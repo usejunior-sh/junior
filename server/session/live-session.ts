@@ -11,11 +11,11 @@ import { attachedFilesNote } from '../attachments.js'
 import { frameTeamMessage, isCheckCommand } from '../teams.js'
 import { GOAL_MODE_MARK, ULTRACODE_OFF_NOTE, ULTRACODE_ON_NOTE } from '../../shared/triageContext.js'
 import { WORKFLOW_TOOL } from '../../core/workflows/fold.js'
-import { browserCallAllowed } from '../../core/browser/policy.js'
+import { BROWSER_SERVER } from '../../core/browser/policy.js'
 import { readOnlyCommand } from '../../core/actions/commands.js'
 import { frameAgentRelay } from '../../core/agents/relay.js'
 import { AsyncQueue } from './async-queue.js'
-import { WorkspaceRuntime } from '../workspace/runtime.js'
+import { browserHub, WorkspaceRuntime } from '../workspace/runtime.js'
 import { BRIEF_DISALLOWED_TOOLS, briefBashAllowed } from './brief-tools.js'
 import { endGoalSession, GOAL_LEAD_DISALLOWED_TOOLS, GOAL_LEAD_TOOLS, settleGoalLead } from '../goal-glue.js'
 import { sessionVeto } from './actions-hold.js'
@@ -34,6 +34,9 @@ import { teamRunOf } from '../team-run/state.js'
 import { noteActionEvent } from './actions-record.js'
 import { endedTask, owedProgress, type ProgressPending, snapshotAgentIds, throttleProgress, WorkflowTurns } from './workflow-tasks.js'
 import { costStep, lastResultMark, type CostMark } from '../../core/usage/turn-cost.js'
+
+/** The browser pane's tools (core/browser/policy.ts). */
+const BROWSER_PREFIX = `mcp__${BROWSER_SERVER}__`
 
 /**
  * Spawn-time extras for special-purpose sessions (briefs): text appended to
@@ -496,9 +499,14 @@ export class LiveSession {
     // the approval. A worker that can't edit runs read-only git/gh unattended,
     // and any worker runs the project's own checks without a click.
     if (TEAM_TOOLS.has(toolName)) return Promise.resolve({ behavior: 'allow', updatedInput: toolInput })
-    // The browser pane: reading and using the page never asks. Leaving this
-    // machine and browser_eval fall through to the session's mode below.
-    if (browserCallAllowed(toolName, toolInput, this.row.cwd)) return Promise.resolve({ behavior: 'allow', updatedInput: toolInput })
+    // The browser pane: the gate in the veto (server/browser/gate.ts) decided
+    // already. What it asked about comes to you; the rest runs, except
+    // browser_eval, which falls through to the session's mode below.
+    if (toolName.startsWith(BROWSER_PREFIX)) {
+      const why = browserHub.page(this.row.id).takeAsk(toolName, toolInput)
+      if (why) return this.askUser(toolName, toolInput, { ...opts, description: why }, effect)
+      if (toolName !== `${BROWSER_PREFIX}browser_eval`) return Promise.resolve({ behavior: 'allow', updatedInput: toolInput })
+    }
     const run = teamRunOf(this.rt, this.row.id)
     if (run && run.leadSessionId !== this.row.id && toolName === 'Bash') {
       const ws = run.workers.filter((w) => w.sessionId === this.row.id)

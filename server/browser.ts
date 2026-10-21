@@ -8,7 +8,7 @@
  * Scope is enforced here, not asked for: a session's tools only ever name
  * that session's tab, and the app only attaches a debugger to tabs.
  */
-export { NO_HOST, VIEWPORTS, BrowserHub } from './browser/hub.js'
+export { NO_HOST, VIEWPORTS, BrowserHub, downloadDirFor } from './browser/hub.js'
 export type { ShotKind, Shot } from './browser/hub.js'
 export { PageDriver } from './browser/page-driver.js'
 export { viewportLabel, ShotStore, shotUrl, renderVerification, shotMarker, SHOT_MARKER_RE } from './browser/evidence.js'
@@ -16,4 +16,6 @@ export type { VerifiedTurn } from './browser/evidence.js'
 export { inspectElement, formatInspected, describePicked } from './browser/tool-kit.js'
 export type { BrowserToolContext } from './browser/tool-kit.js'
 export { makeBrowserMcp } from './browser/mcp.js'
+export { browserGate } from './browser/gate.js'
+export type { BrowserGate, BrowserGateContext } from './browser/gate.js'
 
