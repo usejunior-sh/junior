@@ -2,7 +2,7 @@ import { mkdtemp, stat } from 'node:fs/promises'
 import path from 'node:path'
 import os from 'node:os'
 import type { ActionRecord } from '../../core/actions/types.js'
-import { canonJson, connectorState, dispatchDisallowed, DispatchFence, dispatchOutcome, dispatchPrompt, type DispatchTrace, dueToExpire, dueToSend, move, sendBackMessage, TOOL_SEARCH } from '../../core/actions/queue.js'
+import { canonJson, connectorState, dispatchDisallowed, DispatchFence, dispatchOutcome, dispatchPrompt, type DispatchTrace, dueToExpire, dueToSend, move, sendBackMessage, settledMessage, TOOL_SEARCH } from '../../core/actions/queue.js'
 import { log } from '../log.js'
 import { shortActionId } from '../../core/actions/view.js'
 import type { StoredSession } from '../../core/store/types.js'
@@ -68,6 +68,23 @@ export async function deliverSendBack(rt: WorkspaceRuntime, rec: ActionRecord): 
     }
   }
   if (delivery !== null) await recordDelivery(rt, rec, delivery)
+}
+
+/**
+ * A chat's approved action settled: tell the chat, so Junior carries on with
+ * the link in hand instead of waiting on a send it can't see. Chats only: a
+ * job run or a task has ended by now, and a team hands its work in.
+ */
+async function tellChat(rt: WorkspaceRuntime, rec: ActionRecord): Promise<void> {
+  const row = rt.rows.get(rec.sessionId)
+  if (!row || row.kind !== 'chat' || row.provider !== 'claude' || rec.teamRunId) return
+  if (!row.sdkSessionId && !rt.live.has(row.id)) return
+  try {
+    const live = await getOrRevive(rt, row.id)
+    await live?.sendUserMessage(settledMessage(rec), undefined, undefined, { from: 'triage' })
+  } catch (err) {
+    log('warn', 'actions', `could not tell the chat #${shortActionId(rec.id)} settled: ${errText(err)}`, { action: rec.id, session: row.id, workspace: rt.meta.id })
+  }
 }
 
 /** Keep on a sent-back record whether its notes reached the session (once. A later word doesn't overwrite "delivered"). */
@@ -334,6 +351,7 @@ export async function dispatchAction(rt: WorkspaceRuntime, id: string): Promise<
     const bash = claimed.tool === 'Bash'
     const out = dispatchOutcome(trace, bash ? 'Bash' : serverOf(claimed.tool), { bash, push: bash && claimed.kind === 'push' })
     const done = await moveAction(rt, id, { type: 'settle', status: out.status, link: out.link, error: out.error, costUsd })
+    void tellChat(rt, done)
     log(out.status === 'succeeded' ? 'info' : 'warn', 'actions', `${out.status}: ${done.summary} (#${shortActionId(id)})${out.error ? ` — ${out.error}` : ''}`, {
       action: id,
       tool: claimed.tool,

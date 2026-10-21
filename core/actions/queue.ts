@@ -84,6 +84,18 @@ export function sendBackMessage(actionId: string, tool: string, notes: string): 
 }
 
 /**
+ * What a chat hears once its held action went out (or didn't): the card was
+ * the approval, this is the result, so Junior can carry on without asking.
+ */
+export function settledMessage(rec: Pick<ActionRecord, 'id' | 'summary' | 'status' | 'link' | 'error' | 'queue'>): string {
+  const id = `#${shortActionId(rec.id)}`
+  const edited = rec.queue?.edits ? ' The user edited it before approving; what went out is their version.' : ''
+  if (rec.status === 'succeeded') return `Action ${id} (${rec.summary}) was approved and sent${rec.link ? `: ${rec.link}` : '.'}${edited} Carry on.`
+  if (rec.status === 'failed') return `Action ${id} (${rec.summary}) was approved but failed: ${rec.error ?? 'no reason given'}. Don't retry it yourself. Tell the user what failed.`
+  return `Action ${id} (${rec.summary}) was approved, but triage can't tell whether it went out (${rec.error ?? 'unknown'}). Don't retry it. Tell the user to check.`
+}
+
+/**
  * A held call as a record: the tracker's own record of the call (or the
  * attempt it already stored, if the call's message beat the hold), now
  * waiting on you, with the full args kept for dispatch.

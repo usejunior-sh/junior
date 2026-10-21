@@ -558,3 +558,15 @@ test('a dispatched push links to the pushed branch', () => {
   assert.equal(o.status, 'succeeded')
   assert.equal(o.link, 'https://github.com/usetriage/triage/tree/feat/x')
 })
+
+test('settledMessage: a chat hears how its approved action ended', async () => {
+  const { settledMessage } = await import('../core/actions/queue.js')
+  const base = { id: 's1:toolu_abcdef123', summary: 'Slack message to Anirudha', link: null, error: null, queue: null }
+  const sent = settledMessage({ ...base, status: 'succeeded', link: 'https://slack.com/archives/D1/p2' })
+  assert.match(sent, /approved and sent: https:\/\/slack\.com\/archives\/D1\/p2/)
+  assert.match(sent, /Carry on/)
+  const edited = settledMessage({ ...base, status: 'succeeded', queue: { edits: 1 } as never })
+  assert.match(edited, /their version/)
+  assert.match(settledMessage({ ...base, status: 'failed', error: 'channel_not_found' }), /failed: channel_not_found\. Don't retry/)
+  assert.match(settledMessage({ ...base, status: 'unknown', error: 'timed out' }), /can't tell whether it went out/)
+})
