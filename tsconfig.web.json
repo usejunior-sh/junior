@@ -25,6 +25,7 @@
     "web/src",
     "shared",
     "core/work/types.ts",
+    "core/cards",
     "core/teams/recipe.ts",
     "core/shells/fold.ts",
     "core/workflows",
