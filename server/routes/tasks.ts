@@ -2,11 +2,14 @@ import { errText } from '../errors.js'
 import { approveTaskOp, babysitSettingsOp, retryTaskOp, skipTaskOp, stopTaskOp } from '../tasks/ops.js'
 import { readJsonBody } from './http-util.js'
 import { postReviewOp, reviewAgainOp, reviewHeadOp } from '../review/post.js'
+import { approvePlanOp, changePlanOp, sendReplyOp } from '../playbooks/ops.js'
+import { startPlaybookOp } from '../rules-ops.js'
 import type { ScopedCtx } from './ctx.js'
 
 /**
  * Tasks on items (POST /api/tasks/<verb> {id, …}), first-pass reviews
- * (post-review, review-again, the head the watch last read) and babysitting's
+ * (post-review, review-again, the head the watch last read), the item playbooks
+ * (start one, send its reply, approve or send back its plan) and babysitting's
  * settings (GET/POST /api/babysit/settings). Every answer is { ok, … }.
  */
 export async function taskRoutes({ req, url, json, rt }: ScopedCtx): Promise<boolean> {
@@ -25,6 +28,28 @@ export async function taskRoutes({ req, url, json, rt }: ScopedCtx): Promise<boo
               ? await stopTaskOp(rt, id)
               : await skipTaskOp(rt, id)
       json(200, { ok: true, task })
+    } catch (err) {
+      json(400, { ok: false, error: errText(err) })
+    }
+    return true
+  }
+  // Playbooks on any item (server/playbooks/ops.ts): send the drafted reply, approve or send back the plan.
+  const pb = /^\/api\/tasks\/(send-reply|approve-plan|change-plan)$/.exec(url.pathname)?.[1]
+  if (pb && req.method === 'POST') {
+    try {
+      const body = ((await readJsonBody(req)) ?? {}) as { id?: unknown }
+      if (typeof body.id !== 'string' || !body.id) throw new Error('id required')
+      const task = pb === 'send-reply' ? await sendReplyOp(rt, body.id, body) : pb === 'approve-plan' ? await approvePlanOp(rt, body.id, body) : await changePlanOp(rt, body.id, body)
+      json(200, { ok: true, task })
+    } catch (err) {
+      json(400, { ok: false, error: errText(err) })
+    }
+    return true
+  }
+  // You handed the item to Junior from its page: answer, investigate or debug-fix (server/rules-ops.ts).
+  if (url.pathname === '/api/playbooks/start' && req.method === 'POST') {
+    try {
+      json(200, { ok: true, task: await startPlaybookOp(rt, (await readJsonBody(req)) ?? {}) })
     } catch (err) {
       json(400, { ok: false, error: errText(err) })
     }

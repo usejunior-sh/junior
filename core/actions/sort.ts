@@ -14,6 +14,9 @@
 import { describePart, matchPart, parsePattern, pushTarget, splitCommand, type BashPattern, type CommandPart } from './bash.js'
 import { bashOverride, parseActionsFile, withOverride, type ActionRules } from './rules.js'
 import type { ActionKind, ActionWhy } from './types.js'
+import { LOCAL_SERVERS, serverOf } from './own.js'
+
+export { serverOf }
 
 // Verb tokens that mark a connector call's intent. Written as word sets and
 // matched against the tokens of a tool's leaf name, so both `slack_read_channel`
@@ -33,15 +36,8 @@ export const wordsOf = (leaf: string): string[] => (leaf.match(/[A-Za-z][a-z]*/g
 
 /** `mcp__<server>__<leaf>` → the leaf. */
 export const leafOf = (toolName: string): string => toolName.slice(toolName.lastIndexOf('__') + 2)
-/** `mcp__<server>__<leaf>` → the server segment. */
-export const serverOf = (toolName: string): string => {
-  const rest = toolName.slice('mcp__'.length)
-  const cut = rest.lastIndexOf('__')
-  return cut === -1 ? rest : rest.slice(0, cut)
-}
 
-/** triage's own in-process servers: they write this machine's inbox, run a team or a task, drive the pane. */
-const LOCAL_SERVERS = new Set(['triage', 'team', 'task', 'goal', 'gate', 'brief', 'browser'])
+
 
 /** What an MCP server says about one of its tools (absent = it didn't say). */
 export type ToolHints = { readOnly?: boolean; destructive?: boolean; openWorld?: boolean }
