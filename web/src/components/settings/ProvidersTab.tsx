@@ -19,7 +19,7 @@ export function ProvidersTab({ workspace }: { workspace: Workspace }) {
       title={`${connected} of ${workspace.providers.length} connected`}
       hint={
         <>
-          The primary agent runs everything — chats, jobs, briefs and team workers. Any other you connect is offered in the
+          The primary agent runs everything — chats, jobs and briefs. Any other you connect is offered in the
           model picker when you start a chat. Plan windows and spend come from each agent’s own account.
         </>
       }

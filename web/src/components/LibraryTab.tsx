@@ -28,6 +28,8 @@ type Row = { key: string; group: string; source: LibrarySource | 'team'; name: s
 /** null = nothing open; 'new' = the create form; 'new-team' = a new team agent; otherwise a row key. */
 type Selection = null | 'new' | 'new-team' | string
 
+const SHOW_TEAMS = false
+
 export function LibraryTab({ kind, refreshNonce }: { kind: LibraryKind; refreshNonce: number }) {
   const { list, error, reload } = useLibrary(kind, refreshNonce)
   const [teams, setTeams] = useState<TeamLibrary | null>(null)
@@ -37,8 +39,9 @@ export function LibraryTab({ kind, refreshNonce }: { kind: LibraryKind; refreshN
   // The editor reports unsaved edits up, so leaving it can ask first.
   const dirtyRef = useRef(false)
 
+  // Team agents are not listed while the teams UI is hidden (the engine and its files stay).
   const loadTeams = useCallback(() => {
-    if (kind === 'agent') loadTeamLibrary().then(setTeams).catch(() => setTeams(null))
+    if (kind === 'agent' && SHOW_TEAMS) loadTeamLibrary().then(setTeams).catch(() => setTeams(null))
   }, [kind])
   useEffect(loadTeams, [loadTeams, refreshNonce])
 
@@ -100,7 +103,7 @@ export function LibraryTab({ kind, refreshNonce }: { kind: LibraryKind; refreshN
   }
 
   const current = selected && selected !== 'new' && selected !== 'new-team' ? rows.find((r) => r.key === selected) : undefined
-  const filters: Filter[] = ['all', 'workspace', 'personal', 'project', 'plugin', ...(kind === 'agent' ? (['team'] as const) : [])]
+  const filters: Filter[] = ['all', 'workspace', 'personal', 'project', 'plugin', ...(kind === 'agent' && SHOW_TEAMS ? (['team'] as const) : [])]
   const noun = kind === 'skill' ? 'skill' : 'agent'
 
   return (

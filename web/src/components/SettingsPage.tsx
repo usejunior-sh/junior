@@ -18,7 +18,6 @@ import { ConnectorsPanel } from './Connectors.js'
 import { McpTab } from './McpTab.js'
 import { PhoneTab } from './PhoneTab.js'
 import { ProjectsTab } from './ProjectsTab.js'
-import { TeamsTab } from './TeamsTab.js'
 import { LibraryTab } from './LibraryTab.js'
 import { UsageTab } from './UsageTab.js'
 import { type SystemTab, ActivityTab, LogsTab } from './SystemModal.js'
@@ -28,7 +27,7 @@ import { ModelsTab } from './settings/ModelsTab.js'
 import { ProvidersTab } from './settings/ProvidersTab.js'
 import { AboutTab, SessionsTab, ShortcutsTab } from './settings/SessionsTab.js'
 import { Loading } from './settings/shared.js'
-import { GoalTeamSection, SourcesTab } from './settings/SourcesTab.js'
+import { SourcesTab } from './settings/SourcesTab.js'
 import { WorkspaceTab } from './settings/WorkspaceTab.js'
 
 const ICONS: Record<SettingsTab, ComponentType<LucideProps>> = {
@@ -179,10 +178,6 @@ export function SettingsPage({ workspace, tab, onOpenSystem }: Props) {
                   </Tabs.Content>
                   <Tabs.Content value="agents" className="settingsFill">
                     <LibraryTab kind="agent" refreshNonce={nonce} />
-                  </Tabs.Content>
-                  <Tabs.Content value="teams">
-                    <GoalTeamSection />
-                    <TeamsTab />
                   </Tabs.Content>
                   <Tabs.Content value="connectors" className="settingsFill">
                     <ConnectorsPanel refreshNonce={nonce} />

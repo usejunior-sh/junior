@@ -256,11 +256,11 @@ export function ActionsPage({ onNavigate }: { onNavigate: (hash: string) => void
         ) : rows.length === 0 ? (
           <div className="actEmpty">
             {actions.length === 0
-              ? 'Nothing has left this machine yet. When a session opens a PR, comments, files a ticket or pushes, it lands here — and when a job or a team wants to, it waits here for you.'
+              ? 'Nothing has left this machine yet. When a chat opens a PR, comments, files a ticket or pushes, it lands here — and when a job wants to, it waits here for you.'
               : q
                 ? 'Nothing here matches.'
                 : active === 'needs_you'
-                  ? 'Nothing waits on you. Jobs and team runs queue their outbound calls here for approval.'
+                  ? 'Nothing waits on you. Jobs queue their outbound calls here for approval.'
                   : active === 'scheduled'
                     ? 'Nothing is about to go out.'
                     : 'Nothing here.'}
