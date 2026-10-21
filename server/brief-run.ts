@@ -124,7 +124,8 @@ export async function extrasFor(rt: WorkspaceRuntime, row: StoredSession): Promi
   }
   // A babysit task's session: its submit_task tool, its per-task budget, the headless contract last.
   const taskRun = rt.taskRuns.get(row.id)
-  if (taskRun) return { systemAppend: `${identity}\n${TASK_SYSTEM_APPEND}`, mcp: { task: makeTaskMcp(rt, row.id) }, maxBudgetUsd: taskRun.perTaskUsd }
+  // Strict: none of ~/.claude's connectors and plugins, whose schemas would ride every call.
+  if (taskRun) return { systemAppend: `${identity}\n${TASK_SYSTEM_APPEND}`, mcp: { task: makeTaskMcp(rt, row.id) }, strictMcpConfig: true, maxBudgetUsd: taskRun.perTaskUsd }
   // A goal's lead: the drafting contract last, like a brief's.
   if (row.kind === 'goal') return { systemAppend: `${identity}\n${LEAD_DRAFT_APPEND}` }
   if (row.kind !== 'brief') return { systemAppend: identity }

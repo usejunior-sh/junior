@@ -49,10 +49,16 @@ export type BabysitEvent =
 
 const settled = (c: PrCheck) => c.status === 'success' || c.status === 'neutral'
 
-/** Ready for a reviewer: every check green, nothing open from a bot, no conflict, and nobody asked yet. */
+/**
+ * Ready for a reviewer: every check green, nothing open from a bot, no
+ * conflict, and nobody asked yet. At least one check must have reported: a
+ * PR whose CI hasn't started yet isn't green. (A repo with no CI at all is
+ * never offered the request; ask in chat.)
+ */
 export function readyForReview(pr: BabysitPr): boolean {
   return (
     pr.state === 'OPEN' &&
+    pr.checks.length > 0 &&
     pr.checks.every(settled) &&
     !pr.threads.some((t) => t.isBot && !t.resolved) &&
     pr.mergeable === 'MERGEABLE' &&

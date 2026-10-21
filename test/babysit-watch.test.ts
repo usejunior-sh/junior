@@ -88,13 +88,15 @@ test('events: failing checks, open threads, rebase, then green', () => {
 })
 
 test('green waits for checks, bots, conflicts and a reviewer nobody asked yet', () => {
-  assert.ok(readyForReview(pr()))
+  const ok = [check('lint', { status: 'success' })]
+  assert.ok(readyForReview(pr({ checks: ok })))
+  assert.ok(!readyForReview(pr()), 'no check has reported yet')
   assert.ok(!readyForReview(pr({ checks: [check('lint', { status: 'pending' })] })))
-  assert.ok(!readyForReview(pr({ threads: [thread()] })))
-  assert.ok(readyForReview(pr({ threads: [thread({ isBot: false })] })), 'a person’s thread doesn’t hold the request')
-  assert.ok(!readyForReview(pr({ reviewers: ['anirudha'] })))
-  assert.ok(!readyForReview(pr({ reviewed: true })))
-  assert.ok(!readyForReview(pr({ mergeable: 'UNKNOWN' })))
+  assert.ok(!readyForReview(pr({ checks: ok, threads: [thread()] })))
+  assert.ok(readyForReview(pr({ checks: ok, threads: [thread({ isBot: false })] })), 'a person’s thread doesn’t hold the request')
+  assert.ok(!readyForReview(pr({ checks: ok, reviewers: ['anirudha'] })))
+  assert.ok(!readyForReview(pr({ checks: ok, reviewed: true })))
+  assert.ok(!readyForReview(pr({ checks: ok, mergeable: 'UNKNOWN' })))
 })
 
 test('a failing check becomes "Fix lint", keyed per head and check', () => {
