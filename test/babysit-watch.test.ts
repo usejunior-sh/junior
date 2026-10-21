@@ -139,6 +139,14 @@ test('a bot comment is fixed by Junior; the same comment again goes to you', () 
   assert.ok(again.do === 'task' && again.stuck && again.task.owner === 'you')
 })
 
+test('a bot thread still open on the next poll is not one that came back', () => {
+  const ev: BabysitEvent = { kind: 'bot_thread', thread: thread() }
+  const w = afterDecision(newBabysitWatch(), ev, decide(ev, newBabysitWatch(), ctx))
+  assert.deepEqual(decide(ev, w, ctx), { do: 'none' })
+  // a watch saved before thread ids were kept still sends the same comment to you
+  assert.ok(decide(ev, { ...w, botThreads: undefined }, ctx).do === 'task')
+})
+
 test('a person’s thread is yours, a rebase is Junior’s, green asks you once', () => {
   const h = decide({ kind: 'human_thread', thread: thread({ author: 'drew', isBot: false, path: null }) }, newBabysitWatch(), ctx)
   assert.ok(h.do === 'task' && h.task.title === 'Answer drew' && h.task.owner === 'you' && h.task.state === 'waiting')

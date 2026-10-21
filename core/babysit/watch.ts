@@ -34,6 +34,8 @@ export type BabysitWatch = {
   reruns: string[]
   /** fingerprints of bot comments Junior already took on */
   botPrints: string[]
+  /** the threads those came from: one still open is the same comment, not one that came back */
+  botThreads?: string[]
 }
 
 export const newBabysitWatch = (): BabysitWatch => ({ headSha: null, fixes: {}, reruns: [], botPrints: [] })
@@ -148,6 +150,8 @@ export function decide(ev: BabysitEvent, w: BabysitWatch, ctx: DecideContext): B
       const who = botName(t.author)
       const file = fileOf(t.path)
       const input = { threadId: t.id, author: t.author, path: t.path, body: clip(t.body, 4_000), url: t.url }
+      // Still open while Junior works on it, or after it handed in blocked: its task already says so.
+      if (w.botThreads?.includes(t.id)) return { do: 'none' }
       if (w.botPrints.includes(fingerprint(t)))
         return {
           do: 'task',
@@ -214,7 +218,12 @@ export function afterDecision(w: BabysitWatch, ev: BabysitEvent, d: BabysitDecis
   if (d.do === 'rerun' && ev.kind === 'checks_failed') return { ...w, reruns: [...w.reruns, `${ev.check.name}@${ev.sha}`].slice(-MAX_KEPT) }
   if (d.do !== 'task' || d.stuck) return w
   if (ev.kind === 'checks_failed') return { ...w, fixes: { ...w.fixes, [ev.check.name]: (w.fixes[ev.check.name] ?? 0) + 1 } }
-  if (ev.kind === 'bot_thread') return { ...w, botPrints: [...w.botPrints, fingerprint(ev.thread)].slice(-MAX_KEPT) }
+  if (ev.kind === 'bot_thread')
+    return {
+      ...w,
+      botPrints: [...w.botPrints, fingerprint(ev.thread)].slice(-MAX_KEPT),
+      botThreads: [...(w.botThreads ?? []), ev.thread.id].slice(-MAX_KEPT),
+    }
   return w
 }
 
