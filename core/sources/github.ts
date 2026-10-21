@@ -59,7 +59,7 @@ fragment issueF on Issue {
   author { login }
 }`
 
-interface RawNode {
+export interface RawNode {
   __typename: 'PullRequest' | 'Issue'
   number: number
   title: string
@@ -186,7 +186,7 @@ export async function listAffiliatedRepos(): Promise<string[]> {
   return out.split('\n').filter(Boolean)
 }
 
-function classifyOwnPr(node: RawNode, now: number): ItemKind {
+export function classifyOwnPr(node: RawNode, now: number): ItemKind {
   if (node.isDraft) return 'own-pr-open'
   if (node.reviewDecision === 'CHANGES_REQUESTED') return 'reply-needed'
   if (node.reviewDecision === 'APPROVED') return 'own-pr-approved'
@@ -195,7 +195,7 @@ function classifyOwnPr(node: RawNode, now: number): ItemKind {
   return 'own-pr-open'
 }
 
-function toItem(node: RawNode, kind: ItemKind, peopleWaiting: number): WorkItem {
+export function toItem(node: RawNode, kind: ItemKind, peopleWaiting: number): WorkItem {
   const repo = node.repository.nameWithOwner
   const rollup = node.commits?.nodes[0]?.commit.statusCheckRollup?.state
   return {

@@ -11,6 +11,8 @@ import { invalidateInbox } from './ws/send.js'
 import { SCHEDULER_TICK_MS } from './jobs/scheduler.js'
 import { sweepGates, watchPrs } from './goal-glue.js'
 import { INBOX_KEEP_WARM_MS, syncInbox } from './inbox/sync.js'
+import { babysitTick } from './babysit/glue.js'
+import { BABYSIT_FAST_MS } from '../core/babysit/watch.js'
 
 /** when the scheduler last ticked: daemon-wide, surfaced in the System status. */
 export let lastSchedulerTickAt: number | null = null
@@ -53,6 +55,12 @@ export function startTicks() {
   setInterval(() => {
     for (const rt of runtimes.values()) watchPrs(rt).catch((err) => log('error', 'goals', `PR watcher failed: ${errText(err)}`, { workspace: rt.meta.id }))
   }, WATCH_TICK_MS).unref()
+
+  // Babysitting your PRs: a cheap tick; the search runs every minute while
+  // something moves, every 5 otherwise (core/babysit/watch.ts).
+  setInterval(() => {
+    for (const rt of runtimes.values()) babysitTick(rt).catch((err) => log('error', 'babysit', `tick failed: ${errText(err)}`, { workspace: rt.meta.id }))
+  }, BABYSIT_FAST_MS).unref()
 
   // Keep the caches warm while the server runs, so page loads are instant. A
   // failed background sync keeps the previous snapshot; the next view retries.
