@@ -46,7 +46,7 @@ export function makeTriageMcp(rt: WorkspaceRuntime, sessionId?: string) {
       // goal_* tools stay in server/goals.ts but no chat is offered them.
       tool(
         'list_work_items',
-        'Read the ranked triage queue: work items with their score, group, and reason. Open items by default — pass status to read the done, snoozed or archived lists instead. Optional filters narrow by source or kind.',
+        'Read the ranked triage queue: work items with their score, group, and rankWhy (why it ranked). Open items by default — pass status to read the done, snoozed or archived lists instead. Optional filters narrow by source or kind.',
         {
           status: z.enum(['open', 'snoozed', 'done', 'archived']).optional().describe('which list to read (default "open")'),
           source: z.enum(['github', 'slack', 'linear', 'manual']).optional().describe('only items from this source'),

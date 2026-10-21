@@ -149,7 +149,7 @@ export function CommandPalette({
         id: `w:${i.id}`,
         section: 'Work items',
         label: i.title,
-        hint: `${i.repo} · ${i.reason}`,
+        hint: `${i.repo} · ${i.rankWhy}`,
         run: () => onOpenItem(i),
       })),
     ],

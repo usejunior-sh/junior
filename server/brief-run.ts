@@ -369,7 +369,7 @@ async function startBriefRun(rt: WorkspaceRuntime, job: BriefJob): Promise<void>
   const { files, note: missingNote } = await itemFilesForSession(rt, row.id, item)
   const briefPrompt = composeBriefPrompt({
       item,
-      reason: scored?.reason,
+      reason: scored?.rankWhy,
       playbookName: job.playbook,
       playbook,
       note: job.note,

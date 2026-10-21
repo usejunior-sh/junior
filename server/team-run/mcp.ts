@@ -388,7 +388,7 @@ export async function dispatchPreviewOp(rt: WorkspaceRuntime, itemId: string): P
     kind: item.kind,
     title: item.title,
     url: item.url || undefined,
-    reason: scored?.reason,
+    reason: scored?.rankWhy,
     note: latest?.note ?? undefined,
     brief: !!brief,
     source: item.source !== 'manual',

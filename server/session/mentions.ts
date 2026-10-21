@@ -113,7 +113,7 @@ export async function resolveMentions(
         item.repo && `where: ${item.repo}`,
         item.author && `author: ${item.author}`,
         item.status && `status: ${item.status}`,
-        scored && `rank: ${scored.score} — ${scored.reason}`,
+        scored && `rank: ${scored.score} — ${scored.rankWhy}`,
         item.why && `why: ${item.why}`,
         item.description && `description: ${item.description}`,
         item.urls?.length ? `links: ${item.urls.join(', ')}` : undefined,

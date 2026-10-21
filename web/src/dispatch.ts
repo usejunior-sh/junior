@@ -18,7 +18,7 @@ export function dispatchPrompt(item: ScoredItem): string {
           `Work item from the triage inbox — ${item.kind}:`,
           item.title,
           item.url,
-          `Why it ranked: ${item.reason}`,
+          `Why it ranked: ${item.rankWhy}`,
           '',
           'Use `gh` to pull the full context (diff, comments, CI) and get started.',
         ]

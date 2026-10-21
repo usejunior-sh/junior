@@ -115,7 +115,7 @@ export function useDispatchers({ navigate, pendingDraft, setCreateError, inbox, 
       void fetch(`/api/items/detail?id=${encodeURIComponent(id)}`)
         .then((r) => r.json() as Promise<ItemDetailResponse>)
         .then((b) => {
-          if (b.ok) dispatch({ ...b.detail.item, score: 0, group: 'cycle', reason: 'on today\u2019s plan', ask: 'do' })
+          if (b.ok) dispatch({ ...b.detail.item, score: 0, group: 'cycle', rankWhy: 'on today\u2019s plan', ask: 'do' })
         })
         .catch(() => {})
     },

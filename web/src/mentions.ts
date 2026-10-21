@@ -97,7 +97,7 @@ const itemHit = (i: ScoredItem): MentionHit => ({
   kind: 'item',
   ref: i.id,
   label: i.title,
-  hint: i.reason,
+  hint: i.rankWhy,
 })
 
 const sessionHit = (s: SessionSummary): MentionHit => ({

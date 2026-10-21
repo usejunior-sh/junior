@@ -23,7 +23,7 @@ export function ItemDetails({ item, jobTitles }: { item: ScoredItem; jobTitles: 
         <div className="secLabel mute">Ranked because</div>
         <div className="line">
           <span className="dash">—</span>
-          <span>{item.reason}</span>
+          <span>{item.rankWhy}</span>
         </div>
 
         {item.why && item.source !== 'manual' && (

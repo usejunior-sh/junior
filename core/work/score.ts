@@ -85,7 +85,7 @@ export function scoreItem(item: WorkItem, now = Date.now()): ScoredItem {
     ...item,
     score: Math.round(score * 10) / 10,
     group,
-    reason: reasonFor(item, waitDays),
+    rankWhy: reasonFor(item, waitDays),
     ask: askOf(item),
   }
 }

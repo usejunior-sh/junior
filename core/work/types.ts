@@ -123,7 +123,7 @@ export interface ScoredItem extends WorkItem {
   score: number
   group: Group
   /** one human-readable line: why this ranked where it did */
-  reason: string
+  rankWhy: string
   /** what the item asks of you (asks.ts), resolved: a job hit's stored `ask` or its kind's */
   ask: import('./asks.js').Ask
   /**

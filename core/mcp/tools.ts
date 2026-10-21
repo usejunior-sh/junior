@@ -37,7 +37,7 @@ export const TOOLS = [
   {
     name: 'list_work_items',
     description:
-      'Read the ranked triage queue: work items with their deterministic score, group, and reason. Open items by default — pass status to read the done, snoozed or archived lists instead. Optional filters narrow by source or kind.',
+      'Read the ranked triage queue: work items with their deterministic score, group, and rankWhy (why it ranked). Open items by default — pass status to read the done, snoozed or archived lists instead. Optional filters narrow by source or kind.',
     inputSchema: {
       type: 'object',
       properties: {

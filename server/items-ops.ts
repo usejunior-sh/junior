@@ -182,7 +182,7 @@ export async function itemDetailOp(rt: WorkspaceRuntime, rawId: unknown): Promis
   const scored = rt.inboxCache?.items.find((i) => i.id === id)
   return {
     item,
-    rank: scored ? { score: scored.score, group: scored.group, reason: scored.reason } : null,
+    rank: scored ? { score: scored.score, group: scored.group, reason: scored.rankWhy } : null,
     linked,
     artifacts,
     sessions,

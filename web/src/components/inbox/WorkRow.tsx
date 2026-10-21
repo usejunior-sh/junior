@@ -187,7 +187,7 @@ export function WorkRow({
   const source = projectName(item.projectId) ?? item.repo
   // The scored reason ("2 people waiting · opened 3d ago") is the fallback when
   // the item carries no human note.
-  const trailing = item.why || item.reason
+  const trailing = item.why || item.rankWhy
 
   return (
     <div
