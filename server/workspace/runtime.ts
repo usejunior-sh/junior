@@ -17,6 +17,7 @@ import { TeamLibrary } from '../teams.js'
 import { JobFiles, renameLegacyFolders } from '../job-files.js'
 import type { Action as TeamAction, TeamRun } from '../../core/teams/engine.js'
 import { ActionsFile } from '../actions-file.js'
+import { CardSpecs } from '../card-specs.js'
 import { ActionTracker } from '../../core/actions/track.js'
 import type { TreeChange } from '../git.js'
 import { log } from '../log.js'
@@ -172,6 +173,8 @@ export class WorkspaceRuntime {
   // Outbound actions (core/actions): the file that says what counts, and one
   // tracker per session folding its events into records as they persist.
   readonly actionsFile: ActionsFile
+  /** how a held send reads on its card: the workspace's `cards/*.json`, then the built-ins */
+  readonly cardSpecs: CardSpecs
   readonly actionTrackers = new Map<string, ActionTracker>()
   /** action writes run one at a time, in event order. A settle never beats its attempt */
   actionChain: Promise<void> = Promise.resolve()
@@ -239,6 +242,7 @@ export class WorkspaceRuntime {
     void ensureWorkspacePlugin(this.libraryDir).catch((err) => log('warn', 'library', `could not set up ${this.libraryDir}: ${errText(err)}`))
     this.jobFiles = new JobFiles(workspaceDir(meta.id))
     this.actionsFile = new ActionsFile(workspaceDir(meta.id))
+    this.cardSpecs = new CardSpecs(workspaceDir(meta.id))
     this.triageMcp = (sessionId) => makeTriageMcp(this, sessionId)
     this.terminals = new TerminalManager(
       (msg) => broadcast(this, msg),

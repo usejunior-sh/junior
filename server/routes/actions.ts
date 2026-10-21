@@ -1,5 +1,5 @@
 import { goalsRoute } from '../goals.js'
-import { type ActionMoveRequest, type ActionMoveResponse, type ActionOverrideRequest, type ActionOverrideResponse, type ActionsPendingResponse, type ActionsResponse, type ActionVerb, isLinkKind, type LinksResponse } from '../../shared/protocol.js'
+import { type ActionMoveRequest, type ActionMoveResponse, type ActionOverrideRequest, type ActionOverrideResponse, type ActionsPendingResponse, type ActionsResponse, type ActionVerb, type CardSpecsResponse, isLinkKind, type LinksResponse } from '../../shared/protocol.js'
 import { isActionKind } from '../../core/actions/types.js'
 import { localMidnight } from '../../core/job/schedule.js'
 import { overriddenOff } from '../../core/actions/sort.js'
@@ -65,6 +65,12 @@ export async function actionRoutes({ req, url, json, rt }: ScopedCtx): Promise<b
     return true
   }
   // The rail's badge: queued actions waiting on you.
+  // The card specs in force (core/cards): the workspace's files first, then the built-ins, and any file that didn't load.
+  if (url.pathname === '/api/actions/cards' && req.method === 'GET') {
+    const { specs, errors } = rt.cardSpecs.current()
+    json(200, { ok: true, dir: rt.cardSpecs.dir, specs, errors } satisfies CardSpecsResponse)
+    return true
+  }
   if (url.pathname === '/api/actions/pending' && req.method === 'GET') {
     let body: ActionsPendingResponse
     try {

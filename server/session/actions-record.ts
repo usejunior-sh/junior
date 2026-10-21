@@ -6,6 +6,7 @@ import { log } from '../log.js'
 import type { ActionRecord } from '../../core/actions/types.js'
 import { actionTitle, countedText } from '../../core/actions/describe.js'
 import { shortActionId } from '../../core/actions/view.js'
+import { planCard } from '../../core/cards/spec.js'
 import { WorkspaceRuntime } from '../workspace/runtime.js'
 import { teamRunOf } from '../team-run/state.js'
 import { errText } from '../errors.js'
@@ -142,6 +143,7 @@ export async function actionViews(rt: WorkspaceRuntime, records: ActionRecord[])
     if (item) itemTitles.set(id, item.title)
   }
   const rules = rt.actionsFile.current().rules
+  const specs = rt.cardSpecs.current().specs
   return records.map((a) => {
     const run = a.teamRunId ? rt.teamRuns.get(a.teamRunId) : undefined
     const itemId = itemOf(a)
@@ -158,6 +160,8 @@ export async function actionViews(rt: WorkspaceRuntime, records: ActionRecord[])
       ...(run ? { teamLabel: run.recipe.label } : {}),
       ...(itemId && itemTitles.has(itemId) ? { itemTitle: itemTitles.get(itemId) } : {}),
       ...(overriddenOff(a, rules) ? { hidden: true } : {}),
+      // An MCP tool's send reads by its card spec; Bash keeps its command view.
+      ...(a.tool.startsWith('mcp__') ? { card: planCard(a.tool, a.queue?.args ?? a.args, specs) } : {}),
     }
   })
 }

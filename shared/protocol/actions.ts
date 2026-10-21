@@ -1,5 +1,6 @@
 import type { ActionRecord, ActionHistoryEntry } from '../../core/actions/types.js'
 import type { KindCount } from '../../core/actions/count.js'
+import type { CardPlan, CardSpec } from '../../core/cards/spec.js'
 
 // Actions (GET /api/actions, POST /api/actions/override), every outbound
 // action a session took: a PR, a comment, a ticket, a push. Domain types
@@ -34,6 +35,8 @@ export type ActionView = ActionRecord & {
   itemTitle?: string
   /** the actions file now says this tool is not an action, listed only under "Not actions" */
   hidden?: boolean
+  /** an MCP tool's send: where its args go on the card (core/cards); the web reads the values from the args */
+  card?: CardPlan
 }
 
 export type ActionsResponse =
@@ -72,3 +75,6 @@ export type ActionMoveResponse = { ok: true; action: ActionView } | { ok: false;
  */
 export type ActionOverrideRequest = { actionId: string; verdict: 'action' | 'not_action' }
 export type ActionOverrideResponse = { ok: true; entries: string[] } | { ok: false; error: string }
+
+/** GET /api/actions/cards: the card specs in force, the workspace's before the built-ins, and files that didn't load. */
+export type CardSpecsResponse = { ok: true; dir: string; specs: readonly CardSpec[]; errors: string[] }
