@@ -351,9 +351,11 @@ async function fixCheckout(rt: WorkspaceRuntime, project: Project, itemId: strin
 
 /**
  * A task's session ended, timed out, went over budget or was stopped. Once
- * per session. A task still running here never handed in: it failed.
+ * per session. A task still running here never handed in. If its turn ended
+ * with something to say, the work may be done: it waits on you with Junior's
+ * last message. Otherwise it failed.
  */
-export async function endTaskSession(rt: WorkspaceRuntime, sessionId: string, error: string | null, costUsd = 0, overBudget = false): Promise<void> {
+export async function endTaskSession(rt: WorkspaceRuntime, sessionId: string, error: string | null, costUsd = 0, overBudget = false, lastWords = ''): Promise<void> {
   const run = rt.taskRuns.get(sessionId)
   if (!run) return
   rt.taskRuns.delete(sessionId)
@@ -368,8 +370,12 @@ export async function endTaskSession(rt: WorkspaceRuntime, sessionId: string, er
     if (costUsd > 0) await rt.store.tasks.addCost(run.taskId, costUsd)
     const t = await rt.store.tasks.get(run.taskId)
     if (t?.state === 'running') {
-      const why = overBudget ? `went over its $${run.perTaskUsd} budget` : (error ?? 'the session ended without handing in')
-      await finish(rt, t.id, 'failed', { error: why })
+      const said = lastWords.trim()
+      if (!error && !overBudget && said) await finish(rt, t.id, 'waiting', { error: unhandedNote(said) })
+      else {
+        const why = overBudget ? `went over its $${run.perTaskUsd} budget` : (error ?? 'the session ended without handing in')
+        await finish(rt, t.id, 'failed', { error: why })
+      }
     }
   } catch (err) {
     log('error', 'tasks', `could not settle task ${run.taskId}: ${errText(err)}`, { workspace: rt.meta.id })
@@ -377,6 +383,15 @@ export async function endTaskSession(rt: WorkspaceRuntime, sessionId: string, er
   broadcastSessionList(rt)
   void syncCheckouts(rt)
   void pumpTasks(rt)
+}
+
+const UNHANDED_CHARS = 600
+
+/** What a task that never handed in tells you: Junior's last message, clipped. */
+export function unhandedNote(said: string): string {
+  const one = said.replace(/\s+/g, ' ').trim()
+  const cut = one.length > UNHANDED_CHARS ? `${one.slice(0, UNHANDED_CHARS - 1).trimEnd()}…` : one
+  return `Junior ended without handing in. Its last message: ${cut}`
 }
 
 /** Stop a task: a running one's session ends, a queued or waiting one never runs. */

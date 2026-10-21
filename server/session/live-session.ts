@@ -327,7 +327,10 @@ export class LiveSession {
           // A goal session is one turn too: the run loop books its spend and moves the goal on.
           if (this.rt.goalRuns.has(this.row.id)) void endGoalSession(this.rt, this.row.id, null, delta)
           // A task session is one turn too: it handed in (or didn't), the runner settles it.
-          if (this.rt.taskRuns.has(this.row.id)) void endTaskSession(this.rt, this.row.id, null, delta, !!ev.overBudget)
+          if (this.rt.taskRuns.has(this.row.id)) {
+            const said = (ev.record as { result?: unknown }).result
+            void endTaskSession(this.rt, this.row.id, null, delta, !!ev.overBudget, typeof said === 'string' ? said : '')
+          }
         }
       }
       this.setStatus('idle')

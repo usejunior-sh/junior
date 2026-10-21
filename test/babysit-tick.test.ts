@@ -13,6 +13,7 @@ import type { Store } from '../core/store/types.js'
 import type { ItemTask } from '../core/work/tasks.js'
 import { DEFAULT_BABYSIT } from '../core/babysit/settings.js'
 import { BABYSIT_WATCH_KEY, babysitTickOp, type BabysitDeps, type BabysitWatchState } from '../server/babysit/watch.js'
+import { unhandedNote } from '../server/tasks/runner.js'
 
 const T0 = Date.parse('2026-10-21T12:00:00Z')
 
@@ -116,3 +117,9 @@ test('off, or no repos: nothing is read', () =>
     assert.equal(await babysitTickOp({ ...deps, settings: async () => DEFAULT_BABYSIT }, T0), null)
     assert.equal(await babysitTickOp({ ...deps, repos: async () => [] }, T0), null)
   }))
+
+test('a task that never handed in carries Junior’s last message, clipped', () => {
+  assert.equal(unhandedNote('Fixed it.\n\nPushed abc1234.'), 'Junior ended without handing in. Its last message: Fixed it. Pushed abc1234.')
+  const long = unhandedNote('x'.repeat(2_000))
+  assert.ok(long.endsWith('…') && long.length < 700)
+})
