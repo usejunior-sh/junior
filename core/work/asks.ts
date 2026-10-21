@@ -1,33 +1,33 @@
 /**
- * Labels: what an item asks of you, in one word. Six, hardcoded: the inbox
- * reads by label ("3 replies · 2 reviews"), not by where an item came from.
+ * Asks: what an item asks of you, in one word. Six, hardcoded: the inbox
+ * reads by ask ("3 replies · 2 reviews"), not by where an item came from.
  *
- * Scanner kinds map to a label and keep their own BASE weight and group
- * (score.ts); a job hit carries the label its run picked (`ask`) and takes
- * the label's weight and group, so a job that finds a real reply ranks with
- * replies instead of sinking into FYI. An `ask` that is no longer a label
+ * Scanner kinds map to an ask and keep their own BASE weight and group
+ * (score.ts); a job hit carries the ask its run picked (`ask`) and takes
+ * the ask's weight and group, so a job that finds a real reply ranks with
+ * replies instead of sinking into FYI. An `ask` that is no longer one
  * falls back to Read. `meaning` is the line the job prompt hands the model.
  */
 import type { Group, ItemKind, WorkItem } from './types.js'
 
-export type Label = 'review' | 'reply' | 'decide' | 'do' | 'follow-up' | 'read'
+export type Ask = 'review' | 'reply' | 'decide' | 'do' | 'follow-up' | 'read'
 
-/** When a label is due by default, counted from when the item arrived. */
+/** When an ask is due by default, counted from when the item arrived. */
 export type DueDefault = 'today' | 'next-workday' | 'this-week' | 'later'
 
-export interface LabelDef {
+export interface AskDef {
   name: string
   /** the header's count noun, one and many: "1 reply", "3 replies" */
   noun: [string, string]
-  /** fed to the job prompt: how the model picks this label */
+  /** fed to the job prompt: how the model picks this ask */
   meaning: string
   group: Group
-  /** BASE weight for a job hit with this label */
+  /** BASE weight for a job hit with this ask */
   weight: number
   due: DueDefault
 }
 
-export const LABELS: Record<Label, LabelDef> = {
+export const ASKS: Record<Ask, AskDef> = {
   review: {
     name: 'Review',
     noun: ['review', 'reviews'],
@@ -78,10 +78,10 @@ export const LABELS: Record<Label, LabelDef> = {
   },
 }
 
-/** Display order: the header counts and the label picker read this way. */
-export const LABEL_ORDER: Label[] = ['review', 'reply', 'decide', 'do', 'follow-up', 'read']
+/** Display order: the header counts and the ask picker read this way. */
+export const ASK_ORDER: Ask[] = ['review', 'reply', 'decide', 'do', 'follow-up', 'read']
 
-export const KIND_TO_LABEL: Record<ItemKind, Label> = {
+export const KIND_TO_ASK: Record<ItemKind, Ask> = {
   'review-requested': 'review',
   'reply-needed': 'reply',
   'slack-reply-pending': 'reply',
@@ -91,7 +91,7 @@ export const KIND_TO_LABEL: Record<ItemKind, Label> = {
   'own-pr-approved': 'do',
   'own-pr-stale': 'follow-up',
   'own-pr-open': 'follow-up',
-  // a job hit without an ask (filed before labels, or by an external scanner)
+  // a job hit without an ask (filed before asks, or by an external scanner)
   'job-hit': 'read',
   digest: 'read',
   mention: 'read',
@@ -99,23 +99,23 @@ export const KIND_TO_LABEL: Record<ItemKind, Label> = {
   fyi: 'read',
 }
 
-export function isLabel(v: unknown): v is Label {
-  return typeof v === 'string' && Object.hasOwn(LABELS, v)
+export function isAsk(v: unknown): v is Ask {
+  return typeof v === 'string' && Object.hasOwn(ASKS, v)
 }
 
-/** The label an item is filed under: a job hit's ask, else its kind's. */
-export function labelOf(item: Pick<WorkItem, 'kind' | 'ask'>): Label {
-  if (item.kind === 'job-hit') return isLabel(item.ask) ? item.ask : 'read'
-  return KIND_TO_LABEL[item.kind] ?? 'read'
+/** The ask an item is filed under: a job hit's ask, else its kind's. */
+export function askOf(item: Pick<WorkItem, 'kind' | 'ask'>): Ask {
+  if (item.kind === 'job-hit') return isAsk(item.ask) ? item.ask : 'read'
+  return KIND_TO_ASK[item.kind] ?? 'read'
 }
 
 /** "3 replies" */
-export function countOf(label: Label, n: number): string {
-  const [one, many] = LABELS[label].noun
+export function countOf(ask: Ask, n: number): string {
+  const [one, many] = ASKS[ask].noun
   return `${n} ${n === 1 ? one : many}`
 }
 
-/** The job prompt's list of labels, one per line. */
-export function labelGuide(): string {
-  return LABEL_ORDER.map((l) => `  - ${l}: ${LABELS[l].meaning}`).join('\n')
+/** The job prompt's list of asks, one per line. */
+export function askGuide(): string {
+  return ASK_ORDER.map((l) => `  - ${l}: ${ASKS[l].meaning}`).join('\n')
 }

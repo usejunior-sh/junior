@@ -77,7 +77,7 @@ export async function withFlows<T extends CoreWorkItem & { flow?: ItemFlow }>(rt
     const was = stored.get(item.id)
     if (was?.stage === item.flow.stage && was?.turn === item.flow.turn) continue
     await rt.store.items
-      .recordFlow(item.id, { stage: item.flow.stage, turn: item.flow.turn }, item.flow.ask ? { ask: item.flow.ask } : {})
+      .recordFlow(item.id, { stage: item.flow.stage, turn: item.flow.turn }, item.flow.next ? { next: item.flow.next } : {})
       .catch((err) => log('error', 'inbox', `could not record the flow of ${item.id}: ${err}`, { workspace: rt.meta.id }))
   }
   return items

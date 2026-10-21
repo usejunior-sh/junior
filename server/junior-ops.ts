@@ -128,11 +128,11 @@ export async function todayView(rt: WorkspaceRuntime, date: string): Promise<Pla
   const times = await rt.store.items.statusTimes(ids)
   const items = new Map<string, PlanItem>()
   for (const id of ids) {
-    // The store is the truth for status; the ranked snapshot adds the label and the flow.
+    // The store is the truth for status; the ranked snapshot adds the ask and the flow.
     const it = await rt.store.items.get(id)
     if (!it) continue
     const r = ranked.get(id)
-    items.set(id, { ...it, status: it.status ?? 'open', statusAt: times.get(id), ...(r ? { label: r.label, flow: r.flow } : {}) })
+    items.set(id, { ...it, status: it.status ?? 'open', statusAt: times.get(id), ...(r ? { ask: r.ask, flow: r.flow } : {}) })
   }
   const sessions: PlanSession[] = []
   for (const [sessionId, itemId] of rt.sessionItem) {

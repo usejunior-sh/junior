@@ -6,7 +6,7 @@ import { grantsFrom, grantsFromLegacy, type LegacyConnector } from '../core/job/
 import { isCatchUpSpec } from '../core/job/schedule.js'
 import { isValidCron } from '../core/job/cron.js'
 import { isPlaybookName } from './briefs.js'
-import { isLabel } from '../core/work/labels.js'
+import { isAsk } from '../core/work/asks.js'
 import { parseDue } from '../core/work/due.js'
 import { canonicalizeRefs } from '../core/work/link.js'
 import { WorkspaceRuntime } from './workspace/runtime.js'
@@ -176,7 +176,7 @@ export function workItemFrom(raw: unknown): { item: WorkItem } | { error: string
       updatedAt: r.updatedAt,
       ...(typeof r.jobId === 'string' ? { jobId: r.jobId } : {}),
       ...(typeof r.why === 'string' && r.why ? { why: r.why } : {}),
-      ...(isLabel(r.ask) ? { ask: r.ask } : {}),
+      ...(isAsk(r.ask) ? { ask: r.ask } : {}),
       ...(parseDue(r.due) != null ? { dueAt: parseDue(r.due)! } : {}),
       ...(canonicalizeRefs(r.refs) ? { refs: canonicalizeRefs(r.refs) } : {}),
     },

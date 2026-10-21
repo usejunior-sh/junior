@@ -5,7 +5,7 @@
  * gave a due, a priority, a note or links to, or that a brief or session
  * hangs off, is yours, and stays.
  */
-import { labelOf } from './labels.js'
+import { askOf } from './asks.js'
 import type { WorkItem } from './types.js'
 
 export const FOLD_AFTER_DAYS = 3
@@ -23,7 +23,7 @@ type FadeFields = Pick<WorkItem, 'kind' | 'ask' | 'dueSource' | 'updatedAt' | 'i
 
 /** A Read item on its default due, past the fold age: one line, not a row. */
 export function isOldFyi(item: FadeFields, now: number): boolean {
-  return labelOf(item) === 'read' && !item.dueSource && ageDays(item, now) > FOLD_AFTER_DAYS
+  return askOf(item) === 'read' && !item.dueSource && ageDays(item, now) > FOLD_AFTER_DAYS
 }
 
 /**
@@ -35,7 +35,7 @@ export function shouldArchive(
   now: number,
   touched: ReadonlySet<string>,
 ): boolean {
-  if (labelOf(item) !== 'read' || item.dueSource || item.priority) return false
+  if (askOf(item) !== 'read' || item.dueSource || item.priority) return false
   if (item.description || item.urls?.length || item.images?.length || item.files?.length || item.returned) return false
   if (touched.has(item.id)) return false
   return ageDays(item, now) > ARCHIVE_AFTER_DAYS

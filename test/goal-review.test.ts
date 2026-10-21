@@ -158,7 +158,7 @@ test('leadDraftPrompt: a revision names each comment and its step', () => {
 
 test('flow: a goal waiting on its plan review is the item\'s ready step, on my turn', () => {
   const item = { kind: 'manual', ask: undefined, status: 'open', updatedAt: '2026-10-16T00:00:00Z', createdAt: '2026-10-16T00:00:00Z' } as unknown as Parameters<typeof flowOf>[0]
-  assert.deepEqual(flowOf(item, { goal: { state: 'plan_ready', at: 9 } }), { stage: 'ready', turn: 'me', ask: 'review the plan', since: 9 })
+  assert.deepEqual(flowOf(item, { goal: { state: 'plan_ready', at: 9 } }), { stage: 'ready', turn: 'me', next: 'review the plan', since: 9 })
   assert.equal(flowOf(item, { goal: { state: 'draft_plan', at: 9 } }).turn, 'ai')
   assert.equal(flowOf(item, { goal: { state: 'queued', at: 9 } }).stage, 'working')
 })

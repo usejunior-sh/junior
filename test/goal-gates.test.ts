@@ -357,7 +357,7 @@ test(
     }
     // The goal's Inbox item: in "Needs you now".
     const flow = flowOf({ id: 'manual:goal-item', kind: 'manual' } as never, { goal: { state: 'waiting_you', at: g.updatedAt } })
-    assert.deepEqual([flow.turn, flow.ask], ['me', 'answer the goal'])
+    assert.deepEqual([flow.turn, flow.next], ['me', 'answer the goal'])
 
     await goalAnswerOp(h.d, h.eng, { goalId: g.id, gate: 'wait' })
     await h.settle()

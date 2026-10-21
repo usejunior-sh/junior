@@ -17,7 +17,7 @@ export type OfferItem = {
   repo: string
   author: string
   score: number
-  label?: string
+  ask?: string
   ciFailing?: boolean
   refs?: string[]
   createdAt: string
@@ -62,7 +62,7 @@ export function offerFor(i: OfferItem, now: number): Offer {
       say: `Fix ${what} on ${ref} (${i.url}) in a worktree. Show me the diff; the push waits for my OK.`,
     }
   }
-  if (i.label === 'review') {
+  if (i.ask === 'review') {
     const who = i.author ? `${i.author}'s ` : ''
     return {
       title: `First-pass review of ${who}${ref}`,
@@ -71,7 +71,7 @@ export function offerFor(i: OfferItem, now: number): Offer {
       say: `Do a first-pass review of ${who}${ref} (${i.url}) and draft comments for me to edit. Nothing gets posted until I send it.`,
     }
   }
-  if (i.label === 'reply') {
+  if (i.ask === 'reply') {
     const where = i.source === 'slack' ? ref : ref
     return {
       title: `Draft a reply${i.author ? ` to ${i.author}` : ''} on ${where}`,
@@ -85,7 +85,7 @@ export function offerFor(i: OfferItem, now: number): Offer {
   const mine = i.source === 'manual'
   const about = mine ? '' : ` (${i.title}${i.url ? `, ${i.url}` : ''})`
   const said = mine ? `my to-do “${i.title}”` : ref
-  if (i.label === 'do' || i.label === 'decide') {
+  if (i.ask === 'do' || i.ask === 'decide') {
     return {
       title: `Take ${ref} end to end`,
       detail: `${mine ? 'Your to-do' : clip(i.title, 60)}. You see my plan before I start.`,
@@ -113,7 +113,7 @@ export function firstOffers(items: readonly OfferItem[], opts: { slack: boolean;
   const seen = new Set<string>()
   for (const i of [...items].sort((a, b) => b.score - a.score)) {
     if (out.length >= room) break
-    if (i.kind === 'digest' || i.label === 'read') continue
+    if (i.kind === 'digest' || i.ask === 'read') continue
     if (seen.has(i.id)) continue
     seen.add(i.id)
     out.push(offerFor(i, opts.now))
@@ -159,14 +159,14 @@ export function canDoFill(items: readonly OfferItem[], projects: readonly string
     projects: uniq([...projects], 4),
     fixes: uniq(
       ranked
-        .filter((i) => i.ciFailing || i.kind === 'own-pr-conflicting' || i.label === 'do')
+        .filter((i) => i.ciFailing || i.kind === 'own-pr-conflicting' || i.ask === 'do')
         .map((i) => (i.ciFailing ? `the red check on ${ref(i)}` : i.kind === 'own-pr-conflicting' ? `the conflicts on ${ref(i)}` : `issue ${ref(i)}`)),
     ),
-    takes: uniq(ranked.filter((i) => i.label === 'do' || i.label === 'decide' || i.source === 'linear').map(ref)),
+    takes: uniq(ranked.filter((i) => i.ask === 'do' || i.ask === 'decide' || i.source === 'linear').map(ref)),
     drafts: uniq(
       ranked
-        .filter((i) => i.label === 'reply' || i.label === 'review')
-        .map((i) => (i.label === 'review' ? `my review of ${ref(i)}` : `a reply${i.author ? ` to ${i.author}` : ''} on ${ref(i)}`)),
+        .filter((i) => i.ask === 'reply' || i.ask === 'review')
+        .map((i) => (i.ask === 'review' ? `my review of ${ref(i)}` : `a reply${i.author ? ` to ${i.author}` : ''} on ${ref(i)}`)),
     ),
     reads: uniq(ranked.map(ref)),
     plans: uniq(ranked.map((i) => (i.source === 'manual' ? clip(i.title.replace(/[.!?]+$/, ''), 40).toLowerCase() : ref(i)))),

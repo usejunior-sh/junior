@@ -7,7 +7,7 @@
  * time is always an argument.
  */
 import { dueOf } from '../work/due.js'
-import type { Label } from '../work/labels.js'
+import type { Ask } from '../work/asks.js'
 import type { BriefFacts, Finished } from './brief.js'
 import { waitedWords } from './greeting.js'
 import { shortRef } from './today.js'
@@ -25,7 +25,7 @@ export type MorningItem = {
   peopleWaiting: number
   createdAt: string
   ingestedAt?: number
-  label?: string
+  ask?: string
   group?: string
   status?: string
   dueAt?: number
@@ -96,14 +96,14 @@ export function morningBrief(input: { items: readonly MorningItem[]; facts: Brie
 
   // People waiting on you: a human asked something of you, a question, a decision. Oldest first.
   const people = open
-    .filter((i) => i.source !== 'manual' && myTurn(i) && i.label !== 'review' && (PEOPLE_ASKS.has(i.label ?? '') || i.peopleWaiting > 0))
+    .filter((i) => i.source !== 'manual' && myTurn(i) && i.ask !== 'review' && (PEOPLE_ASKS.has(i.ask ?? '') || i.peopleWaiting > 0))
     .sort((a, b) => waitingSince(a) - waitingSince(b))
-    .map((i) => row(i, { ask: i.label === 'decide' ? 'decide' : 'reply' }))
+    .map((i) => row(i, { ask: i.ask === 'decide' ? 'decide' : 'reply' }))
   for (const r of people) taken.add(r.itemId)
 
   // To review: teammates' work you were asked to review, then Junior's own finished work.
   const asked = open
-    .filter((i) => !taken.has(i.id) && myTurn(i) && i.label === 'review')
+    .filter((i) => !taken.has(i.id) && myTurn(i) && i.ask === 'review')
     .sort((a, b) => waitingSince(a) - waitingSince(b))
     .map((i) => row(i))
   for (const r of asked) taken.add(r.itemId)
@@ -117,7 +117,7 @@ export function morningBrief(input: { items: readonly MorningItem[]; facts: Brie
   // Due today: a day someone set (the source, or you) that is today or already past. Most late first.
   const due = open
     .filter((i) => !taken.has(i.id) && i.dueSource)
-    .map((i) => ({ i, d: dueOf({ label: (i.label ?? 'do') as Label, dueAt: i.dueAt, dueSource: i.dueSource }, now) }))
+    .map((i) => ({ i, d: dueOf({ ask: (i.ask ?? 'do') as Ask, dueAt: i.dueAt, dueSource: i.dueSource }, now) }))
     .filter(({ d }) => d.section === 'today' && d.at != null)
     .sort((a, b) => b.d.late - a.d.late || a.i.title.localeCompare(b.i.title))
     .map(({ i, d }) => row(i, { late: d.late }))

@@ -10,7 +10,7 @@
 import { humanSpan } from './schedule.js'
 import { MAX_WEB_FETCHES, grantLabel, runDeferredTools, serverLabel, type JobToolGrant } from './tools.js'
 import type { JobOutput } from './types.js'
-import { labelGuide } from '../work/labels.js'
+import { askGuide } from '../work/asks.js'
 
 export { MAX_WEB_FETCHES } from './tools.js'
 
@@ -94,7 +94,7 @@ Do not file individual items. If there is nothing new in the window, do not call
 - lastActivity: ISO 8601 timestamp of the newest activity
 - why: one line stating exactly what matched the instructions
 - ask: what it asks of the user — pick exactly one:
-${labelGuide()}
+${askGuide()}
   Pick review, reply or decide only when a person is waiting on the user. When unsure, pick read.
 - due: only when the content states a deadline for the user ("by EOD", "before Friday's release", a ticket due date): that day as YYYY-MM-DD. Omit otherwise; never guess one
 - refs: any other GitHub PR/issue URLs or Linear keys visible in the content (omit if none)`,

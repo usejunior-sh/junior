@@ -74,8 +74,8 @@ export interface WorkItem {
   /** scanner's one-line match reason (rendered on the item), the latest find's */
   why?: string
   /**
-   * what a job hit asks of you, picked by the run (labels.ts), the latest
-   * find's. A string, not a Label: a stored ask can outlive its label.
+   * what a job hit asks of you, picked by the run (asks.ts), the latest
+   * find's. A string, not an Ask: a stored ask can outlive the Ask type.
    */
   ask?: string
   /** due day, local midnight ms (core/work/due.ts); a column, not payload */
@@ -124,8 +124,8 @@ export interface ScoredItem extends WorkItem {
   group: Group
   /** one human-readable line: why this ranked where it did */
   reason: string
-  /** what the item asks of you (labels.ts) */
-  label: import('./labels.js').Label
+  /** what the item asks of you (asks.ts), resolved: a job hit's stored `ask` or its kind's */
+  ask: import('./asks.js').Ask
   /**
    * items sharing a canonical ref, folded into this card (linked, not merged).
    * Carries id and title, not just the URL, so a reader, a person or a model

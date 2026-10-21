@@ -62,7 +62,7 @@ export function FlowPopover({ itemId, flow, onSaved }: { itemId: string; flow: I
         >
           <span className="dot" aria-hidden="true" />
           {STAGE_LABEL[flow.stage]} · {TURN_LABEL[flow.turn]}
-          {flow.ask && flow.turn === 'me' && <span className="ask">· {flow.ask}</span>}
+          {flow.next && flow.turn === 'me' && <span className="ask">· {flow.next}</span>}
           {flow.note && <span className="ask">· {flow.note}</span>}
         </button>
       </Popover.Trigger>

@@ -3,7 +3,7 @@
  * Blocking impact ranks above recency: base weight by kind, then how many
  * humans are waiting, then how long they've waited.
  */
-import { LABELS, labelOf } from './labels.js'
+import { ASKS, askOf } from './asks.js'
 import type { Group, ItemKind, ScoredItem, WorkItem } from './types.js'
 
 export const BASE: Record<ItemKind, number> = {
@@ -64,7 +64,7 @@ export function ageWeightFor(group: Group): number {
  */
 function placeOf(item: WorkItem): { base: number; group: Group } {
   if (item.kind !== 'job-hit') return { base: BASE[item.kind], group: GROUP[item.kind] }
-  const def = LABELS[labelOf(item)]
+  const def = ASKS[askOf(item)]
   return { base: def.weight, group: def.group }
 }
 
@@ -86,7 +86,7 @@ export function scoreItem(item: WorkItem, now = Date.now()): ScoredItem {
     score: Math.round(score * 10) / 10,
     group,
     reason: reasonFor(item, waitDays),
-    label: labelOf(item),
+    ask: askOf(item),
   }
 }
 

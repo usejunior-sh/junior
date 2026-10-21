@@ -3,7 +3,7 @@ import { useState } from 'react'
 import type { ScoredItem, SessionSummary, InboxAlert } from '../../../../shared/protocol.js'
 import { rowOpen } from '../../tabs.js'
 import { briefPill } from '../../briefStore.js'
-import { shortAge, LABELS, kindIcon, itemTone, priorityClass, PRIORITY_LABEL, PRIORITY_VALUES } from '../../itemUi.js'
+import { shortAge, ASKS, kindIcon, itemTone, priorityClass, PRIORITY_LABEL, PRIORITY_VALUES } from '../../itemUi.js'
 import { Menu, MenuTrigger, MenuContent, MenuItem, MenuSeparator } from '../../ui/Menu.js'
 import { dueOf, dueChip, SECTION_ORDER, sectionTitle } from '../../../../core/work/due.js'
 import { STAGE_LABEL, type ItemFlow, TURN_LABEL } from '../../../../core/work/flow.js'
@@ -110,9 +110,9 @@ const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
  */
 function rowState(item: ScoredItem, brief: { label: string; tone: string } | null): { text: string; tone: string } {
   const f = item.flow
-  if (!f) return { text: brief?.label ?? (LABELS[item.label] ?? LABELS.read).name, tone: brief ? brief.tone : `label-${item.label}` }
+  if (!f) return { text: brief?.label ?? (ASKS[item.ask] ?? ASKS.read).name, tone: brief ? brief.tone : `ask-${item.ask}` }
   if (f.broken) return { text: cap(f.broken), tone: 'flow-broken' }
-  if (f.turn === 'me') return f.ask ? { text: cap(f.ask), tone: 'flow-ask' } : { text: (LABELS[item.label] ?? LABELS.read).name, tone: `label-${item.label}` }
+  if (f.turn === 'me') return f.next ? { text: cap(f.next), tone: 'flow-ask' } : { text: (ASKS[item.ask] ?? ASKS.read).name, tone: `ask-${item.ask}` }
   if (f.turn === 'ai') return { text: f.stage === 'briefing' ? (brief?.label === 'brief queued' ? 'Brief queued' : 'Briefing…') : 'AI working', tone: 'flow-ai' }
   if (f.turn === 'others') return { text: f.note ? f.note : 'Waiting', tone: 'flow-others' }
   return { text: STAGE_LABEL[f.stage], tone: 'flow-none' }

@@ -4,7 +4,7 @@
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { KIND_TO_LABEL, LABELS, labelOf } from '../core/work/labels.js'
+import { KIND_TO_ASK, ASKS, askOf } from '../core/work/asks.js'
 import { BASE, scoreItem } from '../core/work/score.js'
 import type { ItemKind, WorkItem } from '../core/work/types.js'
 
@@ -27,33 +27,33 @@ function item(kind: ItemKind, extra: Partial<WorkItem> = {}): WorkItem {
 }
 
 test('every kind maps to a label', () => {
-  for (const kind of Object.keys(BASE) as ItemKind[]) assert.ok(LABELS[KIND_TO_LABEL[kind]], kind)
+  for (const kind of Object.keys(BASE) as ItemKind[]) assert.ok(ASKS[KIND_TO_ASK[kind]], kind)
 })
 
 test('scanner kinds keep their base weight and group', () => {
   const s = scoreItem(item('review-requested'), NOW)
-  assert.equal(s.label, 'review')
+  assert.equal(s.ask, 'review')
   assert.equal(s.score, BASE['review-requested'])
   assert.equal(s.group, 'blocking')
-  assert.equal(scoreItem(item('own-pr-open'), NOW).label, 'follow-up')
+  assert.equal(scoreItem(item('own-pr-open'), NOW).ask, 'follow-up')
   assert.equal(scoreItem(item('own-pr-open'), NOW).group, 'fyi')
 })
 
-test('a job hit takes its label weight and group', () => {
+test('a job hit takes its ask weight and group', () => {
   const reply = scoreItem(item('job-hit', { ask: 'reply' }), NOW)
-  assert.equal(reply.label, 'reply')
+  assert.equal(reply.ask, 'reply')
   assert.equal(reply.group, 'blocking')
-  assert.equal(reply.score, LABELS.reply.weight)
+  assert.equal(reply.score, ASKS.reply.weight)
   // a job-found reply outranks a plain mention
   assert.ok(reply.score > scoreItem(item('slack-mention'), NOW).score)
 })
 
 test('a job hit with no ask, or one that is no longer a label, is Read', () => {
-  assert.equal(labelOf(item('job-hit')), 'read')
-  assert.equal(labelOf(item('job-hit', { ask: 'escalate' })), 'read')
+  assert.equal(askOf(item('job-hit')), 'read')
+  assert.equal(askOf(item('job-hit', { ask: 'escalate' })), 'read')
   assert.equal(scoreItem(item('job-hit', { ask: 'escalate' }), NOW).group, 'fyi')
 })
 
 test('ask only moves job hits; a scanner kind ignores it', () => {
-  assert.equal(labelOf(item('mention', { ask: 'decide' })), 'read')
+  assert.equal(askOf(item('mention', { ask: 'decide' })), 'read')
 })

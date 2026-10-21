@@ -14,7 +14,7 @@
  * The server materializes the result on the row and logs every change in the
  * item's event log; this module only answers "what is it now".
  */
-import { labelOf } from './labels.js'
+import { askOf } from './asks.js'
 import type { WorkItem } from './types.js'
 
 export type Stage = 'new' | 'briefing' | 'ready' | 'working' | 'review' | 'done'
@@ -109,8 +109,8 @@ export interface FlowSignals {
 export interface ItemFlow {
   stage: Stage
   turn: Turn
-  /** on my turn, the specific ask: "read brief", "dispatch", "review result", "merge" */
-  ask?: string
+  /** on my turn, the specific next: "read brief", "dispatch", "review result", "merge" */
+  next?: string
   /** something broke on this item: "CI failing", "brief failed", "session failed" */
   broken?: string
   /** epoch ms the item has been in this turn (for "waiting 2d") */
@@ -141,7 +141,7 @@ export function flowOf(item: FlowItem, signals: FlowSignals = {}): ItemFlow {
   return {
     stage,
     turn,
-    ...(turn === 'me' ? { ask: derived.turn === 'me' && derived.stage === stage ? derived.ask : askFor(stage) } : {}),
+    ...(turn === 'me' ? { next: derived.turn === 'me' && derived.stage === stage ? derived.next : nextFor(stage) } : {}),
     ...(derived.broken ? { broken: derived.broken } : {}),
     since: o.at,
     overridden: true,
@@ -149,8 +149,8 @@ export function flowOf(item: FlowItem, signals: FlowSignals = {}): ItemFlow {
   }
 }
 
-/** The default ask for a stage that is on my turn. */
-function askFor(stage: Stage): string | undefined {
+/** The default next step for a stage that is on my turn. */
+function nextFor(stage: Stage): string | undefined {
   switch (stage) {
     case 'ready':
       return 'dispatch'
@@ -169,7 +169,7 @@ function deriveFlow(item: FlowItem, s: FlowSignals): ItemFlow {
   if (item.status === 'done' || item.status === 'archived') return { stage: 'done', turn: 'none', since: updated }
   // An agent's action held for approval blocks whatever step the item is on:
   // nothing it drafted goes out until you answer it.
-  if (s.actions && s.actions.pending > 0) return { stage: 'review', turn: 'me', ask: 'approve action', since: s.actions.at }
+  if (s.actions && s.actions.pending > 0) return { stage: 'review', turn: 'me', next: 'approve action', since: s.actions.at }
 
   const brief = s.brief
   const session = s.session
@@ -180,16 +180,16 @@ function deriveFlow(item: FlowItem, s: FlowSignals): ItemFlow {
       case 'draft_plan':
         return { stage: 'briefing', turn: 'ai', since: goal.at }
       case 'plan_ready':
-        return { stage: 'ready', turn: 'me', ask: 'review the plan', since: goal.at }
+        return { stage: 'ready', turn: 'me', next: 'review the plan', since: goal.at }
       case 'queued':
       case 'running':
         return { stage: 'working', turn: 'ai', since: goal.at }
       case 'waiting_world':
         return { stage: 'working', turn: 'others', since: goal.at }
       case 'waiting_you':
-        return { stage: 'working', turn: 'me', ask: 'answer the goal', since: goal.at }
+        return { stage: 'working', turn: 'me', next: 'answer the goal', since: goal.at }
       case 'result_ready':
-        return withOwnPr(item, { stage: 'review', turn: 'me', ask: 'review result', since: goal.at })
+        return withOwnPr(item, { stage: 'review', turn: 'me', next: 'review result', since: goal.at })
       case 'paused':
         return { stage: 'working', turn: 'none', since: goal.at }
     }
@@ -198,32 +198,32 @@ function deriveFlow(item: FlowItem, s: FlowSignals): ItemFlow {
   const team = s.team && s.team.state !== 'stopped' ? s.team : undefined
   if (team && (!brief || team.at >= brief.at)) {
     // Junior asked you something: whatever the team is doing, it's your turn to answer.
-    if (team.asks && team.state !== 'done') return { stage: 'working', turn: 'me', ask: 'answer Junior', since: team.at }
+    if (team.asks && team.state !== 'done') return { stage: 'working', turn: 'me', next: 'answer Junior', since: team.at }
     switch (team.state) {
       case 'waiting':
         return { stage: 'working', turn: 'others', since: team.at }
       case 'proposed':
-        return { stage: 'ready', turn: 'me', ask: 'approve the team', since: team.at }
+        return { stage: 'ready', turn: 'me', next: 'approve the team', since: team.at }
       case 'gate':
-        return { stage: 'working', turn: 'me', ask: 'approve the step', since: team.at }
+        return { stage: 'working', turn: 'me', next: 'approve the step', since: team.at }
       case 'paused':
-        return { stage: 'working', turn: 'me', ask: 'resume the team', broken: 'team paused', since: team.at }
+        return { stage: 'working', turn: 'me', next: 'resume the team', broken: 'team paused', since: team.at }
       case 'running':
         return { stage: 'working', turn: 'ai', since: team.at }
       case 'done':
-        return withOwnPr(item, { stage: 'review', turn: 'me', ask: team.toAccept ? 'accept the result' : 'review result', since: team.at })
+        return withOwnPr(item, { stage: 'review', turn: 'me', next: team.toAccept ? 'accept the result' : 'review result', since: team.at })
     }
   }
   // A session dispatched after the latest brief is the item's newest step.
   if (session && (!brief || session.at >= brief.at)) {
-    if (session.error) return { stage: 'review', turn: 'me', ask: 'review result', broken: 'session failed', since: session.at }
-    if (session.running && session.waiting) return { stage: 'working', turn: 'me', ask: 'answer the session', since: session.at }
+    if (session.error) return { stage: 'review', turn: 'me', next: 'review result', broken: 'session failed', since: session.at }
+    if (session.running && session.waiting) return { stage: 'working', turn: 'me', next: 'answer the session', since: session.at }
     if (session.running) return { stage: 'working', turn: 'ai', since: session.at }
-    return withOwnPr(item, { stage: 'review', turn: 'me', ask: 'review result', since: session.at })
+    return withOwnPr(item, { stage: 'review', turn: 'me', next: 'review result', since: session.at })
   }
   if (brief) {
     if (brief.status === 'queued' || brief.status === 'running') return { stage: 'briefing', turn: 'ai', since: brief.at }
-    if (brief.status === 'ready') return withOwnPr(item, { stage: 'ready', turn: 'me', ask: 'read brief', since: brief.at })
+    if (brief.status === 'ready') return withOwnPr(item, { stage: 'ready', turn: 'me', next: 'read brief', since: brief.at })
     // A failed brief leaves the item where it started, flagged.
     return { ...fromKind(item, created, updated), broken: 'brief failed' }
   }
@@ -235,7 +235,7 @@ function deriveFlow(item: FlowItem, s: FlowSignals): ItemFlow {
  * approved, conflicting, red. These hold whatever step triage is on.
  */
 function withOwnPr(item: FlowItem, f: ItemFlow): ItemFlow {
-  if (item.ciFailing && isOwnPr(item)) return { ...f, stage: 'review', turn: 'me', ask: 'fix CI', broken: 'CI failing' }
+  if (item.ciFailing && isOwnPr(item)) return { ...f, stage: 'review', turn: 'me', next: 'fix CI', broken: 'CI failing' }
   return f
 }
 
@@ -243,19 +243,19 @@ const isOwnPr = (item: FlowItem) => item.kind.startsWith('own-pr-')
 
 function fromKind(item: FlowItem, created: number, updated: number): ItemFlow {
   if (isOwnPr(item)) {
-    if (item.ciFailing) return { stage: 'review', turn: 'me', ask: 'fix CI', broken: 'CI failing', since: updated }
+    if (item.ciFailing) return { stage: 'review', turn: 'me', next: 'fix CI', broken: 'CI failing', since: updated }
     switch (item.kind) {
       case 'own-pr-approved':
-        return { stage: 'review', turn: 'me', ask: 'merge', since: updated }
+        return { stage: 'review', turn: 'me', next: 'merge', since: updated }
       case 'own-pr-conflicting':
-        return { stage: 'review', turn: 'me', ask: 'resolve conflicts', since: updated }
+        return { stage: 'review', turn: 'me', next: 'resolve conflicts', since: updated }
       default:
         // open or stale: the reviewers have the turn
         return { stage: 'review', turn: 'others', since: updated }
     }
   }
   // "You are waiting on someone else and may need to nudge them."
-  if (labelOf(item) === 'follow-up') return { stage: 'new', turn: 'others', since: updated }
+  if (askOf(item) === 'follow-up') return { stage: 'new', turn: 'others', since: updated }
   return { stage: 'new', turn: 'me', since: created }
 }
 

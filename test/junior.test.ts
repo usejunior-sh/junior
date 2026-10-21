@@ -190,11 +190,11 @@ test('brief facts: finished from the flow, jobs from their runs, arrivals by sou
   const items: FactItem[] = [
     item({ id: 'github:acme/api#1', title: 'Done by Junior', kind: 'own-pr-approved', flow: { stage: 'review', turn: 'me', since: NOW - HOUR } }),
     item({ id: 'github:acme/api#2', title: 'Reviewed long ago', flow: { stage: 'review', turn: 'me', since: since - HOUR } }),
-    item({ id: 'github:acme/api#3', title: 'New review', label: 'review', author: 'Tomas', createdAt: iso(NOW - 2 * DAY), ingestedAt: NOW - 2 * HOUR, flow: { stage: 'new', turn: 'me', since: NOW - 2 * HOUR } }),
-    item({ id: 'slack:1', source: 'slack', repo: 'api', kind: 'slack-mention', label: 'reply', author: 'Priya', ingestedAt: NOW - HOUR, createdAt: iso(NOW - DAY) }),
-    item({ id: 'manual:1', source: 'manual', kind: 'manual', label: 'do', ingestedAt: NOW - HOUR }),
-    item({ id: 'job:m:1', source: 'job', kind: 'job-hit', jobId: 'm', label: 'read', ingestedAt: NOW - HOUR }),
-    item({ id: 'github:acme/api#9', label: 'review', author: 'Wei', flow: { stage: 'working', turn: 'ai', since: NOW } }),
+    item({ id: 'github:acme/api#3', title: 'New review', ask: 'review', author: 'Tomas', createdAt: iso(NOW - 2 * DAY), ingestedAt: NOW - 2 * HOUR, flow: { stage: 'new', turn: 'me', since: NOW - 2 * HOUR } }),
+    item({ id: 'slack:1', source: 'slack', repo: 'api', kind: 'slack-mention', ask: 'reply', author: 'Priya', ingestedAt: NOW - HOUR, createdAt: iso(NOW - DAY) }),
+    item({ id: 'manual:1', source: 'manual', kind: 'manual', ask: 'do', ingestedAt: NOW - HOUR }),
+    item({ id: 'job:m:1', source: 'job', kind: 'job-hit', jobId: 'm', ask: 'read', ingestedAt: NOW - HOUR }),
+    item({ id: 'github:acme/api#9', ask: 'review', author: 'Wei', flow: { stage: 'working', turn: 'ai', since: NOW } }),
   ]
   const f = briefFacts({
     since,
@@ -248,22 +248,22 @@ test('morning brief: people oldest first, reviews then my work, due by lateness 
   })
   const yesterday = startOfDay(NOW) - DAY
   const items: MorningItem[] = [
-    item({ id: 'slack:dana', source: 'slack', repo: 'infra', label: 'reply', author: 'Dana', createdAt: iso(NOW - 3 * HOUR) }),
-    item({ id: 'slack:priya', source: 'slack', repo: 'launch', label: 'decide', author: 'Priya', createdAt: iso(NOW - 2 * DAY) }),
+    item({ id: 'slack:dana', source: 'slack', repo: 'infra', ask: 'reply', author: 'Dana', createdAt: iso(NOW - 3 * HOUR) }),
+    item({ id: 'slack:priya', source: 'slack', repo: 'launch', ask: 'decide', author: 'Priya', createdAt: iso(NOW - 2 * DAY) }),
     // a review request that is also due today reads as a review, once
-    item({ id: 'github:acme/api#507', title: 'Move retries', label: 'review', author: 'Anirudha', createdAt: iso(NOW - 9 * HOUR), dueSource: 'you', dueAt: startOfDay(NOW) }),
-    item({ id: 'github:acme/api#512', title: 'Fix dates', kind: 'own-pr-open', label: 'do', flow: { stage: 'review', turn: 'me', since: NOW - HOUR } }),
-    item({ id: 'github:acme/api#513', title: 'Report done', kind: 'own-pr-approved', label: 'do', flow: { stage: 'review', turn: 'me', since: NOW - HOUR } }),
-    item({ id: 'linear:NOV-121', source: 'linear', title: 'Login loop', kind: 'ticket-assigned', label: 'do', dueSource: 'explicit', dueAt: yesterday }),
-    item({ id: 'linear:NOV-138', source: 'linear', title: 'Release notes', kind: 'ticket-assigned', label: 'do', dueSource: 'explicit', dueAt: startOfDay(NOW) }),
-    item({ id: 'linear:NOV-130', source: 'linear', title: 'SAML', kind: 'ticket-assigned', label: 'do', dueSource: 'explicit', dueAt: startOfDay(NOW) + 2 * DAY }),
+    item({ id: 'github:acme/api#507', title: 'Move retries', ask: 'review', author: 'Anirudha', createdAt: iso(NOW - 9 * HOUR), dueSource: 'you', dueAt: startOfDay(NOW) }),
+    item({ id: 'github:acme/api#512', title: 'Fix dates', kind: 'own-pr-open', ask: 'do', flow: { stage: 'review', turn: 'me', since: NOW - HOUR } }),
+    item({ id: 'github:acme/api#513', title: 'Report done', kind: 'own-pr-approved', ask: 'do', flow: { stage: 'review', turn: 'me', since: NOW - HOUR } }),
+    item({ id: 'linear:NOV-121', source: 'linear', title: 'Login loop', kind: 'ticket-assigned', ask: 'do', dueSource: 'explicit', dueAt: yesterday }),
+    item({ id: 'linear:NOV-138', source: 'linear', title: 'Release notes', kind: 'ticket-assigned', ask: 'do', dueSource: 'explicit', dueAt: startOfDay(NOW) }),
+    item({ id: 'linear:NOV-130', source: 'linear', title: 'SAML', kind: 'ticket-assigned', ask: 'do', dueSource: 'explicit', dueAt: startOfDay(NOW) + 2 * DAY }),
     // Junior's turn, done, a digest and your own to-do never count as people waiting
-    item({ id: 'slack:wei', source: 'slack', label: 'reply', author: 'Wei', flow: { stage: 'working', turn: 'ai', since: NOW } }),
-    item({ id: 'slack:old', source: 'slack', label: 'reply', status: 'done' }),
-    item({ id: 'job:d', source: 'job', kind: 'digest', label: 'read', peopleWaiting: 2 }),
-    item({ id: 'manual:a', source: 'manual', kind: 'manual', label: 'do', peopleWaiting: 1 }),
+    item({ id: 'slack:wei', source: 'slack', ask: 'reply', author: 'Wei', flow: { stage: 'working', turn: 'ai', since: NOW } }),
+    item({ id: 'slack:old', source: 'slack', ask: 'reply', status: 'done' }),
+    item({ id: 'job:d', source: 'job', kind: 'digest', ask: 'read', peopleWaiting: 2 }),
+    item({ id: 'manual:a', source: 'manual', kind: 'manual', ask: 'do', peopleWaiting: 1 }),
     // FYI that arrived in the window: skipped
-    item({ id: 'slack:fyi', source: 'slack', label: 'read', group: 'fyi', ingestedAt: NOW - HOUR }),
+    item({ id: 'slack:fyi', source: 'slack', ask: 'read', group: 'fyi', ingestedAt: NOW - HOUR }),
   ]
   const facts = { since: NOW - 12 * HOUR, away: true, finished: [{ kind: 'job' as const, jobId: 'm', title: 'Mentions', runs: 2, filed: 1 }], sent: 3, arrived: [{ label: 'Slack', count: 4 }], blocking: [] }
   const b = morningBrief({ items, facts, now: NOW })
@@ -288,7 +288,7 @@ test('morning brief: people oldest first, reviews then my work, due by lateness 
 
 test('morning brief: start with the overdue thing when nobody waits, nothing when the day is clear', () => {
   const facts = { since: NOW - HOUR, away: false, finished: [], sent: 0, arrived: [], blocking: [] }
-  const late: MorningItem = { id: 'linear:NOV-1', title: 'Late one', source: 'linear', kind: 'ticket-assigned', repo: '', author: '', url: '', peopleWaiting: 0, createdAt: iso(NOW - DAY), label: 'do', dueSource: 'explicit', dueAt: startOfDay(NOW) - 3 * DAY }
+  const late: MorningItem = { id: 'linear:NOV-1', title: 'Late one', source: 'linear', kind: 'ticket-assigned', repo: '', author: '', url: '', peopleWaiting: 0, createdAt: iso(NOW - DAY), ask: 'do', dueSource: 'explicit', dueAt: startOfDay(NOW) - 3 * DAY }
   assert.deepEqual(morningBrief({ items: [late], facts, now: NOW }).start, { itemId: 'linear:NOV-1', title: 'Late one', why: 'it was due 3 days ago' })
   assert.equal(morningBrief({ items: [], facts, now: NOW }).start, null)
 })
@@ -413,7 +413,7 @@ test('plan rows: done, needs you, live, waiting on you, carried, to do — and S
     ['d', planItem({ id: 'd', status: 'done', statusAt: at(6, 10) })],
     ['n', planItem({ id: 'n' })],
     ['l', planItem({ id: 'l' })],
-    ['w', planItem({ id: 'w', label: 'review', flow: { stage: 'new', turn: 'me', since: NOW - 2 * DAY } })],
+    ['w', planItem({ id: 'w', ask: 'review', flow: { stage: 'new', turn: 'me', since: NOW - 2 * DAY } })],
     ['c', planItem({ id: 'c', source: 'manual', kind: 'manual' })],
     ['j', planItem({ id: 'j', source: 'manual', kind: 'manual', flow: { stage: 'ready', turn: 'me', since: NOW } })],
   ])
@@ -547,10 +547,10 @@ test('right now: the todo step in progress, a plan item first', () => {
 test('offers and sentences come from real items', () => {
   const item = (over: Partial<OfferItem>): OfferItem => ({ id: 'github:acme/api#1', title: 'T', url: 'https://x', source: 'github', kind: 'review-requested', repo: 'acme/api', author: 'Tomas', score: 50, createdAt: iso(NOW - 2 * DAY), ...over })
   const items = [
-    item({ id: 'github:acme/api#479', label: 'review', score: 90 }),
-    item({ id: 'github:acme/api#482', kind: 'own-pr-open', ciFailing: true, label: 'do', score: 80 }),
-    item({ id: 'linear:NOV-123', source: 'linear', kind: 'ticket-assigned', label: 'do', title: 'Rate-limit retries', score: 70 }),
-    item({ id: 'slack:x', source: 'slack', repo: 'api', kind: 'slack-mention', label: 'read', score: 60 }),
+    item({ id: 'github:acme/api#479', ask: 'review', score: 90 }),
+    item({ id: 'github:acme/api#482', kind: 'own-pr-open', ciFailing: true, ask: 'do', score: 80 }),
+    item({ id: 'linear:NOV-123', source: 'linear', kind: 'ticket-assigned', ask: 'do', title: 'Rate-limit retries', score: 70 }),
+    item({ id: 'slack:x', source: 'slack', repo: 'api', kind: 'slack-mention', ask: 'read', score: 60 }),
   ]
   const offers = firstOffers(items, { slack: true, now: NOW })
   assert.deepEqual(

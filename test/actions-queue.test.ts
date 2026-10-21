@@ -41,7 +41,7 @@ import type { ActionRecord, ActionStatus } from '../core/actions/types.js'
 import { openSqliteStore } from '../core/store/sqlite.js'
 import { flowOf } from '../core/work/flow.js'
 import { inboxTabOf } from '../core/work/inbox-tabs.js'
-import { labelOf } from '../core/work/labels.js'
+import { askOf } from '../core/work/asks.js'
 import type { WorkItem } from '../core/work/types.js'
 
 const T0 = new Date(2026, 9, 13, 10).getTime()
@@ -369,14 +369,14 @@ test('flow: an action waiting on approval puts the item on my turn, in Ready for
     status: 'open',
   } as WorkItem
   const running = flowOf(item, { session: { running: true, waiting: false, error: false, at: T0 - 1000 }, actions: { pending: 1, at: T0 } })
-  assert.deepEqual([running.stage, running.turn, running.ask], ['review', 'me', 'approve action'])
+  assert.deepEqual([running.stage, running.turn, running.next], ['review', 'me', 'approve action'])
   // A review request is a human ask (People waiting), but a queued action outranks it.
-  assert.equal(inboxTabOf({ ...item, label: labelOf(item), score: 1, flow: running }, T0), 'needs')
+  assert.equal(inboxTabOf({ ...item, ask: askOf(item), score: 1, flow: running }, T0), 'needs')
   const none = flowOf(item, { session: { running: true, waiting: false, error: false, at: T0 - 1000 }, actions: { pending: 0, at: T0 } })
   assert.equal(none.turn, 'ai')
   // An override older than the action gives way to it.
   const o = flowOf(item, { override: { turn: 'others', at: T0 - 5000 }, actions: { pending: 2, at: T0 } })
-  assert.equal(o.ask, 'approve action')
+  assert.equal(o.next, 'approve action')
 })
 
 // ---------------------------------------------------------------------------

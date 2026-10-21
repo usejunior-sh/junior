@@ -18,13 +18,13 @@ import {
 } from 'lucide-react'
 import type { ComponentType } from 'react'
 import type { Group, ScoredItem } from '../../shared/protocol.js'
-import { LABELS, isLabel } from '../../core/work/labels.js'
+import { ASKS, isAsk } from '../../core/work/asks.js'
 
-export { LABELS, LABEL_ORDER, countOf, type Label } from '../../core/work/labels.js'
+export { ASKS, ASK_ORDER, countOf, type Ask } from '../../core/work/asks.js'
 
 /** A label's display name; an unknown one reads as Read, as it ranks. */
-export function labelName(label: string | undefined): string {
-  return isLabel(label) ? LABELS[label].name : LABELS.read.name
+export function askName(label: string | undefined): string {
+  return isAsk(label) ? ASKS[label].name : ASKS.read.name
 }
 
 export const KIND_LABEL: Record<string, string> = {

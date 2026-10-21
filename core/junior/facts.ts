@@ -20,7 +20,7 @@ export type FactItem = {
   peopleWaiting: number
   createdAt: string
   ingestedAt?: number
-  label?: string
+  ask?: string
   jobId?: string
   flow?: { stage: string; turn: string; since: number }
 }
@@ -70,11 +70,11 @@ export function briefFacts(input: {
 
   // Blocking: a person, not a to-do, waits on you.
   const blocking: Blocking[] = items
-    .filter((i) => i.source !== 'manual' && (i.flow?.turn ?? 'me') === 'me' && (ASKS.has(i.label ?? '') || i.peopleWaiting > 0))
+    .filter((i) => i.source !== 'manual' && (i.flow?.turn ?? 'me') === 'me' && (ASKS.has(i.ask ?? '') || i.peopleWaiting > 0))
     .map((i) => ({
       itemId: i.id,
       who: i.author || 'Someone',
-      ask: (ASKS.has(i.label ?? '') ? i.label : 'reply') as Blocking['ask'],
+      ask: (ASKS.has(i.ask ?? '') ? i.ask : 'reply') as Blocking['ask'],
       where: shortRef(i),
       since: Date.parse(i.createdAt) || 0,
     }))

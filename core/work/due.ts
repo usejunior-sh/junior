@@ -12,7 +12,7 @@
  * Sections: Today (overdue rolls in), the next workday, This week (up to the
  * Friday after the next workday), Later.
  */
-import { LABELS, type DueDefault, type Label } from './labels.js'
+import { ASKS, type DueDefault, type Ask } from './asks.js'
 
 export type DueSource = 'explicit' | 'you' | 'default'
 export type Section = DueDefault
@@ -70,7 +70,7 @@ export function dueFor(bucket: Section, now: number): number | null {
 }
 
 export interface DueFields {
-  label: Label
+  ask: Ask
   dueAt?: number
   dueSource?: 'explicit' | 'you'
 }
@@ -87,7 +87,7 @@ export interface DueView {
 /** Where an item sits today and why. */
 export function dueOf(item: DueFields, now: number): DueView {
   if (!item.dueSource) {
-    const section = LABELS[item.label]?.due ?? 'later'
+    const section = ASKS[item.ask]?.due ?? 'later'
     return { section, source: 'default', at: null, late: 0 }
   }
   const at = item.dueAt ?? null

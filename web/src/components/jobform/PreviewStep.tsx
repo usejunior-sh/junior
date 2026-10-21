@@ -1,6 +1,6 @@
 import type { JobPreviewResult } from '../../../../shared/protocol.js'
 import { useEvents } from '../../hooks.js'
-import { labelName, relTime } from '../../itemUi.js'
+import { askName, relTime } from '../../itemUi.js'
 import { Markdown } from '../Markdown.js'
 import { Transcript } from '../Transcript.js'
 
@@ -137,7 +137,7 @@ function PreviewCard({ result }: { result: JobPreviewResult }) {
                 {r.title}
               </a>
               {r.place && <span className="place">{r.place}</span>}
-              {r.ask && <span className={`place label-${r.ask}`}>{labelName(r.ask)}</span>}
+              {r.ask && <span className={`place ask-${r.ask}`}>{askName(r.ask)}</span>}
             </span>
             <span className="when">{relTime(r.lastActivity)}</span>
             <span className="why">{r.why}</span>

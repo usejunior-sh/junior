@@ -3,7 +3,7 @@ import { createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk'
 import type { WorkItem as CoreWorkItem, Provenance, WorkSource } from '../../core/work/types.js'
 import { permalinkId, safeWhen } from '../../core/sources/slack.js'
 import { canonicalizeRef, canonicalizeRefs } from '../../core/work/link.js'
-import { type Label, LABEL_ORDER } from '../../core/work/labels.js'
+import { type Ask, ASK_ORDER } from '../../core/work/asks.js'
 import type { Job } from '../../core/job/types.js'
 import type { UpsertOutcome } from '../../core/store/types.js'
 import { MAX_ROWS_PER_RUN } from '../../core/job/connectors.js'
@@ -59,7 +59,7 @@ export const UPSERT_SHAPE = {
   from: z.string().optional().describe('the author or asker'),
   lastActivity: z.string().describe('ISO 8601 timestamp of the newest activity'),
   why: z.string().describe('one line: exactly what matched the instructions'),
-  ask: z.enum(LABEL_ORDER as [Label, ...Label[]]).describe('what it asks of the user: review, reply, decide, do, follow-up or read'),
+  ask: z.enum(ASK_ORDER as [Ask, ...Ask[]]).describe('what it asks of the user: review, reply, decide, do, follow-up or read'),
   due: z.string().optional().describe('only when the content states a deadline for the user: the day, ISO 8601 (e.g. 2026-10-12)'),
   refs: z.array(z.string()).optional().describe('other GitHub PR/issue URLs or Linear keys in the content'),
 }

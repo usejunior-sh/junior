@@ -7,7 +7,7 @@ import assert from 'node:assert/strict'
 import { flowOf, isStuck, type FlowSignals } from '../core/work/flow.js'
 import { OPEN_TABS, inboxTabOf, inboxTabs, type OpenTab, type TabItem } from '../core/work/inbox-tabs.js'
 import { inboxViews, parseInboxRoute } from '../core/work/inbox-views.js'
-import { labelOf } from '../core/work/labels.js'
+import { askOf } from '../core/work/asks.js'
 import type { WorkItem } from '../core/work/types.js'
 
 const HOUR = 3_600_000
@@ -35,7 +35,7 @@ function item(over: Partial<WorkItem> = {}): WorkItem {
 
 const flow = (i: WorkItem, s?: FlowSignals) => {
   const f = flowOf(i, s)
-  return `${f.stage}/${f.turn}${f.ask ? ` (${f.ask})` : ''}${f.broken ? ` !${f.broken}` : ''}`
+  return `${f.stage}/${f.turn}${f.next ? ` (${f.next})` : ''}${f.broken ? ` !${f.broken}` : ''}`
 }
 
 test('the table: created → briefing → ready → working → review → done', () => {
@@ -127,7 +127,7 @@ test('stuck: waiting on others for more than two days', () => {
 
 function scored(over: Partial<WorkItem> = {}, signals?: FlowSignals, score = 50): TabItem & { title: string } {
   const i = item(over)
-  return { ...i, label: labelOf(i), score, flow: flowOf(i, signals) }
+  return { ...i, ask: askOf(i), score, flow: flowOf(i, signals) }
 }
 
 const startOfToday = new Date(2026, 9, 12).getTime()

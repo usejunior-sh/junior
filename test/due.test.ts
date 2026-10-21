@@ -45,19 +45,19 @@ test('a key sets the section it names', () => {
 })
 
 test('overdue rolls into Today with how late it is', () => {
-  const v = dueOf({ label: 'do', dueAt: day(2026, 10, 7, 0), dueSource: 'you' }, FRI)
+  const v = dueOf({ ask: 'do', dueAt: day(2026, 10, 7, 0), dueSource: 'you' }, FRI)
   assert.equal(v.section, 'today')
   assert.equal(v.late, 2)
 })
 
-test('defaults come from the label and are never late', () => {
-  assert.deepEqual(dueOf({ label: 'reply' }, FRI), { section: 'today', source: 'default', at: null, late: 0 })
-  assert.equal(dueOf({ label: 'do' }, FRI).section, 'this-week')
-  assert.equal(dueOf({ label: 'read' }, FRI).section, 'later')
+test('defaults come from the ask and are never late', () => {
+  assert.deepEqual(dueOf({ ask: 'reply' }, FRI), { section: 'today', source: 'default', at: null, late: 0 })
+  assert.equal(dueOf({ ask: 'do' }, FRI).section, 'this-week')
+  assert.equal(dueOf({ ask: 'read' }, FRI).section, 'later')
 })
 
 test('a Later you chose has no day', () => {
-  assert.deepEqual(dueOf({ label: 'reply', dueSource: 'you' }, FRI), { section: 'later', source: 'you', at: null, late: 0 })
+  assert.deepEqual(dueOf({ ask: 'reply', dueSource: 'you' }, FRI), { section: 'later', source: 'you', at: null, late: 0 })
 })
 
 test('a bare date is that local day, not UTC midnight', () => {

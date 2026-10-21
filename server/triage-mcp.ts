@@ -2,7 +2,7 @@ import { createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk'
 import { z } from 'zod'
 import { TRIAGE_MCP_INSTRUCTIONS } from '../shared/triageContext.js'
 import { AGENTS_ARG, SKILLS_ARG } from '../core/mcp/tools.js'
-import { type Label, LABEL_ORDER } from '../core/work/labels.js'
+import { type Ask, ASK_ORDER } from '../core/work/asks.js'
 import { WorkspaceRuntime } from './workspace/runtime.js'
 import { VERSION } from './config.js'
 import { teamLeadTools } from './team-run/mcp.js'
@@ -253,7 +253,7 @@ export function makeTriageMcp(rt: WorkspaceRuntime, sessionId?: string) {
           createdAt: z.string().optional(),
           jobId: z.string().optional(),
           why: z.string().optional(),
-          ask: z.enum(LABEL_ORDER as [Label, ...Label[]]).optional().describe('what it asks of the user (job hits)'),
+          ask: z.enum(ASK_ORDER as [Ask, ...Ask[]]).optional().describe('what it asks of the user (job hits)'),
           due: z.string().optional().describe('a deadline the source states, ISO 8601 day'),
           refs: z.array(z.string()).optional(),
         },

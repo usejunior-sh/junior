@@ -18,7 +18,7 @@
  */
 import { dueOf } from './due.js'
 import { isStuck, type ItemFlow } from './flow.js'
-import type { Label } from './labels.js'
+import type { Ask } from './asks.js'
 import type { WorkItem } from './types.js'
 
 export type OpenTab = 'needs' | 'due' | 'people' | 'new' | 'ready' | 'ai' | 'review' | 'others' | 'backlog'
@@ -51,7 +51,7 @@ export const isOpenTab = (t: InboxTab): t is OpenTab => (OPEN_TABS as readonly s
 export type TabItem = Pick<
   WorkItem,
   'id' | 'source' | 'peopleWaiting' | 'createdAt' | 'updatedAt' | 'ingestedAt' | 'dueAt' | 'dueSource'
-> & { label: Label; score: number; flow?: ItemFlow; linked?: { id: string }[] }
+> & { ask: Ask; score: number; flow?: ItemFlow; linked?: { id: string }[] }
 
 /** A session held on a prompt: reduced to what the tab reads. */
 export interface BlockedSession {
@@ -81,16 +81,16 @@ export interface InboxTabs<T, S> {
 }
 
 const DAY = 86_400_000
-const HUMAN_ASKS: ReadonlySet<Label> = new Set(['review', 'reply', 'decide'])
+const HUMAN_ASKS: ReadonlySet<Ask> = new Set(['review', 'reply', 'decide'])
 /** Asks that hold an agent until you answer: they jump the queue. */
-const BLOCKING_ASKS: ReadonlySet<string> = new Set(['approve action', 'approve the step', 'resume the team', 'answer the session', 'answer the goal'])
+const BLOCKING_NEXT: ReadonlySet<string> = new Set(['approve action', 'approve the step', 'resume the team', 'answer the session', 'answer the goal'])
 
 const ms = (iso: string): number => Date.parse(iso) || 0
 
 /** Someone, not something, is waiting on you. A to-do you wrote yourself isn't one. */
 export function isHumanAsk(item: TabItem): boolean {
   if (item.source === 'manual') return false
-  return item.peopleWaiting > 0 || HUMAN_ASKS.has(item.label)
+  return item.peopleWaiting > 0 || HUMAN_ASKS.has(item.ask)
 }
 
 /** A day set by you or the source, today or earlier. A label's default is a bucket, not a deadline. */
@@ -114,7 +114,7 @@ const arrivedAt = (item: TabItem) => item.ingestedAt ?? ms(item.createdAt)
 export function inboxTabOf(item: TabItem, now: number, blocked = false): OpenTab {
   const f: ItemFlow = item.flow ?? { stage: 'new', turn: 'me', since: arrivedAt(item) }
   const mine = f.turn === 'me'
-  if (blocked || f.broken || (mine && f.ask && BLOCKING_ASKS.has(f.ask))) return 'needs'
+  if (blocked || f.broken || (mine && f.next && BLOCKING_NEXT.has(f.next))) return 'needs'
   if (mine && isDue(item, now)) return 'due'
   if (mine && isHumanAsk(item)) return 'people'
   if (mine && f.stage === 'new' && now - arrivedAt(item) < DAY) return 'new'

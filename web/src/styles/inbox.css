@@ -74,9 +74,9 @@
 .wrow .meta .state { width: 134px; color: var(--mute); }
 /* The label is one tone scale, not a palette: asks that block a person read
    brightest, your own work next, reading material fades. */
-.wrow .meta .state.label-review, .wrow .meta .state.label-reply, .wrow .meta .state.label-decide { color: var(--ink); }
-.wrow .meta .state.label-do { color: var(--body); }
-.wrow .meta .state.label-read { color: var(--stone); }
+.wrow .meta .state.ask-review, .wrow .meta .state.ask-reply, .wrow .meta .state.ask-decide { color: var(--ink); }
+.wrow .meta .state.ask-do { color: var(--body); }
+.wrow .meta .state.ask-read { color: var(--stone); }
 .wrow .meta .state.brief-ready { color: var(--green); }
 .wrow .meta .state.brief-queued, .wrow .meta .state.brief-running { color: var(--blue); }
 .wrow .meta .state.brief-stale { color: var(--yellow); }

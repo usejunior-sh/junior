@@ -103,9 +103,9 @@ export type PlanItem = {
   statusAt?: number
   peopleWaiting: number
   createdAt: string
-  /** what it asks of you (core/work/labels.ts), when ranked */
-  label?: string
-  flow?: { stage: string; turn: string; since: number; ask?: string }
+  /** what it asks of you (core/work/asks.ts), when ranked */
+  ask?: string
+  flow?: { stage: string; turn: string; since: number; next?: string }
   refs?: string[]
   projectId?: string
 }
@@ -200,7 +200,7 @@ export function planRows(input: {
     if (item.status === 'done') status = { kind: 'done', at: item.statusAt ?? null }
     else if (waiting) status = { kind: 'needs', sessionId: waiting.id }
     else if (live) status = { kind: 'live', sessionId: live.id, step: live.step, activity: live.activity }
-    else if (e.owner === 'you' && item.source !== 'manual' && (item.peopleWaiting > 0 || HUMAN_ASKS.has(item.label ?? ''))) {
+    else if (e.owner === 'you' && item.source !== 'manual' && (item.peopleWaiting > 0 || HUMAN_ASKS.has(item.ask ?? ''))) {
       const since = item.flow?.turn === 'me' ? item.flow.since : Date.parse(item.createdAt) || 0
       status = { kind: 'waiting', since, who: item.author || null }
     } else if (e.carriedFrom) status = { kind: 'carried', from: e.carriedFrom }

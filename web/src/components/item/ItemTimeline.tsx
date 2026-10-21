@@ -22,7 +22,9 @@ function flowLine(ev: ItemEvent): string | undefined {
     if (!to) return undefined
     const stage = isStage(to.stage) ? STAGE_LABEL[to.stage] : to.stage
     const turn = isTurn(to.turn) ? TURN_LABEL[to.turn] : to.turn
-    return `${stage} · ${turn}${typeof d.ask === 'string' ? ` — ${d.ask}` : ''}`
+    // `ask` is the pre-rename key on older moves
+    const next = d.next ?? d.ask
+    return `${stage} · ${turn}${typeof next === 'string' ? ` — ${next}` : ''}`
   }
   if (ev.event === 'flow-set') {
     if (d.cleared) return 'back to automatic'

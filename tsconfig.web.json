@@ -32,7 +32,7 @@
     "core/teams/engine.ts",
     "core/teams/engine-*.ts",
     "core/work/state.ts",
-    "core/work/labels.ts",
+    "core/work/asks.ts",
     "core/work/due.ts",
     "core/work/fade.ts",
     "core/work/flow.ts",
