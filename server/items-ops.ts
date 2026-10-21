@@ -6,6 +6,7 @@ import { log } from './log.js'
 import type { ItemStatus } from '../core/work/state.js'
 import type { UpsertOutcome } from '../core/store/types.js'
 import { dueInput } from '../core/work/due.js'
+import { reasonOf } from '../core/work/fields.js'
 import { ANY_ITEM_ID_RE, ITEM_STATUSES, manualItemFrom, MAX_URLS_PER_ITEM, workItemFrom } from './validate.js'
 import { BASE64, base64Bytes } from './ws/parse.js'
 import { WorkspaceRuntime } from './workspace/runtime.js'
@@ -175,7 +176,7 @@ export async function itemDetailOp(rt: WorkspaceRuntime, rawId: unknown): Promis
     .map((sid) => byId.get(sid)!)
     .map((i) => ({ id: i.id, title: i.title, source: i.source as string, url: i.url, repo: i.repo, status: i.status ?? 'open' }))
 
-  const [artifacts, sessions] = await Promise.all([linkedArtifacts(rt, links), linkedSessions(rt, links)])
+  const [artifacts, sessions, tasks] = await Promise.all([linkedArtifacts(rt, links), linkedSessions(rt, links), rt.store.tasks.list(id)])
 
   // Ranked only when it happens to be in the cached open inbox: ranking means
   // a scan, and reading one item must never pay for one.
@@ -187,6 +188,8 @@ export async function itemDetailOp(rt: WorkspaceRuntime, rawId: unknown): Promis
     artifacts,
     sessions,
     flow: await flowFor(rt, item),
+    reason: reasonOf(item),
+    tasks,
   }
 }
 

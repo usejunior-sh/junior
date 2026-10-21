@@ -4,6 +4,7 @@
  * humans are waiting, then how long they've waited.
  */
 import { ASKS, askOf } from './asks.js'
+import { reasonOf } from './fields.js'
 import type { Group, ItemKind, ScoredItem, WorkItem } from './types.js'
 
 export const BASE: Record<ItemKind, number> = {
@@ -87,6 +88,7 @@ export function scoreItem(item: WorkItem, now = Date.now()): ScoredItem {
     group,
     rankWhy: reasonFor(item, waitDays),
     ask: askOf(item),
+    reason: reasonOf(item),
   }
 }
 

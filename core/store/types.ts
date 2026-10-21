@@ -41,6 +41,8 @@ import type { ActionHistoryEntry, ActionKind, ActionRecord, ActionStatus } from 
 import type { Gate, Goal, GoalEvent, GoalLogEntry, GoalState, GoalStepState } from '../goals/types.js'
 import type { NewJob, NewJobSlotRun, Job, JobRunResult, JobRunStart, JobRunStatus, JobRunTrigger, JobSlotFinish, JobSlotRun } from '../job/types.js'
 import type { TodayDay, TodayEntry } from '../junior/today.js'
+import type { Decision, ItemLabel, Playbook, Reason } from '../work/fields.js'
+import type { ItemTask, NewTask, TaskState } from '../work/tasks.js'
 
 export type StoredSession = {
   id: string
@@ -399,7 +401,52 @@ export interface WorkItemStore {
   setUrls(id: string, urls: string[]): Promise<void>
   /** Give every item without a project the one `assign` picks; returns how many were set. */
   backfillProjects(assign: (item: WorkItem) => string | null): Promise<number>
+  /**
+   * Set or clear (null) reason · label · parent · playbook (core/work/fields.ts).
+   * Absent keys are left alone. Never touched by ingestion.
+   */
+  setFields(id: string, patch: ItemFieldsPatch): Promise<void>
+  /** Replace the item's plan (null clears). Decisions are kept. */
+  setPlan(id: string, plan: string | null): Promise<void>
+  /** Append one decision to the item's memory. */
+  addDecision(id: string, decision: Decision): Promise<void>
 }
+
+export type ItemFieldsPatch = {
+  reason?: Reason | null
+  label?: ItemLabel | null
+  parent?: string | null
+  playbook?: Playbook | null
+}
+
+/**
+ * Tasks on items (core/work/tasks.ts). Moves are checked against `canMove`:
+ * a move a task can't make returns null and changes nothing, so a late
+ * result never revives a task you stopped.
+ */
+export interface ItemTaskStore {
+  /** Add a task; null when the item already has one with this `key`. */
+  add(task: NewTask, now: number): Promise<ItemTask | null>
+  get(id: string): Promise<ItemTask | null>
+  /** One item's tasks, oldest first. */
+  list(itemId: string): Promise<ItemTask[]>
+  /** Every task in these states, oldest first, across items: the runner's queue. */
+  inState(states: readonly TaskState[]): Promise<ItemTask[]>
+  /** The task with this key on this item, if any. */
+  byKey(itemId: string, key: string): Promise<ItemTask | null>
+  /**
+   * Move a task and set what came with the move. Starting sets `startedAt` and
+   * bumps `attempts`; finishing sets `endedAt`. Null = no such task, or a move
+   * it can't make.
+   */
+  move(id: string, to: TaskState, patch: TaskMovePatch, now: number): Promise<ItemTask | null>
+  /** Add to a task's spend (its sessions' cost). */
+  addCost(id: string, usd: number): Promise<void>
+  /** Running tasks left over from a daemon that stopped: back to queued. Returns their ids. */
+  requeueRunning(): Promise<string[]>
+}
+
+export type TaskMovePatch = Partial<Pick<ItemTask, 'output' | 'error' | 'sessionId' | 'model'>>
 
 export type NewBriefJob = {
   id: string
@@ -615,5 +662,6 @@ export interface Store {
   actions: ActionStore
   goals: GoalStore
   today: TodayStore
+  tasks: ItemTaskStore
   close(): Promise<void>
 }

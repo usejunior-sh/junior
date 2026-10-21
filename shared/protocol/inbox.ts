@@ -75,6 +75,10 @@ export type ItemDetail = {
   sessions: { id: string; title: string; role: LinkRole; kind: SessionKind; updatedAt: number }[]
   /** stage and turn, where it is and whose move it is */
   flow: import('../../core/work/flow.js').ItemFlow
+  /** why it is here, resolved (core/work/fields.ts) */
+  reason: import('../../core/work/fields.js').Reason
+  /** its task list, oldest first (core/work/tasks.ts) */
+  tasks: import('../../core/work/tasks.js').ItemTask[]
 }
 
 export type ItemDetailResponse = { ok: true; detail: ItemDetail } | { ok: false; error: string }

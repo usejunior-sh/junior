@@ -2,6 +2,7 @@ import { type Dispatch, type SetStateAction, useCallback } from 'react'
 import { type ScoredItem, type Mention, type DispatchPreviewResponse, type ProjectsResponse, type ItemDetailResponse, type SessionSummary, mentionToken } from '../../../shared/protocol.js'
 import type { NewSession } from '../components/NewSessionComposer.js'
 import { dispatchTitle, dispatchPrompt } from '../dispatch.js'
+import { reasonOf } from '../../../core/work/fields.js'
 import { draftStore } from '../drafts.js'
 import { REFINE_JOB_KEY } from '../components/JobFormPage.js'
 import { useCheckouts } from '../hooks.js'
@@ -115,7 +116,7 @@ export function useDispatchers({ navigate, pendingDraft, setCreateError, inbox, 
       void fetch(`/api/items/detail?id=${encodeURIComponent(id)}`)
         .then((r) => r.json() as Promise<ItemDetailResponse>)
         .then((b) => {
-          if (b.ok) dispatch({ ...b.detail.item, score: 0, group: 'cycle', rankWhy: 'on today\u2019s plan', ask: 'do' })
+          if (b.ok) dispatch({ ...b.detail.item, score: 0, group: 'cycle', rankWhy: 'on today\u2019s plan', ask: 'do', reason: reasonOf(b.detail.item) })
         })
         .catch(() => {})
     },

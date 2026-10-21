@@ -23,6 +23,37 @@ export const TODAY_SCHEMA = `CREATE TABLE IF NOT EXISTS today_days (
    );`
 
 /**
+ * Tasks on items (core/work/tasks.ts). `key` dedupes: one task per item per
+ * event ("checks_failed@<sha>"); NULL keys never collide. `input` and
+ * `output` are JSON. IF NOT EXISTS throughout: migration 33 and
+ * ensureDurableSchema both run it.
+ */
+export const TASKS_SCHEMA = `CREATE TABLE IF NOT EXISTS item_tasks (
+     id          TEXT PRIMARY KEY,
+     item_id     TEXT NOT NULL,
+     title       TEXT NOT NULL,
+     owner       TEXT NOT NULL,
+     state       TEXT NOT NULL,
+     why         TEXT NOT NULL,
+     why_detail  TEXT,
+     step        TEXT,
+     input       TEXT,
+     key         TEXT,
+     output      TEXT,
+     error       TEXT,
+     session_id  TEXT,
+     model       TEXT,
+     cost_usd    REAL,
+     attempts    INTEGER NOT NULL DEFAULT 0,
+     created_at  INTEGER NOT NULL,
+     started_at  INTEGER,
+     ended_at    INTEGER,
+     UNIQUE (item_id, key)
+   );
+   CREATE INDEX IF NOT EXISTS idx_item_tasks_item ON item_tasks(item_id, created_at);
+   CREATE INDEX IF NOT EXISTS idx_item_tasks_state ON item_tasks(state);`
+
+/**
  * Goals (core/goals/types.ts). `plan` and `budget` are JSON; `plan.md` in the
  * ledger folder is the plan's source and this caches it parsed. `key` is
  * goal_create's caller-stable id, unique when given. Transitions update `state`
@@ -474,4 +505,6 @@ export const MIGRATIONS: string[] = [
   // 32: today's plan (core/junior/today.ts): one row per item per local day,
   // and each day's own record. Also converged by ensureDurableSchema.
   TODAY_SCHEMA,
+  // 33: tasks on items (core/work/tasks.ts). Also converged by ensureDurableSchema.
+  TASKS_SCHEMA,
 ]

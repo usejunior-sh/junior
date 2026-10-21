@@ -18,6 +18,7 @@ import { SqliteJobRuns, SqliteJobs } from './sqlite-jobs.js'
 import { SqliteCheckouts, SqliteProjects } from './sqlite-projects.js'
 import { ensureDurableSchema, migrate, renameLegacyTables, renameLegacyValues } from './sqlite-schema.js'
 import { SqliteConfig, SqliteEvents, SqliteInbox, SqliteSessions, SqliteTurns } from './sqlite-sessions.js'
+import { SqliteItemTasks } from './sqlite-tasks.js'
 import { SqliteToday } from './sqlite-today.js'
 
 export function openSqliteStore(file: string): Store {
@@ -47,6 +48,7 @@ export function openSqliteStore(file: string): Store {
     actions: new SqliteActions(db),
     goals: new SqliteGoals(db),
     today: new SqliteToday(db),
+    tasks: new SqliteItemTasks(db),
     close: async () => db.close(),
   }
 }

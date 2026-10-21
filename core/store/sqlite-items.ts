@@ -3,7 +3,8 @@ import type { ItemImage, FileRef } from '../../shared/protocol.js'
 import type { WorkItem, Provenance } from '../work/types.js'
 import { type ItemStatus, type ItemEventKind, shouldReopen, type StatusChange, eventForStatus, type ItemEvent } from '../work/state.js'
 import { type FlowOverride, isStage, isTurn } from '../work/flow.js'
-import type { WorkItemStore, UpsertResult, NewManualItem, StoredFlow } from './types.js'
+import type { WorkItemStore, UpsertResult, NewManualItem, StoredFlow, ItemFieldsPatch } from './types.js'
+import type { Decision } from '../work/fields.js'
 
 type WorkItemRow = {
   id: string
@@ -424,6 +425,42 @@ export class SqliteWorkItems implements WorkItemStore {
     else delete next.description
     // A manual item's card quotes its description as the "why"; source items keep the scanner's.
     if (base.source === 'manual') next.why = description || undefined
+    this.db.prepare('UPDATE work_items SET payload = ?, updated_at = ? WHERE id = ?').run(payloadOf(next), Date.now(), id)
+  }
+
+  async setFields(id: string, patch: ItemFieldsPatch): Promise<void> {
+    this.patchPayload(id, (next) => {
+      for (const k of ['reason', 'label', 'parent', 'playbook'] as const) {
+        if (!(k in patch)) continue
+        const v = patch[k]
+        if (v == null) delete next[k]
+        else Object.assign(next, { [k]: v })
+      }
+    })
+  }
+
+  async setPlan(id: string, plan: string | null): Promise<void> {
+    this.patchPayload(id, (next) => {
+      const memory = { decisions: [], ...next.memory }
+      if (plan) memory.plan = plan
+      else delete memory.plan
+      next.memory = memory
+    })
+  }
+
+  async addDecision(id: string, decision: Decision): Promise<void> {
+    this.patchPayload(id, (next) => {
+      const memory = { decisions: [] as Decision[], ...next.memory }
+      next.memory = { ...memory, decisions: [...memory.decisions, decision] }
+    })
+  }
+
+  /** Read-modify-write one item's payload; the user-owned fields only, never lifecycle columns. */
+  private patchPayload(id: string, edit: (next: WorkItem) => void): void {
+    const r = this.row(id)
+    if (!r) throw new Error('no such work item')
+    const next: WorkItem = { ...(JSON.parse(r.payload) as WorkItem) }
+    edit(next)
     this.db.prepare('UPDATE work_items SET payload = ?, updated_at = ? WHERE id = ?').run(payloadOf(next), Date.now(), id)
   }
 

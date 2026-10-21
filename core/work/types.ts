@@ -117,6 +117,16 @@ export interface WorkItem {
    * dispatched session is handed them as paths it can Read.
    */
   files?: import('../../shared/protocol.js').FileRef[]
+  /** why it is here (fields.ts), when a scanner, job or you set it; read through `reasonOf` */
+  reason?: import('./fields.js').Reason
+  /** what it is: bug, improvement… Junior suggests, you change. Never touched by ingestion. */
+  label?: import('./fields.js').ItemLabel
+  /** the epic item this belongs to. Never touched by ingestion. */
+  parent?: string
+  /** how Junior works it, when one is set. Never touched by ingestion. */
+  playbook?: import('./fields.js').Playbook
+  /** plan · decisions, read and written by every task. Never touched by ingestion. */
+  memory?: import('./fields.js').ItemMemory
 }
 
 export interface ScoredItem extends WorkItem {
@@ -126,6 +136,8 @@ export interface ScoredItem extends WorkItem {
   rankWhy: string
   /** what the item asks of you (asks.ts), resolved: a job hit's stored `ask` or its kind's */
   ask: import('./asks.js').Ask
+  /** why it is here (fields.ts), resolved: what was stored or the kind's */
+  reason: import('./fields.js').Reason
   /**
    * items sharing a canonical ref, folded into this card (linked, not merged).
    * Carries id and title, not just the URL, so a reader, a person or a model
