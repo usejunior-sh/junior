@@ -39,6 +39,8 @@ export const DEFAULT_BABYSIT: BabysitSettings = {
   maxRunning: 2,
 }
 
+import { isItemStep, ITEM_STEP_RUN } from '../playbooks/item.js'
+
 const MODEL_RE = /^[\w.\-[\]]{1,80}$/
 
 type J = Record<string, unknown>
@@ -64,15 +66,22 @@ export function babysitSettingsFrom(raw: unknown): BabysitSettings {
 
 /** The model a task's step runs on. */
 export function modelFor(step: string | undefined, s: BabysitSettings): string {
+  if (isItemStep(step)) return ITEM_STEP_RUN[step!]!.model
   return step === 'rebase' ? s.models.rebase : step === 'review' ? s.models.review : s.models.fix
 }
 
 /** One task's cap, in USD. */
 export function capFor(step: string | undefined, s: BabysitSettings): number {
+  if (isItemStep(step)) return ITEM_STEP_RUN[step!]!.capUsd
   return step === 'review' ? s.budget.perReviewUsd : s.budget.perTaskUsd
 }
 
-/** Whether the runner may start a task with this step: its playbook is switched on. */
+/**
+ * Whether the runner may start a task with this step: its playbook is
+ * switched on. A rule's playbook (answer, investigate, debug-fix) is switched
+ * by its rule (core/rules), so its tasks only exist when it is on.
+ */
 export function stepOn(step: string | undefined, s: BabysitSettings): boolean {
+  if (isItemStep(step)) return true
   return step === 'review' ? s.reviews : s.enabled
 }

@@ -154,6 +154,11 @@ export async function holdIfAction(rt: WorkspaceRuntime, row: StoredSession, too
     return { allow: true }
   }
   if (!sorted) return { allow: true }
+  // A read-only task (a first pass, an answer's draft, a plan) sends nothing: the user does.
+  if (taskRun?.scope.readOnly) {
+    log('info', 'tasks', `refused a send in a read-only task: ${sorted.summary}`, { session: row.id, workspace: rt.meta.id })
+    return { allow: false, reason: 'This task is read-only: nothing is sent from here. Hand in with your submit tool; sending is the user’s call.' }
+  }
   // Approved in advance (core/approvals): it goes out now, and its record says which approval let it.
   const rule = await coveringApproval(rt, toolName, args)
   if (rule) {

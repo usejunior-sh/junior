@@ -20,6 +20,23 @@ import { MAX_COMMENTS, passLine, passMarkdown, reviewPrompt, VERDICT_LABEL, type
 import { POST_REVIEW_STEP, REVIEW_STEP } from '../../core/review/watch.js'
 import { isStale } from '../../core/babysit/watch.js'
 import type { ItemTask } from '../../core/work/tasks.js'
+import type { WorkItem } from '../../core/work/types.js'
+import {
+  ANSWER_STEP,
+  answerPrompt,
+  APPROVE_PLAN_STEP,
+  DEBUG_FIX_STEP,
+  DEBUG_PLAN_STEP,
+  debugFixPrompt,
+  debugPlanPrompt,
+  fixBranch,
+  INVESTIGATE_STEP,
+  investigatePrompt,
+  isItemStep,
+  MAX_REPLY_CHARS,
+  planMarkdown,
+  SEND_REPLY_STEP,
+} from '../../core/playbooks/item.js'
 import type { Checkout, Project } from '../../shared/protocol.js'
 import { BABYSIT_WATCH_KEY, type BabysitWatchState } from '../babysit/watch.js'
 import { REVIEW_WATCH_KEY, type ReviewWatchState } from '../review/watch.js'
@@ -104,7 +121,6 @@ async function pumpOnce(rt: WorkspaceRuntime): Promise<void> {
     if (back.length) log('info', 'tasks', `requeued ${back.length} task(s) a stopped daemon left running`, { workspace: rt.meta.id })
   }
   const s = await babysitSettings(rt)
-  if (!s.enabled && !s.reviews) return
   const now = Date.now()
   const spent = await rt.store.tasks.spentSince(dayStart(now))
   // Only what its playbook's switch allows: babysit off doesn't hold back reviews, and the other way round.
@@ -194,6 +210,7 @@ async function reviewCtx(pr: { repo: string; number: number }): Promise<ReviewCt
 async function startTask(rt: WorkspaceRuntime, t: ItemTask, s: BabysitSettings): Promise<void> {
   const item = await rt.store.items.get(t.itemId)
   if (!item) return void (await finish(rt, t.id, 'stopped', { error: 'the item is gone' }))
+  if (isItemStep(t.step)) return startItemTask(rt, t, s, item)
   const ref = prOfItem(item.id)
   const review = t.step === REVIEW_STEP
   const watch = await watchedPr(rt, item.id, t.step)
@@ -259,6 +276,80 @@ async function startTask(rt: WorkspaceRuntime, t: ItemTask, s: BabysitSettings):
 }
 
 /**
+ * A playbook task on any item (core/playbooks/item.ts): answer, investigate
+ * and debug-plan read the project folder and hand in; debug-fix works in its
+ * own worktree on Junior's own branch and opens a draft PR.
+ */
+async function startItemTask(rt: WorkspaceRuntime, t: ItemTask, s: BabysitSettings, item: WorkItem): Promise<void> {
+  const projects = await rt.store.projects.list()
+  const project = projects.find((p) => p.id === item.projectId) ?? projects.find((p) => p.isDefault)
+  if (!project) throw new Error('no project folder to work in: add one so Junior can read the code')
+  const base = (await defaultBranch(project.path).catch(() => null)) ?? 'main'
+  const fix = t.step === DEBUG_FIX_STEP
+  let cwd = project.path
+  let checkoutId: string | null = null
+  let prompt: string
+  const branch = fixBranch(item)
+  if (fix) {
+    const co = await fixCheckout(rt, project, item.id, branch, base)
+    cwd = co.path
+    checkoutId = co.id
+    prompt = debugFixPrompt(item, { branch, base, ...(typeof t.input?.note === 'string' && t.input.note ? { note: t.input.note } : {}) })
+  } else {
+    const p = { name: project.name, path: project.path }
+    prompt = t.step === ANSWER_STEP ? answerPrompt(item, p) : t.step === INVESTIGATE_STEP ? investigatePrompt(item, p) : debugPlanPrompt(item, p)
+  }
+  const model = modelFor(t.step, s)
+  const row = await createSession(rt, `${t.title} · ${item.title}`.slice(0, 120), cwd, model, null, false, 'gated', {
+    kind: 'task',
+    projectId: project.id,
+    ...(checkoutId ? { checkoutId } : {}),
+    spawn: false,
+  })
+  const run: TaskRun = {
+    taskId: t.id,
+    itemId: item.id,
+    sessionId: row.id,
+    ...(t.step ? { step: t.step } : {}),
+    headSha: '',
+    scope: fix ? { headRef: branch, defaultBranch: base, draftPr: true } : { headRef: '', defaultBranch: base, readOnly: true },
+    perTaskUsd: capFor(t.step, s),
+    release: power.hold(`task ${t.id}`),
+    timer: setTimeout(() => void endTaskSession(rt, row.id, `timed out after ${TASK_SESSION_TIMEOUT_MS / 60_000} minutes`), TASK_SESSION_TIMEOUT_MS),
+  }
+  rt.taskRuns.set(row.id, run)
+  const moved = await rt.store.tasks.move(t.id, 'running', { sessionId: row.id, model }, Date.now())
+  if (!moved) {
+    rt.taskRuns.delete(row.id)
+    clearTimeout(run.timer)
+    run.release()
+    return
+  }
+  tasksChanged(rt)
+  try {
+    await linkSessionToItem(rt, row.id, item.id, 'dispatch')
+    const live = await getOrRevive(rt, row.id)
+    if (!live) throw new Error('could not start the session')
+    await live.sendUserMessage(prompt)
+    log('info', 'tasks', `started "${t.title}" on ${item.id} (${model})`, { task: t.id, session: row.id, workspace: rt.meta.id })
+  } catch (err) {
+    await endTaskSession(rt, row.id, errText(err))
+  }
+}
+
+/**
+ * The fix's worktree: Junior's own branch from the default branch as origin
+ * has it. Made on the first fix, reused by a retry (its commits kept).
+ */
+async function fixCheckout(rt: WorkspaceRuntime, project: Project, itemId: string, branch: string, base: string): Promise<Checkout> {
+  const have = checkoutList(rt).find((c) => c.itemId === itemId && c.kind === 'worktree' && existsSync(c.path))
+  if (have) return have
+  await git(project.path, ['fetch', 'origin', base])
+  const sha = (await git(project.path, ['rev-parse', 'FETCH_HEAD'])).trim()
+  return makeWorktree(rt, project, branch, itemId, undefined, sha)
+}
+
+/**
  * A task's session ended, timed out, went over budget or was stopped. Once
  * per session. A task still running here never handed in: it failed.
  */
@@ -316,35 +407,181 @@ export async function skipTaskOp(rt: WorkspaceRuntime, taskId: string): Promise<
  * spawn (one instance connects to one transport).
  */
 export function makeTaskMcp(rt: WorkspaceRuntime, sessionId: string) {
-  const review = rt.taskRuns.get(sessionId)?.step === REVIEW_STEP
-  return createSdkMcpServer({
-    name: 'task',
-    version: VERSION,
-    alwaysLoad: true,
-    tools: review ? [submitReviewTool(rt, sessionId)] : [
-      tool(
-        'submit_task',
-        "Hand in this session's task, once, at the end: done (what you changed, in one line, and the commit you pushed) or blocked (the question the user must answer). Then end your turn.",
+  const step = rt.taskRuns.get(sessionId)?.step
+  const handIn =
+    step === REVIEW_STEP ? submitReviewTool(rt, sessionId)
+    : step === ANSWER_STEP ? submitReplyTool(rt, sessionId)
+    : step === INVESTIGATE_STEP ? submitBriefTool(rt, sessionId)
+    : step === DEBUG_PLAN_STEP ? submitPlanTool(rt, sessionId)
+    : submitTaskTool(rt, sessionId)
+  return createSdkMcpServer({ name: 'task', version: VERSION, alwaysLoad: true, tools: [handIn] })
+}
+
+/** The running task a hand-in is for, or why there is none. */
+async function runningTask(rt: WorkspaceRuntime, sessionId: string): Promise<{ run: TaskRun; t: ItemTask; item: WorkItem } | { error: string }> {
+  const run = rt.taskRuns.get(sessionId)
+  if (!run) return { error: 'This session has no task running (it ended or was stopped).' }
+  const t = await rt.store.tasks.get(run.taskId)
+  if (!t || t.state !== 'running') return { error: `This task is ${t?.state ?? 'gone'}: nothing to hand in.` }
+  const item = await rt.store.items.get(run.itemId)
+  if (!item) return { error: 'The item this task was for is gone.' }
+  return { run, t, item }
+}
+
+const DECISIONS = z.array(z.string().min(1).max(500)).max(10).optional().describe('what the next task on this item should know')
+
+async function addDecisions(rt: WorkspaceRuntime, itemId: string, taskId: string, decisions: string[] | undefined): Promise<void> {
+  const at = Date.now()
+  for (const text of decisions ?? []) await rt.store.items.addDecision(itemId, { at, by: 'junior', text, taskId })
+}
+
+/** Babysit's tasks and the fix: done (what changed, the commit) or blocked (the question). */
+function submitTaskTool(rt: WorkspaceRuntime, sessionId: string) {
+  return tool(
+    'submit_task',
+    "Hand in this session's task, once, at the end: done (what you changed, in one line, and the commit you pushed) or blocked (the question the user must answer). Then end your turn.",
+    {
+      outcome: z.enum(['done', 'blocked']),
+      summary: z.string().min(1).max(300).describe('done: what changed, one line. blocked: the question for the user.'),
+      sha: z.string().regex(/^[0-9a-f]{7,40}$/).optional().describe('the commit you pushed'),
+      decisions: DECISIONS,
+    },
+    async (a) => {
+      const got = await runningTask(rt, sessionId)
+      if ('error' in got) return errResult(got.error)
+      const { run, t } = got
+      await addDecisions(rt, run.itemId, t.id, a.decisions)
+      if (a.outcome === 'done') await finish(rt, t.id, 'done', { output: { summary: a.summary, ...(a.sha ? { sha: a.sha } : {}) } })
+      else await finish(rt, t.id, 'waiting', { error: a.summary })
+      return okResult('Handed in. End your turn now.')
+    },
+  )
+}
+
+/**
+ * The answer's hand-in: the draft reply. It becomes "Send reply", a task on
+ * you with the reply on an editable card. Nothing is sent from here.
+ */
+function submitReplyTool(rt: WorkspaceRuntime, sessionId: string) {
+  return tool(
+    'submit_reply',
+    'Hand in the draft reply, once, at the end. Nothing is sent: the user reads it, edits it if they want, and sends it. Then end your turn.',
+    {
+      reply: z.string().min(1).max(MAX_REPLY_CHARS).describe('the message as the user would send it, Slack markdown'),
+      summary: z.string().min(1).max(300).describe('one line for the user: what you answered'),
+      unsure: z.string().max(500).optional().describe('what you could not confirm, if anything'),
+      decisions: DECISIONS,
+    },
+    async (a) => {
+      const got = await runningTask(rt, sessionId)
+      if ('error' in got) return errResult(got.error)
+      const { run, t, item } = got
+      await addDecisions(rt, run.itemId, t.id, a.decisions)
+      await finish(rt, t.id, 'done', { output: { summary: a.summary } })
+      const send = await rt.store.tasks.add(
         {
-          outcome: z.enum(['done', 'blocked']),
-          summary: z.string().min(1).max(300).describe('done: what changed, one line. blocked: the question for the user.'),
-          sha: z.string().regex(/^[0-9a-f]{7,40}$/).optional().describe('the commit you pushed'),
-          decisions: z.array(z.string().min(1).max(500)).max(10).optional().describe('what the next task on this item should know'),
+          itemId: item.id,
+          title: `Send reply${item.author ? ` to ${item.author}` : ''}`,
+          owner: 'you',
+          state: 'waiting',
+          why: 'playbook',
+          whyDetail: "Junior's draft",
+          step: SEND_REPLY_STEP,
+          key: `send:${t.id}`,
+          input: { reply: a.reply.trim(), ...(a.unsure?.trim() ? { unsure: a.unsure.trim() } : {}), answerTaskId: t.id },
         },
-        async (a) => {
-          const run = rt.taskRuns.get(sessionId)
-          if (!run) return errResult('This session has no task running (it ended or was stopped).')
-          const t = await rt.store.tasks.get(run.taskId)
-          if (!t || t.state !== 'running') return errResult(`This task is ${t?.state ?? 'gone'}: nothing to hand in.`)
-          const at = Date.now()
-          for (const text of a.decisions ?? []) await rt.store.items.addDecision(run.itemId, { at, by: 'junior', text, taskId: t.id })
-          if (a.outcome === 'done') await finish(rt, t.id, 'done', { output: { summary: a.summary, ...(a.sha ? { sha: a.sha } : {}) } })
-          else await finish(rt, t.id, 'waiting', { error: a.summary })
-          return okResult('Handed in. End your turn now.')
-        },
-      ),
-    ],
-  })
+        Date.now(),
+      )
+      if (send) taskNeedsYou(rt, { kind: 'reply', task: send })
+      tasksChanged(rt)
+      return okResult('Handed in. End your turn now.')
+    },
+  )
+}
+
+/** Investigate's hand-in: the options brief, an artifact on the item. */
+function submitBriefTool(rt: WorkspaceRuntime, sessionId: string) {
+  return tool(
+    'submit_brief',
+    'Hand in the options brief, once, at the end. It is saved on the item for the user. Then end your turn.',
+    {
+      title: z.string().min(1).max(200),
+      body: z.string().min(1).max(40_000).describe('the whole brief, markdown'),
+      summary: z.string().min(1).max(300).describe('one line: your recommendation'),
+      decisions: DECISIONS,
+    },
+    async (a) => {
+      const got = await runningTask(rt, sessionId)
+      if ('error' in got) return errResult(got.error)
+      const { run, t, item } = got
+      try {
+        const { artifact } = await createArtifactOp(
+          rt,
+          { title: a.title, format: 'md', body: a.body, note: 'Options, by Junior', ...(item.url ? { refs: [item.url] } : {}), links: [{ kind: 'item', id: item.id, role: 'context' }] },
+          'model',
+          { sessionId },
+        )
+        await addDecisions(rt, run.itemId, t.id, a.decisions)
+        await finish(rt, t.id, 'done', { output: { summary: a.summary, artifactId: artifact.id } })
+        return okResult('Handed in. End your turn now.')
+      } catch (err) {
+        return errResult(`Could not save the brief: ${errText(err)}`)
+      }
+    },
+  )
+}
+
+/**
+ * Debug-fix's first hand-in: the plan. It becomes the Plan artifact and the
+ * item's plan, and "Approve plan", a task on you: Junior changes nothing
+ * until you approve it.
+ */
+function submitPlanTool(rt: WorkspaceRuntime, sessionId: string) {
+  return tool(
+    'submit_plan',
+    'Hand in the plan for the fix, once, at the end. Nothing changes until the user approves it. Then end your turn.',
+    {
+      plan: z.string().min(1).max(20_000).describe('the plan, markdown: cause, fix, test, risk'),
+      summary: z.string().min(1).max(300).describe('one line: the cause and the fix'),
+      confidence: z.enum(['high', 'medium', 'low']),
+      decisions: DECISIONS,
+    },
+    async (a) => {
+      const got = await runningTask(rt, sessionId)
+      if ('error' in got) return errResult(got.error)
+      const { run, t, item } = got
+      try {
+        const { artifact } = await createArtifactOp(
+          rt,
+          { title: `Plan: ${item.title}`.slice(0, 200), format: 'md', body: planMarkdown(item, a.plan, a.confidence), note: `Plan, ${a.confidence} confidence`, ...(item.url ? { refs: [item.url] } : {}), links: [{ kind: 'item', id: item.id, role: 'context' }] },
+          'model',
+          { sessionId },
+        )
+        await rt.store.items.setPlan(item.id, a.plan.trim())
+        await addDecisions(rt, run.itemId, t.id, a.decisions)
+        await finish(rt, t.id, 'done', { output: { summary: `${a.summary} (${a.confidence} confidence)`, artifactId: artifact.id } })
+        const approve = await rt.store.tasks.add(
+          {
+            itemId: item.id,
+            title: 'Approve plan',
+            owner: 'you',
+            state: 'waiting',
+            why: 'playbook',
+            whyDetail: 'debug-fix stops at the plan',
+            step: APPROVE_PLAN_STEP,
+            key: `approve:${t.id}`,
+            input: { artifactId: artifact.id, planTaskId: t.id, confidence: a.confidence },
+          },
+          Date.now(),
+        )
+        if (approve) taskNeedsYou(rt, { kind: 'plan', task: approve })
+        tasksChanged(rt)
+        return okResult('Handed in. End your turn now.')
+      } catch (err) {
+        return errResult(`Could not save the plan: ${errText(err)}`)
+      }
+    },
+  )
 }
 
 /**
@@ -426,6 +663,10 @@ function submitReviewTool(rt: WorkspaceRuntime, sessionId: string) {
 /** The system prompt's last word for a task session. */
 export const TASK_SYSTEM_APPEND = `
 This is a headless task session: nobody reads this chat while it runs. Do the one task in the first message, then call submit_task and stop. Don't ask questions in chat: hand in blocked with the question instead.`
+
+/** A playbook task on an item that reads (answer, investigate, the plan): read-only, its own hand-in tool. */
+export const ITEM_SYSTEM_APPEND = `
+This is a headless task session: nobody reads this chat while it runs. Do the one task in the first message: read, change nothing, send nothing. Then call your submit tool once and stop. Don't ask questions in chat: put what you are unsure of in what you hand in.`
 
 /** The same for a first-pass review: read-only, and it hands in with submit_review. */
 export const REVIEW_SYSTEM_APPEND = `

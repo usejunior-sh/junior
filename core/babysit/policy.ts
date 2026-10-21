@@ -16,6 +16,7 @@
  */
 import { pushTarget, splitCommand, unwrap, type CommandPart } from '../actions/bash.js'
 import type { SortedAction } from '../actions/sort.js'
+import { freeSend } from '../actions/policy.js'
 
 export type TaskRunScope = {
   /** the PR's head branch on origin */
@@ -26,6 +27,8 @@ export type TaskRunScope = {
   threadId?: string | null
   /** a first-pass review: nothing may be sent at all, not even a push */
   readOnly?: boolean
+  /** a fix on Junior's own branch: opening a draft PR from it is free too */
+  draftPr?: boolean
 }
 
 export type RunVerdict = { verdict: 'allow' } | { verdict: 'hold' } | { verdict: 'refuse'; reason: string }
@@ -68,7 +71,8 @@ export function taskRunVerdict(command: string, s: TaskRunScope, sortPart: (part
   for (const part of splitCommand(command)) {
     const sorted = sortPart(part.join(' '))
     if (!sorted) continue
-    if (s.readOnly) return { verdict: 'refuse', reason: 'A first-pass review is read-only: nothing is pushed or sent from here. Hand in with submit_review; posting is the user’s call.' }
+    if (s.readOnly) return { verdict: 'refuse', reason: 'This task is read-only: nothing is pushed or sent from here. Hand in with your submit tool; sending is the user’s call.' }
+    if (sorted.kind === 'pr' && s.draftPr && freeSend(part, 'pr', { current: s.headRef, defaultBranch: s.defaultBranch }) === 'draft PR') continue
     const v = sorted.kind === 'push' ? pushVerdict(part, s) : sorted.kind === 'other' || sorted.kind === 'comment' || sorted.kind === 'update' ? threadVerdict(part, s) : { verdict: 'hold' as const }
     if (v.verdict === 'refuse') return v
     if (v.verdict === 'hold') held = true

@@ -18,6 +18,8 @@ export type NeedsYou =
   | { kind: 'review'; task: ItemTask }
   | { kind: 'stuck'; task: ItemTask }
   | { kind: 'post-review'; task: ItemTask; verdict: Verdict }
+  | { kind: 'reply'; task: ItemTask }
+  | { kind: 'plan'; task: ItemTask }
   | { kind: 'budget'; spent: number; limit: number; waiting: number }
 
 /** The notification's title and line, or null for one that shouldn't ping. Pure. */
@@ -27,6 +29,11 @@ export function needsYouText(n: NeedsYou, pr: string | null): { title: string; b
       return { title: `${pr ?? 'Your PR'} is green`, body: `${n.task.title}? Junior waits for your OK.` }
     case 'post-review':
       return { title: `Review ready: ${pr ?? 'a PR'}`, body: `Junior's first pass: ${VERDICT_LABEL[n.verdict]}. Nothing is posted until you OK it.` }
+    case 'reply':
+      // someone is waiting on you: People waiting pings (cb50520f "Notifications")
+      return { title: 'Reply drafted', body: `${n.task.title}: Junior's draft waits for you. Nothing is sent until you send it.` }
+    case 'plan':
+      return { title: 'Plan ready', body: 'Junior found the cause and wrote the fix plan. Nothing changes until you approve it.' }
     case 'stuck':
       return { title: `Junior is stuck${pr ? ` on ${pr}` : ''}`, body: n.task.error ? `${n.task.title}: ${n.task.error}` : n.task.title }
     case 'budget':

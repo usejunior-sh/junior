@@ -28,7 +28,8 @@ import { ANY_ITEM_ID_RE } from './validate.js'
 import { createSession, getOrRevive } from './session/sessions.js'
 import { BRIEF_TIMEOUT_MS, linkSessionToItem, projectFor, readSettings } from './settings-ops.js'
 import { itemFilesForSession } from './items-ops.js'
-import { makeTaskMcp, REVIEW_SYSTEM_APPEND, TASK_SYSTEM_APPEND } from './tasks/runner.js'
+import { ITEM_SYSTEM_APPEND, makeTaskMcp, REVIEW_SYSTEM_APPEND, TASK_SYSTEM_APPEND } from './tasks/runner.js'
+import { READ_ONLY_STEPS } from '../core/playbooks/item.js'
 import { REVIEW_STEP } from '../core/review/watch.js'
 
 /** The artifact linked to an item as its brief, with the body on disk. */
@@ -128,6 +129,17 @@ export async function extrasFor(rt: WorkspaceRuntime, row: StoredSession): Promi
   // Strict: none of ~/.claude's connectors and plugins, whose schemas would ride every call.
   if (taskRun) {
     const review = taskRun.step === REVIEW_STEP
+    // A playbook task on an item that reads (answer, investigate, the plan) needs
+    // the source's connector to read the thread or the issue: your connectors
+    // load, and every send through them is refused (holdIfAction, read-only).
+    if (taskRun.step && READ_ONLY_STEPS.includes(taskRun.step)) {
+      return {
+        systemAppend: `${identity}\n${ITEM_SYSTEM_APPEND}`,
+        mcp: { task: makeTaskMcp(rt, row.id) },
+        maxBudgetUsd: taskRun.perTaskUsd,
+        disallowedTools: [...EDIT_TOOLS],
+      }
+    }
     return {
       systemAppend: `${identity}\n${review ? REVIEW_SYSTEM_APPEND : TASK_SYSTEM_APPEND}`,
       mcp: { task: makeTaskMcp(rt, row.id) },
