@@ -146,7 +146,7 @@ export function App() {
   // A narrow window can't hold the chats list, a chat and the browser at once: while
   // the pane shows, the list steps aside for display only (the saved setting stays),
   // and comes back when the pane closes, the window widens, or you ask for it.
-  const narrowWindow = useWindowNarrower(1100)
+  const narrowWindow = useWindowNarrower(1180)
   const paneShown = browserOpen && route.page === 'session' && !!current
   const [keepPanel, setKeepPanel] = useState(false)
   useEffect(() => {
