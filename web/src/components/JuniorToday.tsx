@@ -68,7 +68,7 @@ export function JuniorBlocked({ day, onNavigate }: Pick<Props, 'day' | 'onNaviga
 
 /** A Needs-you row: a small orange dot, what it is, where from, and the verb. */
 function NeedsLine({ row, onNavigate }: { row: NeedsRow; onNavigate: (hash: string) => void }) {
-  const go = () => onNavigate(row.target.kind === 'session' ? row.target.id : '/actions')
+  const go = () => onNavigate(row.target.kind === 'session' ? row.target.id : '/junior/log')
   return (
     <button type="button" className="jrRow need" onClick={go}>
       <span className="t">{row.title}</span>

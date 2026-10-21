@@ -110,7 +110,7 @@ export function CommandPalette({
       { id: 'sessions', section: 'Pages', label: 'Chats', hint: 'g s', run: () => onNavigate('') },
       { id: 'terminals', section: 'Pages', label: 'Terminals', hint: 'g t', run: () => onNavigate('/terminals') },
       { id: 'jobs', section: 'Pages', label: 'Jobs', hint: 'g j', run: () => onNavigate('/jobs') },
-      { id: 'actions', section: 'Pages', label: 'Actions', hint: 'g a', run: () => onNavigate('/actions') },
+      { id: 'actions', section: 'Pages', label: 'Junior’s log', hint: 'g a', run: () => onNavigate('/junior/log') },
       ...jobs.map((w): Command => ({
         id: `wa:${w.id}`,
         section: 'Jobs',

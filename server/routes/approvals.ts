@@ -2,6 +2,8 @@ import { errText } from '../errors.js'
 import { addApprovalOp, listApprovalsOp, revokeApprovalOp } from '../approvals-ops.js'
 import { readJsonBody } from './http-util.js'
 import { juniorLogOp, juniorLogSeenOp } from '../junior-log.js'
+import { withOverride } from '../../core/actions/rules.js'
+import { broadcast } from '../ws/send.js'
 import type { ScopedCtx } from './ctx.js'
 
 /**
@@ -22,6 +24,26 @@ export async function approvalRoutes({ req, url, json, rt }: ScopedCtx): Promise
       const body = (await readJsonBody(req)) ?? {}
       const approval = url.pathname.endsWith('/revoke') ? await revokeApprovalOp(rt, body) : await addApprovalOp(rt, body)
       json(200, { ok: true, approval })
+    } catch (err) {
+      json(400, { ok: false, error: errText(err) })
+    }
+    return true
+  }
+  // What counts as a send: the actions file's overrides, listed and removable (Settings → Approvals).
+  if (url.pathname === '/api/approvals/sends' && req.method === 'GET') {
+    const { rules, errors } = rt.actionsFile.current()
+    json(200, { ok: true, path: rt.actionsFile.path, errors, action: rules.action, notAction: rules.notAction })
+    return true
+  }
+  if (url.pathname === '/api/approvals/sends' && req.method === 'POST') {
+    try {
+      const body = ((await readJsonBody(req)) ?? {}) as { key?: unknown; entry?: unknown }
+      const key = body.key === 'action' || body.key === 'not_action' ? body.key : null
+      const entry = typeof body.entry === 'string' ? body.entry.trim() : ''
+      if (!key || !entry) throw new Error("need key ('action' | 'not_action') and entry")
+      await rt.actionsFile.edit((text) => withOverride(text, key, entry, false))
+      broadcast(rt, { type: 'actions_changed' })
+      json(200, { ok: true })
     } catch (err) {
       json(400, { ok: false, error: errText(err) })
     }

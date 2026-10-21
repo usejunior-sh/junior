@@ -1,4 +1,4 @@
-import { Terminal as TerminalIcon, FileText, FileDiff, CalendarClock, Send, Target } from 'lucide-react'
+import { Terminal as TerminalIcon, FileText, FileDiff, CalendarClock, Target } from 'lucide-react'
 import { changeId } from '../changesStore.js'
 import type { RailSection } from '../components/Rail.js'
 import type { PageTab, TabKind } from '../components/TabBand.js'
@@ -6,12 +6,11 @@ import { runFileHash } from '../components/RunFolderPage.js'
 import { goalHash } from '../goals.js'
 import { type Route, itemHash } from '../hooks.js'
 
-export const PAGE_TABS: Record<'jobs' | 'terminals' | 'artifacts' | 'changes' | 'actions' | 'goals', PageTab> = {
+export const PAGE_TABS: Record<'jobs' | 'terminals' | 'artifacts' | 'changes' | 'goals', PageTab> = {
   terminals: { key: 'page:terminals', label: 'Terminals', icon: TerminalIcon },
   artifacts: { key: 'page:artifacts', label: 'Artifacts', icon: FileText },
   changes: { key: 'page:changes', label: 'Changes', icon: FileDiff },
   jobs: { key: 'page:jobs', label: 'Jobs', icon: CalendarClock },
-  actions: { key: 'page:actions', label: 'Actions', icon: Send },
   goals: { key: 'page:goals', label: 'Goals', icon: Target },
 }
 
@@ -68,7 +67,6 @@ export function tabKeyOf(route: Route): string | null {
     case 'artifacts':
     case 'jobs':
     case 'terminals':
-    case 'actions':
     case 'goals':
       return PAGE_TABS[route.page].key
     case 'home':
@@ -170,8 +168,6 @@ export function sectionOf(route: Route): RailSection | null {
     case 'job-form':
     case 'jobs':
       return 'jobs'
-    case 'actions':
-      return 'actions'
     case 'goal':
     case 'goals':
       return 'goals'

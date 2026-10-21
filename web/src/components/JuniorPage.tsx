@@ -35,14 +35,16 @@ type Props = {
   onNavigate: (hash: string) => void
   /** Start on a Junior-owned plan row: the inbox's own dispatch */
   onDispatch: (itemId: string) => void
+  /** `#/junior/log`: open on the Log tab */
+  initialTab?: 'log'
 }
 
-export function JuniorPage({ onNavigate, onDispatch }: Props) {
+export function JuniorPage({ onNavigate, onDispatch, initialTab }: Props) {
   const workspaceId = useWorkspaceId()
   const persona = usePersona()
   const win = useAwayWindow(workspaceId)
   const { day, error, reload } = useJuniorDay(win)
-  const [tab, setTab] = useState<Tab>('brief')
+  const [tab, setTab] = useState<Tab>(initialTab ?? 'brief')
   const [sheet, setSheet] = useState<JuniorView | null>(null)
   const unread = useLogUnread()
   // The clock the headline reads; the page re-reads it on every fetch.

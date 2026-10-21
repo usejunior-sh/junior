@@ -9,7 +9,7 @@ import { useEffect, useState } from 'react'
 import type { LogFilter, LogLine } from '../../../core/junior/log.js'
 import { itemHash } from '../hooks.js'
 import { markLogSeen, useJuniorLog } from '../juniorLog.js'
-import { KIND_ICON, shortLink, spanText } from '../actions.js'
+import { KIND_ICON, overrideAction, shortLink, spanText } from '../actions.js'
 import { openSettings } from '../settings.js'
 
 export function JuniorLog({ active, onNavigate }: { active: boolean; onNavigate: (hash: string) => void }) {
@@ -84,6 +84,16 @@ function Line({ l, now, onNavigate }: { l: LogLine; now: number; onNavigate: (ha
           )}
           {l.origin && <span>{l.origin}</span>}
           {l.error && <span className="jlErr">{l.error}</span>}
+          {l.source === 'send' && (
+            <button
+              type="button"
+              className="jlNot"
+              title="This call doesn’t reach anyone: stop counting it as a send (Settings → Approvals undoes it)"
+              onClick={() => void overrideAction(l.id.slice('send:'.length), 'not_action')}
+            >
+              Not a send
+            </button>
+          )}
         </span>
       </span>
       {l.link && (

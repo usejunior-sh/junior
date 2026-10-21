@@ -194,3 +194,7 @@
 .apMain small { font-size: 0.8462rem; color: var(--ash); }
 .apMain .apWhy { color: var(--charcoal); }
 .apEmpty { margin: 8px 0 0; color: var(--ash); }
+.apGroup + .apGroup { margin-top: 18px; }
+.apGroupHead { display: flex; align-items: baseline; gap: 8px; margin-top: 12px; }
+.apGroupHead b { font-weight: 500; color: var(--ink); }
+.apGroupHead small { font-size: 0.8462rem; color: var(--ash); }

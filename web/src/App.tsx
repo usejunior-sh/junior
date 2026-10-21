@@ -40,7 +40,6 @@ import { JobsPage } from './components/JobsPage.js'
 import { JobFormPage } from './components/JobFormPage.js'
 import { JobPage } from './components/JobPage.js'
 import { ArtifactsPage } from './components/ArtifactsPage.js'
-import { ActionsPage } from './components/ActionsPage.js'
 import { usePendingActions } from './actions.js'
 import { ArtifactPage } from './components/ArtifactPage.js'
 import { DefaultProjectGate } from './components/DefaultProjectGate.js'
@@ -399,7 +398,7 @@ export function App() {
   // Only the rail *indexes* get a transient page tab now: an artifact, job
   // or item in front is a document, and gets a real tab of its own.
   const pageTab =
-    route.page === 'jobs' || route.page === 'terminals' || route.page === 'artifacts' || route.page === 'changes' || route.page === 'actions'
+    route.page === 'jobs' || route.page === 'terminals' || route.page === 'artifacts' || route.page === 'changes'
       ? PAGE_TABS[route.page]
       : null
 
@@ -568,7 +567,7 @@ export function App() {
 
           <div className="content">
             {route.page === 'junior' ? (
-              <JuniorPage onNavigate={navigate} onDispatch={dispatchById} />
+              <JuniorPage key={route.tab ?? 'home'} initialTab={route.tab} onNavigate={navigate} onDispatch={dispatchById} />
             ) : route.page === 'inbox' ? (
               <InboxPage
                 view={resolveView(route.view, inboxTabs)}
@@ -637,8 +636,6 @@ export function App() {
               />
             ) : route.page === 'jobs' ? (
               <JobsPage onNavigate={navigate} onAddJob={addJob} onPin={(id, title) => pin(`job:${id}`, title)} />
-            ) : route.page === 'actions' ? (
-              <ActionsPage onNavigate={navigate} />
             ) : route.page === 'job' ? (
               <JobPage key={route.id} id={route.id} onNavigate={navigate} />
             ) : route.page === 'job-form' ? (

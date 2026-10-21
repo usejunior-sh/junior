@@ -54,7 +54,8 @@ export function useLiveText(sessionId: string | null) {
 export type Route =
   | { page: 'home' }
   /** `#/junior`: Junior's page: the brief, today's plan, what it can do */
-  | { page: 'junior' }
+  /** `#/junior`, or `#/junior/log`: Junior's page, on the Log tab (old `#/actions` links land there too) */
+  | { page: 'junior'; tab?: 'log' }
   | { page: 'session'; id: string }
   | { page: 'draft'; id: string }
   /** `#/inbox/<view>`: one inbox view (or Snoozed, Archived); bare `#/inbox` opens In progress when something is held on you */
@@ -74,8 +75,6 @@ export type Route =
   | { page: 'changes' }
   /** `#/change/<checkoutId>/<encoded path>`: one changed file: its diff, and an editor (a project id = its main checkout) */
   | { page: 'change'; checkoutId: string; path: string }
-  /** `#/actions`: everything sessions did that left this machine */
-  | { page: 'actions' }
   /** `#/goals`: outcomes Junior drives across sessions */
   | { page: 'goals' }
   /** `#/goals/<id>`: one goal: its state and ledger */
@@ -89,6 +88,8 @@ export const itemHash = (id: string) => `/item/${encodeURIComponent(id)}`
 function parseRoute(hash: string): Route {
   if (!hash) return { page: 'home' }
   if (hash === '/junior') return { page: 'junior' }
+  // The Actions page folded into Junior's log (M2): its old links open the log.
+  if (hash === '/junior/log' || hash === '/actions') return { page: 'junior', tab: 'log' }
   if (hash === '/inbox') return { page: 'inbox' }
   if (hash.startsWith('/inbox/')) {
     const view = parseInboxRoute(hash.slice('/inbox/'.length))
@@ -118,7 +119,6 @@ function parseRoute(hash: string): Route {
     const d = /^\/jobs\/([^/]+)$/.exec(hash)
     if (d) return { page: 'job', id: decodeURIComponent(d[1]) }
   }
-  if (hash === '/actions') return { page: 'actions' }
   if (hash === '/goals') return { page: 'goals' }
   {
     const m = /^\/goals\/([^/]+)$/.exec(hash)

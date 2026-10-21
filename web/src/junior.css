@@ -310,6 +310,9 @@ button.jlTitle:hover { text-decoration: underline; text-decoration-color: var(--
 .jlLink:hover { color: var(--ink); }
 .jlLine > .pill { padding: 1px 8px; background: transparent; font-family: var(--mono); font-size: 0.8077rem; white-space: nowrap; }
 .jlMore { margin-top: 12px; }
+.jlNot { padding: 0; border: 0; background: none; color: var(--stone); font: inherit; cursor: pointer; opacity: 0; }
+.jlLine:hover .jlNot, .jlNot:focus-visible { opacity: 1; }
+.jlNot:hover { color: var(--ink); }
 .jrView .c.dot { display: inline-block; width: 6px; height: 6px; margin-left: 6px; vertical-align: middle; border-radius: 50%; background: var(--blue); }
 /* The rail's dot on Junior: something new in the log. */
 .railDot { position: absolute; top: 6px; right: 12px; width: 7px; height: 7px; border-radius: 50%; background: var(--blue); border: 1.5px solid var(--canvas); }
@@ -318,6 +321,7 @@ button.jlTitle:hover { text-decoration: underline; text-decoration-color: var(--
   .jrDot.live, .jrPlanRow.fresh { animation: none; }
 }
 @media (hover: none) {
+  .jlNot { opacity: 1; }
   .jrPlanRow .rm { opacity: 1; }
 }
 
