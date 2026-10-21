@@ -7,7 +7,7 @@
  * allowed from where and writes the history line for it:
  *
  *   (held call)  → needs_you                       queue      agent
- *   needs_you    → scheduled   sendAt = now + 15s  approve    you   (with args = edit, then approve)
+ *   needs_you    → scheduled   sendAt = now         approve    you   (with args = edit, then approve)
  *   needs_you    → sent_back                       send back  you   (notes go to the drafting session)
  *   needs_you    → rejected                        reject     you
  *   needs_you    → expired     now ≥ expiresAt     expire     triage
@@ -30,8 +30,8 @@ export const holdable = (toolName: string): boolean => toolName === 'Bash' || to
 
 /** A held call waits this long for you, then expires. */
 export const QUEUE_TTL_MS = 24 * 3_600_000
-/** Approve → this long to undo before it goes out. */
-export const UNDO_MS = 15_000
+/** Approve → this long before it goes out. Zero: approving sends now. */
+export const UNDO_MS = 0
 /** Send-back notes and reject reasons are kept up to this long. */
 export const NOTE_CAP = 4_000
 

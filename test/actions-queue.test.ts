@@ -86,20 +86,16 @@ test('hold: a held call waits on you, full args kept, expiring in 24h', () => {
   assert.equal(e.args?.text, long, 'the history keeps the original')
 })
 
-test('approve: scheduled 15s out; undo inside the window puts it back untouched', () => {
+test('approve: due at once, no undo window', () => {
   const a = held()
   const r = move(a, { type: 'approve' }, T0 + 1000)
   assert.ok(r.ok)
   assert.equal(r.next.status, 'scheduled')
-  assert.equal(r.next.queue?.sendAt, T0 + 1000 + UNDO_MS)
+  assert.equal(r.next.queue?.sendAt, T0 + 1000)
   assert.deepEqual([r.entry.actor, r.entry.event, r.entry.from, r.entry.to], ['you', 'approved', 'needs_you', 'scheduled'])
-  assert.equal(sendDelay(r.next, T0 + 6000), UNDO_MS - 5000)
-  const back = ok(r.next, { type: 'undo' }, T0 + 10_000)
-  assert.equal(back.status, 'needs_you')
-  assert.equal(back.queue?.sendAt, null)
-  assert.deepEqual(back.queue?.args, a.queue?.args)
-  // Past the window it is going out: too late.
-  assert.match(refused(r.next, { type: 'undo' }, T0 + 1000 + UNDO_MS), /too late/)
+  assert.equal(sendDelay(r.next, T0 + 1000), 0)
+  assert.equal(dueToSend(r.next, T0 + 1000), true)
+  assert.match(refused(r.next, { type: 'undo' }, T0 + 1000), /too late/)
 })
 
 test('edit then approve: the edited args go out, the edit is counted and in the history', () => {
@@ -146,9 +142,7 @@ test('expiry: only past its time, and an expired one can no longer be approved',
 
 test('claim → settle: only when due; outcomes; retry from failed or unknown, never from sent', () => {
   const s = ok(held(), { type: 'approve' }, T0)
-  assert.equal(dueToSend(s, T0 + UNDO_MS - 1), false)
-  assert.equal(dueToSend(s, T0 + UNDO_MS), true)
-  refused(s, { type: 'claim' }, T0 + 1)
+  assert.equal(dueToSend(s, T0), true)
   const sending = ok(s, { type: 'claim' }, T0 + UNDO_MS)
   assert.equal(sending.status, 'sending')
   refused(sending, { type: 'undo' }, T0 + UNDO_MS)
@@ -403,8 +397,6 @@ test('store: queue state round-trips; a claim moves a due row once', async () =>
   assert.equal((await store.actions.list({ status: ['needs_you'] })).length, 1)
   const s = ok(a, { type: 'approve' }, T0)
   await store.actions.put(s)
-  // Not due yet: no claim.
-  assert.equal(await store.actions.claim(a.id, 'scheduled', 'sending', T0 + 1, { dueBy: T0 + 1 }), false)
   const due = T0 + UNDO_MS
   const [first, second] = await Promise.all([
     store.actions.claim(a.id, 'scheduled', 'sending', due, { dueBy: due }),

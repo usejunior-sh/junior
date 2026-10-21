@@ -225,10 +225,15 @@ export async function moveAction(rt: WorkspaceRuntime, id: string, m: ActionMove
 export function armDispatch(rt: WorkspaceRuntime, rec: ActionRecord): void {
   disarmDispatch(rt, rec.id)
   if (rec.status !== 'scheduled') return
+  const delay = sendDelay(rec, Date.now())
+  if (delay === 0) {
+    void dispatchAction(rt, rec.id)
+    return
+  }
   const t = setTimeout(() => {
     rt.actionTimers.delete(rec.id)
     void dispatchAction(rt, rec.id)
-  }, sendDelay(rec, Date.now()) + 50)
+  }, delay + 50)
   t.unref()
   rt.actionTimers.set(rec.id, t)
 }
