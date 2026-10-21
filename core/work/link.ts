@@ -73,10 +73,13 @@ export function textRefs(item: Pick<WorkItem, 'title' | 'why' | 'repo'>): string
   return [...out]
 }
 
+const leads = (i: Pick<WorkItem, 'id'>) => (i.id.startsWith('github:') ? 1 : 0)
+
 /**
- * Fold items sharing a canonical ref into one card: the highest-scored item
- * stays, gains a +10 multi-source bonus (two signals about the same work =
- * more urgent) and carries the others as `linked`. An item's own id counts as
+ * Fold items sharing a canonical ref into one card: a GitHub item leads (the
+ * work itself, not a thread about it), else the highest-scored item. The card
+ * gains a +10 multi-source bonus on the group's top score (two signals about
+ * the same work = more urgent) and carries the others as `linked`. An item's own id counts as
  * a ref, so "Slack asks for review of PR #123" folds into the PR's item.
  *
  * Refs come from the scanner and from the item's own words (textRefs). A bare
@@ -131,10 +134,14 @@ export function linkByRefs(items: ScoredItem[]): ScoredItem[] {
       out.push(group[0])
       continue
     }
-    const [primary, ...rest] = [...group].sort((a, b) => b.score - a.score || a.id.localeCompare(b.id))
+    // The work itself leads its row: a GitHub PR or issue over the threads about it, so the
+    // row shows the PR's tasks and review. The row keeps the group's top score (a Slack ask
+    // with people waiting still lifts it).
+    const [primary, ...rest] = [...group].sort((a, b) => leads(b) - leads(a) || b.score - a.score || a.id.localeCompare(b.id))
+    const top = Math.max(...group.map((i) => i.score))
     out.push({
       ...primary,
-      score: Math.round((primary.score + 10) * 10) / 10,
+      score: Math.round((top + 10) * 10) / 10,
       linked: rest.map((i) => ({ id: i.id, title: i.title, source: i.source, url: i.url, repo: i.repo, author: i.author })),
     })
   }

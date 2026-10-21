@@ -67,3 +67,21 @@ test('a bare number two repos share joins neither repo, only other mentions', ()
   const slack = out.find((i) => i.id.startsWith('slack:'))
   assert.equal(slack?.linked?.length, 1)
 })
+
+test('the PR leads its row even when the Slack ask outranks it, and the row keeps the higher score', () => {
+  const ranked = rank(
+    [
+      it('github:acme/api#40', 'Cache the token', { author: 'drew', kind: 'fyi' }),
+      it('slack:C9/p9', 'Can you review my PR?', { author: 'Anirudha', kind: 'slack-reply-pending', peopleWaiting: 1, refs: ['github:acme/api#40'] }),
+    ],
+    NOW,
+  )
+  const slack = ranked.find((i) => i.id.startsWith('slack:'))!
+  const pr = ranked.find((i) => i.id.startsWith('github:'))!
+  assert.ok(slack.score > pr.score, 'the ask outranks the PR on its own')
+  const out = linkByRefs(ranked)
+  assert.equal(out.length, 1)
+  assert.equal(out[0].id, 'github:acme/api#40')
+  assert.deepEqual(out[0].linked?.map((l) => l.author), ['Anirudha'])
+  assert.equal(out[0].score, Math.round((slack.score + 10) * 10) / 10)
+})

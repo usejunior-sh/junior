@@ -54,7 +54,7 @@ Judge each candidate on its title and first ~200 characters; only read a full th
 const BUILTIN_SECTION = `SECTION builtins — across the workspace, from the last 3 days:
 1. Messages that mention/tag the user (the authenticated Slack account).
 2. Threads the user participated in where the LATEST message is a question or request directed at the user that they have not answered yet (a reply is pending from them).
-Rules: deduplicate threads (one row per thread, prefer kind reply-pending); if the user already answered, exclude it. Rows from this section carry "kind": "mention" or "reply-pending" (no jobId).`
+Rules: deduplicate threads (one row per thread, prefer kind reply-pending); if the user already answered, exclude it. Rows from this section carry "kind": "mention" or "reply-pending" (no jobId), and "refs": an array of any GitHub PR/issue URLs or Linear issue keys visible in the thread (empty array if none).`
 
 function jobSection(w: JobScanSpec): string {
   const window = w.cursor
@@ -65,7 +65,7 @@ Rules: one row per thread; at most ${MAX_ROWS_PER_JOB} rows; skip anything outsi
 }
 
 const OUTPUT_CONTRACT = `Output ONLY one JSON array combining all sections' rows — no prose, no code fence. Each row:
-{"title": "<one-line summary>", "permalink": "<slack message permalink>", "channel": "#<channel name>", "from": "<display name of the author/asker>", "lastActivity": "<ISO 8601 timestamp of the newest message in the thread>", "kind": "mention" | "reply-pending" (builtins only), "jobId": "<id>" (job sections only), "why": "<one line>" (job sections only), "refs": ["..."] (job sections only)}
+{"title": "<one-line summary>", "permalink": "<slack message permalink>", "channel": "#<channel name>", "from": "<display name of the author/asker>", "lastActivity": "<ISO 8601 timestamp of the newest message in the thread>", "kind": "mention" | "reply-pending" (builtins only), "jobId": "<id>" (job sections only), "why": "<one line>" (job sections only), "refs": ["..."]}
 If nothing qualifies anywhere, output [].
 If you cannot access any Slack tools at all, output exactly: {"error": "no-slack-tools"}`
 
@@ -115,6 +115,8 @@ export interface RawBuiltinRow {
   from: string
   lastActivity: string
   kind: 'mention' | 'reply-pending'
+  /** PR/issue URLs or Linear keys in the thread: a review ask folds into its PR's row */
+  refs?: string[]
 }
 
 export interface RawJobRow {
@@ -186,10 +188,12 @@ export function safeWhen(iso: string, now: number): string {
 export function normalizeBuiltinRows(rows: RawBuiltinRow[], now = Date.now()): WorkItem[] {
   return rows.map((row) => {
     const when = safeWhen(row.lastActivity, now)
+    const refs = canonicalizeRefs(row.refs)
     return {
       id: permalinkId(row.permalink),
       source: 'slack' as const,
       kind: row.kind === 'reply-pending' ? ('slack-reply-pending' as const) : ('slack-mention' as const),
+      ...(refs ? { refs } : {}),
       title: row.title,
       url: row.permalink,
       repo: row.channel,
