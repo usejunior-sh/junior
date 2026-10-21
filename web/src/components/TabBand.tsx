@@ -468,7 +468,7 @@ function NewTabMenu({ onNew, onNewTerminal, terminalCwd }: Pick<Props, 'onNew' |
   return (
     <Menu open={open} onOpenChange={setOpen}>
       <MenuTrigger asChild>
-        <button type="button" className="add" title="New tab — session or terminal">
+        <button type="button" className="add" title="New tab — chat or terminal">
           <Plus size={14} aria-hidden="true" />
         </button>
       </MenuTrigger>
@@ -476,7 +476,7 @@ function NewTabMenu({ onNew, onNewTerminal, terminalCwd }: Pick<Props, 'onNew' |
         <MenuItem onSelect={onNew}>
           <MessageSquare size={14} aria-hidden="true" />
           <span className="text">
-            <span className="name">New session</span>
+            <span className="name">New chat</span>
             <span className="desc">Pick the project in the composer</span>
           </span>
           <span className="val">n</span>

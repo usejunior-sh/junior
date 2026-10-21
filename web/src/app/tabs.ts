@@ -20,7 +20,7 @@ export const MOBILE_SHEETS: readonly RailSection[] = ['inbox', 'sessions', 'term
 export const SHEET_LABEL: Record<RailSection, string> = {
   junior: 'Junior',
   inbox: 'Inbox',
-  sessions: 'Sessions',
+  sessions: 'Chats',
   artifacts: 'Artifacts',
   changes: 'Changes',
   terminals: 'Terminals',

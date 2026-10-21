@@ -3,7 +3,7 @@ import type { SessionSummary } from '../../../shared/protocol.js'
 import { ChangesPanel } from '../components/ChangesPanel.js'
 import { useChanges, changeId } from '../changesStore.js'
 import { TerminalsPanel, ArtifactsPanel, InboxTabsPanel, SessionsPanel } from '../components/ContextPanel.js'
-import { useInboxTabs, resolveTab, tabOfItem } from '../inboxTabs.js'
+import { useInboxTabs, resolveView, viewOfItem, type Views } from '../inboxTabs.js'
 import type { RailSection } from '../components/Rail.js'
 import { useDrafts } from '../drafts.js'
 import { useTeamRun } from '../components/TeamRun.js'
@@ -29,6 +29,7 @@ export function AppPanel({
   changes,
   inbox,
   inboxTabs,
+  inboxViews,
   route,
   pin,
   chatSessions,
@@ -58,6 +59,7 @@ export function AppPanel({
   changes: ReturnType<typeof useChanges>
   inbox: ReturnType<typeof useInbox>
   inboxTabs: ReturnType<typeof useInboxTabs>
+  inboxViews: Views
   route: Route
   pin: (key: string, title?: string) => void
   chatSessions: readonly SessionSummary[]
@@ -108,9 +110,10 @@ export function AppPanel({
     ) : panelSection === 'inbox' ? (
       <InboxTabsPanel
         tabs={inboxTabs}
+        views={inboxViews}
         statusCounts={inbox.counts}
         loaded={inbox.loaded}
-        current={route.page === 'inbox' ? resolveTab(route.tab, inboxTabs.counts) : route.page === 'item' ? tabOfItem(inboxTabs, route.id) : null}
+        current={route.page === 'inbox' ? resolveView(route.view, inboxTabs) : route.page === 'item' ? viewOfItem(inboxViews, route.id) : null}
         onGo={(t) => navigate(`/inbox/${t}`)}
         onAdd={() => {
           setComposeSignal((n) => n + 1)

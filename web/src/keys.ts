@@ -49,15 +49,15 @@ export const MOD_LABEL = isMac ? '⌘' : 'Ctrl+'
 
 /** Every global key, for the `?` overlay and the Shortcuts settings tab. */
 export const SHORTCUTS: ReadonlyArray<[keys: string, what: string]> = [
-  [`${MOD_LABEL}K`, 'Search — sessions, items, projects, commands'],
+  [`${MOD_LABEL}K`, 'Search — chats, items, projects, commands'],
   [`${MOD_LABEL},`, 'Settings'],
   [`${MOD_LABEL}B`, 'Hide / show the side panel'],
   [`${MOD_LABEL}J`, 'New chat with Junior'],
-  ['n', 'New session (in the inbox: new work item)'],
-  ['Shift+Tab', 'Composer: cycle the mode — Normal, Plan, Goal'],
+  ['n', 'New chat (in the inbox: new work item)'],
+  ['Shift+Tab', 'New chat: switch Solo / Ultracode'],
   ['g h', 'Go to Junior (home)'],
   ['g i', 'Go to Inbox'],
-  ['g s', 'Go to Sessions'],
+  ['g s', 'Go to Chats'],
   ['g t', 'Go to Terminals (n opens a new one there)'],
   ['g j', 'Go to Jobs'],
   ['g p', 'Projects (in Settings)'],
@@ -65,7 +65,7 @@ export const SHORTCUTS: ReadonlyArray<[keys: string, what: string]> = [
   ['j / k', 'Inbox: move selection'],
   ['Enter', 'Inbox: open the selected item'],
   ['o', 'Inbox: open the selected item at its source'],
-  ['d', 'Inbox: dispatch selected item to a session'],
+  ['d', 'Inbox: start a chat on the selected item'],
   ['b', 'Inbox: brief the selected item (or the checked ones)'],
   ['Space', 'Inbox: check / uncheck the selected item'],
   ['e', 'Inbox: mark selected item done'],

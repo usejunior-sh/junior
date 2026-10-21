@@ -1,9 +1,10 @@
-import { CalendarClock, FileDiff, FileText, Inbox, MessagesSquare, Send, Target, Terminal, type LucideProps } from 'lucide-react'
-import type { ComponentType } from 'react'
+import { CalendarClock, FileDiff, FileText, Inbox, MessagesSquare, Terminal, type LucideProps } from 'lucide-react'
+import { Fragment, type ComponentType } from 'react'
 import type { Mood } from '../../../core/junior/mood.js'
 import { MOOD_LABEL } from '../../../core/junior/mood.js'
 import { JuniorFace } from './JuniorFace.js'
 
+/** Every section a route can sit in. Actions and Goals are routes with no rail entry (Actions folds into Junior in M2; Goals is hidden). */
 export type RailSection = 'junior' | 'inbox' | 'sessions' | 'artifacts' | 'changes' | 'terminals' | 'jobs' | 'actions' | 'goals'
 
 type Props = {
@@ -14,21 +15,16 @@ type Props = {
   runningCount: number
   terminalCount: number
   changedCount: number
-  /** queued actions waiting on your approval */
-  actionsCount: number
-  /** goals whose turn is yours */
-  goalsCount: number
   /** Junior's entry: the persona's name, and its face's mood (the most urgent state) */
   juniorName: string
   juniorMood: Mood
   onGo: (section: RailSection) => void
 }
 
-const ITEMS: Array<{ id: RailSection; label: string; icon: ComponentType<LucideProps> }> = [
+/** Junior · Inbox, a gap, then the places you work. `gap` starts the second group. */
+const ITEMS: Array<{ id: RailSection; label: string; icon: ComponentType<LucideProps>; gap?: true }> = [
   { id: 'inbox', label: 'Inbox', icon: Inbox },
-  { id: 'actions', label: 'Actions', icon: Send },
-  { id: 'goals', label: 'Goals', icon: Target },
-  { id: 'sessions', label: 'Sessions', icon: MessagesSquare },
+  { id: 'sessions', label: 'Chats', icon: MessagesSquare, gap: true },
   { id: 'artifacts', label: 'Artifacts', icon: FileText },
   { id: 'changes', label: 'Changes', icon: FileDiff },
   { id: 'terminals', label: 'Terminals', icon: Terminal },
@@ -36,7 +32,7 @@ const ITEMS: Array<{ id: RailSection; label: string; icon: ComponentType<LucideP
 ]
 
 /** The labelled 64px rail: Junior first, then one button per destination, counts as small badges. */
-export function Rail({ active, collapsed, inboxCount, runningCount, terminalCount, changedCount, actionsCount, goalsCount, juniorName, juniorMood, onGo }: Props) {
+export function Rail({ active, collapsed, inboxCount, runningCount, terminalCount, changedCount, juniorName, juniorMood, onGo }: Props) {
   const juniorToggle = collapsed !== undefined && active === 'junior'
   return (
     <nav className="rail" aria-label="Sections">
@@ -54,7 +50,7 @@ export function Rail({ active, collapsed, inboxCount, runningCount, terminalCoun
         </span>
         <span className="label">{juniorName}</span>
       </button>
-      {ITEMS.map(({ id, label, icon: Icon }) => {
+      {ITEMS.map(({ id, label, icon: Icon, gap }) => {
         const badge =
           id === 'inbox'
             ? inboxCount
@@ -64,17 +60,14 @@ export function Rail({ active, collapsed, inboxCount, runningCount, terminalCoun
                 ? terminalCount
                 : id === 'changes'
                   ? changedCount
-                  : id === 'actions'
-                    ? actionsCount
-                    : id === 'goals'
-                      ? goalsCount
-                      : 0
+                  : 0
         // On a phone the active tab toggles its sheet, so its own tooltip and
         // aria-expanded speak to that instead of just naming itself.
         const isToggle = collapsed !== undefined && active === id
         return (
+          <Fragment key={id}>
+          {gap && <div className="railSep" aria-hidden="true" />}
           <button
-            key={id}
             type="button"
             className={`railBtn${active === id ? ' active' : ''}`}
             title={isToggle ? (collapsed ? 'Show panel' : 'Hide panel') : label}
@@ -85,14 +78,10 @@ export function Rail({ active, collapsed, inboxCount, runningCount, terminalCoun
             <Icon size={18} aria-hidden="true" />
             <span className="label">{label}</span>
             {badge > 0 && (
-              <span
-                className={`railBadge${id === 'actions' || id === 'goals' ? ' need' : ''}`}
-                title={id === 'actions' ? `${badge} waiting on your approval` : id === 'goals' ? `${badge} waiting on you` : undefined}
-              >
-                {badge > 99 ? '99+' : badge}
-              </span>
+              <span className="railBadge">{badge > 99 ? '99+' : badge}</span>
             )}
           </button>
+          </Fragment>
         )
       })}
     </nav>

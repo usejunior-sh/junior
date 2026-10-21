@@ -11,7 +11,7 @@ import { uuid } from './uuid.js'
 
 export type Draft = {
   id: string
-  /** shown on the tab while the prompt is empty. The dispatched item's title, or "New session" */
+  /** shown on the tab while the prompt is empty. The dispatched item's title, or "New chat" */
   label?: string
   text: string
   cwd?: string
@@ -123,5 +123,5 @@ export function useDrafts(): readonly Draft[] {
 export function draftTitle(d: Draft): string {
   if (d.label) return d.label
   const line = d.text.trim().split('\n')[0]
-  return line ? (line.length > 48 ? line.slice(0, 47) + '…' : line) : d.intent === 'job' ? 'New job' : d.intent === 'goal' ? 'New goal' : 'New session'
+  return line ? (line.length > 48 ? line.slice(0, 47) + '…' : line) : d.intent === 'job' ? 'New job' : d.intent === 'goal' ? 'New goal' : 'New chat'
 }

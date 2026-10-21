@@ -10,7 +10,7 @@ import { Composer } from './components/Composer.js'
 import { BrowserPane } from './components/BrowserPane.js'
 import { useBrowserOpen, hasBrowser } from './browser.js'
 import { PanelCollapseContext, NewTerminalMenu } from './components/ContextPanel.js'
-import { useInboxTabs, resolveTab } from './inboxTabs.js'
+import { useInboxTabs, useInboxViews, resolveView } from './inboxTabs.js'
 import { HelpOverlay } from './components/HelpOverlay.js'
 import { InboxPage } from './components/InboxPage.js'
 import { JuniorPage } from './components/JuniorPage.js'
@@ -40,9 +40,6 @@ import { JobFormPage } from './components/JobFormPage.js'
 import { JobPage } from './components/JobPage.js'
 import { ArtifactsPage } from './components/ArtifactsPage.js'
 import { ActionsPage } from './components/ActionsPage.js'
-import { GoalPage } from './components/GoalPage.js'
-import { GoalsPage } from './components/GoalsPage.js'
-import { useTeamGoals } from './teams.js'
 import { usePendingActions } from './actions.js'
 import { ArtifactPage } from './components/ArtifactPage.js'
 import { DefaultProjectGate } from './components/DefaultProjectGate.js'
@@ -79,6 +76,7 @@ export function App() {
   const models = useModels()
   const inbox = useInbox()
   const inboxTabs = useInboxTabs()
+  const inboxViews = useInboxViews(inboxTabs)
   const artifacts = useArtifacts()
   const changes = useChanges()
   const [route, navigate] = useHashRoute()
@@ -122,9 +120,8 @@ export function App() {
   // for the sections whose list *is* the panel (see onRailGo); it closes on
   // any navigation, which is how picking a row in it lands you on the row.
   const mobile = useIsMobile()
-  // Queued actions waiting on you: the Actions rail badge.
+  // Queued actions waiting on you: they set Junior's face on the rail.
   const pendingActions = usePendingActions()
-  const goals = useTeamGoals(sessions)
   // Junior's name and face, everywhere it shows: the rail and the phone's title.
   const persona = usePersona()
   const juniorMood = useRailMood(pendingActions)
@@ -196,9 +193,10 @@ export function App() {
   useEffect(() => {
     document.title = activeWorkspace ? `triage • ${activeWorkspace.name}` : 'triage'
   }, [activeWorkspace?.name])
-  // The bare home route: Junior's page is the product's home.
+  // The bare home route: Junior's page is the product's home. Goals are hidden
+  // (the engine stays), so an old link to one lands there too.
   useEffect(() => {
-    if (route.page === 'home') navigate('/junior', { replace: true })
+    if (route.page === 'home' || route.page === 'goals' || route.page === 'goal') navigate('/junior', { replace: true })
   }, [route.page, navigate])
 
   // Settings is a page: remember its tab for the gear, and every other page
@@ -341,7 +339,7 @@ export function App() {
 
   useGlobalHotkeys({ route, navigate, newSession, newTerminal, terminalCwd, goTo, currentId, panelSize, setHelpOpen, setPaletteOpen, setComposeSignal })
 
-  const { create, addJob, goalFrom, refineJob, dispatch, dispatchById, continueInMain } = useDispatchers({ navigate, pendingDraft, setCreateError, inbox, checkouts })
+  const { create, addJob, refineJob, dispatch, dispatchById, continueInMain } = useDispatchers({ navigate, pendingDraft, setCreateError, inbox, checkouts })
 
   // derived shell state
 
@@ -362,6 +360,8 @@ export function App() {
   const openTabs = useMemo<OpenTab[]>(
     () =>
       tabs.flatMap((key): OpenTab[] => {
+        // Goals are hidden: a goal tab left from before stays out of the band.
+        if (key.startsWith('goal:')) return []
         if (key.startsWith('draft:')) {
           const d = drafts.find((x) => x.id === key.slice(6))
           return d ? [{ key, kind: 'draft', title: draftTitle(d), color: 'var(--stone)', running: false }] : []
@@ -396,12 +396,12 @@ export function App() {
   // Only the rail *indexes* get a transient page tab now: an artifact, job
   // or item in front is a document, and gets a real tab of its own.
   const pageTab =
-    route.page === 'jobs' || route.page === 'terminals' || route.page === 'artifacts' || route.page === 'changes' || route.page === 'actions' || route.page === 'goals'
+    route.page === 'jobs' || route.page === 'terminals' || route.page === 'artifacts' || route.page === 'changes' || route.page === 'actions'
       ? PAGE_TABS[route.page]
       : null
 
   const previewTab = useMemo<OpenTab | null>(() => {
-    const t = preview ? docTab(preview) : null
+    const t = preview && !preview.startsWith('goal:') ? docTab(preview) : null
     return t ? { ...t, preview: true } : null
   }, [preview, docTab])
 
@@ -431,8 +431,6 @@ export function App() {
         return () => history.back()
       case 'job':
         return () => navigate('/jobs')
-      case 'goal':
-        return () => navigate('/goals')
       case 'job-form':
         return () => navigate(route.id ? `/jobs/${encodeURIComponent(route.id)}` : '/jobs')
       case 'session':
@@ -476,6 +474,7 @@ export function App() {
         changes={changes}
         inbox={inbox}
         inboxTabs={inboxTabs}
+        inboxViews={inboxViews}
         route={route}
         pin={pin}
         chatSessions={chatSessions}
@@ -523,8 +522,6 @@ export function App() {
           runningCount={runningCount}
           terminalCount={terminals.filter((t) => t.status === 'running').length}
           changedCount={changes.projects.reduce((n, p) => n + p.checkouts.reduce((m, c) => m + c.files.length, 0), 0)}
-          actionsCount={pendingActions}
-          goalsCount={goals.waitingOnYou}
           juniorName={persona.name}
           juniorMood={juniorMood}
           onGo={onRailGo}
@@ -570,10 +567,10 @@ export function App() {
               <JuniorPage onNavigate={navigate} onDispatch={dispatchById} />
             ) : route.page === 'inbox' ? (
               <InboxPage
-                tab={resolveTab(route.tab, inboxTabs.counts)}
+                view={resolveView(route.view, inboxTabs)}
                 tabs={inboxTabs}
+                views={inboxViews}
                 onDispatch={dispatch}
-                onGoal={goalFrom}
                 onRefineJob={refineJob}
                 onOpenItem={openItem}
                 onPinItem={(id, title) => pin(`item:${id}`, title)}
@@ -581,7 +578,7 @@ export function App() {
                 onNavigate={navigate}
               />
             ) : route.page === 'item' ? (
-              <ItemPage key={route.id} id={route.id} onDispatch={dispatch} onGoal={goalFrom} onNavigate={navigate} onDirty={pinCurrent} />
+              <ItemPage key={route.id} id={route.id} onDispatch={dispatch} onNavigate={navigate} onDirty={pinCurrent} />
             ) : route.page === 'terminal' ? (
               currentTerminal ? (
                 <TerminalPage
@@ -638,10 +635,6 @@ export function App() {
               <JobsPage onNavigate={navigate} onAddJob={addJob} onPin={(id, title) => pin(`job:${id}`, title)} />
             ) : route.page === 'actions' ? (
               <ActionsPage onNavigate={navigate} />
-            ) : route.page === 'goals' ? (
-              <GoalsPage sessions={sessions} onNavigate={navigate} onPin={(key, title) => pin(key, title)} />
-            ) : route.page === 'goal' ? (
-              <GoalPage key={route.id} id={route.id} onNavigate={navigate} />
             ) : route.page === 'job' ? (
               <JobPage key={route.id} id={route.id} onNavigate={navigate} />
             ) : route.page === 'job-form' ? (
@@ -659,7 +652,7 @@ export function App() {
               ) : (
                 <div id="empty">This draft was discarded.</div>
               )
-            ) : route.page === 'home' || route.page === 'settings' ? null : current ? (
+            ) : route.page === 'home' || route.page === 'settings' || route.page === 'goals' || route.page === 'goal' ? null : current ? (
               <div className={`sessRow${(teamRun && teamSide) || wf.sideRun ? ' withSide' : ''}${browserOpen ? ' withBrowser' : ''}`}>
               <div className="sessCol">
                 <ChatHeader

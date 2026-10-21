@@ -46,6 +46,7 @@
   }
   .shell.mobile .railBtn { flex: 1 1 0; min-width: 0; width: auto; height: var(--nav-h); margin: 0; border-radius: 0; gap: 4px; -webkit-tap-highlight-color: transparent; }
   .shell.mobile .railBtn.active { background: transparent; }
+  .shell.mobile .railSep { display: none; }
   .shell.mobile .railBtn.active::before {
     content: ""; position: absolute; top: -1px; left: 30%; right: 30%; height: 2px; border-radius: 0 0 2px 2px; background: var(--ink);
   }

@@ -1,11 +1,13 @@
 /**
  * The inbox tabs (core/work/inbox-tabs.ts) over the shared inbox snapshot and
- * the live session list, read by both the sidebar and the inbox page, so the
- * counts beside a tab are always the rows under it.
+ * the live session list, and the views cut from them (core/work/inbox-views.ts),
+ * read by both the sidebar and the inbox page, so the counts beside a view are
+ * always the rows under it.
  */
 import { useMemo } from 'react'
 import type { ScoredItem, SessionSummary } from '../../shared/protocol.js'
-import { DEFAULT_TAB, OPEN_TABS, inboxTabs, type InboxTab, type InboxTabs, type OpenTab } from '../../core/work/inbox-tabs.js'
+import { inboxTabs, type InboxTabs } from '../../core/work/inbox-tabs.js'
+import { inboxViews, isStarted, type InboxRoute, type InboxViews, type OpenView } from '../../core/work/inbox-views.js'
 import { useSessions } from './hooks.js'
 import { useInbox } from './inboxStore.js'
 
@@ -24,17 +26,24 @@ export function useInboxTabs(): Tabs {
   return useMemo(() => inboxTabs(snap.items, blocked, Date.now()), [snap.items, blocked])
 }
 
-/** The tab a bare `#/inbox` opens: Needs you now, else the first that holds anything. */
-export function resolveTab(tab: InboxTab | undefined, counts: Tabs['counts']): InboxTab {
-  if (tab) return tab
-  return OPEN_TABS.find((t: OpenTab) => counts[t] > 0) ?? DEFAULT_TAB
+export type Views = InboxViews<ScoredItem>
+
+export function useInboxViews(tabs: Tabs): Views {
+  return useMemo(() => inboxViews(tabs), [tabs])
 }
 
-/** Which open tab a row (or an item folded into one) sits in; null when it isn't open. */
-export function tabOfItem(tabs: Tabs, id: string): OpenTab | null {
-  for (const [tab, entries] of tabs.tabs) {
-    if (entries.some((e) => e.item.id === id || e.item.linked?.some((l) => l.id === id))) return tab
-  }
+/** The view a bare `#/inbox` opens: In progress when something there is held on you, else Not started. */
+export function resolveView(view: InboxRoute | undefined, tabs: Tabs): InboxRoute {
+  if (view) return view
+  const held = tabs.orphans.length > 0 || (tabs.tabs.get('needs') ?? []).some((e) => isStarted(e.item.flow, tabs.sessionsByRow.has(e.item.id)))
+  return held ? 'doing' : 'todo'
+}
+
+/** Which open view a row (or an item folded into one) sits in; null when it isn't open. */
+export function viewOfItem(views: Views, id: string): OpenView | null {
+  const has = (e: Views['todo'][number]) => e.item.id === id || !!e.item.linked?.some((l) => l.id === id)
+  if (views.doing.some(has)) return 'doing'
+  if (views.todo.some(has)) return 'todo'
   return null
 }
 

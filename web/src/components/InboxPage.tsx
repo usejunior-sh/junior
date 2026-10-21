@@ -9,8 +9,9 @@ import { ago } from '../itemUi.js'
 import { isTypingTarget, anyDialogOpen, isGoSequence } from '../keys.js'
 import { type Section, SECTION_ORDER, dueFor, parseDue } from '../../../core/work/due.js'
 import type { Turn } from '../../../core/work/flow.js'
-import { type InboxTab, isOpenTab, type TabEntry, TAB_TITLE } from '../../../core/work/inbox-tabs.js'
-import type { Tabs } from '../inboxTabs.js'
+import { OPEN_TABS, type TabEntry } from '../../../core/work/inbox-tabs.js'
+import { type InboxRoute, VIEW_TITLE } from '../../../core/work/inbox-views.js'
+import type { Tabs, Views } from '../inboxTabs.js'
 import { ItemComposer, RepoPicker } from './inbox/ItemComposer.js'
 import { DUE_KEYS, signalIds, tomorrow9 } from './inbox/rowHelpers.js'
 import { type RowActions, SelectionBar } from './inbox/SelectionBar.js'
@@ -22,13 +23,13 @@ type OtherState =
   | { phase: 'error'; message: string }
 
 type Props = {
-  /** the tab in front: the route's (`#/inbox/<tab>`), resolved by the shell */
-  tab: InboxTab
-  /** the open tabs, shared with the sidebar so the counts are the rows */
+  /** the view in front: the route's (`#/inbox/<view>`), resolved by the shell */
+  view: InboxRoute
+  /** the open tabs (row order, held sessions), shared with the sidebar */
   tabs: Tabs
+  /** the open views cut from them, so the sidebar's counts are the rows */
+  views: Views
   onDispatch: (item: ScoredItem) => void
-  /** "Turn into a goal": a chat with Junior about making the item a goal */
-  onGoal: (item: ScoredItem) => void
   onRefineJob: (item: ScoredItem) => void
   onOpenItem: (id: string) => void
   /** Keep it in the band without leaving the inbox (⌘-click, middle-click). */
@@ -39,9 +40,9 @@ type Props = {
   onNavigate: (path: string) => void
 }
 
-export function InboxPage({ tab, tabs, onDispatch, onGoal, onRefineJob, onOpenItem, onPinItem, composeSignal = 0, onNavigate }: Props) {
-  // The open tabs read the shared snapshot (the sidebar counts the same rows);
-  // the status tabs are loaded here on demand.
+export function InboxPage({ view, tabs, views, onDispatch, onRefineJob, onOpenItem, onPinItem, composeSignal = 0, onNavigate }: Props) {
+  // The open views read the shared snapshot (the sidebar counts the same rows);
+  // Done, Snoozed and Archived are loaded here on demand, and All adds Done to the open rows.
   const snap = useInbox()
   // Archived holds deleted to-dos too; this picks which of the two it lists.
   const [deletedOnly, setDeletedOnly] = useState(false)
@@ -75,7 +76,9 @@ export function InboxPage({ tab, tabs, onDispatch, onGoal, onRefineJob, onOpenIt
     })
   }, [])
 
-  const isOpen = isOpenTab(tab)
+  // Open rows come from the snapshot; a view of a status (or All's done rows) from the server.
+  const isOpen = view === 'todo' || view === 'doing' || view === 'all'
+  const otherStatus: ItemStatus | null = view === 'todo' || view === 'doing' ? null : view === 'all' ? 'done' : view
 
   const loadOther = useCallback(async (which: ItemStatus) => {
     setOther({ phase: 'loading' })
@@ -90,10 +93,10 @@ export function InboxPage({ tab, tabs, onDispatch, onGoal, onRefineJob, onOpenIt
 
   const reload = useCallback(
     (refresh: boolean) => {
-      if (isOpenTab(tab)) void inboxStore.refresh(refresh)
-      else void loadOther(tab)
+      if (isOpen) void inboxStore.refresh(refresh)
+      if (otherStatus) void loadOther(otherStatus)
     },
-    [tab, loadOther],
+    [isOpen, otherStatus, loadOther],
   )
 
   const scanNow = useCallback(async () => {
@@ -112,13 +115,10 @@ export function InboxPage({ tab, tabs, onDispatch, onGoal, onRefineJob, onOpenIt
     [projects],
   )
 
-  const removeLocally = useCallback(
-    (id: string) => {
-      if (isOpen) inboxStore.patch((items) => items.filter((i) => i.id !== id))
-      else setOther((prev) => (prev.phase === 'ready' ? { ...prev, items: prev.items.filter((i) => i.id !== id) } : prev))
-    },
-    [isOpen],
-  )
+  const removeLocally = useCallback((id: string) => {
+    inboxStore.patch((items) => items.filter((i) => i.id !== id))
+    setOther((prev) => (prev.phase === 'ready' ? { ...prev, items: prev.items.filter((i) => i.id !== id) } : prev))
+  }, [])
 
   // A status change is a recorded transition on a durable item, the row leaves
   // the current tab optimistically; the item is never deleted (.docs/jobs-v2.md).
@@ -188,33 +188,32 @@ export function InboxPage({ tab, tabs, onDispatch, onGoal, onRefineJob, onOpenIt
     }
   }, [])
 
-  // The route picks the tab; a status tab loads its list when it comes up.
+  // The route picks the view; a status view (and All, for its done rows) loads its list when it comes up.
   useEffect(() => {
     setSel(0)
-    if (!isOpenTab(tab)) void loadOther(tab)
-  }, [tab, loadOther])
+    if (otherStatus) void loadOther(otherStatus)
+  }, [otherStatus, loadOther])
 
-  const entries = useMemo<readonly TabEntry<ScoredItem>[]>(() => (isOpenTab(tab) ? tabs.tabs.get(tab) ?? [] : []), [tab, tabs])
+  // The open rows, in the tabs' reading order: held on you, due and people waiting first.
+  const entries = useMemo<readonly TabEntry<ScoredItem>[]>(
+    () => (view === 'todo' ? views.todo : view === 'doing' ? views.doing : view === 'all' ? OPEN_TABS.flatMap((t) => tabs.tabs.get(t) ?? []) : []),
+    [view, views, tabs],
+  )
+  const openIds = useMemo(() => new Set(entries.map((e) => e.item.id)), [entries])
+  const isOpenItem = useCallback((i: ScoredItem) => openIds.has(i.id), [openIds])
 
-  // Items in on-screen order: the tab's entries, or the status list.
-  const ordered = useMemo<readonly ScoredItem[]>(
-    () =>
-      isOpen
-        ? entries.map((e) => e.item)
-        : other.phase === 'ready'
-          ? tab === 'archived'
-            ? other.items.filter((i) => !!i.deleted === deletedOnly)
-            : other.items
-          : [],
-    [isOpen, entries, other, tab, deletedOnly],
+  // The list a status view shows, or All's done rows under the open ones.
+  const others = useMemo<readonly ScoredItem[]>(
+    () => (other.phase !== 'ready' || !otherStatus ? [] : view === 'archived' ? other.items.filter((i) => !!i.deleted === deletedOnly) : other.items),
+    [other, otherStatus, view, deletedOnly],
   )
 
-  // The live selection: checked ids that are still on screen. Ids of rows that
-  // already left the tab (done via the keyboard, refreshed away) don't count.
-  const checkedItems = useMemo(
-    () => (isOpen ? ordered.filter((i) => checked.has(i.id)) : []),
-    [isOpen, ordered, checked],
-  )
+  // Items in on-screen order: the open entries, then the status list.
+  const ordered = useMemo<readonly ScoredItem[]>(() => [...entries.map((e) => e.item), ...others], [entries, others])
+
+  // The live selection: checked open rows still on screen. Ids of rows that
+  // already left the view (done via the keyboard, refreshed away) don't count.
+  const checkedItems = useMemo(() => ordered.filter((i) => openIds.has(i.id) && checked.has(i.id)), [ordered, openIds, checked])
   const clearChecked = useCallback(() => setChecked(new Set()), [])
 
   // Bulk transition: every checked row leaves the tab optimistically, the N
@@ -267,7 +266,9 @@ export function InboxPage({ tab, tabs, onDispatch, onGoal, onRefineJob, onOpenIt
     function onKey(e: KeyboardEvent) {
       if (isTypingTarget(e) || anyDialogOpen() || isGoSequence(e) || e.metaKey || e.ctrlKey || e.altKey) return
       const cur = ordered[sel]
-      const due = isOpen ? DUE_KEYS[e.key] : undefined
+      // All mixes open and done rows: what a key does follows the row under it.
+      const curOpen = !!cur && openIds.has(cur.id)
+      const due = curOpen || checkedItems.length ? DUE_KEYS[e.key] : undefined
       if (due) {
         const picked = checkedItems.length ? checkedItems : cur ? [cur] : []
         if (picked.length) {
@@ -291,11 +292,11 @@ export function InboxPage({ tab, tabs, onDispatch, onGoal, onRefineJob, onOpenIt
       } else if (e.key === 'd' && cur) {
         e.preventDefault()
         onDispatch(cur)
-      } else if (e.key === 'b' && isOpen) {
+      } else if (e.key === 'b' && (curOpen || checkedItems.length)) {
         e.preventDefault()
         if (checkedItems.length) void briefChecked()
         else if (cur) briefOne(cur)
-      } else if (e.key === ' ' && cur && isOpen) {
+      } else if (e.key === ' ' && cur && curOpen) {
         e.preventDefault()
         toggleChecked(cur.id)
       } else if (e.key === 'Escape' && checkedItems.length && !e.defaultPrevented) {
@@ -306,7 +307,7 @@ export function InboxPage({ tab, tabs, onDispatch, onGoal, onRefineJob, onOpenIt
         void bulkState('done')
       } else if (e.key === 'e' && cur) {
         e.preventDefault()
-        void setItemState(cur, isOpen ? 'done' : 'open')
+        void setItemState(cur, curOpen ? 'done' : 'open')
       } else if (e.key === 'x' && checkedItems.length) {
         e.preventDefault()
         void bulkState('archived')
@@ -316,7 +317,7 @@ export function InboxPage({ tab, tabs, onDispatch, onGoal, onRefineJob, onOpenIt
       } else if (e.key === 'z' && checkedItems.length) {
         e.preventDefault()
         void bulkState('snoozed', tomorrow9())
-      } else if (e.key === 'z' && cur && isOpen) {
+      } else if (e.key === 'z' && cur && curOpen) {
         e.preventDefault()
         snooze1d(cur)
       } else if (e.key === 'r') {
@@ -326,7 +327,7 @@ export function InboxPage({ tab, tabs, onDispatch, onGoal, onRefineJob, onOpenIt
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [ordered, sel, isOpen, onDispatch, onOpenItem, reload, setItemState, snooze1d, setDue, checkedItems, toggleChecked, bulkState, clearChecked, briefChecked, briefOne])
+  }, [ordered, sel, openIds, onDispatch, onOpenItem, reload, setItemState, snooze1d, setDue, checkedItems, toggleChecked, bulkState, clearChecked, briefChecked, briefOne])
 
   const loadProjects = useCallback(() => {
     void fetch('/api/projects')
@@ -364,28 +365,29 @@ export function InboxPage({ tab, tabs, onDispatch, onGoal, onRefineJob, onOpenIt
     }
   }, [composeSignal])
 
-  const loading = isOpen ? !snap.loaded && snap.loading : other.phase === 'loading'
-  const error = isOpen ? (!snap.loaded ? snap.error : undefined) : other.phase === 'error' ? other.message : undefined
+  const loading = (isOpen && !snap.loaded && snap.loading) || (!!otherStatus && other.phase === 'loading')
+  const error = (isOpen && !snap.loaded ? snap.error : undefined) ?? (otherStatus && other.phase === 'error' ? other.message : undefined)
   const items = ordered
-  // Needs you now also holds what isn't an item: a blocked session with no
-  // open item, a failed job, a paused team run.
-  const alerts = tab === 'needs' ? snap.alerts : []
-  const orphans = tab === 'needs' ? tabs.orphans : []
+  // In progress (and All) also hold what isn't an item but is held on you: a
+  // blocked session with no open item, a failed job, a paused run.
+  const held = view === 'doing' || view === 'all'
+  const alerts = held ? snap.alerts : []
+  const orphans = held ? tabs.orphans : []
   const count = items.length + alerts.length + orphans.length
-  const tabLabel = TAB_TITLE[tab]
+  const viewLabel = VIEW_TITLE[view]
   const emptyText =
     isOpen && snap.notices.length > 0
       ? 'Nothing here — but a source is degraded, so this may be incomplete.'
-      : EMPTY_TEXT[tab] ?? `Nothing in ${tabLabel.toLowerCase()}.`
+      : EMPTY_TEXT[view]
 
   const rowProps: RowActions = {
-    tab,
+    view,
+    isOpenItem,
     projectName,
     onSelect: (id) => setSel(ordered.findIndex((i) => i.id === id)),
     onOpen: onOpenItem,
     onPin: onPinItem,
     onDispatch,
-    onGoal,
     onDone: (i) => void setItemState(i, 'done'),
     onSnooze: snooze1d,
     onArchive: (i) => void setItemState(i, 'archived'),
@@ -409,17 +411,11 @@ export function InboxPage({ tab, tabs, onDispatch, onGoal, onRefineJob, onOpenIt
       <div className="inner">
         <div className="pageHead">
           <h1 className="display">
-            {tabLabel}.{' '}
+            {viewLabel}.{' '}
             {loading && count === 0 ? (
               <span className="muted">syncing…</span>
             ) : (
-              <span className="muted">
-                {tab === 'needs'
-                  ? count === 0
-                    ? 'Nothing is held on you.'
-                    : `${count} held on you.`
-                  : `${count} item${count === 1 ? '' : 's'}.`}
-              </span>
+              <span className="muted">{`${count} item${count === 1 ? '' : 's'}.`}</span>
             )}
           </h1>
           <span className="pageMeta" title={snap.syncedAt ? new Date(snap.syncedAt).toLocaleString() : undefined}>
@@ -437,7 +433,7 @@ export function InboxPage({ tab, tabs, onDispatch, onGoal, onRefineJob, onOpenIt
         </div>
 
         <div className="toolRow">
-          {tab === 'archived' ? (
+          {view === 'archived' ? (
             <div className="seg" role="tablist" aria-label="Archived or deleted">
               {([false, true] as const).map((d) => (
                 <button
@@ -509,20 +505,20 @@ export function InboxPage({ tab, tabs, onDispatch, onGoal, onRefineJob, onOpenIt
                 {alerts.map((a) => (
                   <AlertRow key={a.id} alert={a} onOpen={() => onNavigate(a.jobId ? `/jobs/${encodeURIComponent(a.jobId)}` : a.sessionId ?? '/inbox')} />
                 ))}
-                {isOpen
-                  ? entries.map((e) => (
-                      <WorkRowWithSessions
-                        key={e.item.id}
-                        entry={e}
-                        sessions={tabs.sessionsByRow.get(e.item.id)}
-                        selected={e.item.id === (ordered[sel]?.id ?? null)}
-                        onOpenSession={(id) => onNavigate(id)}
-                        {...rowProps}
-                      />
-                    ))
-                  : items.map((item) => (
-                      <WorkRow key={item.id} item={item} selected={item.id === (ordered[sel]?.id ?? null)} {...rowProps} />
-                    ))}
+                {entries.map((e) => (
+                  <WorkRowWithSessions
+                    key={e.item.id}
+                    entry={e}
+                    sessions={tabs.sessionsByRow.get(e.item.id)}
+                    selected={e.item.id === (ordered[sel]?.id ?? null)}
+                    onOpenSession={(id) => onNavigate(id)}
+                    {...rowProps}
+                  />
+                ))}
+                {view === 'all' && others.length > 0 && <div className="secLabel">Done</div>}
+                {others.map((item) => (
+                  <WorkRow key={item.id} item={item} selected={item.id === (ordered[sel]?.id ?? null)} {...rowProps} />
+                ))}
               </div>
             )}
           </>

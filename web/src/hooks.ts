@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
 import { DEFAULT_SETTINGS_TAB, isSettingsTab, LEGACY_SETTINGS_TABS, type SettingsTab } from './settings.js'
 import { store } from './store.js'
-import { isInboxTab, type InboxTab } from '../../core/work/inbox-tabs.js'
+import { parseInboxRoute, type InboxRoute } from '../../core/work/inbox-views.js'
 
 export function useConn() {
   return useSyncExternalStore(store.subscribeStructural, store.getConn)
@@ -57,8 +57,8 @@ export type Route =
   | { page: 'junior' }
   | { page: 'session'; id: string }
   | { page: 'draft'; id: string }
-  /** `#/inbox/<tab>`: one inbox tab; bare `#/inbox` opens the first that needs you */
-  | { page: 'inbox'; tab?: InboxTab }
+  /** `#/inbox/<view>`: one inbox view (or Snoozed, Archived); bare `#/inbox` opens In progress when something is held on you */
+  | { page: 'inbox'; view?: InboxRoute }
   | { page: 'item'; id: string }
   | { page: 'terminal'; id: string }
   | { page: 'terminals' }
@@ -91,8 +91,8 @@ function parseRoute(hash: string): Route {
   if (hash === '/junior') return { page: 'junior' }
   if (hash === '/inbox') return { page: 'inbox' }
   if (hash.startsWith('/inbox/')) {
-    const tab = hash.slice('/inbox/'.length)
-    return isInboxTab(tab) ? { page: 'inbox', tab } : { page: 'inbox' }
+    const view = parseInboxRoute(hash.slice('/inbox/'.length))
+    return view ? { page: 'inbox', view } : { page: 'inbox' }
   }
   if (hash.startsWith('/new/')) return { page: 'draft', id: hash.slice('/new/'.length) }
   if (hash.startsWith('/item/')) {

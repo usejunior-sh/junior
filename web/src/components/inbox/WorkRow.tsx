@@ -1,4 +1,4 @@
-import { MessageCircleQuestion, ShieldQuestion, AlertTriangle, CheckSquare, Square, Sparkles, Check, AlarmClock, MoreHorizontal, ChevronRight, ExternalLink, Play, Target, CalendarDays, UserRound, Undo2, Pencil, ThumbsDown, Trash2, Archive } from 'lucide-react'
+import { MessageCircleQuestion, ShieldQuestion, AlertTriangle, CheckSquare, Square, Sparkles, Check, AlarmClock, MoreHorizontal, ChevronRight, ExternalLink, Play, CalendarDays, UserRound, Undo2, Pencil, ThumbsDown, Trash2, Archive } from 'lucide-react'
 import { useState } from 'react'
 import type { ScoredItem, SessionSummary, InboxAlert } from '../../../../shared/protocol.js'
 import { rowOpen } from '../../tabs.js'
@@ -7,21 +7,19 @@ import { shortAge, LABELS, kindIcon, itemTone, priorityClass, PRIORITY_LABEL, PR
 import { Menu, MenuTrigger, MenuContent, MenuItem, MenuSeparator } from '../../ui/Menu.js'
 import { dueOf, dueChip, SECTION_ORDER, sectionTitle } from '../../../../core/work/due.js'
 import { STAGE_LABEL, type ItemFlow, TURN_LABEL } from '../../../../core/work/flow.js'
-import { type InboxTab, type TabEntry, isOpenTab, waitedFor } from '../../../../core/work/inbox-tabs.js'
+import { type TabEntry, isHumanAsk, waitedFor } from '../../../../core/work/inbox-tabs.js'
+import type { InboxRoute } from '../../../../core/work/inbox-views.js'
 import { waitingText } from '../../inboxTabs.js'
 import { DUE_KEY_OF, signalsText } from './rowHelpers.js'
 import type { RowActions } from './SelectionBar.js'
 
-export const EMPTY_TEXT: Partial<Record<InboxTab, string>> = {
-  needs: 'Nothing is held on you — no agent is waiting, nothing broke.',
-  due: 'Nothing is due today.',
-  people: 'Nobody is waiting on you.',
-  new: 'Nothing new in the last day.',
-  ready: 'No brief is waiting on you.',
-  ai: 'The AI isn’t working on anything.',
-  review: 'Nothing to review.',
-  others: 'Nobody is holding anything of yours.',
-  backlog: 'The backlog is empty.',
+export const EMPTY_TEXT: Record<InboxRoute, string> = {
+  todo: 'Nothing waiting to be started.',
+  doing: 'Nothing in progress. Start a chat on an item and it shows here.',
+  done: 'Nothing done yet.',
+  all: 'No work items yet.',
+  snoozed: 'Nothing snoozed.',
+  archived: 'Nothing archived.',
 }
 
 /**
@@ -138,13 +136,13 @@ function flowTitle(f: ItemFlow): string {
 export function WorkRow({
   item,
   selected,
-  tab,
+  view,
+  isOpenItem,
   projectName,
   onSelect,
   onOpen,
   onPin,
   onDispatch,
-  onGoal,
   onDone,
   onSnooze,
   onArchive,
@@ -164,7 +162,7 @@ export function WorkRow({
 }: { item: ScoredItem; selected: boolean; entry?: TabEntry<ScoredItem> } & RowActions) {
   const [menuOpen, setMenuOpen] = useState(false)
   const isManual = item.source === 'manual'
-  const isOpen = isOpenTab(tab)
+  const isOpen = isOpenItem(item)
   const isChecked = checked.has(item.id)
   const brief = briefPill(briefOf(item.id))
   const pri = item.priority ?? 0
@@ -177,9 +175,9 @@ export function WorkRow({
   const state = rowState(item, brief)
   const flow = item.flow
   const signals = signalsText(item)
-  // Tab extras: how long a person has waited, a stuck wait to nudge.
+  // Row extras: how long a person has waited, a stuck wait to nudge.
   const now = Date.now()
-  const waited = tab === 'people' ? waitedFor(Date.parse(item.createdAt) || now, now) : null
+  const waited = isOpen && isHumanAsk(item) ? waitedFor(Date.parse(item.createdAt) || now, now) : null
   const stuck = entry?.stuck && flow ? waitedFor(flow.since, now) : null
   // Only a stated deadline gets a date chip; a late one you set says how late.
   const due = isOpen ? dueOf(item, Date.now()) : null
@@ -292,7 +290,7 @@ export function WorkRow({
             Nudge?
           </button>
         ) : isOpen ? (
-          <button type="button" className="btn sm primary" title="Start a Claude Code session on this item (d)" onClick={() => onDispatch(item)}>
+          <button type="button" className="btn sm primary" title="Start a chat on this item (d)" onClick={() => onDispatch(item)}>
             Dispatch
           </button>
         ) : (
@@ -341,10 +339,7 @@ export function WorkRow({
                   <span className="k">b</span>
                 </MenuItem>
                 <MenuItem onSelect={() => onDispatch(item)}>
-                  <Play size={13} aria-hidden="true" /> Dispatch to a session<span className="k">d</span>
-                </MenuItem>
-                <MenuItem onSelect={() => onGoal(item)}>
-                  <Target size={13} aria-hidden="true" /> Turn into a goal
+                  <Play size={13} aria-hidden="true" /> Start a chat<span className="k">d</span>
                 </MenuItem>
                 <MenuItem onSelect={() => onDone(item)}>
                   <Check size={13} aria-hidden="true" /> Mark done<span className="k">e</span>
@@ -410,7 +405,7 @@ export function WorkRow({
                 <MenuItem onSelect={() => onReopen(item)}>
                   <Undo2 size={13} aria-hidden="true" /> Move back to open<span className="k">e</span>
                 </MenuItem>
-                {tab !== 'archived' && (
+                {view !== 'archived' && (
                   <MenuItem className="danger" onSelect={() => onArchive(item)}>
                     <Archive size={13} aria-hidden="true" /> Archive<span className="k">x</span>
                   </MenuItem>

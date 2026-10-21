@@ -15,7 +15,7 @@ import { grantLabel } from '../../../core/job/tools.js'
 
 export type Command = {
   id: string
-  section: 'Actions' | 'Pages' | 'Settings' | 'Projects' | 'Sessions' | 'Terminals' | 'Jobs' | 'Work items'
+  section: 'Actions' | 'Pages' | 'Settings' | 'Projects' | 'Chats' | 'Terminals' | 'Jobs' | 'Work items'
   label: string
   hint?: string
   run: () => void
@@ -37,7 +37,7 @@ type Props = {
   onHelp: () => void
 }
 
-const SECTION_ORDER: Command['section'][] = ['Actions', 'Pages', 'Settings', 'Projects', 'Sessions', 'Terminals', 'Jobs', 'Work items']
+const SECTION_ORDER: Command['section'][] = ['Actions', 'Pages', 'Settings', 'Projects', 'Chats', 'Terminals', 'Jobs', 'Work items']
 
 export function CommandPalette({
   open,
@@ -93,7 +93,7 @@ export function CommandPalette({
 
   const commands = useMemo<Command[]>(
     () => [
-      { id: 'new', section: 'Actions', label: 'New session', hint: 'n', run: onNewSession },
+      { id: 'new', section: 'Actions', label: 'New chat', hint: 'n', run: onNewSession },
       { id: 'newterm', section: 'Actions', label: 'New terminal', run: onNewTerminal },
       { id: 'sync', section: 'Actions', label: 'Sync inbox now', run: onSyncInbox },
       { id: 'addjob', section: 'Actions', label: 'Add job', run: onAddJob },
@@ -107,7 +107,7 @@ export function CommandPalette({
         run: () => onOpenSettings(t.id),
       })),
       { id: 'inbox', section: 'Pages', label: 'Inbox', hint: 'g i', run: () => onNavigate('/inbox') },
-      { id: 'sessions', section: 'Pages', label: 'Sessions', hint: 'g s', run: () => onNavigate('') },
+      { id: 'sessions', section: 'Pages', label: 'Chats', hint: 'g s', run: () => onNavigate('') },
       { id: 'terminals', section: 'Pages', label: 'Terminals', hint: 'g t', run: () => onNavigate('/terminals') },
       { id: 'jobs', section: 'Pages', label: 'Jobs', hint: 'g j', run: () => onNavigate('/jobs') },
       { id: 'actions', section: 'Pages', label: 'Actions', hint: 'g a', run: () => onNavigate('/actions') },
@@ -127,13 +127,13 @@ export function CommandPalette({
       ...projects.map((pr): Command => ({
         id: `p:${pr.id}`,
         section: 'Projects',
-        label: `New session in ${pr.name}`,
+        label: `New chat in ${pr.name}`,
         hint: pr.repo || pr.path.split('/').pop(),
         run: () => onNewSessionIn(pr),
       })),
       ...sessions.map((s): Command => ({
         id: `s:${s.id}`,
-        section: 'Sessions',
+        section: 'Chats',
         label: s.title,
         hint: `${s.status} · ${s.cwd.split('/').pop() ?? ''}`,
         run: () => onNavigate(s.id),
@@ -183,7 +183,7 @@ export function CommandPalette({
       <div className="palHead">
         <input
           autoFocus
-          placeholder="Search sessions, items, projects, commands…"
+          placeholder="Search chats, items, projects, commands…"
           value={query}
           onChange={(e) => {
             setQuery(e.target.value)

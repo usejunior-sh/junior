@@ -32,8 +32,6 @@ import { ItemTimeline } from './item/ItemTimeline.js'
 type Props = {
   id: string
   onDispatch: (item: ScoredItem) => void
-  /** "Turn into a goal": opens a goal chat on the item. */
-  onGoal: (item: ScoredItem) => void
   onNavigate: (hash: string) => void
   /** Editing here means the tab must survive: promote it out of the peek slot. */
   onDirty: () => void
@@ -41,7 +39,7 @@ type Props = {
 
 const OTHER_STATUSES: ItemStatus[] = ['snoozed', 'done', 'archived']
 
-export function ItemPage({ id, onDispatch, onGoal, onNavigate, onDirty }: Props) {
+export function ItemPage({ id, onDispatch, onNavigate, onDirty }: Props) {
   const snap = useInbox()
   const sessions = useSessions()
   const checkouts = useCheckouts()
@@ -636,9 +634,6 @@ export function ItemPage({ id, onDispatch, onGoal, onNavigate, onDirty }: Props)
           due={due}
           dueLabel={dueLabel}
           onDispatch={onDispatch}
-          onGoal={onGoal}
-          onNavigate={onNavigate}
-          setNotice={setNotice}
           setBriefOpen={setBriefOpen}
           setPickingDue={setPickingDue}
           setState={setState}

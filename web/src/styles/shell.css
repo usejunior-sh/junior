@@ -229,6 +229,8 @@ kbd { font-family: var(--mono); font-size: 0.8462rem; color: var(--ash); border:
   color: var(--charcoal); font-size: 0.6923rem; line-height: 12px; text-align: center; font-family: var(--mono);
 }
 .railBtn.active .railBadge { background: var(--canvas); }
+/* Junior · Inbox, then the places you work: a hairline between the two groups. */
+.railSep { height: 1px; margin: 4px 14px; background: var(--hair); flex: none; }
 
 /* context panel */
 .panel {
@@ -293,6 +295,10 @@ kbd { font-family: var(--mono); font-size: 0.8462rem; color: var(--ash); border:
   color: var(--stone); font: inherit; font-size: 0.8462rem; text-align: left;
 }
 .doneLink:hover, .doneLink.sel { color: var(--ink); }
+/* Snoozed · Archived under the inbox views: statuses, not views, so they stay quiet. */
+.parkedLinks { display: flex; gap: 2px; margin: 8px 6px 0; }
+.parkedLinks .doneLink { display: inline-flex; align-items: center; gap: 6px; margin: 0; padding: 4px 10px; }
+.parkedLinks .doneLink .m { font-family: var(--mono); }
 
 /* main + tab band */
 #main { flex: 1; min-width: 0; display: flex; flex-direction: column; position: relative; overflow: hidden; background: var(--canvas); }

@@ -85,7 +85,7 @@ export type MentionHit = Mention & {
 
 type Group = { kind: MentionKind; title: string; hits: MentionHit[] }
 
-export const GROUP_TITLE: Record<MentionKind, string> = { file: 'Files', item: 'Work items', session: 'Sessions', artifact: 'Artifacts' }
+export const GROUP_TITLE: Record<MentionKind, string> = { file: 'Files', item: 'Work items', session: 'Chats', artifact: 'Artifacts' }
 
 /** How many hits each kind contributes on the All tab. */
 const ALL_TAB_PER_KIND = 6

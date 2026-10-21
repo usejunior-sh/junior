@@ -11,6 +11,9 @@ import {
   Check,
   ChevronDown,
   ChevronRight,
+  CircleCheck,
+  CircleDashed,
+  CircleDot,
   ExternalLink,
   FileText,
   Folder,
@@ -39,8 +42,8 @@ import {
 } from 'lucide-react'
 import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import type { ArtifactWithLinks, Project, ProjectsResponse, SessionSummary, TerminalSummary } from '../../../shared/protocol.js'
-import { OPEN_TABS, TAB_TITLE, type InboxTab } from '../../../core/work/inbox-tabs.js'
-import type { Tabs } from '../inboxTabs.js'
+import { INBOX_VIEWS, VIEW_TITLE, type InboxRoute, type InboxView } from '../../../core/work/inbox-views.js'
+import type { Tabs, Views } from '../inboxTabs.js'
 import { FormatIcon } from '../artifactFormat.js'
 import { checkoutOf } from '../checkouts.js'
 import { draftTitle, type Draft } from '../drafts.js'
@@ -71,60 +74,38 @@ export function PanelSearch({ onSearch, placeholder }: { onSearch: () => void; p
   )
 }
 
-// Inbox tabs: the inbox's sidebar, one tab per step (core/work/inbox-tabs.ts)
+// Inbox views: the inbox's sidebar, one list cut four ways (core/work/inbox-views.ts)
 
-const TAB_ICON: Record<InboxTab, LucideIcon> = {
-  needs: Hand,
-  due: CalendarClock,
-  people: Users,
-  new: Sparkle,
-  ready: FileText,
-  ai: Bot,
-  review: Eye,
-  others: Hourglass,
-  backlog: Layers,
-  snoozed: AlarmClock,
-  archived: Archive,
-  done: Check,
+const VIEW_ICON: Record<InboxView, LucideIcon> = {
+  todo: CircleDashed,
+  doing: CircleDot,
+  done: CircleCheck,
+  all: Layers,
 }
-
-/** Tabs whose count is called out while it isn't zero: something is held on you. */
-const HOT: Partial<Record<InboxTab, string>> = { needs: 'hot-red', due: 'hot-amber' }
 
 type InboxTabsProps = {
   tabs: Tabs
+  views: Views
   /** snoozed and archived row counts, from the snapshot */
   statusCounts?: { snoozed: number; archived: number }
   loaded: boolean
-  /** the tab in front: the inbox page's, or the open item's */
-  current: InboxTab | null
-  onGo: (tab: InboxTab) => void
+  /** the view in front: the inbox page's, or the open item's */
+  current: InboxRoute | null
+  onGo: (view: InboxRoute) => void
   onAdd: () => void
   onRefresh: () => void
   onSearch: () => void
 }
 
-export function InboxTabsPanel({ tabs, statusCounts, loaded, current, onGo, onAdd, onRefresh, onSearch }: InboxTabsProps) {
-  const open = OPEN_TABS.reduce((n, t) => n + tabs.tabs.get(t)!.length, 0)
-  const row = (t: InboxTab, n: number | null) => {
-    const Icon = TAB_ICON[t]
-    return (
-      <button
-        key={t}
-        type="button"
-        className={['prow', 'tabRow', current === t && 'sel', n === 0 && 'empty', n && HOT[t]].filter(Boolean).join(' ')}
-        aria-current={current === t ? 'page' : undefined}
-        onClick={() => onGo(t)}
-      >
-        <Icon size={13} aria-hidden="true" />
-        <span className="t">{TAB_TITLE[t]}</span>
-        {loaded && n != null && <span className="m">{n}</span>}
-      </button>
-    )
-  }
+export function InboxTabsPanel({ tabs, views, statusCounts, loaded, current, onGo, onAdd, onRefresh, onSearch }: InboxTabsProps) {
+  const open = views.todo.length + views.doing.length
+  // In progress is called out while something in it is held on you.
+  const held = tabs.orphans.length > 0 || views.doing.some((e) => tabs.sessionsByRow.has(e.item.id) || e.item.flow?.turn === 'me')
+  // Done and All read the server's done list, which the sidebar doesn't hold: no count beats a wrong one.
+  const count: Record<InboxView, number | null> = { todo: views.todo.length, doing: views.doing.length, done: null, all: null }
   return (
     <aside className="panel" aria-label="Inbox">
-      <PanelSearch onSearch={onSearch} placeholder="Search items, sessions…" />
+      <PanelSearch onSearch={onSearch} placeholder="Search items, chats…" />
       <div className="panelBody">
         <div className="panelHead">
           <span>Inbox</span>
@@ -138,14 +119,33 @@ export function InboxTabsPanel({ tabs, statusCounts, loaded, current, onGo, onAd
             </button>
           </span>
         </div>
-        <nav aria-label="Inbox tabs">
-          {OPEN_TABS.map((t) => row(t, tabs.counts[t]))}
-          <div className="panelGroup">Parked</div>
-          {row('snoozed', statusCounts?.snoozed ?? null)}
-          {row('archived', statusCounts?.archived ?? null)}
-          <button type="button" className={`doneLink${current === 'done' ? ' sel' : ''}`} onClick={() => onGo('done')}>
-            Done
-          </button>
+        <nav aria-label="Inbox views">
+          {INBOX_VIEWS.map((v) => {
+            const Icon = VIEW_ICON[v]
+            const n = count[v]
+            return (
+              <button
+                key={v}
+                type="button"
+                className={['prow', 'tabRow', current === v && 'sel', n === 0 && 'empty', v === 'doing' && held && 'hot-red'].filter(Boolean).join(' ')}
+                aria-current={current === v ? 'page' : undefined}
+                onClick={() => onGo(v)}
+              >
+                <Icon size={13} aria-hidden="true" />
+                <span className="t">{VIEW_TITLE[v]}</span>
+                {loaded && n != null && <span className="m">{n}</span>}
+              </button>
+            )
+          })}
+          {/* Parked: statuses, not views, so they sit quietly under the list. */}
+          <div className="parkedLinks">
+            {(['snoozed', 'archived'] as const).map((v) => (
+              <button key={v} type="button" className={`doneLink${current === v ? ' sel' : ''}`} aria-current={current === v ? 'page' : undefined} onClick={() => onGo(v)}>
+                {VIEW_TITLE[v]}
+                {statusCounts && statusCounts[v] > 0 && <span className="m">{statusCounts[v]}</span>}
+              </button>
+            ))}
+          </div>
         </nav>
       </div>
       <div className="panelFoot">
@@ -323,20 +323,20 @@ export function SessionsPanel({
 
   return (
     <aside className="panel" aria-label="Sessions">
-      <PanelSearch onSearch={onSearch} placeholder="Search sessions, items…" />
+      <PanelSearch onSearch={onSearch} placeholder="Search chats, items…" />
       <div className="panelBody">
         <div className="panelHead">
-          <span>Sessions</span>
+          <span>Chats</span>
           <span className="n">{sessions.length}</span>
           {running > 0 && <span className="n" title="running now">· {running} live</span>}
           <span className="acts">
-            <button type="button" className="iconBtn sm" title="New session (n)" onClick={onNew}>
+            <button type="button" className="iconBtn sm" title="New chat (n)" onClick={onNew}>
               <Plus size={13} aria-hidden="true" />
             </button>
           </span>
         </div>
         {sessions.length === 0 && drafts.length === 0 && (
-          <div className="panelEmpty">No sessions yet. Dispatch a work item, or start one from the composer.</div>
+          <div className="panelEmpty">No chats yet. Start one on a work item, or from the composer.</div>
         )}
         {drafts.length > 0 && (
           <>
@@ -413,7 +413,7 @@ export function SessionsPanel({
         })}
       </div>
       <div className="panelFoot">
-        <span className="kbd">n</span> new session <span className="kbd">g s</span> here
+        <span className="kbd">n</span> new chat <span className="kbd">g s</span> here
       </div>
 
       <DeleteSessionDialog
@@ -610,7 +610,7 @@ export function TerminalsPanel({ terminals, currentId, defaultCwd, onSelect, onN
 
   return (
     <aside className="panel" aria-label="Terminals">
-      <PanelSearch onSearch={onSearch} placeholder="Search terminals, sessions…" />
+      <PanelSearch onSearch={onSearch} placeholder="Search terminals, chats…" />
       <div className="panelBody">
         <div className="panelHead">
           <span>Terminals</span>

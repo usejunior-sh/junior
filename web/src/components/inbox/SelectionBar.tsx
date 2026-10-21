@@ -2,7 +2,7 @@ import { Sparkles, Check, AlarmClock, Archive, X } from 'lucide-react'
 import type { ScoredItem, BriefJob } from '../../../../shared/protocol.js'
 import type { Section } from '../../../../core/work/due.js'
 import type { Turn } from '../../../../core/work/flow.js'
-import type { InboxTab } from '../../../../core/work/inbox-tabs.js'
+import type { InboxRoute } from '../../../../core/work/inbox-views.js'
 
 /**
  * Floating bulk-action bar. Appears bottom-centre of the pane while rows are
@@ -54,13 +54,14 @@ export function SelectionBar({
 }
 
 export type RowActions = {
-  tab: InboxTab
+  view: InboxRoute
+  /** open, rather than done, snoozed or archived: All mixes both */
+  isOpenItem: (item: ScoredItem) => boolean
   projectName: (id?: string) => string | undefined
   onSelect: (id: string) => void
   onOpen: (id: string) => void
   onPin: (id: string, title: string) => void
   onDispatch: (item: ScoredItem) => void
-  onGoal: (item: ScoredItem) => void
   onDone: (item: ScoredItem) => void
   onSnooze: (item: ScoredItem) => void
   onArchive: (item: ScoredItem) => void

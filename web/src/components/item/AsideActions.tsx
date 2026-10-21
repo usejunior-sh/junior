@@ -1,8 +1,7 @@
-import { Play, Target, Sparkles, Check, AlarmClock, Archive, ChevronDown, CalendarDays, Folder } from 'lucide-react'
+import { Play, Sparkles, Check, AlarmClock, Archive, ChevronDown, CalendarDays, Folder } from 'lucide-react'
 import type { ScoredItem, Project, ItemStatus, BriefView } from '../../../../shared/protocol.js'
 import { projectColor } from '../../tabs.js'
 import { PRIORITY_LABEL, PRIORITY_VALUES } from '../../itemUi.js'
-import { TeamPicker } from '../TeamPicker.js'
 import { Menu, MenuTrigger, MenuContent, MenuItem, MenuSeparator } from '../../ui/Menu.js'
 import { dueOf, type Section, SECTION_ORDER, sectionTitle } from '../../../../core/work/due.js'
 import { choosesProject, ProjectIdPicker, defaultProjectOf } from '../ProjectPicker.js'
@@ -20,9 +19,6 @@ export function AsideActions({
   due,
   dueLabel,
   onDispatch,
-  onGoal,
-  onNavigate,
-  setNotice,
   setBriefOpen,
   setPickingDue,
   setState,
@@ -42,9 +38,6 @@ export function AsideActions({
   due: ReturnType<typeof dueOf>
   dueLabel: string
   onDispatch: (item: ScoredItem) => void
-  onGoal: (item: ScoredItem) => void
-  onNavigate: (hash: string) => void
-  setNotice: (notice: string | null) => void
   setBriefOpen: (open: boolean) => void
   setPickingDue: (open: boolean) => void
   setState: (status: ItemStatus, snoozeUntil?: number) => Promise<void>
@@ -56,13 +49,9 @@ export function AsideActions({
   return (
     <>
       <div className="asideActions">
-        <button type="button" className="btn primary wide" onClick={() => onDispatch(item)} title="Start a session on this item — the brief rides along if there is one">
+        <button type="button" className="btn primary wide" onClick={() => onDispatch(item)} title="Start a chat on this item — the brief rides along if there is one">
           <Play size={12} aria-hidden="true" />
-          {linkedSessions.some((x) => x.role === 'dispatch') ? 'Dispatch another session' : 'Dispatch to a session'}
-        </button>
-        <TeamPicker item={item} onStarted={onNavigate} onError={setNotice} />
-        <button type="button" className="btn wide" onClick={() => onGoal(item)} title="Junior plans it — steps, team, budget — and runs it once you approve the plan">
-          <Target size={12} aria-hidden="true" /> Turn into a goal
+          {linkedSessions.some((x) => x.role === 'dispatch') ? 'Start another chat' : 'Start a chat'}
         </button>
         {isOpen && settled && (
           <button type="button" className="btn wide" onClick={() => setBriefOpen(true)}>
