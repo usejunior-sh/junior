@@ -6,6 +6,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { flowOf, isStuck, type FlowSignals } from '../core/work/flow.js'
 import { OPEN_TABS, inboxTabOf, inboxTabs, type OpenTab, type TabItem } from '../core/work/inbox-tabs.js'
+import { inboxViews, parseInboxRoute } from '../core/work/inbox-views.js'
 import { labelOf } from '../core/work/labels.js'
 import type { WorkItem } from '../core/work/types.js'
 
@@ -247,4 +248,26 @@ test('deleted: archived by a Delete, until archived again or reopened', async ()
   } finally {
     await store.close()
   }
+})
+
+test('views: not started vs in progress, in the tabs\' reading order', () => {
+  const fresh = scored({ id: 'manual:new' })
+  const briefing = scored({ id: 'manual:briefing' }, { brief: { status: 'running', at: NOW } })
+  const ready = scored({ id: 'manual:ready' }, { brief: { status: 'ready', at: NOW } })
+  const working = scored({ id: 'manual:working' }, { session: running })
+  const ownPr = scored({ id: 'github:o/r#7', source: 'github', kind: 'own-pr-open' })
+  const held = scored({ id: 'manual:held' })
+  const t = inboxTabs([fresh, briefing, ready, working, ownPr, held], [{ id: 's1', itemId: 'manual:held', updatedAt: NOW }], NOW)
+  const v = inboxViews(t)
+  assert.deepEqual(v.todo.map((e) => e.item.id).sort(), ['manual:briefing', 'manual:new', 'manual:ready'])
+  assert.deepEqual(v.doing.map((e) => e.item.id), ['manual:held', 'manual:working', 'github:o/r#7']) // held on you first
+  assert.equal(v.todo.length + v.doing.length, OPEN_TABS.reduce((n, k) => n + t.tabs.get(k)!.length, 0)) // each row once
+})
+
+test('inbox routes: views, parked statuses, and the old tab names', () => {
+  assert.equal(parseInboxRoute('todo'), 'todo')
+  assert.equal(parseInboxRoute('archived'), 'archived')
+  assert.equal(parseInboxRoute('needs'), 'doing')
+  assert.equal(parseInboxRoute('backlog'), 'todo')
+  assert.equal(parseInboxRoute('nope'), undefined)
 })
