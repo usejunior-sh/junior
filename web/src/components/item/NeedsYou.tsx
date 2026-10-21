@@ -78,7 +78,7 @@ export function NeedsYou({ item, verdict, tasks, held, onChanged, onNavigate, on
     )
 
   return (
-    <div className="needsYou">
+    <div className="needList">
       {ownAsk && <OwnAsk item={item} onSnooze={onSnooze} />}
       {waiting.map((t) => {
         const props = { t, busy: busy === t.id, act }

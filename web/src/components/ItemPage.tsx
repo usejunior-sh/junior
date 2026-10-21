@@ -26,7 +26,7 @@ import { FlowPopover } from './FlowPopover.js'
 import { AsideActions } from './item/AsideActions.js'
 import { CostBlock } from './item/CostBlock.js'
 import { BriefCard, ItemDetails, ReportCard } from './item/ItemCards.js'
-import { ItemSessions } from './item/ItemSessions.js'
+import { ItemPlans } from './item/ItemPlans.js'
 import { ItemTimeline } from './item/ItemTimeline.js'
 import * as Tabs from '@radix-ui/react-tabs'
 import { verdictOf, type ItemTab } from '../../../core/work/verdict.js'
@@ -741,7 +741,7 @@ export function ItemPage({ id, onDispatch, onNavigate, onDirty }: Props) {
             />
           </Tabs.Content>
           <Tabs.Content className="itemTabPanel" value="sessions">
-            <ItemSessionsTab tasks={tasks} chats={chats} handedOff={verdict.handedOff} onChanged={reloadTasks} onNavigate={onNavigate} />
+            <ItemSessionsTab tasks={tasks} chats={chats} handedOff={verdict.handedOff} spend={spend} checkouts={checkouts} onChanged={reloadTasks} onNavigate={onNavigate} />
           </Tabs.Content>
           <Tabs.Content className="itemTabPanel" value="activity">
             <ItemActivity
@@ -776,7 +776,7 @@ export function ItemPage({ id, onDispatch, onNavigate, onDirty }: Props) {
           setProject={setProject}
         />
 
-        <ItemSessions linkedSessions={linkedSessions} links={links} spend={spend} checkouts={checkouts} onNavigate={onNavigate} />
+        <ItemPlans linkedSessions={linkedSessions} links={links} onNavigate={onNavigate} />
 
         {/* Outbound actions: what those sessions did that left this machine. */}
         {itemActions.actions.some((a) => !a.hidden) && (

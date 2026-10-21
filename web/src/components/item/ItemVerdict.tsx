@@ -75,7 +75,7 @@ export function ItemVerdict({ item, verdict, tasks, action, onChat, onChanged }:
 
       {!verdict.handedOff && open ? (
         <>
-          <div className="handoff">
+          <div className="handoffBar">
             <span className="jrMark" aria-hidden="true">J</span>
             <span className="hlabel">Hand it to Junior</span>
             <span className="hpicks" role="radiogroup" aria-label="What Junior should do">

@@ -1,5 +1,9 @@
 import { useState } from 'react'
-import type { SessionSummary } from '../../../../shared/protocol.js'
+import type { SessionSummary, SessionsUsage } from '../../../../shared/protocol.js'
+import { money } from '../../usageFormat.js'
+import { useCheckouts } from '../../hooks.js'
+import { checkoutOf } from '../../checkouts.js'
+import { TEAM_STATE } from './ItemPlans.js'
 import type { ItemTask } from '../../../../core/work/tasks.js'
 import { relTime } from '../../itemUi.js'
 import { taskVerb } from './useItemTasks.js'
@@ -21,10 +25,13 @@ export function outcomeOf(t: ItemTask): string {
  * Who has worked this item: Junior's tasks, one row each with what came of
  * it, then your own chats about it.
  */
-export function ItemSessionsTab({ tasks, chats, handedOff, onChanged, onNavigate }: {
+export function ItemSessionsTab({ tasks, chats, handedOff, spend, checkouts, onChanged, onNavigate }: {
   tasks: ItemTask[]
   chats: { s: SessionSummary; role: string }[]
   handedOff: boolean
+  /** each session's cost, from the usage ledger */
+  spend: SessionsUsage | null
+  checkouts: ReturnType<typeof useCheckouts>
   onChanged: () => void
   onNavigate: (hash: string) => void
 }) {
@@ -51,17 +58,17 @@ export function ItemSessionsTab({ tasks, chats, handedOff, onChanged, onNavigate
           {handedOff ? 'No tasks of Junior’s own here. Its work on this item is in the chats below.' : 'Not handed off. Junior hasn’t worked on this item.'}
         </div>
       ) : (
-        <div className="wrows">
+        <div className="sxRows">
           {mine.map((t) => (
-            <div key={t.id} className={`wrow st-${t.state}`}>
-              <span className="wmk" aria-label={t.state}>{MARK[t.state]}</span>
-              <span className="wt">
+            <div key={t.id} className={`sxRow st-${t.state}`}>
+              <span className="sxMark" aria-label={t.state}>{MARK[t.state]}</span>
+              <span className="sxText">
                 <b>{t.title}</b>
                 <span title={outcomeOf(t)}>{outcomeOf(t)}</span>
               </span>
-              <span className="wm mono">{t.model ?? ''}</span>
-              <span className="wc mono">{t.state === 'running' ? 'running' : t.costUsd ? `$${t.costUsd.toFixed(2)}` : t.endedAt ? relTime(t.endedAt) : ''}</span>
-              <span className="wa">
+              <span className="sxModel mono">{t.model ?? ''}</span>
+              <span className="sxCost mono">{t.state === 'running' ? 'running' : t.costUsd ? `$${t.costUsd.toFixed(2)}` : t.endedAt ? relTime(t.endedAt) : ''}</span>
+              <span className="sxActs">
                 {t.state === 'running' && (
                   <button type="button" className="linkBtn" disabled={busy === t.id} onClick={() => void verb('stop', t)}>Stop</button>
                 )}
@@ -87,21 +94,33 @@ export function ItemSessionsTab({ tasks, chats, handedOff, onChanged, onNavigate
       {chats.length === 0 ? (
         <div className="emptyLine">No chats about this item yet. Start one from the side panel.</div>
       ) : (
-        <div className="wrows">
-          {chats.map(({ s, role }) => (
-            <div key={s.id} className="wrow">
-              <span className="wmk">{s.status === 'running' ? '◐' : '·'}</span>
-              <span className="wt">
-                <b>{s.title}</b>
-                <span>{role === 'brief' || s.kind === 'brief' ? 'brief run' : s.teamRun ? 'team run' : s.kind === 'job-run' ? 'job run' : 'chat'} · {relTime(s.updatedAt)}</span>
-              </span>
-              <span className="wm mono">{s.model ?? ''}</span>
-              <span className="wc mono">{s.status === 'running' ? 'running' : ''}</span>
-              <span className="wa">
-                <button type="button" className="linkBtn" onClick={() => onNavigate(s.id)}>Open ›</button>
-              </span>
-            </div>
-          ))}
+        <div className="sxRows">
+          {chats.map(({ s, role }) => {
+            const kind = role === 'brief' || s.kind === 'brief' ? 'brief run' : s.teamRun ? (s.teamRun.role === 'lead' ? 'team lead' : 'team worker') : s.kind === 'job-run' ? 'job run' : 'chat'
+            const state = s.teamRun?.role === 'lead' ? TEAM_STATE[s.teamRun.state] : s.status === 'running' ? 'running' : s.status === 'error' ? 'stopped on an error' : null
+            const branch = checkoutOf(checkouts, s.checkoutId)?.branch
+            const cost = spend?.bySession[s.id]?.cost
+            return (
+              <div key={s.id} className={`sxRow${s.status === 'running' ? ' st-running' : s.status === 'error' ? ' st-failed' : ''}`}>
+                <span className="sxMark">{s.status === 'running' ? '◐' : s.status === 'error' ? '×' : '○'}</span>
+                <span className="sxText">
+                  <b title={s.title}>{s.title}</b>
+                  <span>
+                    {kind}
+                    {state ? ` · ${state}` : ''}
+                    {branch ? ` · ${branch}` : ''} · {relTime(s.updatedAt)}
+                  </span>
+                </span>
+                <span className="sxModel mono">{s.model ?? ''}</span>
+                <span className="sxCost mono">{cost ? money(cost) : ''}</span>
+                <span className="sxActs">
+                  <button type="button" className="linkBtn" onClick={() => onNavigate(s.id)}>
+                    {role === 'brief' ? 'Open the run ›' : 'Open ›'}
+                  </button>
+                </span>
+              </div>
+            )
+          })}
         </div>
       )}
     </div>
