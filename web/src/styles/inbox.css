@@ -309,3 +309,18 @@
 .taskRow .acts:empty { display: none; }
 .taskRow .acts a { color: var(--mute); font-size: 0.8462rem; text-decoration: none; margin-right: 4px; }
 .taskRow .acts a:hover { color: var(--ink); }
+
+/* An unposted first-pass review on its task row (item/PostReview.tsx): verdict, body, comments, then the send. */
+.postReview { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
+.postReview .prHead { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.postReview .prAt { color: var(--ash); font-family: var(--mono); font-size: 0.7692rem; }
+.postReview .prAt .moved { color: var(--yellow); }
+.postReview .segBtn.v-approve.active { color: var(--green); }
+.postReview .segBtn.v-request_changes.active { color: var(--red); }
+.postReview textarea { width: 100%; resize: vertical; padding: 7px 9px; background: var(--elev); border: 1px solid var(--hair-strong); border-radius: var(--r-sm); color: var(--ink); font: inherit; font-size: 0.9231rem; line-height: 1.45; }
+.postReview textarea:focus { outline: none; border-color: var(--ink); }
+.postReview .prComments { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.postReview .prComments .where { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; }
+.postReview .prComments code { font-family: var(--mono); font-size: 0.7692rem; color: var(--mute); overflow-wrap: anywhere; }
+.postReview .ask a { color: var(--mute); font-size: 0.8462rem; text-decoration: none; }
+.postReview .ask a:hover { color: var(--ink); }

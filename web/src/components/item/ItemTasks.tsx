@@ -3,6 +3,7 @@ import type { ItemDetailResponse } from '../../../../shared/protocol.js'
 import type { ItemTask } from '../../../../core/work/tasks.js'
 import { requestCommands } from '../../../../core/babysit/reviewer.js'
 import { useInbox } from '../../inboxStore.js'
+import { PostReview } from './PostReview.js'
 
 /** One glyph per state, read at a glance down the column. */
 const MARK: Record<ItemTask['state'], string> = {
@@ -30,7 +31,9 @@ const prOf = (itemId: string) => {
   return m ? { repo: m[1]!, number: Number(m[2]) } : null
 }
 
-async function post(verb: 'approve' | 'retry' | 'stop' | 'skip', body: Record<string, string>): Promise<string | null> {
+type Verb = 'approve' | 'retry' | 'stop' | 'skip' | 'post-review' | 'review-again'
+
+async function post(verb: Verb, body: Record<string, unknown>): Promise<string | null> {
   const r = await fetch(`/api/tasks/${verb}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
   const b = (await r.json().catch(() => ({ ok: false, error: `HTTP ${r.status}` }))) as { ok: boolean; error?: string }
   return b.ok ? null : (b.error ?? 'failed')
@@ -39,7 +42,8 @@ async function post(verb: 'approve' | 'retry' | 'stop' | 'skip', body: Record<st
 /**
  * The item's task list (core/work/tasks.ts): what Junior did, is doing and
  * waits on you for. Dense rows, oldest first. A reviewer request shows the
- * exact commands it runs, so Request is your OK to those, word for word.
+ * exact commands it runs, so Request is your OK to those, word for word; an
+ * unposted review shows the review itself, editable (PostReview).
  */
 export function ItemTasks({ itemId, onNavigate }: { itemId: string; onNavigate: (hash: string) => void }) {
   const snap = useInbox()
@@ -66,7 +70,7 @@ export function ItemTasks({ itemId, onNavigate }: { itemId: string; onNavigate: 
 
   if (!tasks || tasks.length === 0) return null
 
-  const act = async (verb: 'approve' | 'retry' | 'stop' | 'skip', t: ItemTask, extra: Record<string, string> = {}) => {
+  const act = async (verb: Verb, t: ItemTask, extra: Record<string, unknown> = {}) => {
     setBusy(t.id)
     setError(null)
     const err = await post(verb, { id: t.id, ...extra })
@@ -83,6 +87,7 @@ export function ItemTasks({ itemId, onNavigate }: { itemId: string; onNavigate: 
       </div>
       {tasks.map((t) => {
         const ask = t.step === 'request-review' && t.state === 'waiting'
+        const posting = t.step === 'post-review' && t.state === 'waiting'
         const who = reviewer[t.id] ?? (typeof t.input?.reviewer === 'string' ? t.input.reviewer : '')
         let cmds: string[] = []
         try {
@@ -111,6 +116,7 @@ export function ItemTasks({ itemId, onNavigate }: { itemId: string; onNavigate: 
                 </div>
               )}
               {t.error && (t.state === 'failed' || t.state === 'waiting' || t.state === 'stopped') && <div className="err">{t.error}</div>}
+              {posting && <PostReview task={t} itemId={itemId} busy={busy === t.id} onAct={(verb, extra) => void act(verb, t, extra)} onNavigate={onNavigate} />}
               {ask && (
                 <div className="ask">
                   <input
@@ -146,7 +152,7 @@ export function ItemTasks({ itemId, onNavigate }: { itemId: string; onNavigate: 
                     Stop
                   </button>
                 )}
-                {(t.state === 'queued' || (t.state === 'waiting' && !ask)) && (
+                {(t.state === 'queued' || (t.state === 'waiting' && !ask && !posting)) && (
                   <button type="button" className="btn xs ghost" disabled={busy === t.id} onClick={() => void act('skip', t)}>
                     Skip
                   </button>

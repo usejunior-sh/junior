@@ -1,11 +1,13 @@
 import { errText } from '../errors.js'
 import { approveTaskOp, babysitSettingsOp, retryTaskOp, skipTaskOp, stopTaskOp } from '../tasks/ops.js'
 import { readJsonBody } from './http-util.js'
+import { postReviewOp, reviewAgainOp, reviewHeadOp } from '../review/post.js'
 import type { ScopedCtx } from './ctx.js'
 
 /**
- * Tasks on items (POST /api/tasks/<verb> {id, …}) and babysitting's settings
- * (GET/POST /api/babysit/settings). Every answer is { ok, … }.
+ * Tasks on items (POST /api/tasks/<verb> {id, …}), first-pass reviews
+ * (post-review, review-again, the head the watch last read) and babysitting's
+ * settings (GET/POST /api/babysit/settings). Every answer is { ok, … }.
  */
 export async function taskRoutes({ req, url, json, rt }: ScopedCtx): Promise<boolean> {
   const verb = /^\/api\/tasks\/(approve|retry|stop|skip)$/.exec(url.pathname)?.[1]
@@ -26,6 +28,31 @@ export async function taskRoutes({ req, url, json, rt }: ScopedCtx): Promise<boo
     } catch (err) {
       json(400, { ok: false, error: errText(err) })
     }
+    return true
+  }
+  // First-pass reviews: post the one on the card, or read the PR again (server/review/post.ts).
+  if (url.pathname === '/api/tasks/post-review' && req.method === 'POST') {
+    try {
+      const body = ((await readJsonBody(req)) ?? {}) as { id?: unknown }
+      if (typeof body.id !== 'string' || !body.id) throw new Error('id required')
+      json(200, { ok: true, task: await postReviewOp(rt, body.id, body) })
+    } catch (err) {
+      json(400, { ok: false, error: errText(err) })
+    }
+    return true
+  }
+  if (url.pathname === '/api/tasks/review-again' && req.method === 'POST') {
+    try {
+      const body = ((await readJsonBody(req)) ?? {}) as { id?: unknown }
+      if (typeof body.id !== 'string' || !body.id) throw new Error('id required')
+      json(200, { ok: true, task: await reviewAgainOp(rt, body.id) })
+    } catch (err) {
+      json(400, { ok: false, error: errText(err) })
+    }
+    return true
+  }
+  if (url.pathname === '/api/review/head' && req.method === 'GET') {
+    json(200, { ok: true, sha: await reviewHeadOp(rt, url.searchParams.get('item') ?? '') })
     return true
   }
   if (url.pathname === '/api/babysit/settings' && (req.method === 'GET' || req.method === 'POST')) {
