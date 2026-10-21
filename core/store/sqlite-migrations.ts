@@ -23,6 +23,29 @@ export const TODAY_SCHEMA = `CREATE TABLE IF NOT EXISTS today_days (
    );`
 
 /**
+ * Advance approvals (core/approvals/approvals.ts): who + what + when. A
+ * revoked one stays, so a log line can still name it. IF NOT EXISTS
+ * throughout: migration 35 and ensureDurableSchema both run it.
+ */
+export const APPROVALS_SCHEMA = `CREATE TABLE IF NOT EXISTS approvals (
+     id           TEXT PRIMARY KEY,
+     what         TEXT NOT NULL,
+     who_kind     TEXT NOT NULL,
+     who_id       TEXT NOT NULL,
+     who_name     TEXT NOT NULL,
+     when_json    TEXT NOT NULL,
+     why          TEXT NOT NULL,
+     created_at   INTEGER NOT NULL,
+     expires_at   INTEGER,
+     revoked_at   INTEGER,
+     session_id   TEXT,
+     proposal_id  TEXT,
+     uses         INTEGER NOT NULL DEFAULT 0,
+     last_used_at INTEGER
+   );
+   CREATE UNIQUE INDEX IF NOT EXISTS idx_approvals_proposal ON approvals(proposal_id) WHERE proposal_id IS NOT NULL;`
+
+/**
  * Tasks on items (core/work/tasks.ts). `key` dedupes: one task per item per
  * event ("checks_failed@<sha>"); NULL keys never collide. `input` and
  * `output` are JSON. IF NOT EXISTS throughout: migration 33 and
@@ -509,5 +532,7 @@ export const MIGRATIONS: string[] = [
   TASKS_SCHEMA,
   // 34: one policy (core/actions/policy.ts): the Autonomy levels are gone. Every
   // Claude chat holds its sends; another agent asks before every change.
-  `UPDATE sessions SET permission_mode = CASE WHEN provider = 'claude' THEN 'auto' ELSE 'gated' END WHERE kind IS NULL OR kind NOT IN ('job-run', 'brief', 'goal')`,
+  `UPDATE sessions SET permission_mode = CASE WHEN provider = 'claude' THEN 'auto' ELSE 'gated' END WHERE kind IS NULL OR kind NOT IN ('job-run', 'brief', 'goal', 'task')`,
+  // 35: advance approvals (core/approvals/approvals.ts). Also converged by ensureDurableSchema.
+  APPROVALS_SCHEMA,
 ]

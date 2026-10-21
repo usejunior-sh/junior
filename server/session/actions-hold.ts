@@ -8,7 +8,7 @@ import type { ToolVeto, VetoDecision } from '../providers/types.js'
 import { log } from '../log.js'
 import { type ActionMove, canonJson, heldEntry, heldRecord, holdable, isArgsObject, move, queuedMessage, sendDelay } from '../../core/actions/queue.js'
 import { destructiveCommand } from '../../core/actions/commands.js'
-import { type BranchScope, chatBashVerdict, mayBeFree } from '../../core/actions/policy.js'
+import { type BranchScope, chatBashVerdict, mayBeFree, selfApproval } from '../../core/actions/policy.js'
 import { currentBranch } from '../git.js'
 import { defaultBranch } from '../worktrees.js'
 import { taskRunVerdict } from '../../core/babysit/policy.js'
@@ -21,6 +21,8 @@ import { WorkspaceRuntime } from '../workspace/runtime.js'
 import { teamRunOf, workerSpec } from '../team-run/state.js'
 import { actionContext, actionsChanged, sortForWorkspace } from './actions-record.js'
 import { errText } from '../errors.js'
+import { coveringApproval, useApproval } from '../approvals-ops.js'
+import { describeApproval } from '../../core/approvals/approvals.js'
 import { invalidateInbox } from '../ws/send.js'
 import { deliverSendBack, dispatchAction } from './actions-send.js'
 
@@ -88,6 +90,10 @@ export function sessionVeto(rt: WorkspaceRuntime, row: StoredSession): { veto?: 
         log('info', 'fence', `refused ${toolName} in a read-only session: ${d.reason}`, { session: row.id, workspace: rt.meta.id })
         return d
       }
+      if (toolName === 'Bash' && isArgsObject(input) && selfApproval(String(input.command ?? ''))) {
+        log('info', 'actions', 'refused a command that approves through triage’s API', { session: row.id, workspace: rt.meta.id })
+        return { allow: false, reason: 'Only the user approves sends and adds advance approvals, in the app. Propose one with propose_approval instead.' }
+      }
       // Claude's auto mode runs local work; a command that destroys work still comes to you.
       if (toolName === 'Bash' && chatHoldsSends(row) && isArgsObject(input)) {
         const why = destructiveCommand(String(input.command ?? ''))
@@ -133,7 +139,8 @@ export async function holdIfAction(rt: WorkspaceRuntime, row: StoredSession, too
     const sort = sortForWorkspace(rt)
     try {
       const scope = mayBeFree(command) ? await branchScope(row.cwd) : { current: null, defaultBranch: null }
-      if (chatBashVerdict(command, scope, (part) => sort('Bash', { command: part })).verdict === 'allow') return { allow: true }
+      const v = chatBashVerdict(command, scope, (part) => sort('Bash', { command: part }))
+      if (v.verdict === 'allow') return v.free ? { allow: true, sure: `Free under the user's policy: ${v.free === 'draft PR' ? 'a draft PR' : 'a push to your own branch'}.` } : { allow: true }
     } catch (err) {
       log('warn', 'actions', `could not judge a command against the policy, holding it: ${errText(err)}`, { session: row.id, workspace: rt.meta.id })
     }
@@ -147,6 +154,12 @@ export async function holdIfAction(rt: WorkspaceRuntime, row: StoredSession, too
     return { allow: true }
   }
   if (!sorted) return { allow: true }
+  // Approved in advance (core/approvals): it goes out now, and its record says which approval let it.
+  const rule = await coveringApproval(rt, toolName, args)
+  if (rule) {
+    await useApproval(rt, rule, row.id, ctx?.toolUseId)
+    return { allow: true, sure: `Approved in advance by the user: ${describeApproval(rule)}.` }
+  }
   // A goal's worker: the same call any of the goal's sessions already filed
   // before a crash, or by the worker this one replaced, is that action.
   const goalRun = rt.goalRuns.get(row.id)

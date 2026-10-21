@@ -166,3 +166,31 @@
   .briefComposer .bcFoot .btn.primary { margin-left: auto; }
   .briefComposer .bcFoot kbd { display: none; }
 }
+
+/* The Rule card (RuleCard.tsx): Junior proposes an advance approval, you add it or not.
+   Blue while it asks (a decision, not a send), quiet once settled. */
+.ruleCard { max-width: 620px; margin: 4px 0 10px; padding: 10px 12px; background: var(--card); border: 1px solid var(--edge-blue); border-radius: var(--r); }
+.ruleCard:not(.st-proposed) { border-color: var(--hair-strong); }
+.ruleCard .rcHead { display: flex; align-items: center; gap: 8px; }
+.ruleCard .rcHead .ic { flex: none; color: var(--blue); }
+.ruleCard:not(.st-proposed) .rcHead .ic { color: var(--charcoal); }
+.ruleCard .rcKicker { font-size: 0.8462rem; color: var(--ash); }
+.ruleCard .rcHead .pill { margin-left: auto; padding: 1px 8px; background: transparent; font-family: var(--mono); font-size: 0.8077rem; }
+.ruleCard .rcLine { margin: 4px 0 8px; font-size: 1.0769rem; font-weight: 500; color: var(--ink); }
+.ruleCard .rcFacts { display: grid; grid-template-columns: max-content 1fr; gap: 3px 14px; margin: 0; font-size: 0.9231rem; }
+.ruleCard .rcFacts dt { color: var(--ash); }
+.ruleCard .rcFacts dd { margin: 0; min-width: 0; color: var(--body); overflow-wrap: anywhere; }
+.ruleCard .rcFacts .mono { color: var(--ash); font-size: 0.8462rem; }
+.ruleCard .rcFoot { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+.ruleCard .rcNote { flex: 1 1 auto; min-width: 0; font-size: 0.8462rem; color: var(--ash); }
+
+/* Settings → Approvals: one row per approval, Revoke on the right. */
+.apList { display: flex; flex-direction: column; margin: 8px 0 0; padding: 0; list-style: none; border: 1px solid var(--hair-strong); border-radius: var(--r); }
+.apRow { display: flex; align-items: flex-start; gap: 12px; padding: 10px 12px; }
+.apRow + .apRow { border-top: 1px solid var(--hair); }
+.apList.past .apRow b { color: var(--ash); font-weight: 400; }
+.apMain { flex: 1 1 auto; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.apMain b { font-weight: 500; color: var(--ink); }
+.apMain small { font-size: 0.8462rem; color: var(--ash); }
+.apMain .apWhy { color: var(--charcoal); }
+.apEmpty { margin: 8px 0 0; color: var(--ash); }

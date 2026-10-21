@@ -254,6 +254,7 @@ export class Store {
   readonly #commandsListeners = new Set<(cwd: string, commands: SlashCommandInfo[]) => void>()
   /** Who follows outbound actions (the Actions page, an item, a transcript's action lines). */
   readonly #actionsListeners = new Set<(sessionId: string | undefined) => void>()
+  readonly #approvalsListeners = new Set<() => void>()
   /** Who follows goals (the Goals page, a goal page, the rail's count). */
   readonly #goalsListeners = new Set<(goalId: string | undefined) => void>()
   /** Who follows today's plan (the Junior page). */
@@ -373,6 +374,9 @@ export class Store {
       case 'actions_changed':
         for (const fn of this.#actionsListeners) fn(msg.sessionId)
         break
+      case 'approvals_changed':
+        for (const fn of this.#approvalsListeners) fn()
+        break
       case 'goals_changed':
         for (const fn of this.#goalsListeners) fn(msg.goalId)
         break
@@ -440,6 +444,14 @@ export class Store {
     this.#actionsListeners.add(fn)
     return () => {
       this.#actionsListeners.delete(fn)
+    }
+  }
+
+  /** Fires when an advance approval was added, revoked or used. */
+  onApprovalsChanged(fn: () => void): () => void {
+    this.#approvalsListeners.add(fn)
+    return () => {
+      this.#approvalsListeners.delete(fn)
     }
   }
 

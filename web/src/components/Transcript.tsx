@@ -38,6 +38,7 @@ import { BrowserShots } from './BrowserShots.js'
 import { FileChip } from './AttachmentStrip.js'
 import { ToolGroup } from './ToolGroup.js'
 import { ActionNotes } from './ActionCard.js'
+import { RuleCards } from './RuleCard.js'
 import { useActions } from '../actions.js'
 import type { ActionView } from '../../../shared/protocol.js'
 
@@ -623,6 +624,7 @@ const Item = memo(function Item({
           <ToolCard sessionId={sessionId} item={item} />
           <ActionNotes tools={[item]} byCall={actionByCall} onNavigate={onRef} />
           <DraftJobLinks tools={[item]} onRef={onRef} />
+          <RuleCards sessionId={sessionId} tools={[item]} />
           <BrowserShots sessionId={sessionId} tools={[item]} />
         </>
       )
@@ -632,6 +634,7 @@ const Item = memo(function Item({
           <ToolGroup sessionId={sessionId} item={item} />
           <ActionNotes tools={item.members} byCall={actionByCall} onNavigate={onRef} />
           <DraftJobLinks tools={item.members} onRef={onRef} />
+          <RuleCards sessionId={sessionId} tools={item.members} />
           <BrowserShots sessionId={sessionId} tools={item.members} />
         </>
       )

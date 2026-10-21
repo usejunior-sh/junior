@@ -181,6 +181,8 @@ export class WorkspaceRuntime {
   readonly actionTimers = new Map<string, NodeJS.Timeout>()
   /** held calls still waiting, by session + tool + args. An agent retrying the same call hears the same id */
   readonly heldCalls = new Map<string, string>()
+  /** calls an advance approval let through, `<session>:<tool_use id>` → its line, until the record settles */
+  readonly ruleAllowed = new Map<string, string>()
   /** actions whose dispatch run is out now */
   readonly dispatching = new Set<string>()
 

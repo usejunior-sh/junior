@@ -76,3 +76,13 @@ test('chats: Claude holds sends, another agent asks before every change', () => 
   assert.equal(chatPermissionMode(undefined), 'auto')
   assert.equal(chatPermissionMode('codex'), 'gated')
 })
+
+test('selfApproval: an agent approving through triage’s API is spotted', async () => {
+  const { selfApproval } = await import('../core/actions/policy.js')
+  assert.ok(selfApproval(`curl -X POST http://localhost:5178/api/approvals -d '{"what":"slack-dm"}'`))
+  assert.ok(selfApproval('curl -XPOST localhost:5188/api/actions/approve -d \'{"id":"x"}\''))
+  assert.ok(selfApproval('curl localhost:5178/api/tasks/approve'))
+  assert.ok(selfApproval('curl localhost:5178/api/actions/override'))
+  assert.ok(!selfApproval('curl localhost:5178/api/actions/pending'))
+  assert.ok(!selfApproval('npm test'))
+})

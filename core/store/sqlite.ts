@@ -20,6 +20,7 @@ import { ensureDurableSchema, migrate, renameLegacyTables, renameLegacyValues } 
 import { SqliteConfig, SqliteEvents, SqliteInbox, SqliteSessions, SqliteTurns } from './sqlite-sessions.js'
 import { SqliteItemTasks } from './sqlite-tasks.js'
 import { SqliteToday } from './sqlite-today.js'
+import { SqliteApprovals } from './sqlite-approvals.js'
 
 export function openSqliteStore(file: string): Store {
   if (file !== ':memory:') mkdirSync(path.dirname(file), { recursive: true })
@@ -49,6 +50,7 @@ export function openSqliteStore(file: string): Store {
     goals: new SqliteGoals(db),
     today: new SqliteToday(db),
     tasks: new SqliteItemTasks(db),
+    approvals: new SqliteApprovals(db),
     close: async () => db.close(),
   }
 }

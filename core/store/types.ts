@@ -41,6 +41,7 @@ import type { ActionHistoryEntry, ActionKind, ActionRecord, ActionStatus } from 
 import type { Gate, Goal, GoalEvent, GoalLogEntry, GoalState, GoalStepState } from '../goals/types.js'
 import type { NewJob, NewJobSlotRun, Job, JobRunResult, JobRunStart, JobRunStatus, JobRunTrigger, JobSlotFinish, JobSlotRun } from '../job/types.js'
 import type { TodayDay, TodayEntry } from '../junior/today.js'
+import type { AdvanceApproval } from '../approvals/approvals.js'
 import type { Decision, ItemLabel, Playbook, Reason } from '../work/fields.js'
 import type { ItemTask, NewTask, TaskState } from '../work/tasks.js'
 
@@ -649,6 +650,20 @@ export interface TodayStore {
   everPlanned(): Promise<boolean>
 }
 
+/** Advance approvals (core/approvals/approvals.ts). Revoking keeps the row. */
+export interface ApprovalStore {
+  /** Every approval, revoked ones included, newest first. */
+  list(): Promise<AdvanceApproval[]>
+  get(id: string): Promise<AdvanceApproval | null>
+  /** The approval a proposal card was added as, if it was. */
+  byProposal(proposalId: string): Promise<AdvanceApproval | null>
+  put(a: AdvanceApproval): Promise<void>
+  /** false = no such approval, or revoked already */
+  revoke(id: string, at: number): Promise<boolean>
+  /** It let a send through. */
+  used(id: string, at: number): Promise<void>
+}
+
 export interface Store {
   sessions: SessionStore
   events: EventStore
@@ -667,5 +682,6 @@ export interface Store {
   goals: GoalStore
   today: TodayStore
   tasks: ItemTaskStore
+  approvals: ApprovalStore
   close(): Promise<void>
 }

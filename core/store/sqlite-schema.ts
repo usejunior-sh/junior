@@ -1,5 +1,5 @@
 import { DatabaseSync } from 'node:sqlite'
-import { GOALS_SCHEMA, MIGRATIONS, TASKS_SCHEMA, TODAY_SCHEMA } from './sqlite-migrations.js'
+import { APPROVALS_SCHEMA, GOALS_SCHEMA, MIGRATIONS, TASKS_SCHEMA, TODAY_SCHEMA } from './sqlite-migrations.js'
 
 /**
  * Converge the durable-inbox schema regardless of migration-version state.
@@ -218,6 +218,7 @@ export function ensureDurableSchema(db: DatabaseSync) {
   db.exec(GOALS_SCHEMA)
   db.exec(TODAY_SCHEMA)
   db.exec(TASKS_SCHEMA)
+  db.exec(APPROVALS_SCHEMA)
 }
 
 /*

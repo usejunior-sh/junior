@@ -47,6 +47,9 @@ export const TRIAGE_READ_TOOLS = new Set([
   'mcp__triage__goal_get',
   'mcp__triage__goal_list',
   'mcp__triage__get_today',
+  // Advance approvals: listing reads, proposing only shows a card. Only the user's Add makes one.
+  'mcp__triage__list_approvals',
+  'mcp__triage__propose_approval',
 ])
 
 // Verb tokens that mark a connector call's intent: READ_VERBS / WRITE_VERBS

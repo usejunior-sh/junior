@@ -31,6 +31,7 @@ import { defaultBranch } from '../worktrees.js'
 import type { WorkspaceRuntime } from '../workspace/runtime.js'
 import { broadcastSessionList, invalidateInbox } from '../ws/send.js'
 import { taskNeedsYou } from './notify.js'
+import { requestUnderApproval } from './ops.js'
 
 /** A task session gives up after this: a hung run never holds a slot all day. */
 export const TASK_SESSION_TIMEOUT_MS = 30 * 60_000
@@ -298,7 +299,11 @@ This is a headless task session: nobody reads this chat while it runs. Do the on
 
 onTaskAdded((rt, task, stuck) => {
   if (stuck) taskNeedsYou(rt, { kind: 'stuck', task })
-  else if (task.step === 'request-review') taskNeedsYou(rt, { kind: 'review', task })
+  // Approved in advance: the request goes out alone and nothing pings you. Else it waits for you.
+  else if (task.step === 'request-review')
+    void requestUnderApproval(rt, task).then((sent) => {
+      if (!sent) taskNeedsYou(rt, { kind: 'review', task })
+    })
   void pumpTasks(rt)
 })
 onBabysitTick((rt) => void pumpTasks(rt))

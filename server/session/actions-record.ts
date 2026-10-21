@@ -39,6 +39,12 @@ export function actionContext(rt: WorkspaceRuntime, row: StoredSession): TrackCo
     jobId: row.jobId,
     teamRunId: teamRunOf(rt, row.id)?.id ?? null,
     itemId: rt.sessionItem.get(row.id) ?? null,
+    ruleFor: (toolUseId) => {
+      const key = `${row.id}:${toolUseId}`
+      const line = rt.ruleAllowed.get(key) ?? null
+      rt.ruleAllowed.delete(key)
+      return line
+    },
   }
 }
 

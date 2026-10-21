@@ -94,5 +94,13 @@ export function chatBashVerdict(command: string, s: BranchScope, sortPart: (part
   return { verdict: 'allow', free }
 }
 
+/**
+ * A command that reaches triage's own approval endpoints: approving a held
+ * send, adding an advance approval, approving a task, marking a tool "not an
+ * action". Only the user does those, from the app. A speed bump for an agent,
+ * not a wall: anything running as you can reach the daemon.
+ */
+export const selfApproval = (command: string): boolean => /\/api\/(approvals\b|actions\/(approve|override|retry)\b|tasks\/approve\b)/.test(command)
+
 /** A push or a PR open: the only sends the shell may make free. Anything else needs no branch lookup. */
 export const mayBeFree = (command: string): boolean => /\bgit\b[\s\S]*\bpush\b|\bgh\s+pr\s+create\b/.test(command)

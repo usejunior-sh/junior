@@ -49,6 +49,8 @@
     "core/job/schedule.ts",
     "core/job/run-rows.ts",
     "core/actions/types.ts",
+    "core/actions/bash.ts",
+    "core/approvals",
     "core/actions/count.ts",
     "core/actions/view.ts",
     "core/goals/types.ts",

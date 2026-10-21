@@ -64,7 +64,7 @@ const toSession = (r: SessionRow): StoredSession => ({
   permissionMode: toPermissionMode(r.permission_mode),
   provider: toProvider(r.provider),
   pinned: r.pinned === 1,
-  kind: r.kind === 'job-run' || r.kind === 'brief' || r.kind === 'goal' ? r.kind : 'chat',
+  kind: r.kind === 'job-run' || r.kind === 'brief' || r.kind === 'goal' || r.kind === 'task' ? r.kind : 'chat',
   jobId: r.job_id,
   runStatus: toRunStatus(r.run_status),
   runTrigger: toTrigger(r.run_trigger),

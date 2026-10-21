@@ -26,6 +26,8 @@ export type TrackContext = {
   jobId: string | null
   teamRunId: string | null
   itemId: string | null
+  /** an advance approval let this call through: its line (core/approvals), else null */
+  ruleFor?: (toolUseId: string) => string | null
 }
 
 export type SettlePatch = {
@@ -44,7 +46,7 @@ export type ActionOp =
   | { op: 'settle'; sessionId: string; toolUseId: string; patch: SettlePatch }
 
 type Prompt = { id: string; behavior?: string }
-type Pending = { name: string; input: Record<string, unknown>; sorted: SortedAction; prompt?: Prompt }
+type Pending = { id: string; name: string; input: Record<string, unknown>; sorted: SortedAction; prompt?: Prompt }
 type LoosePrompt = { id: string; toolName: string; input: Record<string, unknown>; toolUseId?: string }
 
 /** A Bash command is kept whole up to this. It is what the record is about. */
@@ -157,7 +159,7 @@ export class ActionTracker {
         const input = b.input && typeof b.input === 'object' ? (b.input as Record<string, unknown>) : {}
         const sorted = this.sort(b.name, input)
         if (!sorted) continue
-        const p: Pending = { name: b.name, input, sorted }
+        const p: Pending = { id: b.id, name: b.name, input, sorted }
         const li = this.loose.findIndex((l) => l.toolUseId === b.id || (!l.toolUseId && l.toolName === b.name && canon(l.input) === canon(input)))
         if (li !== -1) {
           p.prompt = { id: this.loose[li].id }
@@ -241,6 +243,8 @@ export class ActionTracker {
   /** You, through a prompt; else the one policy (core/actions/policy.ts), a job's grants, a brief's policy, or an allow rule. */
   private allowedBy(p: Pending): [ActionAllowedBy, string | null] {
     if (p.prompt) return ['prompt', p.prompt.behavior === 'allow_always' ? 'always, for this session' : null]
+    const rule = this.ctx.ruleFor?.(p.id)
+    if (rule) return ['rule', rule]
     if (this.ctx.sessionKind === 'job-run') return ['rule', 'the job’s grants']
     if (this.ctx.sessionKind === 'brief') return ['policy', 'brief sessions']
     const mode = this.ctx.permissionMode
