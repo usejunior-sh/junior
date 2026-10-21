@@ -330,6 +330,16 @@ test('fold: who allowed it — your prompt, a job’s grants, a rule; a denial i
   assert.equal(s.op === 'settle' && s.patch.status, 'denied')
 })
 
+test('fold: a task’s free sends say what they were', () => {
+  const t = tracker({ sessionKind: 'task' })
+  t.feed(use('t1', 'Bash', { command: 'git push origin HEAD:feat' }), 1)
+  let [s] = t.feed(result('t1', 'ok'), 2)
+  assert.equal(s.op === 'settle' && s.patch.allowedDetail, 'free: a push to your PR’s branch')
+  t.feed(use('t2', 'Bash', { command: "gh api graphql -f query='mutation{resolveReviewThread(input:{threadId:\"T1\"}){thread{isResolved}}}'" }), 3)
+  ;[s] = t.feed(result('t2', 'ok'), 4)
+  assert.equal(s.op === 'settle' && s.patch.allowedDetail, 'free: a reply on the bot thread it fixed')
+})
+
 test('fold: an expired prompt settles as denied at once', () => {
   const t = tracker()
   t.feed(use('t1', 'Bash', { command: 'gh issue create -t Bug' }), 1)
