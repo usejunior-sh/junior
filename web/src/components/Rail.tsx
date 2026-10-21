@@ -4,7 +4,7 @@ import type { Mood } from '../../../core/junior/mood.js'
 import { MOOD_LABEL } from '../../../core/junior/mood.js'
 import { JuniorFace } from './JuniorFace.js'
 
-/** Every section a route can sit in. Actions and Goals are routes with no rail entry (Actions folds into Junior in M2; Goals is hidden). */
+/** Every section a route can sit in. Actions and Goals are routes with no rail entry (Actions folded into Junior's log in M2; Goals is hidden). */
 export type RailSection = 'junior' | 'inbox' | 'sessions' | 'artifacts' | 'changes' | 'terminals' | 'jobs' | 'actions' | 'goals'
 
 type Props = {
@@ -18,6 +18,8 @@ type Props = {
   /** Junior's entry: the persona's name, and its face's mood (the most urgent state) */
   juniorName: string
   juniorMood: Mood
+  /** Junior's log has lines you haven't seen: a dot on its entry */
+  juniorUnread?: boolean
   onGo: (section: RailSection) => void
 }
 
@@ -32,7 +34,7 @@ const ITEMS: Array<{ id: RailSection; label: string; icon: ComponentType<LucideP
 ]
 
 /** The labelled 64px rail: Junior first, then one button per destination, counts as small badges. */
-export function Rail({ active, collapsed, inboxCount, runningCount, terminalCount, changedCount, juniorName, juniorMood, onGo }: Props) {
+export function Rail({ active, collapsed, inboxCount, runningCount, terminalCount, changedCount, juniorName, juniorMood, juniorUnread = false, onGo }: Props) {
   const juniorToggle = collapsed !== undefined && active === 'junior'
   return (
     <nav className="rail" aria-label="Sections">
@@ -40,7 +42,7 @@ export function Rail({ active, collapsed, inboxCount, runningCount, terminalCoun
       <button
         type="button"
         className={`railBtn junior${active === 'junior' ? ' active' : ''}`}
-        title={`${juniorName} · ${MOOD_LABEL[juniorMood].toLowerCase()}`}
+        title={`${juniorName} · ${MOOD_LABEL[juniorMood].toLowerCase()}${juniorUnread ? ' · new in the log' : ''}`}
         aria-current={active === 'junior' ? 'page' : undefined}
         aria-expanded={juniorToggle ? !collapsed : undefined}
         onClick={() => onGo('junior')}
@@ -49,6 +51,7 @@ export function Rail({ active, collapsed, inboxCount, runningCount, terminalCoun
           <JuniorFace mood={juniorMood} size={22} motion="still" decorative />
         </span>
         <span className="label">{juniorName}</span>
+        {juniorUnread && <span className="railDot" aria-label="new in the log" />}
       </button>
       {ITEMS.map(({ id, label, icon: Icon, gap }) => {
         const badge =

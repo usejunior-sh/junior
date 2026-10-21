@@ -22,12 +22,14 @@ import { JuniorCanDo } from './JuniorCanDo.js'
 import { JuniorSide } from './JuniorSide.js'
 import { JuniorBlocked, JuniorFirstOpen, JuniorGoals } from './JuniorToday.js'
 import { JuniorPrs } from './JuniorPrs.js'
+import { JuniorLog } from './JuniorLog.js'
+import { useLogUnread } from '../juniorLog.js'
 import { useInbox } from '../inboxStore.js'
 
 /** What the sheet over the page shows: every capability, or the persona. */
 export type JuniorView = 'can' | 'me'
 
-type Tab = 'brief' | 'goals' | 'blocked' | 'prs'
+type Tab = 'brief' | 'goals' | 'blocked' | 'prs' | 'log'
 
 type Props = {
   onNavigate: (hash: string) => void
@@ -42,6 +44,7 @@ export function JuniorPage({ onNavigate, onDispatch }: Props) {
   const { day, error, reload } = useJuniorDay(win)
   const [tab, setTab] = useState<Tab>('brief')
   const [sheet, setSheet] = useState<JuniorView | null>(null)
+  const unread = useLogUnread()
   // The clock the headline reads; the page re-reads it on every fetch.
   const now = Date.now()
 
@@ -114,6 +117,9 @@ export function JuniorPage({ onNavigate, onDispatch }: Props) {
                 <Tabs.Trigger className="jrView" value="prs">
                   My PRs <PrCount />
                 </Tabs.Trigger>
+                <Tabs.Trigger className="jrView" value="log">
+                  Log {unread && <span className="c dot" aria-label="new" />}
+                </Tabs.Trigger>
               </Tabs.List>
             </div>
             <Tabs.Content value="brief" className="jrPane">
@@ -127,6 +133,9 @@ export function JuniorPage({ onNavigate, onDispatch }: Props) {
             </Tabs.Content>
             <Tabs.Content value="prs" className="jrPane">
               <JuniorPrs onNavigate={onNavigate} />
+            </Tabs.Content>
+            <Tabs.Content value="log" className="jrPane">
+              <JuniorLog active={tab === 'log'} onNavigate={onNavigate} />
             </Tabs.Content>
           </Tabs.Root>
         )}

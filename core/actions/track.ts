@@ -247,6 +247,7 @@ export class ActionTracker {
     if (rule) return ['rule', rule]
     if (this.ctx.sessionKind === 'job-run') return ['rule', 'the job’s grants']
     if (this.ctx.sessionKind === 'brief') return ['policy', 'brief sessions']
+    if (this.ctx.sessionKind === 'task') return ['policy', 'free: a push to your PR’s branch']
     const mode = this.ctx.permissionMode
     // A chat's send that ran without a card: the policy made it free.
     if (mode === 'auto') return ['policy', p.sorted.kind === 'push' ? 'free: a push to your own branch' : p.sorted.kind === 'pr' ? 'free: a draft PR' : 'free']

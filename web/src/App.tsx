@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef, useCallback, type CSSProperties } from 'react'
+import { useLogUnread } from './juniorLog.js'
 import type { TerminalSummary, WorkflowAgent, WorkflowRun } from '../../shared/protocol.js'
 import { CommandPalette } from './components/CommandPalette.js'
 import { useSessionChanges } from './useSessionChanges.js'
@@ -137,6 +138,8 @@ export function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onboarded, activeWorkspace?.id])
 
+  // Junior's log has something new: a dot on the rail until you open the Log tab.
+  const logUnread = useLogUnread()
   const current = sessions.find((s) => s.id === currentId) ?? null
   // The browser pane beside this session (.docs/browser.md), Triage.app only, never on a phone.
   const browserOpen = useBrowserOpen(currentId) && hasBrowser && !mobile
@@ -524,6 +527,7 @@ export function App() {
           changedCount={changes.projects.reduce((n, p) => n + p.checkouts.reduce((m, c) => m + c.files.length, 0), 0)}
           juniorName={persona.name}
           juniorMood={juniorMood}
+          juniorUnread={logUnread}
           onGo={onRailGo}
         />
 

@@ -286,6 +286,34 @@ a.jrRef { overflow-wrap: anywhere; }
 .jrShapes .shp[data-state="checked"] { background: var(--wash-3); border-color: var(--hair-bright); }
 .jrShapes .shp:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
 
+/* Junior's log (JuniorLog.tsx): one feed, All · Sent. Dense aligned rows: when · icon · what + who allowed it · link · state. */
+.jlFilters { display: flex; align-items: baseline; gap: 4px; margin: 24px 0 8px; }
+.jlFilter { padding: 3px 10px; border: 1px solid transparent; border-radius: var(--r-full); background: none; color: var(--ash); font-size: 0.9231rem; cursor: pointer; }
+.jlFilter:hover { color: var(--ink); }
+.jlFilter.on { color: var(--ink); border-color: var(--hair-strong); background: var(--wash-1); }
+.jlAside { margin-left: auto; color: var(--ash); font-size: 0.8462rem; }
+.jlList { margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--hair); }
+.jlLine { display: grid; grid-template-columns: 36px 16px minmax(0, 1fr) auto auto; align-items: center; gap: 10px; min-height: 44px; padding: 6px 4px; border-bottom: 1px solid var(--hair); }
+.jlWhen { color: var(--stone); font-size: 0.8462rem; text-align: right; }
+.jlIc { display: inline-flex; justify-content: center; color: var(--charcoal); }
+.jlDot { width: 5px; height: 5px; border-radius: 50%; background: var(--stone); }
+.jlMain { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.jlTitle { min-width: 0; padding: 0; border: 0; background: none; color: var(--ink); font: inherit; font-weight: 500; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+button.jlTitle { cursor: pointer; }
+button.jlTitle:hover { text-decoration: underline; text-decoration-color: var(--hair-bright); }
+.src-task .jlTitle, .src-job .jlTitle { font-weight: 400; color: var(--body); }
+.jlMeta { display: flex; flex-wrap: wrap; gap: 0 12px; min-width: 0; color: var(--ash); font-size: 0.8462rem; }
+.jlBy { color: var(--charcoal); }
+.jlBy.by-rule .jrRef { font-size: inherit; }
+.jlErr { color: var(--red-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 360px; }
+.jlLink { display: inline-flex; align-items: center; gap: 4px; font-family: var(--mono); font-size: 0.8462rem; color: var(--ash); white-space: nowrap; }
+.jlLink:hover { color: var(--ink); }
+.jlLine > .pill { padding: 1px 8px; background: transparent; font-family: var(--mono); font-size: 0.8077rem; white-space: nowrap; }
+.jlMore { margin-top: 12px; }
+.jrView .c.dot { display: inline-block; width: 6px; height: 6px; margin-left: 6px; vertical-align: middle; border-radius: 50%; background: var(--blue); }
+/* The rail's dot on Junior: something new in the log. */
+.railDot { position: absolute; top: 6px; right: 12px; width: 7px; height: 7px; border-radius: 50%; background: var(--blue); border: 1.5px solid var(--canvas); }
+
 @media (prefers-reduced-motion: reduce) {
   .jrDot.live, .jrPlanRow.fresh { animation: none; }
 }
@@ -295,6 +323,8 @@ a.jrRef { overflow-wrap: anywhere; }
 
 /* ---------- phone ---------- */
 @media (max-width: 767px), (pointer: coarse) and (max-height: 500px) {
+  .jlLine { grid-template-columns: 30px minmax(0, 1fr) auto; }
+  .jlIc, .jlLink, .jlAside { display: none; }
   /* the card goes on top, compact; the day scrolls under it */
   .jrPage { display: block; overflow-y: auto; overflow-x: hidden; }
   .jrSide { overflow: visible; border-right: 0; border-bottom: 1px solid var(--hair); }
