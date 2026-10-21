@@ -172,6 +172,7 @@ async function seedItems(
     const prov = it.jobId ? { jobId: it.jobId, runId: lastRun.get(it.jobId), at: now - it.ingested, why: it.why } : undefined
     await store.items.upsert(item, prov)
     if (it.description) await store.items.setDescription(it.id, it.description)
+    if (it.handoff || it.label) await store.items.setFields(it.id, { ...(it.handoff ? { handoff: it.handoff } : {}), ...(it.label ? { label: it.label } : {}) })
     if (it.status) await settle(store, it.id, it.status, now, today)
   }
   for (const m of W.manuals()) {

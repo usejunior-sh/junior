@@ -24,6 +24,10 @@ export type DemoItem = {
   /** `explicit` due, in days from today (0 = today, -1 = yesterday) */
   dueInDays?: number
   description?: string
+  /** handed to Junior (hand-offs, Phase 1): babysat, first-passed, or paused */
+  handoff?: 'on' | 'paused'
+  /** what it is, for the rules' suggestions */
+  label?: 'bug' | 'improvement' | 'question' | 'feature' | 'idea'
   /** stage/turn override, set `at` now */
   override?: { stage?: string; turn?: string; note?: string }
   /** after insert: done/snoozed/archived, `at` ms ago */
@@ -218,6 +222,7 @@ export function items(): DemoItem[] {
       created: 2 * HOUR,
       updated: 2 * HOUR,
       ingested: 2 * HOUR,
+      label: 'bug',
     },
     {
       id: ID.item.sentryPdf,
@@ -312,6 +317,7 @@ export function items(): DemoItem[] {
       created: 2 * DAY,
       updated: 1 * HOUR,
       ingested: 2 * DAY,
+      handoff: 'on',
     },
 
     // Waiting on others

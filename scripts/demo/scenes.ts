@@ -27,6 +27,13 @@ const item = (id: string) => `#/item/${encodeURIComponent(id)}`
 
 export const SCENES: Scene[] = [
   {
+    name: 'junior',
+    hash: '#/junior',
+    headline: 'Junior works on what you hand it.',
+    sub: 'It suggests. You hand off, snooze, or say not this one.',
+    settleMs: 1500,
+  },
+  {
     name: 'inbox',
     hash: '#/inbox/people',
     headline: 'Everything that needs you. Ranked.',
