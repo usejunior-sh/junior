@@ -40,8 +40,8 @@ export const serverOf = (toolName: string): string => {
   return cut === -1 ? rest : rest.slice(0, cut)
 }
 
-/** triage's own in-process servers: they write this machine's inbox, run a team, drive the pane. */
-const LOCAL_SERVERS = new Set(['triage', 'team', 'brief', 'browser'])
+/** triage's own in-process servers: they write this machine's inbox, run a team or a task, drive the pane. */
+const LOCAL_SERVERS = new Set(['triage', 'team', 'task', 'goal', 'gate', 'brief', 'browser'])
 
 /** What an MCP server says about one of its tools (absent = it didn't say). */
 export type ToolHints = { readOnly?: boolean; destructive?: boolean; openWorld?: boolean }

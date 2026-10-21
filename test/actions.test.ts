@@ -117,6 +117,7 @@ test('sort: built-ins and triage’s own servers are never actions', () => {
   for (const t of ['Write', 'Edit', 'Read', 'WebFetch', 'TodoWrite', 'Agent']) assert.equal(sort(t, { file_path: '/x' }), null)
   assert.equal(sort('mcp__triage__create_work_item', { title: 'x' }), null)
   assert.equal(sort('mcp__team__submit_step'), null)
+  assert.equal(sort('mcp__task__submit_task'), null)
   assert.equal(sort('mcp__browser__browser_act'), null)
 })
 
