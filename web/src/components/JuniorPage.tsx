@@ -3,7 +3,7 @@
  * Junior on the left, the day on the right. The sidebar is Junior's card:
  * Chat (⌘J), right now, what it can see, what it can do, Customize. The
  * right side is a two-tone serif headline over three tabs: Morning brief,
- * Today's goals, Blocked on you. "What I can do" in full and the persona open
+ * Today's plan, Blocked on you. "What I can do" in full and the persona open
  * in a sheet over the page.
  */
 import * as Dialog from '@radix-ui/react-dialog'
@@ -104,7 +104,7 @@ export function JuniorPage({ onNavigate, onDispatch }: Props) {
                   Morning brief <Count day={day} of="brief" />
                 </Tabs.Trigger>
                 <Tabs.Trigger className="jrView" value="goals">
-                  Today's goals <Count day={day} of="goals" />
+                  Today's plan <Count day={day} of="goals" />
                 </Tabs.Trigger>
                 <Tabs.Trigger className="jrView" value="blocked">
                   Blocked on you <Count day={day} of="blocked" />

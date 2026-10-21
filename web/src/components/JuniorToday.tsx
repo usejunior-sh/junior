@@ -1,5 +1,5 @@
 /**
- * The Junior page's two working tabs: Today's goals (one list, every row with
+ * The Junior page's two working tabs: Today's plan (one list, every row with
  * an owner, ending in "Also today…") and Blocked on you (what holds Junior
  * until you answer). On a first open, no plan yet, nothing used, Junior
  * says what it can see and offers work instead (JuniorFirstOpen).
@@ -18,14 +18,14 @@ type Props = {
   onDispatch: (itemId: string) => void
 }
 
-/** Today's goals: the shared plan, then "Also today…". */
+/** Today's plan: the shared plan, then "Also today…". */
 export function JuniorGoals({ day, onNavigate, onDispatch }: Props) {
   const persona = usePersona()
   const [fresh, setFresh] = useState<string | null>(null)
   return (
-    <section aria-label="Today's goals">
+    <section aria-label="Today's plan">
       <h2 className="jrLh">
-        Today's goals{' '}
+        Today's plan{' '}
         <span className="n">
           {day.plan.done} of {day.plan.total} done
         </span>
