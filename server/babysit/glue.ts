@@ -67,10 +67,24 @@ export function onTaskAdded(fn: (rt: WorkspaceRuntime, task: ItemTask, stuck: bo
   addedHooks.push(fn)
 }
 
+/** A watch added a task: the runner and notifications hear of it. */
+export function taskAdded(rt: WorkspaceRuntime, task: ItemTask, stuck: boolean): void {
+  for (const fn of addedHooks) {
+    try {
+      fn(rt, task, stuck)
+    } catch (err) {
+      log('error', 'babysit', `task hook failed: ${errText(err)}`, { workspace: rt.meta.id })
+    }
+  }
+}
+
 /** Hooks run after every tick: the runner's pump. */
 const tickHooks: ((rt: WorkspaceRuntime) => void)[] = []
 export function onBabysitTick(fn: (rt: WorkspaceRuntime) => void): void {
   tickHooks.push(fn)
+}
+export function runTickHooks(rt: WorkspaceRuntime): void {
+  for (const fn of tickHooks) fn(rt)
 }
 
 export function babysitDeps(rt: WorkspaceRuntime): BabysitDeps {
@@ -81,15 +95,7 @@ export function babysitDeps(rt: WorkspaceRuntime): BabysitDeps {
     repos: () => connectedRepos(rt),
     upsertItem: async (item) => void (await upsertItem(rt, item)),
     reviewerFor: (repo) => reviewerFor(rt, repo),
-    added: (task, stuck) => {
-      for (const fn of addedHooks) {
-        try {
-          fn(rt, task, stuck)
-        } catch (err) {
-          log('error', 'babysit', `task hook failed: ${errText(err)}`, { workspace: rt.meta.id })
-        }
-      }
-    },
+    added: (task, stuck) => taskAdded(rt, task, stuck),
     log: (level, message, fields) => log(level, 'babysit', message, { ...fields, workspace: rt.meta.id }),
   }
 }
@@ -105,6 +111,6 @@ export async function babysitTick(rt: WorkspaceRuntime, force = false): Promise<
   } finally {
     ticking.delete(rt)
     // Queued tasks a full budget or a restart held back get their chance every tick, even when GitHub didn't answer.
-    for (const fn of tickHooks) fn(rt)
+    runTickHooks(rt)
   }
 }

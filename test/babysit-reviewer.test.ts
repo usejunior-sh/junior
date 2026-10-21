@@ -43,10 +43,11 @@ test('the request: mark ready first for a draft, then add the reviewer', () => {
 
 test('settings: defaults, then whatever is valid of what was saved', () => {
   assert.deepEqual(babysitSettingsFrom(null), DEFAULT_BABYSIT)
-  assert.deepEqual(DEFAULT_BABYSIT.models, { fix: 'opus', rebase: 'sonnet' })
-  assert.deepEqual(DEFAULT_BABYSIT.budget, { perTaskUsd: 3, perDayUsd: 20 })
+  assert.deepEqual(DEFAULT_BABYSIT.models, { fix: 'opus', rebase: 'sonnet', review: 'sonnet' })
+  assert.deepEqual(DEFAULT_BABYSIT.budget, { perTaskUsd: 3, perDayUsd: 20, perReviewUsd: 1 })
+  assert.equal(DEFAULT_BABYSIT.reviews, false)
   const s = babysitSettingsFrom({ enabled: true, models: { fix: 'claude-opus-5-5', rebase: 'bad model!' }, budget: { perTaskUsd: 5, perDayUsd: -1 }, maxRunning: 9 })
-  assert.deepEqual(s, { enabled: true, models: { fix: 'claude-opus-5-5', rebase: 'sonnet' }, budget: { perTaskUsd: 5, perDayUsd: 20 }, maxRunning: 2 })
+  assert.deepEqual(s, { enabled: true, reviews: false, models: { fix: 'claude-opus-5-5', rebase: 'sonnet', review: 'sonnet' }, budget: { perTaskUsd: 5, perDayUsd: 20, perReviewUsd: 1 }, maxRunning: 2 })
   assert.equal(modelFor('rebase', s), 'sonnet')
   assert.equal(modelFor('fix-ci', s), 'claude-opus-5-5')
   assert.equal(modelFor('fix-thread', s), 'claude-opus-5-5')

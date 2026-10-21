@@ -12,6 +12,7 @@ import { SCHEDULER_TICK_MS } from './jobs/scheduler.js'
 import { sweepGates, watchPrs } from './goal-glue.js'
 import { INBOX_KEEP_WARM_MS, syncInbox } from './inbox/sync.js'
 import { babysitTick } from './babysit/glue.js'
+import { reviewTick } from './review/glue.js'
 // the runner registers its hooks on the babysit tick when loaded
 import './tasks/runner.js'
 import { BABYSIT_FAST_MS } from '../core/babysit/watch.js'
@@ -62,6 +63,12 @@ export function startTicks() {
   // something moves, every 5 otherwise (core/babysit/watch.ts).
   setInterval(() => {
     for (const rt of runtimes.values()) babysitTick(rt).catch((err) => log('error', 'babysit', `tick failed: ${errText(err)}`, { workspace: rt.meta.id }))
+  }, BABYSIT_FAST_MS).unref()
+
+  // First-pass reviews of PRs that ask for yours: the search runs every 2
+  // minutes while they're on (core/review/watch.ts).
+  setInterval(() => {
+    for (const rt of runtimes.values()) reviewTick(rt).catch((err) => log('error', 'review', `tick failed: ${errText(err)}`, { workspace: rt.meta.id }))
   }, BABYSIT_FAST_MS).unref()
 
   // Keep the caches warm while the server runs, so page loads are instant. A

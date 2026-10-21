@@ -7,6 +7,7 @@ import { requestCommands } from '../../core/babysit/reviewer.js'
 import { BABYSIT_SETTINGS_KEY, babysitSettingsFrom, type BabysitSettings } from '../../core/babysit/settings.js'
 import type { ItemTask } from '../../core/work/tasks.js'
 import { gh, rememberReviewer } from '../babysit/glue.js'
+import { reviewTick } from '../review/glue.js'
 import { log } from '../log.js'
 import type { WorkspaceRuntime } from '../workspace/runtime.js'
 import { prOfItem, pumpTasks, tasksChanged } from './runner.js'
@@ -149,6 +150,8 @@ export async function babysitSettingsOp(rt: WorkspaceRuntime, patch?: unknown): 
   const p = (patch && typeof patch === 'object' ? patch : {}) as Partial<BabysitSettings>
   const next = babysitSettingsFrom({ ...now, ...p, models: { ...now.models, ...(p.models ?? {}) }, budget: { ...now.budget, ...(p.budget ?? {}) } })
   await rt.store.config.set(BABYSIT_SETTINGS_KEY, next)
+  // Switched on: the requests already waiting get their pass now, not in 2 minutes.
+  if (next.reviews && !now.reviews) void reviewTick(rt, true).catch((err) => log('error', 'review', `tick failed: ${errText(err)}`, { workspace: rt.meta.id }))
   // A raised budget or switching on can free queued work now.
   rt.taskBudgetHitOn = null
   void pumpTasks(rt)
