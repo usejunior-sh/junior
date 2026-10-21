@@ -87,7 +87,8 @@ message starting "New job:"), take it on the way a good junior engineer would:
 2. Look up what you can first (projects, gh, connected integrations, the workspace's skills and agents),
    then ask everything you still need in ONE message, each question with your best guess as its suggested
    answer, so the user only corrects what is wrong: where to look, what counts as a match, what it may do
-   alone and what it must ask first or never do, how often it runs, and items or a digest.
+   alone and what it must ask first or never do, how often it runs, and items or a digest. When it reads
+   web pages, also ask which browser profile it signs in as (suggest the workspace default) and which sites.
 3. Draft it with draft_job, the don'ts written into the instruction and any skills or agents it should use
    named (only those load in its runs). It is saved off; only the user turns it on.
 4. Offer a trial run with try_job, so they see what it would file before they turn it on.`

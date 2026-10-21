@@ -15,6 +15,8 @@ export type Fence = {
   bash: string[]
   /** file tools read here; always the project folder */
   root: string
+  /** more folders Read/Grep/Glob may look in, never write: a browser run's downloads */
+  readRoots: string[]
   /** Write/Edit allowed (inside root) */
   write: boolean
   /** the skills the job names: the only ones the Skill tool may load */
@@ -28,10 +30,12 @@ export function fenceFor(
   output: RunOutput,
   root: string,
   library: { skills?: string[]; agents?: string[] } = {},
+  /** browser: the job names a profile, so its runs get the browser tools; readRoots: extra read-only folders */
+  extra: { browser?: boolean; readRoots?: string[] } = {},
 ): Fence {
   const exact = new Set<string>(['TodoWrite'])
   const bash: string[] = []
-  for (const t of runAllowedTools(grants, output)) {
+  for (const t of runAllowedTools(grants, output, extra.browser)) {
     const m = /^Bash\((.+):\*\)$/.exec(t)
     if (m) bash.push(m[1])
     else exact.add(t)
@@ -40,6 +44,7 @@ export function fenceFor(
     exact,
     bash,
     root: path.resolve(root),
+    readRoots: (extra.readRoots ?? []).map((r) => path.resolve(r)),
     write: hasBuiltin(grants, 'files-write'),
     skills: new Set(library.skills ?? []),
     agents: new Set(library.agents ?? []),
@@ -79,13 +84,16 @@ export function fenceDecision(f: Fence, toolName: string, input: unknown): Fence
     if (!f.exact.has(toolName) && !(f.write && (toolName === 'Write' || toolName === 'Edit'))) {
       return { allow: false, reason: `${toolName} is not granted to this job` }
     }
+    // writes stay in the project; reads may also look in the run's read-only folders
+    const roots = toolName === 'Write' || toolName === 'Edit' ? [f.root] : [f.root, ...f.readRoots]
+    const within = (p: string) => roots.some((r) => (path.isAbsolute(p) || r === f.root) && inside(r, p))
     const target = toolName === 'Read' || toolName === 'Write' || toolName === 'Edit' ? str('file_path') : str('path')
-    if (target !== undefined && !inside(f.root, target)) {
+    if (target !== undefined && !within(target)) {
       return { allow: false, reason: `outside this job's folder (${f.root})` }
     }
     if (toolName === 'Glob') {
       const pat = str('pattern') ?? ''
-      if (path.isAbsolute(pat) && !inside(f.root, pat.replace(/[*?[{].*$/, ''))) {
+      if (path.isAbsolute(pat) && !within(pat.replace(/[*?[{].*$/, ''))) {
         return { allow: false, reason: `outside this job's folder (${f.root})` }
       }
     }

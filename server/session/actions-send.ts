@@ -13,7 +13,7 @@ import type { AgentCan, SessionEvent } from '../../shared/protocol.js'
 import type { McpServers } from '../providers/types.js'
 import { serverOf } from '../../core/actions/sort.js'
 import { resultText } from '../../core/actions/link.js'
-import { WorkspaceRuntime } from '../workspace/runtime.js'
+import { browserHub, WorkspaceRuntime } from '../workspace/runtime.js'
 import { errText } from '../errors.js'
 import { armDispatch, disarmDispatch, DISPATCH_MODEL, DISPATCH_TIMEOUT_MS, holdIfAction, isTeamWorker, moveAction, onActionChain } from './actions-hold.js'
 import { getOrRevive } from './sessions.js'
@@ -146,10 +146,11 @@ function continueJobRun(rt: WorkspaceRuntime, row: StoredSession, text: string, 
     try {
       const spec = await jobQuery(
         rt,
-        { instruction: job.instruction, tools: job.tools, project, model: job.model, output: job.output, schedule: scheduleOf(job), scope: job.scope, skills: job.skills, agents: job.agents },
+        { instruction: job.instruction, tools: job.tools, project, model: job.model, output: job.output, schedule: scheduleOf(job), scope: job.scope, skills: job.skills, agents: job.agents, browser: job.browser },
         scanMcp,
         abort,
-        budget.maxBudgetUsd != null ? { maxBudgetUsd: budget.maxBudgetUsd } : {},
+        // the redraft's tab is the run's own, keyed by its session
+        { ...(budget.maxBudgetUsd != null ? { maxBudgetUsd: budget.maxBudgetUsd } : {}), tab: row.id },
       )
       const fence = spec.veto
       if (!fence) throw new Error('no fence for this job run')
@@ -197,6 +198,7 @@ function continueJobRun(rt: WorkspaceRuntime, row: StoredSession, text: string, 
     } finally {
       clearTimeout(timer)
       rt.actionTrackers.delete(row.id)
+      if (job.browser) browserHub.forget(row.id)
       await ledger(rt, rt.store.jobRuns.finish(job.id, slot, { status, ...(reason ? { reason } : {}), sessionId: row.id, endedAt: Date.now(), ...(costUsd != null ? { costUsd } : {}) }))
       log(status === 'ok' ? 'info' : 'warn', 'job', `redraft ${status}: ${job.title}${costUsd != null ? ` — $${costUsd.toFixed(2)}` : ''}${reason ? ` — ${reason}` : ''}`, {
         jobId: job.id,

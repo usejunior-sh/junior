@@ -1,7 +1,7 @@
 import { createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk'
 import { z } from 'zod'
 import { TRIAGE_MCP_INSTRUCTIONS } from '../shared/triageContext.js'
-import { AGENTS_ARG, SKILLS_ARG } from '../core/mcp/tools.js'
+import { AGENTS_ARG, BROWSER_ARG, BROWSER_SITES_ARG, SKILLS_ARG } from '../core/mcp/tools.js'
 import { type Ask, ASK_ORDER } from '../core/work/asks.js'
 import { WorkspaceRuntime } from './workspace/runtime.js'
 import { VERSION } from './config.js'
@@ -173,6 +173,8 @@ export function makeTriageMcp(rt: WorkspaceRuntime, sessionId?: string) {
           brief_template: z.string().optional().describe('playbook to brief with, e.g. "review-requested"; default = the item’s kind'),
           skills: z.array(z.string()).optional().describe(SKILLS_ARG),
           agents: z.array(z.string()).optional().describe(AGENTS_ARG),
+          browser: z.string().optional().describe(BROWSER_ARG),
+          browser_sites: z.array(z.string()).optional().describe(BROWSER_SITES_ARG),
         },
         async (args) => {
           try {

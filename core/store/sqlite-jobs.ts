@@ -1,6 +1,6 @@
 import { DatabaseSync } from 'node:sqlite'
 import { randomUUID } from 'node:crypto'
-import { type JobConnector, type JobRunStatus, JOB_RUN_STATUSES, type JobRunTrigger, type JobBrief, type Job, JOB_NOTIFY, type JobNotify, type JobCadence, type NewJob, type JobRunStart, type JobRunResult, type NewJobSlotRun, type JobSlotFinish, type JobSlotRun, type JobSlotStatus } from '../job/types.js'
+import { type JobConnector, type JobRunStatus, JOB_RUN_STATUSES, type JobRunTrigger, type JobBrief, type JobBrowser, type Job, JOB_NOTIFY, type JobNotify, type JobCadence, type NewJob, type JobRunStart, type JobRunResult, type NewJobSlotRun, type JobSlotFinish, type JobSlotRun, type JobSlotStatus } from '../job/types.js'
 import { cronFromCadence } from '../job/cron.js'
 import { filingFromJson } from '../job/filing.js'
 import { type JobToolGrant, grantsFrom, grantsFromLegacy } from '../job/tools.js'
@@ -47,6 +47,7 @@ type JobRow = {
   skills?: string | null
   agents?: string | null
   filing?: string | null
+  browser?: string | null
   created_at: number
   updated_at: number
 }
@@ -71,11 +72,16 @@ const TRIGGERS: JobRunTrigger[] = ['scheduled', 'catch_up', 'manual', 'redraft']
 export const toTrigger = (v: string | null): JobRunTrigger | undefined =>
   TRIGGERS.includes(v as JobRunTrigger) ? (v as JobRunTrigger) : undefined
 
-/** Stored grants; a row from before grants (NULL) migrates from its legacy connectors. */
+/**
+ * Stored grants; a row from before grants (NULL) migrates from its legacy
+ * connectors. `[]` is a job with no tools but the browser, never a legacy one.
+ */
 function toGrants(raw: string | null, legacy: string | null): JobToolGrant[] {
   if (raw) {
     try {
-      const parsed = grantsFrom(JSON.parse(raw))
+      const json = JSON.parse(raw) as unknown
+      if (Array.isArray(json) && json.length === 0) return []
+      const parsed = grantsFrom(json)
       if ('grants' in parsed) return parsed.grants
     } catch {
       /* fall through to the legacy list */
@@ -93,6 +99,19 @@ function toJobBrief(raw: string | null | undefined): JobBrief | null {
       ...(typeof o.model === 'string' && o.model ? { model: o.model } : {}),
       ...(typeof o.template === 'string' && o.template ? { template: o.template } : {}),
     }
+  } catch {
+    return null
+  }
+}
+
+/** A stored job browser (`{ profile, sites? }` JSON); anything else reads as none. */
+function toJobBrowser(raw: string | null | undefined): JobBrowser | null {
+  if (!raw) return null
+  try {
+    const b = JSON.parse(raw) as { profile?: unknown; sites?: unknown }
+    if (typeof b?.profile !== 'string' || !b.profile) return null
+    const sites = Array.isArray(b.sites) ? b.sites.filter((s): s is string => typeof s === 'string' && s !== '') : []
+    return { profile: b.profile, ...(sites.length ? { sites } : {}) }
   } catch {
     return null
   }
@@ -152,6 +171,7 @@ const toJob = (r: JobRow): Job => ({
   ...(toNames(r.skills).length ? { skills: toNames(r.skills) } : {}),
   ...(toNames(r.agents).length ? { agents: toNames(r.agents) } : {}),
   ...(filingFromJson(r.filing) ? { filing: filingFromJson(r.filing)! } : {}),
+  ...(toJobBrowser(r.browser) ? { browser: toJobBrowser(r.browser)! } : {}),
   createdAt: r.created_at,
   updatedAt: r.updated_at,
 })
@@ -175,8 +195,8 @@ export class SqliteJobs implements JobStore {
         `INSERT INTO jobs (id, source, title, scope, instruction, cadence, window_start, window_day,
            schedule, enabled, creates_items, cursor, last_run_at, last_run_tokens, last_run_matches, template_id,
            tools, project_id, model, output, catch_up_window, timeout_ms, max_budget_usd, daily_budget_usd, file, notify,
-           config_error, last_run_started_at, consecutive_failures, brief, draft, skills, agents, filing, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?)`,
+           config_error, last_run_started_at, consecutive_failures, brief, draft, skills, agents, filing, browser, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         w.id, w.source, w.title, w.scope, w.instruction, w.cadence,
@@ -188,7 +208,7 @@ export class SqliteJobs implements JobStore {
         w.catchUpWindow ?? null, w.timeoutMs ?? null, w.maxBudgetUsd ?? null, w.dailyBudgetUsd ?? null, w.file ?? null, w.notify,
         w.configError ?? null, w.lastRunStartedAt ?? null,
         w.brief ? JSON.stringify(w.brief) : null, w.draft ? 1 : 0,
-        fromNames(w.skills), fromNames(w.agents), w.filing ? JSON.stringify(w.filing) : null,
+        fromNames(w.skills), fromNames(w.agents), w.filing ? JSON.stringify(w.filing) : null, w.browser ? JSON.stringify(w.browser) : null,
         w.createdAt, w.updatedAt,
       )
   }
@@ -204,7 +224,7 @@ export class SqliteJobs implements JobStore {
         `UPDATE jobs SET title = ?, scope = ?, instruction = ?, cadence = ?, window_start = ?,
            window_day = ?, schedule = ?, enabled = ?, creates_items = ?, tools = ?, project_id = ?, model = ?, output = ?,
            catch_up_window = ?, timeout_ms = ?, max_budget_usd = ?, daily_budget_usd = ?, file = ?, notify = ?,
-           brief = ?, draft = ?, skills = ?, agents = ?, filing = ?, updated_at = ? WHERE id = ?`,
+           brief = ?, draft = ?, skills = ?, agents = ?, filing = ?, browser = ?, updated_at = ? WHERE id = ?`,
       )
       .run(
         next.title, next.scope ?? '', next.instruction, next.cadence,
@@ -214,7 +234,7 @@ export class SqliteJobs implements JobStore {
         JSON.stringify(next.tools), next.projectId || null, next.model ?? null, next.output ?? 'items',
         opt(next.catchUpWindow), opt(next.timeoutMs), opt(next.maxBudgetUsd), opt(next.dailyBudgetUsd), next.file ?? null, next.notify ?? 'on_failure',
         next.brief ? JSON.stringify(next.brief) : null, next.draft ? 1 : 0,
-        fromNames(next.skills), fromNames(next.agents), next.filing ? JSON.stringify(next.filing) : null,
+        fromNames(next.skills), fromNames(next.agents), next.filing ? JSON.stringify(next.filing) : null, next.browser ? JSON.stringify(next.browser) : null,
         Date.now(), id,
       )
   }

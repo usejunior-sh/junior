@@ -7,9 +7,9 @@ import { grantLabel } from '../../core/job/tools.js'
 import type { SessionEvent } from '../../shared/protocol.js'
 import { HardStop, settleRunStatus, untilStopped } from '../../core/goals/run-guard.js'
 import { sleepWatch } from '../power.js'
-import { WorkspaceRuntime } from '../workspace/runtime.js'
+import { browserHub, WorkspaceRuntime } from '../workspace/runtime.js'
 import { ledger, type QueuedRun, RUN_KILL_GRACE_MS } from './queue.js'
-import { jobLimits, jobProject, jobQuery, noConnectorError } from './preview.js'
+import { BROWSER_NEEDS_APP, jobLimits, jobProject, jobQuery, noConnectorError } from './preview.js'
 import { broadcast, broadcastSessionList, invalidateInbox } from '../ws/send.js'
 import { noteActionEvent } from '../session/actions-record.js'
 import { makeScanMcp } from './scan-mcp.js'
@@ -80,6 +80,15 @@ export async function runJob(
     log('warn', 'job', `paused ${job.title}: its project was removed`, { jobId: job.id, workspace: rt.meta.id })
     return
   }
+  // The scheduler skips a browser job while Triage.app is closed (jobReady); a
+  // "Run now" meets the same rule here, as a skip, not a failure.
+  if (job.browser && !browserHub.status.compatible) {
+    const now = Date.now()
+    await rt.store.jobs.recordRun(job.id, { lastRunAt: now, lastRunTokens: 0, lastRunMatches: 0, status: 'skipped', trigger: run.trigger, error: `skipped: ${BROWSER_NEEDS_APP}` })
+    await ledger(rt, rt.store.jobRuns.finish(job.id, run.slot, { status: 'skipped', reason: `connector: ${BROWSER_NEEDS_APP}`, endedAt: now }))
+    log('warn', 'job', `${job.title}: skipped, ${BROWSER_NEEDS_APP}`, { jobId: job.id, workspace: rt.meta.id })
+    return
+  }
   const session = await rt.store.sessions.create({
     id: randomUUID(),
     title: `Job · ${job.title}`,
@@ -139,10 +148,10 @@ export async function runJob(
     }, runLimits.timeoutMs)
     const runSpec = await jobQuery(
       rt,
-      { instruction: job.instruction, tools: job.tools, project, model: job.model, output: job.output, schedule: scheduleOf(job), scope: job.scope, lateness, skills: job.skills, agents: job.agents, filing: job.filing },
+      { instruction: job.instruction, tools: job.tools, project, model: job.model, output: job.output, schedule: scheduleOf(job), scope: job.scope, lateness, skills: job.skills, agents: job.agents, filing: job.filing, browser: job.browser },
       scanMcp,
       abort,
-      runLimits,
+      { ...runLimits, tab: session.id },
     )
     // Past the fence, an outbound connector call is held for you, not run
     // (core/actions/queue.ts). Dry runs (previews) never hold: they record nothing.
@@ -218,6 +227,8 @@ export async function runJob(
       { jobId: job.id, runId: session.id, status, trigger: run.trigger, matches, newCount, tokens, durationMs: Date.now() - startedMs, workspace: rt.meta.id, ...(error ? { error } : {}) },
     )
     rt.actionTrackers.delete(session.id)
+    // the run's session is single-use: close its tab
+    if (job.browser) browserHub.forget(session.id)
     // Notes on an action sent back while the run was still going reach it now.
     void deliverPendingSendBacks(rt, session.id)
     notifyRun(rt, job, status, status === 'ok' ? `${newCount} new` : error)

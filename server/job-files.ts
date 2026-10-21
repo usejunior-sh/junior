@@ -14,7 +14,9 @@
  *
  * Tools are one entry per grant line: a built-in (`web`, `github`,
  * `files-write`) or `<server>/<tool>` for an MCP tool, the server as Claude
- * Code names it ("claude.ai Slack/slack_search_public").
+ * Code names it ("claude.ai Slack/slack_search_public"). `browser: <profile>`
+ * gives runs the browser pane's tools, signed in as that profile, and
+ * `browser_sites` limits where they may go.
  */
 import { createHash, randomUUID } from 'node:crypto'
 import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
@@ -34,8 +36,9 @@ import {
   type ConnectorScope,
   type JobToolGrant,
 } from '../core/job/tools.js'
-import { JOB_NOTIFY, type JobBrief, type JobNotify, type JobOutput } from '../core/job/types.js'
+import { JOB_NOTIFY, type JobBrief, type JobBrowser, type JobNotify, type JobOutput } from '../core/job/types.js'
 import { FILING_KEYS, filingFrom, filingKeys, type JobFiling } from '../core/job/filing.js'
+import { type BrowserProfile, findProfile } from '../core/browser/profiles.js'
 import type { LibrarySource } from '../shared/protocol.js'
 import { parseFrontmatter, serializeFrontmatter, type FrontmatterValue } from './artifacts.js'
 import { WORKSPACE_PLUGIN } from './library.js'
@@ -68,18 +71,23 @@ export type JobFileSpec = {
   agents?: string[]
   /** how it files: reason, labels, tiers (core/job/filing.ts) */
   filing?: JobFiling
+  /** the browser profile its runs use, and the sites they may open (`browser`, `browser_sites`) */
+  browser?: JobBrowser
   instruction: string
 }
 
 export const JOB_FILE_KEYS = [
   'id', 'title', 'schedule', 'project', 'tools', 'skills', 'agents', 'model', 'output', 'catch_up',
   'timeout', 'budget_usd', 'daily_budget_usd', 'notify', 'enabled',
-  'brief', 'brief_model', 'brief_template', 'draft',
+  'brief', 'brief_model', 'brief_template', 'draft', 'browser', 'browser_sites',
   ...FILING_KEYS,
 ] as const
 
 /** A skill or agent name as Claude calls it: `name`, or `namespace:name` for a plugin's (the workspace library is `triage:`). */
 const LIBRARY_NAME_RE = /^[A-Za-z0-9][\w.-]*(?::[A-Za-z0-9][\w.-]*)?$/
+
+/** A host a browser run may open: `app.pendo.io`, or `*.pendo.io` for it and its subdomains. Pages on this machine always open. */
+const SITE_RE = /^(\*\.)?[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$/
 
 /** A playbook name, as briefs read them (server/briefs.ts isPlaybookName). */
 const PLAYBOOK_RE = /^[a-z][a-z0-9-]{0,40}$/
@@ -161,7 +169,9 @@ export function parseJobFile(name: string, text: string): ParsedJobFile {
 
   const toolLines = Array.isArray(d.tools) ? d.tools : str(d.tools) ? [str(d.tools)] : []
   const tools = grantsFromLines(toolLines, errors)
-  if (!tools.length) errors.push('tools must list at least one integration')
+  const browser = browserFrom(d.browser, d.browser_sites, errors)
+  // the browser is an integration of its own: a job may need nothing else
+  if (!tools.length && !browser) errors.push('tools must list at least one integration')
 
   const names = (key: 'skills' | 'agents'): string[] => {
     const raw = d[key]
@@ -238,9 +248,52 @@ export function parseJobFile(name: string, text: string): ParsedJobFile {
     ...(brief ? { brief } : {}),
     ...(draftRaw === 'true' ? { draft: true } : {}),
     ...(filing ? { filing } : {}),
+    ...(browser ? { browser } : {}),
     instruction,
   }
   return { spec, errors, hadId: Boolean(id) }
+}
+
+/**
+ * `browser` + `browser_sites` → the job's browser, or nothing. The profile
+ * is checked against the registry at sync (checkBrowserProfile), not here:
+ * this stays pure. Hosts are lower-case names, never URLs. Pure.
+ */
+function browserFrom(rawProfile: FrontmatterValue | undefined, rawSites: FrontmatterValue | undefined, errors: string[]): JobBrowser | undefined {
+  const profile = str(rawProfile)
+  if (Array.isArray(rawProfile)) errors.push('browser must be one profile id or name, e.g. browser: work')
+  const list = Array.isArray(rawSites) ? rawSites.map((x) => x.trim()) : str(rawSites) ? [str(rawSites)] : []
+  const sites: string[] = []
+  for (const site of list) {
+    if (!site) continue
+    if (!SITE_RE.test(site)) errors.push(`browser_sites: "${site}" is not a host. Write app.pendo.io, or *.pendo.io for its subdomains`)
+    else if (!sites.includes(site)) sites.push(site)
+  }
+  if (!profile) {
+    if (list.length) errors.push('browser_sites needs browser: <profile> as well')
+    return undefined
+  }
+  if (profile.length > 64) {
+    errors.push('browser must be a profile id or name (Settings → Browser)')
+    return undefined
+  }
+  return { profile, ...(sites.length ? { sites } : {}) }
+}
+
+/**
+ * The job's profile against the registry (`browser-profiles.json`), by id
+ * or name. Unknown → the config error that holds the job. Pure over the
+ * list it's given.
+ */
+export function checkBrowserProfile(
+  browser: JobBrowser | undefined,
+  profiles: readonly BrowserProfile[],
+): { profile: BrowserProfile | null; errors: string[] } {
+  if (!browser) return { profile: null, errors: [] }
+  const found = findProfile(profiles, browser.profile)
+  if (found) return { profile: found, errors: [] }
+  const have = profiles.map((p) => p.name).join(', ')
+  return { profile: null, errors: [`browser: no profile named "${browser.profile.trim()}" (Settings → Browser)${have ? `. Profiles: ${have}` : ''}`] }
 }
 
 const fmtTimeout = (ms: number) => (ms % 3_600_000 === 0 ? `${ms / 3_600_000}h` : `${Math.round(ms / 60_000)}m`)
@@ -270,6 +323,10 @@ export function serializeJobFile(s: JobFileSpec): string {
     if (s.brief.template) data.brief_template = s.brief.template
   }
   if (s.draft) data.draft = 'true'
+  if (s.browser) {
+    data.browser = s.browser.profile
+    if (s.browser.sites?.length) data.browser_sites = s.browser.sites
+  }
   Object.assign(data, filingKeys(s.filing))
   return serializeFrontmatter(data, `\n${s.instruction.trim()}\n`)
 }
@@ -393,6 +450,8 @@ export function starterJobFile(projects: { id: string; name: string }[]): string
     '# brief: true             (brief every item it files — output: items only)',
     '# brief_model: sonnet     (the brief runs\' model; default = Settings → Briefs)',
     '# brief_template: job-hit (a playbook in playbooks/; default = the item\'s kind)',
+    '# browser: work           (a browser profile, Settings → Browser: runs get the browser)',
+    '# browser_sites: [app.pendo.io]  (the only sites it may open; *.pendo.io for subdomains)',
     '---',
     '',
     'What to look for, where, and what counts as a match.',

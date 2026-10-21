@@ -2,20 +2,23 @@ import { stat } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import { createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk'
 import type { Connector, Project, SessionEvent } from '../../shared/protocol.js'
-import type { JobOutput, JobPreviewResult, JobPreviewRow } from '../../core/job/types.js'
+import type { JobBrowser, JobOutput, JobPreviewResult, JobPreviewRow } from '../../core/job/types.js'
 import { grantLabel, type JobToolGrant, mcpGrants, mcpToolName, RESERVED_SERVER, runAllowedTools, runBaseTools } from '../../core/job/tools.js'
 import type { RunSpec as AgentRunSpec, McpServers } from '../providers/types.js'
 import { requireVeto } from '../providers/capabilities.js'
 import { composeRunPrompt, MAX_ROWS_PER_RUN } from '../../core/job/connectors.js'
 import { lookbackMs } from '../../core/job/schedule.js'
-import { checkLibrary } from '../job-files.js'
+import { checkBrowserProfile, checkLibrary } from '../job-files.js'
 import { WORKSPACE_PLUGIN } from '../library.js'
 import { fenceDecision, fenceFor } from '../../core/job/fence.js'
 import { personaAppend } from '../../core/junior/persona.js'
 import { safeWhen } from '../../core/sources/slack.js'
 import { dryRunDecision, isArgsObject } from '../../core/actions/queue.js'
 import { log } from '../log.js'
-import { WorkspaceRuntime } from '../workspace/runtime.js'
+import { browserGateFor, browserHub, browserMcpFor, WorkspaceRuntime } from '../workspace/runtime.js'
+import { listProfiles } from '../browser/profiles.js'
+import { downloadDirFor } from '../browser.js'
+import type { BrowserProfile } from '../../core/browser/profiles.js'
 import { readSettings } from '../settings-ops.js'
 import { probeConnectors } from '../workspace/probes.js'
 import { jobLibrary } from '../session/changes.js'
@@ -37,6 +40,10 @@ export type JobPreview = {
 }
 const PREVIEW_TTL_MS = 15 * 60_000
 
+/** Why a browser job can't run: the pane lives in Triage.app. The job page matches "needs Triage.app" in a skip's reason: keep it. */
+export const BROWSER_NEEDS_APP = 'the browser needs Triage.app open'
+const BROWSER_PREFIX = mcpToolName('browser', '')
+
 /** What a run (real or dry) is made of: the job as saved, or the form as it stands. */
 type RunSpec = {
   instruction: string
@@ -52,6 +59,8 @@ type RunSpec = {
   agents?: string[]
   /** how it files: reason, labels, tiers */
   filing?: JobFiling
+  /** the browser profile and sites, when the job names one */
+  browser?: JobBrowser
 }
 
 type PreviewSpec = Omit<RunSpec, 'project'> & { projectId: string }
@@ -125,10 +134,20 @@ export async function jobQuery(
   spec: RunSpec,
   triage: McpServers[string],
   abort: AbortController,
-  extra: { maxBudgetUsd?: number; includePartialMessages?: boolean } = {},
+  /** tab: the browser tab's key, the run's session id (a dry run's preview id); a browser job without one gets no browser */
+  extra: { maxBudgetUsd?: number; includePartialMessages?: boolean; tab?: string } = {},
 ): Promise<AgentRunSpec> {
   // The fence below is the whole safety story: no veto, no run.
   requireVeto(rt.provider, 'job')
+  // The browser: the job's profile, checked again (it may have been removed
+  // since the file was), and Triage.app open to host the tab.
+  let browser: { profile: BrowserProfile; sites?: string[]; tab: string } | null = null
+  if (spec.browser && extra.tab) {
+    const found = checkBrowserProfile(spec.browser, listProfiles())
+    if (!found.profile) throw new Error(found.errors.join('; '))
+    if (!browserHub.status.compatible) throw new Error(BROWSER_NEEDS_APP)
+    browser = { profile: found.profile, ...(spec.browser.sites?.length ? { sites: spec.browser.sites } : {}), tab: extra.tab }
+  }
   const folder = await folderMcpServers(rt, spec.project.path)
   const granted = new Set(mcpGrants(spec.tools).map((g) => g.source.server))
   const folderServers = Object.fromEntries(Object.entries(folder.servers).filter(([name]) => granted.has(name)))
@@ -153,6 +172,7 @@ export async function jobQuery(
     ...(spec.skills?.length ? { skills: spec.skills } : {}),
     ...(spec.agents?.length ? { agents: spec.agents } : {}),
     ...(spec.filing ? { filing: spec.filing } : {}),
+    ...(browser ? { browser: { profile: browser.profile.name, ...(browser.sites ? { sites: browser.sites } : {}) } } : {}),
   })
   // A job's skills and agents: only the ones it names load, checked again
   // here: the library may have changed since the file was. The workspace
@@ -165,7 +185,10 @@ export async function jobQuery(
   }
   const extraTools = [...(skills.length ? ['Skill'] : []), ...(agents.length ? ['Agent'] : [])]
   const fromLibrary = [...skills, ...agents].some((n) => n.startsWith(`${WORKSPACE_PLUGIN}:`))
-  const fence = fenceFor(spec.tools, spec.output, spec.project.path, { skills, agents })
+  const fence = fenceFor(spec.tools, spec.output, spec.project.path, { skills, agents }, browser ? { browser: true, readRoots: [downloadDirFor(browser.tab)] } : {})
+  // Past the fence, the browser's own gate: sites, commit clicks, passwords (server/browser/gate.ts).
+  const tab = browser ? { id: browser.tab, cwd: spec.project.path } : null
+  const gate = tab ? browserGateFor(tab, { mode: 'job', ...(browser?.sites ? { sites: browser.sites } : {}) }) : null
   return {
     prompt,
     // A job run is Junior's too: its name and voice, and the one rule an unattended run can keep.
@@ -173,16 +196,24 @@ export async function jobQuery(
     cwd: spec.project.path,
     userConfig: true,
     tools: [...runBaseTools(spec.tools), ...extraTools],
-    allowedTools: [...runAllowedTools(spec.tools, spec.output), ...extraTools],
+    allowedTools: [...runAllowedTools(spec.tools, spec.output, !!browser), ...extraTools],
     ...(skills.length ? { skills } : {}),
     ...(fromLibrary ? { plugins: [rt.libraryDir] } : {}),
     ...(disallowedTools.length ? { disallowedTools } : {}),
     unattended: true,
-    veto: (toolName, input) => fenceDecision(fence, toolName, input),
+    veto: async (toolName, input) => {
+      const d = fenceDecision(fence, toolName, input)
+      if (!d.allow || !gate || !toolName.startsWith(BROWSER_PREFIX)) return d
+      return (await gate(toolName, input)) ?? d
+    },
     ...(spec.model ? { model: spec.model } : {}),
     ...(extra.maxBudgetUsd != null ? { maxBudgetUsd: extra.maxBudgetUsd } : {}),
     ...(extra.includePartialMessages ? { streamDeltas: true } : {}),
-    mcpServers: { ...folderServers, triage },
+    mcpServers: {
+      ...folderServers,
+      triage,
+      ...(tab && browser ? { browser: browserMcpFor(rt, tab, { mode: 'job', profile: browser.profile.id, ...(browser.sites ? { sites: browser.sites } : {}) }) } : {}),
+    },
     abort,
     ...(rt.env ? { env: rt.env } : {}),
   }
@@ -198,7 +229,9 @@ export async function jobProject(rt: WorkspaceRuntime, projectId: string): Promi
 }
 
 export const noConnectorError = (tools: JobToolGrant[]) =>
-  `no connector tools — connect ${tools.map(grantLabel).join(', ')} for Claude (claude.ai/settings/connectors, or the project's MCP config)`
+  tools.length
+    ? `no connector tools — connect ${tools.map(grantLabel).join(', ')} for Claude (claude.ai/settings/connectors, or the project's MCP config)`
+    : `no browser tools — ${BROWSER_NEEDS_APP}`
 
 /**
  * Start a dry run of a job as the form currently describes it. Same prompt,
@@ -266,7 +299,7 @@ export async function runJobPreview(rt: WorkspaceRuntime, pv: JobPreview, spec: 
     const project = await jobProject(rt, spec.projectId)
     const limits = await jobLimits(rt, {})
     timer = setTimeout(() => abort.abort(), limits.timeoutMs)
-    const previewSpec = await jobQuery(rt, { ...spec, project }, collector, abort, { ...limits, includePartialMessages: true })
+    const previewSpec = await jobQuery(rt, { ...spec, project }, collector, abort, { ...limits, includePartialMessages: true, tab: pv.id })
     // A dry run never sends: past the fence, anything that counts as an action
     // (a connector write, an outbound command) is refused and listed instead.
     const fence = previewSpec.veto
@@ -309,6 +342,8 @@ export async function runJobPreview(rt: WorkspaceRuntime, pv: JobPreview, spec: 
     log('warn', 'job', `preview failed: ${pv.error}`, { previewId: pv.id, workspace: rt.meta.id })
   } finally {
     if (timer) clearTimeout(timer)
+    // the dry run's tab is single-use: close it
+    if (spec.browser) browserHub.forget(pv.id)
     setTimeout(() => rt.previews.delete(pv.id), PREVIEW_TTL_MS).unref()
   }
 }

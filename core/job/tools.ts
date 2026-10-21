@@ -70,6 +70,16 @@ export const PROJECT_TOOLS = [
   'Bash(git log:*)', 'Bash(git show:*)', 'Bash(git diff:*)', 'Bash(git status:*)', 'Bash(git blame:*)',
 ]
 
+/**
+ * A job with `browser:` gets these from the browser pane's server (.docs/browser.md).
+ * No browser_eval (arbitrary script), checkpoint or compare: an unattended run reads
+ * pages, it doesn't verify a build. The `browser` gate still judges every call.
+ */
+export const BROWSER_JOB_TOOLS = [
+  'browser_open', 'browser_snapshot', 'browser_screenshot', 'browser_act', 'browser_fill',
+  'browser_wait', 'browser_logs', 'browser_viewport', 'browser_extract',
+].map((t) => mcpToolName('browser', t))
+
 export const BUILTIN_TOOLS: Record<BuiltinToolId, string[]> = {
   web: WEB_TOOLS,
   github: GITHUB_TOOLS,
@@ -199,10 +209,14 @@ export type RunOutput = 'items' | 'digest'
 export const triageWriteTool = (output: RunOutput): string =>
   output === 'digest' ? 'mcp__triage__write_digest' : 'mcp__triage__upsert_work_item'
 
-/** The exact tools a run may call: its grants, the project's read tools, and its one triage write tool. */
-export function runAllowedTools(grants: JobToolGrant[], output: RunOutput = 'items'): string[] {
+/**
+ * The exact tools a run may call: its grants, the project's read tools, its
+ * one triage write tool, and the browser's when the job names a profile.
+ */
+export function runAllowedTools(grants: JobToolGrant[], output: RunOutput = 'items', browser = false): string[] {
   const tools = new Set<string>(['ToolSearch', triageWriteTool(output), ...PROJECT_TOOLS])
   for (const g of grants) for (const t of g.tools) tools.add(t)
+  if (browser) for (const t of BROWSER_JOB_TOOLS) tools.add(t)
   return [...tools]
 }
 

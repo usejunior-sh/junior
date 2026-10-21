@@ -29,6 +29,11 @@ export type ToolResult = { text: string; isError: boolean }
 export const SKILLS_ARG =
   'skills the runs may load, as Claude calls them: triage:<name> for the workspace library, <name> for personal ones, <plugin>:<name>. Only these load; omit for none'
 export const AGENTS_ARG = 'subagents the runs may hand work to, named the same way. Only these start; omit for none'
+/** draft_job's browser arguments: when to set them, and the question to ask first. */
+export const BROWSER_ARG =
+  'a browser profile id or name (Settings → Browser) when the job reads web pages, e.g. a dashboard the user signs in to. Runs get the browser, signed in as it, and may read but never press Send or Save. Ask which profile first, suggesting the workspace default'
+export const BROWSER_SITES_ARG =
+  'with browser: the only hosts runs may open, e.g. ["app.pendo.io"] or ["*.pendo.io"]; take them from the pages the job reads. Default = any site'
 
 /** The MCP revision both transports speak. */
 export const PROTOCOL_VERSION = '2024-11-05'
@@ -147,6 +152,8 @@ export const TOOLS = [
         brief_template: { type: 'string', description: 'playbook to brief with, e.g. "review-requested"; default = the item’s kind' },
         skills: { type: 'array', items: { type: 'string' }, description: SKILLS_ARG },
         agents: { type: 'array', items: { type: 'string' }, description: AGENTS_ARG },
+        browser: { type: 'string', description: BROWSER_ARG },
+        browser_sites: { type: 'array', items: { type: 'string' }, description: BROWSER_SITES_ARG },
       },
       required: ['title', 'schedule', 'instruction'],
     },

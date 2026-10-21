@@ -81,6 +81,17 @@ export interface JobBrief {
   template?: string
 }
 
+/**
+ * A job whose runs use the browser pane (.docs/browser.md): the profile they
+ * are signed in as, and the sites they may open. Absent = no browser.
+ */
+export interface JobBrowser {
+  /** a profile id or name, as the file writes it; resolved to an id when a run starts */
+  profile: string
+  /** hosts `browser_open` may load (`*.pendo.io` covers its subdomains); omitted = any site */
+  sites?: string[]
+}
+
 export interface Job {
   id: string
   /** slack only (connector-neutral machinery; Slack lives in the prompt) */
@@ -160,6 +171,8 @@ export interface Job {
   agents?: string[]
   /** how it files: reason, labels, tiers (filing.ts); omitted = found, any label, no tiers */
   filing?: import('./filing.js').JobFiling
+  /** the browser profile and sites its runs use; omitted = no browser */
+  browser?: JobBrowser
   createdAt: number
   updatedAt: number
 }
@@ -183,6 +196,8 @@ export type NewJob = Pick<Job, 'title' | 'instruction' | 'schedule' | 'createsIt
   agents?: string[] | null
   /** null = the default filing */
   filing?: import('./filing.js').JobFiling | null
+  /** null = no browser */
+  browser?: JobBrowser | null
   /** legacy; defaults to a coarse bucket when omitted */
   cadence?: JobCadence
   windowStart?: string

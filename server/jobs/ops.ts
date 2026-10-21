@@ -1,10 +1,10 @@
 import { rmdir } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
-import { type Job, JOB_OUTPUTS, type JobBrief, type JobOutput } from '../../core/job/types.js'
+import { type Job, JOB_OUTPUTS, type JobBrief, type JobBrowser, type JobOutput } from '../../core/job/types.js'
 import type { JobFiling } from '../../core/job/filing.js'
 import { type JobToolGrant, presetGrant, RESERVED_SERVER } from '../../core/job/tools.js'
 import { log } from '../log.js'
-import { checkGrants, checkLibrary, grantsFromLines, type JobFileSpec, type JobLibrary, parseJobFile, serializeJobFile, withKey } from '../job-files.js'
+import { checkBrowserProfile, checkGrants, checkLibrary, grantsFromLines, type JobFileSpec, type JobLibrary, parseJobFile, serializeJobFile, withKey } from '../job-files.js'
 import { scheduleOf } from '../../core/job/schedule.js'
 import type { JobFileReference, Project } from '../../shared/protocol.js'
 import { vetoRefusal } from '../providers/capabilities.js'
@@ -15,6 +15,7 @@ import { jobLibrary } from '../session/changes.js'
 import { defaultProject } from '../session/sessions.js'
 import { type JobPreview, runJobPreview } from './preview.js'
 import { invalidateInbox } from '../ws/send.js'
+import { listProfiles } from '../browser/profiles.js'
 
 /**
  * The Slack job (M4): seeded on, the way Slack work reaches the inbox. One
@@ -119,6 +120,7 @@ function jobConfigFrom(spec: JobFileSpec, file: string) {
     skills: spec.skills ?? null,
     agents: spec.agents ?? null,
     filing: spec.filing ?? null,
+    browser: spec.browser ?? null,
     file,
   }
 }
@@ -145,12 +147,13 @@ export function jobSpecFrom(w: Job): JobFileSpec {
     ...(w.skills?.length ? { skills: w.skills } : {}),
     ...(w.agents?.length ? { agents: w.agents } : {}),
     ...(w.filing ? { filing: w.filing } : {}),
+    ...(w.browser ? { browser: w.browser } : {}),
     instruction: w.instruction,
   }
 }
 
 type JobConfig = ReturnType<typeof jobConfigFrom>
-const configKey = (w: Pick<Job, Exclude<keyof JobConfig, 'catchUpWindow' | 'timeoutMs' | 'maxBudgetUsd' | 'dailyBudgetUsd' | 'brief' | 'draft' | 'skills' | 'agents' | 'filing'>> & {
+const configKey = (w: Pick<Job, Exclude<keyof JobConfig, 'catchUpWindow' | 'timeoutMs' | 'maxBudgetUsd' | 'dailyBudgetUsd' | 'brief' | 'draft' | 'skills' | 'agents' | 'filing' | 'browser'>> & {
   catchUpWindow?: string | null
   timeoutMs?: number | null
   maxBudgetUsd?: number | null
@@ -160,12 +163,14 @@ const configKey = (w: Pick<Job, Exclude<keyof JobConfig, 'catchUpWindow' | 'time
   skills?: string[] | null
   agents?: string[] | null
   filing?: JobFiling | null
+  browser?: JobBrowser | null
 }) =>
   JSON.stringify([
     w.title, w.instruction, w.schedule, w.tools, w.projectId || '', w.model ?? null, w.output, w.catchUpWindow ?? null,
     w.timeoutMs ?? null, w.maxBudgetUsd ?? null, w.dailyBudgetUsd ?? null, w.notify, w.enabled, w.file ?? null,
     w.brief ? [w.brief.model ?? null, w.brief.template ?? null] : null, !!w.draft,
     w.skills?.length ? w.skills : null, w.agents?.length ? w.agents : null, w.filing ?? null,
+    w.browser ? [w.browser.profile, w.browser.sites ?? null] : null,
   ])
 
 /**
@@ -190,8 +195,11 @@ async function syncJobFilesNow(rt: WorkspaceRuntime, { force = false, deferFirst
   // only listed when a job names a skill or an agent. A skill removed later holds that job at the next tick
   const named = files.some((f) => /^(skills|agents)\s*:/m.test(f.text))
   const lib: JobLibrary = named ? await jobLibrary(rt) : { skills: new Map(), agents: new Map() }
+  // a profile renamed or removed in Settings → Browser holds the jobs that name it
+  const browsing = files.some((f) => /^browser\s*:/m.test(f.text))
   const sig = JSON.stringify([
     named ? [[...lib.skills], [...lib.agents]] : null,
+    browsing ? listProfiles().map((p) => [p.id, p.name]) : null,
     rt.provider.id,
     files.map((f) => [f.name, f.mtimeMs]),
     projects.map((p) => [p.id, p.path]),
@@ -236,6 +244,7 @@ async function syncJobFilesNow(rt: WorkspaceRuntime, { force = false, deferFirst
         skills: cfg.skills ?? undefined,
         agents: cfg.agents ?? undefined,
         filing: cfg.filing ?? undefined,
+        browser: cfg.browser ?? undefined,
         ...(configError ? { configError } : {}),
         // never run → due at once ("run once now"), unless the creator said wait
         ...(deferFirstRun === spec.id ? { lastRunStartedAt: now } : {}),
@@ -279,7 +288,8 @@ function checkJobSpec(rt: WorkspaceRuntime, spec: JobFileSpec, projects: Project
   if (refusal) errors.push(refusal)
   const probes = [rt.connectorCache, project ? rt.folderProbes.get(project.path) : undefined].filter((p): p is ConnectorProbe => p != null)
   const checked = checkGrants(spec.tools, probes.length ? probes.flatMap((p) => p.connectors) : null)
-  return { tools: checked.tools, errors: [...errors, ...checked.errors, ...checkLibrary(spec, lib)] }
+  const browser = spec.browser ? checkBrowserProfile(spec.browser, listProfiles()).errors : []
+  return { tools: checked.tools, errors: [...errors, ...checked.errors, ...checkLibrary(spec, lib), ...browser] }
 }
 
 /** The editor's side list: project ids, every tool line the probes know, the skills and agents a job may name. */
@@ -358,11 +368,15 @@ export async function draftJobOp(rt: WorkspaceRuntime, raw: unknown): Promise<{ 
   if (!project) throw new Error(want ? `no project "${want}" — pass a project id or name: ${projects.map((p) => p.name).join(', ')}` : 'this workspace has no project yet')
 
   const errors: string[] = []
+  const names = (k: string) => (Array.isArray(r[k]) ? (r[k] as unknown[]).filter((x): x is string => typeof x === 'string' && x.trim() !== '').map((x) => x.trim()) : [])
+  // a browser job may need nothing but the browser; parseJobFile checks the sites
+  const sites = names('browser_sites')
+  const browser = text('browser') ? { profile: text('browser'), ...(sites.length ? { sites } : {}) } : undefined
+  if (!browser && sites.length) errors.push('browser_sites needs browser: the profile the runs use')
   const lines = Array.isArray(r.tools) ? r.tools.filter((t): t is string => typeof t === 'string') : []
-  const tools = grantsFromLines(lines.length ? lines : ['web'], errors)
+  const tools = grantsFromLines(lines.length ? lines : browser ? [] : ['web'], errors)
   const output = text('output') || 'items'
   if (!JOB_OUTPUTS.includes(output as JobOutput)) errors.push(`output must be one of: ${JOB_OUTPUTS.join(', ')}`)
-  const names = (k: string) => (Array.isArray(r[k]) ? (r[k] as unknown[]).filter((x): x is string => typeof x === 'string' && x.trim() !== '').map((x) => x.trim()) : [])
   const skills = names('skills')
   const agents = names('agents')
   const brief = r.brief === true ? { ...(text('brief_model') ? { model: text('brief_model') } : {}), ...(text('brief_template') ? { template: text('brief_template') } : {}) } : undefined
@@ -380,6 +394,7 @@ export async function draftJobOp(rt: WorkspaceRuntime, raw: unknown): Promise<{ 
     draft: true,
     ...(skills.length ? { skills } : {}),
     ...(agents.length ? { agents } : {}),
+    ...(browser ? { browser } : {}),
     instruction,
   }
   // The file's own schema is the check: what it would refuse, this refuses.
@@ -434,6 +449,7 @@ export async function tryJobOp(rt: WorkspaceRuntime, raw: unknown): Promise<stri
     skills: job.skills,
     agents: job.agents,
     filing: job.filing,
+    browser: job.browser,
   })
   if (pv.status !== 'ready' || !pv.result) throw new Error(pv.error ?? 'the trial run ended without a result')
   const res = pv.result

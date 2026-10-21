@@ -28,6 +28,22 @@ const SERVER_HOW_TO: Record<string, string> = {
   'claude.ai Linear': 'Linear: list and read issues, teams, projects and comments through the Linear tools. Find the team or label the instructions name by searching; never assume a key. The issue URL (or its key, e.g. PX-123) identifies an issue.',
 }
 
+/**
+ * The browser paragraph: which profile the run is signed in as, where it may
+ * go, and that it reads and never commits (the gate refuses those clicks anyway).
+ */
+export function browserHowTo(b: { profile: string; sites?: string[] }): string {
+  const where = b.sites?.length
+    ? `You may open only ${b.sites.join(', ')} (a *. name covers its subdomains), plus pages on this machine.`
+    : 'You may open any site, plus pages on this machine.'
+  return [
+    `Browser: you have Triage's browser, signed in as the user's "${b.profile}" profile. Open a page with browser_open, read it with browser_snapshot (pass find to narrow a big page) or browser_extract, and wait for it with browser_wait. Its URL identifies a find.`,
+    where,
+    "You may type, scroll and follow links. You can't press Send, Submit, Save or anything else that changes something: the run refuses it. Record what you found with your write tool instead.",
+    'Never sign in or type a password. If a page asks you to log in, stop and say the profile needs signing in (Settings → Browser).',
+  ].join(' ')
+}
+
 function howTo(g: JobToolGrant): string {
   if (g.source.kind === 'builtin') return BUILTIN_HOW_TO[g.source.id]
   return (
@@ -59,6 +75,8 @@ export function composeRunPrompt(w: {
   agents?: string[]
   /** how it files: reason, labels, tiers */
   filing?: JobFiling
+  /** the browser profile (its name) and sites, when the job names one */
+  browser?: { profile: string; sites?: string[] }
 }): string {
   const deferred = runDeferredTools(w.tools)
   const span = humanSpan(w.lookbackMs)
@@ -69,8 +87,9 @@ export function composeRunPrompt(w: {
     deferred.length
       ? `Your tools are deferred: before anything else, call ToolSearch with "select:${deferred.join(',')}" to load their schemas, then use them. Never call a tool you have not loaded.`
       : '',
-    `Integrations you may use: ${w.tools.map(grantLabel).join(', ')}.`,
+    `Integrations you may use: ${[...w.tools.map(grantLabel), ...(w.browser ? ['Browser'] : [])].join(', ')}.`,
     ...w.tools.map(howTo),
+    w.browser ? browserHowTo(w.browser) : '',
     `Project: the folder ${w.project.path} (${w.project.name}) is your working directory and the only folder you may read. Read code with Read/Grep/Glob and git log/show/diff when the instructions need it.`,
     w.skills?.length ? `Skills you may load with the Skill tool, when the instructions call for them: ${w.skills.join(', ')}. No others.` : '',
     w.agents?.length

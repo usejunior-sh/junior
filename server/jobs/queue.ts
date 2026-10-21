@@ -6,11 +6,12 @@ import { decide, humanSpan, parseCatchUp, scheduleOf, type SkipReason } from '..
 import { log } from '../log.js'
 import { power, sleepWatch } from '../power.js'
 import { settleRunStatus } from '../../core/goals/run-guard.js'
-import { type ConnectorProbe, WorkspaceRuntime } from '../workspace/runtime.js'
+import { browserHub, type ConnectorProbe, WorkspaceRuntime } from '../workspace/runtime.js'
 import { jobsEnabled } from '../settings-ops.js'
 import { syncJobFiles } from './ops.js'
 import { SCHEDULER_TICK_MS } from './scheduler.js'
 import { runJob } from './run.js'
+import { BROWSER_NEEDS_APP } from './preview.js'
 
 /** how many job runs may execute at once (avoid the top-of-hour stampede) */
 const JOB_CONCURRENCY = 2
@@ -29,9 +30,11 @@ export type QueuedRun = { id: string; trigger: JobRunTrigger; slot: number }
  * Is every MCP server this job uses up, per the latest probes? Only a server
  * the probe positively reports broken (needs auth, failed, disabled) blocks a
  * run. A server missing from a stale probe gets the benefit of the doubt, and
- * a run that truly can't reach it fails loudly with no-connector-tools.
+ * a run that truly can't reach it fails loudly with no-connector-tools. The
+ * browser lives in Triage.app: a job that uses it skips while the app is closed.
  */
 function jobReady(rt: WorkspaceRuntime, w: Job, project: Project | null): true | string {
+  if (w.browser && !browserHub.status.compatible) return BROWSER_NEEDS_APP
   const probes = [rt.connectorCache, project ? rt.folderProbes.get(project.path) : undefined].filter(
     (p): p is ConnectorProbe => p != null,
   )
