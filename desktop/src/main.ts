@@ -54,10 +54,12 @@ let browser: BrowserHost | null = null
 // An unpackaged app (`npm start` in desktop/) is the dev app: its own data
 // folder, so it never shares the installed app's single-instance lock, which
 // would quit it on launch and bring the installed window forward instead, nor its window state or the browser pane's cookies.
-if (!app.isPackaged) {
-  app.setName('Triage Dev')
-  app.setPath('userData', path.join(app.getPath('appData'), 'Triage Dev'))
-}
+// TRIAGE_APP_USER_DATA gives either app a folder of its own (QA runs), so it
+// never touches a real login, lock or window state.
+if (!app.isPackaged) app.setName('Triage Dev')
+const userData = process.env.TRIAGE_APP_USER_DATA?.trim()
+if (userData) app.setPath('userData', path.resolve(userData))
+else if (!app.isPackaged) app.setPath('userData', path.join(app.getPath('appData'), 'Triage Dev'))
 
 if (!app.requestSingleInstanceLock()) {
   app.quit()
@@ -523,8 +525,19 @@ function saveWindowState() {
   }
 }
 
-app.on('before-quit', () => {
+// The browser's cookies hit the disk once, before the first quit goes ahead
+// (a login made a few seconds before ⌘Q would otherwise be lost), then its
+// tabs and parking window close, so nothing holds the quit up.
+let flushed = false
+app.on('before-quit', (e) => {
   quitting = true
+  if (flushed || !browser) return
+  flushed = true
+  e.preventDefault()
+  void Promise.race([browser.flush(), new Promise((r) => setTimeout(r, 2000))]).finally(() => {
+    browser?.shutdown()
+    app.quit()
+  })
 })
 app.on('will-quit', stopCapture)
 app.on('activate', showWindow)

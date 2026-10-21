@@ -1,38 +1,56 @@
 /**
  * The browser pane's host (.docs/browser.md). Each triage session gets its own
- * tab, a WebContentsView in its own partition, no preload, sandboxed, shown
- * in whichever window's pane is on that session, else parked in a hidden
+ * tab, a WebContentsView in its profile's partition, no preload, sandboxed,
+ * shown in whichever window's pane is on that session, else parked in a hidden
  * window where it keeps rendering, so the agent can screenshot it while you
  * look at something else.
  *
  * The agent never talks to this file directly: the daemon dials in nothing,
  * we dial it (`/browser-host`) and run the verbs it sends, each scoped to one
- * session's tab. The debugger is only ever attached to tabs, never to a
- * triage window.
+ * session's tab, in the profile the frame names. The daemon decides profiles
+ * and remembers tabs; the app never does. The debugger is only ever attached
+ * to tabs, never to a triage window or a sign-in window.
  */
-import { BrowserWindow, ipcMain, session as electronSession, WebContentsView, type IpcMainEvent, type IpcMainInvokeEvent, type Rectangle } from 'electron'
+import {
+  app,
+  BrowserWindow,
+  clipboard,
+  ipcMain,
+  Menu,
+  shell,
+  WebContentsView,
+  type BrowserWindowConstructorOptions,
+  type ContextMenuParams,
+  type IpcMainEvent,
+  type IpcMainInvokeEvent,
+  type MenuItemConstructorOptions,
+  type Rectangle,
+  type WebContents,
+} from 'electron'
+import path from 'node:path'
+import { downloadsDir, Jars, sweepDroppedJars, type JarTab } from './browser-jar.js'
+import { openSignInWindow } from './browser-popup.js'
+import {
+  partitionOf,
+  PROFILE_ID_RE,
+  TAB_KEY_RE,
+  WIRE_VERSION,
+  type CallFrame,
+  type ColorScheme,
+  type HostFrame,
+  type PageDialog,
+  type PageLog,
+  type ProfileFrame,
+  type ProfileId,
+  type TabState,
+  type Viewport,
+} from './browser-wire.js'
 import { PORT } from './daemon.js'
 
-// The wire: a copy of core/browser/wire.ts, since desktop can't import outside src/
-
-const WIRE_VERSION = 1
-type Viewport = { width: number; height: number; deviceScaleFactor: number; mobile: boolean }
-type ColorScheme = 'dark' | 'light' | null
-type HostVerb =
-  | { verb: 'open'; url: string; wait: 'load' | 'idle' }
-  | { verb: 'cdp'; method: string; params?: Record<string, unknown> }
-  | { verb: 'viewport'; viewport: Viewport | null; colorScheme?: ColorScheme }
-  | { verb: 'flash'; backendNodeId: number }
-  | { verb: 'state' }
-  | { verb: 'close' }
-type CallFrame = { type: 'call'; id: number; sessionId: string } & HostVerb
-type PageLog = { level: 'error' | 'warning' | 'info'; source: 'console' | 'exception' | 'network'; text: string; url?: string; at: number }
-
-const PARTITION = 'persist:triage-browser'
-const DEFAULT_VIEWPORT: Viewport = { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false }
+const DESKTOP: Viewport = { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false }
 const PRESETS: Record<string, Viewport | null> = {
   fit: null,
-  desktop: DEFAULT_VIEWPORT,
+  desktop: DESKTOP,
   laptop: { width: 1280, height: 800, deviceScaleFactor: 1, mobile: false },
   tablet: { width: 820, height: 1180, deviceScaleFactor: 2, mobile: true },
   mobile: { width: 390, height: 844, deviceScaleFactor: 2, mobile: true },
@@ -41,7 +59,13 @@ const MAX_TABS = 8
 const IDLE_CLOSE_MS = 15 * 60_000
 /** Input within this long of an agent call is the agent's, not yours. */
 const AGENT_QUIET_MS = 1500
+/** A click this recent is what lets a page hand a mailto: or zoommtg: link to another app. */
+const USER_GESTURE_MS = 10_000
 const FLASH_MS = 700
+/** The daemon remembers a tab's URL, title, viewport and scheme; this often at most. */
+const REMEMBER_MS = 500
+const POPUP_SIZE = { width: 520, height: 680 }
+const POPUP_MAX_MS = 10 * 60_000
 
 /** What the web UI's pane shows for one session's tab. */
 export type PaneState = {
@@ -57,32 +81,70 @@ export type PaneState = {
   /** an agent call is running on this tab right now */
   agentBusy: boolean
   picking: boolean
+  /** the profile (cookie jar) the tab is in */
+  profile: ProfileId | null
+  /** a sign-in window the tab opened, still open */
+  popup: { url: string } | null
+  /** a JavaScript dialog blocking the page */
+  dialog: PageDialog | null
+  /** the last main-frame load failed (`code` is Chromium's, e.g. ERR_CONNECTION_REFUSED), or the page crashed (`crashed`) */
+  error: { code: string; url: string } | null
 }
+
+/** The keys a tab hands to its pane instead of the page (or the app menu, where ⌘R would reload Triage). */
+type PaneKey = 'focus-url' | 'find' | 'reload' | 'back' | 'forward'
 
 type Pane = { win: BrowserWindow; sessionId: string | null; rect: Rectangle | null }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
-class Tab {
+const NO_TAB: TabState = { exists: false, url: '', title: '', loading: false, viewport: null, colorScheme: null, profile: null, popup: null, dialog: null }
+
+/**
+ * Where a page's window.open goes. A sign-in popup (a features string or a
+ * named window, without noopener) needs a real window: "Sign in with Google"
+ * talks back through window.opener. Everything else (target=_blank, a plain
+ * window.open) stays in the tab: one session, one page.
+ */
+function isSignInPopup(disposition: string, frameName: string, features: string): boolean {
+  return disposition === 'new-window' || (!!frameName && !/(^|,)\s*noopener\b/i.test(features))
+}
+
+class Tab implements JarTab {
   readonly view: WebContentsView
-  viewport: Viewport | null = DEFAULT_VIEWPORT
+  /** null = fit the pane, like a browser; Junior or the viewport menu sets a size */
+  viewport: Viewport | null = null
   colorScheme: ColorScheme = null
   /** the pane's zoom: agent coordinates (CSS px) × scale = view px */
   scale = 1
   inflight = 0
+  /** opens you sent from the pane (`open.byUser`) running now: their navigations are yours */
+  userOpen = 0
   lastAgentAt = 0
+  lastUserAt = 0
   lastUsed = Date.now()
   picking = false
+  /** the text of the find in progress: the same text again is "next match" */
+  findText = ''
+  /** the sign-in window and the page in it */
+  popup: BrowserWindow | null = null
+  popupPage: WebContents | null = null
+  popupUrl = ''
+  dialog: PageDialog | null = null
+  error: { code: string; url: string } | null = null
   private requests = new Map<string, { method: string; url: string }>()
   private lastTouchSent = 0
+  private rememberTimer: NodeJS.Timeout | null = null
 
   constructor(
-    readonly sessionId: string,
+    readonly key: string,
+    readonly profile: ProfileId,
+    partition: string,
     private readonly host: BrowserHost,
   ) {
     this.view = new WebContentsView({
       webPreferences: {
-        partition: PARTITION,
+        partition,
         sandbox: true,
         contextIsolation: true,
         nodeIntegration: false,
@@ -92,30 +154,79 @@ class Tab {
     })
     this.view.setBackgroundColor('#ffffff')
     const wc = this.view.webContents
-    wc.setWindowOpenHandler(({ url }) => {
-      // target=_blank stays in this tab: one session, one page
+    wc.setWindowOpenHandler(({ url, frameName, features, disposition }) => {
+      if (isSignInPopup(disposition, frameName, features) && /^(https?:|about:blank)/.test(url)) {
+        const open = this.popup
+        if (open && !open.isDestroyed() && this.popupPage && !this.popupPage.isDestroyed()) {
+          // one sign-in window per tab: a second popup reuses it
+          void this.popupPage.loadURL(url).catch(() => {})
+          open.focus()
+          return { action: 'deny' }
+        }
+        return { action: 'allow', createWindow: (options) => this.host.openPopup(this, options, url) }
+      }
       if (/^https?:|^file:/.test(url)) void wc.loadURL(url).catch(() => {})
       return { action: 'deny' }
     })
     const navigated = (url: string) => {
       // the blank page every tab starts on is ours, not a navigation anyone made
       if (url === 'about:blank') return
-      this.host.send({ type: 'navigated', sessionId, url, byUser: !this.agentRecently() })
+      this.host.send({ type: 'navigated', sessionId: key, url, byUser: this.userOpen > 0 || !this.agentRecently() })
       this.host.pushState(this)
+      this.remember()
     }
     wc.on('did-navigate', (_e, url) => navigated(url))
     wc.on('did-navigate-in-page', (_e, url, isMainFrame) => {
       if (isMainFrame) navigated(url)
     })
-    wc.on('page-title-updated', () => this.host.pushState(this))
+    wc.on('did-start-navigation', (d) => {
+      if (!d.isMainFrame || d.isSameDocument || !this.error) return
+      this.error = null
+      this.host.pushState(this)
+    })
+    wc.on('did-fail-load', (_e, code, desc, url, isMainFrame) => {
+      // -3 ERR_ABORTED: superseded by another load, not a failure
+      if (!isMainFrame || code === -3) return
+      this.error = { code: desc || `ERR_${-code}`, url }
+      this.host.pushState(this)
+    })
+    wc.on('page-title-updated', () => {
+      this.host.pushState(this)
+      this.remember()
+    })
     wc.on('did-start-loading', () => this.host.pushState(this))
     wc.on('did-stop-loading', () => this.host.pushState(this))
-    wc.on('before-input-event', () => {
-      if (this.agentRecently() || Date.now() - this.lastTouchSent < 2000) return
-      this.lastTouchSent = Date.now()
-      this.host.send({ type: 'touched', sessionId })
+    wc.on('before-input-event', (e, input) => {
+      if (this.inflight > 0) return
+      if (input.type === 'keyDown' && input.meta && !input.control && !input.alt) {
+        const k = input.key.toLowerCase()
+        const key: PaneKey | null =
+          k === 'l' && !input.shift ? 'focus-url' : k === 'f' && !input.shift ? 'find' : k === 'r' ? 'reload' : k === '[' ? 'back' : k === ']' ? 'forward' : null
+        if (key) {
+          e.preventDefault()
+          this.host.paneKey(this, key)
+          return
+        }
+        // Not the app menu's zoom: zooming a tab changes the CSS width Junior measures, even under emulation
+        if (k === '=' || k === '+' || k === '-' || k === '0') {
+          e.preventDefault()
+          return
+        }
+      }
+      if (input.type === 'keyDown') this.userInput()
     })
-    wc.on('render-process-gone', (_e, d) => this.log({ level: 'error', source: 'exception', text: `the page crashed (${d.reason})` }))
+    wc.on('input-event', (_e, input) => {
+      if (input.type === 'mouseDown' || input.type === 'gestureTap') this.userInput()
+    })
+    wc.on('context-menu', (_e, params) => {
+      if (!this.agentRecently()) this.host.contextMenu(this, params)
+    })
+    wc.on('found-in-page', (_e, r) => this.host.toPanes('browser:found', { tabKey: key, matches: r.matches, active: r.activeMatchOrdinal }))
+    wc.on('render-process-gone', (_e, d) => {
+      this.log({ level: 'error', source: 'exception', text: `the page crashed (${d.reason})` })
+      this.error = { code: 'crashed', url: wc.getURL() }
+      this.host.pushState(this)
+    })
   }
 
   /**
@@ -128,6 +239,9 @@ class Tab {
     await wc.loadURL('about:blank').catch(() => {})
     const dbg = wc.debugger
     dbg.attach('1.3')
+    // Without it a view whose window isn't focused (parked, or a pane in a window in the
+    // background) drops synthetic clicks and Enter: the page believes it has no focus.
+    await dbg.sendCommand('Emulation.setFocusEmulationEnabled', { enabled: true }).catch(() => {})
     dbg.on('message', (_e, method, params) => this.onCdp(method, params as Record<string, unknown>))
     for (const domain of ['Runtime', 'Log', 'Network', 'Page', 'DOM', 'Overlay']) await dbg.sendCommand(`${domain}.enable`).catch(() => {})
     await this.applyColorScheme()
@@ -141,12 +255,40 @@ class Tab {
     return this.inflight > 0 || Date.now() - this.lastAgentAt < AGENT_QUIET_MS
   }
 
+  userRecently() {
+    return Date.now() - this.lastUserAt < USER_GESTURE_MS
+  }
+
+  /** You typed or clicked in the page: the agent's next call hears about it. */
+  private userInput() {
+    if (this.agentRecently()) return
+    this.lastUserAt = Date.now()
+    if (Date.now() - this.lastTouchSent < 2000) return
+    this.lastTouchSent = Date.now()
+    this.host.send({ type: 'touched', sessionId: this.key })
+  }
+
   cdp<T = Record<string, unknown>>(method: string, params?: Record<string, unknown>): Promise<T> {
     return this.wc.debugger.sendCommand(method, params) as Promise<T>
   }
 
   private log(l: Omit<PageLog, 'at'>) {
-    this.host.send({ type: 'log', sessionId: this.sessionId, log: { ...l, at: Date.now() } })
+    this.host.send({ type: 'log', sessionId: this.key, log: { ...l, at: Date.now() } })
+  }
+
+  /** Tell the daemon where this tab is, soon: it brings the tab back there after a restart. */
+  remember() {
+    if (this.rememberTimer) clearTimeout(this.rememberTimer)
+    this.rememberTimer = setTimeout(() => this.flushRemember(), REMEMBER_MS)
+  }
+
+  flushRemember() {
+    if (!this.rememberTimer) return
+    clearTimeout(this.rememberTimer)
+    this.rememberTimer = null
+    const url = this.wc.getURL()
+    if (!url || url === 'about:blank') return
+    this.host.send({ type: 'tab', sessionId: this.key, profile: this.profile, url, title: this.wc.getTitle(), viewport: this.viewport, colorScheme: this.colorScheme })
   }
 
   private onCdp(method: string, p: Record<string, unknown>) {
@@ -199,6 +341,17 @@ class Tab {
         this.log({ level: 'error', source: 'network', text: `${err} — ${req?.method ?? 'GET'}`, ...(req ? { url: req.url } : {}) })
         return
       }
+      case 'Page.javascriptDialogOpening':
+        this.dialog = { type: String(p.type ?? 'alert'), message: String(p.message ?? '') }
+        this.host.send({ type: 'dialog', sessionId: this.key, dialog: this.dialog })
+        this.host.pushState(this)
+        return
+      case 'Page.javascriptDialogClosed':
+        if (!this.dialog) return
+        this.dialog = null
+        this.host.send({ type: 'dialog', sessionId: this.key, dialog: null })
+        this.host.pushState(this)
+        return
       case 'Overlay.inspectNodeRequested':
         this.host.picked(this, Number(p.backendNodeId))
         return
@@ -256,24 +409,42 @@ class Tab {
     await this.cdp('Emulation.setTouchEmulationEnabled', { enabled: vp.mobile, ...(vp.mobile ? { maxTouchPoints: 5 } : {}) }).catch(() => {})
   }
 
-  state(): PaneState {
+  tabState(): TabState {
     const wc = this.wc
     return {
-      sessionId: this.sessionId,
       exists: true,
       url: wc.getURL(),
       title: wc.getTitle(),
       loading: wc.isLoading(),
-      canGoBack: wc.navigationHistory.canGoBack(),
-      canGoForward: wc.navigationHistory.canGoForward(),
       viewport: this.viewport,
       colorScheme: this.colorScheme,
-      agentBusy: this.inflight > 0,
-      picking: this.picking,
+      profile: this.profile,
+      popup: this.popupState(),
+      dialog: this.dialog,
     }
   }
 
+  state(): PaneState {
+    const wc = this.wc
+    return {
+      ...this.tabState(),
+      sessionId: this.key,
+      canGoBack: wc.navigationHistory.canGoBack(),
+      canGoForward: wc.navigationHistory.canGoForward(),
+      agentBusy: this.inflight > 0,
+      picking: this.picking,
+      error: this.error,
+    }
+  }
+
+  private popupState(): { url: string } | null {
+    const p = this.popup
+    return p && !p.isDestroyed() ? { url: this.popupUrl } : null
+  }
+
   destroy() {
+    this.flushRemember()
+    if (this.popup && !this.popup.isDestroyed()) this.popup.close()
     try {
       if (this.wc.debugger.isAttached()) this.wc.debugger.detach()
     } catch {
@@ -285,23 +456,58 @@ class Tab {
 
 export class BrowserHost {
   private readonly tabs = new Map<string, Tab>()
-  /** the last URL of tabs closed for being idle, so the next call reopens them where they were */
-  private readonly revive = new Map<string, string>()
   private readonly panes = new Map<number, Pane>()
+  /** triage's own windows (never the parking window or a sign-in window) */
+  private readonly windows = new Set<BrowserWindow>()
   private park: BrowserWindow | null = null
   private ws: WebSocket | null = null
   private retry: NodeJS.Timeout | null = null
   private readonly pickWaiters = new Map<string, (uid: number | null) => void>()
-  /** tabs being made: two calls for a new session must not make two */
-  private readonly creating = new Map<string, Promise<Tab>>()
-  private sessionConfigured = false
+  /** tabs being made or remade: two calls for one tab key must not make two */
+  private readonly making = new Map<string, Promise<Tab>>()
+  private readonly jars: Jars
+  /** the app is quitting: nothing gets parked, made or redialled any more */
+  private quitting = false
 
-  constructor(private readonly version: string) {}
+  constructor(private readonly version: string) {
+    this.jars = new Jars({
+      tabOf: (wc) => this.tabOf(wc),
+      download: (key, d) => this.send({ type: 'download', sessionId: key, ...d }),
+    })
+  }
 
   start() {
+    // before any partition loads: a dropped profile's folder is free to remove only now
+    sweepDroppedJars()
     this.connect()
     this.registerIpc()
+    // A self-signed dev server opens; nothing else with a bad certificate does.
+    app.on('certificate-error', (e, wc, url, _error, _cert, cb) => {
+      if (!this.tabOf(wc) || !isLocalUrl(url)) return
+      e.preventDefault()
+      cb(true)
+    })
     setInterval(() => this.closeIdle(), 60_000)
+  }
+
+  /** Before quit: what the daemon should remember, and every jar's cookies, on disk. */
+  async flush() {
+    for (const t of this.tabs.values()) t.flushRemember()
+    await this.jars.flush()
+  }
+
+  /**
+   * Quitting: close every tab and the parking window. Left alone, a closing
+   * window parks its tab, the parking window lives on, and ⌘Q never quits.
+   */
+  shutdown() {
+    this.quitting = true
+    for (const t of [...this.tabs.values()]) this.closeTab(t.key)
+    if (this.park && !this.park.isDestroyed()) this.park.destroy()
+    this.park = null
+    if (this.retry) clearTimeout(this.retry)
+    this.retry = null
+    this.ws?.close()
   }
 
   private connect() {
@@ -319,67 +525,109 @@ export class BrowserHost {
       ws.send(JSON.stringify({ type: 'hello', version: WIRE_VERSION, app: `Triage.app ${this.version}` }))
     })
     ws.addEventListener('message', (ev) => {
-      let f: CallFrame
+      let f: CallFrame | ProfileFrame
       try {
-        f = JSON.parse(String(ev.data)) as CallFrame
+        f = JSON.parse(String(ev.data)) as CallFrame | ProfileFrame
       } catch {
         return
       }
       if (f?.type === 'call' && typeof f.id === 'number' && typeof f.sessionId === 'string') void this.handle(f)
+      else if (f?.type === 'profile' && typeof f.id === 'number') void this.handleProfile(f)
     })
     ws.addEventListener('close', () => {
       if (this.ws === ws) this.ws = null
       // the daemon restarts, or isn't up yet: keep trying, quietly
-      if (!this.retry) this.retry = setTimeout(() => this.connect(), 2000)
+      if (!this.retry && !this.quitting) this.retry = setTimeout(() => this.connect(), 2000)
     })
     ws.addEventListener('error', () => {
       // close follows
     })
   }
 
-  send(frame: Record<string, unknown>) {
+  send(frame: HostFrame) {
     if (this.ws?.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify(frame))
   }
 
+  private reply(id: number, ok: boolean, payload: unknown) {
+    this.send(ok ? { type: 'result', id, ok: true, result: payload ?? null } : { type: 'result', id, ok: false, error: payload instanceof Error ? payload.message : String(payload) })
+  }
+
   private async handle(f: CallFrame) {
-    const reply = (ok: boolean, payload: unknown) =>
-      this.send(ok ? { type: 'result', id: f.id, ok: true, result: payload ?? null } : { type: 'result', id: f.id, ok: false, error: String(payload) })
+    const reply = (ok: boolean, payload: unknown) => this.reply(f.id, ok, payload)
+    if (this.quitting) return reply(false, 'Triage.app is quitting')
+    if (!TAB_KEY_RE.test(f.sessionId)) return reply(false, 'bad tab key')
+    if (typeof f.profile !== 'string' || !PROFILE_ID_RE.test(f.profile)) return reply(false, `bad profile "${String(f.profile)}"`)
     const existing = this.tabs.get(f.sessionId)
-    // Reading the state of a tab that isn't there shouldn't make one.
-    if (f.verb === 'state' && !existing && !this.revive.has(f.sessionId)) {
-      reply(true, { exists: false, url: '', title: '', loading: false, viewport: null, colorScheme: null })
-      return
-    }
+    // Reading a tab's state never makes one, nor moves it to another profile.
+    if (f.verb === 'state') return reply(true, existing ? existing.tabState() : NO_TAB)
     if (f.verb === 'close') {
       this.closeTab(f.sessionId)
-      reply(true, null)
-      return
+      return reply(true, null)
     }
     let tab: Tab
+    let fresh: boolean
     try {
-      tab = await this.tabFor(f.sessionId)
+      ;({ tab, fresh } = await this.tabFor(f.sessionId, f.profile, f.verb !== 'open'))
     } catch (err) {
-      reply(false, err instanceof Error ? err.message : String(err))
-      return
+      return reply(false, err)
     }
-    tab.inflight += 1
+    // Your own open (the pane's address bar, a profile switch) isn't Junior driving.
+    const mine = f.verb === 'open' && f.byUser === true
+    if (mine) tab.userOpen += 1
+    else tab.inflight += 1
     tab.lastUsed = Date.now()
     this.pushState(tab)
     try {
+      // a revived tab comes back at its remembered size before it loads, so it never flashes
+      if (fresh && f.verb === 'open' && f.restore) {
+        tab.viewport = f.restore.viewport
+        tab.colorScheme = f.restore.colorScheme
+        await tab.applyColorScheme()
+        await tab.layout(this.paneOf(tab)?.rect ?? null)
+      }
       reply(true, await this.run(tab, f))
     } catch (err) {
-      reply(false, err instanceof Error ? err.message : String(err))
+      reply(false, err)
     } finally {
-      tab.inflight -= 1
-      tab.lastAgentAt = Date.now()
-      this.pushState(tab)
+      if (mine) tab.userOpen -= 1
+      else {
+        tab.inflight -= 1
+        tab.lastAgentAt = Date.now()
+      }
+      // the tab may have been closed or remade meanwhile: the pane gets whatever is there now
+      const live = this.tabs.get(tab.key)
+      if (live) this.pushState(live)
+      else this.broadcast({ sessionId: tab.key, exists: false } as PaneState)
+    }
+  }
+
+  private async handleProfile(f: ProfileFrame) {
+    const reply = (ok: boolean, payload: unknown) => this.reply(f.id, ok, payload)
+    if (typeof f.profile !== 'string' || !PROFILE_ID_RE.test(f.profile)) return reply(false, `bad profile "${String(f.profile)}"`)
+    try {
+      switch (f.op) {
+        case 'sites':
+          return reply(true, { sites: await this.jars.sites(f.profile) })
+        case 'clear':
+          return reply(true, { removed: await this.jars.clear(f.profile, typeof f.site === 'string' && f.site ? f.site : undefined) })
+        case 'drop': {
+          await Promise.all([...this.making.values()].map((p) => p.catch(() => {})))
+          for (const t of [...this.tabs.values()]) if (t.profile === f.profile) this.closeTab(t.key)
+          await this.jars.drop(f.profile)
+          return reply(true, null)
+        }
+        default:
+          return reply(false, `unknown profile op`)
+      }
+    } catch (err) {
+      reply(false, err)
     }
   }
 
   private async run(tab: Tab, f: CallFrame): Promise<unknown> {
     switch (f.verb) {
       case 'open': {
-        this.activity(tab.sessionId)
+        if (!f.byUser) this.activity(tab.key)
         let status: number | null = null
         const onNav = (_e: unknown, _url: string, code: number) => (status = code)
         tab.wc.on('did-navigate', onNav)
@@ -411,6 +659,7 @@ export class BrowserHost {
           await tab.applyColorScheme()
         }
         await tab.layout(this.paneOf(tab)?.rect ?? null)
+        tab.remember()
         return null
       }
       case 'flash': {
@@ -423,10 +672,6 @@ export class BrowserHost {
           .catch(() => {})
         setTimeout(() => void tab.cdp('Overlay.hideHighlight').catch(() => {}), FLASH_MS)
         return null
-      }
-      case 'state': {
-        const s = tab.state()
-        return { exists: true, url: s.url, title: s.title, loading: s.loading, viewport: s.viewport, colorScheme: s.colorScheme }
       }
     }
     return null
@@ -451,67 +696,81 @@ export class BrowserHost {
     return second
   }
 
-  private configureSession() {
-    if (this.sessionConfigured) return
-    this.sessionConfigured = true
-    const ses = electronSession.fromPartition(PARTITION)
-    // no camera, mic, notifications, geolocation… a page under test asks, it hears no
-    ses.setPermissionRequestHandler((_wc, _perm, cb) => cb(false))
-    ses.setPermissionCheckHandler(() => false)
-    ses.on('will-download', (e) => e.preventDefault())
+  /** The tab a page belongs to: its own view, or the sign-in window it opened. */
+  private tabOf(wc: WebContents): Tab | null {
+    for (const t of this.tabs.values()) if (t.wc === wc || (t.popupPage && !t.popupPage.isDestroyed() && t.popupPage === wc)) return t
+    return null
   }
 
-  private tabFor(sessionId: string): Promise<Tab> {
-    const have = this.tabs.get(sessionId)
-    if (have) return Promise.resolve(have)
-    let p = this.creating.get(sessionId)
-    if (!p) {
-      p = this.createTab(sessionId).finally(() => this.creating.delete(sessionId))
-      this.creating.set(sessionId, p)
+  /**
+   * The tab for `key` in `profile`'s jar. A live tab in another jar is made
+   * again in this one, at the same viewport and scheme, and (`carry`) back at
+   * its URL. Its history stays behind: it is another identity.
+   */
+  private async tabFor(key: string, profile: ProfileId, carry: boolean): Promise<{ tab: Tab; fresh: boolean }> {
+    for (;;) {
+      const pending = this.making.get(key)
+      if (pending) {
+        await pending.catch(() => {})
+        continue
+      }
+      const have = this.tabs.get(key)
+      if (have && have.profile === profile) return { tab: have, fresh: false }
+      const p = this.makeTab(key, profile, have ?? null, carry).finally(() => this.making.delete(key))
+      this.making.set(key, p)
+      return { tab: await p, fresh: true }
     }
-    return p
   }
 
-  private async createTab(sessionId: string): Promise<Tab> {
-    if (!/^[\w-]{1,80}$/.test(sessionId)) throw new Error('bad session id')
-    this.configureSession()
-    if (this.tabs.size >= MAX_TABS) {
+  private async makeTab(key: string, profile: ProfileId, old: Tab | null, carry: boolean): Promise<Tab> {
+    // the jar first: a view keeps the user agent it was created under
+    this.jars.session(profile)
+    let url = ''
+    let viewport: Viewport | null = null
+    let colorScheme: ColorScheme = null
+    if (old) {
+      url = old.wc.getURL()
+      viewport = old.viewport
+      colorScheme = old.colorScheme
+      // the tab lives on in another jar: neither the daemon nor the pane should see it close
+      this.closeTab(key, true)
+    } else if (this.tabs.size >= MAX_TABS) {
       const shown = new Set([...this.panes.values()].map((p) => p.sessionId))
-      const lru = [...this.tabs.values()].filter((t) => !shown.has(t.sessionId)).sort((a, b) => a.lastUsed - b.lastUsed)[0]
-      if (lru) this.closeTab(lru.sessionId, true)
+      const lru = [...this.tabs.values()].filter((t) => !shown.has(t.key)).sort((a, b) => a.lastUsed - b.lastUsed)[0]
+      if (lru) this.closeTab(lru.key)
     }
-    const tab = new Tab(sessionId, this)
+    const tab = new Tab(key, profile, partitionOf(profile), this)
+    tab.viewport = viewport
+    tab.colorScheme = colorScheme
     await tab.init()
-    this.tabs.set(sessionId, tab)
-    const pane = [...this.panes.values()].find((p) => p.sessionId === sessionId)
+    this.tabs.set(key, tab)
+    const pane = [...this.panes.values()].find((p) => p.sessionId === key)
     if (pane?.rect) await this.show(pane, tab)
     else await this.parkTab(tab)
-    const back = this.revive.get(sessionId)
-    if (back) {
-      this.revive.delete(sessionId)
-      await tab.wc.loadURL(back).catch(() => {})
-    }
+    if (carry && url && url !== 'about:blank') await tab.wc.loadURL(url).catch(() => {})
+    this.pushState(tab)
     return tab
   }
 
-  private closeTab(sessionId: string, remember = false) {
-    const tab = this.tabs.get(sessionId)
+  /** Close a tab. `quiet`: it is being made again in another jar, so nobody hears it close. */
+  private closeTab(key: string, quiet = false) {
+    const tab = this.tabs.get(key)
     if (!tab) return
-    if (remember) {
-      const url = tab.wc.getURL()
-      if (url) this.revive.set(sessionId, url)
-    } else this.revive.delete(sessionId)
-    this.tabs.delete(sessionId)
+    this.tabs.delete(key)
+    const waiter = this.pickWaiters.get(key)
+    this.pickWaiters.delete(key)
+    waiter?.(null)
     this.detach(tab)
     tab.destroy()
-    this.send({ type: 'closed', sessionId })
-    this.broadcast({ sessionId, exists: false } as PaneState)
+    if (quiet) return
+    this.send({ type: 'closed', sessionId: key })
+    this.broadcast({ sessionId: key, exists: false } as PaneState)
   }
 
   private closeIdle() {
     const shown = new Set([...this.panes.values()].map((p) => p.sessionId))
     for (const t of [...this.tabs.values()]) {
-      if (!shown.has(t.sessionId) && t.inflight === 0 && Date.now() - t.lastUsed > IDLE_CLOSE_MS) this.closeTab(t.sessionId, true)
+      if (!shown.has(t.key) && t.inflight === 0 && Date.now() - t.lastUsed > IDLE_CLOSE_MS) this.closeTab(t.key)
     }
   }
 
@@ -536,6 +795,7 @@ export class BrowserHost {
   }
 
   private async parkTab(tab: Tab) {
+    if (this.quitting) return
     const park = this.parkWindow()
     if (!park.contentView.children.includes(tab.view)) {
       this.detach(tab)
@@ -545,7 +805,7 @@ export class BrowserHost {
   }
 
   private async show(pane: Pane, tab: Tab) {
-    if (!pane.rect || pane.win.isDestroyed()) return
+    if (this.quitting || !pane.rect || pane.win.isDestroyed()) return
     if (!pane.win.contentView.children.includes(tab.view)) {
       this.detach(tab)
       pane.win.contentView.addChildView(tab.view)
@@ -554,28 +814,148 @@ export class BrowserHost {
   }
 
   private paneOf(tab: Tab): Pane | undefined {
-    return [...this.panes.values()].find((p) => p.sessionId === tab.sessionId && p.rect && !p.win.isDestroyed())
+    return [...this.panes.values()].find((p) => p.sessionId === tab.key && p.rect && !p.win.isDestroyed())
   }
 
   /** Push one tab's state to every window; each pane filters by its session. */
   pushState(tab: Tab) {
-    if (!this.tabs.has(tab.sessionId)) return
+    if (this.tabs.get(tab.key) !== tab) return
     this.broadcast(tab.state())
   }
 
   private broadcast(s: PaneState) {
-    for (const p of this.panes.values()) if (!p.win.isDestroyed()) p.win.webContents.send('browser:state', s)
+    this.toPanes('browser:state', s)
   }
 
-  /** The agent opened a page: a pane on that session opens itself. */
+  toPanes(channel: string, payload: unknown) {
+    for (const p of this.panes.values()) if (!p.win.isDestroyed()) p.win.webContents.send(channel, payload)
+  }
+
+  /** The agent opened a page, or a parked tab opened a sign-in window: a pane on that session opens itself. */
   private activity(sessionId: string) {
-    for (const w of BrowserWindow.getAllWindows()) if (!w.isDestroyed() && w !== this.park) w.webContents.send('browser:activity', { sessionId })
+    for (const w of this.windows) if (!w.isDestroyed()) w.webContents.send('browser:activity', { sessionId })
+  }
+
+  /** The window a tab's sign-in window sits over: its pane's, else the first triage window you can see. */
+  private anchorWindow(tab: Tab): BrowserWindow | null {
+    const pane = this.paneOf(tab)?.win
+    if (pane) return pane
+    const live = [...this.windows].filter((w) => !w.isDestroyed())
+    return live.find((w) => w.isVisible() && !w.isMinimized()) ?? live[0] ?? null
+  }
+
+  /** Where a tab's sign-in window goes: 520×680, centred over the pane (or the window you can see). */
+  private popupFrame(tab: Tab): BrowserWindowConstructorOptions {
+    const pane = this.paneOf(tab)?.win
+    const anchor = this.anchorWindow(tab)
+    const b = anchor?.getBounds()
+    return {
+      ...POPUP_SIZE,
+      ...(b ? { x: Math.round(b.x + (b.width - POPUP_SIZE.width) / 2), y: Math.round(b.y + Math.max(0, (b.height - POPUP_SIZE.height) / 2)) } : {}),
+      ...(pane ? { parent: pane } : {}),
+      show: true,
+      minimizable: false,
+      fullscreenable: false,
+      backgroundColor: '#000000',
+    }
+  }
+
+  /** `createWindow` for a tab's sign-in popup (browser-popup.ts): the window, wired to its tab. */
+  openPopup(tab: Tab, options: BrowserWindowConstructorOptions, firstUrl: string): WebContents {
+    const { win, page: pwc } = openSignInWindow(this.popupFrame(tab), options, firstUrl, (next) => {
+      if (tab.popup !== win) return
+      tab.popupUrl = next
+      this.pushState(tab)
+    })
+    tab.popup = win
+    tab.popupPage = pwc
+    tab.popupUrl = firstUrl
+    // inside the sign-in window, another window.open stays in it
+    pwc.setWindowOpenHandler(({ url: next }) => {
+      if (/^https?:/.test(next)) void pwc.loadURL(next).catch(() => {})
+      return { action: 'deny' }
+    })
+    const timer = setTimeout(() => !win.isDestroyed() && win.close(), POPUP_MAX_MS)
+    win.on('closed', () => {
+      clearTimeout(timer)
+      const url = tab.popupUrl
+      if (tab.popup === win) {
+        tab.popup = null
+        tab.popupPage = null
+        tab.popupUrl = ''
+      }
+      this.send({ type: 'popup', sessionId: tab.key, url, state: 'closed' })
+      this.pushState(tab)
+    })
+    this.send({ type: 'popup', sessionId: tab.key, url: firstUrl, state: 'opened' })
+    if (!this.paneOf(tab)) this.activity(tab.key)
+    this.pushState(tab)
+    return pwc
+  }
+
+  /** A shortcut pressed in the page: back, forward and reload happen here; the pane hears every one. */
+  paneKey(tab: Tab, key: PaneKey) {
+    const h = tab.wc.navigationHistory
+    if (key === 'reload') tab.wc.reload()
+    else if (key === 'back' && h.canGoBack()) h.goBack()
+    else if (key === 'forward' && h.canGoForward()) h.goForward()
+    const win = this.paneOf(tab)?.win
+    // the URL field and the find bar are in triage's page: it needs the keyboard back
+    if (win && (key === 'focus-url' || key === 'find')) win.webContents.focus()
+    this.toPanes('browser:key', { tabKey: tab.key, key })
+  }
+
+  contextMenu(tab: Tab, p: ContextMenuParams) {
+    const win = this.paneOf(tab)?.win
+    if (!win) return
+    const wc = tab.wc
+    const h = wc.navigationHistory
+    const items: MenuItemConstructorOptions[] = []
+    const separate = () => {
+      if (items.length && items[items.length - 1].type !== 'separator') items.push({ type: 'separator' })
+    }
+    const selection = p.selectionText.trim()
+    if (p.isEditable) {
+      items.push(
+        { label: 'Cut', enabled: p.editFlags.canCut, click: () => wc.cut() },
+        { label: 'Copy', enabled: p.editFlags.canCopy, click: () => wc.copy() },
+        { label: 'Paste', enabled: p.editFlags.canPaste, click: () => wc.paste() },
+        { label: 'Select all', enabled: p.editFlags.canSelectAll, click: () => wc.selectAll() },
+      )
+    } else if (selection) items.push({ label: 'Copy', click: () => wc.copy() })
+    if (p.linkURL) {
+      separate()
+      items.push(
+        { label: 'Copy link', click: () => clipboard.writeText(p.linkURL) },
+        { label: 'Open link in your browser', enabled: /^(https?|mailto):/i.test(p.linkURL), click: () => void shell.openExternal(p.linkURL) },
+      )
+    }
+    if (p.mediaType === 'image' && p.srcURL) {
+      separate()
+      items.push({ label: 'Copy image', click: () => wc.copyImageAt(p.x, p.y) })
+    }
+    if (!items.length) {
+      items.push(
+        { label: 'Back', enabled: h.canGoBack(), click: () => h.goBack() },
+        { label: 'Forward', enabled: h.canGoForward(), click: () => h.goForward() },
+        { label: 'Reload', click: () => wc.reload() },
+      )
+    }
+    separate()
+    items.push({
+      label: 'Inspect element',
+      click: () => {
+        wc.openDevTools({ mode: 'detach' })
+        wc.inspectElement(p.x, p.y)
+      },
+    })
+    Menu.buildFromTemplate(items).popup({ window: win })
   }
 
   picked(tab: Tab, backendNodeId: number) {
-    const done = this.pickWaiters.get(tab.sessionId)
+    const done = this.pickWaiters.get(tab.key)
     if (!done) return
-    this.pickWaiters.delete(tab.sessionId)
+    this.pickWaiters.delete(tab.key)
     tab.picking = false
     void tab.cdp('Overlay.setInspectMode', { mode: 'none', highlightConfig: {} }).catch(() => {})
     this.pushState(tab)
@@ -596,6 +976,7 @@ export class BrowserHost {
 
   /** A window closed or hid: its pane's tab goes back to the parking window. */
   watchWindow(win: BrowserWindow) {
+    this.windows.add(win)
     const parkShown = () => {
       const p = this.panes.get(win.webContents.id)
       const tab = p?.sessionId ? this.tabs.get(p.sessionId) : undefined
@@ -612,6 +993,7 @@ export class BrowserHost {
     win.on('show', reshow)
     const id = win.webContents.id
     win.on('closed', () => {
+      this.windows.delete(win)
       const p = this.panes.get(id)
       this.panes.delete(id)
       const tab = p?.sessionId ? this.tabs.get(p.sessionId) : undefined
@@ -628,7 +1010,7 @@ export class BrowserHost {
 
   private windowOf(e: IpcMainEvent | IpcMainInvokeEvent): BrowserWindow | null {
     const w = BrowserWindow.fromWebContents(e.sender)
-    return w && w !== this.park ? w : null
+    return w && this.windows.has(w) ? w : null
   }
 
   private registerIpc() {
@@ -654,16 +1036,10 @@ export class BrowserHost {
         return
       }
       // the same session shown in another window: this one takes it
-      for (const [otherId, p] of this.panes) if (otherId !== id && p.sessionId === tab.sessionId) p.rect = null
+      for (const [otherId, p] of this.panes) if (otherId !== id && p.sessionId === tab.key) p.rect = null
       if (rect && !win.isMinimized() && win.isVisible()) void this.show(pane, tab)
       else void this.parkTab(tab)
       win.webContents.send('browser:state', tab.state())
-    })
-    ipcMain.handle('browser:navigate', async (_e, msg: { sessionId: string; url: string }) => {
-      const tab = await this.tabFor(msg.sessionId)
-      tab.lastUsed = Date.now()
-      await tab.wc.loadURL(msg.url).catch(() => {})
-      return tab.state()
     })
     ipcMain.on('browser:nav', (_e, msg: { sessionId: string; action: 'back' | 'forward' | 'reload' | 'stop' }) => {
       const tab = this.tabs.get(msg.sessionId)
@@ -683,6 +1059,7 @@ export class BrowserHost {
         await tab.applyColorScheme()
       }
       await tab.layout(this.paneOf(tab)?.rect ?? null)
+      tab.remember()
       this.pushState(tab)
       return tab.state()
     })
@@ -714,5 +1091,57 @@ export class BrowserHost {
     ipcMain.on('browser:devtools', (_e, msg: { sessionId: string }) => {
       this.tabs.get(msg.sessionId)?.wc.openDevTools({ mode: 'detach' })
     })
+    // Find in page: matches arrive as browser:found. The same text again moves to
+    // the next match, new text starts over, empty text clears the highlight.
+    // (Electron's own `findNext` means the opposite: true starts a new search.)
+    ipcMain.on('browser:find', (_e, msg: { sessionId: string; text: string; forward?: boolean }) => {
+      const tab = this.tabs.get(msg.sessionId)
+      if (!tab) return
+      if (typeof msg.text !== 'string' || !msg.text) {
+        tab.findText = ''
+        tab.wc.stopFindInPage('clearSelection')
+        return
+      }
+      const again = msg.text === tab.findText
+      tab.findText = msg.text
+      tab.wc.findInPage(msg.text, { forward: msg.forward !== false, findNext: !again })
+    })
+    ipcMain.on('browser:find-stop', (_e, msg: { sessionId: string }) => {
+      const tab = this.tabs.get(msg.sessionId)
+      if (!tab) return
+      tab.findText = ''
+      tab.wc.stopFindInPage('clearSelection')
+    })
+    // A still of the page, for the pane to show while one of its menus covers the view → PNG data URL
+    ipcMain.handle('browser:capture', async (_e, msg: { sessionId: string }) => {
+      const tab = this.tabs.get(msg.sessionId)
+      if (!tab) return null
+      const img = await tab.wc.capturePage().catch(() => null)
+      return img && !img.isEmpty() ? img.toDataURL() : null
+    })
+    // "Show window" on the pane's sign-in strip: the window may be behind Triage
+    ipcMain.on('browser:focus-popup', (_e, msg: { sessionId: string }) => {
+      const win = this.tabs.get(msg.sessionId)?.popup
+      if (!win || win.isDestroyed()) return
+      win.show()
+      win.focus()
+    })
+    // "Show in Finder" for a download, and only for one: nothing outside ~/Downloads
+    ipcMain.on('browser:reveal', (e, msg: { path: string }) => {
+      if (!this.windowOf(e) || typeof msg?.path !== 'string') return
+      const downloads = downloadsDir()
+      const p = path.resolve(msg.path)
+      if (p.startsWith(downloads + path.sep)) shell.showItemInFolder(p)
+    })
+  }
+}
+
+/** localhost, 127.0.0.1, [::1] and *.localhost: where a self-signed dev server lives. */
+function isLocalUrl(raw: string): boolean {
+  try {
+    const host = new URL(raw).hostname
+    return host === 'localhost' || host === '127.0.0.1' || host === '[::1]' || host.endsWith('.localhost')
+  } catch {
+    return false
   }
 }
