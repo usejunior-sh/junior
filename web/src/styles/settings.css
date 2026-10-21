@@ -107,13 +107,14 @@
 .setErr { color: var(--red); font-size: 0.9231rem; }
 .setField label { display: block; font-size: 0.9231rem; color: var(--mute); margin: 12px 0 5px; }
 .setField label:first-child { margin-top: 0; }
-.settings input:not([type]), .settings input[type="text"], .settings input[type="password"], .settings textarea {
+/* The browser pane (a profile's sign-in tab) keeps its own inputs: `:where` adds no specificity. */
+.settings input:not([type]):where(:not(.browserPane *)), .settings input[type="text"]:where(:not(.browserPane *)), .settings input[type="password"]:where(:not(.browserPane *)), .settings textarea:where(:not(.browserPane *)) {
   width: 100%; background: var(--canvas); border: 1px solid var(--hair-strong); color: var(--ink);
   border-radius: var(--r); padding: 8px 10px; font-size: 1rem; line-height: 1.45; outline: none; transition: border-color 0.12s;
 }
-.settings input:focus { border-color: var(--ink); }
+.settings input:focus:where(:not(.browserPane *)) { border-color: var(--ink); }
 .settings .logFilterInput { width: auto; flex: 1; }
-.settings input::placeholder { color: var(--stone); }
+.settings input:where(:not(.browserPane *))::placeholder { color: var(--stone); }
 .settings .wsKeyRow input { font-family: var(--mono); font-size: 0.9231rem; }
 .settings .msg.error { margin-top: 12px; }
 .settings .wsVerify { margin-top: 0; }
@@ -180,3 +181,68 @@
 .chip.cwd { flex: 0 1 auto; min-width: 72px; }
 #newSessionHome .statusline .hint { flex: 0 1 auto; }
 
+
+/* Settings → Browser: the machine's profiles as ledger rows, a draft row to make
+   one, and the sign-in tab (the pane, full width; its styles are in session.css). */
+.bpProfiles { border-top: 1px solid var(--hair); }
+.bpProfRow {
+  display: grid; grid-template-columns: 14px minmax(140px, 1.1fr) minmax(160px, 1.6fr) 72px 200px;
+  align-items: center; gap: 14px; min-height: 56px; padding: 8px 4px; border-bottom: 1px solid var(--hair);
+}
+.bpProfRow.head { min-height: 30px; padding-top: 6px; padding-bottom: 6px; font-family: var(--mono); font-size: 0.7692rem; color: var(--stone); text-transform: lowercase; }
+.bpProfRow .nm { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.bpProfRow .nm b { display: flex; align-items: center; gap: 0; color: var(--ink); font-weight: 500; font-size: 1rem; min-width: 0; }
+.bpProfRow .nm small { font-size: 0.8462rem; color: var(--ash); }
+.bpProfRow .when { font-size: 0.8462rem; color: var(--ash); white-space: nowrap; }
+.bpProfRow .acts { display: flex; align-items: center; justify-content: flex-end; gap: 2px; }
+/* Sign in repeats on every row: quiet until the row is the one you're on. */
+.bpProfRow .acts .btn.ghost:not(.icon) { color: var(--ash); }
+.bpProfRow:hover .acts .btn.ghost:not(.icon):not(:disabled), .bpProfRow:focus-within .acts .btn.ghost:not(.icon):not(:disabled) { color: var(--ink); }
+/* The star alone: the name beside it may well be "Default" too. */
+.projDefault.bpDefaultStar { padding: 0 6px; cursor: default; }
+.bpProfMsg { margin: 0 0 12px; }
+.bpSiteChips { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; }
+.bpSiteChip {
+  display: inline-flex; align-items: center; height: 20px; padding: 0 7px; border-radius: var(--r-xs);
+  background: var(--card); border: 1px solid var(--hair); font-size: 0.8077rem; color: var(--charcoal);
+}
+.bpSiteChip.more { color: var(--ash); }
+.bpSiteChips .none { color: var(--stone); font-size: 0.9231rem; }
+.bpProfInput {
+  height: 30px; min-width: 0; padding: 0 10px; border: 1px solid var(--hair-bright); border-radius: var(--r);
+  background: var(--canvas); color: var(--ink); font: inherit; font-size: 1rem; outline: none;
+}
+.bpProfInput[aria-invalid="true"] { border-color: var(--edge-red-hi); }
+.bpProfRow .bpProfInput { width: 100%; max-width: 260px; }
+.bpProfDraft {
+  display: grid; grid-template-columns: 14px minmax(180px, 1fr) auto auto auto; align-items: center; gap: 12px;
+  margin-top: 8px; padding: 10px 10px 10px 8px; border: 1px solid var(--hair-strong); border-radius: var(--r); background: var(--card);
+}
+.bpProfDraftErr { grid-column: 2 / -1; color: var(--red-ink); font-size: 0.8846rem; }
+.bpSwatches { display: flex; gap: 6px; }
+.bpSwatch { width: 16px; height: 16px; padding: 0; border: 0; border-radius: var(--r-full); cursor: pointer; flex: none; }
+.bpSwatch.on { box-shadow: 0 0 0 2px var(--canvas), 0 0 0 3px var(--ink); }
+.uiMenu.bpSwatchMenu { min-width: 140px; }
+.bpSwatchMenu .uiMenuItem { gap: 10px; }
+.bpSwatchMenu .cap { text-transform: capitalize; }
+.bpMenuNote { max-width: 220px; padding: 4px 9px 6px; font-size: 0.8077rem; color: var(--ash); line-height: 1.4; }
+.bpNewProfile { margin-top: 10px; }
+.bpProfNudge {
+  display: flex; align-items: center; gap: 10px; padding: 8px 4px 10px 32px; border-bottom: 1px solid var(--hair);
+  color: var(--body); font-size: 0.9231rem;
+}
+.bpConfirm { width: 420px; }
+.bpConfirm .wsIntro p { margin: 0; }
+.bpConfirmJobs { margin: 8px 0 0; padding-left: 18px; color: var(--charcoal); font-size: 0.9231rem; line-height: 1.6; }
+.bpConfirmBtns { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+
+@media (max-width: 767px) {
+  .bpProfRow { grid-template-columns: 14px minmax(0, 1fr) auto; }
+  .bpProfRow > .bpSiteChips, .bpProfRow > .when, .bpProfRow.head > :nth-child(3), .bpProfRow.head > :nth-child(4) { display: none; }
+  /* Signing in needs Triage.app, which a phone never is: the row keeps only its menu. */
+  .bpProfRow .acts > :not([aria-haspopup]) { display: none; }
+  .bpProfRow .acts .btn.icon { width: 34px; padding: 0; }
+  .bpProfDraft { display: flex; flex-wrap: wrap; }
+  .bpProfDraft > .bpProfInput { flex: 1 1 200px; }
+  .bpProfDraft > .bpSwatches { flex-basis: 100%; padding-left: 26px; }
+}

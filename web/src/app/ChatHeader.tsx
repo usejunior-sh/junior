@@ -5,7 +5,8 @@ import { useChanges } from '../changesStore.js'
 import { checkoutOf } from '../checkouts.js'
 import { CheckoutChip } from '../components/CheckoutChip.js'
 import { CheckoutMenu } from '../components/CheckoutMenu.js'
-import { hasBrowser, browserPane } from '../browser.js'
+import { hasBrowser, browserPane, profileById, useBrowserProfiles, useBrowserTab } from '../browser.js'
+import { ProfileDot } from '../components/browser/ProfileMenu.js'
 import { SessionCost } from '../components/SessionCost.js'
 import { AgentsMenu } from '../components/Agents.js'
 import { ArtifactsMenu } from '../components/SessionArtifacts.js'
@@ -139,18 +140,7 @@ export function ChatHeader({
         </AgentsMenu>
       )}
       <ArtifactsMenu sessionId={current.id} onNavigate={onNavigate} />
-      {hasBrowser && !mobile && (
-        <button
-          type="button"
-          className={`btn sm ghost browserBtn${browserOpen ? ' on' : ''}`}
-          title={browserOpen ? 'Hide the browser pane' : 'Show this session’s browser — the page the agent checks its work in'}
-          aria-pressed={browserOpen}
-          onClick={() => browserPane.set(current.id, !browserOpen)}
-        >
-          <Globe size={14} aria-hidden="true" />
-          Browser
-        </button>
-      )}
+      {!mobile && <BrowserButton sessionId={current.id} open={browserOpen} />}
       <SessionCost sessionId={current.id} status={current.status} workflows={current.workflows} />
       <span className={`state ${shown.status}`} title={shown.title}>
         <span
@@ -165,5 +155,47 @@ export function ChatHeader({
         {STATUS_LABEL[shown.status]}
       </span>
     </div>
+  )
+}
+
+/**
+ * The chat's Browser button (not on a phone; outside Triage.app the pane says
+ * where the browser lives). Once the chat uses a profile other than the
+ * workspace's default, the label names it, "Browser · Work", with a swatch:
+ * a bare coloured dot here would read as the header's "working" dot.
+ */
+function BrowserButton({ sessionId, open }: { sessionId: string; open: boolean }) {
+  const tab = useBrowserTab(sessionId)
+  const snap = useBrowserProfiles()
+  const profile = profileById(snap, tab?.effectiveProfile)
+  const other = !!profile && !!snap && profile.id !== snap.workspaceDefault
+  return (
+    <button
+      type="button"
+      className={`btn sm ghost browserBtn${open ? ' on' : ''}`}
+      title={
+        !hasBrowser
+          ? 'Open in Triage.app: the browser lives there.'
+          : open
+            ? 'Hide the browser'
+            : `Show this chat's browser.${profile ? ` Profile: ${profile.name}.` : ''}`
+      }
+      aria-pressed={open}
+      onClick={() => browserPane.set(sessionId, !open)}
+    >
+      <Globe size={14} aria-hidden="true" />
+      Browser
+      {other && (
+        <>
+          <span className="bbSep" aria-hidden="true">
+            ·
+          </span>
+          <span className="bbProfile">
+            <ProfileDot profile={profile} size={7} />
+            {profile.name}
+          </span>
+        </>
+      )}
+    </button>
   )
 }

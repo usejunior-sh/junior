@@ -59,7 +59,19 @@ export const PermissionCard = memo(function PermissionCard({ item, onRespond, ju
           </>
         )}
       </div>
-      <pre className="well">{truncate(JSON.stringify(item.input, null, 2), 1200)}</pre>
+      {/* When the ask comes with its reason in words (the browser gate), that is the card;
+          the raw call stays one click away. */}
+      {item.description ? (
+        <>
+          <p className="permWhy">{item.description}</p>
+          <details className="permArgs">
+            <summary>Details</summary>
+            <pre className="well">{truncate(JSON.stringify(item.input, null, 2), 1200)}</pre>
+          </details>
+        </>
+      ) : (
+        <pre className="well">{truncate(JSON.stringify(item.input, null, 2), 1200)}</pre>
+      )}
       {item.resolved ? (
         <span className={`verdict ${item.resolved}`}>
           {item.resolved === 'allow'

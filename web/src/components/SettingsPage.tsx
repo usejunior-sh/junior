@@ -9,7 +9,7 @@
  * server; browser-scoped ones (Sessions · Shortcuts) write to localStorage.
  */
 import * as Tabs from '@radix-ui/react-tabs'
-import { type LucideProps, GitPullRequest, ShieldCheck, Settings2, Bot, Plug, Folder, Gauge, Sparkles, WandSparkles, BotMessageSquare, Users, Cable, Activity, Wallet, ScrollText, Palette, SwatchBook, MessagesSquare, Keyboard, Smartphone, Info, RefreshCw, X } from 'lucide-react'
+import { type LucideProps, GitPullRequest, ShieldCheck, Settings2, Bot, Plug, Folder, Gauge, Sparkles, WandSparkles, BotMessageSquare, Users, Cable, Activity, Wallet, ScrollText, Palette, SwatchBook, MessagesSquare, Keyboard, Smartphone, Info, RefreshCw, X, Globe } from 'lucide-react'
 import { type ComponentType, useState, useEffect, useCallback } from 'react'
 import type { Workspace } from '../../../shared/protocol.js'
 import { isTypingTarget, anyDialogOpen } from '../keys.js'
@@ -25,6 +25,7 @@ import { AppearanceTab, ThemesTab } from './settings/AppearanceTab.js'
 import { BriefsTab } from './settings/BriefsTab.js'
 import { BabysitTab } from './settings/BabysitTab.js'
 import { ApprovalsTab } from './settings/ApprovalsTab.js'
+import { BrowserTab } from './settings/BrowserTab.js'
 import { ModelsTab } from './settings/ModelsTab.js'
 import { ProvidersTab } from './settings/ProvidersTab.js'
 import { AboutTab, SessionsTab, ShortcutsTab } from './settings/SessionsTab.js'
@@ -41,6 +42,7 @@ const ICONS: Record<SettingsTab, ComponentType<LucideProps>> = {
   briefs: Sparkles,
   babysit: GitPullRequest,
   approvals: ShieldCheck,
+  browser: Globe,
   skills: WandSparkles,
   agents: BotMessageSquare,
   teams: Users,
@@ -176,6 +178,9 @@ export function SettingsPage({ workspace, tab, onOpenSystem }: Props) {
                   </Tabs.Content>
                   <Tabs.Content value="approvals">
                     <ApprovalsTab />
+                  </Tabs.Content>
+                  <Tabs.Content value="browser">
+                    <BrowserTab />
                   </Tabs.Content>
                   <Tabs.Content value="babysit">
                     <BabysitTab />

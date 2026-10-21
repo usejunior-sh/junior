@@ -2,12 +2,15 @@
  * The screenshots a browser tool call saved, right under the call. The
  * transcript keeps the bytes out of the event log, so they come from disk
  * (`[shot #n]` in the result names the file). Click one to see it full size.
+ * A `browser_open` also says which profile it loaded in, and a switch reads
+ * as its own line.
  */
 import { useState } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
 import { X } from 'lucide-react'
 import { BROWSER_SHOT_RE } from '../../../shared/protocol.js'
-import { shotSrc } from '../browser.js'
+import { profileById, shotSrc, useBrowserProfiles } from '../browser.js'
+import { ProfileDot } from './browser/ProfileMenu.js'
 import type { TranscriptItem } from '../transcript.js'
 
 type Shot = { key: string; n: number; caption: string }
@@ -26,12 +29,57 @@ function shotsOf(tools: readonly TranscriptItem[]): Shot[] {
   })
 }
 
+// What browser_open's result says (server/browser/mcp.ts): `… in the "Work" profile.`
+const LOADED_IN = /in the "([^"\n]+)" profile\./
+const SWITCHED = /Switched this session's browser to the "([^"\n]+)" profile\./
+
+function profilesOf(tools: readonly TranscriptItem[]): { key: string; name: string; switched: boolean }[] {
+  return tools.flatMap((t) => {
+    if (t.kind !== 'tool' || t.name !== 'mcp__browser__browser_open' || !t.result || t.result.isError) return []
+    const switched = SWITCHED.exec(t.result.text)
+    const loaded = LOADED_IN.exec(t.result.text)
+    const name = switched?.[1] ?? loaded?.[1]
+    return name ? [{ key: t.key, name, switched: !!switched }] : []
+  })
+}
+
+function ProfileChips({ tools }: { tools: readonly TranscriptItem[] }) {
+  const named = profilesOf(tools)
+  if (!named.length) return null
+  return (
+    <>
+      {named.map((n) =>
+        n.switched ? (
+          <div key={n.key} className="bpSwitchNotice mono">
+            Browser switched to {n.name}.
+          </div>
+        ) : (
+          <ProfileChip key={n.key} name={n.name} />
+        ),
+      )}
+    </>
+  )
+}
+
+function ProfileChip({ name }: { name: string }) {
+  const snap = useBrowserProfiles()
+  const p = snap?.profiles.find((x) => x.name === name) ?? profileById(snap, name.toLowerCase())
+  return (
+    <div className="bpToolProfile" title={`Browser profile: ${name}`}>
+      <ProfileDot profile={p} />
+      {name}
+    </div>
+  )
+}
+
 export function BrowserShots({ sessionId, tools }: { sessionId: string; tools: readonly TranscriptItem[] }) {
   const shots = shotsOf(tools)
   const [open, setOpen] = useState<Shot | null>(null)
-  if (!shots.length) return null
+  const chips = <ProfileChips tools={tools} />
+  if (!shots.length) return chips
   return (
     <>
+      {chips}
       <div className="shotStrip">
         {shots.map((s) => (
           <button key={s.key} type="button" className="shotThumb" title={s.caption || `Shot #${s.n}`} onClick={() => setOpen(s)}>

@@ -5,7 +5,7 @@
  */
 import * as Dialog from '@radix-ui/react-dialog'
 import * as Switch from '@radix-ui/react-switch'
-import { Ellipsis, ExternalLink, Pencil, Play, X } from 'lucide-react'
+import { Ellipsis, ExternalLink, Eye, Globe, Pencil, Play, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ActivityResponse, ActivityRun, ItemListResponse, Project, ProjectsResponse, Job, JobsResponse, JobRunsResponse, JobSlotRun } from '../../../shared/protocol.js'
 import type { ScoredItem } from '../../../core/work/types.js'
@@ -14,6 +14,8 @@ import { itemHash, useEvents } from '../hooks.js'
 import { kindIcon, relTime } from '../itemUi.js'
 import { store } from '../store.js'
 import { Transcript } from './Transcript.js'
+import { BrowserPane } from './BrowserPane.js'
+import { hasBrowser } from '../browser.js'
 import { Menu, MenuContent, MenuItem, MenuTrigger } from '../ui/Menu.js'
 import { humanSpan, lookbackMs, parseCatchUp } from '../../../core/job/schedule.js'
 import { TRIGGER_LABEL, cronText, grantIcon, grantLabel, runStatusText } from '../jobUi.js'
@@ -23,6 +25,8 @@ import { runRows, type RunRow } from '../../../core/job/run-rows.js'
 type Tab = 'overview' | 'runs' | 'items'
 const WEEK_MS = 7 * 86_400_000
 const SHOW_RUNS = 7
+/** How a browser job's skip reads when Triage.app wasn't open to host its tab (server/jobs/preview.ts BROWSER_NEEDS_APP). */
+const NEEDS_APP = /needs Triage\.app/
 
 const fmtTokens = (n: number) => (n === 0 ? '0' : n < 1000 ? String(n) : n < 1_000_000 ? `${Math.round(n / 1000)}k` : `${(n / 1_000_000).toFixed(1)}M`)
 const fmtUsd = (n: number) => (n < 0.01 && n > 0 ? '<$0.01' : `$${n.toFixed(2)}`)
@@ -66,6 +70,7 @@ function outcomeText(r: RunRow): string {
     case 'missed':
       return r.coveredAt != null ? `missed · covered by the ${fmtWhen(r.coveredAt)} run` : 'missed · covered by a later run'
     case 'skipped':
+      if (NEEDS_APP.test(r.reason ?? '')) return "skipped · Triage.app wasn't open"
       return r.reason?.startsWith('skipped') ? r.reason : `skipped · ${r.reason ?? 'no reason recorded'}`
     case 'skipped_budget':
       return `over the daily budget${r.reason ? ` · ${r.reason}` : ''}`
@@ -85,6 +90,8 @@ export function JobPage({ id, onNavigate }: { id: string; onNavigate: (hash: str
   const [running, setRunning] = useState(false)
   const [error, setError] = useState('')
   const [openRun, setOpenRun] = useState<ActivityRun | null>(null)
+  // Watch: the run's transcript with its browser beside it, while it runs.
+  const [watch, setWatch] = useState(false)
 
   const load = useCallback(async () => {
     try {
@@ -118,18 +125,23 @@ export function JobPage({ id, onNavigate }: { id: string; onNavigate: (hash: str
       .catch(() => setProjects([]))
   }, [])
 
+  const rows = useMemo(() => runRows(ledger, runs), [ledger, runs])
+
   // The health strip, all derived: runs this week, what they filed and cost,
   // and how many of the filed items the user kept (anything not archived).
+  // Outcomes count the ledger's rows, so a slot skipped without a session
+  // (Triage.app closed, over budget) still shows; spend comes from receipts.
   const health = useMemo(() => {
     const since = Date.now() - WEEK_MS
     const week = runs.filter((r) => r.startedAt >= since)
+    const slots = rows.filter((r) => r.startedAt >= since)
     const lastOk = runs.find((r) => r.status === 'ok')
     const kept = items.filter((it) => it.status !== 'archived').length
     return {
       lastOk,
-      ok: week.filter((r) => r.status === 'ok').length,
-      failed: week.filter((r) => r.status === 'failed' || r.status === 'timeout').length,
-      skipped: week.filter((r) => r.status === 'skipped' || r.status === 'interrupted' || r.status === 'slept').length,
+      ok: slots.filter((r) => r.status === 'ok').length,
+      failed: slots.filter((r) => r.status === 'failed' || r.status === 'timeout').length,
+      skipped: slots.filter((r) => r.status === 'skipped' || r.status === 'skipped_budget' || r.status === 'interrupted' || r.status === 'slept').length,
       filed: week.reduce((n, r) => n + (r.newCount ?? r.matches ?? 0), 0),
       tokens: week.reduce((n, r) => n + (r.tokens ?? 0), 0),
       runsWithTokens: week.filter((r) => (r.tokens ?? 0) > 0).length,
@@ -138,9 +150,11 @@ export function JobPage({ id, onNavigate }: { id: string; onNavigate: (hash: str
       kept,
       total: items.length,
     }
-  }, [runs, items])
+  }, [runs, rows, items])
 
-  const rows = useMemo(() => runRows(ledger, runs), [ledger, runs])
+  const ledgerSession = (key: string) => ledger.find((l) => l.id === key)?.sessionId
+  // A browser job skips while Triage.app is closed; two in a row is worth a word.
+  const skipsForApp = rows.length >= 2 && rows.slice(0, 2).every((r) => r.status === 'skipped' && NEEDS_APP.test(r.reason ?? ''))
 
   async function toggle(on: boolean) {
     if (!job) return
@@ -240,6 +254,14 @@ export function JobPage({ id, onNavigate }: { id: string; onNavigate: (hash: str
               )}
               <span className="sep">·</span>
               <span>{cronText(job.schedule)}</span>
+              {job.browser && (
+                <>
+                  <span className="sep">·</span>
+                  <span title={job.browser.sites?.length ? `Opens only ${job.browser.sites.join(', ')}` : 'Opens any site'}>
+                    <Globe size={11} aria-hidden="true" /> browser <span className="mono">{job.browser.profile}</span>
+                  </span>
+                </>
+              )}
               {job.output === 'digest' && (
                 <>
                   <span className="sep">·</span>
@@ -303,6 +325,7 @@ export function JobPage({ id, onNavigate }: { id: string; onNavigate: (hash: str
         </div>
 
         {error && <div className="msg error">{error}</div>}
+        {job.browser && skipsForApp && <div className="msg">This job needs the browser. Keep Triage.app open, or it skips.</div>}
         {job.draft && !job.enabled && (
           <div className="draftBanner" role="status">
             <span className="tag">Draft</span>
@@ -517,10 +540,24 @@ export function JobPage({ id, onNavigate }: { id: string; onNavigate: (hash: str
                         <td className="r mono">{run?.tokens ? fmtTokens(run.tokens) : '—'}</td>
                         <td className="r mono">{r.costUsd != null ? fmtUsd(r.costUsd) : '—'}</td>
                         <td className="tr r">
-                          {run && (
-                            <button type="button" className="tlink" onClick={() => setOpenRun(run)}>
-                              Transcript <ExternalLink size={11} aria-hidden="true" />
+                          {live && job.browser && hasBrowser && (run?.sessionId ?? ledgerSession(r.key)) ? (
+                            <button
+                              type="button"
+                              className="tlink"
+                              title="See the run's browser as Junior uses it"
+                              onClick={() => {
+                                setWatch(true)
+                                setOpenRun(run ?? { sessionId: ledgerSession(r.key)!, jobId: job.id, jobTitle: job.title, startedAt: r.startedAt, finishedAt: r.startedAt })
+                              }}
+                            >
+                              Watch <Eye size={11} aria-hidden="true" />
                             </button>
+                          ) : (
+                            run && (
+                              <button type="button" className="tlink" onClick={() => setOpenRun(run)}>
+                                Transcript <ExternalLink size={11} aria-hidden="true" />
+                              </button>
+                            )
                           )}
                         </td>
                       </tr>
@@ -568,7 +605,16 @@ export function JobPage({ id, onNavigate }: { id: string; onNavigate: (hash: str
           ))}
       </div>
 
-      <RunTranscriptModal run={openRun} jobTitle={job.title} onClose={() => setOpenRun(null)} onNavigate={onNavigate} />
+      <RunTranscriptModal
+        run={openRun}
+        jobTitle={job.title}
+        watch={watch}
+        onClose={() => {
+          setOpenRun(null)
+          setWatch(false)
+        }}
+        onNavigate={onNavigate}
+      />
     </div>
   )
 }
@@ -654,7 +700,20 @@ const days0 = (days: Array<{ at: number }>) => days[0].at
 // A run's transcript, in place. The run is a session; this replays its event
 // log into the same Transcript the session page uses.
 
-function RunTranscriptModal({ run, jobTitle, onClose, onNavigate }: { run: ActivityRun | null; jobTitle: string; onClose: () => void; onNavigate: (hash: string) => void }) {
+function RunTranscriptModal({
+  run,
+  jobTitle,
+  watch,
+  onClose,
+  onNavigate,
+}: {
+  run: ActivityRun | null
+  jobTitle: string
+  /** the run's browser beside its transcript */
+  watch: boolean
+  onClose: () => void
+  onNavigate: (hash: string) => void
+}) {
   const sessionId = run?.sessionId ?? null
   const events = useEvents(sessionId)
   useEffect(() => {
@@ -664,7 +723,7 @@ function RunTranscriptModal({ run, jobTitle, onClose, onNavigate }: { run: Activ
     <Dialog.Root open={run !== null} onOpenChange={(o) => !o && onClose()}>
       <Dialog.Portal>
         <Dialog.Overlay className="runOverlay" />
-        <Dialog.Content className="runModal" aria-describedby={undefined}>
+        <Dialog.Content className={`runModal${watch ? ' watch' : ''}`} aria-describedby={undefined}>
           {run && (
             <>
               <div className="head">
@@ -703,8 +762,11 @@ function RunTranscriptModal({ run, jobTitle, onClose, onNavigate }: { run: Activ
                   </Dialog.Close>
                 </div>
               </div>
-              <div className="body">
-                {events.length === 0 ? <div className="empty">Loading the run’s transcript…</div> : <Transcript sessionId={run.sessionId} events={events} onRespond={() => {}} onNavigate={onNavigate} />}
+              <div className={`runWrap${watch ? ' watch' : ''}`}>
+                <div className="body">
+                  {events.length === 0 ? <div className="empty">Loading the run’s transcript…</div> : <Transcript sessionId={run.sessionId} events={events} onRespond={() => {}} onNavigate={onNavigate} />}
+                </div>
+                {watch && <BrowserPane key={run.sessionId} tabKey={run.sessionId} embedded onClose={onClose} />}
               </div>
             </>
           )}

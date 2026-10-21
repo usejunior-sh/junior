@@ -133,6 +133,8 @@ export type TranscriptItem =
       toolName: string
       input: Record<string, unknown>
       title?: string
+      /** why it asks, in words (the browser gate's "Open app.pendo.io as Work?") */
+      description?: string
       canAlwaysAllow?: boolean
       effect?: ToolEffect
       resolved?: PermissionBehavior | 'expired'
@@ -247,6 +249,7 @@ export function buildTranscript(
           toolName: ev.toolName,
           input: ev.input,
           title: ev.title,
+          description: ev.description,
           canAlwaysAllow: ev.canAlwaysAllow,
           effect: ev.effect,
           agentId: ev.agentId,

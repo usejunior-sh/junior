@@ -28,6 +28,7 @@ import { adoptWorkspace, boundWorkspace, gotoWorkspace } from './workspaceUrl.js
 import { DEFAULT_PERSONA } from '../../core/junior/persona.js'
 
 export type ConnState = 'connecting' | 'connected' | 'disconnected'
+export type BrowserFrame = Extract<ServerMessage, { type: 'browser_profiles' | 'browser_tab' | 'browser_download' }>
 
 const NO_EVENTS: readonly SessionEvent[] = []
 
@@ -259,6 +260,8 @@ export class Store {
   readonly #goalsListeners = new Set<(goalId: string | undefined) => void>()
   /** Who follows today's plan (the Junior page). */
   readonly #todayListeners = new Set<() => void>()
+  /** Who follows the browser: the profile list, a tab's remembered state, its downloads (browser.ts). */
+  readonly #browserListeners = new Set<(msg: BrowserFrame) => void>()
 
   #handle(msg: ServerMessage) {
     switch (msg.type) {
@@ -380,6 +383,11 @@ export class Store {
       case 'goals_changed':
         for (const fn of this.#goalsListeners) fn(msg.goalId)
         break
+      case 'browser_profiles':
+      case 'browser_tab':
+      case 'browser_download':
+        for (const fn of this.#browserListeners) fn(msg)
+        break
       case 'error':
         // Server-level failure, not scoped to a session.
         console.error('[triage] server error:', msg.message)
@@ -460,6 +468,14 @@ export class Store {
     this.#goalsListeners.add(fn)
     return () => {
       this.#goalsListeners.delete(fn)
+    }
+  }
+
+  /** Fires on every browser frame (profiles, a tab, a download); returns the unsubscribe. */
+  onBrowser(fn: (msg: BrowserFrame) => void): () => void {
+    this.#browserListeners.add(fn)
+    return () => {
+      this.#browserListeners.delete(fn)
     }
   }
 

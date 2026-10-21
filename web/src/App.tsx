@@ -9,7 +9,7 @@ import { checkoutOf, branchSlug } from './checkouts.js'
 import { GoneCheckoutBar } from './components/GoneCheckoutBar.js'
 import { Composer } from './components/Composer.js'
 import { BrowserPane } from './components/BrowserPane.js'
-import { useBrowserOpen, hasBrowser } from './browser.js'
+import { useBrowserOpen, useWindowNarrower } from './browser.js'
 import { PanelCollapseContext, NewTerminalMenu } from './components/ContextPanel.js'
 import { useInboxTabs, useInboxViews, resolveView } from './inboxTabs.js'
 import { HelpOverlay } from './components/HelpOverlay.js'
@@ -140,8 +140,20 @@ export function App() {
   // Junior's log has something new: a dot on the rail until you open the Log tab.
   const logUnread = useLogUnread()
   const current = sessions.find((s) => s.id === currentId) ?? null
-  // The browser pane beside this session (.docs/browser.md), Triage.app only, never on a phone.
-  const browserOpen = useBrowserOpen(currentId) && hasBrowser && !mobile
+  // The browser pane beside this session (.docs/browser.md), never on a phone. Outside
+  // Triage.app it opens to say the browser lives there.
+  const browserOpen = useBrowserOpen(currentId) && !mobile
+  // A narrow window can't hold the chats list, a chat and the browser at once: while
+  // the pane shows, the list steps aside for display only (the saved setting stays),
+  // and comes back when the pane closes, the window widens, or you ask for it.
+  const narrowWindow = useWindowNarrower(1100)
+  const paneShown = browserOpen && route.page === 'session' && !!current
+  const [keepPanel, setKeepPanel] = useState(false)
+  useEffect(() => {
+    if (!paneShown || !narrowWindow) setKeepPanel(false)
+  }, [paneShown, narrowWindow])
+  const panelStepsAside = paneShown && narrowWindow && !keepPanel && !panelSize.collapsed
+  const panelCollapsed = panelSize.collapsed || panelStepsAside
   const currentCheckout = checkoutOf(checkouts, current?.checkoutId)
   const chatHeaderRef = useRef<HTMLDivElement>(null)
   const folderTextRef = useRef<HTMLSpanElement>(null)
@@ -302,11 +314,12 @@ export function App() {
           goTo(section)
         }
       } else {
+        if (panelStepsAside) setKeepPanel(true)
         if (panelSize.collapsed) panelSize.setCollapsed(false)
         goTo(section)
       }
     },
-    [mobile, panelSize, goTo],
+    [mobile, panelSize, panelStepsAside, goTo],
   )
 
   const collapsePanel = useCallback(() => panelSize.setCollapsed(true), [panelSize])
@@ -511,11 +524,11 @@ export function App() {
         settingsOpen={route.page === 'settings'}
         onHelp={() => setHelpOpen(true)}
         build={build}
-        desktop={isDesktop ? { panelCollapsed: panelSize.collapsed, onTogglePanel: panelSize.toggleCollapsed } : undefined}
+        desktop={isDesktop ? { panelCollapsed, onTogglePanel: panelStepsAside ? () => setKeepPanel(true) : panelSize.toggleCollapsed } : undefined}
       />
 
       <div
-        className={`shell${panelSize.dragging ? ' resizing' : ''}${panelSize.collapsed ? ' collapsed' : ''}${mobile ? ' mobile' : ''}${sheet ? ' sheetOpen' : ''}`}
+        className={`shell${panelSize.dragging ? ' resizing' : ''}${panelCollapsed ? ' collapsed' : ''}${mobile ? ' mobile' : ''}${sheet ? ' sheetOpen' : ''}`}
       >
         <Rail
           active={mobile ? sheet ?? railActive : railActive}
@@ -536,7 +549,7 @@ export function App() {
         <>
         {/* Triage.app's title bar carries the panel toggle, so the panel and tab band drop theirs. */}
         <PanelCollapseContext.Provider value={mobile || isDesktop ? null : collapsePanel}>{panel}</PanelCollapseContext.Provider>
-        {!panelSize.collapsed && !mobile && panel && (
+        {!panelCollapsed && !mobile && panel && (
           <div
             className="panelResize"
             role="separator"
@@ -555,7 +568,7 @@ export function App() {
             onPin={pin}
             pageTab={pageTab}
             onInbox={() => navigate('/inbox')}
-            onShowPanel={panelSize.collapsed && !isDesktop ? () => panelSize.setCollapsed(false) : undefined}
+            onShowPanel={panelCollapsed && !isDesktop ? () => (panelStepsAside ? setKeepPanel(true) : panelSize.setCollapsed(false)) : undefined}
             onSelect={(key) => navigate(routeOfKey(key))}
             onClose={closeOpenTab}
             onCloseAll={closeAllOpenTabs}
@@ -768,7 +781,7 @@ export function App() {
                 </>
                 )}
               </div>
-              {browserOpen && <BrowserPane key={current.id} sessionId={current.id} />}
+              {browserOpen && <BrowserPane key={current.id} tabKey={current.id} onTerminal={currentCheckout ? () => newTerminalIn(currentCheckout.id) : undefined} />}
               {wf.sideRun && (
                 <WorkflowSide
                   sessionId={current.id}

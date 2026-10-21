@@ -144,6 +144,11 @@
   font-family: var(--mono); font-size: 0.8462rem; color: var(--mute); margin-bottom: 6px;
   text-transform: lowercase;
 }
+.msg.teammate .msgFromLink {
+  font: inherit; color: var(--body); background: none; border: 0; padding: 0; cursor: pointer;
+  text-decoration: underline; text-decoration-color: var(--hair-strong); text-underline-offset: 2px;
+}
+.msg.teammate .msgFromLink:hover { text-decoration-color: currentColor; }
 
 /* team strip: the members of a team, one tab per session, over the transcript */
 #teamStrip {
@@ -192,38 +197,163 @@
 .sessCol { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
 
 /* The browser pane (.docs/browser.md): the page is a native view Triage.app lays
-   over .bpStage, so the stage is only a placeholder with an empty state. */
-.sessRow.withBrowser .sessCol { flex: 1 1 46%; min-width: 360px; }
+   over .bpStage, so the stage is only a placeholder with our own empty and error
+   states. Its width is a share of the row (flex-basis, set inline from the split). */
+/* Each side keeps its floor (chat 380, pane 360) only while the row has room for both:
+   a narrow window shares it instead of pushing the pane, and the page on it, off screen. */
+.sessRow.withBrowser .sessCol { flex: 1 1 0; min-width: min(380px, 46%); }
 .browserPane {
-  flex: 1 1 54%; min-width: 360px; max-width: 62%; min-height: 0; display: flex; flex-direction: column;
+  position: relative; flex: 0 0 54%; min-width: min(360px, 50%); max-width: calc(100% - min(380px, 46%)); min-height: 0; display: flex; flex-direction: column;
   border-left: 1px solid var(--hair); background: var(--canvas);
 }
-.bpBar { display: flex; align-items: center; gap: 4px; height: var(--bar-h); padding: 0 10px; flex: none; border-bottom: 1px solid var(--hair); min-width: 0; }
+.bpResize {
+  position: absolute; top: 0; bottom: 0; left: -4px; width: 7px; z-index: 3;
+  cursor: col-resize; touch-action: none; outline: none;
+}
+.bpResize::after {
+  content: ""; position: absolute; top: 0; bottom: 0; left: 3px; width: 1px;
+  background: transparent; transition: background 0.12s ease;
+}
+.bpResize:hover::after, .bpResize:focus-visible::after, body.bpResizing .bpResize::after { background: var(--hair-bright); }
+body.bpResizing, body.bpResizing * { cursor: col-resize !important; user-select: none !important; }
+.bpBar { position: relative; display: flex; align-items: center; gap: 2px; height: var(--bar-h); padding: 0 8px; flex: none; border-bottom: 1px solid var(--hair); min-width: 0; }
 .bpBar .sp { flex: 1; }
 .bpBar .btn.ghost.on { color: var(--ink); background: var(--elev); }
-.bpBar .btn.spin svg { animation: spin 0.9s linear infinite; }
-@media (prefers-reduced-motion: reduce) { .bpBar .btn.spin svg { animation: none; } }
 .bpTitle { color: var(--ink); font-size: 0.9615rem; padding-left: 4px; }
-.bpUrl { flex: 1; min-width: 0; margin: 0 4px; }
+/* Below ~520px of pane, back/forward give their room to the address. */
+@container bpane (max-width: 520px) { .bpNavBtn { display: none; } }
+/* Narrower still, the chip keeps only its dot; the address needs the room. */
+@container bpane (max-width: 400px) { .bpProfile .nm, .bpProfile svg { display: none; } .bpProfile { padding: 0 8px; } }
+.browserPane { container: bpane / inline-size; }
+
+/* the profile chip, and its switcher */
+.profDot { display: inline-block; flex: none; border-radius: var(--r-full); }
+.bpProfileWrap { display: inline-flex; }
+.bpProfile {
+  display: inline-flex; align-items: center; gap: 6px; flex: none; max-width: 150px; height: 26px; margin-right: 4px; padding: 0 8px 0 9px;
+  border: 1px solid var(--hair-strong); border-radius: var(--r-full); background: var(--card);
+  color: var(--ink); font: inherit; font-size: 0.9231rem; font-weight: 500; white-space: nowrap; cursor: pointer;
+}
+.bpProfile .nm { overflow: hidden; text-overflow: ellipsis; }
+.bpProfile svg { flex: none; color: var(--ash); }
+.bpProfile:hover:not(:disabled), .bpProfile[data-state="open"] { border-color: var(--hair-bright); background: var(--elev); }
+.bpProfile:disabled { opacity: 0.55; cursor: default; }
+.bpProfile.static { cursor: default; }
+.uiMenu.bpProfileMenu { width: 280px; }
+.bpMenuGroup { padding: 8px 9px 4px; font-family: var(--mono); font-size: 0.7692rem; color: var(--stone); text-transform: lowercase; }
+.bpProfileItem { gap: 10px; }
+.bpProfileItem .nm { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.bpProfileItem .nm b { font-weight: 500; color: var(--ink); }
+.bpProfileItem .nm small { font-size: 0.7692rem; color: var(--ash); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bpProfileItem .star { color: var(--ash); font-weight: 400; }
+.bpProfileItem .chk { display: inline-flex; width: 14px; color: var(--ink); }
+.bpProfileItem .profDot { align-self: flex-start; margin-top: 6px; }
+
+/* the address field: at rest a mark, the host in ink, the path in ash; focused, the URL */
+.bpUrl { position: relative; flex: 1; min-width: 0; margin: 0 4px; }
 .bpUrl input {
-  width: 100%; height: 26px; padding: 0 10px; border-radius: var(--r-full);
-  border: 1px solid var(--hair-strong); background: var(--card); color: var(--body); font-size: 0.8462rem;
+  width: 100%; height: 28px; padding: 0 10px; border-radius: var(--r-full);
+  border: 1px solid var(--hair-strong); background: var(--card); color: var(--ink); font-size: 0.9231rem;
   outline: none;
 }
-.bpUrl input:focus { border-color: var(--hair-bright); color: var(--ink); }
-.bpAgent { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 20px; height: 24px; }
+.bpUrl input::placeholder { color: var(--stone); }
+.bpUrl input:focus { border-color: var(--hair-bright); }
+.bpUrl input.rest { color: transparent; caret-color: transparent; }
+.bpUrlRest {
+  position: absolute; inset: 1px 1px 1px 11px; z-index: 1; display: flex; align-items: center; gap: 6px; min-width: 0;
+  padding: 0; border: 0; background: none; font-size: 0.9231rem; white-space: nowrap; overflow: hidden; cursor: text; text-align: left;
+}
+.bpHost { color: var(--ink); flex: none; max-width: 55%; overflow: hidden; text-overflow: ellipsis; }
+.bpPath { color: var(--ash); min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.bpMark { display: inline-flex; align-items: center; gap: 4px; flex: none; color: var(--ash); font-size: 0.8462rem; }
+.bpMark.warn { color: var(--yellow); }
+/* "local" and "Not secure" fold to their icon (with a tooltip) when the path needs the room. */
+@container bpane (max-width: 760px) { .bpMark .t { display: none; } }
+
+/* the find bar takes the address field's place */
+.bpFind {
+  flex: 1; min-width: 0; height: 28px; margin: 0 4px; display: flex; align-items: center; gap: 2px; padding: 0 2px 0 10px;
+  border: 1px solid var(--hair-bright); border-radius: var(--r-full); background: var(--card);
+}
+.bpFind input { flex: 1; min-width: 0; height: 100%; padding: 0 6px; border: 0; background: none; color: var(--ink); font: inherit; font-size: 0.9231rem; outline: none; }
+.bpFind input::placeholder { color: var(--stone); }
+.bpFindCount { flex: none; padding: 0 6px; color: var(--ash); font-size: 0.7692rem; }
+.bpFind .btn.icon { width: 22px; height: 22px; }
+
+/* the 2px progress bar on the toolbar's bottom hairline */
+.bpProgress { position: absolute; left: 0; bottom: -1px; height: 2px; width: 0; background: var(--blue); border-radius: 0 2px 2px 0; opacity: 0; pointer-events: none; }
+.bpProgress.loading { opacity: 1; animation: bpLoad 8s cubic-bezier(0.1, 0.7, 0.2, 1) forwards; }
+.bpProgress.done { opacity: 0; width: 100%; transition: width 0.15s ease, opacity 0.3s ease 0.15s; }
+@keyframes bpLoad { 0% { width: 0; } 4% { width: 30%; } 100% { width: 85%; } }
+@media (prefers-reduced-motion: reduce) {
+  .bpProgress.loading { animation: none; width: 100%; }
+  .bpProgress.done { transition: none; }
+}
+
 .bpVpMenu { min-width: 200px; }
 .bpVpMenu .uiMenuItem { gap: 10px; }
 .bpVpLabel { flex: 1; }
 .bpVpHint { color: var(--ash); font-size: 0.7692rem; }
 .bpVpCheck { display: inline-flex; width: 13px; color: var(--ink); }
-.bpNote { flex: none; padding: 6px 14px; border-bottom: 1px solid var(--hair); background: var(--tint-red); color: var(--body); font-size: 0.8462rem; }
-.bpStage { flex: 1; min-height: 0; position: relative; background: var(--deep); }
-.bpEmpty { max-width: 340px; margin: 72px auto 0; padding: 0 20px; color: var(--mute); font-size: 0.9231rem; line-height: 1.55; }
-.bpEmpty p { margin: 0 0 8px; }
-.bpEmpty .bpLead { font-family: var(--display); font-size: 1.5rem; color: var(--ink); line-height: 1.2; }
+.uiMenu.bpMoreMenu { min-width: 220px; }
+.bpMoreMenu .uiMenuItem .k { color: var(--ash); }
+
+/* strips under the toolbar: Junior driving, a sign-in window, a dialog, a download */
+.bpStrip {
+  flex: none; display: flex; align-items: center; gap: 8px; min-height: 32px; padding: 0 8px 0 14px;
+  border-bottom: 1px solid var(--hair); font-size: 0.8846rem; color: var(--body); min-width: 0;
+}
+.bpStrip b { color: var(--ink); font-weight: 500; white-space: nowrap; }
+.bpStrip .step { color: var(--charcoal); min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bpStrip .sp { flex: 1; }
+.bpStrip.drive { background: var(--tint-blue); border-bottom-color: var(--edge-blue); }
+.bpStrip.wait, .bpStrip.wheel { background: var(--tint-yellow); border-bottom-color: var(--edge-yellow); }
+.bpStrip.warn { background: var(--tint-red); }
+.bpStrip.done { background: var(--card); }
+.bpNote {
+  flex: none; display: flex; align-items: center; gap: 8px; padding: 4px 8px 4px 14px; border-bottom: 1px solid var(--hair);
+  background: var(--tint-red); color: var(--body); font-size: 0.8462rem;
+}
+.bpNote span { flex: 1; min-width: 0; }
+.bpNote.ok { background: var(--card); }
+
+.bpStage { flex: 1; min-height: 0; position: relative; background: var(--canvas); overflow: auto; }
+/* While Junior drives, the page is inset 2px and the ring sits in that gap: ours, outside the page. */
+.bpStage.driving { box-shadow: inset 0 0 0 2px var(--blue); }
+.bpEmpty { max-width: 420px; margin: 56px auto 0; padding: 0 20px 24px; color: var(--mute); font-size: 0.9231rem; line-height: 1.55; }
+.bpEmpty p { margin: 0 0 14px; }
+.bpEmpty .bpLead { font-family: var(--display); font-size: 1.8462rem; color: var(--ink); line-height: 1.15; margin-bottom: 6px; }
+.bpEmpty .bpWait { color: var(--ash); font-size: 0.8462rem; }
+.bpEmpty .bpLead .mono { font-size: 0.75em; }
+/* The page as a picture while one of our menus would otherwise blank it (design §3.8). */
+.bpFrozen { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; object-position: top center; opacity: 0.85; pointer-events: none; }
+/* An emulated size, under the page: what you're looking at, and how far it's scaled down. */
+.bpVpCaption {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 22px; display: flex; align-items: center; justify-content: center;
+  font-size: 0.7692rem; color: var(--ash); pointer-events: none;
+}
+.bpBtns { display: flex; gap: 8px; flex-wrap: wrap; }
+.bpReopen { width: 100%; justify-content: flex-start; gap: 8px; margin: 0 0 6px; }
+.bpReopen .h { color: var(--ink); font-weight: 400; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bpGroup { margin: 18px 0 6px; font-family: var(--mono); font-size: 0.7692rem; color: var(--stone); text-transform: lowercase; }
+.bpSites { list-style: none; margin: 0; padding: 0; }
+.bpSiteRow {
+  display: flex; align-items: center; gap: 10px; width: calc(100% + 16px); height: 32px; margin: 0 -8px; padding: 0 8px;
+  border: 0; border-radius: var(--r-sm); background: none; color: var(--ink); font: inherit; cursor: pointer; text-align: left;
+}
+.bpSiteRow:hover { background: var(--wash-2); }
+.bpSiteRow svg { color: var(--ash); flex: none; }
+
+/* a profile's sign-in tab in Settings → Browser: the same pane, full width */
+.bpSignin { display: flex; flex-direction: column; gap: 10px; height: calc(var(--vvh, 100vh) - 190px); min-height: 420px; padding-top: 14px; }
+.bpSigninHead { display: flex; align-items: center; gap: 8px; color: var(--ink); }
+.bpSigninHead .t { font-weight: 500; }
+.browserPane.signin { flex: 1; min-width: 0; max-width: none; border: 1px solid var(--hair-strong); border-radius: var(--r-lg) var(--r-lg) 0 0; overflow: hidden; }
 #chatHeader .browserBtn { margin-left: auto; flex: none; gap: 6px; }
 #chatHeader .browserBtn.on { color: var(--ink); background: var(--elev); }
+#chatHeader .browserBtn .bbSep { color: var(--stone); }
+#chatHeader .browserBtn .bbProfile { display: inline-flex; align-items: center; gap: 5px; color: var(--ash); font-weight: 400; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#chatHeader .browserBtn .bbProfile .profDot { box-shadow: 0 0 0 1px var(--hair-bright); }
 #chatHeader .agentsBtn + .browserBtn { margin-left: 0; }
 #chatHeader .browserBtn + .costPill, #chatHeader .browserBtn + .costSkel { margin-left: 0; }
 
@@ -766,3 +896,18 @@ button.edText:focus-visible { outline: none; border-color: var(--hair-bright); }
 .hoFix { color: var(--ash); font-size: 0.8462rem; }
 .hoFiles { font-size: 0.7692rem; color: var(--stone); }
 
+/* Under a browser_open: which profile it loaded in; a switch is its own quiet line. */
+.bpToolProfile { display: flex; align-items: center; justify-content: flex-end; gap: 5px; margin: 2px 2px 0; font-size: 0.8077rem; color: var(--ash); }
+.bpSwitchNotice { margin: 6px 0; font-size: 0.8077rem; color: var(--ash); text-align: center; }
+/* Watching a job run (JobPage): its transcript, and its browser beside it. */
+.runModal .runWrap { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.runModal .runWrap.watch { flex-direction: row; }
+.runModal .runWrap.watch .body { flex: 1 1 45%; min-width: 320px; }
+.runModal.watch { width: min(1400px, calc(100vw - 48px)); max-width: none; }
+.browserPane.embedded { flex: 1 1 55%; min-width: min(360px, 50%); max-width: none; }
+/* A permission card that says why it asks in words (the browser gate): the reason leads, the call folds away. */
+.perm .permWhy { margin: 0 0 8px; color: var(--ink); font-size: 1rem; line-height: 1.5; }
+.perm .permArgs { margin-bottom: 12px; }
+.perm .permArgs summary { cursor: pointer; color: var(--ash); font-size: 0.8462rem; width: fit-content; }
+.perm .permArgs summary:hover { color: var(--ink); }
+.perm .permArgs .well { margin: 6px 0 0; }

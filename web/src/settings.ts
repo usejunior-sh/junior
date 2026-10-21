@@ -15,6 +15,7 @@ export type SettingsTab =
   | 'briefs'
   | 'babysit'
   | 'approvals'
+  | 'browser'
   | 'skills'
   | 'agents'
   | 'teams'
@@ -46,6 +47,7 @@ export const SETTINGS_TABS: ReadonlyArray<SettingsTabMeta> = [
   { id: 'projects', label: 'Projects', sub: 'The local folders you work in. Sessions run in a project’s folder, and dispatch matches a work item’s repo to land there.', group: 'workspace' },
   { id: 'models', label: 'Models', sub: 'Which models the model picker offers — hide the ones you never use, or add an id Claude Code does not list yet.', group: 'workspace' },
   { id: 'approvals', label: 'Approvals', sub: 'Sends Junior may make without asking each time — who, what and when. Revoke any of them here.', group: 'workspace' },
+  { id: 'browser', label: 'Browser', sub: 'Profiles keep separate logins. Junior uses the one you name.', group: 'workspace' },
   { id: 'babysit', label: 'Babysit', sub: 'Junior keeps your PRs green: on or off, the models it uses, and what it may spend.', group: 'workspace' },
   { id: 'briefs', label: 'Briefs', sub: 'How briefs run: the daily cap, the model, and the playbook for each kind of work item.', group: 'workspace' },
   { id: 'skills', label: 'Skills', sub: 'Every skill a session here can use — this workspace’s, yours, each project’s, and your plugins’. Edits are live in open sessions.', group: 'workspace', fill: true },
