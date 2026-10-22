@@ -1,4 +1,3 @@
-import * as Switch from '@radix-ui/react-switch'
 import { useState, useEffect } from 'react'
 import type { ConnectorsResponse } from '../../../../shared/protocol.js'
 import { setSettingsTab } from '../../settings.js'
@@ -6,7 +5,7 @@ import { MAX_GOAL_TEAM } from '../../../../core/goals/types.js'
 import { RepoScopeEditor } from '../RepoScope.js'
 import { Row, Section, useWorkspaceSettings } from './shared.js'
 
-// Sources: GitHub scope, connectors.
+// Sources: GitHub scope, connectors. The jobs switch lives under Automations.
 
 export function SourcesTab() {
   const [connectors, setConnectors] = useState<{ total: number; connected: number; slack: boolean } | 'loading' | 'error'>(
@@ -36,8 +35,6 @@ export function SourcesTab() {
       >
         <RepoScopeEditor onSaved={() => {}} />
       </Section>
-
-      <JobsSwitchSection />
 
       <Section
         title="Slack and connectors"
@@ -90,51 +87,6 @@ export function GoalTeamSection() {
             else if (settings) setSize(String(settings.goalsMaxTeam))
           }}
         />
-      </Row>
-      {error && <div className="msg error">{error}</div>}
-    </Section>
-  )
-}
-
-/** The global jobs switch, off by default in 0.7 (.docs/next-version.md), and default run limits. */
-function JobsSwitchSection() {
-  const { settings, error, save } = useWorkspaceSettings()
-  const [timeoutMin, setTimeoutMin] = useState('')
-  const [budget, setBudget] = useState('')
-  useEffect(() => {
-    if (!settings) return
-    setTimeoutMin(String(Math.round(settings.jobTimeoutMs / 60_000)))
-    setBudget(settings.jobBudgetUsd != null ? String(settings.jobBudgetUsd) : '')
-  }, [settings])
-  const saveTimeout = () => {
-    const n = Number(timeoutMin)
-    if (Number.isFinite(n) && n >= 1 && n <= 60 && settings && Math.round(n * 60_000) !== settings.jobTimeoutMs) void save({ jobTimeoutMs: Math.round(n * 60_000) })
-  }
-  const saveBudget = () => {
-    const b = budget.trim() ? Number(budget) : null
-    if (b === null || (Number.isFinite(b) && b > 0 && b <= 100)) void save({ jobBudgetUsd: b })
-  }
-  return (
-    <Section
-      title="Jobs"
-      hint="Scheduled scans that file work items on their own. Off by default: add items by hand or by pasting a link, and switch this on once the briefs you queue by hand have earned it."
-    >
-      <Row label="Run jobs on a schedule" hint={settings?.jobsEnabled ? 'Due jobs run every minute tick.' : 'The scheduler skips every job. “Run now” on a job still works.'}>
-        <Switch.Root
-          className="uiSwitch"
-          checked={settings?.jobsEnabled ?? false}
-          disabled={!settings}
-          onCheckedChange={(on) => void save({ jobsEnabled: on })}
-          aria-label="Run jobs on a schedule"
-        >
-          <Switch.Thumb className="uiSwitchThumb" />
-        </Switch.Root>
-      </Row>
-      <Row label="Default timeout" hint="Minutes a job run may take before it is stopped and recorded as timed out. A job can set its own.">
-        <input className="setNum" inputMode="numeric" value={timeoutMin} disabled={!settings} onChange={(e) => setTimeoutMin(e.target.value)} onBlur={saveTimeout} aria-label="Default job timeout in minutes" />
-      </Row>
-      <Row label="Default budget per run" hint="Dollars a job run may spend before it stops. Blank = no cap. A job can set its own.">
-        <input className="setNum" inputMode="decimal" value={budget} placeholder="none" disabled={!settings} onChange={(e) => setBudget(e.target.value)} onBlur={saveBudget} aria-label="Default job budget in dollars" />
       </Row>
       {error && <div className="msg error">{error}</div>}
     </Section>

@@ -35,7 +35,7 @@ export function heldBy(step: string | undefined, handoff: Handoff | undefined): 
 }
 
 /**
- * The watches a workspace switches on or off one by one (Settings → Workspace):
+ * The watches a workspace switches on or off one by one (Settings → Automations):
  * babysit fixes your PRs, review takes a first pass at PRs that ask for you.
  * Off = it stops polling, and its queued tasks wait until it is back on.
  */

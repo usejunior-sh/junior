@@ -1,12 +1,14 @@
+import * as Switch from '@radix-ui/react-switch'
 import { useEffect, useState } from 'react'
 import type { BabysitSettings } from '../../../../core/babysit/settings.js'
 import { usePickableModels } from '../../models.js'
 import { Select, SelectItem } from '../../ui/Select.js'
-import { Row, Section } from './shared.js'
+import { Row, Section, useWorkspaceSettings } from './shared.js'
 
 type Resp = { ok: true; settings: BabysitSettings } | { ok: false; error: string }
 
-// Babysitting your PRs and first-pass reviews: the model per kind of task, and what it may spend. What it works on is what you hand off.
+// Automations: a switch for each thing Junior runs on its own (babysitting, first-pass reviews, jobs),
+// then the models and spend for babysitting and reviews, and the default limits for a job run.
 
 export function BabysitTab() {
   const [s, setS] = useState<BabysitSettings | null>(null)
@@ -57,6 +59,7 @@ export function BabysitTab() {
 
   return (
     <>
+      <SwitchesSection />
       <Section
         title="What Junior works on"
         hint="Only the PRs you hand off. Press Babysit on your PR, or First pass on a review request. Both are on the Junior page and on each PR’s page. Junior fixes red CI and bot comments, rebases, and pushes to your PR branch. It asks before it requests a reviewer or posts a review. Pause a PR to stop it."
@@ -86,6 +89,81 @@ export function BabysitTab() {
         </Row>
         {error && <div className="msg error">{error}</div>}
       </Section>
+      <JobLimitsSection />
     </>
+  )
+}
+
+/** One switch for each thing Junior runs on its own here. New workspaces start with each one off. */
+function SwitchesSection() {
+  const { settings, error, save } = useWorkspaceSettings()
+  const rows = [
+    {
+      field: 'babysitEnabled',
+      label: 'PR babysitting',
+      on: 'Junior watches your PRs. It fixes CI, comments and rebases on the ones you hand off.',
+      off: 'Junior doesn’t watch your PRs. Fixes already queued wait until you switch it on.',
+    },
+    {
+      field: 'reviewsEnabled',
+      label: 'First-pass reviews',
+      on: 'Junior watches PRs that ask for your review. It reviews the ones you hand off.',
+      off: 'Junior doesn’t watch review requests. Reviews already queued wait until you switch it on.',
+    },
+    {
+      field: 'jobsEnabled',
+      label: 'Scheduled jobs',
+      on: 'Due jobs run on their schedule.',
+      off: 'The scheduler skips every job. “Run now” on a job still works.',
+    },
+  ] as const
+  return (
+    <Section title="On or off" hint="What Junior runs here on its own. New workspaces start with each one off.">
+      {rows.map((r) => (
+        <Row key={r.field} label={r.label} hint={settings?.[r.field] ? r.on : r.off}>
+          <Switch.Root
+            className="uiSwitch"
+            checked={settings?.[r.field] ?? false}
+            disabled={!settings}
+            onCheckedChange={(on) => void save({ [r.field]: on })}
+            aria-label={r.label}
+          >
+            <Switch.Thumb className="uiSwitchThumb" />
+          </Switch.Root>
+        </Row>
+      ))}
+      {error && <div className="msg error">{error}</div>}
+    </Section>
+  )
+}
+
+/** The default limits for a job run; a job can set its own. */
+function JobLimitsSection() {
+  const { settings, error, save } = useWorkspaceSettings()
+  const [timeoutMin, setTimeoutMin] = useState('')
+  const [budget, setBudget] = useState('')
+  useEffect(() => {
+    if (!settings) return
+    setTimeoutMin(String(Math.round(settings.jobTimeoutMs / 60_000)))
+    setBudget(settings.jobBudgetUsd != null ? String(settings.jobBudgetUsd) : '')
+  }, [settings])
+  const saveTimeout = () => {
+    const n = Number(timeoutMin)
+    if (Number.isFinite(n) && n >= 1 && n <= 60 && settings && Math.round(n * 60_000) !== settings.jobTimeoutMs) void save({ jobTimeoutMs: Math.round(n * 60_000) })
+  }
+  const saveBudget = () => {
+    const b = budget.trim() ? Number(budget) : null
+    if (b === null || (Number.isFinite(b) && b > 0 && b <= 100)) void save({ jobBudgetUsd: b })
+  }
+  return (
+    <Section title="Jobs" hint="Scheduled scans that file work items on their own. These are the defaults; a job can set its own.">
+      <Row label="Default timeout" hint="Minutes a job run may take before it is stopped and recorded as timed out.">
+        <input className="setNum" inputMode="numeric" value={timeoutMin} disabled={!settings} onChange={(e) => setTimeoutMin(e.target.value)} onBlur={saveTimeout} aria-label="Default job timeout in minutes" />
+      </Row>
+      <Row label="Default budget per run" hint="Dollars a job run may spend before it stops. Blank = no cap.">
+        <input className="setNum" inputMode="decimal" value={budget} placeholder="none" disabled={!settings} onChange={(e) => setBudget(e.target.value)} onBlur={saveBudget} aria-label="Default job budget in dollars" />
+      </Row>
+      {error && <div className="msg error">{error}</div>}
+    </Section>
   )
 }

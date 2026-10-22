@@ -2,7 +2,7 @@
  * The task runner: Junior's queued tasks become short fresh sessions, at most
  * `maxRunning` at once, one per item at a time, each in the item's own
  * worktree, on the model its step calls for, within the per-task and daily
- * budgets (Settings → Babysit). A session is one turn: it hands in with
+ * budgets (Settings → Automations). A session is one turn: it hands in with
  * submit_task, and its result ends the run (like a goal worker's).
  *
  * Junior runs the babysit playbook's tasks (fix-ci, fix-thread, rebase) and

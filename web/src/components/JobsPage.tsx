@@ -67,7 +67,7 @@ export function JobsPage({
   const [tab, setTab] = useState<Tab>('active')
   const [filter, setFilter] = useState('')
   const [running, setRunning] = useState<Set<string>>(new Set())
-  // The global switch (Settings → Sources). Off = the scheduler never runs a job.
+  // The global switch (Settings → Automations). Off = the scheduler never runs a job.
   const [enabled, setEnabled] = useState<boolean | null>(null)
   const [projects, setProjects] = useState<Project[]>([])
 
@@ -185,7 +185,7 @@ export function JobsPage({
         {enabled === false && (
           <div className="notice jobsOff">
             Scheduled runs are <b>off</b> for this workspace. Jobs stay editable and “Run now” still works, but nothing runs on its own.{' '}
-            <a href="#/settings/sources">Turn jobs on in Settings → Sources</a>.
+            <a href="#/settings/babysit">Turn jobs on in Settings → Automations</a>.
           </div>
         )}
 

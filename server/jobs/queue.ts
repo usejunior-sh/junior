@@ -80,7 +80,7 @@ async function recordSkip(rt: WorkspaceRuntime, w: Job, reason: SkipReason, slot
  * job, record skips, queue due runs oldest slot first.
  */
 export async function runDueJobs(rt: WorkspaceRuntime, now = Date.now()): Promise<void> {
-  // The global switch (Settings → Sources): off means the scheduler never runs a job.
+  // The global switch (Settings → Automations): off means the scheduler never runs a job.
   if (!(await jobsEnabled(rt))) return
   await syncJobFiles(rt).catch(() => {}) // logged by the sync; a bad file never stops the tick
   const projects = await rt.store.projects.list()

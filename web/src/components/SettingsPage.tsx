@@ -9,7 +9,7 @@
  * server; browser-scoped ones (Sessions · Shortcuts) write to localStorage.
  */
 import * as Tabs from '@radix-ui/react-tabs'
-import { type LucideProps, GitPullRequest, ShieldCheck, Settings2, Bot, Plug, Folder, Gauge, Sparkles, WandSparkles, BotMessageSquare, Users, Cable, Activity, Wallet, ScrollText, Palette, SwatchBook, MessagesSquare, Keyboard, Smartphone, Info, RefreshCw, X, Globe } from 'lucide-react'
+import { type LucideProps, Zap, ShieldCheck, Settings2, Bot, Plug, Folder, Gauge, Sparkles, WandSparkles, BotMessageSquare, Users, Cable, Activity, Wallet, ScrollText, Palette, SwatchBook, MessagesSquare, Keyboard, Smartphone, Info, RefreshCw, X, Globe } from 'lucide-react'
 import { type ComponentType, useState, useEffect, useCallback } from 'react'
 import type { Workspace } from '../../../shared/protocol.js'
 import { isTypingTarget, anyDialogOpen } from '../keys.js'
@@ -40,7 +40,7 @@ const ICONS: Record<SettingsTab, ComponentType<LucideProps>> = {
   projects: Folder,
   models: Gauge,
   briefs: Sparkles,
-  babysit: GitPullRequest,
+  babysit: Zap,
   approvals: ShieldCheck,
   browser: Globe,
   skills: WandSparkles,

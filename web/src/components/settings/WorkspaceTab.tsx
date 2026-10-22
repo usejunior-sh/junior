@@ -1,11 +1,10 @@
-import * as Switch from '@radix-ui/react-switch'
 import { useState } from 'react'
 import type { Workspace, WorkspaceResponse, WorkspacesResponse } from '../../../../shared/protocol.js'
 import { store } from '../../store.js'
 import { ColorPicker, authTitle } from '../workspaceAuth.js'
-import { Row, SaveRow, Section, useSavedFlash, useWorkspaceSettings } from './shared.js'
+import { Row, SaveRow, Section, useSavedFlash } from './shared.js'
 
-// Workspace: identity, watches, default, delete.
+// Workspace: identity, default, delete.
 
 export function WorkspaceTab({ workspace }: { workspace: Workspace }) {
   const [name, setName] = useState(workspace.name)
@@ -75,8 +74,6 @@ export function WorkspaceTab({ workspace }: { workspace: Workspace }) {
         <SaveRow dirty={dirty} saving={saving} saved={saved} error={error} onSave={() => void save()} />
       </Section>
 
-      <WatchesSection />
-
       <Section title="Default workspace" hint="The workspace the daemon, the CLI, and a fresh browser open when none is named.">
         <Row
           label={workspace.isDefault ? 'This is the default workspace' : 'Make this the default'}
@@ -118,43 +115,6 @@ export function WorkspaceTab({ workspace }: { workspace: Workspace }) {
         </Section>
       )}
     </>
-  )
-}
-
-/** What Junior watches here on its own, one switch each. Jobs have their own switch, under Sources. */
-function WatchesSection() {
-  const { settings, error, save } = useWorkspaceSettings()
-  const rows = [
-    {
-      field: 'babysitEnabled',
-      label: 'PR babysitting',
-      on: 'Junior watches your PRs. It fixes CI, comments and rebases on the ones you hand off.',
-      off: 'Junior doesn’t watch your PRs. Fixes already queued wait until you switch it on.',
-    },
-    {
-      field: 'reviewsEnabled',
-      label: 'First-pass reviews',
-      on: 'Junior watches PRs that ask for your review. It reviews the ones you hand off.',
-      off: 'Junior doesn’t watch review requests. Reviews already queued wait until you switch it on.',
-    },
-  ] as const
-  return (
-    <Section title="Watches" hint="What Junior watches here on its own. New workspaces start with each one off. Jobs have their own switch, under Sources.">
-      {rows.map((r) => (
-        <Row key={r.field} label={r.label} hint={settings?.[r.field] ? r.on : r.off}>
-          <Switch.Root
-            className="uiSwitch"
-            checked={settings?.[r.field] ?? false}
-            disabled={!settings}
-            onCheckedChange={(on) => void save({ [r.field]: on })}
-            aria-label={r.label}
-          >
-            <Switch.Thumb className="uiSwitchThumb" />
-          </Switch.Root>
-        </Row>
-      ))}
-      {error && <div className="msg error">{error}</div>}
-    </Section>
   )
 }
 
