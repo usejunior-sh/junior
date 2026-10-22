@@ -66,6 +66,16 @@ if (!userData) {
   const now = app.getPath('userData')
   const before = path.join(path.dirname(now), path.basename(now).replace('Junior', 'Triage'))
   if (before !== now && fs.existsSync(before) && !fs.existsSync(now)) fs.renameSync(before, now)
+  // The browser's cookie jars were named persist:triage-*; they are persist:junior-* now
+  // (partitionOf). Without this the profiles' saved logins stay behind in the old jars.
+  const parts = path.join(now, 'Partitions')
+  if (fs.existsSync(parts)) {
+    for (const name of fs.readdirSync(parts)) {
+      if (!name.startsWith('triage-')) continue
+      const to = path.join(parts, 'junior-' + name.slice('triage-'.length))
+      if (!fs.existsSync(to)) fs.renameSync(path.join(parts, name), to)
+    }
+  }
 }
 
 if (!app.requestSingleInstanceLock()) {
