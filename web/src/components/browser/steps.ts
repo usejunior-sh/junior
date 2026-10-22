@@ -17,7 +17,13 @@ const hostOf = (url: unknown) => {
 export function stepOf(tool: string, input: Record<string, unknown>): string {
   switch (tool) {
     case 'browser_open':
-      return `Opening ${hostOf(input.url)}`
+      return input.newPage === true ? `Opening ${hostOf(input.url)} in a new page` : `Opening ${hostOf(input.url)}`
+    case 'browser_page':
+      return input.action === 'switch' && typeof input.page === 'number'
+        ? `Switching to page ${input.page}`
+        : input.action === 'close' && typeof input.page === 'number'
+          ? `Closing page ${input.page}`
+          : 'Looking at the pages'
     case 'browser_snapshot':
     case 'browser_extract':
       return 'Reading the page'

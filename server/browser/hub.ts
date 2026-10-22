@@ -135,6 +135,22 @@ type TabRecord = {
 
 const emptyRecord = (): TabRecord => ({ profile: null, url: '', title: '', viewport: null, colorScheme: null, updatedAt: null })
 
+/**
+ * A session's pages (.docs/browser.md → Pages): page 1 is the session's own
+ * tab, keyed by the session id; more pages are `<session>.p<n>`, opened by the
+ * agent (browser_open newPage) or by a link that opens a new tab. They share
+ * the session's profile (its logins), takeover and allowed sites; each has its
+ * own URL, logs, dialog and checkpoints. Extra pages are not remembered across
+ * a daemon restart.
+ */
+const PAGE_SUFFIX = /\.p(\d{1,2})$/
+export const baseKey = (key: string) => key.replace(PAGE_SUFFIX, '')
+export const pageNumber = (key: string) => Number(PAGE_SUFFIX.exec(key)?.[1] ?? 1)
+export const pageKey = (sessionId: string, n: number) => (n <= 1 ? sessionId : `${sessionId}.p${n}`)
+const MAX_PAGES = 6
+
+type SessionPages = { keys: string[]; active: string; next: number }
+
 /** The profile a tab ends up in, and whether it fell back from one that was deleted. */
 export type ResolvedProfile = { profile: string; explicit: boolean; missing: string | null }
 
@@ -151,6 +167,8 @@ export class BrowserHub {
   /** tabs open in the app right now */
   private readonly live = new Set<string>()
   private readonly persistTimers = new Map<string, NodeJS.Timeout>()
+  /** sessions with more than one page; absent = just page 1 */
+  private readonly sessionPages = new Map<string, SessionPages>()
   private resolver: (sessionId: string) => TabOwner | null = () => null
 
   constructor(private readonly onStatus: () => void = () => {}) {}
@@ -160,9 +178,75 @@ export class BrowserHub {
     return { connected, compatible: connected && this.hostInfo!.version === BROWSER_WIRE_VERSION, version: this.hostInfo?.version ?? null }
   }
 
-  /** How a tab key finds its owner (installed once, at boot). */
+  /** How a tab key finds its owner (installed once, at boot): a page finds its session's. */
   setResolver(fn: (sessionId: string) => TabOwner | null) {
-    this.resolver = fn
+    this.resolver = (key) => fn(baseKey(key))
+  }
+
+  // ── pages: more than one tab in a session ────────────────────────────────
+
+  /** The key of the page the session is on: what the pane shows and the tools act on. */
+  activeKey(sessionId: string): string {
+    return this.sessionPages.get(baseKey(sessionId))?.active ?? baseKey(sessionId)
+  }
+
+  /** Every page of a session, page 1 first. */
+  pageKeys(sessionId: string): string[] {
+    const base = baseKey(sessionId)
+    return this.sessionPages.get(base)?.keys ?? [base]
+  }
+
+  /** A new page in the session, made the active one. Opening a URL in it is the caller's. */
+  newPage(sessionId: string): string {
+    const base = baseKey(sessionId)
+    const sp = this.sessionPages.get(base) ?? { keys: [base], active: base, next: 2 }
+    if (sp.keys.length >= MAX_PAGES) throw new Error(`This session already has ${MAX_PAGES} pages open. Close one with browser_page first.`)
+    const key = pageKey(base, sp.next++)
+    sp.keys.push(key)
+    sp.active = key
+    this.sessionPages.set(base, sp)
+    void this.announce(base)
+    return key
+  }
+
+  /** Make a page the active one (by its number). */
+  switchPage(sessionId: string, n: number, opts: { byUser?: boolean } = {}): string {
+    const base = baseKey(sessionId)
+    const key = pageKey(base, n)
+    const sp = this.sessionPages.get(base)
+    if (!(sp?.keys.includes(key) ?? n === 1)) throw new Error(`There is no page ${n}. Pages: ${this.pageKeys(base).map(pageNumber).join(', ')}.`)
+    if (sp && sp.active !== key) {
+      sp.active = key
+      // you switched in the pane: Junior's next call hears about it
+      if (opts.byUser) this.page(key).touched = true
+      void this.announce(base)
+    }
+    return key
+  }
+
+  /** Close a page (page 1 is the session's own and stays). The active one falls back to the page before it. */
+  closePage(sessionId: string, n: number): void {
+    const base = baseKey(sessionId)
+    if (n <= 1) throw new Error('Page 1 is the session\'s own tab and stays open. Close the others.')
+    const key = pageKey(base, n)
+    const sp = this.sessionPages.get(base)
+    if (!sp?.keys.includes(key)) throw new Error(`There is no page ${n}.`)
+    if (this.status.compatible) void this.call(key, { verb: 'close' }).catch(() => {})
+    this.dropPage(base, key)
+  }
+
+  private dropPage(base: string, key: string) {
+    const sp = this.sessionPages.get(base)
+    if (!sp) return
+    const i = sp.keys.indexOf(key)
+    if (i < 0) return
+    sp.keys.splice(i, 1)
+    if (sp.active === key) sp.active = sp.keys[Math.max(0, i - 1)] ?? base
+    this.pages.delete(key)
+    this.records.delete(key)
+    this.live.delete(key)
+    // kept, even down to page 1: numbers never come back, so a close still in flight can't hit a new page
+    void this.announce(base)
   }
 
   /** A host (Junior.app's main process) connected. The newest wins: a restarted app beats its old socket. */
@@ -216,8 +300,25 @@ export class BrowserHub {
         this.page(f.sessionId).touched = true
         return
       case 'closed':
-        this.markClosed(f.sessionId)
+        // an extra page the app closed (its window went, the page called window.close) is gone for good
+        if (baseKey(f.sessionId) !== f.sessionId) this.dropPage(baseKey(f.sessionId), f.sessionId)
+        else this.markClosed(f.sessionId)
         return
+      case 'newpage': {
+        // a link or window.open asked for a new tab: a new page in the same session, made active
+        const base = baseKey(f.sessionId)
+        let key: string
+        try {
+          key = this.newPage(base)
+        } catch (err) {
+          // too many pages: the link opens where it was clicked instead
+          void this.open(f.sessionId, f.url, 'load').catch(() => {})
+          log('info', 'browser', err instanceof Error ? err.message : String(err), { session: base })
+          return
+        }
+        void this.open(key, f.url, 'load').catch((err) => log('warn', 'browser', `a new page did not open: ${err instanceof Error ? err.message : String(err)}`, { session: base }))
+        return
+      }
       case 'tab':
         this.live.add(f.sessionId)
         this.page(f.sessionId).url = f.url
@@ -235,7 +336,7 @@ export class BrowserHub {
       case 'download': {
         const note: DownloadNote = { file: f.file, path: f.path, bytes: f.bytes, state: f.state, byAgent: f.byAgent, at: Date.now() }
         if (f.byAgent) this.page(f.sessionId).downloads.push(note)
-        this.resolver(f.sessionId)?.broadcast({ type: 'browser_download', download: { sessionId: f.sessionId, ...note } })
+        this.resolver(f.sessionId)?.broadcast({ type: 'browser_download', download: { sessionId: baseKey(f.sessionId), ...note } })
         return
       }
     }
@@ -278,8 +379,16 @@ export class BrowserHub {
     this.fallbacks.set(sessionId, profile)
   }
 
-  /** The session is gone: close its tab and drop what was remembered about it (its row is the session store's to delete). */
+  /** The session is gone: close its tabs and drop what was remembered about them (its row is the session store's to delete). */
   forget(sessionId: string) {
+    for (const key of this.pageKeys(sessionId)) {
+      if (key === sessionId) continue
+      if (this.status.compatible) void this.call(key, { verb: 'close' }).catch(() => {})
+      this.pages.delete(key)
+      this.records.delete(key)
+      this.live.delete(key)
+    }
+    this.sessionPages.delete(sessionId)
     this.pages.delete(sessionId)
     this.fallbacks.delete(sessionId)
     this.records.delete(sessionId)
@@ -298,7 +407,7 @@ export class BrowserHub {
     let p = this.loading.get(sessionId)
     if (!p) {
       p = (async () => {
-        const owner = this.resolver(sessionId)
+        const owner = baseKey(sessionId) === sessionId ? this.resolver(sessionId) : null
         const row = owner ? await owner.store.get(sessionId).catch(() => null) : null
         const rec: TabRecord = row ? { profile: row.profile, url: row.url, title: row.title, viewport: row.viewport, colorScheme: row.colorScheme, updatedAt: row.updatedAt } : emptyRecord()
         // a frame may have filled it while the row loaded: the frame is newer
@@ -318,6 +427,8 @@ export class BrowserHub {
     Object.assign(rec, patch, { updatedAt: Date.now() })
     const owner = this.resolver(sessionId)
     if (!owner) return
+    // an extra page lives only as long as the daemon: told to the pane, not written down
+    if (baseKey(sessionId) !== sessionId) return void this.announce(sessionId)
     const t = this.persistTimers.get(sessionId)
     if (t) clearTimeout(t)
     this.persistTimers.set(
@@ -334,10 +445,10 @@ export class BrowserHub {
     void this.announce(sessionId)
   }
 
-  private async announce(sessionId: string) {
-    const owner = this.resolver(sessionId)
+  private async announce(key: string) {
+    const owner = this.resolver(key)
     if (!owner) return
-    owner.broadcast({ type: 'browser_tab', tab: await this.tabInfo(sessionId) })
+    owner.broadcast({ type: 'browser_tab', tab: await this.tabInfo(baseKey(key)) })
   }
 
   /**
@@ -346,6 +457,7 @@ export class BrowserHub {
    * Default. A pick that names a deleted profile falls back, and says so.
    */
   async resolve(sessionId: string, depth = 0): Promise<ResolvedProfile> {
+    if (baseKey(sessionId) !== sessionId) return this.resolve(baseKey(sessionId), depth)
     const profiles = browserProfiles()
     const signin = profileOfSigninTab(sessionId)
     if (signin) return profiles.get(signin) ? { profile: signin, explicit: true, missing: null } : { profile: DEFAULT_PROFILE, explicit: false, missing: signin }
@@ -389,19 +501,34 @@ export class BrowserHub {
     for (const rec of this.records.values()) if (rec.profile === id) rec.profile = null
   }
 
-  /** What the pane shows about a session's tab. */
+  /** What the pane shows about a session's tab: its active page, and the list when there are more. */
   async tabInfo(sessionId: string): Promise<BrowserTabInfo> {
-    const rec = await this.record(sessionId)
+    sessionId = baseKey(sessionId)
+    const own = await this.record(sessionId)
+    const active = this.activeKey(sessionId)
+    const rec = active === sessionId ? own : await this.record(active)
     const r = await this.resolve(sessionId)
+    const keys = this.pageKeys(sessionId)
+    const pages =
+      keys.length > 1
+        ? await Promise.all(
+            keys.map(async (k) => {
+              const pr = k === sessionId ? own : await this.record(k)
+              return { n: pageNumber(k), key: k, url: pr.url, title: pr.title, live: this.live.has(k) }
+            }),
+          )
+        : []
     return {
       sessionId,
-      profile: rec.profile,
+      pageKey: active,
+      pages,
+      profile: own.profile,
       effectiveProfile: r.profile,
       url: rec.url,
       title: rec.title,
       viewport: rec.viewport,
       colorScheme: rec.colorScheme,
-      live: this.live.has(sessionId),
+      live: this.live.has(active),
       heldByUser: this.pages.get(sessionId)?.heldByUser ?? false,
       agentStep: this.pages.get(sessionId)?.agentStep ?? null,
       updatedAt: rec.updatedAt,

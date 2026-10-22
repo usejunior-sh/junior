@@ -11,7 +11,7 @@
  * new BROWSER_WIRE_VERSION.
  */
 
-export const BROWSER_WIRE_VERSION = 2
+export const BROWSER_WIRE_VERSION = 3
 export const BROWSER_HOST_PATH = '/browser-host'
 
 /** A browser profile's id: 'default' or a slug. `partitionOf(id)` (core/browser/profiles.ts) is its cookie jar. */
@@ -66,8 +66,8 @@ export type TabState = {
 }
 
 /**
- * daemon → app. `sessionId` is the tab key: a session id, or `profile-<id>`
- * for a profile's sign-in tab in Settings. `profile` is the jar the tab must
+ * daemon → app. `sessionId` is the tab key: a session id, `<session>.p<n>` for
+ * a session's extra page, or `profile-<id>` for a profile's sign-in tab in Settings. `profile` is the jar the tab must
  * be in: a live tab in another one is recreated in this one first.
  */
 export type CallFrame = { type: 'call'; id: number; sessionId: string; profile: ProfileId } & HostVerb
@@ -116,6 +116,8 @@ export type HostFrame =
   | { type: 'popup'; sessionId: string; url: string; state: 'opened' | 'closed' }
   /** a JavaScript dialog opened (or was answered: null) */
   | { type: 'dialog'; sessionId: string; dialog: PageDialog | null }
+  /** a link or window.open in the tab wants a new tab: the daemon makes it a new page in the session (v3) */
+  | { type: 'newpage'; sessionId: string; url: string }
   /** a download finished, failed or was refused; `byAgent` = it started during an agent call */
   | { type: 'download'; sessionId: string; file: string; path: string; bytes: number; state: DownloadState; byAgent: boolean }
 
@@ -148,6 +150,8 @@ export function parseHostFrame(raw: string): HostFrame | null {
       return str(f.sessionId) && str(f.url) && (f.state === 'opened' || f.state === 'closed') ? (f as HostFrame) : null
     case 'dialog':
       return str(f.sessionId) && (f.dialog === null || (!!f.dialog && typeof f.dialog === 'object')) ? (f as HostFrame) : null
+    case 'newpage':
+      return str(f.sessionId) && str(f.url) ? (f as HostFrame) : null
     case 'download':
       return str(f.sessionId) && str(f.file) && str(f.path) && typeof f.bytes === 'number' && str(f.state) ? (f as HostFrame) : null
     default:

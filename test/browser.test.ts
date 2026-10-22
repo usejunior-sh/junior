@@ -219,3 +219,58 @@ test('hub: a host on another wire version is refused with what to update', async
     },
   )
 })
+
+test('hub pages: a session opens more pages in its own profile, switches, closes, and a new-tab link makes one', async () => {
+  const seen: Record<string, unknown>[] = []
+  await withHost(
+    BROWSER_WIRE_VERSION,
+    (f) => {
+      seen.push(f)
+      return f.verb === 'open' ? { url: f.url, title: 't', status: 200 } : { ok: true }
+    },
+    async (hub, host) => {
+      assert.equal(hub.activeKey('s1'), 's1')
+      assert.deepEqual(hub.pageKeys('s1'), ['s1'])
+
+      // browser_open newPage: page 2, made active, in page 1's profile
+      const p2 = hub.newPage('s1')
+      assert.equal(p2, 's1.p2')
+      assert.equal(hub.activeKey('s1'), 's1.p2')
+      await hub.open(p2, 'https://mail.example.com/', 'load')
+      const open2 = seen.find((f) => f.verb === 'open' && f.sessionId === 's1.p2')!
+      await hub.call('s1', { verb: 'state' })
+      assert.equal(open2.profile, seen.at(-1)!.profile, 'pages share the session profile (its logins)')
+
+      const info = await hub.tabInfo('s1.p2')
+      assert.equal(info.sessionId, 's1')
+      assert.equal(info.pageKey, 's1.p2')
+      assert.deepEqual(info.pages.map((p) => p.n), [1, 2])
+
+      // switch back from the pane: page 1 is active and its next tool call hears you moved it
+      assert.equal(hub.switchPage('s1', 1, { byUser: true }), 's1')
+      assert.equal(hub.page('s1').touched, true)
+      assert.throws(() => hub.switchPage('s1', 7), /no page 7/)
+
+      // page 1 stays; page 2 closes in the app and in the list
+      assert.throws(() => hub.closePage('s1', 1), /stays open/)
+      hub.switchPage('s1', 2)
+      hub.closePage('s1', 2)
+      assert.deepEqual(hub.pageKeys('s1'), ['s1'])
+      assert.equal(hub.activeKey('s1'), 's1', 'closing the active page falls back to the one before')
+      await new Promise((r) => setTimeout(r, 20))
+      assert.ok(seen.some((f) => f.verb === 'close' && f.sessionId === 's1.p2'))
+
+      // a target=_blank link in page 1: the app asks, the daemon makes page 3 and opens the URL there
+      host.send(JSON.stringify({ type: 'newpage', sessionId: 's1', url: 'https://docs.example.com/x' }))
+      await new Promise((r) => setTimeout(r, 40))
+      assert.equal(hub.activeKey('s1'), 's1.p3', 'numbers never reuse a closed page')
+      assert.ok(seen.some((f) => f.verb === 'open' && f.sessionId === 's1.p3' && f.url === 'https://docs.example.com/x'))
+
+      // the app closed page 3 itself (window.close): it leaves the list
+      host.send(JSON.stringify({ type: 'closed', sessionId: 's1.p3' }))
+      await new Promise((r) => setTimeout(r, 20))
+      assert.deepEqual(hub.pageKeys('s1'), ['s1'])
+      assert.deepEqual((await hub.tabInfo('s1')).pages, [])
+    },
+  )
+})

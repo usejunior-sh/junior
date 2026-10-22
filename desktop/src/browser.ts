@@ -103,8 +103,9 @@ const NO_TAB: TabState = { exists: false, url: '', title: '', loading: false, vi
 /**
  * Where a page's window.open goes. A sign-in popup (a features string or a
  * named window, without noopener) needs a real window: "Sign in with Google"
- * talks back through window.opener. Everything else (target=_blank, a plain
- * window.open) stays in the tab: one session, one page.
+ * talks back through window.opener. A link that wants a new tab (target=_blank,
+ * a plain window.open) becomes a new page in the session, made by the daemon so
+ * it knows the page; a profile's sign-in tab keeps it in place.
  */
 function isSignInPopup(disposition: string, frameName: string, features: string): boolean {
   return disposition === 'new-window' || (!!frameName && !/(^|,)\s*noopener\b/i.test(features))
@@ -165,7 +166,11 @@ class Tab implements JarTab {
         }
         return { action: 'allow', createWindow: (options) => this.host.openPopup(this, options, url) }
       }
-      if (/^https?:|^file:/.test(url)) void wc.loadURL(url).catch(() => {})
+      if (/^https?:|^file:/.test(url)) {
+        const newTab = disposition === 'foreground-tab' || disposition === 'background-tab'
+        if (newTab && !this.key.startsWith('profile-')) this.host.send({ type: 'newpage', sessionId: this.key, url })
+        else void wc.loadURL(url).catch(() => {})
+      }
       return { action: 'deny' }
     })
     const navigated = (url: string) => {

@@ -127,8 +127,10 @@ test('snapshot find: only what mentions the text, with the path to it and what i
   assert.match(formatSnapshot(nodes, { find: 'pendo', rootUid: 5 }).text, /Nothing in uid=5/)
 })
 
-test('wire v2: the new host frames are validated', () => {
-  assert.equal(BROWSER_WIRE_VERSION, 2)
+test('wire v3: the host frames are validated, pages included', () => {
+  assert.equal(BROWSER_WIRE_VERSION, 3)
+  assert.ok(parseHostFrame(JSON.stringify({ type: 'newpage', sessionId: 's', url: 'https://x' })))
+  assert.equal(parseHostFrame(JSON.stringify({ type: 'newpage', sessionId: 's' })), null)
   assert.ok(parseHostFrame(JSON.stringify({ type: 'tab', sessionId: 's', profile: 'work', url: 'https://x', title: 't', viewport: null, colorScheme: null })))
   assert.equal(parseHostFrame(JSON.stringify({ type: 'tab', sessionId: 's', url: 'https://x', title: 't' })), null)
   assert.ok(parseHostFrame(JSON.stringify({ type: 'popup', sessionId: 's', url: 'https://accounts.google.com', state: 'opened' })))

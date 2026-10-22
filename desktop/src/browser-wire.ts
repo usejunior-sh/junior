@@ -4,7 +4,7 @@
  * reach outside src/. A change there is a change here, and a new WIRE_VERSION.
  */
 
-export const WIRE_VERSION = 2
+export const WIRE_VERSION = 3
 
 /** A browser profile's id: 'default' or a slug. `partitionOf(id)` is its cookie jar. */
 export type ProfileId = string
@@ -61,14 +61,15 @@ export type HostFrame =
   | { type: 'tab'; sessionId: string; profile: ProfileId; url: string; title: string; viewport: Viewport | null; colorScheme: ColorScheme }
   | { type: 'popup'; sessionId: string; url: string; state: 'opened' | 'closed' }
   | { type: 'dialog'; sessionId: string; dialog: PageDialog | null }
+  | { type: 'newpage'; sessionId: string; url: string }
   | { type: 'download'; sessionId: string; file: string; path: string; bytes: number; state: DownloadState; byAgent: boolean }
 
 // From core/browser/profiles.ts
 
 export const DEFAULT_PROFILE = 'default'
 export const PROFILE_ID_RE = /^[a-z0-9][a-z0-9-]{0,31}$/
-/** A tab key: a session id, or `profile-<id>` for a profile's sign-in tab in Settings. */
-export const TAB_KEY_RE = /^(profile-)?[\w-]{1,80}$/
+/** A tab key: a session id, `<session>.p<n>` for its extra pages, or `profile-<id>` for a profile's sign-in tab in Settings. */
+export const TAB_KEY_RE = /^(profile-)?[\w-]{1,80}(\.p\d{1,2})?$/
 
 export const partitionOf = (id: string): string => (id === DEFAULT_PROFILE ? 'persist:junior-browser' : `persist:junior-profile-${id}`)
 

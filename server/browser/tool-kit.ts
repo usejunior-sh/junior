@@ -2,7 +2,7 @@ import type { PageDialog, TabState } from '../../core/browser/wire.js'
 import { profileOfSigninTab } from '../../core/browser/profiles.js'
 import { formatLogs } from '../../core/browser/logs.js'
 import { ShotStore, viewportLabel } from './evidence.js'
-import { BrowserHub } from './hub.js'
+import { BrowserHub, pageNumber } from './hub.js'
 import { PageDriver, sleep } from './page-driver.js'
 
 // The `browser` MCP server: one per session, bound to that session's tab.
@@ -65,8 +65,9 @@ export function guarded(ctx: BrowserToolContext, body: (d: PageDriver) => Promis
   return async () => {
     // A profile's sign-in tab is yours alone: no tool ever drives it.
     if (profileOfSigninTab(ctx.sessionId)) return fail(SIGNIN_TAB_REFUSAL)
-    const d = new PageDriver(ctx.hub, ctx.sessionId)
-    if (d.memory.heldByUser) return fail(HELD_BY_USER)
+    // the session's active page: page 1, or the one browser_open newPage / browser_page switched to
+    const d = new PageDriver(ctx.hub, ctx.hub.activeKey(ctx.sessionId))
+    if (ctx.hub.page(ctx.sessionId).heldByUser) return fail(HELD_BY_USER)
     if (d.memory.dialog && !opts.duringDialog) return text(dialogNote(d.memory.dialog))
     try {
       const touched = d.memory.touched
@@ -76,6 +77,8 @@ export function guarded(ctx: BrowserToolContext, body: (d: PageDriver) => Promis
       if (d.revived) r.content.unshift({ type: 'text', text: `Reopened ${d.revived}: the tab had closed.` })
       const notes = pageNotes(d)
       if (notes) r.content.push({ type: 'text', text: notes })
+      const pages = pagesNote(ctx, d.sessionId)
+      if (pages) r.content.push({ type: 'text', text: pages })
       return r
     } catch (err) {
       return fail(err instanceof Error ? err.message : String(err))
@@ -128,6 +131,24 @@ export async function pressKey(d: PageDriver, combo: string) {
     ...(textOut ? { text: textOut, unmodifiedText: textOut } : {}),
   })
   await d.cdp('Input.dispatchKeyEvent', { type: 'keyUp', key, code: k.code, windowsVirtualKeyCode: k.keyCode, modifiers })
+}
+
+/** With more than one page open: which one this was, so the agent never loses track. */
+export function pagesNote(ctx: BrowserToolContext, key: string): string {
+  const keys = ctx.hub.pageKeys(ctx.sessionId)
+  if (keys.length < 2) return ''
+  const list = keys.map((k) => {
+    const n = pageNumber(k)
+    const host = (() => {
+      try {
+        return new URL(ctx.hub.page(k).url).hostname
+      } catch {
+        return 'blank'
+      }
+    })()
+    return k === key ? `[${n}: ${host}]` : `${n}: ${host}`
+  })
+  return `Page ${pageNumber(key)} of ${keys.length} (pages ${list.join(', ')}). browser_page switches or closes them.`
 }
 
 /** What else is going on with the tab: a sign-in window, a dialog, downloads (each said once). */
@@ -232,7 +253,7 @@ export function formatInspected(uid: number, i: Inspected): string {
  * an agent can find again, plus a crop of it with a little context.
  */
 export async function describePicked(ctx: BrowserToolContext, uid: number): Promise<{ text: string; image: string | null; shot: number | null }> {
-  const d = new PageDriver(ctx.hub, ctx.sessionId)
+  const d = new PageDriver(ctx.hub, ctx.hub.activeKey(ctx.sessionId))
   const s = await d.requirePage()
   const [info, selector, ax, vp] = await Promise.all([
     inspectElement(d, uid),

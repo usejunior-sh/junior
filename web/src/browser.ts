@@ -320,6 +320,8 @@ export const openTab = (tabKey: string, url?: string) => tabCall('POST', `${tabP
 export const setTabProfile = (tabKey: string, profile: string | null) => tabCall('PUT', tabPath(tabKey), { profile })
 /** Take the tab over (Junior's browser calls wait) or hand it back. */
 export const setTakeover = (tabKey: string, on: boolean) => tabCall('PUT', `${tabPath(tabKey)}/takeover`, { on })
+/** Switch the session to one of its pages, or close one (the pane's page strip). */
+export const setTabPage = (tabKey: string, action: 'switch' | 'close', page: number) => tabCall('POST', `${tabPath(tabKey)}/page`, { action, page })
 
 /** What the daemon remembers about a tab: its profile, last URL and title. null until loaded. */
 export function useBrowserTab(tabKey: string): BrowserTabInfo | null {

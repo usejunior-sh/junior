@@ -10,6 +10,7 @@
  * pick, find) goes straight to the app.
  */
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
+import * as Tabs from '@radix-ui/react-tabs'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowDown,
@@ -48,6 +49,7 @@ import {
   profileById,
   profileSites,
   setTabProfile,
+  setTabPage,
   setTakeover,
   useBrowserDownload,
   useBrowserProfiles,
@@ -110,8 +112,11 @@ export function BrowserPane({ tabKey, onClose, embedded = false, onTerminal }: P
   const sessionId = signin ? null : tabKey
   const chat = !signin && !embedded
 
-  const state = useBrowserState(tabKey)
   const tab = useBrowserTab(tabKey)
+  // The page the pane shows: the session's active one (it may have more). The desktop
+  // app knows pages by key; the daemon's routes take the session.
+  const view = tab?.pageKey ?? tabKey
+  const state = useBrowserState(view)
   const snap = useBrowserProfiles()
   const download = useBrowserDownload(tabKey)
   const events = useEvents(sessionId)
@@ -141,8 +146,8 @@ export function BrowserPane({ tabKey, onClose, embedded = false, onTerminal }: P
   // An emulated size gets a caption under the page; Fit fills the stage.
   const emulated = state.exists && !error && !!state.viewport
   const capturing = useRef<Promise<unknown> | null>(null)
-  const { ref: stage, covered } = useStageRect(tabKey, !!error || split.dragging || opening, driving ? 2 : 0, emulated ? CAPTION_H : 0, capturing)
-  const { frame, freeze } = useFrozenFrame(tabKey, covered, capturing)
+  const { ref: stage, covered } = useStageRect(view, !!error || split.dragging || opening, driving ? 2 : 0, emulated ? CAPTION_H : 0, capturing)
+  const { frame, freeze } = useFrozenFrame(view, covered, capturing)
   const [stageSize, setStageSize] = useState<{ w: number; h: number } | null>(null)
   useEffect(() => {
     const el = stage.current
@@ -206,6 +211,16 @@ export function BrowserPane({ tabKey, onClose, embedded = false, onTerminal }: P
     [tabKey],
   )
 
+  // The page strip: a session with more than one page (Junior opened one, or a link did).
+  const pageAction = useCallback(
+    async (action: 'switch' | 'close', n: number) => {
+      setNote(null)
+      const b = await setTabPage(tabKey, action, n)
+      if (!b.ok) setNote(b.error)
+    },
+    [tabKey, setNote],
+  )
+
   const switchProfile = useCallback(
     async (id: string) => {
       setNote(null)
@@ -218,13 +233,13 @@ export function BrowserPane({ tabKey, onClose, embedded = false, onTerminal }: P
   const pick = useCallback(async () => {
     if (!browserBridge || !sessionId) return
     if (picking) {
-      browserBridge.cancelPick(sessionId)
+      browserBridge.cancelPick(view)
       return
     }
     setNote(null)
     setPicking(true)
     try {
-      const uid = await browserBridge.pick(sessionId)
+      const uid = await browserBridge.pick(view)
       if (uid == null) return
       const r = await fetch('/api/browser/pick', {
         method: 'POST',
@@ -241,17 +256,17 @@ export function BrowserPane({ tabKey, onClose, embedded = false, onTerminal }: P
     } finally {
       setPicking(false)
     }
-  }, [picking, sessionId])
+  }, [picking, sessionId, view])
 
   // Escape ends a pick from anywhere in the junior window.
   useEffect(() => {
     if (!picking || !sessionId) return
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') browserBridge?.cancelPick(sessionId)
+      if (e.key === 'Escape') browserBridge?.cancelPick(view)
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [picking, sessionId])
+  }, [picking, sessionId, view])
 
   // "Saved report.csv" goes after 10s or the next page, whichever is first; a failed one stays.
   useEffect(() => {
@@ -279,9 +294,9 @@ export function BrowserPane({ tabKey, onClose, embedded = false, onTerminal }: P
   useEffect(
     () =>
       browserBridge?.onKey?.((k) => {
-        if (k.tabKey === tabKey && (k.key === 'focus-url' || k.key === 'find')) onShortcut(k.key)
+        if (k.tabKey === view && (k.key === 'focus-url' || k.key === 'find')) onShortcut(k.key)
       }),
-    [tabKey, onShortcut],
+    [view, onShortcut],
   )
 
   if (!browserBridge) {
@@ -368,10 +383,10 @@ export function BrowserPane({ tabKey, onClose, embedded = false, onTerminal }: P
             onPress={freeze}
           />
         )}
-        <button type="button" className="btn sm ghost icon bpNavBtn" title="Back" disabled={!state.canGoBack} onClick={() => browserBridge!.nav(tabKey, 'back')}>
+        <button type="button" className="btn sm ghost icon bpNavBtn" title="Back" disabled={!state.canGoBack} onClick={() => browserBridge!.nav(view, 'back')}>
           <ArrowLeft size={14} aria-hidden="true" />
         </button>
-        <button type="button" className="btn sm ghost icon bpNavBtn" title="Forward" disabled={!state.canGoForward} onClick={() => browserBridge!.nav(tabKey, 'forward')}>
+        <button type="button" className="btn sm ghost icon bpNavBtn" title="Forward" disabled={!state.canGoForward} onClick={() => browserBridge!.nav(view, 'forward')}>
           <ArrowRight size={14} aria-hidden="true" />
         </button>
         <button
@@ -379,12 +394,12 @@ export function BrowserPane({ tabKey, onClose, embedded = false, onTerminal }: P
           className="btn sm ghost icon"
           title={state.loading ? 'Stop' : 'Reload'}
           disabled={!state.exists}
-          onClick={() => (error ? void open(error.url) : browserBridge!.nav(tabKey, state.loading ? 'stop' : 'reload'))}
+          onClick={() => (error ? void open(error.url) : browserBridge!.nav(view, state.loading ? 'stop' : 'reload'))}
         >
           {state.loading ? <X size={14} aria-hidden="true" /> : <RotateCw size={14} aria-hidden="true" />}
         </button>
         {findOpen ? (
-          <FindBar tabKey={tabKey} onClose={() => setFindOpen(false)} />
+          <FindBar tabKey={view} onClose={() => setFindOpen(false)} />
         ) : (
           <AddressField ref={address} url={shownUrl} onGo={(u) => void open(u)} />
         )}
@@ -409,7 +424,7 @@ export function BrowserPane({ tabKey, onClose, embedded = false, onTerminal }: P
           </MenuTrigger>
           <MenuContent className="bpVpMenu" align="end">
             {PRESETS.map((p) => (
-              <MenuItem key={p.value} onSelect={() => void browserBridge!.setViewport(tabKey, p.value)}>
+              <MenuItem key={p.value} onSelect={() => void browserBridge!.setViewport(view, p.value)}>
                 <p.Icon size={14} aria-hidden="true" />
                 <span className="bpVpLabel">{p.label}</span>
                 <span className="bpVpHint mono">{p.hint}</span>
@@ -420,7 +435,7 @@ export function BrowserPane({ tabKey, onClose, embedded = false, onTerminal }: P
             <DropdownMenu.Label className="bpMenuGroup">colour scheme</DropdownMenu.Label>
             <DropdownMenu.RadioGroup
               value={scheme ?? 'system'}
-              onValueChange={(v) => void browserBridge!.setViewport(tabKey, '', v === 'system' ? null : (v as ColorScheme))}
+              onValueChange={(v) => void browserBridge!.setViewport(view, '', v === 'system' ? null : (v as ColorScheme))}
             >
               {SCHEMES.map((s) => (
                 <DropdownMenu.RadioItem key={s.value} value={s.value} className="uiMenuItem">
@@ -464,7 +479,7 @@ export function BrowserPane({ tabKey, onClose, embedded = false, onTerminal }: P
               <Eraser size={14} aria-hidden="true" />
               Clear this site's data
             </MenuItem>
-            <MenuItem disabled={!state.exists} onSelect={() => browserBridge!.devtools(tabKey)}>
+            <MenuItem disabled={!state.exists} onSelect={() => browserBridge!.devtools(view)}>
               <SquareTerminal size={14} aria-hidden="true" />
               Developer tools
             </MenuItem>
@@ -483,6 +498,29 @@ export function BrowserPane({ tabKey, onClose, embedded = false, onTerminal }: P
         )}
         <Progress loading={!!state.loading} />
       </div>
+      {tab && tab.pages.length > 1 && (
+        <Tabs.Root
+          className="bpPages"
+          value={String(tab.pages.find((p) => p.key === tab.pageKey)?.n ?? 1)}
+          onValueChange={(v) => void pageAction('switch', Number(v))}
+        >
+          <Tabs.List className="bpPageList" aria-label="Pages">
+            {tab.pages.map((p) => (
+              <div key={p.key} className="bpPage" data-active={p.key === tab.pageKey || undefined}>
+                <Tabs.Trigger value={String(p.n)} className="bpPageTab" title={p.title || p.url || `Page ${p.n}`}>
+                  <span className="bpPageN mono">{p.n}</span>
+                  <span className="bpPageName">{pageName(p.title, p.url)}</span>
+                </Tabs.Trigger>
+                {p.n > 1 && (
+                  <button type="button" className="bpPageClose" title={`Close page ${p.n}`} aria-label={`Close page ${p.n}`} onClick={() => void pageAction('close', p.n)}>
+                    <X size={11} aria-hidden="true" />
+                  </button>
+                )}
+              </div>
+            ))}
+          </Tabs.List>
+        </Tabs.Root>
+      )}
       {held ? (
         <div className="bpStrip wheel" role="status">
           <b>You have the page.</b>
@@ -512,7 +550,7 @@ export function BrowserPane({ tabKey, onClose, embedded = false, onTerminal }: P
           <span className="step">{popupHost ? `Finish signing in to ${popupHost} in the window that opened.` : 'Finish signing in in the window that opened.'}</span>
           <span className="sp" />
           {browserBridge.focusPopup && (
-            <button type="button" className="btn sm" onClick={() => browserBridge!.focusPopup!(tabKey)}>
+            <button type="button" className="btn sm" onClick={() => browserBridge!.focusPopup!(view)}>
               Show window
             </button>
           )}
@@ -620,6 +658,16 @@ function Progress({ loading }: { loading: boolean }) {
 }
 
 /** ⌘F: the address field makes way for a find bar on the page. */
+/** A page's label in the strip: its title, else its host. */
+function pageName(title: string, url: string): string {
+  if (title.trim()) return title.trim()
+  try {
+    return new URL(url).hostname || 'New page'
+  } catch {
+    return 'New page'
+  }
+}
+
 function FindBar({ tabKey, onClose }: { tabKey: string; onClose: () => void }) {
   const [text, setText] = useState('')
   const [found, setFound] = useState<{ matches: number; active: number } | null>(null)

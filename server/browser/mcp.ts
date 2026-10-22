@@ -10,9 +10,9 @@ import { stepText, stepUid } from '../../core/browser/steps.js'
 import { browserProfiles } from './profiles.js'
 import { decodePng, diffImages, encodePng } from '../../core/browser/image.js'
 import { shotMarker, viewportLabel } from './evidence.js'
-import { DIFF_LONG, FULL_LONG, SHOT_LONG, VIEWPORTS } from './hub.js'
+import { DIFF_LONG, FULL_LONG, SHOT_LONG, VIEWPORTS, pageNumber } from './hub.js'
 import { PageDriver, sleep } from './page-driver.js'
-import { type BrowserToolContext, VERIFY_LOOP, dialogNote, fail, formatInspected, guarded, inspectElement, lineDiff, pressKey, settle, text, unlessDialog } from './tool-kit.js'
+import { type BrowserToolContext, SIGNIN_TAB_REFUSAL, VERIFY_LOOP, dialogNote, fail, formatInspected, guarded, inspectElement, lineDiff, pressKey, settle, text, unlessDialog } from './tool-kit.js'
 
 export function makeBrowserMcp(ctx: BrowserToolContext) {
   const uid = z.number().int().describe('an element uid from browser_snapshot')
@@ -30,11 +30,15 @@ export function makeBrowserMcp(ctx: BrowserToolContext) {
         {
           url: z.string().describe('http(s)://localhost:5173/settings, localhost:3000, /settings, or a file: URL'),
           wait: z.enum(['load', 'idle']).optional().describe('idle (default) also waits for the network to go quiet — for apps that fetch after load'),
+          newPage: z
+            .boolean()
+            .optional()
+            .describe('open it in a new page of this session and keep the current one, e.g. check an inbox for a code and come back. browser_page switches back. Same profile, same logins.'),
           ...(job ? {} : { profile: z.string().optional().describe('a profile name or id: this session\'s tab moves to it and stays there') }),
         },
         async (args) =>
-          guarded(ctx, async (d) => {
-            const cur = (await d.state().catch(() => null))?.url
+          guarded(ctx, async (cur0) => {
+            const cur = (await cur0.state().catch(() => null))?.url
             const url = resolveUrl(args.url, cur)
             if (!url) return fail(`"${args.url}" is not a URL this browser can open.`)
             if (job && !isLocalUrl(url, ctx.projectRoot) && !hostAllowed(ctx.sites, url)) return fail(`This job may only open ${ctx.sites!.join(', ')}.`)
@@ -50,14 +54,17 @@ export function makeBrowserMcp(ctx: BrowserToolContext) {
             }
             const resolved = await ctx.hub.resolve(ctx.sessionId)
             if (resolved.missing) notes.push(`The profile "${resolved.missing}" was deleted; using "${profileName(resolved.profile)}".`)
+            // a new page keeps the one it came from; without newPage the active page moves
+            const d = args.newPage ? new PageDriver(ctx.hub, ctx.hub.newPage(ctx.sessionId)) : cur0
+            if (args.newPage) notes.push(`Opened page ${pageNumber(d.sessionId)}; page ${pageNumber(cur0.sessionId)} stays where it was.`)
             d.memory.logs.markLoad()
-            const r = await ctx.hub.open(ctx.sessionId, url, args.wait ?? 'idle')
+            const r = await ctx.hub.open(d.sessionId, url, args.wait ?? 'idle')
             d.memory.url = r.url
             // The user let this session open the site (the gate asked): the same site doesn't ask again.
             if (!job && !isLocalUrl(url, ctx.projectRoot)) {
               for (const u of [url, r.url]) {
                 try {
-                  d.memory.sites.add(siteOf(new URL(u).hostname))
+                  ctx.hub.page(ctx.sessionId).sites.add(siteOf(new URL(u).hostname))
                 } catch {}
               }
             }
@@ -284,7 +291,7 @@ export function makeBrowserMcp(ctx: BrowserToolContext) {
               vp = { width, height, deviceScaleFactor: width < 768 ? 2 : 1, mobile: width < 768 }
             }
             const scheme = args.colorScheme === 'default' ? null : args.colorScheme
-            await ctx.hub.call(ctx.sessionId, { verb: 'viewport', viewport: vp, ...(scheme !== undefined ? { colorScheme: scheme } : {}) })
+            await ctx.hub.call(d.sessionId, { verb: 'viewport', viewport: vp, ...(scheme !== undefined ? { colorScheme: scheme } : {}) })
             await sleep(200)
             const s = await d.state()
             return text(`Viewport: ${await d.viewportText(s)}${s.colorScheme ? `, ${s.colorScheme} scheme` : ''}.`)
@@ -329,7 +336,7 @@ export function makeBrowserMcp(ctx: BrowserToolContext) {
             if (!s.viewport) {
               const fit = await d.evalValue<{ width: number; height: number; dpr: number }>('({ width: innerWidth, height: innerHeight, dpr: devicePixelRatio || 1 })')
               const vp: Viewport = { width: fit.width, height: fit.height, deviceScaleFactor: fit.dpr, mobile: false }
-              await ctx.hub.call(ctx.sessionId, { verb: 'viewport', viewport: vp })
+              await ctx.hub.call(d.sessionId, { verb: 'viewport', viewport: vp })
               await sleep(200)
               s = await d.state()
               pinned = ` Pinned the viewport at ${vp.width}×${vp.height} (it fitted the pane) so the compare lays out the same; browser_viewport "fit" lets it follow the pane again.`
@@ -357,7 +364,7 @@ export function makeBrowserMcp(ctx: BrowserToolContext) {
             }
             const notes: string[] = []
             if (JSON.stringify(cp.viewport) !== JSON.stringify(s.viewport)) {
-              await ctx.hub.call(ctx.sessionId, { verb: 'viewport', viewport: cp.viewport })
+              await ctx.hub.call(d.sessionId, { verb: 'viewport', viewport: cp.viewport })
               await sleep(250)
               notes.push(`Switched back to the checkpoint's viewport (${viewportLabel(cp.viewport)}).`)
             }
@@ -392,6 +399,34 @@ export function makeBrowserMcp(ctx: BrowserToolContext) {
               ],
             }
           })(),
+      ),
+
+      tool(
+        'browser_page',
+        'This session\'s pages: list them, switch to one (the pane shows it and every browser tool acts on it), or close one. Open a new page with browser_open newPage. Page 1 is the session\'s own and stays.',
+        {
+          action: z.enum(['list', 'switch', 'close']).describe('list the pages, switch to one, or close one'),
+          page: z.number().int().min(1).max(99).optional().describe('the page number, for switch and close'),
+        },
+        async (args) => {
+          try {
+            if (profileOfSigninTab(ctx.sessionId)) return fail(SIGNIN_TAB_REFUSAL)
+            if (args.action !== 'list') {
+              if (args.page == null) return fail(`Which page? Give page (${ctx.hub.pageKeys(ctx.sessionId).map(pageNumber).join(', ')}).`)
+              if (args.action === 'switch') ctx.hub.switchPage(ctx.sessionId, args.page)
+              else ctx.hub.closePage(ctx.sessionId, args.page)
+            }
+            const active = ctx.hub.activeKey(ctx.sessionId)
+            const lines = ctx.hub.pageKeys(ctx.sessionId).map((k) => {
+              const m = ctx.hub.page(k)
+              return `${k === active ? '→' : ' '} page ${pageNumber(k)}: ${m.url || '(nothing open yet)'}`
+            })
+            const head = args.action === 'switch' ? `On page ${pageNumber(active)} now.` : args.action === 'close' ? `Closed page ${args.page}; on page ${pageNumber(active)}.` : `${lines.length} page${lines.length === 1 ? '' : 's'}.`
+            return text([head, ...lines].join('\n'))
+          } catch (err) {
+            return fail(err instanceof Error ? err.message : String(err))
+          }
+        },
       ),
 
       tool(
@@ -519,13 +554,14 @@ export function makeBrowserMcp(ctx: BrowserToolContext) {
 
   // Each call puts its step on the tab while it runs ("Clicking "Send""), for the pane's driving strip.
   for (const t of tools) {
-    if (t.name === 'browser_profiles') continue
+    if (t.name === 'browser_profiles' || t.name === 'browser_page') continue
     type Handler = (args: unknown, extra: unknown) => Promise<unknown>
     const tt = t as unknown as { handler: Handler }
     const run = tt.handler
     tt.handler = async (args, extra) => {
       const m = ctx.hub.page(ctx.sessionId)
-      if (profileOfSigninTab(ctx.sessionId) || m.heldByUser || (m.dialog && t.name !== 'browser_act')) return run(args, extra)
+      const dialog = ctx.hub.page(ctx.hub.activeKey(ctx.sessionId)).dialog
+      if (profileOfSigninTab(ctx.sessionId) || m.heldByUser || (dialog && t.name !== 'browser_act')) return run(args, extra)
       ctx.hub.setStep(ctx.sessionId, await stepFor(t.name, args as Record<string, unknown>))
       try {
         return await run(args, extra)
@@ -539,11 +575,12 @@ export function makeBrowserMcp(ctx: BrowserToolContext) {
   async function stepFor(leaf: string, args: Record<string, unknown>): Promise<string> {
     const uid = stepUid(leaf, args)
     let el: ElementFacts | null = null
-    if (uid != null && ctx.hub.isLive(ctx.sessionId) && ctx.hub.status.compatible) {
-      const d = new PageDriver(ctx.hub, ctx.sessionId)
+    const key = ctx.hub.activeKey(ctx.sessionId)
+    if (uid != null && ctx.hub.isLive(key) && ctx.hub.status.compatible) {
+      const d = new PageDriver(ctx.hub, key)
       el = await Promise.race([d.describe(uid).catch(() => null), sleep(1500).then(() => null)])
     }
-    const url = leaf === 'browser_open' && typeof args.url === 'string' ? resolveUrl(args.url, ctx.hub.page(ctx.sessionId).url) : null
+    const url = leaf === 'browser_open' && typeof args.url === 'string' ? resolveUrl(args.url, ctx.hub.page(key).url) : null
     return stepText(leaf, args, el, url)
   }
 

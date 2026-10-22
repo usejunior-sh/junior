@@ -168,7 +168,7 @@ export async function browserRoutes({ req, url, json, res, rt }: ScopedCtx): Pro
 
   // ── a session's tab ──────────────────────────────────────────────────────
 
-  const tab = /^\/api\/browser\/tabs\/([\w-]{1,80})(\/open|\/takeover)?$/.exec(p)
+  const tab = /^\/api\/browser\/tabs\/([\w-]{1,80})(\/open|\/takeover|\/page)?$/.exec(p)
   if (tab) {
     const [, key, sub] = tab
     const open = sub === '/open'
@@ -202,10 +202,20 @@ export async function browserRoutes({ req, url, json, res, rt }: ScopedCtx): Pro
         const b = ((await readJsonBody(req, 10_000)) ?? {}) as { url?: unknown }
         let target: string | null = null
         if (typeof b.url === 'string' && b.url.trim()) {
-          target = resolveUrl(b.url, await browserHub.remembered(key))
+          target = resolveUrl(b.url, await browserHub.remembered(browserHub.activeKey(key)))
           if (!target) throw new Error(`"${b.url}" is not a URL this browser can open`)
         }
-        await browserHub.open(key, target, 'load', { byUser: true })
+        // the address bar drives the page the pane shows
+        await browserHub.open(browserHub.activeKey(key), target, 'load', { byUser: true })
+        body = { ok: true, tab: await browserHub.tabInfo(key) }
+      } else if (sub === '/page' && req.method === 'POST') {
+        // the pane's page strip: switch to a page or close one
+        if (signin) throw new Error("a profile's sign-in tab has one page")
+        const b = ((await readJsonBody(req, 10_000)) ?? {}) as { action?: unknown; page?: unknown }
+        if (typeof b.page !== 'number' || !Number.isInteger(b.page)) throw new Error('need page: a page number')
+        if (b.action === 'switch') browserHub.switchPage(key, b.page, { byUser: true })
+        else if (b.action === 'close') browserHub.closePage(key, b.page)
+        else throw new Error('need action: switch or close')
         body = { ok: true, tab: await browserHub.tabInfo(key) }
       } else return false
     } catch (err) {

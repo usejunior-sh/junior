@@ -58,8 +58,23 @@ export type BrowserClearResponse = { ok: true; removed: number } | { ok: false; 
 export type BrowserDefaultResponse = { ok: true; workspaceDefault: string } | { ok: false; error: string }
 
 /** What the daemon remembers about one session's tab (persisted, survives restarts). */
+/** One of a session's pages, when it has more than one. */
+export type BrowserPageInfo = {
+  /** 1 = the session's own tab; numbers don't shift when a page closes */
+  n: number
+  /** the tab key the desktop app knows it by: the session id, or `<session>.p<n>` */
+  key: string
+  url: string
+  title: string
+  live: boolean
+}
+
 export type BrowserTabInfo = {
   sessionId: string
+  /** the page the pane shows and Junior's tools act on: give this key to the desktop app */
+  pageKey: string
+  /** every page, page 1 first, when there is more than one; [] = just the session's tab */
+  pages: BrowserPageInfo[]
   /** the profile picked for this session; null = follow the default */
   profile: string | null
   /** the profile the tab is actually in: picked → team lead's → job's → workspace default → 'default' */

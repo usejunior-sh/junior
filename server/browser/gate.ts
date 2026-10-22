@@ -40,11 +40,14 @@ export async function browserGate(ctx: BrowserGateContext, toolName: string, inp
   if (!toolName.startsWith(PREFIX)) return null
   const leaf = toolName.slice(PREFIX.length)
   const i = (input && typeof input === 'object' ? input : {}) as Record<string, unknown>
+  // the session (takeover, allowed sites, asks) and the page the tools act on (its URL, its dialog)
   const mem = ctx.hub.page(ctx.sessionId)
+  const pageKey = ctx.hub.activeKey(ctx.sessionId)
+  const pg = ctx.hub.page(pageKey)
   // the user has the tab: the tool itself says so, nothing to ask about
   if (mem.heldByUser) return null
   // a dialog blocks the page: the tool says so; only answering it is judged
-  if (mem.dialog && !(leaf === 'browser_act' && i.action === 'dialog')) return null
+  if (pg.dialog && !(leaf === 'browser_act' && i.action === 'dialog')) return null
 
   const ask = (reason: string): VetoDecision => {
     mem.noteAsk(toolName, input, reason)
@@ -57,7 +60,7 @@ export async function browserGate(ctx: BrowserGateContext, toolName: string, inp
 
   if (leaf === 'browser_open') {
     if (typeof i.url !== 'string') return null
-    const url = resolveUrl(i.url, mem.url)
+    const url = resolveUrl(i.url, pg.url)
     // the tool says what is wrong with a URL it can't open
     if (!url || isLocalUrl(url, ctx.projectRoot)) return null
     if (ctx.mode === 'job') {
@@ -70,11 +73,11 @@ export async function browserGate(ctx: BrowserGateContext, toolName: string, inp
 
   if (leaf !== 'browser_act' && leaf !== 'browser_fill') return null
   // Everything is free on this machine: that is what testing is.
-  const here = mem.url
+  const here = pg.url
   if (!here || isLocalUrl(here, ctx.projectRoot)) return null
   if (!ctx.hub.status.compatible) return null // the tool answers "open Junior.app"
 
-  const d = new PageDriver(ctx.hub, ctx.sessionId)
+  const d = new PageDriver(ctx.hub, pageKey)
   const facts = async (uid: unknown): Promise<ElementFacts | null> => (typeof uid === 'number' ? d.describe(uid).catch(() => null) : null)
   const host = hostOf(here)
   const as = await profileName()
@@ -100,7 +103,7 @@ export async function browserGate(ctx: BrowserGateContext, toolName: string, inp
         break
       }
       case 'dialog':
-        if (i.text !== 'dismiss' && mem.dialog && mem.dialog.type !== 'alert') verdicts.push({ v: 'commit', what: `Accept "${clip(mem.dialog.message)}"` })
+        if (i.text !== 'dismiss' && pg.dialog && pg.dialog.type !== 'alert') verdicts.push({ v: 'commit', what: `Accept "${clip(pg.dialog.message)}"` })
         break
     }
   } else {

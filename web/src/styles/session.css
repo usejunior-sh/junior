@@ -299,6 +299,26 @@ body.bpResizing, body.bpResizing * { cursor: col-resize !important; user-select:
 .bpMoreMenu .uiMenuItem .k { color: var(--ash); }
 
 /* strips under the toolbar: Junior driving, a sign-in window, a dialog, a download */
+/* The page strip: a session with more than one page. Quiet tabs; the active one is lifted. */
+.bpPages { flex: none; border-bottom: 1px solid var(--hair); min-width: 0; }
+.bpPageList { display: flex; gap: 2px; padding: 4px 6px; overflow-x: auto; scrollbar-width: none; }
+.bpPage { display: inline-flex; align-items: center; min-width: 0; max-width: 220px; border-radius: var(--r-sm); color: var(--ash); }
+.bpPage:hover { background: var(--wash-2); color: var(--body); }
+.bpPage[data-active] { background: var(--elev); color: var(--ink); }
+.bpPageTab {
+  display: inline-flex; align-items: center; gap: 6px; min-width: 0; height: 24px; padding: 0 8px;
+  border: 0; background: none; color: inherit; font-size: 0.8462rem;
+}
+.bpPageTab:focus-visible { outline: 1px solid var(--hair-bright); outline-offset: -1px; border-radius: var(--r-sm); }
+.bpPageN { flex: none; font-size: 0.7308rem; color: var(--stone); }
+.bpPage[data-active] .bpPageN { color: var(--blue); }
+.bpPageName { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bpPageClose {
+  flex: none; display: inline-grid; place-items: center; width: 18px; height: 18px; margin-right: 3px;
+  border: 0; border-radius: var(--r-xs); background: none; color: var(--stone);
+}
+.bpPageClose:hover { background: var(--wash-3); color: var(--ink); }
+
 .bpStrip {
   flex: none; display: flex; align-items: center; gap: 8px; min-height: 32px; padding: 0 8px 0 14px;
   border-bottom: 1px solid var(--hair); font-size: 0.8846rem; color: var(--body); min-width: 0;
