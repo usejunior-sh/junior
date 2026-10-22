@@ -1,77 +1,12 @@
 /* =========================================================================
-   The Junior page (.docs/junior-goals-teams/junior-home-v2.html, variation
-   J). The app's own tokens (styles/tokens.css). Junior on the left (its card),
-   the day on the right: a two-tone serif headline over three tabs. Rows
-   over cards.
+   The Junior page's parts: the sheet, the brief, the plan, the hand-off
+   tabs. The app's own tokens (styles/tokens.css). The home itself (halo,
+   prompt box, pill tabs, the Ledger) is the last section below.
    ========================================================================= */
 
 /* rail + tab band: the face in place of an icon */
 .railBtn .jrRailFace { display: grid; place-items: center; width: 22px; height: 22px; }
 .railBtn.junior span.label { max-width: 52px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
-/* ---------- the page: sidebar | main ---------- */
-.jrPage { flex: 1; min-height: 0; display: grid; grid-template-columns: 288px minmax(0, 1fr); overflow: hidden; }
-.jrMain { position: relative; min-width: 0; overflow-y: auto; padding: 34px 40px 72px; }
-.jrMain > .glow { top: -200px; left: 30%; }
-/* everything but the glow, which floats behind the headline */
-.jrMain > :not(.glow) { position: relative; max-width: calc(var(--measure) + 200px); }
-
-/* ---------- the sidebar: Junior's card ---------- */
-.jrSide { display: flex; flex-direction: column; min-height: 0; overflow-y: auto; border-right: 1px solid var(--hair); background: var(--wash-1); }
-/* a soft glow of Junior's own colour from the top, behind the face */
-.jrId {
-  display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 30px 18px 20px; text-align: center;
-  background: radial-gradient(ellipse 85% 95% at 50% 0%, color-mix(in srgb, var(--junior, var(--blue)) 26%, transparent), transparent 72%);
-}
-.jrId .nm { margin-top: 2px; font-family: var(--serif); font-size: 1.95rem; line-height: 1; color: var(--ink); }
-.jrId .who { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; }
-.jrId .nm .g { color: var(--mute); }
-/* a quiet pill, not a call to action: the face already says who this is */
-.jrChat {
-  display: inline-flex; align-items: center; gap: 7px; margin-top: 12px; height: 28px; padding: 0 12px;
-  border: 1px solid var(--hair-strong); border-radius: 999px; background: transparent;
-  font: inherit; font-size: 0.9231rem; color: var(--mute); white-space: nowrap; cursor: pointer;
-}
-.jrChat:hover { color: var(--ink); border-color: color-mix(in srgb, var(--junior, var(--ink)) 55%, transparent); background: var(--wash-2); }
-.jrChat kbd { margin-left: 2px; font-family: var(--mono); font-size: 0.7692rem; color: var(--stone); background: none; border: 0; padding: 0; }
-.jrId .ro { color: var(--mute); font-size: 0.9231rem; }
-.jrSec { padding: 13px 18px 14px; border-top: 1px solid var(--hair); }
-.jrSl { display: flex; align-items: baseline; gap: 8px; margin: 0 0 8px; font-family: var(--mono); font-size: 0.7692rem; font-weight: 400; color: var(--stone); text-transform: uppercase; letter-spacing: 0.5px; }
-.jrSl .r { margin-left: auto; font-family: var(--sans); font-size: 0.8462rem; text-transform: none; letter-spacing: 0; color: var(--stone); }
-.jrLink { padding: 0; border: 0; background: none; cursor: pointer; }
-.jrLink:hover { color: var(--ink); }
-.jrSm { display: block; color: var(--ash); font-size: 0.8462rem; margin-top: 3px; }
-.jrNow { display: flex; align-items: flex-start; gap: 9px; width: 100%; padding: 0; border: 0; background: none; font: inherit; color: var(--mute); text-align: left; }
-.jrNow .jrDot { margin-top: 6px; }
-.jrNow > span:last-child { flex: 1; min-width: 0; }
-button.jrNow { cursor: pointer; }
-.jrNow .t { color: var(--ink); }
-button.jrNow:hover .t { text-decoration: underline; text-decoration-color: var(--hair-bright); text-underline-offset: 3px; }
-.jrProg { display: block; height: 3px; margin-top: 8px; border-radius: 2px; background: var(--hair-strong); overflow: hidden; }
-.jrProg i { display: block; height: 100%; background: var(--blue); }
-.jrChips { display: flex; flex-wrap: wrap; gap: 5px; }
-.jrChips span { display: inline-flex; align-items: center; gap: 5px; padding: 1px 8px; border: 1px solid var(--hair-strong); border-radius: 999px; font-size: 0.8846rem; color: var(--body); }
-.jrChips i { width: 6px; height: 6px; border-radius: 50%; background: var(--green); }
-.jrChips .off { border-style: dashed; color: var(--ash); }
-.jrChips .off i { background: transparent; border: 1px solid var(--stone); }
-.jrChips .proj { font-family: var(--mono); font-size: 0.8077rem; color: var(--ash); }
-.jrChips[data-state="open"] { margin-top: 8px; }
-.jrSeenT { display: flex; align-items: center; gap: 6px; width: 100%; padding: 0; border: 0; background: none; font: inherit; font-size: 0.9615rem; color: var(--body); text-align: left; cursor: pointer; }
-.jrSeenT:hover { color: var(--ink); }
-.jrSeenT .chev { margin-left: auto; color: var(--stone); transition: transform 0.15s ease; }
-.jrSeenT[data-state="open"] .chev { transform: rotate(90deg); }
-.jrAsk { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; margin-top: 6px; color: var(--body); line-height: 1.45; }
-.jrAsk b { color: var(--ink); font-weight: 500; }
-.jrAskActs { display: flex; gap: 6px; margin-top: 8px; }
-.jrCan { display: flex; flex-direction: column; }
-.jrCan button { display: flex; align-items: center; gap: 8px; min-height: 32px; padding: 0; border: 0; border-bottom: 1px solid var(--hair); background: none; font: inherit; font-size: 0.9615rem; color: var(--body); text-align: left; cursor: pointer; }
-.jrCan button:last-child { border-bottom: 0; }
-.jrCan button:hover { color: var(--ink); }
-.jrCan .go { margin-left: auto; flex: none; color: var(--ink); opacity: 0; transform: translateX(-3px); transition: opacity 0.12s ease, transform 0.12s ease; }
-.jrCan button:hover .go, .jrCan button:focus-visible .go { opacity: 1; transform: none; }
-.jrCan .on { font-family: var(--mono); font-size: 0.7692rem; color: var(--blue); border: 1px solid color-mix(in srgb, var(--blue) 40%, transparent); border-radius: 999px; padding: 0 6px; }
-.jrSideFoot { display: flex; align-items: center; gap: 8px; margin-top: auto; padding: 12px 18px; border-top: 1px solid var(--hair); color: var(--stone); font-size: 0.8462rem; }
-.jrSideFoot .btn { margin-left: auto; }
 
 /* ---------- the sheet: What I can do in full, and About me ---------- */
 .jrSheet { position: fixed; z-index: 91; top: 0; right: 0; bottom: 0; width: min(720px, 100vw); display: flex; flex-direction: column; background: var(--canvas); border-left: 1px solid var(--hair-strong); animation: fadeIn 0.14s ease; }
@@ -119,11 +54,6 @@ button.jrNow:hover .t { text-decoration: underline; text-decoration-color: var(-
   100% { box-shadow: 0 0 0 0 transparent; }
 }
 
-.jrHello {
-  margin: 0; font-family: var(--serif); font-weight: 400; font-size: 2.6rem; line-height: 1.1; letter-spacing: -0.4px;
-  color: var(--ink); text-wrap: balance;
-}
-.jrHello .g { color: var(--mute); }
 .jrBrief { margin: 14px 0 0; color: var(--body); font-size: 1.077rem; line-height: 1.6; max-width: 70ch; }
 .jrBrief.err { color: var(--red-ink); }
 .jrRef {
@@ -134,21 +64,6 @@ button.jrNow:hover .t { text-decoration: underline; text-decoration-color: var(-
 a.jrRef { overflow-wrap: anywhere; }
 .jrRef:disabled { color: var(--mute); cursor: default; }
 
-/* the toolbar: underline tabs on the left, New chat on the right, one hairline under the row */
-.jrBar { display: flex; align-items: center; gap: 10px; margin-top: 26px; border-bottom: 1px solid var(--hair); }
-.jrView .c { margin-left: 6px; font-family: var(--mono); font-size: 0.8462rem; color: var(--stone); }
-.jrView .c.hot { color: var(--orange); }
-.jrViews { display: flex; gap: 24px; margin-right: auto; }
-.jrView {
-  position: relative; height: 42px; padding: 0; border: 0; background: transparent;
-  color: var(--mute); font: inherit; font-size: 0.9615rem; cursor: pointer;
-}
-.jrView:hover { color: var(--ink); }
-.jrView[data-state="active"] { color: var(--ink); }
-/* the active tab is underlined in Junior's colour: one of the few places it shows */
-.jrView[data-state="active"]::after {
-  content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; border-radius: 1px; background: var(--junior, var(--ink));
-}
 .jrPane:focus-visible { outline: none; }
 
 /* section heads */
@@ -317,7 +232,7 @@ button.jlTitle:hover { text-decoration: underline; text-decoration-color: var(--
 .jlNot { padding: 0; border: 0; background: none; color: var(--stone); font: inherit; cursor: pointer; opacity: 0; }
 .jlLine:hover .jlNot, .jlNot:focus-visible { opacity: 1; }
 .jlNot:hover { color: var(--ink); }
-.jrView .c.dot { display: inline-block; width: 6px; height: 6px; margin-left: 6px; vertical-align: middle; border-radius: 50%; background: var(--blue); }
+
 /* The rail's dot on Junior: something new in the log. */
 .railDot { position: absolute; top: 6px; right: 12px; width: 7px; height: 7px; border-radius: 50%; background: var(--blue); border: 1.5px solid var(--canvas); }
 
@@ -373,22 +288,11 @@ button.jlTitle:hover { text-decoration: underline; text-decoration-color: var(--
   .jlLine { grid-template-columns: 30px minmax(0, 1fr) auto; }
   .jlIc, .jlLink, .jlAside { display: none; }
   /* the card goes on top, compact; the day scrolls under it */
-  .jrPage { display: block; overflow-y: auto; overflow-x: hidden; }
-  .jrSide { overflow: visible; border-right: 0; border-bottom: 1px solid var(--hair); }
-  .jrId { flex-direction: row; gap: 14px; padding: 16px; text-align: left; }
-  .jrId .who { align-items: flex-start; }
-  .jrChat { margin-top: 8px; }
-  .jrChat kbd { display: none; }
-  .jrId .nm { font-size: 1.6rem; }
-  .jrSec:has(.jrCan), .jrSec:has(.jrSeenC) { display: none; }
-  .jrMain { overflow: visible; padding: 20px 16px calc(40px + env(safe-area-inset-bottom)); }
+  
+
   .jrBr { grid-template-columns: 52px minmax(0, 1fr); }
   .jrBr .st { grid-column: 2; }
-  .jrId svg { width: 56px; height: 56px; }
-  .jrHello { font-size: 1.95rem; }
-  .jrBar { margin-top: 22px; gap: 8px; }
-  .jrViews { gap: 16px; overflow-x: auto; scrollbar-width: none; }
-  .jrView { white-space: nowrap; flex: none; }
+
   .jrLh .aside { display: none; }
   /* plan rows drop the source and owner columns */
   .jrPlanRow { grid-template-columns: 18px minmax(0, 1fr) auto 22px; gap: 10px; min-height: 48px; }
@@ -407,4 +311,179 @@ button.jlTitle:hover { text-decoration: underline; text-decoration-color: var(--
   .jrRow .m, .jrRow .go { display: none; }
   .jrCards { grid-template-columns: 1fr; }
   .jrMe .mrow { grid-template-columns: 1fr; gap: 4px; }
+}
+
+/* =========================================================================
+   The Junior home (.docs/junior-goals-teams/junior-home-list.html, artifact
+   065cfb8a v8): Junior up top, centred, in a sky halo; the prompt box; sticky
+   pill tabs; one Ledger, rows that open into a card. One page, one scroll.
+   ========================================================================= */
+.jhPage { position: relative; flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; display: flex; flex-direction: column; align-items: center; padding: 44px 40px 72px; }
+.jhGlow { position: absolute; inset: 0 0 auto 0; height: 520px; pointer-events: none; background: radial-gradient(60% 100% at 50% 0%, color-mix(in srgb, var(--junior, var(--blue)) 22%, transparent), transparent 70%); }
+.jhTop { position: relative; z-index: 2; width: 100%; display: flex; flex-direction: column; align-items: center; }
+
+/* the face is a button: it opens Junior's menu */
+.jhFaceBtn { position: relative; padding: 0; border: 0; background: transparent; border-radius: 50%; cursor: pointer; }
+.jhFaceBtn:focus-visible { outline: 1px solid var(--hair-strong); outline-offset: 6px; }
+.jhFaceBtn .hint { position: absolute; left: 50%; bottom: -8px; transform: translateX(-50%); font-size: 0.8462rem; color: var(--ash); opacity: 0; transition: opacity 0.15s; white-space: nowrap; }
+.jhFaceBtn:hover .hint { opacity: 1; }
+.jhHalo { position: relative; width: 168px; height: 168px; display: grid; place-items: center; }
+.jhHalo::before {
+  content: ""; position: absolute; inset: 0; border-radius: 50%; opacity: 0;
+  background: conic-gradient(from 0deg, transparent 0 62%, var(--junior, var(--blue)) 100%);
+  -webkit-mask: radial-gradient(circle, transparent 79px, #000 80px, #000 82px, transparent 83px);
+  mask: radial-gradient(circle, transparent 79px, #000 80px, #000 82px, transparent 83px);
+  animation: jhSpin 2.4s linear infinite paused;
+}
+.jhHalo::after { content: ""; position: absolute; inset: 0; border-radius: 50%; border: 1px solid var(--hair); }
+.jhHalo .sat { position: absolute; inset: 0; opacity: 0; animation: jhSpin 7s linear infinite reverse paused; }
+.jhHalo .sat i { position: absolute; top: 50%; left: -3px; width: 6px; height: 6px; border-radius: 50%; background: var(--junior, var(--blue)); box-shadow: 0 0 10px var(--junior, var(--blue)); }
+.jhHalo .sat i:nth-child(2) { left: auto; right: -3px; opacity: 0.5; }
+/* working: the halo spins; listening or free, only its hairline ring shows */
+.jhHalo.on::before, .jhHalo.on .sat { opacity: 1; animation-play-state: running; }
+.jhHalo .bob { display: inline-block; animation: jhBob 2.2s ease-in-out infinite; }
+@keyframes jhSpin { to { transform: rotate(360deg); } }
+@keyframes jhBob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+
+.uiMenu.jhFaceMenu { width: 340px; padding: 6px; }
+.jhFaceMenu .hd { display: flex; gap: 10px; align-items: center; padding: 8px 10px 12px; margin-bottom: 6px; border-bottom: 1px solid var(--hair); }
+.jhFaceMenu .hd b { display: block; color: var(--ink); font-weight: 500; }
+.jhFaceMenu .hd span { font-size: 0.9231rem; color: var(--ash); }
+.jhFaceMenu .uiMenuItem .k { margin-left: auto; color: var(--ash); font-size: 0.9231rem; }
+.jhFaceMenu .src { display: flex; align-items: center; gap: 10px; padding: 6px 10px; color: var(--body); text-decoration: none; }
+.jhFaceMenu .src i { width: 7px; height: 7px; border-radius: 50%; background: var(--green); flex: none; }
+.jhFaceMenu .src.off i { background: var(--orange); }
+.jhFaceMenu .src small { color: var(--ash); font-family: var(--mono); font-size: 0.8462rem; }
+.jhFaceMenu .src .go { margin-left: auto; padding: 2px 9px; border: 1px solid var(--hair-strong); border-radius: var(--r); font-size: 0.9231rem; color: var(--ink); }
+.jhFaceMenu .src.proj { color: var(--ash); font-size: 0.9615rem; }
+
+.jhHello { margin: 22px 0 6px; max-width: 760px; font-family: var(--serif); font-weight: 400; font-size: 3.5rem; line-height: 1.05; letter-spacing: -0.01em; color: var(--ink); text-align: center; text-wrap: balance; }
+
+/* right now, in one line */
+.jhTicker { min-height: 26px; max-width: min(680px, 100%); margin: 0; display: flex; gap: 8px; align-items: center; justify-content: center; color: var(--mute); font-size: 1.115rem; white-space: nowrap; }
+.jhTicker.err { color: var(--red-ink); }
+.jhTicker .txt { min-width: 0; overflow: hidden; text-overflow: ellipsis; padding: 0; border: 0; background: none; font: inherit; color: inherit; cursor: pointer; transition: opacity 0.35s; }
+.jhTicker .jobs, .jhTicker .pulse { flex: none; }
+.jhTicker .txt:hover { color: var(--ink); }
+.jhTicker .txt.out { opacity: 0; }
+.jhTicker b { color: var(--blue); font-weight: 400; font-family: var(--mono); font-size: 1rem; }
+.jhTicker .jobs { color: var(--ash); }
+.jhTicker .pulse { position: relative; width: 7px; height: 7px; flex: none; border-radius: 50%; background: var(--blue); }
+.jhTicker .pulse::after { content: ""; position: absolute; inset: -4px; border-radius: 50%; border: 1px solid var(--blue); animation: jhPing 2s infinite; }
+@keyframes jhPing { 0% { transform: scale(0.6); opacity: 0.9; } 100% { transform: scale(1.8); opacity: 0; } }
+
+/* the box: the shared ChatComposer, the same one a new tab has */
+.jhComposeWrap { width: 100%; max-width: 680px; margin-top: 26px; }
+.jhComposeWrap .chatComposer { display: flex; flex-direction: column; align-items: center; gap: 14px; width: 100%; }
+.jhComposeWrap .nsStarters { margin-top: -2px; }
+.jhComposeWrap .composeError, .jhComposeWrap .composeNote { margin: 0; }
+.jhKbd { display: inline-block; padding: 0 5px; border: 1px solid var(--hair-strong); border-radius: var(--r-xs); background: none; font-family: var(--mono); font-size: 0.8077rem; line-height: 16px; color: var(--ash); }
+.btn.primary .jhKbd { border-color: color-mix(in srgb, var(--on-primary) 22%, transparent); color: color-mix(in srgb, var(--on-primary) 55%, transparent); }
+
+/* a source line, only when something Junior relies on is signed out */
+.jhSrc { margin: 10px 0 0; display: flex; gap: 8px; align-items: center; justify-content: center; color: var(--mute); font-size: 1rem; }
+.jhSrc .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--orange); }
+.jhSrc a { color: var(--ink); text-decoration: none; border-bottom: 1px solid var(--hair-strong); }
+
+/* pill tabs, sticky: the page's top padding counts against `top`, so it is taken back */
+.jhTabsRoot { width: 100%; display: flex; flex-direction: column; align-items: center; }
+.jhTabWrap { position: sticky; top: -44px; z-index: 6; width: calc(100% + 80px); margin: 30px -40px 0; padding: 14px 0 10px; display: flex; justify-content: center; background: var(--canvas); }
+.jhTabs { display: flex; gap: 2px; padding: 4px; border: 1px solid var(--hair-strong); border-radius: var(--r-lg); background: var(--card); max-width: calc(100vw - 32px); }
+.jhTabList { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; }
+.jhTab { display: inline-flex; gap: 8px; align-items: center; padding: 7px 14px; border: 0; border-radius: 9px; background: transparent; font: inherit; font-size: 1.077rem; color: var(--ash); white-space: nowrap; cursor: pointer; }
+.jhTab:hover { color: var(--ink); }
+.jhTab[data-state="active"] { color: var(--ink); background: var(--elev); }
+.jhTab .n { font-family: var(--mono); font-size: 0.8462rem; color: var(--stone); }
+.jhTab .n.hot { color: var(--orange); }
+.jhTab .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--blue); }
+.jhTab.more { padding: 7px 10px; color: var(--stone); }
+.jhTab.more:hover, .jhTab.more[data-state="open"] { color: var(--ink); }
+.jhTabMenu .ck { display: inline-grid; place-items: center; width: 14px; color: var(--blue); }
+.jhBody { width: 100%; max-width: 920px; }
+
+/* ---------- the Ledger ---------- */
+.jhList { margin-top: 4px; }
+.jhGrp { display: flex; align-items: baseline; gap: 8px; padding: 22px 12px 8px; font-size: 0.9615rem; color: var(--ash); }
+.jhGrp b { font-weight: 500; color: var(--charcoal); }
+.jhGrp .n { font-family: var(--mono); font-size: 0.8462rem; color: var(--stone); }
+.jhItem { border: 1px solid transparent; border-radius: var(--r-lg); }
+.jhItem + .jhItem:not(.open) > .jhRow { border-top-color: var(--hair-soft); }
+.jhItem.open + .jhItem > .jhRow, .jhItem:hover + .jhItem > .jhRow, .jhItem.focus + .jhItem > .jhRow { border-top-color: transparent; }
+.jhRow {
+  display: grid; grid-template-columns: 150px minmax(0, 1fr) 128px 120px 40px 14px; align-items: center; column-gap: 18px;
+  width: 100%; height: 44px; padding: 0 12px; border: 0; border-top: 1px solid transparent; border-radius: var(--r);
+  background: transparent; font: inherit; font-size: 1.077rem; text-align: left; color: var(--body); cursor: pointer;
+}
+.jhRow:hover { background: var(--hair-soft); }
+.jhRow:focus-visible { outline: 1px solid var(--hair-strong); outline-offset: -1px; }
+.jhItem.focus:not(.open) > .jhRow { background: var(--hair-soft); box-shadow: inset 2px 0 0 var(--hair-strong); }
+.jhRow .wc { display: flex; gap: 9px; align-items: center; min-width: 0; color: var(--ink); white-space: nowrap; }
+.jhRow .wc .nm { overflow: hidden; text-overflow: ellipsis; }
+.jhRow .wc.you { color: var(--ash); }
+.jhRow .av { width: 20px; height: 20px; flex: none; display: inline-grid; place-items: center; border: 1px solid var(--hair-strong); border-radius: 50%; background: var(--elev); font-size: 0.6923rem; font-weight: 500; color: var(--charcoal); }
+.jhRow .tt { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); }
+.jhRow .jrc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.9615rem; color: var(--blue); }
+.jhRow .jrc.quiet { color: var(--ash); }
+.jhRow .prog { display: block; height: 3px; border-radius: 3px; background: var(--hair-strong); overflow: hidden; }
+.jhRow .prog i { display: block; height: 100%; background: var(--blue); }
+.jhRow .wh { display: flex; gap: 7px; align-items: center; min-width: 0; font-family: var(--mono); font-size: 0.9231rem; color: var(--ash); white-space: nowrap; }
+.jhRow .wh > span { overflow: hidden; text-overflow: ellipsis; }
+.jhRow .wh svg { flex: none; color: var(--stone); }
+.jhRow .ag { font-family: var(--mono); font-size: 0.9231rem; color: var(--ash); text-align: right; white-space: nowrap; }
+.jhRow .ag.hot { color: var(--orange); }
+.jhRow .chev { color: var(--stone); transition: transform 0.18s ease, color 0.15s; }
+.jhRow:hover .chev { color: var(--mute); }
+/* open: one bordered card, the row then the details under its own columns */
+.jhItem.open { margin: 6px 0; border-color: var(--hair-strong); background: var(--card); }
+.jhItem.open.focus { border-color: var(--ash); }
+.jhItem.open > .jhRow:hover { background: transparent; }
+.jhItem.open .tt { font-weight: 500; }
+.jhItem.open .chev { transform: rotate(90deg); color: var(--charcoal); }
+.jhXp {
+  display: grid; grid-template-columns: 150px minmax(0, 1fr); column-gap: 18px; row-gap: 12px; margin: 0 12px; padding: 14px 0 16px;
+  border-top: 1px solid var(--hair); font-size: 1.077rem; line-height: 1.5; animation: jhIn 0.18s ease;
+}
+@keyframes jhIn { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: none; } }
+.jhXp .lbl { padding-top: 2px; font-family: var(--mono); font-size: 0.8462rem; letter-spacing: 0.02em; color: var(--ash); }
+.jhXp .lbl.jr { color: var(--blue); }
+.jhXp .ctx { color: var(--charcoal); overflow-wrap: anywhere; }
+.jhXp .said { color: var(--body); }
+.jhXp .acts { grid-column: 2; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 2px; }
+.jhXp .acts .btn { gap: 6px; }
+.jhXp .keys { margin-left: auto; display: flex; gap: 6px; }
+.jhKey { display: inline-flex; gap: 6px; align-items: center; padding: 3px 6px; border: 0; border-radius: var(--r-sm); background: none; font: inherit; font-size: 0.9231rem; color: var(--ash); cursor: pointer; }
+.jhKey:hover, .jhKey[data-state="open"] { color: var(--ink); background: var(--hair-soft); }
+.jhKeys { margin-top: 18px; display: flex; gap: 18px; justify-content: center; font-size: 0.9231rem; color: var(--ash); }
+.jhKeys span { display: inline-flex; gap: 6px; align-items: center; }
+.jhMore { display: block; margin: 8px 12px 0; padding: 0; border: 0; background: none; font: inherit; font-size: 0.9615rem; color: var(--ash); cursor: pointer; }
+.jhMore:hover { color: var(--ink); }
+.jhEmpty { display: flex; gap: 10px; align-items: center; justify-content: center; margin: 28px 0 0; color: var(--mute); font-size: 1.038rem; }
+.jhBody > .jrPane > section:first-child .jrLh { margin-top: 18px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .jhHalo::before, .jhHalo .sat, .jhHalo .bob, .jhTicker .pulse::after, .jhXp { animation: none; }
+}
+
+/* ---------- phone ---------- */
+@media (max-width: 767px), (pointer: coarse) and (max-height: 500px) {
+  .jhPage { padding: 24px 16px calc(40px + env(safe-area-inset-bottom)); }
+  .jhHalo { width: 124px; height: 124px; }
+  .jhHalo::before { -webkit-mask: radial-gradient(circle, transparent 57px, #000 58px, #000 60px, transparent 61px); mask: radial-gradient(circle, transparent 57px, #000 58px, #000 60px, transparent 61px); }
+  .jhHalo svg { width: 84px; height: 84px; }
+  .jhHello { font-size: 2.3rem; }
+  .jhTicker { font-size: 1rem; text-align: center; flex-wrap: wrap; white-space: normal; }
+  .jhTicker .jobs { display: none; }
+  .jhTabWrap { top: -24px; width: calc(100% + 32px); margin: 22px -16px 0; padding: 10px 8px 8px; }
+  .jhRow { grid-template-columns: minmax(0, 1fr) auto 14px; height: auto; min-height: 52px; padding: 8px 10px; row-gap: 2px; }
+  .jhRow .wc { grid-column: 1; grid-row: 2; font-size: 0.9231rem; color: var(--ash); }
+  .jhRow .wc .av, .jhRow .wc svg { display: none; }
+  .jhRow .tt { grid-column: 1; grid-row: 1; }
+  .jhRow .jrc, .jhRow .prog, .jhRow .wh { display: none; }
+  .jhRow .ag { grid-column: 2; grid-row: 1 / 3; }
+  .jhRow .chev { grid-column: 3; grid-row: 1 / 3; }
+  .jhXp { grid-template-columns: 1fr; row-gap: 4px; }
+  .jhXp .lbl { padding-top: 8px; }
+  .jhXp .acts { grid-column: 1; margin-top: 10px; }
+  .jhXp .acts .btn { height: 36px; }
+  .jhXp .keys, .jhKeys, .jhKbd { display: none; }
 }

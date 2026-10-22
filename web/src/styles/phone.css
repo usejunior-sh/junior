@@ -172,7 +172,7 @@ html.kbOpen .shell.mobile .panel { bottom: 0; }
   #composer .frame { min-width: 0; gap: 6px; padding: 8px 8px 6px 12px; }
   /* A session's project is fixed and the header shows it; only a new session's composer keeps its head (the project picker). */
   #composer .frame .cardHead { display: none; }
-  #newSessionHome #composer .frame .cardHead { display: flex; margin: 0 -8px 0 -12px; padding: 8px 12px; overflow: hidden; }
+  .chatComposer #composer .frame .cardHead { display: flex; margin: 0 -8px 0 -12px; padding: 8px 12px; overflow: hidden; }
   #composer .frame { padding-top: 8px; }
   .cardHead .branch { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
   .cardHead .path { display: none; }

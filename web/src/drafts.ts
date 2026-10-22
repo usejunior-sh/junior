@@ -5,7 +5,7 @@
  * workspace, sending one turns it into a real session on the server, and the
  * draft is discarded, so they live in localStorage, not the daemon.
  */
-import { useSyncExternalStore } from 'react'
+import { useEffect, useSyncExternalStore } from 'react'
 import type { Mention } from '../../shared/protocol.js'
 import { uuid } from './uuid.js'
 
@@ -29,6 +29,8 @@ export type Draft = {
   continueIn?: string
   /** `job` = "New job": a chat with Junior that sets one up, its first message prefixed "New job:"; `goal` = the same for a goal ("New goal:") */
   intent?: 'job' | 'goal'
+  /** the Junior page's own box: never a tab, never listed, never reused by New chat */
+  home?: true
   createdAt: number
 }
 
@@ -36,9 +38,12 @@ const key = (workspaceId: string) => `junior.drafts.${workspaceId || 'default'}`
 
 let wsId = ''
 let drafts: readonly Draft[] = []
+/** every draft but the Junior page's box: what tabs and the panel list */
+let listed: readonly Draft[] = []
 const listeners = new Set<() => void>()
 
 function notify() {
+  listed = drafts.filter((d) => !d.home)
   for (const fn of listeners) fn()
 }
 
@@ -66,7 +71,8 @@ function load(workspaceId: string): readonly Draft[] {
 }
 
 export const draftStore = {
-  get: () => drafts,
+  get: () => listed,
+  all: () => drafts,
 
   subscribe(fn: () => void) {
     listeners.add(fn)
@@ -106,12 +112,12 @@ export const draftStore = {
 
   /** An untouched draft: `n` focuses it rather than stacking blank tabs. */
   findEmpty(): Draft | undefined {
-    return drafts.find((d) => !d.text.trim() && !d.label && !d.intent)
+    return drafts.find((d) => !d.home && !d.text.trim() && !d.label && !d.intent)
   },
 
   /** An untouched "New job" draft, reused like an empty session draft. */
   findEmptyJob(): Draft | undefined {
-    return drafts.find((d) => !d.text.trim() && d.intent === 'job')
+    return drafts.find((d) => !d.home && !d.text.trim() && d.intent === 'job')
   },
 }
 
@@ -124,4 +130,14 @@ export function draftTitle(d: Draft): string {
   if (d.label) return d.label
   const line = d.text.trim().split('\n')[0]
   return line ? (line.length > 48 ? line.slice(0, 47) + '…' : line) : d.intent === 'job' ? 'New job' : d.intent === 'goal' ? 'New goal' : 'New chat'
+}
+
+/** The Junior page's box: one draft of its own, made the first time the page needs it. */
+export function useHomeDraft(): Draft | null {
+  const all = useSyncExternalStore(draftStore.subscribe, draftStore.all)
+  const d = all.find((x) => x.home) ?? null
+  useEffect(() => {
+    if (!d) draftStore.create({ home: true })
+  }, [d])
+  return d
 }

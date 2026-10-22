@@ -44,5 +44,15 @@ export async function snoozeItem(item: ScoredItem, until: number): Promise<void>
   )
 }
 
+/** Done from the Junior page: the row leaves at once. */
+export async function doneItem(item: ScoredItem): Promise<void> {
+  inboxStore.patch((items) => items.filter((i) => i.id !== item.id))
+  await Promise.all(
+    signalIds(item).map((id) =>
+      fetch('/api/items/state', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id, status: 'done' }) }).catch(() => {}),
+    ),
+  )
+}
+
 /** The verb on a suggestion's button. */
 export const VERB: Record<string, string> = { babysit: 'Babysit', review: 'First pass', answer: 'Hand off', 'debug-fix': 'Hand off', investigate: 'Hand off' }

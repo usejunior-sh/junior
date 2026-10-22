@@ -305,10 +305,9 @@ kbd { font-family: var(--mono); font-size: 0.8462rem; color: var(--ash); border:
   display: flex; align-items: stretch; height: var(--bar-h); flex: none; overflow: hidden;
   border-bottom: 1px solid var(--hair); background: var(--canvas); position: relative; z-index: 1;
 }
-/* Only the tabs between Inbox and the + scroll. Tabs squeeze to --tab-min
-   first and the strip starts scrolling only once even that stops fitting,
-   so a crowded band degrades in two steps rather than clipping. */
-.tabband > .tab.lead { flex: none; }
+/* Only the tabs before the + scroll. Tabs squeeze to --tab-min first and
+   the strip starts scrolling only once even that stops fitting, so a
+   crowded band degrades in two steps rather than clipping. */
 .tabband .strip {
   display: flex; align-items: stretch; flex: 0 1 auto; min-width: 0;
   overflow-x: auto; overflow-y: hidden; scrollbar-width: none; overscroll-behavior-x: contain;
@@ -353,6 +352,8 @@ kbd { font-family: var(--mono); font-size: 0.8462rem; color: var(--ash); border:
 .tab.active .cl { color: var(--ash); }
 .tabband .add { display: flex; align-items: center; justify-content: center; width: 34px; flex: none; color: var(--ash); background: transparent; border: 0; }
 .tabband .add:hover { color: var(--ink); }
+/* the + with its word: alone in the band, a bare + reads as decoration */
+.tabband .add.labelled { width: auto; gap: 6px; padding: 0 12px; font: inherit; font-size: 0.9615rem; cursor: pointer; }
 .tabband .add.showPanel { border-right: 1px solid var(--hair); }
 .content { flex: 1; min-height: 0; position: relative; display: flex; flex-direction: column; }
 

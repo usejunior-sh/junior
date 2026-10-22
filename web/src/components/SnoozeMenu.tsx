@@ -30,9 +30,22 @@ function Choices({ onSnooze }: { onSnooze: (until: number) => void }) {
 }
 
 /** A trigger of its own: `children` is the button. */
-export function SnoozeMenu({ onSnooze, children, align = 'end' }: { onSnooze: (until: number) => void; children: ReactNode; align?: 'start' | 'end' }) {
+export function SnoozeMenu({
+  onSnooze,
+  children,
+  align = 'end',
+  open,
+  onOpenChange,
+}: {
+  onSnooze: (until: number) => void
+  children: ReactNode
+  align?: 'start' | 'end'
+  /** controlled, for a key that opens it (S on the Junior page) */
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
+}) {
   return (
-    <Menu>
+    <Menu {...(open !== undefined ? { open } : {})} {...(onOpenChange ? { onOpenChange } : {})}>
       <MenuTrigger asChild>{children}</MenuTrigger>
       <MenuContent align={align} className="snzMenu">
         <Choices onSnooze={onSnooze} />

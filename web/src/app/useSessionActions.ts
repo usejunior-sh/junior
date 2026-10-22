@@ -137,7 +137,7 @@ export function useSessionActions({ currentId, currentDraftId, navigate, closeTa
     (id: string) => {
       draftStore.remove(id)
       closeTab(draftKey(id))
-      if (id === currentDraftId) navigate('/inbox')
+      if (id === currentDraftId) navigate('/junior')
     },
     [closeTab, currentDraftId, navigate],
   )

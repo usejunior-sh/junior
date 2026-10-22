@@ -1,4 +1,4 @@
-import { ArrowUp, LoaderCircle, Paperclip, Square } from 'lucide-react'
+import { ArrowUp, LoaderCircle, Paperclip, Plus, Square } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
   mentionToken,
@@ -71,6 +71,8 @@ type Props = {
   busy?: boolean
   /** Draw send as something else once it can send (Junior's face on a new session); `hover` = the pointer is on it. */
   sendFace?: (hover: boolean) => ReactNode
+  /** The head as a tray tucked under the card instead of a row on top, and + for attach (the Junior page). */
+  headBelow?: boolean
 }
 
 /**
@@ -117,6 +119,7 @@ export function PromptBox({
   draftKey,
   busy,
   sendFace,
+  headBelow,
 }: Props) {
   const box = useRef<HTMLTextAreaElement>(null)
   const filePicker = useRef<HTMLInputElement>(null)
@@ -273,7 +276,7 @@ export function PromptBox({
   }
 
   return (
-    <div id="composer">
+    <div id="composer" className={headBelow ? 'headBelow' : undefined}>
       <div
         className={'frame card' + (dragging ? ' dragging' : '')}
         onDragOver={(e) => {
@@ -291,7 +294,7 @@ export function PromptBox({
           void attach.add(e.dataTransfer.files)
         }}
       >
-        <div className="cardHead">{head}</div>
+        {!headBelow && <div className="cardHead">{head}</div>}
 
         <AttachmentStrip
           images={attach.images}
@@ -427,7 +430,7 @@ export function PromptBox({
             title="Attach file (or paste / drop it) · type @ to mention project files, work items, sessions · type / for commands"
             aria-label="Attach file"
           >
-            <Paperclip aria-hidden="true" />
+            {headBelow ? <Plus aria-hidden="true" /> : <Paperclip aria-hidden="true" />}
           </button>
           <ModelPopover
             model={model}
@@ -474,6 +477,7 @@ export function PromptBox({
           </button>
         </div>
       </div>
+      {headBelow && <div className="cardHead tray">{head}</div>}
     </div>
   )
 }

@@ -280,21 +280,18 @@ button.chip:hover:not(:disabled), .chip[data-state="open"] { color: var(--ink); 
 #composer .hint kbd { font-size: 0.7692rem; }
 
 /* new-session home */
-#newSessionHome { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px; padding: 20px 40px; position: relative; }
+/* centred a little above the middle (the extra bottom padding lifts it about 10% of the window) */
+#newSessionHome { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px; padding: 20px 40px calc(20px + 20vh); position: relative; }
 /* Junior's new session: the face asks in a bubble, reacts as you type, nods when you send.
    Its colour (the persona's, as --junior) touches the glow, the bubble, the caret, the border
    while you type and send, nothing else. */
-/* 22px from the page's gap + 14px here: about 36px between Junior's line and the box */
-#newSessionHome .nsWho { position: relative; display: flex; align-items: center; justify-content: center; gap: 16px; max-width: 760px; margin-bottom: 14px; }
+/* The Junior page's top: the face in its halo, the line centred under it. 22px from the page's gap + 4px here before the box */
+#newSessionHome .nsWho { position: relative; display: flex; flex-direction: column; align-items: center; gap: 22px; max-width: 760px; margin-bottom: 4px; }
 #newSessionHome .nsFace { position: relative; display: inline-flex; flex: none; }
-#newSessionHome .nsFace::before {
-  content: ""; position: absolute; inset: -40px; z-index: -1; border-radius: 50%; pointer-events: none;
-  background: radial-gradient(closest-side, color-mix(in srgb, var(--junior) 20%, transparent), transparent);
-}
-/* Junior's line beside its face: two-tone like the Junior page headline (muted greeting, ink question). */
+/* Junior's line: two-tone like the Junior page headline (muted greeting, ink question), and as big. */
 #newSessionHome .nsLine {
-  margin: 0; min-width: 0; font-family: var(--display); font-weight: 400; font-size: 2.2rem; line-height: 1.1; letter-spacing: -0.3px;
-  color: var(--ink); text-align: left; text-wrap: balance; min-height: 1.1em;
+  margin: 0; min-width: 0; font-family: var(--display); font-weight: 400; font-size: 3.5rem; line-height: 1.05; letter-spacing: -0.01em;
+  color: var(--ink); text-align: center; text-wrap: balance; min-height: 1.05em;
 }
 #newSessionHome .nsLine .g { color: var(--mute); }
 #newSessionHome .nsWho.handoff .nsFace { animation: nsNod 0.5s ease-in-out; }
@@ -303,52 +300,74 @@ button.chip:hover:not(:disabled), .chip[data-state="open"] { color: var(--ink); 
   30% { transform: translateY(6px) rotate(-4deg); }
   60% { transform: translateY(-2px) rotate(2deg); }
 }
-#newSessionHome.junior #box { caret-color: var(--junior); }
-#newSessionHome.junior #sendBtn:not(:disabled) { background: var(--junior); color: #14121a; }
-#newSessionHome.junior #sendBtn:hover:not(:disabled) { background: color-mix(in srgb, var(--junior) 85%, white); }
+.chatComposer.junior #box { caret-color: var(--junior); }
+.chatComposer.junior #sendBtn:not(:disabled) { background: var(--junior); color: #14121a; }
+.chatComposer.junior #sendBtn:hover:not(:disabled) { background: color-mix(in srgb, var(--junior) 85%, white); }
 /* Once there's something to send, send is the primary button with Junior in it. The same white,
    radius and height as the plain send, so it reads as the one bright control, not an oversized chip.
    The face carries the colour. It pops in. */
-#sendBtn.face, #newSessionHome.junior #sendBtn.face:not(:disabled) {
+#sendBtn.face, .chatComposer.junior #sendBtn.face:not(:disabled) {
   width: auto; gap: 6px; padding: 0 9px 0 6px; font: inherit; font-size: 0.9231rem; font-weight: 500;
   background: var(--ink); color: var(--on-primary); border-color: transparent;
   animation: sendPillIn 0.2s ease-out;
 }
-#sendBtn.face:hover:not(:disabled), #newSessionHome.junior #sendBtn.face:hover:not(:disabled) { background: var(--primary-hover); }
+#sendBtn.face:hover:not(:disabled), .chatComposer.junior #sendBtn.face:hover:not(:disabled) { background: var(--primary-hover); }
 #sendBtn.face kbd { font-family: var(--mono); font-size: 0.8462rem; color: inherit; opacity: 0.55; background: none; border: 0; padding: 0; }
 @keyframes sendPillIn { from { transform: scale(0.85); opacity: 0; } to { transform: none; opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { #sendBtn.face { animation: none; } }
 /* Starters under the new-session box: shortcuts that set it up, not modes. */
-#newSessionHome .nsStarters { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; width: 100%; max-width: 760px; margin-top: -8px; }
-#newSessionHome .nsStarters button {
+.chatComposer .nsStarters { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; width: 100%; max-width: 760px; margin-top: -8px; }
+.chatComposer .nsStarters button {
   display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px; border-radius: var(--r-full);
   border: 1px solid var(--hair); background: transparent; color: var(--ash); font: inherit; font-size: 0.8846rem; cursor: pointer;
   transition: border-color 0.1s ease, color 0.1s ease;
 }
-#newSessionHome .nsStarters button:hover { color: var(--ink); border-color: var(--hair-bright); }
-#newSessionHome .nsStarters button.on { color: var(--ink); border-color: var(--hair-bright); background: var(--wash-2); }
-#newSessionHome .nsStarters button.on.job svg { color: var(--green); }
-#newSessionHome .nsStarters button.on.goal svg { color: var(--yellow); }
-#newSessionHome .nsStarters button.on.plan svg { color: var(--blue); }
-#newSessionHome .nsPull { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; width: 100%; max-width: 760px; margin-top: -10px; font-size: 0.9231rem; color: var(--ash); }
-#newSessionHome .nsPullLb { margin-right: 2px; }
-#newSessionHome .nsPull .chip { display: inline-flex; align-items: center; gap: 6px; max-width: 280px; padding: 2px 4px 2px 10px; border: 1px solid color-mix(in srgb, var(--junior) 35%, var(--hair-strong)); border-radius: 999px; color: var(--body); }
-#newSessionHome .nsPull .chip b { font-family: var(--mono); font-weight: 500; font-size: 0.8462rem; color: var(--ink); }
-#newSessionHome .nsPull .chip .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-#newSessionHome .nsPull .chip button { display: inline-grid; place-items: center; width: 18px; height: 18px; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--ash); cursor: pointer; }
-#newSessionHome .nsPull .chip button:hover { background: var(--wash-2); color: var(--ink); }
+.chatComposer .nsStarters button:hover { color: var(--ink); border-color: var(--hair-bright); }
+.chatComposer .nsStarters.away { visibility: hidden; }
+.chatComposer .nsStarters button.on { color: var(--ink); border-color: var(--hair-bright); background: var(--wash-2); }
+.chatComposer .nsStarters button.on.job svg { color: var(--green); }
+.chatComposer .nsStarters button.on.goal svg { color: var(--yellow); }
+.chatComposer .nsStarters button.on.plan svg { color: var(--blue); }
+.chatComposer .nsPull { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; width: 100%; max-width: 760px; margin-top: -10px; font-size: 0.9231rem; color: var(--ash); }
+.chatComposer .nsPullLb { margin-right: 2px; }
+.chatComposer .nsPull .chip { display: inline-flex; align-items: center; gap: 6px; max-width: 280px; padding: 2px 4px 2px 10px; border: 1px solid color-mix(in srgb, var(--junior) 35%, var(--hair-strong)); border-radius: 999px; color: var(--body); }
+.chatComposer .nsPull .chip b { font-family: var(--mono); font-weight: 500; font-size: 0.8462rem; color: var(--ink); }
+.chatComposer .nsPull .chip .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chatComposer .nsPull .chip button { display: inline-grid; place-items: center; width: 18px; height: 18px; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--ash); cursor: pointer; }
+.chatComposer .nsPull .chip button:hover { background: var(--wash-2); color: var(--ink); }
 @media (prefers-reduced-motion: reduce) { #newSessionHome .nsWho.handoff .nsFace { animation: none; } }
-/* Phones: a smaller line, still beside the face. */
+/* Phones: a smaller halo and line. */
 @media (max-width: 767px) {
-  #newSessionHome .nsWho { gap: 12px; }
-  #newSessionHome .nsLine { font-size: 1.6rem; }
+  #newSessionHome .nsWho { gap: 14px; }
+  #newSessionHome .nsLine { font-size: 2.3rem; }
 }
 #newSessionHome h2 { margin: 0; font-family: var(--display); font-weight: 400; font-size: 2.7692rem; letter-spacing: -0.36px; line-height: 1; color: var(--ink); }
-#newSessionHome #composer { width: 100%; padding: 0; display: flex; justify-content: center; }
-#newSessionHome .frame { width: 100%; }
+.chatComposer #composer { width: 100%; padding: 0; display: flex; justify-content: center; }
+/* A new chat's box, here and on the Junior page (PromptBox headBelow): the card holds the text
+   and one row, + on the left, the model and send on the right; where it runs (project, branch,
+   folder) sits in a quiet tray tucked under it */
+.chatComposer #composer.headBelow { flex-direction: column; align-items: stretch; max-width: var(--measure); margin: 0 auto; }
+.chatComposer .frame { gap: 14px; padding: 20px 14px 12px 22px; border-radius: 18px; }
+.chatComposer #box { font-size: 1.231rem; min-height: 4.5em; }  /* three lines */
+.chatComposer .statusline { gap: 4px; margin-left: -10px; }
+.chatComposer .statusline .chip { border-color: transparent; background: none; color: var(--mute); }
+.chatComposer .statusline .chip:hover { color: var(--ink); background: var(--wash-2); }
+.chatComposer .statusline .chip.attachBtn { order: 0; width: 32px; height: 32px; border-radius: 50%; }
+.chatComposer .statusline .chip.attachBtn svg { width: 17px; height: 17px; }
+.chatComposer .statusline .modePicker { order: 1; }
+.chatComposer .statusline .spacer { order: 2; }
+.chatComposer .statusline .chip.model { order: 3; }
+.chatComposer .statusline .chip.fast { order: 4; }
+.chatComposer .statusline #stopBtn { order: 5; }
+.chatComposer .statusline #sendBtn { order: 6; margin-left: 4px; border-radius: var(--r-full); }
+.chatComposer .statusline #sendBtn { height: 34px; }
+.chatComposer .statusline #sendBtn:not(.face) { width: 34px; min-width: 34px; padding: 0; }
+.chatComposer .cardHead.tray { display: flex; align-items: center; gap: 10px; min-width: 0; margin: 0 14px; padding: 7px 10px; border: 1px solid var(--hair); border-top: 0; border-radius: 0 0 14px 14px; background: var(--wash-1); }
+.chatComposer .tray .chip { border-color: transparent; background: none; color: var(--mute); }
+.chatComposer .tray .chip:hover { color: var(--ink); background: var(--wash-2); }
+.chatComposer .frame { width: 100%; }
 /* The draft box opens tall: a first prompt is usually a paragraph. In a live
    session it starts at two lines and grows with what you type. */
-#newSessionHome #box { min-height: 96px; }
 #newSessionHome .actions { display: flex; align-items: center; gap: 12px; }
 #newSessionHome .actions .hint { flex: 1; }
 

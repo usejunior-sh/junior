@@ -261,3 +261,27 @@ export function sentenceOf(card: CanDoCard, picks: readonly number[]): string {
     })
     .join('')
 }
+
+/** A shortcut under the Junior page's box: a short label, and the message it writes into the box. */
+export type TryShortcut = { label: string; say: string }
+
+/**
+ * Shortcuts from your real items, for the Junior page's starters: fix what's
+ * red, review what waits on you, take a ticket. Jobs and the day's plan have
+ * starters of their own; "More…" opens all eight cards.
+ */
+export function tryShortcuts(f: CanDoFill): TryShortcut[] {
+  const cards = canDoCards(f)
+  const say = (id: string) => sentenceOf(cards.find((c) => c.id === id)!, [])
+  // a label reads as a name, not a quote: "Fix Add test", "Review #1296"
+  const bare = (s: string) => clip(s.replace(/^(?:the red check on|the conflicts on|issue) /, '').replace(/[“”]/g, ''), 22)
+  const out: TryShortcut[] = []
+  const fix = f.fixes[0]
+  if (fix) out.push({ label: `Fix ${bare(fix)}`, say: say('fix') })
+  const review = f.drafts.find((d) => d.startsWith('my review of '))?.slice('my review of '.length)
+  if (review) out.push({ label: `Review ${bare(review)}`, say: `Do a first-pass review of ${review} and draft comments for me to edit.` })
+  // the same item twice ("Fix Add test", "Take Add test") is one shortcut
+  const take = f.takes[0]
+  if (take && !fix?.includes(take)) out.push({ label: `Take ${bare(take)}`, say: say('take') })
+  return out
+}

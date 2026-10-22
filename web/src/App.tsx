@@ -214,10 +214,10 @@ export function App() {
   }, [route.page, navigate])
 
   // Settings is a page: remember its tab for the gear, and every other page
-  // as where Close and Esc go back to (the inbox on a cold load).
+  // as where Close and Esc go back to (Junior's page on a cold load).
   useEffect(() => {
     if (route.page === 'settings') noteSettingsTab(route.tab)
-    else if (route.page !== 'home') noteReturnHash(location.hash.slice(1) || '/inbox')
+    else if (route.page !== 'home') noteReturnHash(location.hash.slice(1) || '/junior')
   }, [route])
 
   const { docTab, pin, pinCurrent } = useDocumentTabs({ conn, route, docKeys, inbox, artifacts, sessions, titles, openTab, remember, setPreview })
@@ -226,7 +226,7 @@ export function App() {
   // coming back lands on what you were reading rather than the section root.
   useEffect(() => {
     const section = sectionOf(route)
-    // `home` redirects to the inbox above; `settings` sits outside the rail's sections.
+    // `home` redirects to Junior's page above; `settings` sits outside the rail's sections.
     if (!section || route.page === 'home') return
     recordRoute(section, location.hash.slice(1) || '/inbox')
   }, [route, recordRoute])
@@ -333,7 +333,7 @@ export function App() {
         // A pinned tab hands over to its neighbour; the preview has none.
         const i = tabs.indexOf(key)
         const next = i === -1 ? undefined : tabs[i + 1] ?? tabs[i - 1]
-        navigate(next ? routeOfKey(next) : '/inbox')
+        navigate(next ? routeOfKey(next) : '/junior')
       }
       // Closing a draft tab discards the draft. There is nowhere else it lives.
       if (key.startsWith('draft:')) draftStore.remove(key.slice(6))
@@ -343,13 +343,13 @@ export function App() {
   )
 
   // Empty the band. Drafts go with their tabs: that is the only place they
-  // live, and with nothing left open, the inbox is where you land.
+  // live, and with nothing left open, Junior's page is where you land.
   const closeAllOpenTabs = useCallback(() => {
     for (const key of [...tabs, ...(preview ? [preview] : [])]) {
       if (key.startsWith('draft:')) draftStore.remove(key.slice(6))
     }
     closeAllTabs()
-    navigate('/inbox')
+    navigate('/junior')
   }, [tabs, preview, closeAllTabs, navigate])
 
   useGlobalHotkeys({ route, navigate, newSession, newTerminal, terminalCwd, goTo, currentId, panelSize, setHelpOpen, setPaletteOpen, setComposeSignal })
@@ -568,7 +568,6 @@ export function App() {
             preview={previewTab}
             onPin={pin}
             pageTab={pageTab}
-            onInbox={() => navigate('/inbox')}
             onShowPanel={panelCollapsed && !isDesktop ? () => (panelStepsAside ? setKeepPanel(true) : panelSize.setCollapsed(false)) : undefined}
             onSelect={(key) => navigate(routeOfKey(key))}
             onClose={closeOpenTab}
@@ -581,7 +580,7 @@ export function App() {
 
           <div className="content">
             {route.page === 'junior' ? (
-              <JuniorPage key={route.tab ?? 'home'} initialTab={route.tab} onNavigate={navigate} onDispatch={dispatchById} />
+              <JuniorPage key={route.tab ?? 'home'} initialTab={route.tab} onNavigate={navigate} onDispatch={dispatchById} onCreate={create} createError={createError} createStep={createStep} />
             ) : route.page === 'inbox' ? (
               <InboxPage
                 view={resolveView(route.view, inboxTabs)}

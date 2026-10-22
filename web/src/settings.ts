@@ -48,7 +48,7 @@ export const SETTINGS_TABS: ReadonlyArray<SettingsTabMeta> = [
   { id: 'models', label: 'Models', sub: 'Which models the model picker offers — hide the ones you never use, or add an id Claude Code does not list yet.', group: 'workspace' },
   { id: 'approvals', label: 'Approvals', sub: 'Sends Junior may make without asking each time — who, what and when. Revoke any of them here.', group: 'workspace' },
   { id: 'browser', label: 'Browser', sub: 'Profiles keep separate logins. Junior uses the one you name.', group: 'workspace' },
-  { id: 'babysit', label: 'Babysit', sub: 'Junior keeps your PRs green: on or off, the models it uses, and what it may spend.', group: 'workspace' },
+  { id: 'babysit', label: 'Automations', sub: 'What Junior runs on its own: PR babysitting, first-pass reviews, scheduled jobs. Each one on or off, its models and what it may spend.', group: 'workspace' },
   { id: 'briefs', label: 'Briefs', sub: 'How briefs run: the daily cap, the model, and the playbook for each kind of work item.', group: 'workspace' },
   { id: 'skills', label: 'Skills', sub: 'Every skill a session here can use — this workspace’s, yours, each project’s, and your plugins’. Edits are live in open sessions.', group: 'workspace', fill: true },
   { id: 'agents', label: 'Agents', sub: 'Every subagent a chat here can hand work to. Edits are live in open chats.', group: 'workspace', fill: true },
@@ -80,11 +80,11 @@ export const settingsHash = (tab: SettingsTab) => `/settings/${tab}`
 /** The last tab shown, so the gear reopens where you were. */
 let lastTab: SettingsTab = DEFAULT_SETTINGS_TAB
 /** The page settings was opened from, where Close and Esc go. */
-let returnHash = '/inbox'
+let returnHash = '/junior'
 
 /** App calls this for every non-settings route, so Close knows where to land. */
 export function noteReturnHash(hash: string) {
-  returnHash = hash || '/inbox'
+  returnHash = hash || '/junior'
 }
 
 /** App calls this when the settings route shows a tab. */

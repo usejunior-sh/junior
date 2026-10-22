@@ -10,7 +10,6 @@ import {
   FolderOpen,
   GitBranch,
   Home,
-  Inbox,
   MessageSquare,
   PanelLeftOpen,
   PenLine,
@@ -94,14 +93,13 @@ export type OpenTab = {
 export type PageTab = { key: string; label: string; icon: ComponentType<LucideProps> }
 
 type Props = {
-  /** 'inbox', a tab key, or a page tab key */
+  /** a tab key, a page tab key, or 'junior' (no tab lit) */
   activeKey: string
   tabs: readonly OpenTab[]
   /** The one document being peeked at, if any, it outlives navigating away. */
   preview?: OpenTab | null
   /** A transient tab for a rail *index* (Jobs, Terminals, Artifacts). */
   pageTab?: PageTab | null
-  onInbox: () => void
   /** Set while the panel is hidden: its show button leads the band. */
   onShowPanel?: () => void
   onSelect: (key: string) => void
@@ -186,7 +184,7 @@ function useTabDrag(tabs: readonly OpenTab[], onReorder: (key: string, before: s
   const [dropBefore, setDropBefore] = useState<string | null>(null)
   // Separate from dragKey: dropBefore's own `null` already means "end of
   // list", so it can't also mean "pointer isn't over a tab right now", the
-  // gap past the last tab, Inbox, the +. Without this the last real target
+  // gap past the last tab, the +. Without this the last real target
   // stays painted under the cursor once the drag leaves the strip.
   const [overStrip, setOverStrip] = useState(false)
 
@@ -240,13 +238,12 @@ function useTabDrag(tabs: readonly OpenTab[], onReorder: (key: string, before: s
   return { bag, onStripDragLeave }
 }
 
-/** The tab band: Inbox pinned, one closable tab per open session or terminal, + for a new session. */
+/** The tab band: one closable tab per open session or terminal, + for a new session. Junior's page is on the rail. */
 export function TabBand({
   activeKey,
   tabs,
   preview,
   pageTab,
-  onInbox,
   onShowPanel,
   onSelect,
   onClose,
@@ -265,23 +262,13 @@ export function TabBand({
 
   return (
     <div className="tabband" role="tablist">
-      {/* Inbox and the + sit outside the scroller: the way out of a crowded
-          band must never be the thing that scrolled off it. */}
+      {/* The + sits outside the scroller: the way out of a crowded band
+          must never be the thing that scrolled off it. */}
       {onShowPanel && (
         <button type="button" className="add showPanel" onClick={onShowPanel} title={`Show panel (${MOD_LABEL}B)`} aria-label="Show panel">
           <PanelLeftOpen size={15} aria-hidden="true" />
         </button>
       )}
-      <button
-        type="button"
-        role="tab"
-        aria-selected={activeKey === 'inbox'}
-        className={`tab lead${activeKey === 'inbox' ? ' active' : ''}`}
-        onClick={onInbox}
-      >
-        <Inbox size={13} aria-hidden="true" />
-        <span className="t">Inbox</span>
-      </button>
 
       <div className="strip" ref={strip} data-fade={fade} role="presentation" onDragLeave={onStripDragLeave}>
         {tabs.map((t, i) => (
@@ -472,8 +459,9 @@ function NewTabMenu({ onNew, onNewTerminal, terminalCwd }: Pick<Props, 'onNew' |
   return (
     <Menu open={open} onOpenChange={setOpen}>
       <MenuTrigger asChild>
-        <button type="button" className="add" title="New tab — chat or terminal">
+        <button type="button" className="add labelled" title="New tab — chat or terminal">
           <Plus size={14} aria-hidden="true" />
+          <span>New</span>
         </button>
       </MenuTrigger>
       <MenuContent align="start" className="wide">
