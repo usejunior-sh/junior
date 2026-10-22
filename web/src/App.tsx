@@ -11,7 +11,7 @@ import { Composer } from './components/Composer.js'
 import { BrowserPane } from './components/BrowserPane.js'
 import { useBrowserOpen, useWindowNarrower } from './browser.js'
 import { PanelCollapseContext, NewTerminalMenu } from './components/ContextPanel.js'
-import { useInboxTabs, useInboxViews, resolveView } from './inboxTabs.js'
+import { needsYouText, useInboxTabs, useInboxViews, resolveView } from './inboxTabs.js'
 import { HelpOverlay } from './components/HelpOverlay.js'
 import { InboxPage } from './components/InboxPage.js'
 import { JuniorPage } from './components/JuniorPage.js'
@@ -400,6 +400,7 @@ export function App() {
                 title: s.title,
                 color: projectColor(s.projectId ?? s.cwd),
                 running: isWorking(s),
+                ...(needsYouText(s) ? { waiting: needsYouText(s)! } : {}),
                 ...worktreeTag(s.checkoutId),
               },
             ]

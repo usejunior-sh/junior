@@ -54,3 +54,16 @@ export function waitingText(s: Pick<SessionSummary, 'waitingOn'>): string {
   if (s.waitingOn === 'ExitPlanMode') return 'Plan to approve'
   return `Permission: ${s.waitingOn.replace(/^mcp__.+?__/, '')}`
 }
+
+/**
+ * What a chat is waiting on you for, or null: a prompt (permission, question,
+ * plan) or, for a team's lead, its card or a gate. The tab, the sidebar row
+ * and the top bar's Waiting list all read this.
+ */
+export function needsYouText(s: Pick<SessionSummary, 'waiting' | 'waitingOn' | 'teamRun'>): string | null {
+  if (s.waiting) return waitingText(s)
+  if (s.teamRun?.role !== 'lead') return null
+  if (s.teamRun.state === 'proposed') return 'Team to approve'
+  if (s.teamRun.state === 'gate') return 'Team waiting at a gate'
+  return null
+}

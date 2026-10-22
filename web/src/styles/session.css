@@ -71,6 +71,15 @@
 .provPopOff { display: flex; flex-direction: column; gap: 4px; padding: 9px 15px; border-top: 1px solid var(--hair); font-size: 0.8462rem; color: var(--stone); }
 .provPopOff span { display: inline-flex; align-items: center; gap: 6px; }
 .provPop .foot { display: flex; justify-content: flex-end; padding: 6px 10px 0; border-top: 1px solid var(--hair); }
+.waitPop { width: 320px; }
+.waitNone { padding: 10px 15px 8px; border-top: 1px solid var(--hair); font-size: 0.9231rem; color: var(--ash); }
+.waitRow {
+  display: flex; align-items: center; gap: 9px; width: 100%; padding: 9px 15px; border: 0; border-top: 1px solid var(--hair);
+  background: transparent; color: var(--ink); font: inherit; font-size: 0.9231rem; text-align: left; cursor: pointer;
+}
+.waitRow:hover, .waitRow:focus-visible { background: var(--wash-3); outline: none; }
+.waitRow .t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.waitRow .why { flex: none; max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 400 0.8462rem var(--mono); color: var(--orange); }
 .provTag { font-size: 0.7692rem; padding: 1px 6px; border-radius: var(--r-full); border: 1px solid var(--hair-strong); color: var(--ash); font-weight: 400; letter-spacing: 0.02em; }
 
 .provUsage { display: flex; flex-direction: column; gap: 7px; }

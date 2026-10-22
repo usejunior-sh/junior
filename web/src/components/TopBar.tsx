@@ -11,6 +11,7 @@ import { Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from '../ui/M
 import { basePath } from '../workspaceUrl.js'
 import { JuniorLogo } from './Logo.js'
 import { ProvidersButton } from './ProvidersButton.js'
+import { WaitingButton } from './WaitingButton.js'
 
 type Props = {
   /** Phone layout: a back button and the page title take the logo's place. */
@@ -147,7 +148,7 @@ export function TopBar({
   )
 }
 
-/** Providers, system status, activity, settings, help, the right end of the bar. */
+/** Waiting, providers, system status, activity, settings, help, the right end of the bar. */
 function SystemIcons({
   workspace,
   conn,
@@ -158,6 +159,7 @@ function SystemIcons({
 }: Pick<Props, 'conn' | 'onOpenSystem' | 'onOpenSettings' | 'settingsOpen' | 'onHelp'> & { workspace: Workspace | undefined }) {
   return (
     <>
+      <WaitingButton />
       {/* a daemon from before providers sends none. It shows once that daemon restarts */}
       {workspace?.providers && <ProvidersButton workspace={workspace} />}
       <button type="button" className="topIcon" title={CONN_TITLE[conn]} onClick={() => onOpenSystem('status')}>

@@ -1,26 +1,25 @@
-// Renders the README banner (marketing/readme-banner/banner.html) to
-// docs/banner-dark.png and docs/banner-light.png through your installed Chrome.
-// Run: node marketing/readme-banner/render.mjs
+// Renders the README banner (docs/banner.png) from the website's dev-only
+// /og/readme stage: the share card's look on a 1280x460 stage, at 2x.
+// Needs the site's `next dev` running (usejunior.sh repo, :3000).
+// Run: node marketing/readme-banner/render.mjs [url]
 import path from 'node:path'
-import { fileURLToPath, pathToFileURL } from 'node:url'
+import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright-core'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const root = path.resolve(here, '../..')
-const page = pathToFileURL(path.join(here, 'banner.html')).href
+const url = process.argv[2] ?? 'http://localhost:3000/og/readme'
 
 const browser = await chromium.launch({ channel: 'chrome' }).catch(() => chromium.launch())
 try {
-  const tab = await browser.newPage({ viewport: { width: 1280, height: 460 }, deviceScaleFactor: 2 })
-  for (const theme of ['dark', 'light']) {
-    await tab.goto(`${page}#${theme}`)
-    await tab.reload()
-    await tab.evaluate(() => document.fonts.ready)
-    await tab.waitForTimeout(300)
-    const out = path.join(root, 'docs', `banner-${theme}.png`)
-    await tab.locator('#banner').screenshot({ path: out })
-    console.log(path.relative(root, out))
-  }
+  // reduced motion holds Junior still, eyes open, looking straight out
+  const tab = await browser.newPage({ viewport: { width: 1280, height: 460 }, deviceScaleFactor: 2, reducedMotion: 'reduce' })
+  await tab.goto(url, { waitUntil: 'networkidle' })
+  await tab.evaluate(() => document.fonts.ready)
+  await tab.waitForTimeout(1500)
+  const out = path.join(root, 'docs', 'banner.png')
+  await tab.locator('#banner').screenshot({ path: out })
+  console.log(path.relative(root, out))
 } finally {
   await browser.close()
 }

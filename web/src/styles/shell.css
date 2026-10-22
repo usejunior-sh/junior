@@ -166,6 +166,7 @@ kbd { font-family: var(--mono); font-size: 0.8462rem; color: var(--ash); border:
 .topIcon .connDot { position: absolute; right: 4px; top: 4px; width: 6px; height: 6px; border-radius: var(--r-full); background: var(--green); }
 .topIcon .connDot.down { background: var(--red); animation: pulse 1.2s infinite; }
 .topIcon .connDot.connecting { background: var(--yellow); }
+.topIcon .connDot.needs { background: var(--orange); box-shadow: 0 0 0 2px var(--glow-orange); }
 .topIcon:disabled { color: var(--stone); background: transparent; cursor: default; }
 
 /* Junior.app's title bar (desktop.ts): the bar is the window's drag handle,
@@ -342,6 +343,8 @@ kbd { font-family: var(--mono); font-size: 0.8462rem; color: var(--ash); border:
 .tab > svg { flex: none; }
 .tab .t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-flex; align-items: center; gap: 7px; }
 .tab .pdot { display: inline-block; width: 5px; height: 5px; border-radius: var(--r-full); flex: none; }
+/* A chat waiting on you: the one orange on the strip (needs-you only). */
+.tab .pdot.needs { width: 6px; height: 6px; background: var(--orange); box-shadow: 0 0 0 3px var(--glow-orange); }
 .tab .cl {
   display: inline-flex; align-items: center; justify-content: center; flex: none; margin-left: auto; margin-right: -4px;
   width: 18px; height: 18px; border-radius: var(--r-xs); color: var(--stone); background: transparent; border: 0; padding: 0;

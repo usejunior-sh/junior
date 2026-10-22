@@ -43,7 +43,7 @@ import {
 import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import type { ArtifactWithLinks, Project, ProjectsResponse, SessionSummary, TerminalSummary } from '../../../shared/protocol.js'
 import { INBOX_VIEWS, VIEW_TITLE, type InboxRoute, type InboxView } from '../../../core/work/inbox-views.js'
-import type { Tabs, Views } from '../inboxTabs.js'
+import { needsYouText, type Tabs, type Views } from '../inboxTabs.js'
 import { FormatIcon } from '../artifactFormat.js'
 import { checkoutOf } from '../checkouts.js'
 import { draftTitle, type Draft } from '../drafts.js'
@@ -456,7 +456,13 @@ function SessionRow({ session: s, active, renaming, onSelect, onStartRename, onE
   const wt = co?.kind === 'worktree' ? co : null
   // Ultracode runs going after the turn ended still read as working.
   const shown = shownStatus(s)
-  const dot = <span className={`dot sm ${STATUS_DOT[shown.status]}`} title={shown.title} aria-hidden="true" />
+  // Waiting on you outranks working: the one orange in the list.
+  const needs = needsYouText(s)
+  const dot = needs ? (
+    <span className="dot sm orange" title={`Waiting on you: ${needs}`} aria-hidden="true" />
+  ) : (
+    <span className={`dot sm ${STATUS_DOT[shown.status]}`} title={shown.title} aria-hidden="true" />
+  )
 
   useEffect(() => {
     if (renaming) input.current?.select()
@@ -488,7 +494,7 @@ function SessionRow({ session: s, active, renaming, onSelect, onStartRename, onE
       className={`prow${active ? ' sel' : ''}${wt ? ' wt' : ''}`}
       role="button"
       tabIndex={0}
-      title={[s.title, s.name && `name: ${s.name}`, s.startedBy && 'started by another chat', wt?.path, shown.title].filter(Boolean).join('\n')}
+      title={[s.title, needs && `waiting on you: ${needs}`, s.name && `name: ${s.name}`, s.startedBy && 'started by another chat', wt?.path, shown.title].filter(Boolean).join('\n')}
       onClick={onSelect}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
@@ -510,6 +516,7 @@ function SessionRow({ session: s, active, renaming, onSelect, onStartRename, onE
       ) : (
         <span className="t">{s.title}</span>
       )}
+      {needs && <span className="needsMark">needs you</span>}
       {s.name && s.name.toLowerCase() !== s.title.toLowerCase() && <span className="nameMark">{s.name}</span>}
       {s.ultracode && <Workflow className="ucMark" size={11} aria-label="Ultracode" />}
       {s.pinned && <Pin className="pinMark" size={11} aria-label="Pinned" />}

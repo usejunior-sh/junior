@@ -26,6 +26,7 @@ import type {
 } from '../../shared/protocol.js'
 import { openSettings } from './settings.js'
 import { store } from './store.js'
+import { withWorkspace } from './workspaceUrl.js'
 
 export type BrowserViewport = { width: number; height: number; deviceScaleFactor: number; mobile: boolean }
 export type BrowserPreset = 'fit' | 'desktop' | 'laptop' | 'tablet' | 'mobile'
@@ -179,7 +180,8 @@ export function presetOf(v: BrowserViewport | null | undefined): BrowserPreset |
   return null
 }
 
-export const shotSrc = (sessionId: string, n: number) => `/api/browser/shots/${sessionId}/${n}`
+/** An <img> src: it skips the fetch wrapper, so it names this tab's workspace itself. */
+export const shotSrc = (sessionId: string, n: number) => withWorkspace(`/api/browser/shots/${sessionId}/${n}`)
 
 // ── profiles (machine-wide, the daemon's list) ──────────────────────────────
 

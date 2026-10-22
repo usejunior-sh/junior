@@ -81,6 +81,8 @@ export type OpenTab = {
   color: string
   /** live: a working session, or a running shell */
   running: boolean
+  /** a chat waiting on you, and for what: "Question", "Permission: Bash" */
+  waiting?: string
   /** the worktree it runs in, as a short branch slug; absent in a project's main folder */
   branch?: string
   /** that worktree has since been removed */
@@ -382,7 +384,7 @@ function Tab({
           aria-selected={active}
           draggable={!!drag}
           className={`tab${active ? ' active' : ''}${tab.preview ? ' preview' : ''}${drag?.dragging ? ' dragging' : ''}`}
-          title={tab.preview ? `${tab.title} — double-click to keep open` : tab.title}
+          title={tab.preview ? `${tab.title} — double-click to keep open` : tab.waiting ? `${tab.title} — waiting on you: ${tab.waiting}` : tab.title}
           onClick={() => onSelect(tab.key)}
           onDoubleClick={() => tab.preview && onPin(tab.key)}
           onAuxClick={(e) => e.button === 1 && close(e)}
@@ -394,8 +396,10 @@ function Tab({
           {drag?.dropEdge === 'before' && <span className="dropline before" aria-hidden="true" />}
           <Icon size={13} aria-hidden="true" />
           <span className={`t${tab.kind === 'draft' ? ' draft' : ''}`}>
-            {dotted && (
-              <span className={`pdot${tab.running ? ' live' : ''}`} style={{ background: tab.color }} aria-hidden="true" />
+            {tab.waiting ? (
+              <span className="pdot needs" aria-label="waiting on you" />
+            ) : (
+              dotted && <span className={`pdot${tab.running ? ' live' : ''}`} style={{ background: tab.color }} aria-hidden="true" />
             )}
             {tab.title}
           </span>

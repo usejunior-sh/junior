@@ -1,13 +1,11 @@
 <a href="https://usejunior.sh">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/banner-dark.png">
-    <img src="docs/banner-light.png" alt="Junior. Your junior engineer. On your Mac. Junior takes the work that doesn't need you. Junior's face, a sky-blue key with round eyes and a small smile, looks out from the right." width="100%">
-  </picture>
+  <img src="docs/banner.png" alt="Junior. Runs on your Mac. Asks before anything goes out. A junior engineer for senior engineers. Junior watches GitHub, Slack, Linear and your other tools. It brings you what needs you. Free, open source, runs on your Mac. Junior's face, a lavender key drawn in dots, stands on a dotted ridge on the right." width="100%">
 </a>
 
 <p align="center">
   <a href="#install">Install</a> ·
   <a href="#how-it-works">How it works</a> ·
+  <a href="#the-rules">The rules</a> ·
   <a href="#features">Features</a> ·
   <a href="#fair-questions">FAQ</a> ·
   <a href="#development">Development</a> ·
@@ -15,13 +13,15 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/usejunior-sh/junior/releases/latest"><img src="https://img.shields.io/github/v/release/usejunior-sh/junior?label=release&color=80b2f6&labelColor=141210" alt="latest release"></a>
-  <img src="https://img.shields.io/badge/macOS-Apple%20silicon%20%C2%B7%20Intel-f8f7f4?labelColor=141210" alt="macOS, Apple silicon or Intel">
-  <img src="https://img.shields.io/badge/runs%20on-Claude%20Code%20%C2%B7%20Codex-a9cdfc?labelColor=141210" alt="runs on Claude Code and Codex">
-  <a href="https://github.com/usejunior-sh/junior/commits/main"><img src="https://img.shields.io/github/last-commit/usejunior-sh/junior?color=f8f7f4&labelColor=141210" alt="last commit"></a>
+  <a href="https://github.com/usejunior-sh/junior/releases/latest"><img src="https://img.shields.io/github/v/release/usejunior-sh/junior?label=release&color=a593f5&labelColor=16131f" alt="latest release"></a>
+  <img src="https://img.shields.io/badge/macOS-Apple%20silicon%20%C2%B7%20Intel-f8f7fc?labelColor=16131f" alt="macOS, Apple silicon or Intel">
+  <img src="https://img.shields.io/badge/runs%20on-Claude%20Code%20%C2%B7%20Codex-cbbffa?labelColor=16131f" alt="runs on Claude Code and Codex">
+  <a href="https://github.com/usejunior-sh/junior/commits/main"><img src="https://img.shields.io/github/last-commit/usejunior-sh/junior?color=f8f7fc&labelColor=16131f" alt="last commit"></a>
 </p>
 
-**Junior is an AI junior engineer for senior engineers. It runs your work inbox, on your Mac.**
+<sub>RUNS ON YOUR MAC. ASKS BEFORE ANYTHING GOES OUT.</sub>
+
+## A junior engineer for senior engineers.
 
 Junior watches GitHub, Slack, Linear and your other tools. It brings you what needs you. It takes the rest, and asks before anything goes out. It runs on your Mac, learns how you work, and needs you a little less each week.
 
@@ -33,16 +33,17 @@ curl -fsSL https://usejunior.sh/install.sh | sh
 
 <sub>Junior was called Triage until October 2026. Same app, one name now. Updating from Triage moves your data from <code>~/.triage</code> to <code>~/.junior</code> on first start.</sub>
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/flow-dark.png">
-  <img src="docs/flow-light.png" alt="Work arrives from GitHub, Slack, Linear and Sentry. The inbox ranks it: two rows need you, three go to Junior. Junior fixes CI and drafts a reply, then holds the push and the reply for your OK. Sent without your OK: 0." width="100%">
-</picture>
+<img src="docs/flow-light.png" alt="Work arrives from GitHub, Slack, Linear and Sentry. The inbox ranks it: two rows need you, three go to Junior. Junior fixes CI and drafts a reply, then holds the push and the reply for your OK. Sent without your OK: 0." width="100%">
 
 <p align="center"><sub>Example work. Your Tuesday will have more of it.</sub></p>
 
-## One inbox. Two owners.
+## Why Junior
 
-**Junior brings you what needs you. Junior takes what doesn't.** On your Mac, with your tools, and it asks before anything goes out.
+**Junior brings you what needs you. And takes what doesn't.** On your Mac, with your tools, and it asks before anything goes out.
+
+- **Only what needs you.** GitHub, Slack, Linear and anything with an MCP server, in one ranked list. Each item says why it's there. People waiting go to the top.
+- **Junior takes the rest.** Junior fixes, retries and waits on CI. It drafts replies and runs your chores on a schedule. You approve what goes out.
+- **Your Mac, your plan.** Junior runs on your Mac, on the Claude Code or Codex plan you already pay for. No API keys to paste. No bill from us.
 
 Every row in the inbox belongs to you or to Junior.
 
@@ -84,6 +85,17 @@ Nothing goes out without you. Junior plans first and asks before anything goes o
 4. **Junior works on your Mac.** Edits, tests and local commits don't need your OK. They stay on your machine until you say otherwise.
 5. **You approve what goes out.** Pushes, PRs, comments and messages wait for you, word for word. Junior has never posted in #general on its own. It isn't allowed to.
 
+## The rules
+
+**Three rules it can't switch off.** Rename it, change its voice. The rules stay.
+
+1. **It reads back what you ask.** Before it starts, it says what it understood, in a line or two. A misunderstanding costs one message, not an afternoon.
+2. **It asks everything in one message.** No drip of questions. One message, and each question comes with the answer it suggests. Often you just say yes.
+3. **Nothing leaves without your OK.** Pushes, PRs, comments, ticket moves and messages wait for you, word for word. Edits, tests and local commits don't.
+
+> **You:** Bump the deps on api.<br>
+> **Junior:** Reading it back: patch and minor bumps in acme/api, one PR, tests green first.
+
 ## Features
 
 The rest of the job. What happens between the inbox and the push.
@@ -92,13 +104,30 @@ The rest of the job. What happens between the inbox and the push.
 | --- | --- |
 | **Inbox** | GitHub, Slack, Linear and anything with an MCP server, in one ranked list. Each item says why it's there. People waiting go to the top. The ranking is plain rules, not a model's mood. |
 | **Today** | Your morning, already sorted. Junior's morning brief and a shared plan for the day: what's yours, what's Junior's, what's overdue. |
-| **Briefs** | Never open a PR cold. Ask for a brief and start with the context. It reads the diff, the thread and the history, and says where to look first. |
 | **Goals** | Hand over the outcome, not the steps. Give Junior a done-when. It waits on CI and reviewers, fixes and retries, and stops at your budget. |
 | **Jobs** | Chores that do themselves. Standing assignments on a schedule, set up by chatting with Junior. Each one gets a trial run before you turn it on. |
-| **Actions** | Every push, PR, comment and message waits here for your OK, word for word. Autonomy sets how often Junior asks. |
+| **Review nits** | Your PR, minus the nits. It reads the comments on your PR, makes the changes and shows you the diff before it pushes. |
+| **Replies** | Same answers, fewer keystrokes. Junior drafts them. They wait for your OK. |
+| **Briefs** | Never open a PR cold. Ask for a brief and start with the context. It reads the diff, the thread and the history, and says where to look first. |
+| **Log** | Every send waits on a card for your OK, word for word. The log shows what went out and who allowed it. |
 | **Sessions** | Full Claude Code chats, Codex chats too, and real terminals in the same workspace. Junior checks its UI work in a browser pane you can watch. |
 | **Receipts** | Every automated run is a session you can open. "Found nothing" means it looked and found nothing. |
 | **Workspaces** | Work and personal stay apart: separate inbox, jobs, connectors and Claude login. |
+
+## Its face
+
+**Its face says what it's doing.** Eight moods, each one a state. If it looks worried, something needs you.
+
+| Mood | What it means |
+| --- | --- |
+| Hello | Nothing needs you right now. |
+| Listening | You're typing. It's reading. |
+| Thinking | Reading the PR, the logs and the thread. |
+| Working | On it. Nothing has left your Mac. |
+| Needs you | One question, with its suggested answer. |
+| Done | Finished. Anything outbound is waiting for your OK. |
+| Stuck | Something broke. It says what, instead of guessing. |
+| Asleep | Your Mac is asleep. So is Junior. |
 
 ## Over time
 
@@ -131,10 +160,15 @@ Better you read that here than after the install.
 The site has the short answers. These are the long ones.
 
 **Will Junior post as me?**<br>
-Not without your OK. Pushes, PRs, comments and messages wait for you, word for word. Edits, tests and local commits don't need it, because they stay on your Mac. Each chat has an Autonomy setting. The default, "Asks before sending", holds everything outbound in Actions. Destructive commands still ask.
+Not without your OK. PRs, comments, ticket moves and messages wait on a card, word for word. Edits, tests and local commits don't need it, because they stay on your Mac. Two things go without a card, because nobody else sees them yet: a push to your own branch, and a draft PR. A push to the default branch waits like any send. So does a plain force push. Commands that destroy work still ask.
+
+You can also approve a send in advance: one person, one kind of send. "Junior may DM Priya when a PR is ready." Junior proposes these on a card. You add and revoke them in Settings → Approvals.
 
 **Will Junior replace me?**<br>
 It asks before it pushes a branch. You're fine.
+
+**Is Junior its own AI model?**<br>
+No. Junior is Claude Code, or Codex for chats, running with your login. The name, the face and the rules are ours.
 
 **Does it work while my Mac sleeps?**<br>
 No. Junior runs on your Mac and stops when it sleeps, like the rest of us. Junior starts again after a reboot. Scheduled jobs that couldn't run are recorded as missed, not quietly dropped. Quitting the window doesn't stop it either. A LaunchAgent keeps the server up.
@@ -151,10 +185,18 @@ On your Mac, under `~/.junior`. Junior holds no GitHub, Slack or Linear credenti
 **What does it cost?**<br>
 Nothing. Junior is free and open source, under the MIT licence. Junior runs on your own Claude or Codex plan, and each session shows what it cost, in dollars.
 
+**Can it merge PRs?**<br>
+Not today. You merge. Later, for work you've trusted it with, and only when you say so.
+
+**What happens when it gets stuck?**<br>
+It stops and asks, with the answer it suggests. Its face says Stuck, so you'll notice before standup.
+
 **Why install from Terminal?**<br>
 The app isn't notarized by Apple yet, so a browser download would get blocked. The script installs it properly. [Read install.sh first](install.sh). We would.
 
 ## Install
+
+**Let Junior do the triage.** One line installs it. Free and open source, on the Claude Code or Codex plan you already pay for. No account, no card.
 
 ```sh
 curl -fsSL https://usejunior.sh/install.sh | sh
