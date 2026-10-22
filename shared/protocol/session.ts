@@ -89,6 +89,10 @@ export type FastModeDisabledReason =
 export type SessionSummary = {
   id: string
   title: string
+  /** the session's handle (`/rename`), when it has one */
+  name?: string
+  /** the session that started this one, when one did */
+  startedBy?: string
   cwd: string
   /** the project the session runs in; absent only on rows older than projects */
   projectId?: string

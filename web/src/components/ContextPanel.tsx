@@ -488,7 +488,7 @@ function SessionRow({ session: s, active, renaming, onSelect, onStartRename, onE
       className={`prow${active ? ' sel' : ''}${wt ? ' wt' : ''}`}
       role="button"
       tabIndex={0}
-      title={[s.title, wt?.path, shown.title].filter(Boolean).join('\n')}
+      title={[s.title, s.name && `name: ${s.name}`, s.startedBy && 'started by another chat', wt?.path, shown.title].filter(Boolean).join('\n')}
       onClick={onSelect}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
@@ -510,6 +510,7 @@ function SessionRow({ session: s, active, renaming, onSelect, onStartRename, onE
       ) : (
         <span className="t">{s.title}</span>
       )}
+      {s.name && s.name.toLowerCase() !== s.title.toLowerCase() && <span className="nameMark">{s.name}</span>}
       {s.ultracode && <Workflow className="ucMark" size={11} aria-label="Ultracode" />}
       {s.pinned && <Pin className="pinMark" size={11} aria-label="Pinned" />}
       <Menu>

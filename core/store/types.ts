@@ -66,6 +66,10 @@ export type StoredSession = {
   planning: boolean
   /** Ultracode: Claude Code runs with settings.ultracode, so big jobs fan out as Workflow runs. */
   ultracode: boolean
+  /** The session's handle, unique in the workspace: what `/rename` sets, and how another session addresses it. */
+  name: string | null
+  /** The session that started this one with start_session; null when you did. */
+  startedBy: string | null
   /** How much the session asks before acting; null = 'default' (ask). */
   permissionMode: PermissionMode | null
   /** The agent the session runs on, fixed at creation; rows from before providers are 'claude'. */
@@ -113,6 +117,8 @@ export type NewSession = {
   fastMode?: boolean
   planning?: boolean
   ultracode?: boolean
+  name?: string | null
+  startedBy?: string | null
   permissionMode?: PermissionMode | null
   /** omitted = 'claude' */
   provider?: ProviderId
@@ -152,6 +158,8 @@ export interface SessionStore {
   setPermissionMode(id: string, mode: PermissionMode | null): Promise<void>
   /** Give a session a new title. */
   rename(id: string, title: string): Promise<void>
+  /** Set or clear a session's handle. Throws when another session holds it (unique index). */
+  setName(id: string, name: string | null): Promise<void>
   /** Pin or unpin a session. */
   setPinned(id: string, pinned: boolean): Promise<void>
   /** Delete a session and its whole event log. Irreversible. */

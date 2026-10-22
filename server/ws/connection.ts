@@ -19,6 +19,8 @@ import { wireWorkspaces } from '../workspace/wiring.js'
 import { registry } from '../workspace/runtime.js'
 import { checkoutList, mainCheckout, makeWorktree } from '../session/checkouts.js'
 import { parseClientMessage } from './parse.js'
+import { renameCommand } from '../../core/sessions/names.js'
+import { setSessionNameOp } from '../session/spawn-ops.js'
 import { createSession, defaultProject, deleteSession, getOrRevive, projectForSession } from '../session/sessions.js'
 import { expandHome } from '../folders.js'
 import { linkSessionToItem } from '../settings-ops.js'
@@ -230,6 +232,14 @@ export function handleConnection(ws: WebSocket, req: http.IncomingMessage): void
         }
         case 'user_message': {
           if (!msg.text.trim() && !msg.images?.length && !msg.files?.length && !msg.mentions?.length) break
+          // `/rename <name>`: the session's handle, here and in Claude Code. Triage's to keep, so other
+          // chats can address it (message_session); the command never reaches the model.
+          const renamed = renameCommand(msg.text)
+          if (renamed !== null && rt.rows.has(msg.sessionId)) {
+            const r = await setSessionNameOp(rt, msg.sessionId, renamed).catch((err: unknown) => err)
+            await sessionNotice(rt, msg.sessionId, r instanceof Error ? `Not renamed: ${r.message}` : r ? `Named this session "${r}".` : 'Cleared this session\'s name.')
+            break
+          }
           // A goal's session: a live one takes the message (its goal keeps a copy);
           // one that has ended is gone for good, so the message goes to the goal's lead.
           const row = rt.rows.get(msg.sessionId)

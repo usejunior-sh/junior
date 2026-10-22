@@ -13,6 +13,8 @@ export function summarize(rt: WorkspaceRuntime, row: StoredSession): SessionSumm
   return {
     id: row.id,
     title: row.title,
+    ...(row.name ? { name: row.name } : {}),
+    ...(row.startedBy ? { startedBy: row.startedBy } : {}),
     cwd: row.cwd,
     ...(row.projectId ? { projectId: row.projectId } : {}),
     status: l?.status ?? 'idle',

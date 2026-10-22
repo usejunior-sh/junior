@@ -21,6 +21,8 @@ export type SessionEvent =
       mentions?: ResolvedMention[]
       /** who sent it when it wasn't the user. A teammate agent's label, or 'triage'; absent = the user */
       from?: string
+      /** the session that sent it (start_session / message_session), so its badge links back */
+      fromSession?: string
       /** A message the user wrote to a subagent, relayed to it through the main agent. */
       relay?: AgentRelay
       /** sent in Goal mode: Junior proposes a goal for it */

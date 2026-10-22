@@ -519,7 +519,17 @@ const Item = memo(function Item({
       if (item.from)
         return (
           <div className="msg teammate">
-            <div className="msgFrom">from {item.from}</div>
+            <div className="msgFrom">
+              from{' '}
+              {item.fromSession ? (
+                // Another chat (start_session / message_session): open it.
+                <button type="button" className="msgFromLink" title="Open the chat that sent this" onClick={() => onRef(item.fromSession!)}>
+                  {item.from}
+                </button>
+              ) : (
+                item.from
+              )}
+            </div>
             <Markdown text={item.text} refs={refs} onRef={onRef} />
           </div>
         )

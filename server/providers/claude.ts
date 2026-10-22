@@ -152,6 +152,7 @@ export const claude: Provider = {
         ...(spec.permissionMode === 'bypassPermissions' ? { allowDangerouslySkipPermissions: true } : {}),
         ...(spec.additionalDirectories?.length ? { additionalDirectories: spec.additionalDirectories } : {}),
         ...(spec.resume ? { resume: spec.resume } : {}),
+        ...(spec.title && !spec.resume ? { title: spec.title } : {}),
         ...(spec.plugins?.length ? { plugins: spec.plugins.map((p) => ({ type: 'local' as const, path: p })) } : {}),
         hooks: {
           ...(spec.veto ? { PreToolUse: [{ hooks: [vetoHook(spec.veto)] }] } : {}),

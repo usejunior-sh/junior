@@ -20,6 +20,8 @@
 .prow.term .rowMenu { margin-top: 1px; }
 /* an Ultracode session: a quiet orange mark beside the pin */
 .prow .ucMark { flex: none; color: var(--orange); opacity: 0.85; }
+/* A session's name (/rename), when it differs from its title: how other chats address it. */
+.prow .nameMark { flex: none; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 400 10px/1 var(--mono); color: var(--stone); }
 .prow.wt .ucMark { margin-top: 1px; }
 .termHome { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; padding: 40px; position: relative; text-align: center; }
 .termHome p { margin: 0; color: var(--mute); font-size: 1rem; max-width: 46ch; }

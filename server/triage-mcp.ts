@@ -14,6 +14,7 @@ import { draftJobOp, draftJobText, tryJobOp } from './jobs/ops.js'
 import { addLinkOp, createArtifactOp, listArtifactsOp, toolResult, updateArtifactOp } from './artifacts-ops.js'
 import { listApprovalsOp } from './approvals-ops.js'
 import { APPROVAL_WHATS, approvalFrom, describeApproval, isLive } from '../core/approvals/approvals.js'
+import { messageSessionOp, sessionByName, sessionReport, startedBy, startSessionsOp } from './session/spawn-ops.js'
 
 export const okResult = (text: string) => ({ content: [{ type: 'text' as const, text }] })
 export const errResult = (text: string) => ({ content: [{ type: 'text' as const, text }], isError: true })
@@ -443,6 +444,71 @@ export function makeTriageMcp(rt: WorkspaceRuntime, sessionId?: string) {
             `Shown to the user as a card: "${describeApproval(out.approval)}". Nothing is approved until they press Add on it. ` +
               'Carry on; a matching send before then still shows its own card.',
           )
+        },
+      ),
+      // Chats that start chats (server/session/spawn-ops.ts): each one an ordinary chat in the list,
+      // addressed by its name (the handle `/rename` sets). Local work, so no card.
+      tool(
+        'start_session',
+        'Start new chat sessions, one per task, each opened with its prompt as a message from this chat. Use it when the user hands you several things to do in parallel ("start 3 sessions: one for X, one for Y…"). Each is a normal chat in the list that the user can open and type into. Give each a short unique name (what /rename sets); you address it by that name later with message_session and read_session. A session runs in this chat\'s folder unless you give it a worktree branch, which keeps parallel edits apart. Write each prompt as a full hand-off: the session starts with none of this chat\'s context.',
+        {
+          sessions: z
+            .array(
+              z.object({
+                name: z.string().describe('short handle, unique in the workspace, e.g. "auth fix"'),
+                title: z.string().optional().describe('what the chat list shows; default = the name'),
+                prompt: z.string().describe('the first message: the task, with every bit of context it needs'),
+                mode: z.enum(['normal', 'plan']).optional().describe('plan: it plans and waits for the user to approve before editing'),
+                worktree: z.string().optional().describe('a branch name: run in a new worktree on that branch instead of this folder'),
+              }),
+            )
+            .min(1)
+            .max(6),
+        },
+        async (args) => {
+          if (!sessionId) return errResult('start_session needs a chat session')
+          try {
+            const started = await startSessionsOp(rt, sessionId, args.sessions)
+            return okResult(JSON.stringify({ started, next: 'message_session to follow up, read_session or list_sessions to see where they stand' }, null, 2))
+          } catch (err) {
+            return errResult(errText(err))
+          }
+        },
+      ),
+      tool(
+        'message_session',
+        'Send a message to another chat session by its name, as this chat (it shows "from" this chat, never as the user). A session that has stopped is started again. It does not wait for the answer: read it later with read_session.',
+        {
+          name: z.string().describe('the session\'s name'),
+          text: z.string().describe('the message'),
+        },
+        async (args) => {
+          if (!sessionId) return errResult('message_session needs a chat session')
+          try {
+            const target = await messageSessionOp(rt, sessionId, args.name, args.text)
+            return okResult(`ok: sent to "${target.name}"`)
+          } catch (err) {
+            return errResult(errText(err))
+          }
+        },
+      ),
+      tool(
+        'read_session',
+        'Where a chat session stands, by its name: working, waiting on the user, idle or error, and the last thing it said.',
+        { name: z.string().describe('the session\'s name') },
+        async (args) => {
+          const row = sessionByName(rt, args.name)
+          if (!row) return errResult(`no session is named "${args.name}"`)
+          return okResult(JSON.stringify(await sessionReport(rt, row, true), null, 2))
+        },
+      ),
+      tool(
+        'list_sessions',
+        'The chat sessions this chat started, newest first, each with its name and state. Pass all to list every named session in the workspace instead.',
+        { all: z.boolean().optional().describe('every named session, not only the ones this chat started') },
+        async (args) => {
+          const rows = args.all === true ? [...rt.rows.values()].filter((r) => r.name && r.kind === 'chat') : sessionId ? startedBy(rt, sessionId) : []
+          return okResult(JSON.stringify(await Promise.all(rows.map((r) => sessionReport(rt, r, false))), null, 2))
         },
       ),
     ],

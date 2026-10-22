@@ -15,6 +15,8 @@ type SessionRow = {
   fast_mode: number
   planning?: number
   ultracode?: number
+  name?: string | null
+  started_by?: string | null
   permission_mode: string | null
   provider: string | null
   pinned: number
@@ -61,6 +63,8 @@ const toSession = (r: SessionRow): StoredSession => ({
   fastMode: r.fast_mode === 1,
   planning: r.planning === 1,
   ultracode: r.ultracode === 1,
+  name: r.name ?? null,
+  startedBy: r.started_by ?? null,
   permissionMode: toPermissionMode(r.permission_mode),
   provider: toProvider(r.provider),
   pinned: r.pinned === 1,
@@ -92,10 +96,10 @@ export class SqliteSessions implements SessionStore {
     const checkoutId = s.checkoutId ?? null
     this.db
       .prepare(
-        `INSERT INTO sessions (id, title, cwd, project_id, checkout_id, sdk_session_id, model, effort, fast_mode, planning, ultracode, permission_mode, provider, kind, job_id, run_trigger, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO sessions (id, title, cwd, project_id, checkout_id, sdk_session_id, model, effort, fast_mode, planning, ultracode, name, started_by, permission_mode, provider, kind, job_id, run_trigger, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
-      .run(s.id, s.title, s.cwd, s.projectId, checkoutId, model, effort, fastMode ? 1 : 0, s.planning ? 1 : 0, s.ultracode ? 1 : 0, permissionMode, provider, kind, jobId, s.runTrigger ?? null, now, now)
+      .run(s.id, s.title, s.cwd, s.projectId, checkoutId, model, effort, fastMode ? 1 : 0, s.planning ? 1 : 0, s.ultracode ? 1 : 0, s.name ?? null, s.startedBy ?? null, permissionMode, provider, kind, jobId, s.runTrigger ?? null, now, now)
     return {
       id: s.id,
       title: s.title,
@@ -107,6 +111,8 @@ export class SqliteSessions implements SessionStore {
       fastMode,
       planning: s.planning ?? false,
       ultracode: s.ultracode ?? false,
+      name: s.name ?? null,
+      startedBy: s.startedBy ?? null,
       permissionMode,
       provider,
       kind,
@@ -197,6 +203,10 @@ export class SqliteSessions implements SessionStore {
 
   async rename(id: string, title: string): Promise<void> {
     this.db.prepare('UPDATE sessions SET title = ? WHERE id = ?').run(title, id)
+  }
+
+  async setName(id: string, name: string | null): Promise<void> {
+    this.db.prepare('UPDATE sessions SET name = ? WHERE id = ?').run(name, id)
   }
 
   async setPinned(id: string, pinned: boolean): Promise<void> {

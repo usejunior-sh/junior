@@ -90,6 +90,8 @@ export type TranscriptItem =
       files?: FileRef[]
       mentions?: ResolvedMention[]
       from?: string
+      /** the session that sent it, when one did */
+      fromSession?: string
       /** sent in Goal mode */
       mode?: 'goal'
       /** In an agent's view: this was written to the agent and relayed through main. */
@@ -223,7 +225,7 @@ export function buildTranscript(
           relays.push({ agentId: ev.relay.agentId, text: ev.text, mark })
           break
         }
-        if (!scope) items.push({ key: `u${i}`, kind: 'user', text: ev.text, images: ev.images, ...(ev.files?.length ? { files: ev.files } : {}), mentions: ev.mentions, from: ev.from, ...(ev.mode ? { mode: ev.mode } : {}) })
+        if (!scope) items.push({ key: `u${i}`, kind: 'user', text: ev.text, images: ev.images, ...(ev.files?.length ? { files: ev.files } : {}), mentions: ev.mentions, from: ev.from, ...(ev.fromSession ? { fromSession: ev.fromSession } : {}), ...(ev.mode ? { mode: ev.mode } : {}) })
         break
       }
       case 'error':

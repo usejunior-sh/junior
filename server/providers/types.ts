@@ -171,6 +171,8 @@ export type SessionSpec = {
   additionalDirectories?: string[]
   /** the agent's own session id to continue */
   resume?: string
+  /** a new session's name (what `/rename` sets); ignored on resume, where the stored one wins */
+  title?: string
   /** local plugin folders to load (the workspace's skills and agents); adapters without plugins ignore it */
   plugins?: string[]
   /** a veto on every call, before any mode or allow rule (a held action, in a job run or a team worker) */

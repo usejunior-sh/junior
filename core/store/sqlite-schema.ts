@@ -112,6 +112,11 @@ export function ensureDurableSchema(db: DatabaseSync) {
   ensure('sessions', 'planning', 'planning INTEGER NOT NULL DEFAULT 0', s)
   // Ultracode: Claude Code runs with settings.ultracode, big jobs fan out as Workflow runs.
   ensure('sessions', 'ultracode', 'ultracode INTEGER NOT NULL DEFAULT 0', s)
+  // A session's handle (what `/rename` sets in Claude Code), unique in the workspace so another
+  // session can address it; and the session that started it, when one did (start_session).
+  ensure('sessions', 'name', 'name TEXT', s)
+  ensure('sessions', 'started_by', 'started_by TEXT', s)
+  db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_sessions_name ON sessions(name COLLATE NOCASE) WHERE name IS NOT NULL')
 
   const w = cols('jobs')
   ensure('jobs', 'last_run_status', 'last_run_status TEXT', w)

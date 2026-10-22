@@ -37,6 +37,8 @@ export const TEAM_TOOLS = new Set([
   'mcp__triage__ask_you',
   'mcp__team__submit_step',
 ])
+/** Starting and messaging other chats: local work, since each chat's own sends stay held. Never a prompt. */
+export const SESSION_TOOLS = new Set(['mcp__triage__start_session', 'mcp__triage__message_session'])
 export const TRIAGE_READ_TOOLS = new Set([
   'mcp__triage__list_work_items',
   'mcp__triage__get_work_item',
@@ -47,6 +49,9 @@ export const TRIAGE_READ_TOOLS = new Set([
   'mcp__triage__goal_get',
   'mcp__triage__goal_list',
   'mcp__triage__get_today',
+  // Other chats, by name (server/session/spawn-ops.ts): reading where they stand.
+  'mcp__triage__read_session',
+  'mcp__triage__list_sessions',
   // Advance approvals: listing reads, proposing only shows a card. Only the user's Add makes one.
   'mcp__triage__list_approvals',
   'mcp__triage__propose_approval',

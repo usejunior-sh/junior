@@ -14,6 +14,7 @@ import { WORKFLOW_TOOL } from '../../core/workflows/fold.js'
 import { BROWSER_SERVER } from '../../core/browser/policy.js'
 import { readOnlyCommand } from '../../core/actions/commands.js'
 import { frameAgentRelay } from '../../core/agents/relay.js'
+import { frameSessionMessage } from '../../core/sessions/frame.js'
 import { AsyncQueue } from './async-queue.js'
 import { browserHub, WorkspaceRuntime } from '../workspace/runtime.js'
 import { BRIEF_DISALLOWED_TOOLS, briefBashAllowed } from './brief-tools.js'
@@ -29,7 +30,7 @@ import { onBriefSessionEnded, onBriefTurnDone } from '../brief-run.js'
 import { noteTeamSpend } from '../team-run/ops.js'
 import { endTaskSession } from '../tasks/runner.js'
 import { resolveMentions } from './mentions.js'
-import { classifyEffect, sessionScoped, TEAM_TOOLS, TRIAGE_READ_TOOLS } from './effects.js'
+import { classifyEffect, SESSION_TOOLS, sessionScoped, TEAM_TOOLS, TRIAGE_READ_TOOLS } from './effects.js'
 import { teamRunOf } from '../team-run/state.js'
 import { noteActionEvent } from './actions-record.js'
 import { endedTask, owedProgress, type ProgressPending, snapshotAgentIds, throttleProgress, WorkflowTurns } from './workflow-tasks.js'
@@ -173,6 +174,8 @@ export class LiveSession {
       additionalDirectories: [rt.attachmentsDir],
       // Revival: replay the agent's own transcript into the new subprocess.
       ...(resumeSdkSessionId ? { resume: resumeSdkSessionId } : {}),
+      // A named session starts with that name in Claude Code too, as if `/rename` had set it.
+      ...(row.name ? { title: row.name } : {}),
       // The workspace's own skills and agents, for a chat. Not for briefs, job
       // runs or team workers: each runs a lean, fixed toolset on purpose.
       ...(row.kind === 'chat' && !extras.tools ? { plugins: [rt.libraryDir] } : {}),
@@ -452,17 +455,19 @@ export class LiveSession {
   }
 
   /** `opts.files` are already claimed into this session's folder (claimSessionFiles). */
-  async sendUserMessage(text: string, images?: ImageAttachment[], mentions?: Mention[], opts: { from?: string; mode?: 'goal'; files?: FileRef[] } = {}) {
+  async sendUserMessage(text: string, images?: ImageAttachment[], mentions?: Mention[], opts: { from?: string; fromSession?: string; mode?: 'goal'; files?: FileRef[] } = {}) {
     // Mentions are resolved now, against this session's folder, so the event
     // log records what the model was actually given (and why a file wasn't).
     const attached = mentions?.length ? await resolveMentions(this.rt, this.row.cwd, mentions) : null
     // Before the agent can touch anything: the tree this turn starts from.
     await this.beginTurn()
-    this.emit({ kind: 'local_user', text, images, ...(opts.files?.length ? { files: opts.files } : {}), mentions: attached?.resolved, ...(opts.from ? { from: opts.from } : {}), ...(opts.mode ? { mode: opts.mode } : {}) }, true)
+    this.emit({ kind: 'local_user', text, images, ...(opts.files?.length ? { files: opts.files } : {}), mentions: attached?.resolved, ...(opts.from ? { from: opts.from } : {}), ...(opts.fromSession ? { fromSession: opts.fromSession } : {}), ...(opts.mode ? { mode: opts.mode } : {}) }, true)
     // A message from triage or a teammate is framed for the model; the transcript keeps the raw text and a badge.
     // One sent in Goal mode says so, so Junior goes straight to a goal card.
     const filesNote = attachedFilesNote(this.rt.attachmentsDir, this.row.id, opts.files ?? [])
-    const modelText = opts.from && text ? frameTeamMessage(opts.from, text) : opts.mode === 'goal' ? `${GOAL_MODE_MARK}${text}` : text
+    // Another chat's message (start_session / message_session) names that chat, so it never reads as the user.
+    const sender = opts.fromSession ? this.rt.rows.get(opts.fromSession) : undefined
+    const modelText = sender && text ? frameSessionMessage(sender, text) : opts.from && text ? frameTeamMessage(opts.from, text) : opts.mode === 'goal' ? `${GOAL_MODE_MARK}${text}` : text
     this.setStatus('running')
     void this.rt.store.sessions.touch(this.row.id)
     // Images lead: the model reads them as context for the text that follows.
@@ -499,6 +504,8 @@ export class LiveSession {
     // the approval. A worker that can't edit runs read-only git/gh unattended,
     // and any worker runs the project's own checks without a click.
     if (TEAM_TOOLS.has(toolName)) return Promise.resolve({ behavior: 'allow', updatedInput: toolInput })
+    // Other chats: starting and messaging them is local work (server/session/spawn-ops.ts).
+    if (SESSION_TOOLS.has(toolName)) return Promise.resolve({ behavior: 'allow', updatedInput: toolInput })
     // The browser pane: the gate in the veto (server/browser/gate.ts) decided
     // already. What it asked about comes to you; the rest runs, except
     // browser_eval, which falls through to the session's mode below.
