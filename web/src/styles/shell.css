@@ -124,16 +124,12 @@ kbd { font-family: var(--mono); font-size: 0.8462rem; color: var(--ash); border:
   display: flex; align-items: center; gap: 12px; height: var(--bar-h); flex: none;
   padding: 0 12px 0 14px; border-bottom: 1px solid var(--hair);
 }
-/* Logo lockup: the brand asset (assets/brand/junior-lockup.svg) painted as a
-   mask filled with currentColor, so the one source file takes the theme's ink. */
-.logo { display: inline-flex; align-items: center; color: var(--ink); line-height: 1; }
-.logo .logoLockup {
-  display: block; height: 24px; aspect-ratio: 353 / 106.4; flex: none;
-  background-color: currentColor;
-  -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
-  -webkit-mask-position: left center; mask-position: left center;
-  -webkit-mask-size: contain; mask-size: contain;
-}
+/* Logo lockup: the brand files (assets/brand/junior-lockup*.svg), white
+   wordmark on dark schemes, black on light; the key keeps its own colours. */
+.logo { display: inline-flex; align-items: center; line-height: 1; }
+.logo .logoLockup { display: block; height: 22px; width: auto; aspect-ratio: 4388 / 975; flex: none; }
+:root[data-scheme="light"] .logo .logoOnDark,
+:root:not([data-scheme="light"]) .logo .logoOnLight { display: none; }
 .wsPill {
   display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 8px;
   border-radius: var(--r-full); border: 1px solid var(--hair-strong); background: var(--elev);

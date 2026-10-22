@@ -1,45 +1,28 @@
+import markUrl from '@assets/brand/junior-mark.svg'
+import iconUrl from '@assets/brand/icon.svg'
 import lockupUrl from '@assets/brand/junior-lockup.svg'
+import lockupBlackUrl from '@assets/brand/junior-lockup-black.svg'
 
 /**
- * The Junior mark: three strokes at sixty degrees, bottom-aligned, each shorter
- * than the last, ending in a dot. Drawn on a 48-unit grid at a single 5.5 stroke
- * with round caps; fills from `currentColor` so it takes the surrounding text
- * colour. The source of truth for the geometry is assets/brand/junior-mark.svg.
+ * The Junior mark: the sky J key with a face (brand v2,
+ * .docs/junior-goals-teams/junior-brand-v2.html). Its colours are the brand's,
+ * never the theme's. Below 48px it draws `icon.svg`, which drops the eye
+ * highlights so the face survives at 16px.
  */
 export function JuniorMark({ size = 18, className }: { size?: number; className?: string }) {
-  return (
-    <svg
-      className={className}
-      width={size}
-      height={size}
-      viewBox="0 0 48 48"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={5.5}
-      strokeLinecap="round"
-      aria-hidden="true"
-    >
-      <path d="M9 40 L25 12.3" />
-      <path d="M20 40 L30 22.7" />
-      <path d="M31 40 L36 31.3" />
-      <circle cx="42.5" cy="40" r="2.9" fill="currentColor" stroke="none" />
-    </svg>
-  )
+  return <img className={className} src={size < 48 ? iconUrl : markUrl} width={size} height={size} alt="" aria-hidden="true" />
 }
 
 /**
- * Mark + wordmark lockup, rendered from the brand source of truth
- * (assets/brand/junior-lockup.svg). Painted as a mask filled with the current
- * text colour, so the single white-on-transparent file adapts to the theme.
+ * Key + wordmark lockup, from the brand files (assets/brand/junior-lockup*.svg).
+ * The wordmark is white on dark schemes and black on light ones; the key and the
+ * orange dot on the i stay as they are.
  */
 export function JuniorLogo({ className }: { className?: string }) {
   return (
-    <span className={`logo${className ? ` ${className}` : ''}`} role="img" aria-label="junior">
-      <span
-        className="logoLockup"
-        aria-hidden="true"
-        style={{ WebkitMaskImage: `url("${lockupUrl}")`, maskImage: `url("${lockupUrl}")` }}
-      />
+    <span className={`logo${className ? ` ${className}` : ''}`} role="img" aria-label="Junior">
+      <img className="logoLockup logoOnDark" src={lockupUrl} alt="" aria-hidden="true" />
+      <img className="logoLockup logoOnLight" src={lockupBlackUrl} alt="" aria-hidden="true" />
     </span>
   )
 }
