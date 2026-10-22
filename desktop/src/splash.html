@@ -7,11 +7,11 @@
 <style>
   /* tokens from the SPA stylesheet; the splash ships without it */
   :root {
-    --canvas: #000000; --card: #0a0a0c; --elev: #101012;
-    --hair: rgba(255, 255, 255, 0.06); --hair-strong: rgba(255, 255, 255, 0.14); --hair-bright: rgba(255, 255, 255, 0.28);
-    --ink: #fcfdff; --body: rgba(252, 253, 255, 0.86); --mute: #a1a4a5; --ash: #888e90; --stone: #464a4d;
+    --canvas: #0c0b0a; --card: #131210; --elev: #1b1917;
+    --hair: rgba(248, 247, 244, 0.07); --hair-strong: rgba(248, 247, 244, 0.14); --hair-bright: rgba(248, 247, 244, 0.28);
+    --ink: #f8f7f4; --body: rgba(248, 247, 244, 0.86); --mute: #a8a49d; --ash: #8d8982; --stone: #4b4843;
     --red: #ff2047; --tint-red: rgba(255, 32, 71, 0.1); --edge-red: rgba(255, 32, 71, 0.36); --red-ink: #ff7a92;
-    --primary-hover: #f1f7fe;
+    --primary-hover: #ffffff;
     --sans: Geist, Inter, -apple-system, system-ui, sans-serif;
     --mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
     --r: 8px;
@@ -41,7 +41,7 @@
     font: 500 13px var(--sans); cursor: pointer; transition: background 0.1s ease, border-color 0.1s ease;
   }
   button:hover { border-color: var(--hair-bright); }
-  button.primary { background: var(--ink); color: #000; border-color: var(--ink); }
+  button.primary { background: var(--ink); color: #141210; border-color: var(--ink); }
   button.primary:hover { background: var(--primary-hover); border-color: var(--primary-hover); }
   button:focus-visible { outline: 2px solid var(--hair-bright); outline-offset: 2px; }
   .version { position: fixed; bottom: 16px; left: 0; right: 0; text-align: center; font: 11px var(--mono); color: var(--stone); }

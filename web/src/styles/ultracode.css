@@ -22,7 +22,7 @@
 .wfCard.failed { border-color: var(--edge-red); }
 .wfCard:focus-visible { outline: 1px solid var(--ink); outline-offset: 1px; }
 .wfRow { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.wfMark { flex: none; color: var(--orange); }
+.wfMark { flex: none; color: var(--purple); }
 .wfName { flex: none; max-width: 40%; font-family: var(--mono); font-size: 0.9231rem; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .wfSum { min-width: 0; font-size: 0.9615rem; color: var(--charcoal); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .wfEnd { margin-left: auto; display: inline-flex; align-items: center; gap: 10px; flex: none; padding-left: 8px; }
@@ -54,7 +54,7 @@
 .wfCount { min-width: 0; font-family: var(--mono); font-size: 0.8077rem; color: var(--charcoal); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* a turn marker whose turn saw workflow agents spend */
-.meta .metaWf { flex: none; font-size: 0.7692rem; color: var(--orange); }
+.meta .metaWf { flex: none; font-size: 0.7692rem; color: var(--purple); }
 
 /* the dock above the composer (inherits .agentDock) */
 .wfdRow { display: flex; align-items: center; gap: 10px; min-width: 0; min-height: 32px; padding: 2px 2px 2px 10px; }
@@ -67,9 +67,9 @@
 /* the run panel (inherits .teamSide / .tsHead / .tsTabs / .tsBody) */
 .wfKey {
   flex: none; height: 20px; display: inline-flex; align-items: center; padding: 0 7px; border-radius: var(--r-full);
-  border: 1px solid var(--edge-orange, color-mix(in srgb, var(--orange) 36%, transparent));
-  background: var(--tint-orange, color-mix(in srgb, var(--orange) 10%, transparent));
-  font-family: var(--mono); font-size: 0.7308rem; color: var(--orange);
+  border: 1px solid var(--edge-purple);
+  background: var(--tint-purple);
+  font-family: var(--mono); font-size: 0.7308rem; color: var(--purple);
 }
 .tsHead .wfTitle { min-width: 0; font-family: var(--mono); font-size: 0.9231rem; overflow: hidden; text-overflow: ellipsis; }
 .wfPick {
@@ -150,7 +150,7 @@
 }
 
 /* the approval card for a Workflow launch (ultracode/WorkflowApproval.tsx, inherits .perm) */
-.perm.wfApprove { border-color: var(--edge-orange); }
+.perm.wfApprove { border-color: var(--edge-purple); }
 .wfApprove .q { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; color: var(--ink); }
 .wfApprove .q > .wfMark { flex: none; }
 .wfapWhat { display: flex; flex-direction: column; gap: 3px; min-width: 0; margin-bottom: 10px; }

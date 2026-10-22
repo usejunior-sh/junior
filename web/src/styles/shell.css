@@ -28,6 +28,7 @@ kbd { font-family: var(--mono); font-size: 0.8462rem; color: var(--ash); border:
 .pill.mute { color: var(--ash); }
 .pill.red { color: var(--red); border-color: var(--edge-red); }
 .pill.yellow { color: var(--yellow); border-color: var(--edge-yellow); }
+.pill.orange { color: var(--orange); border-color: var(--edge-orange); }
 .pill.green { color: var(--green); border-color: var(--edge-green); }
 .pill.blue { color: var(--blue); border-color: var(--edge-blue); }
 .pill.mono { font-family: var(--mono); }
@@ -174,12 +175,12 @@ kbd { font-family: var(--mono); font-size: 0.8462rem; color: var(--ash); border:
    fades out at the sides (.docs/titlebar-variations.html, 6a), no shadow. */
 .desktopBar {
   position: relative; padding: 0; gap: 0; -webkit-app-region: drag; user-select: none;
-  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.012)), #08080a;
+  background: linear-gradient(to bottom, var(--wash-2), var(--wash-1)), var(--deep);
   border-bottom-color: transparent;
 }
 .desktopBar::after {
   content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 1px; pointer-events: none;
-  background: linear-gradient(to right, transparent, rgba(255, 255, 255, 0.12) 25%, rgba(255, 255, 255, 0.12) 75%, transparent);
+  background: linear-gradient(to right, transparent, var(--hair-strong) 25%, var(--hair-strong) 75%, transparent);
 }
 .desktopBar button, .desktopBar [role="button"] { -webkit-app-region: no-drag; }
 .desktopBar .dbSide {

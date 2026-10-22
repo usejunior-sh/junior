@@ -72,7 +72,7 @@ export function RunFolderPage({ runId, path, rev, onNavigate }: { runId: string;
             </h1>
             <div className="chipRow" style={{ marginTop: 10 }}>
               {folder && <span className="pill mute">{folder.title}</span>}
-              {folder && <span className={`pill ${folder.state === 'gate' || folder.state === 'paused' ? 'yellow' : 'mute'}`}>{STATE[folder.state] ?? folder.state}</span>}
+              {folder && <span className={`pill ${folder.state === 'gate' || folder.state === 'paused' ? 'orange' : 'mute'}`}>{STATE[folder.state] ?? folder.state}</span>}
               <span className="pill mono mute" title={full}>
                 <span className="t">{path}</span>
               </span>

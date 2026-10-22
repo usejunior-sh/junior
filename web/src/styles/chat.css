@@ -10,7 +10,7 @@
 .speaker .spFace { position: absolute; left: -54px; top: 50%; transform: translateY(-50%); line-height: 0; }
 .speaker .spWho { color: var(--ink); font-weight: 500; }
 .speaker .spNote { margin-left: 8px; color: var(--ash); }
-.speaker .spNote.needs { color: var(--yellow); }
+.speaker .spNote.needs { color: var(--orange); }
 .speaker .spNote.stuck { color: var(--red-ink); }
 .speaker .spAt { margin-left: 8px; font-family: var(--mono); font-size: 0.7692rem; color: var(--stone); }
 @container transcript (max-width: 810px) {
@@ -249,21 +249,21 @@ button.chip:hover:not(:disabled), .chip[data-state="open"] { color: var(--ink); 
 .chip.sessionMode.goal { color: var(--yellow); border-color: var(--edge-yellow); }
 .chip.sessionMode.plan svg { color: var(--blue); }
 .chip.sessionMode.goal svg { color: var(--yellow); }
-.chip.sessionMode.ultracode { color: var(--orange); border-color: var(--edge-orange); }
-.chip.sessionMode.ultracode svg { color: var(--orange); }
+.chip.sessionMode.ultracode { color: var(--purple); border-color: var(--edge-purple); }
+.chip.sessionMode.ultracode svg { color: var(--purple); }
 /* a running session's Planning chip: status with a way out, not a picker */
 .chip.sessionMode.planning { cursor: pointer; background: var(--tint-blue); }
 .chip.sessionMode.planning:hover { color: var(--blue); border-color: var(--edge-blue-hi); }
 /* a running session's Ultracode chip, the same: on for the session, X turns it off */
-.chip.sessionMode.ultracodeOn { cursor: pointer; background: var(--tint-orange); }
-.chip.sessionMode.ultracodeOn:hover { color: var(--orange); border-color: var(--edge-orange-hi); }
+.chip.sessionMode.ultracodeOn { cursor: pointer; background: var(--tint-purple); }
+.chip.sessionMode.ultracodeOn:hover { color: var(--purple); border-color: var(--edge-purple-hi); }
 .chip.sessionMode.ultracodeOff { cursor: pointer; }
 .chip.sessionMode.ultracodeOff:hover { color: var(--body); border-color: var(--hair-bright); }
 /* icons sit on the name's line, not centred on the two-line row */
 .uiMenu .modeIcon { flex: none; align-self: flex-start; margin-top: 3px; color: var(--ash); }
 .uiMenuItem.mode-plan .modeIcon { color: var(--blue); }
 .uiMenuItem.mode-goal .modeIcon { color: var(--yellow); }
-.uiMenuItem.mode-ultracode .modeIcon { color: var(--orange); }
+.uiMenuItem.mode-ultracode .modeIcon { color: var(--purple); }
 #sendBtn, #stopBtn {
   display: inline-flex; align-items: center; justify-content: center; flex: none;
   width: 30px; height: 30px; padding: 0; border-radius: var(--r); border: 1px solid transparent;

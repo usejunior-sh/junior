@@ -62,7 +62,7 @@ function standing(g: TeamGoalSummary): string {
 function teamGoalDot(g: TeamGoalSummary): string {
   if (g.state === 'done' && g.acceptedAt) return 'green'
   if (g.state === 'stopped') return 'stone'
-  return g.turn === 'you' ? 'yellow' : g.turn === 'junior' ? 'live' : g.turn === 'world' ? 'blue' : 'stone'
+  return g.turn === 'you' ? 'orange' : g.turn === 'junior' ? 'live' : g.turn === 'world' ? 'blue' : 'stone'
 }
 
 export function GoalsPage({ sessions, onNavigate, onPin }: { sessions: readonly SessionSummary[]; onNavigate: (hash: string) => void; onPin: (key: string, title: string) => void }) {

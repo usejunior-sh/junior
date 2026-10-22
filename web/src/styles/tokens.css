@@ -1,51 +1,56 @@
 /* =========================================================================
-   junior: workbench design system (.docs/design.md + the "Junior Workbench
-   Final" canvas)
+   Junior: workbench design system (.docs/design.md, brand v2 in
+   .docs/junior-goals-teams/junior-brand-v2.html)
 
-   True-black canvas, translucent-white hairlines instead of shadows, one
-   bright surface per viewport (the white primary button). Editorial serif for
-   the wordmark and page headlines, Geist for UI, Geist Mono for machine data (paths, scores,
-   diffs, code). Accent colours appear only as status dots, diff colouring
-   and atmospheric glows, never as filled controls.
+   Warm ink canvas, translucent paper hairlines instead of shadows, one bright
+   surface per viewport (the paper primary button). Instrument Serif for page
+   headlines, Geist for UI, Geist Mono for machine data (paths, scores, diffs,
+   code). Sky is Junior's colour; orange means one thing: something needs you.
+   Accents appear as status dots, diff colouring and atmospheric glows, never
+   as filled controls.
    ========================================================================= */
 
 :root {
   /* surfaces */
-  --canvas: #000000;
-  --card: #0a0a0c;
-  --elev: #101012;
-  --deep: #06060a;
+  --canvas: #0c0b0a;
+  --card: #131210;
+  --elev: #1b1917;
+  --deep: #090807;
 
   /* lines */
-  --hair: rgba(255, 255, 255, 0.06);
-  --hair-strong: rgba(255, 255, 255, 0.14);
-  --hair-soft: rgba(255, 255, 255, 0.04);
-  --hair-bright: rgba(255, 255, 255, 0.28);
+  --hair: rgba(248, 247, 244, 0.07);
+  --hair-strong: rgba(248, 247, 244, 0.14);
+  --hair-soft: rgba(248, 247, 244, 0.045);
+  --hair-bright: rgba(248, 247, 244, 0.28);
 
   /* ink */
-  --ink: #fcfdff;
-  --body: rgba(252, 253, 255, 0.86);
-  --charcoal: rgba(252, 253, 255, 0.7);
-  --mute: #a1a4a5;
-  --ash: #888e90;
-  --stone: #464a4d;
+  --ink: #f8f7f4;
+  --body: rgba(248, 247, 244, 0.86);
+  --charcoal: rgba(248, 247, 244, 0.7);
+  --mute: #a8a49d;
+  --ash: #8d8982;
+  --stone: #4b4843;
 
-  /* accents: status, diff and glow only */
-  --orange: #ff801f;
+  /* accents: status, diff and glow only. Orange is the brand's needs-you
+     colour and means nothing else; blue is Junior's sky. */
+  --orange: #ff6a1f;
   --yellow: #ffc53d;
-  --blue: #3b9eff;
+  --blue: #80b2f6;
   --green: #11ff99;
   --red: #ff2047;
-  --glow-orange: rgba(255, 89, 0, 0.22);
+  /* Ultracode and other modes that aren't a status: never orange, which means needs-you */
+  --purple: #a78bfa;
+  --tint-purple: rgba(167, 139, 250, 0.1);
+  --glow-orange: rgba(255, 106, 31, 0.22);
   --glow-yellow: rgba(255, 197, 61, 0.16);
-  --glow-blue: rgba(0, 117, 255, 0.34);
+  --glow-blue: rgba(128, 178, 246, 0.26);
   --glow-green: rgba(34, 255, 153, 0.18);
   --glow-red: rgba(255, 32, 71, 0.34);
   --tint-red: rgba(255, 32, 71, 0.1);
   --tint-green: rgba(17, 255, 153, 0.08);
   --tint-yellow: rgba(255, 197, 61, 0.1);
-  --tint-blue: rgba(59, 158, 255, 0.1);
-  --tint-orange: rgba(255, 128, 31, 0.1);
+  --tint-blue: rgba(128, 178, 246, 0.1);
+  --tint-orange: rgba(255, 106, 31, 0.1);
 
   /* legacy aliases still referenced by a few components */
   --text: var(--ink);
@@ -89,12 +94,12 @@
      on-primary: ink/text sitting on the one bright surface (the primary button,
      switch thumbs). wash-*: the translucent hover/selected overlays. select: the
      text-selection highlight. primary-hover: the primary button's hover fill. */
-  --on-primary: #000;
-  --wash-1: rgba(255, 255, 255, 0.03);
-  --wash-2: rgba(255, 255, 255, 0.045);
-  --wash-3: rgba(255, 255, 255, 0.07);
-  --select: rgba(255, 255, 255, 0.18);
-  --primary-hover: #f1f7fe;
+  --on-primary: #141210;
+  --wash-1: rgba(248, 247, 244, 0.03);
+  --wash-2: rgba(248, 247, 244, 0.045);
+  --wash-3: rgba(248, 247, 244, 0.07);
+  --select: rgba(128, 178, 246, 0.28);
+  --primary-hover: #ffffff;
 
   /* lifted surfaces: menus, popovers, dialogs. ring: the 1px separation round
      a floating panel. drop: the shadow under it. scrim: the overlay behind a
@@ -103,8 +108,8 @@
   --ring: rgba(0, 0, 0, 0.7);
   --drop: rgba(0, 0, 0, 0.65);
   --scrim: rgba(0, 0, 0, 0.6);
-  --scroll-thumb: #2a2c30;
-  --scroll-thumb-hover: #3a3d42;
+  --scroll-thumb: #2c2a27;
+  --scroll-thumb-hover: #3c3935;
 
   /* accent edges: the hairline round a red/yellow chip, derived from the
      accent so the light theme's darkened accents carry through automatically. */
@@ -117,18 +122,20 @@
   --edge-blue-hi: color-mix(in srgb, var(--blue) 55%, transparent);
   --edge-orange: color-mix(in srgb, var(--orange) 36%, transparent);
   --edge-orange-hi: color-mix(in srgb, var(--orange) 55%, transparent);
+  --edge-purple: color-mix(in srgb, var(--purple) 36%, transparent);
+  --edge-purple-hi: color-mix(in srgb, var(--purple) 55%, transparent);
   /* a link under the pointer: away from the page ink in both themes */
-  --link-hover: #6db6ff;
+  --link-hover: #a9cdfc;
   /* red as *reading* text (error bodies): softer than the status red on black,
      darker than it on white. */
   --red-ink: #ff7a92;
 
   /* project hues: one stable dot colour per codebase (see tabs.ts). Indexed,
      not named, because the index is hashed from the folder path. */
-  --hue-0: #3b9eff;
+  --hue-0: #80b2f6;
   --hue-1: #11ff99;
   --hue-2: #ffc53d;
-  --hue-3: #ff801f;
+  --hue-3: #ff6a1f;
   --hue-4: #ff2047;
   --hue-5: #a78bfa;
   --hue-6: #f472b6;
@@ -152,69 +159,71 @@
   /* surfaces: a light-grey page with white panels floating on it. Unlike the
      dark theme (where "elevated" is brighter), elevation here reads as a greyer
      surface, so hover/selected chips and menus stay visible against white. */
-  --canvas: #f6f8fa;
-  --card: #ffffff;
-  --elev: #eceef2;
-  --deep: #e6e9ee;
+  --canvas: #f8f7f4;
+  --card: #fffefc;
+  --elev: #efede8;
+  --deep: #e8e5df;
 
   /* lines: hairlines go from white-on-black to black-on-white */
-  --hair: rgba(11, 12, 14, 0.1);
-  --hair-strong: rgba(11, 12, 14, 0.16);
-  --hair-soft: rgba(11, 12, 14, 0.06);
-  --hair-bright: rgba(11, 12, 14, 0.3);
+  --hair: rgba(20, 18, 16, 0.1);
+  --hair-strong: rgba(20, 18, 16, 0.16);
+  --hair-soft: rgba(20, 18, 16, 0.06);
+  --hair-bright: rgba(20, 18, 16, 0.3);
 
   /* ink */
-  --ink: #0b0c0e;
-  --body: rgba(11, 12, 14, 0.84);
-  --charcoal: rgba(11, 12, 14, 0.68);
-  --mute: #5c6166;
-  --ash: #71767b;
-  --stone: #b3b8bd;
+  --ink: #141210;
+  --body: rgba(20, 18, 16, 0.84);
+  --charcoal: rgba(20, 18, 16, 0.68);
+  --mute: #5f5b55;
+  --ash: #77736c;
+  --stone: #bab5ad;
 
   /* accents: the dark theme's neons are darkened for contrast on white */
-  --orange: #c85a00;
+  --orange: #e5580e;
   --yellow: #8a6d1f;
-  --blue: #1f6feb;
+  --blue: #2f63c9;
   --green: #0f9d58;
   --red: #d61f3c;
-  --glow-orange: rgba(200, 90, 0, 0.14);
+  --purple: #7c3aed;
+  --tint-purple: rgba(124, 58, 237, 0.08);
+  --glow-orange: rgba(229, 88, 14, 0.14);
   --glow-yellow: rgba(138, 109, 31, 0.12);
-  --glow-blue: rgba(31, 111, 235, 0.16);
+  --glow-blue: rgba(128, 178, 246, 0.3);
   --glow-green: rgba(15, 157, 88, 0.14);
   --glow-red: rgba(214, 31, 60, 0.16);
   --tint-red: rgba(214, 31, 60, 0.08);
   --tint-green: rgba(15, 157, 88, 0.1);
   --tint-yellow: rgba(138, 109, 31, 0.12);
-  --tint-blue: rgba(31, 111, 235, 0.1);
-  --tint-orange: rgba(200, 90, 0, 0.1);
+  --tint-blue: rgba(47, 99, 201, 0.1);
+  --tint-orange: rgba(229, 88, 14, 0.1);
 
   /* semantic layer */
   --on-primary: #ffffff;
-  --wash-1: rgba(11, 12, 14, 0.03);
-  --wash-2: rgba(11, 12, 14, 0.05);
-  --wash-3: rgba(11, 12, 14, 0.08);
-  --select: rgba(31, 111, 235, 0.18);
-  --primary-hover: #23262b;
+  --wash-1: rgba(20, 18, 16, 0.03);
+  --wash-2: rgba(20, 18, 16, 0.05);
+  --wash-3: rgba(20, 18, 16, 0.08);
+  --select: rgba(47, 99, 201, 0.18);
+  --primary-hover: #2a2724;
 
   /* lifted surfaces: a black ring round a white menu is a bruise, so the ring
      becomes a hairline and the drop a soft grey. */
-  --ring: rgba(11, 12, 14, 0.14);
-  --drop: rgba(11, 12, 14, 0.14);
-  --scrim: rgba(11, 12, 14, 0.32);
-  --scroll-thumb: rgba(11, 12, 14, 0.2);
-  --scroll-thumb-hover: rgba(11, 12, 14, 0.32);
+  --ring: rgba(20, 18, 16, 0.14);
+  --drop: rgba(20, 18, 16, 0.14);
+  --scrim: rgba(20, 18, 16, 0.32);
+  --scroll-thumb: rgba(20, 18, 16, 0.2);
+  --scroll-thumb-hover: rgba(20, 18, 16, 0.32);
 
   /* --edge-* derive from --red/--yellow/--green/--blue/--orange above, so they
      darken with them. */
   --red-ink: #b3172f;
-  --link-hover: #0a4fb5;
+  --link-hover: #1f4a9e;
 
   /* project hues: the neons vanish on a white canvas, so each is re-picked at
      a weight that still reads as a 6px dot. */
-  --hue-0: #1f6feb;
+  --hue-0: #2f63c9;
   --hue-1: #0f9d58;
   --hue-2: #a97a00;
-  --hue-3: #c85a00;
+  --hue-3: #e5580e;
   --hue-4: #d61f3c;
   --hue-5: #7c3aed;
   --hue-6: #db2777;

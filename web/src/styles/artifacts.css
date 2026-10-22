@@ -151,7 +151,7 @@ dialog.artDialog textarea { min-height: 240px; font-family: var(--mono); font-si
   background: var(--card); border: 1px solid var(--hair-strong); color: var(--ink); font-family: var(--mono); font-size: 0.9231rem; cursor: pointer;
 }
 .briefComposer .bcChip:hover { border-color: var(--hair-bright); }
-.briefComposer .bcChip .slash { color: var(--orange); }
+.briefComposer .bcChip .slash { color: var(--blue); }
 .briefComposer .bcChip .caret { color: var(--ash); font-size: 0.7692rem; }
 .briefComposer .bcLabel { color: var(--mute); font-size: 0.9231rem; }
 .briefComposer .bcHint { margin-left: auto; color: var(--stone); font-size: 0.8462rem; white-space: nowrap; }

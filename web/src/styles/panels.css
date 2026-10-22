@@ -18,8 +18,8 @@
 .prow.term .t .sub { color: var(--stone); font-size: 0.8462rem; font-family: var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .prow.term.off .t { color: var(--ash); }
 .prow.term .rowMenu { margin-top: 1px; }
-/* an Ultracode session: a quiet orange mark beside the pin */
-.prow .ucMark { flex: none; color: var(--orange); opacity: 0.85; }
+/* an Ultracode session: a quiet purple mark beside the pin */
+.prow .ucMark { flex: none; color: var(--purple); opacity: 0.85; }
 /* A session's name (/rename), when it differs from its title: how other chats address it. */
 .prow .nameMark { flex: none; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 400 10px/1 var(--mono); color: var(--stone); }
 .prow.wt .ucMark { margin-top: 1px; }

@@ -860,10 +860,10 @@ button.edText:focus-visible { outline: none; border-color: var(--hair-bright); }
   background: none; color: var(--stone); font: inherit; font-size: 0.8462rem; cursor: pointer; justify-self: start;
 }
 .edAdd:hover { color: var(--ink); background: var(--wash-2); }
-.sessCard .rs .needsYou { color: var(--yellow); }
+.sessCard .rs .needsYou { color: var(--orange); }
 .planLine { width: 100%; border: 0; background: none; font: inherit; color: inherit; text-align: left; cursor: pointer; border-radius: var(--r-sm); }
 .planLine:hover { background: var(--wash-2); }
-.planLine .needsYou { color: var(--yellow); }
+.planLine .needsYou { color: var(--orange); }
 .teamPickMenu { min-width: 320px; max-width: 420px; }
 .teamPickTag { margin-left: 8px; font-family: var(--mono); font-size: 0.7308rem; color: var(--body); border: 1px solid var(--hair-strong); border-radius: var(--r-full); padding: 0 6px; }
 

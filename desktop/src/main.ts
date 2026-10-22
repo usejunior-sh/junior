@@ -108,7 +108,7 @@ function createWindow(url: string, bounds?: Partial<Rectangle>): BrowserWindow {
     minWidth: MIN_SIZE.width,
     minHeight: MIN_SIZE.height,
     title: 'Junior',
-    backgroundColor: '#000000',
+    backgroundColor: '#0c0b0a',
     // No grey title bar: the traffic lights sit inside Junior's own 44px bar
     // (web/src/components/TopBar.tsx, desktop layout), centred vertically.
     titleBarStyle: 'hiddenInset',

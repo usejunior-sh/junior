@@ -95,7 +95,7 @@ export function TeamStrip({
               {spent > 0 && <span className="spend">{usd(spent)}</span>}
               {(needsYou || working) && (
                 <span className="state">
-                  <span className={`dot ${needsYou ? 'yellow' : 'live'}`} aria-hidden="true" /> {state}
+                  <span className={`dot ${needsYou ? 'orange' : 'live'}`} aria-hidden="true" /> {state}
                 </span>
               )}
               {s?.status === 'error' && <span className="dot red" aria-label="error" />}
@@ -197,7 +197,7 @@ export function TeamDock({ run, onDetails, onNavigate }: { run: TeamRunView; onD
   let line: ReactNode = null
   let primary: ReactNode = null
   if (run.state === 'proposed') {
-    dot = 'yellow'
+    dot = 'orange'
     title = g ? 'Run this goal?' : 'Run this team?'
     line = g ? `done when ${g.doneWhen} · ${horizonText(g.horizon)}` : run.card.goal
     primary = (
@@ -216,7 +216,7 @@ export function TeamDock({ run, onDetails, onNavigate }: { run: TeamRunView; onD
       </>
     )
   } else if (run.revision) {
-    dot = 'yellow'
+    dot = 'orange'
     title = 'Plan change proposed'
     line = run.revision.why
     primary = (
@@ -248,7 +248,7 @@ export function TeamDock({ run, onDetails, onNavigate }: { run: TeamRunView; onD
           ? `${task ? `${task.title} · ` : ''}${waiting.join(', ')} ${waiting.length === 1 ? 'is' : 'are'} on it`
           : 'moving on'
   } else if (run.state === 'gate') {
-    dot = 'yellow'
+    dot = 'orange'
     title = 'Needs you'
     line = run.reason
     primary = (
@@ -262,7 +262,7 @@ export function TeamDock({ run, onDetails, onNavigate }: { run: TeamRunView; onD
     line = `for ${g.wait.for} · ${wakeText(g.wait.until)}`
     primary = <WakeNow run={run} onError={setError} />
   } else if (run.state === 'paused') {
-    dot = 'yellow'
+    dot = 'orange'
     title = 'Paused'
     line = run.reason
     // Only you lift a budget pause: say how much more, then it resumes.
@@ -274,7 +274,7 @@ export function TeamDock({ run, onDetails, onNavigate }: { run: TeamRunView; onD
       </button>
     )
   } else if (toAccept) {
-    dot = 'yellow'
+    dot = 'orange'
     title = 'Junior says it’s done'
     line = g!.verdicts.at(-1)?.evidence ?? g!.doneWhen
     primary = <ResultActions run={run} onError={setError} />

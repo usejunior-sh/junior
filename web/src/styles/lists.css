@@ -19,12 +19,12 @@
 .connRow:hover { background: var(--wash-1); }
 .connDot { width: 6px; height: 6px; border-radius: 50%; background: var(--stone); flex: none; }
 .connDot.connected { background: var(--green); }
-.connDot.needs-auth { background: var(--yellow); }
+.connDot.needs-auth { background: var(--orange); }
 .connDot.failed { background: var(--red); }
 .connName { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .connStatus { font-size: 0.8462rem; color: var(--ash); flex: none; }
 .connStatus.connected { color: var(--ash); }
-.connStatus.needs-auth { color: var(--yellow); }
+.connStatus.needs-auth { color: var(--orange); }
 .connStatus.failed { color: var(--red); }
 .authNote { border: 1px solid var(--hair-strong); border-radius: var(--r); padding: 11px 14px; color: var(--mute); font-size: 0.9231rem; background: var(--card); line-height: 1.55; }
 .authNote b { color: var(--yellow); font-family: var(--mono); font-weight: 500; }

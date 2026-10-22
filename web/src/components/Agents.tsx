@@ -166,7 +166,7 @@ export function AgentsMenu({
         <span className="desc">{firstLine((running(a) ? a.activity : a.state === 'failed' ? a.error : a.report) ?? '') || STATE_LABEL[a.state]}</span>
       </span>
       <span className="val">
-        {running(a) ? <span className={`dot ${a.waiting ? 'yellow' : 'live'}`} aria-hidden="true" /> : <span className={`amGlyph ${a.state}`}>{a.state === 'done' ? '✓' : a.state === 'failed' ? '✕' : '■'}</span>}
+        {running(a) ? <span className={`dot ${a.waiting ? 'orange' : 'live'}`} aria-hidden="true" /> : <span className={`amGlyph ${a.state}`}>{a.state === 'done' ? '✓' : a.state === 'failed' ? '✕' : '■'}</span>}
         {formatDuration(agentElapsedMs(a, now) ?? 0)}
       </span>
     </MenuItem>
