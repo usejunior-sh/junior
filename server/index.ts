@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * The triage daemon: serves the web UI on :5178 and drives the locally
+ * The junior daemon: serves the web UI on :5178 and drives the locally
  * installed Claude Code via @anthropic-ai/claude-agent-sdk.
  *
  * Sessions are persisted to SQLite (core/store): the row + an append-only
@@ -15,15 +15,16 @@
  * workspace has its own SQLite file, its own Claude auth backend (spawn env),
  * and its own runtime state. Every map and cache that used to be a module
  * singleton lives on a WorkspaceRuntime. Every HTTP request and WS connection
- * is bound to exactly one workspace (?workspace= param, else the triage_ws
+ * is bound to exactly one workspace (?workspace= param, else the junior_ws
  * cookie, else the default), and broadcasts stay inside that boundary.
  *
  * The wire format lives in shared/protocol/ and is shared with the frontend.
  */
+import './migrate-boot.js'
 import http from 'node:http'
 import path from 'node:path'
 import { WebSocketServer } from 'ws'
-import { clearState, TRIAGE_DIR, writeState } from './state.js'
+import { clearState, JUNIOR_DIR, writeState } from './state.js'
 import { initLogFile, log } from './log.js'
 import { accessOf, isLoopbackAddress, sameOrigin } from './remote.js'
 import { BROWSER_HOST_PATH } from '../core/browser/wire.js'
@@ -54,7 +55,7 @@ import { actionRoutes } from './routes/actions.js'
 import type { RouteCtx, ScopedCtx } from './routes/ctx.js'
 
 // Daemon-wide logs (one process, one log stream); workspace ids ride in fields.
-initLogFile(path.join(TRIAGE_DIR, 'logs'))
+initLogFile(path.join(JUNIOR_DIR, 'logs'))
 
 startTicks()
 
@@ -92,7 +93,7 @@ const server = http.createServer(async (req, res) => {
 })
 
 // WebSocket: each connection binds to one workspace at upgrade time
-// (?workspace= param, else the triage_ws cookie, else the default), and only
+// (?workspace= param, else the junior_ws cookie, else the default), and only
 // ever sees that workspace's sessions and events.
 // Drop other devices at accept while phone access is off, the same as a
 // loopback-only bind, without a restart to switch it on (server/remote.ts).
@@ -121,7 +122,7 @@ const wss = new WebSocketServer({
   },
 })
 
-/** Triage.app's main process, hosting the browser pane's tabs (server/browser.ts). */
+/** Junior.app's main process, hosting the browser pane's tabs (server/browser.ts). */
 const hostWss = new WebSocketServer({ noServer: true })
 
 server.on('upgrade', (req, socket, head) => {
@@ -153,8 +154,8 @@ for (const emitter of [server, wss]) emitter.on('error', onListenError)
 function onListenError(err: NodeJS.ErrnoException) {
   if (err.code === 'EADDRINUSE') {
     console.error(
-      `triage: port ${PORT} is already in use — \`triage status\` shows whether it's another triage; ` +
-        `otherwise pick a port with \`triage --port ${PORT + 1}\``,
+      `junior: port ${PORT} is already in use — \`junior status\` shows whether it's another junior; ` +
+        `otherwise pick a port with \`junior --port ${PORT + 1}\``,
     )
     process.exit(1)
   }
@@ -162,8 +163,8 @@ function onListenError(err: NodeJS.ErrnoException) {
 }
 server.listen(PORT, () => {
   syncTunnel()
-  log('info', 'server', `triage v${VERSION} started on :${PORT} (${runtimes.size} workspace${runtimes.size === 1 ? '' : 's'}, default: ${registry.defaultId})`)
-  // Record where we are so `triage stop/status` can find a --port server.
+  log('info', 'server', `junior v${VERSION} started on :${PORT} (${runtimes.size} workspace${runtimes.size === 1 ? '' : 's'}, default: ${registry.defaultId})`)
+  // Record where we are so `junior stop/status` can find a --port server.
   writeState({ pid: process.pid, port: PORT, version: VERSION, startedAt: new Date().toISOString() }).catch(
     (err) => console.error('[state] could not write server.json:', err),
   )

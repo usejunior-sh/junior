@@ -2,23 +2,23 @@ import { writeFileSync, existsSync } from 'node:fs'
 import { mkdir } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-import { TRIAGE_DIR, checkHealth, pkgVersion } from '../state.js'
+import { JUNIOR_DIR, checkHealth, pkgVersion } from '../state.js'
 import { uninstallLaunchAgent, launchAgentInstalled, launchAgentLoaded } from '../launchd.js'
 import { cyan, die, dim, execFileP, green, red, tilde, yellow } from './ui.js'
 
 /**
- * Removing the agent is a decision, and Triage.app puts one back on every
- * launch, so record it. Deleted again by the next explicit `triage install`.
+ * Removing the agent is a decision, and Junior.app puts one back on every
+ * launch, so record it. Deleted again by the next explicit `junior install`.
  */
-export const OPT_OUT_FILE = path.join(TRIAGE_DIR, 'no-launch-agent')
+export const OPT_OUT_FILE = path.join(JUNIOR_DIR, 'no-launch-agent')
 
 export async function uninstall() {
-  if (process.platform !== 'darwin') die(`${cyan('triage uninstall')} is macOS only`)
+  if (process.platform !== 'darwin') die(`${cyan('junior uninstall')} is macOS only`)
   const had = await uninstallLaunchAgent()
-  await mkdir(TRIAGE_DIR, { recursive: true }).catch(() => {})
-  writeFileSync(OPT_OUT_FILE, `removed by triage uninstall\n`)
-  console.log(had ? `${green('✓')} LaunchAgent removed — triage is stopped; ${cyan('triage')} starts it by hand` : `${dim('○')} no LaunchAgent is installed`)
-  console.log(dim(`  Triage.app won't put it back. Undo with ${cyan('triage install')}.`))
+  await mkdir(JUNIOR_DIR, { recursive: true }).catch(() => {})
+  writeFileSync(OPT_OUT_FILE, `removed by junior uninstall\n`)
+  console.log(had ? `${green('✓')} LaunchAgent removed — junior is stopped; ${cyan('junior')} starts it by hand` : `${dim('○')} no LaunchAgent is installed`)
+  console.log(dim(`  Junior.app won't put it back. Undo with ${cyan('junior install')}.`))
 }
 
 export async function doctor(port: number) {
@@ -40,12 +40,12 @@ export async function doctor(port: number) {
   if (process.platform === 'darwin') {
     const installed = launchAgentInstalled()
     const loaded = installed ? await launchAgentLoaded() : false
-    check(installed ? loaded : null, 'agent', installed ? (loaded ? 'installed and loaded' : 'installed but not loaded') : `not installed — jobs stop after a reboot`, `triage start (loads it)`)
-    if (!installed) console.log(dim(`             install it with ${cyan('triage install')}`))
+    check(installed ? loaded : null, 'agent', installed ? (loaded ? 'installed and loaded' : 'installed but not loaded') : `not installed — jobs stop after a reboot`, `junior start (loads it)`)
+    if (!installed) console.log(dim(`             install it with ${cyan('junior install')}`))
   }
   const health = await checkHealth(port)
   if (health === 'other') check(false, 'server', `port ${port} is in use by something else`)
-  else if (!health) check(false, 'server', `not answering on :${port}`, 'triage')
-  else check(health.version === pkgVersion(), 'server', `up on :${port} · v${health.version}${health.version === pkgVersion() ? '' : ` (this CLI is v${pkgVersion()})`}`, 'triage restart')
+  else if (!health) check(false, 'server', `not answering on :${port}`, 'junior')
+  else check(health.version === pkgVersion(), 'server', `up on :${port} · v${health.version}${health.version === pkgVersion() ? '' : ` (this CLI is v${pkgVersion()})`}`, 'junior restart')
   if (failures) process.exitCode = 1
 }

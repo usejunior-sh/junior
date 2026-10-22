@@ -100,7 +100,7 @@ export function fenceDecision(f: Fence, toolName: string, input: unknown): Fence
     return { allow: true }
   }
 
-  // Exact names only: allowing `triage:x` must not let a bare `x` through. That can be another skill.
+  // Exact names only: allowing `junior:x` must not let a bare `x` through. That can be another skill.
   if (toolName === 'Skill') {
     const name = (str('skill') ?? str('command') ?? '').trim().replace(/^\//, '')
     if (f.skills.has(name)) return { allow: true }

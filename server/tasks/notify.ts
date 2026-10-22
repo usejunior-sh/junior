@@ -5,7 +5,7 @@
  * rebase done) shows in the item's task list, never here.
  *
  * Server-side `osascript`, like a job's notify: the daemon runs whether or
- * not Triage.app is open. macOS only; elsewhere, the log line is all.
+ * not Junior.app is open. macOS only; elsewhere, the log line is all.
  */
 import type { ItemTask } from '../../core/work/tasks.js'
 import { VERDICT_LABEL, type Verdict } from '../../core/review/brief.js'
@@ -50,8 +50,8 @@ export function taskNeedsYou(rt: WorkspaceRuntime, n: NeedsYou): void {
   const text = needsYouText(n, 'task' in n ? prName(n.task.itemId) : null)
   if (!text) return
   log('info', 'tasks', `needs you: ${text.title} — ${text.body}`, { workspace: rt.meta.id })
-  if (process.platform !== 'darwin' || process.env.TRIAGE_NO_NOTIFY) return
-  pExecFile('osascript', ['-e', `display notification ${as(text.body)} with title ${as(text.title)} subtitle "Triage"`]).catch((err) =>
+  if (process.platform !== 'darwin' || process.env.JUNIOR_NO_NOTIFY) return
+  pExecFile('osascript', ['-e', `display notification ${as(text.body)} with title ${as(text.title)} subtitle "Junior"`]).catch((err) =>
     log('warn', 'tasks', `could not notify: ${errText(err)}`, { workspace: rt.meta.id }),
   )
 }

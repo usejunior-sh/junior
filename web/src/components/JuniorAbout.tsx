@@ -166,7 +166,7 @@ export function JuniorAbout({ routines, onNavigate, onView }: Props) {
             <span key={r.path}>
               {i > 0 && ', '}
               <button type="button" title={`${r.kind === 'skill' ? 'Skill' : 'Agent'} · ${r.path}`} onClick={() => onNavigate(`/settings/${r.kind === 'skill' ? 'skills' : 'agents'}`)}>
-                {r.name.replace(/^triage:/, '')}
+                {r.name.replace(/^junior:/, '')}
               </button>
             </span>
           ))}

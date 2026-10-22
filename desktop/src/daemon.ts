@@ -1,7 +1,7 @@
 /**
- * Find, start and restart the local triage daemon from the Electron main
+ * Find, start and restart the local Junior daemon from the Electron main
  * process (ARCHITECTURE.md). The app attaches, it does not own: the daemon runs
- * under the same LaunchAgent `triage install` writes, so it survives the app
+ * under the same LaunchAgent `junior install` writes, so it survives the app
  * quitting, and a reboot, a logout and a crash, which is what jobs need.
  *
  * Deliberately free of an `electron` import, packaging is detected from the
@@ -15,16 +15,16 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 /** Mirrors `Health` in server/state.ts. */
-export type DaemonHealth = { app: 'triage'; version: string; pid: number; port: number; db: string; liveSessions: number }
+export type DaemonHealth = { app: 'junior'; version: string; pid: number; port: number; db: string; liveSessions: number }
 
-/** TRIAGE_APP_PORT lets the app be tested against an isolated daemon; else DEFAULT_PORT. */
-export const PORT: number = Number(process.env.TRIAGE_APP_PORT) || 5178
+/** JUNIOR_APP_PORT lets the app be tested against an isolated daemon; else DEFAULT_PORT. */
+export const PORT: number = Number(process.env.JUNIOR_APP_PORT) || 5178
 
 /**
- * TRIAGE_APP_URL loads the UI from somewhere else, the Vite dev server, for
+ * JUNIOR_APP_URL loads the UI from somewhere else, the Vite dev server, for
  * HMR, while health checks and the browser host still talk to PORT.
  */
-const UI_URL = process.env.TRIAGE_APP_URL?.trim() || ''
+const UI_URL = process.env.JUNIOR_APP_URL?.trim() || ''
 export const UI_PORT: number = UI_URL ? Number(new URL(UI_URL).port || 80) : PORT
 
 export function daemonUrl(): string {
@@ -33,12 +33,12 @@ export function daemonUrl(): string {
 
 /** Mirrors LOG_FILE in server/state.ts. */
 export function logFile(): string {
-  return path.join(process.env.TRIAGE_HOME || path.join(os.homedir(), '.triage'), 'server.log')
+  return path.join(process.env.JUNIOR_HOME || path.join(os.homedir(), '.junior'), 'server.log')
 }
 
 /**
  * Same three outcomes as `checkHealth` in server/state.ts: a health body,
- * 'other' (the port answers, or hangs, but isn't triage), null (nothing listens).
+ * 'other' (the port answers, or hangs, but isn't Junior), null (nothing listens).
  * Tries IPv4 then IPv6 loopback: the daemon listens on both, but a dev server
  * (Vite on :5189) may hold only [::1].
  */
@@ -62,7 +62,7 @@ async function probeHost(host: string): Promise<DaemonHealth | 'other' | null> {
 }
 
 function isHealth(body: unknown): body is DaemonHealth {
-  return typeof body === 'object' && body !== null && (body as DaemonHealth).app === 'triage'
+  return typeof body === 'object' && body !== null && (body as DaemonHealth).app === 'junior'
 }
 
 /**
@@ -76,7 +76,7 @@ export function runtime(): { node: string; cli: string; bundled: boolean } {
   if (resources) {
     const node = path.join(resources, 'node', 'bin', 'node')
     if (existsSync(node)) {
-      return { node, cli: path.join(resources, 'triage', 'dist', 'server', 'cli.js'), bundled: true }
+      return { node, cli: path.join(resources, 'junior', 'dist', 'server', 'cli.js'), bundled: true }
     }
   }
   // desktop/dist/daemon.js → <repo>/dist/server/cli.js
@@ -123,8 +123,8 @@ export async function loginShellEnv(): Promise<NodeJS.ProcessEnv> {
   return env
 }
 
-const PATH_START = '__TRIAGE_PATH__'
-const PATH_END = '__TRIAGE_END__'
+const PATH_START = '__JUNIOR_PATH__'
+const PATH_END = '__JUNIOR_END__'
 
 /** `$SHELL -ilc`, with markers: rc files may print banners or junk around it. */
 function shellPath(): Promise<string | null> {
@@ -166,7 +166,7 @@ function dedupe(dirs: string[]): string[] {
 }
 
 /**
- * Find a running triage, or start one; resolves once /api/health answers.
+ * Find a running junior, or start one; resolves once /api/health answers.
  *
  * Installing the app is the only step anyone takes, so the app, not the
  * installer, which a drag-from-DMG user never runs, is what guarantees the
@@ -176,7 +176,7 @@ function dedupe(dirs: string[]): string[] {
 export async function ensureDaemon(onStatus?: (msg: string) => void): Promise<DaemonHealth> {
   const health = await probe()
   if (health === 'other') {
-    throw new Error(`port ${PORT} is used by something that isn't triage — quit it, or set TRIAGE_APP_PORT to another port`)
+    throw new Error(`port ${PORT} is used by something that isn't Junior — quit it, or set JUNIOR_APP_PORT to another port`)
   }
   if (health) {
     // Someone else's daemon already holds the port. Write the agent for next
@@ -184,7 +184,7 @@ export async function ensureDaemon(onStatus?: (msg: string) => void): Promise<Da
     if (agentNeedsWriting()) void runCli('install', ['--defer']).catch(() => {})
     return health
   }
-  onStatus?.('Starting triage…')
+  onStatus?.('Starting Junior…')
   // `install` writes the agent and lets launchd start the server, so the daemon
   // is launchd-owned from birth: no second restart to adopt it later. `start`
   // already prefers an installed agent, so it is the fallback when we must not
@@ -194,10 +194,10 @@ export async function ensureDaemon(onStatus?: (msg: string) => void): Promise<Da
 }
 
 /** Mirrors LAUNCH_AGENT_LABEL in server/launchd.ts. */
-const AGENT_PLIST = path.join(os.homedir(), 'Library', 'LaunchAgents', 'sh.usetriage.triage.plist')
-/** Written by `triage uninstall`: mirrors OPT_OUT_FILE in server/cli.ts. */
+const AGENT_PLIST = path.join(os.homedir(), 'Library', 'LaunchAgents', 'sh.usejunior.junior.plist')
+/** Written by `junior uninstall`: mirrors OPT_OUT_FILE in server/cli.ts. */
 const agentOptOut = (): string =>
-  path.join(process.env.TRIAGE_HOME || path.join(os.homedir(), '.triage'), 'no-launch-agent')
+  path.join(process.env.JUNIOR_HOME || path.join(os.homedir(), '.junior'), 'no-launch-agent')
 
 /**
  * Should we write the LaunchAgent? Only for a packaged app: an unpackaged dev
@@ -209,7 +209,7 @@ function agentNeedsWriting(): boolean {
   if (process.platform !== 'darwin') return false
   const { node, cli, bundled } = runtime()
   if (!bundled) return false
-  // `triage uninstall` is a decision, not an accident, don't overrule it.
+  // `junior uninstall` is a decision, not an accident, don't overrule it.
   if (existsSync(agentOptOut())) return false
   try {
     const xml = readFileSync(AGENT_PLIST, 'utf8')
@@ -238,7 +238,7 @@ async function runCli(command: 'start' | 'restart' | 'install', extra: string[] 
   const env = { ...(await loginShellEnv()), PORT: String(PORT) }
   const { node, cli, bundled } = runtime()
   if (!existsSync(cli)) {
-    throw new Error(`triage is not built — ${cli} is missing${bundled ? '' : ' (run `npm run build` at the repo root)'}`)
+    throw new Error(`junior is not built — ${cli} is missing${bundled ? '' : ' (run `npm run build` at the repo root)'}`)
   }
   return new Promise((resolve, reject) => {
     // The server it launches is detached with its own stdio (the log file),
@@ -269,7 +269,7 @@ async function waitForHealth(cli: CliResult, accept: (h: DaemonHealth) => boolea
     if (cli.code !== 0 || Date.now() >= deadline) break
     await new Promise((r) => setTimeout(r, 250))
   }
-  const parts = [`triage did not come up on port ${PORT}${cli.code ? ` (cli exited ${cli.code})` : ''}`]
+  const parts = [`junior did not come up on port ${PORT}${cli.code ? ` (cli exited ${cli.code})` : ''}`]
   if (cli.output) parts.push(cli.output)
   const tail = await logTail(20)
   if (tail) parts.push(`${logFile()}:\n${tail}`)

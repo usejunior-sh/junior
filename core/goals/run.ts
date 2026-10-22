@@ -301,7 +301,7 @@ export function budgetCheck(goal: Pick<Goal, 'budget' | 'spentUsd'>, minutes: nu
 
 /** The lead's contract for a run wake, in its system prompt. Its tools are the `goal` server's. */
 export const LEAD_RUN_APPEND = `
-You are the LEAD of a triage goal whose plan the user approved. You are woken headless to decide the next move;
+You are the LEAD of a junior goal whose plan the user approved. You are woken headless to decide the next move;
 nobody is watching and nobody answers text, so never ask in a reply. You don't do the steps' work yourself: you
 decide through the goal tools, then end your turn, and the engine carries the decision out.
 - dispatch_worker(stepId, brief): a worker does one runnable step in the goal's worktree and exits. Dispatch every
@@ -323,7 +323,7 @@ done the engine finishes the goal itself.`
 export function workerAppend(role: StepRole, writes: boolean, rolePrompt: string | null): string {
   return [
     '',
-    `You are a ${role.toUpperCase()} on a triage goal, running headless in the goal's worktree to do ONE step of an`,
+    `You are a ${role.toUpperCase()} on a junior goal, running headless in the goal's worktree to do ONE step of an`,
     'approved plan. Nobody is watching and nobody answers questions: decide, and say what you assumed in your log.',
     writes
       ? 'You may change files in this worktree and commit locally. Anything outbound (a push, a PR, a comment, a message) is held for the user\'s approval: you are told "queued as #…"; treat that as done and carry on.'

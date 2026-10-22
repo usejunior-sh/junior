@@ -1,7 +1,7 @@
 /**
  * Team recipes (core/teams/recipe.ts): the YAML subset, the strict schema, the
  * rules every team obeys, the round trip, and the shipped defaults seeding next
- * to V1/V2 roster files. Files live in a temp dir — never ~/.triage.
+ * to V1/V2 roster files. Files live in a temp dir — never ~/.junior.
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -54,8 +54,8 @@ test('the YAML subset rejects what it does not understand, with a line number', 
   assert.throws(() => parseYaml('a:\n\t- 1'), /tabs/)
 })
 
-test('every shipped recipe parses clean and names agents triage ships', async () => {
-  const dir = mkdtempSync(path.join(tmpdir(), 'triage-recipes-'))
+test('every shipped recipe parses clean and names agents junior ships', async () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'junior-recipes-'))
   try {
     const lib = new TeamLibrary(dir)
     await lib.seed()
@@ -178,9 +178,9 @@ test('the task loop: contiguous for-each steps, context only on its change step,
 })
 
 test('seeding writes the recipes, retires untouched old roster teams, and keeps your edits', async () => {
-  const dir = mkdtempSync(path.join(tmpdir(), 'triage-recipes-'))
+  const dir = mkdtempSync(path.join(tmpdir(), 'junior-recipes-'))
   try {
-    // A workspace seeded by an older triage: the roster teams and their manifest entries.
+    // A workspace seeded by an older junior: the roster teams and their manifest entries.
     const teams = path.join(dir, 'teams')
     mkdirSync(teams, { recursive: true })
     mkdirSync(path.join(dir, 'agents'), { recursive: true })

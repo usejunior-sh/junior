@@ -36,16 +36,16 @@
 <body>
 <canvas id="c"></canvas>
 <div class="copy">
-  <img class="logo" id="logo" src="triage-lockup.svg" alt="triage">
-  <h1>Triage finds the work.</h1>
-  <h2>Junior finishes it.</h2>
+  <img class="logo" id="logo" src="junior-lockup.svg" alt="junior">
+  <h1>Junior takes the work</h1>
+  <h2>that doesn’t need you.</h2>
 </div>
-<div class="url"><b>usetriage.sh</b><i></i>Open source<i></i>Runs on your Mac</div>
+<div class="url"><b>usejunior.sh</b><i></i>Open source<i></i>Runs on your Mac</div>
 <script>
 const light = new URLSearchParams(location.search).get("theme") === "light";
 if (light) {
   document.documentElement.classList.add("light");
-  document.getElementById("logo").src = "triage-lockup-black.svg";
+  document.getElementById("logo").src = "junior-lockup-black.svg";
 }
 
 const W = 1500, H = 500, DPR = 2, CELL = 6.5;

@@ -2,7 +2,7 @@ import path from 'node:path'
 import { readFile } from 'node:fs/promises'
 import type { DispatchPreviewResponse, LibraryFileResponse, LibraryListResponse, TeamGoalsResponse, TeamRunFileResponse, TeamRunFilesResponse, TeamRunFolderResponse, TeamRunResponse } from '../../shared/protocol.js'
 import { createLibraryEntry, libraryTargets, listLibrary, locate as locateLibrary, readLibraryFile, removeLibraryItem, writeLibraryFile } from '../library.js'
-import { TRIAGE_DIR } from '../state.js'
+import { JUNIOR_DIR } from '../state.js'
 import { isLibraryName } from '../teams.js'
 import { libraryRootsFor, reloadLibraryEverywhere } from '../session/changes.js'
 import { readJsonBody } from './http-util.js'
@@ -39,7 +39,7 @@ export async function libraryRoutes({ req, url, json, rt }: ScopedCtx): Promise<
         reloadLibraryEverywhere(rt)
         json(200, { ok: true, path: made.path })
       } else if (route === 'DELETE /api/library') {
-        await removeLibraryItem(url.searchParams.get('path'), roots, path.join(TRIAGE_DIR, 'trash'), {
+        await removeLibraryItem(url.searchParams.get('path'), roots, path.join(JUNIOR_DIR, 'trash'), {
           fileOnly: url.searchParams.get('file') === '1',
         })
         reloadLibraryEverywhere(rt)

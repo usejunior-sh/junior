@@ -9,7 +9,7 @@ import { snapshotTree } from '../git.js'
 import { log } from '../log.js'
 import { attachedFilesNote } from '../attachments.js'
 import { frameTeamMessage, isCheckCommand } from '../teams.js'
-import { GOAL_MODE_MARK, ULTRACODE_OFF_NOTE, ULTRACODE_ON_NOTE } from '../../shared/triageContext.js'
+import { GOAL_MODE_MARK, ULTRACODE_OFF_NOTE, ULTRACODE_ON_NOTE } from '../../shared/juniorContext.js'
 import { WORKFLOW_TOOL } from '../../core/workflows/fold.js'
 import { BROWSER_SERVER } from '../../core/browser/policy.js'
 import { readOnlyCommand } from '../../core/actions/commands.js'
@@ -30,7 +30,7 @@ import { onBriefSessionEnded, onBriefTurnDone } from '../brief-run.js'
 import { noteTeamSpend } from '../team-run/ops.js'
 import { endTaskSession } from '../tasks/runner.js'
 import { resolveMentions } from './mentions.js'
-import { classifyEffect, SESSION_TOOLS, sessionScoped, TEAM_TOOLS, TRIAGE_READ_TOOLS } from './effects.js'
+import { classifyEffect, SESSION_TOOLS, sessionScoped, TEAM_TOOLS, JUNIOR_READ_TOOLS } from './effects.js'
 import { teamRunOf } from '../team-run/state.js'
 import { noteActionEvent } from './actions-record.js'
 import { endedTask, owedProgress, type ProgressPending, snapshotAgentIds, throttleProgress, WorkflowTurns } from './workflow-tasks.js'
@@ -42,7 +42,7 @@ const BROWSER_PREFIX = `mcp__${BROWSER_SERVER}__`
 /**
  * Spawn-time extras for special-purpose sessions (briefs): text appended to
  * Claude Code's own system prompt (it survives `resume`), and MCP servers
- * beyond the workspace's triage server.
+ * beyond the workspace's Junior server.
  */
 export type SessionExtras = {
   systemAppend?: string
@@ -135,14 +135,14 @@ export class LiveSession {
       // Brief sessions: the headless contract rides in the system prompt so
       // it survives `resume` (.docs/next-version.md).
       ...(extras.systemAppend ? { systemAppend: extras.systemAppend } : {}),
-      // The triage inbox as in-process tools, so a chat can list/create/edit
+      // The junior inbox as in-process tools, so a chat can list/create/edit
       // work items directly: same tool surface as the stdio shim external
       // Claude Code sessions get (server/mcp.ts). Scoped to this workspace.
       // Brief sessions add their own `write_brief` server on top. An agent
       // that can't host in-process servers (Codex) gets none of them: it
-      // reaches triage through its own configured `triage` MCP instead.
+      // reaches junior through its own configured `junior` MCP instead.
       mcpServers: {
-        ...(this.provider.capabilities.inProcessMcp ? { triage: rt.triageMcp(row.id), ...(extras.mcp ?? {}) } : {}),
+        ...(this.provider.capabilities.inProcessMcp ? { junior: rt.juniorMcp(row.id), ...(extras.mcp ?? {}) } : {}),
         ...((extras.externalMcp ?? {}) as McpServers),
       },
       ...(extras.tools ? { tools: extras.tools } : {}),
@@ -462,7 +462,7 @@ export class LiveSession {
     // Before the agent can touch anything: the tree this turn starts from.
     await this.beginTurn()
     this.emit({ kind: 'local_user', text, images, ...(opts.files?.length ? { files: opts.files } : {}), mentions: attached?.resolved, ...(opts.from ? { from: opts.from } : {}), ...(opts.fromSession ? { fromSession: opts.fromSession } : {}), ...(opts.mode ? { mode: opts.mode } : {}) }, true)
-    // A message from triage or a teammate is framed for the model; the transcript keeps the raw text and a badge.
+    // A message from Junior or a teammate is framed for the model; the transcript keeps the raw text and a badge.
     // One sent in Goal mode says so, so Junior goes straight to a goal card.
     const filesNote = attachedFilesNote(this.rt.attachmentsDir, this.row.id, opts.files ?? [])
     // Another chat's message (start_session / message_session) names that chat, so it never reads as the user.
@@ -496,11 +496,11 @@ export class LiveSession {
     // Plan mode: the plan is yours to approve, like a PR, never waved through by a mode or a rule.
     if (toolName === 'ExitPlanMode') return this.askUser(toolName, toolInput, opts, effect)
     // Reading our own inbox is harmless in any mode, never prompt for it. Every
-    // triage write (create/edit/upsert/resolve) still goes through the prompt.
-    if (TRIAGE_READ_TOOLS.has(toolName)) {
+    // junior write (create/edit/upsert/resolve) still goes through the prompt.
+    if (JUNIOR_READ_TOOLS.has(toolName)) {
       return Promise.resolve({ behavior: 'allow', updatedInput: toolInput })
     }
-    // Team runs: triage's own team tools only record and route, the card is
+    // Team runs: Junior's own team tools only record and route, the card is
     // the approval. A worker that can't edit runs read-only git/gh unattended,
     // and any worker runs the project's own checks without a click.
     if (TEAM_TOOLS.has(toolName)) return Promise.resolve({ behavior: 'allow', updatedInput: toolInput })
@@ -650,7 +650,7 @@ export class LiveSession {
         void this.planApproved(typeof pending.input.plan === 'string' ? pending.input.plan : '')
       }
     } else if (behavior === 'deny') {
-      pending.resolve({ behavior: 'deny', message: 'Denied by the user in the triage web UI.' })
+      pending.resolve({ behavior: 'deny', message: 'Denied by the user in the junior web UI.' })
     } else if (answers) {
       // AskUserQuestion: the picked labels ride back in on the tool's input,
       // which is where the tool reads the user's answer from.
@@ -790,7 +790,7 @@ export class LiveSession {
     broadcastSessionList(this.rt)
   }
 
-  /** Write a line of triage's own into this transcript (a team paused, a stage began). */
+  /** Write a line of Junior's own into this transcript (a team paused, a stage began). */
   notice(text: string) {
     this.emit({ kind: 'notice', text }, true)
   }

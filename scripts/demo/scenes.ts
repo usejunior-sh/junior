@@ -11,7 +11,7 @@ export type Scene = {
   headline?: string
   /** smaller line under the headline */
   sub?: string
-  /** CSS px; default 1440×900 (Triage.app's default window is 1360×880) */
+  /** CSS px; default 1440×900 (Junior.app's default window is 1360×880) */
   viewport?: { width: number; height: number }
   /** phone layout (≤767px): no window chrome, framed as a phone */
   mobile?: boolean

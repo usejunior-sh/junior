@@ -239,7 +239,7 @@
 @media (max-width: 767px) {
   .bpProfRow { grid-template-columns: 14px minmax(0, 1fr) auto; }
   .bpProfRow > .bpSiteChips, .bpProfRow > .when, .bpProfRow.head > :nth-child(3), .bpProfRow.head > :nth-child(4) { display: none; }
-  /* Signing in needs Triage.app, which a phone never is: the row keeps only its menu. */
+  /* Signing in needs Junior.app, which a phone never is: the row keeps only its menu. */
   .bpProfRow .acts > :not([aria-haspopup]) { display: none; }
   .bpProfRow .acts .btn.icon { width: 34px; padding: 0; }
   .bpProfDraft { display: flex; flex-wrap: wrap; }

@@ -1,5 +1,5 @@
 /**
- * Settings → Phone: let a phone on the same network use this triage.
+ * Settings → Phone: let a phone on the same network use this Junior.
  *
  * One switch, then a QR code. The code carries the pairing token
  * (server/remote.ts), so scanning it is the whole sign-in; the phone keeps a
@@ -35,7 +35,7 @@ function QrCode({ text }: { text: string }) {
   }, [text])
   // Four modules of quiet zone, as the spec asks; the card is the white.
   return (
-    <svg className="phoneQr" viewBox={`-4 -4 ${n + 8} ${n + 8}`} role="img" aria-label="QR code that pairs a phone with this triage" shapeRendering="crispEdges">
+    <svg className="phoneQr" viewBox={`-4 -4 ${n + 8} ${n + 8}`} role="img" aria-label="QR code that pairs a phone with this Junior" shapeRendering="crispEdges">
       <rect x={-4} y={-4} width={n + 8} height={n + 8} fill="#fff" />
       <path d={d} fill="#000" />
     </svg>
@@ -88,7 +88,7 @@ export function PhoneTab() {
       <section className="setSection">
         <h3>This device is paired</h3>
         <p className="hint">
-          You are using the triage that runs on your Mac. Phone access — switching it off, or resetting the pairing code to sign
+          You are using the Junior that runs on your Mac. Phone access — switching it off, or resetting the pairing code to sign
           every device out — is managed from the Mac itself.
         </p>
       </section>
@@ -100,13 +100,13 @@ export function PhoneTab() {
       <section className="setSection">
         <h3>Phone access</h3>
         <p className="hint">
-          Use triage from a phone or tablet. Devices get in only by pairing with this Mac, and switching this off cuts every
+          Use Junior from a phone or tablet. Devices get in only by pairing with this Mac, and switching this off cuts every
           device at once.
         </p>
         <div className="setRow">
           <div className="lbl">
             <b>Allow other devices</b>
-            <small>Off: triage only answers this Mac, as it always has.</small>
+            <small>Off: junior only answers this Mac, as it always has.</small>
           </div>
           <div className="ctl">
             <Switch.Root
@@ -213,7 +213,7 @@ function PairSection({
               Point the camera at the code and open the link. ngrok shows a one-time warning page first — tap <b>Visit Site</b>.
             </Step>
             <Step n={2}>
-              Share → <b>Add to Home Screen</b> to open triage like an app.
+              Share → <b>Add to Home Screen</b> to open junior like an app.
             </Step>
             <Step n={3}>
               Keep this Mac awake: while it sleeps, the address stops answering.
@@ -236,7 +236,7 @@ function PairSection({
             Point the camera at the code and open the link. The phone is paired from then on — no code to type.
           </Step>
           <Step n={2}>
-            Share → <b>Add to Home Screen</b> to open triage like an app.
+            Share → <b>Add to Home Screen</b> to open junior like an app.
           </Step>
           <Step n={3}>
             Nothing loads? Check that the phone is on the same network, and that macOS Firewall lets <b>node</b> accept incoming
@@ -263,7 +263,7 @@ function PairSection({
       )}
       {import.meta.env.DEV && (
         <p className="hint">
-          Dev server: Vite answers the network only when started as <code>TRIAGE_DEV_LAN=1 npm run dev</code>.
+          Dev server: Vite answers the network only when started as <code>JUNIOR_DEV_LAN=1 npm run dev</code>.
         </p>
       )}
       <Snippet label="open on the phone" text={base} />

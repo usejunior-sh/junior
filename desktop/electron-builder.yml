@@ -1,10 +1,10 @@
-# Packaging for Triage.app. Driven by scripts/build.mjs, which stages
-# .stage/triage (the usetriage package + prod node_modules) and .stage/node
+# Packaging for Junior.app. Driven by scripts/build.mjs, which stages
+# .stage/junior (the usejunior package + prod node_modules) and .stage/node
 # (official Node binary) first, passes the version from the root package.json,
 # then ad-hoc signs the app and zips it with ditto.
-appId: sh.usetriage.app
-productName: Triage
-copyright: Copyright © 2026 Triage
+appId: sh.usejunior.app
+productName: Junior
+copyright: Copyright © 2026 Junior
 
 directories:
   output: release
@@ -21,14 +21,14 @@ asar: true
 # electron-builder always drops a source's top-level node_modules, so it gets
 # its own entry; naming node_modules in the filter keeps nested ones too.
 extraResources:
-  - from: .stage/triage
-    to: triage
-  - from: .stage/triage/node_modules
-    to: triage/node_modules
+  - from: .stage/junior
+    to: junior
+  - from: .stage/junior/node_modules
+    to: junior/node_modules
     filter:
       - '**/*'
       - '**/node_modules/**/*'
-      - '!.triage-stage'
+      - '!.junior-stage'
   - from: .stage/node
     to: node
     filter:
@@ -51,4 +51,4 @@ mac:
   hardenedRuntime: false
   gatekeeperAssess: false
   minimumSystemVersion: '12.0'
-  artifactName: Triage-${version}-mac-${arch}.${ext}
+  artifactName: Junior-${version}-mac-${arch}.${ext}

@@ -3,7 +3,7 @@
  * frontmatter block, then the prompt. Other tools write these by hand, so the
  * reader is lenient, block scalars (`description: >`), quoted strings, lists,
  * and the writer is surgical: setting one field rewrites only that key's lines,
- * so keys triage doesn't know (allowed-tools, metadata, hooks…) and the
+ * so keys junior doesn't know (allowed-tools, metadata, hooks…) and the
  * author's formatting survive an edit from the settings form.
  *
  * Shared by the server (listing) and the web (the editor). Dependency-free.

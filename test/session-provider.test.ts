@@ -1,6 +1,6 @@
 /**
  * A session's provider is stored on its row (migration 27), against a real
- * sqlite store in a temp dir — never ~/.triage.
+ * sqlite store in a temp dir — never ~/.junior.
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -11,8 +11,8 @@ import { DatabaseSync } from 'node:sqlite'
 import { openSqliteStore } from '../core/store/sqlite.js'
 
 function tempDb() {
-  const dir = mkdtempSync(path.join(tmpdir(), 'triage-session-provider-'))
-  return { file: path.join(dir, 'triage.db'), done: () => rmSync(dir, { recursive: true, force: true }) }
+  const dir = mkdtempSync(path.join(tmpdir(), 'junior-session-provider-'))
+  return { file: path.join(dir, 'junior.db'), done: () => rmSync(dir, { recursive: true, force: true }) }
 }
 
 test('sessions from before providers read back as claude', async () => {

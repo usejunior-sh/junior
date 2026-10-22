@@ -1,9 +1,9 @@
 /**
- * The provider seam: everything triage asks of a coding agent, as one
+ * The provider seam: everything junior asks of a coding agent, as one
  * interface. Claude Code (via the Agent SDK, `claude.ts`) and Codex (via
  * `codex app-server`, `codex.ts`) implement it; call sites never see either.
  *
- * Specs say what triage wants (a folder, a model, which tools, a veto on every
+ * Specs say what junior wants (a folder, a model, which tools, a veto on every
  * tool call); each adapter decides how its agent is told. What comes back is
  * `ProviderEvent`: each adapter folds its own stream into it, so the server
  * reads one shape whatever the agent. A few shapes are still Claude's own,
@@ -44,9 +44,9 @@ export type Capability =
   | 'interrupt'
   /** switch model inside a live session */
   | 'setModel'
-  /** ask triage before a tool runs (SessionSpec.approve) */
+  /** ask junior before a tool runs (SessionSpec.approve) */
   | 'toolApproval'
-  /** host an MCP server inside triage's own process */
+  /** host an MCP server inside Junior's own process */
   | 'inProcessMcp'
   /** a veto that runs before every tool call (RunSpec.veto) */
   | 'hooks'
@@ -64,7 +64,7 @@ export type ToolCall = { id: string; name: string; input: unknown }
 /**
  * One event out of a running agent, normalised by its adapter. The server
  * reads the kind and its fields; `record` is the message as the transcript
- * keeps it (protocol's `SdkMessage`, triage's own shape), persisted as an
+ * keeps it (protocol's `SdkMessage`, Junior's own shape), persisted as an
  * `sdk` session event for every kind but `stream`.
  */
 export type ProviderEvent = {
@@ -235,7 +235,7 @@ export type RunSpec = {
 }
 
 /**
- * A workspace's auth as the adapter reads it: the backend, plus what triage
+ * A workspace's auth as the adapter reads it: the backend, plus what junior
  * keeps for it on disk (the stored key; the workspace's private config dir).
  */
 export type ProviderAuth =

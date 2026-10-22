@@ -32,7 +32,7 @@ export type Draft = {
   createdAt: number
 }
 
-const key = (workspaceId: string) => `triage.drafts.${workspaceId || 'default'}`
+const key = (workspaceId: string) => `junior.drafts.${workspaceId || 'default'}`
 
 let wsId = ''
 let drafts: readonly Draft[] = []

@@ -13,19 +13,19 @@ import {
   profileIdFor,
   profileNameError,
 } from '../../core/browser/profiles.js'
-import { TRIAGE_DIR } from '../state.js'
+import { JUNIOR_DIR } from '../state.js'
 
 /**
  * The browser profiles (.docs/browser.md → Profiles): machine-wide, owned
- * here, in `browser-profiles.json` under TRIAGE_HOME (0600). Every workspace
+ * here, in `browser-profiles.json` under JUNIOR_HOME (0600). Every workspace
  * sees the same list, as every Chrome window sees the same profiles; each
- * workspace only picks its default. The cookie jars are Triage.app's, one per
+ * workspace only picks its default. The cookie jars are Junior.app's, one per
  * id, so a deleted profile's jar is wiped by the app: when the app is closed
  * the wipe waits in `pendingDrops` for its next hello.
  */
 type ProfilesFile = { version: 1; profiles: BrowserProfile[]; pendingDrops?: string[] }
 
-export const PROFILES_FILE = path.join(TRIAGE_DIR, 'browser-profiles.json')
+export const PROFILES_FILE = path.join(JUNIOR_DIR, 'browser-profiles.json')
 const MAX_SITES = 50
 
 /** What a stored file holds, cleaned: Default always first, unknown fields and bad rows dropped. */

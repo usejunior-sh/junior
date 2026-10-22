@@ -149,10 +149,10 @@ test('a failing command and a declined patch come back as errors', () => {
 test('an MCP call is named the way Claude names it', () => {
   const mapper = createCodexMapper(THREAD)
   const [call, result] = mapper.notification('item/completed', {
-    item: { type: 'mcpToolCall', id: 'm', server: 'triage', tool: 'list_work_items', arguments: { status: 'open' }, result: { content: [{ type: 'text', text: '[]' }] }, error: null, status: 'completed' },
+    item: { type: 'mcpToolCall', id: 'm', server: 'junior', tool: 'list_work_items', arguments: { status: 'open' }, result: { content: [{ type: 'text', text: '[]' }] }, error: null, status: 'completed' },
   })
   assert.ok(call.kind === 'message')
-  assert.deepEqual(call.toolCalls, [{ id: 'm', name: 'mcp__triage__list_work_items', input: { status: 'open' } }])
+  assert.deepEqual(call.toolCalls, [{ id: 'm', name: 'mcp__junior__list_work_items', input: { status: 'open' } }])
   assert.deepEqual(result.record.message?.content, [{ type: 'tool_result', tool_use_id: 'm', content: [{ type: 'text', text: '[]' }], is_error: false }])
 })
 
@@ -186,7 +186,7 @@ test('buildTranscript renders the turn: text, the Bash call with its output, an 
   assert.ok(items.some((it) => it.kind === 'meta'), 'the turn marker')
 })
 
-test('codexModels: model/list as picker rows, efforts kept to the ones triage names', () => {
+test('codexModels: model/list as picker rows, efforts kept to the ones junior names', () => {
   // model/list as codex-cli 0.150.1 answered it, trimmed, plus a hidden model and junk rows.
   const effortsOf = (...e: string[]) => e.map((reasoningEffort) => ({ reasoningEffort, description: '' }))
   const data = [

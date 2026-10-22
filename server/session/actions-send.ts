@@ -60,7 +60,7 @@ export async function deliverSendBack(rt: WorkspaceRuntime, rec: ActionRecord): 
       const live = await getOrRevive(rt, row.id)
       if (!live) delivery = 'not delivered: the session could not be resumed (its folder is gone)'
       else {
-        await live.sendUserMessage(text, undefined, undefined, { from: 'triage' })
+        await live.sendUserMessage(text, undefined, undefined, { from: 'junior' })
         delivery = 'delivered'
       }
     } catch (err) {
@@ -81,7 +81,7 @@ async function tellChat(rt: WorkspaceRuntime, rec: ActionRecord): Promise<void> 
   if (!row.sdkSessionId && !rt.live.has(row.id)) return
   try {
     const live = await getOrRevive(rt, row.id)
-    await live?.sendUserMessage(settledMessage(rec), undefined, undefined, { from: 'triage' })
+    await live?.sendUserMessage(settledMessage(rec), undefined, undefined, { from: 'junior' })
   } catch (err) {
     log('warn', 'actions', `could not tell the chat #${shortActionId(rec.id)} settled: ${errText(err)}`, { action: rec.id, session: row.id, workspace: rt.meta.id })
   }
@@ -96,7 +96,7 @@ async function recordDelivery(rt: WorkspaceRuntime, rec: ActionRecord, delivery:
     await rt.store.actions.addHistory({
       actionId: cur.id,
       at: Date.now(),
-      actor: 'triage',
+      actor: 'junior',
       event: delivery === 'delivered' ? 'notes delivered' : 'notes not delivered',
       from: 'sent_back',
       to: 'sent_back',
@@ -113,7 +113,7 @@ const jobContinuations = new Map<string, Promise<void>>()
 
 /**
  * Continue a finished job run's own Claude session with one message from
- * triage, headless, under the job's own run spec (jobQuery: grants,
+ * junior, headless, under the job's own run spec (jobQuery: grants,
  * allowlist, unattended, the fence) plus the hold. The same box the run had.
  * The transcript continues on its session row. `onStarted` fires once the
  * agent is up with the message.
@@ -158,7 +158,7 @@ function continueJobRun(rt: WorkspaceRuntime, row: StoredSession, text: string, 
         const d = await fence(toolName, input, ctx)
         return d.allow ? holdIfAction(rt, row, toolName, input, ctx) : d
       }
-      spec.prompt = frameTeamMessage('triage', text)
+      spec.prompt = frameTeamMessage('junior', text)
       spec.resume = row.sdkSessionId ?? undefined
       let seq = await rt.store.events.lastSeq(row.id)
       const emit = (event: SessionEvent, persist = true) => {
@@ -169,7 +169,7 @@ function continueJobRun(rt: WorkspaceRuntime, row: StoredSession, text: string, 
         }
         broadcast(rt, { type: 'session_event', sessionId: row.id, event, at: Date.now() })
       }
-      emit({ kind: 'local_user', text, from: 'triage' })
+      emit({ kind: 'local_user', text, from: 'junior' })
       let started = false
       try {
         for await (const ev of rt.provider.run(spec)) {
@@ -243,7 +243,7 @@ async function dispatchOrigin(rt: WorkspaceRuntime, rec: ActionRecord): Promise<
     if (!cwd || !isDir) throw new Error(`the folder it was drafted in is gone${cwd ? ` (${cwd})` : ''}`)
     return { cwd, mcpServers: {} }
   }
-  if (!cwd || !isDir) cwd = await mkdtemp(path.join(os.tmpdir(), 'triage-dispatch-'))
+  if (!cwd || !isDir) cwd = await mkdtemp(path.join(os.tmpdir(), 'junior-dispatch-'))
   const servers: McpServers = {}
   const folder = await folderMcpServers(rt, cwd).catch(() => null)
   if (folder?.servers[server]) servers[server] = folder.servers[server]
@@ -363,7 +363,7 @@ export async function dispatchAction(rt: WorkspaceRuntime, id: string): Promise<
   } catch (err) {
     // The run's own failures are in its trace; this is the record failing to settle. It may have gone out.
     log('error', 'actions', `dispatch of #${shortActionId(id)} ended badly: ${errText(err)}`, { action: id, workspace: rt.meta.id })
-    await moveAction(rt, id, { type: 'settle', status: 'unknown', error: `triage lost track of the send: ${errText(err)} — check before retrying` }).catch(() => {})
+    await moveAction(rt, id, { type: 'settle', status: 'unknown', error: `junior lost track of the send: ${errText(err)} — check before retrying` }).catch(() => {})
   } finally {
     rt.dispatching.delete(id)
   }
@@ -403,9 +403,9 @@ export async function recoverActions(rt: WorkspaceRuntime): Promise<void> {
       if (!(await rt.store.actions.claim(a.id, 'sending', 'unknown', now))) return
       const cur = await rt.store.actions.get(a.id)
       if (!cur) return
-      const error = 'triage stopped while this was being sent — it may have gone out; check before retrying'
+      const error = 'junior stopped while this was being sent — it may have gone out; check before retrying'
       await rt.store.actions.put({ ...cur, error, settledAt: now })
-      await rt.store.actions.addHistory({ actionId: a.id, at: now, actor: 'triage', event: 'unknown', from: 'sending', to: 'unknown', note: error, args: null })
+      await rt.store.actions.addHistory({ actionId: a.id, at: now, actor: 'junior', event: 'unknown', from: 'sending', to: 'unknown', note: error, args: null })
     }).catch((err) => log('warn', 'actions', `could not recover ${a.id}: ${errText(err)}`, { workspace: rt.meta.id }))
   }
   // Notes sent back to a job run that died before it ended never reached it: try now.

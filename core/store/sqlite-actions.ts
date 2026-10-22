@@ -97,7 +97,7 @@ type ActionHistoryRow = {
   args: string | null
 }
 
-const isActor = (v: string): v is ActionActor => v === 'agent' || v === 'you' || v === 'triage'
+const isActor = (v: string): v is ActionActor => v === 'agent' || v === 'you' || v === 'junior'
 
 export class SqliteActions implements ActionStore {
   constructor(private db: DatabaseSync) {}
@@ -252,7 +252,7 @@ export class SqliteActions implements ActionStore {
         const e: ActionHistoryEntry = {
           actionId: r.action_id,
           at: r.at,
-          actor: isActor(r.actor) ? r.actor : 'triage',
+          actor: isActor(r.actor) ? r.actor : 'junior',
           event: r.event,
           from: r.from_status && isActionStatus(r.from_status) ? r.from_status : null,
           to: isActionStatus(r.to_status) ? r.to_status : 'attempted',

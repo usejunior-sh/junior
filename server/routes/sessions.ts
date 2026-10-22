@@ -205,7 +205,7 @@ export async function sessionRoutes({ req, url, json, access, rt }: ScopedCtx): 
     const checkout = checkoutById(rt, decodeURIComponent(removalMatch[1]))
     const main = mainCheckout(rt, checkout?.projectId)
     if (!checkout || checkout.kind !== 'worktree' || checkout.state !== 'active' || !main) {
-      json(404, { ok: false, error: checkout?.kind === 'main' ? "the main folder is yours — triage doesn't remove it" : 'no such worktree' })
+      json(404, { ok: false, error: checkout?.kind === 'main' ? "the main folder is yours — junior doesn't remove it" : 'no such worktree' })
       return true
     }
     if (removalMatch[2] === 'removal' && req.method === 'GET') {
@@ -316,7 +316,7 @@ export async function sessionRoutes({ req, url, json, access, rt }: ScopedCtx): 
     const limit = Math.min(Math.max(Number(url.searchParams.get('limit')) || 40, 1), 200)
     let body: FileSearchResponse
     if (!(await isSearchableRoot(rt, root))) {
-      body = { ok: false, error: 'not a folder triage can list (a session folder, a project, or under your home)' }
+      body = { ok: false, error: 'not a folder Junior can list (a session folder, a project, or under your home)' }
     } else {
       try {
         body = { ok: true, root, ...(await rt.files.get(root).search(q, limit)) }

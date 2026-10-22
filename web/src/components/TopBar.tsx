@@ -3,13 +3,13 @@ import { useRef, useState, type ReactNode } from 'react'
 import { goBack, goForward, isDesktop, useDesktopNav } from '../desktop.js'
 import { MOD_LABEL } from '../keys.js'
 
-// Triage.app turns a same-origin window.open into its own window, not a tab.
+// Junior.app turns a same-origin window.open into its own window, not a tab.
 const NEW_TAB = isDesktop ? 'a new window' : 'a new tab'
 import type { Build, Workspace } from '../../../shared/protocol.js'
 import type { ConnState } from '../store.js'
 import { Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from '../ui/Menu.js'
 import { basePath } from '../workspaceUrl.js'
-import { TriageLogo } from './Logo.js'
+import { JuniorLogo } from './Logo.js'
 import { ProvidersButton } from './ProvidersButton.js'
 
 type Props = {
@@ -29,14 +29,14 @@ type Props = {
   /** The settings page is in front: the gear shows it, and closes it. */
   settingsOpen?: boolean
   onHelp: () => void
-  /** Which copy of triage is answering; null until `hello` lands. */
+  /** Which copy of Junior is answering; null until `hello` lands. */
   build: Build | null
-  /** Inside Triage.app: the bar is the window's title bar (see desktop.ts). */
+  /** Inside Junior.app: the bar is the window's title bar (see desktop.ts). */
   desktop?: { panelCollapsed: boolean; onTogglePanel: () => void }
 }
 
 /**
- * Which build am I looking at: the badge that ends the "wait, which triage is
+ * Which build am I looking at: the badge that ends the "wait, which Junior is
  * this?" question. Three copies can run on one machine, so a released build
  * says nothing (that is the normal case, and noise there would be ignored) and
  * anything *ahead* of a release is called out. Clicking opens System status,
@@ -108,7 +108,7 @@ export function TopBar({
             <ChevronLeft size={20} aria-hidden="true" />
           </button>
         ) : (
-          <TriageLogo />
+          <JuniorLogo />
         )}
         {onBack && title && <span className="topTitle">{title}</span>}
         <span className="spacer" />
@@ -132,7 +132,7 @@ export function TopBar({
   }
   return (
     <header className="topbar">
-      <TriageLogo />
+      <JuniorLogo />
       <WorkspaceSwitcher
         workspaces={workspaces}
         workspaceId={workspaceId}
@@ -184,7 +184,7 @@ function SystemIcons({
 }
 
 /**
- * Triage.app's title bar (.docs/titlebar-variations.html, E). Two zones that
+ * Junior.app's title bar (.docs/titlebar-variations.html, E). Two zones that
  * line up with the columns below: over the rail + panel, the traffic lights,
  * the lockup, the panel toggle and ← →; over the content, the workspace and
  * the system icons. With the panel hidden the zones run together as one row.
@@ -207,7 +207,7 @@ function DesktopBar({
   return (
     <header className={`topbar desktopBar${panelCollapsed ? ' panelHidden' : ''}${nav.fullscreen ? ' fullscreen' : ''}`}>
       <div className="dbSide">
-        <TriageLogo />
+        <JuniorLogo />
         <span className="spacer" />
         <button
           type="button"
@@ -249,7 +249,7 @@ function WorkspaceSwitcher({
   onNew,
   onSettings,
 }: {
-  /** Triage.app's bar: a WORKSPACE eyebrow and the name at full size instead of the pill. */
+  /** Junior.app's bar: a WORKSPACE eyebrow and the name at full size instead of the pill. */
   labelled?: boolean
   workspaces: readonly Workspace[]
   workspaceId: string

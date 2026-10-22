@@ -192,7 +192,7 @@ function AddProjectModal({
             <label>Name</label>
             <input
               autoFocus
-              placeholder="e.g. triage"
+              placeholder="e.g. junior"
               value={name}
               onChange={(e) => setName(e.target.value)}
             />

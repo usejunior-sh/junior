@@ -5,7 +5,7 @@
 const { contextBridge, ipcRenderer } = require('electron')
 
 if (location.protocol === 'file:' && location.pathname.endsWith('/capture.html')) {
-  contextBridge.exposeInMainWorld('triageCapture', {
+  contextBridge.exposeInMainWorld('juniorCapture', {
     // resolves { ok: true } | { ok: false, error }
     submit: (title) => ipcRenderer.invoke('capture:submit', title),
     close: () => ipcRenderer.send('capture:close'),
@@ -14,10 +14,10 @@ if (location.protocol === 'file:' && location.pathname.endsWith('/capture.html')
 }
 
 else if (location.protocol === 'file:') {
-  const arg = process.argv.find((a) => a.startsWith('--triage-version='))
-  contextBridge.exposeInMainWorld('triageDesktop', {
+  const arg = process.argv.find((a) => a.startsWith('--junior-version='))
+  contextBridge.exposeInMainWorld('juniorDesktop', {
     platform: 'darwin',
-    version: arg ? arg.slice('--triage-version='.length) : '',
+    version: arg ? arg.slice('--junior-version='.length) : '',
     retry: () => ipcRenderer.send('splash:retry'),
     openLog: () => ipcRenderer.send('splash:open-log'),
     // { state: 'starting' | 'error', text, detail? }, the latest is replayed on load
@@ -31,7 +31,7 @@ else {
     ipcRenderer.on(channel, fn)
     return () => ipcRenderer.removeListener(channel, fn)
   }
-  contextBridge.exposeInMainWorld('triageDesktop', {
+  contextBridge.exposeInMainWorld('juniorDesktop', {
     platform: 'darwin',
     chrome: 'mac',
     back: () => ipcRenderer.send('nav:back'),

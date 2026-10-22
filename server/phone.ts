@@ -32,7 +32,7 @@ export function syncTunnel() {
  * app its own cookie jar and the pairing cookie would not follow it there.
  */
 export function webManifest(access: Access): Record<string, unknown> {
-  let base: Record<string, unknown> = { name: 'Triage', short_name: 'Triage', display: 'standalone' }
+  let base: Record<string, unknown> = { name: 'Junior', short_name: 'Junior', display: 'standalone' }
   try {
     base = JSON.parse(readFileSync(path.join(WEB_DIR, 'manifest.webmanifest'), 'utf8')) as Record<string, unknown>
   } catch {
@@ -104,7 +104,7 @@ export async function pairRoute({ req, res, url, access }: RouteCtx): Promise<bo
 
 export async function remoteRoute({ req, url, json, access }: RouteCtx): Promise<boolean> {
   if (url.pathname === '/api/remote') {
-    // Phone access is managed from the Mac only: a paired phone can use triage
+    // Phone access is managed from the Mac only: a paired phone can use junior
     // but cannot read the token, rotate it, or switch access off and on.
     if (access !== 'local') {
       json(200, { local: false } satisfies RemoteStatus)

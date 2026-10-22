@@ -248,7 +248,7 @@ export const GATE_DEFAULT_DEADLINE = '24h'
 
 // Events: the bus and the transition log, one table
 
-/** Who caused an event. `engine` is triage itself; a session is named by its id. */
+/** Who caused an event. `engine` is junior itself; a session is named by its id. */
 export type GoalActor = 'you' | 'engine' | 'lead' | 'worker' | 'gate' | 'watcher'
 
 /**

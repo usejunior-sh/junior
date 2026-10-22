@@ -8,7 +8,7 @@ import { accountLine, ProviderUsage } from '../ProviderUsage.js'
 import { useProviderStatus, loadProviderStatus, invalidateProviderStatus } from '../../providerStatus.js'
 import { SaveRow, Section } from './shared.js'
 
-// Providers: every agent triage knows: connected or not, how it signs in,
+// Providers: every agent junior knows: connected or not, how it signs in,
 // and what its own account says about the plan.
 
 export function ProvidersTab({ workspace }: { workspace: Workspace }) {

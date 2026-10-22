@@ -57,7 +57,7 @@ test('destructive commands are caught, chained or not', () => {
     'git branch -D feat/x',
     'git stash drop',
     'git stash clear',
-    'dropdb triage',
+    'dropdb junior',
     'psql -c "DROP TABLE users"',
     'sqlite3 x.db "truncate table t"',
     'bash -c "git reset --hard"',

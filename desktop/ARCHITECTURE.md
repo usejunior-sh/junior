@@ -1,26 +1,26 @@
-# Triage.app — architecture
+# Junior.app — architecture
 
-A native macOS window over the local triage daemon. Electron, because the
+A native macOS window over the local junior daemon. Electron, because the
 server is Node: nothing in `server/` or `core/` is ported.
 
 ## Decisions
 
 - **The app attaches, it does not own.** The daemon (`server/index.ts`) keeps
   running when the app quits — live Claude sessions and jobs must survive
-  closing a window. The app finds a running triage via `GET /api/health`
-  (`{ app: 'triage', … }`) and loads it in a `BrowserWindow`.
+  closing a window. The app finds a running junior via `GET /api/health`
+  (`{ app: 'junior', … }`) and loads it in a `BrowserWindow`.
 - **If nothing is running, the app starts the bundled daemon**, detached, using
-  the same path `triage start` uses: `<bundled node> <bundled cli.js> start`.
-  If the user's LaunchAgent (`~/Library/LaunchAgents/sh.usetriage.triage.plist`)
+  the same path `junior start` uses: `<bundled node> <bundled cli.js> start`.
+  If the user's LaunchAgent (`~/Library/LaunchAgents/sh.usejunior.junior.plist`)
   is installed, `cli.js start` loads it instead — the CLI already handles that.
 - **Bundled runtime = an official Node binary**, not Electron-as-node. The
   server needs `node:sqlite` (Node ≥ 22.5) and the Agent SDK spawns `node` for
   Claude Code; node-pty is N-API so it works unchanged. Layout inside the app:
 
   ```
-  Triage.app/Contents/Resources/
+  Junior.app/Contents/Resources/
     node/bin/node                   official Node 22 LTS for the target arch
-    triage/                         the usetriage package: dist/, package.json,
+    junior/                         the usejunior package: dist/, package.json,
       dist/server/cli.js            production node_modules (npm ci --omit=dev)
       node_modules/…
   ```
@@ -31,14 +31,14 @@ server is Node: nothing in `server/` or `core/` is ported.
   `/usr/bin:/bin:/usr/sbin:/sbin`; `claude`, `gh`, `git` would not resolve.
   The app reads `$SHELL -ilc 'printf %s "$PATH"'` once (5 s timeout, falls back
   to Homebrew + `~/.local/bin` defaults) and prepends the bundled `node/bin`.
-- **Port** = `TRIAGE_APP_PORT` env, else `5178` (`DEFAULT_PORT` in
-  `server/state.ts`). `TRIAGE_HOME` passes through unchanged. These exist so
+- **Port** = `JUNIOR_APP_PORT` env, else `5178` (`DEFAULT_PORT` in
+  `server/state.ts`). `JUNIOR_HOME` passes through unchanged. These exist so
   the app can be tested against an isolated daemon without touching prod.
 - **URL** = `http://localhost:<port>/`. Loopback socket + loopback `Host`
   counts as "local" in `server/remote.ts`, so no pairing.
 - **Distribution without an Apple Developer ID**: ad-hoc signed
   (`codesign --force --deep -s -`), shipped as a zip on the GitHub release,
-  installed by `curl -fsSL https://usetriage.sh/install.sh | sh` (curl sets no
+  installed by `curl -fsSL https://usejunior.sh/install.sh | sh` (curl sets no
   quarantine xattr; the script strips it anyway). Homebrew is not an escape
   hatch — unsigned casks are gone from the official tap.
 
@@ -52,8 +52,8 @@ server is Node: nothing in `server/` or `core/` is ported.
 | `src/browser-jar.ts` | one partition per browser profile: Chrome user agent, permissions, downloads, sites with saved logins, clearing and dropping a jar (its folder goes at the next launch), flushing cookies on quit |
 | `src/browser-popup.ts` | a tab's sign-in window ("Sign in with Google"): a real window around the opener's guest, with a read-only address strip and the host in the title |
 | `src/browser-wire.ts` | a copy of the wire (`../core/browser/wire.ts`) and of `partitionOf` / `siteOf` (`../core/browser/profiles.ts`): desktop can't import outside `src/` |
-| `src/preload.cjs` | tiny preload (CommonJS): exposes `window.triageDesktop` (window chrome + the browser pane's controls) |
-| `src/splash.html` | the "starting triage…" / error page shown before the daemon answers |
+| `src/preload.cjs` | tiny preload (CommonJS): exposes `window.juniorDesktop` (window chrome + the browser pane's controls) |
+| `src/splash.html` | the "starting junior…" / error page shown before the daemon answers |
 | `scripts/build.mjs` | root build → stage server → fetch Node → electron-builder → ad-hoc sign → zip/dmg |
 | `scripts/icon.mjs` | `build/icon.icns` from `web/public/icon-1024.png` |
 | `electron-builder.yml` | packaging config |
@@ -63,16 +63,16 @@ server is Node: nothing in `server/` or `core/` is ported.
 ## `src/daemon.ts` contract (consumed by `main.ts`)
 
 ```ts
-export type DaemonHealth = { app: 'triage'; version: string; pid: number; port: number; db: string; liveSessions: number }
-export const PORT: number                                   // TRIAGE_APP_PORT ?? 5178
+export type DaemonHealth = { app: 'junior'; version: string; pid: number; port: number; db: string; liveSessions: number }
+export const PORT: number                                   // JUNIOR_APP_PORT ?? 5178
 export function daemonUrl(): string                         // http://localhost:PORT/
 export async function probe(): Promise<DaemonHealth | 'other' | null>   // null = nothing listening
 export async function ensureDaemon(onStatus?: (msg: string) => void): Promise<DaemonHealth>
-  // probe → if triage, return; if 'other', throw a readable Error; else start the
+  // probe → if junior, return; if 'other', throw a readable Error; else start the
   // bundled daemon via `cli.js start` and poll health up to 20 s; throws with the
   // last 20 lines of the log on failure.
 export async function restartDaemon(): Promise<DaemonHealth>   // `cli.js restart`, then poll
 export function runtime(): { node: string; cli: string; bundled: boolean }
 export async function loginShellEnv(): Promise<NodeJS.ProcessEnv>  // cached
-export function logFile(): string                            // $TRIAGE_HOME/server.log or ~/.triage/server.log
+export function logFile(): string                            // $JUNIOR_HOME/server.log or ~/.junior/server.log
 ```

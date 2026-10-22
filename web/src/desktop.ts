@@ -1,5 +1,5 @@
 /**
- * Triage.app (desktop/): the Electron preload exposes `window.triageDesktop`
+ * Junior.app (desktop/): the Electron preload exposes `window.juniorDesktop`
  * on the daemon's pages. Present = the UI draws its own title bar, traffic
  * lights inside the top bar, ← → driving the window's history, instead of
  * the grey one macOS would add. Absent (a browser, a phone) = nothing changes.
@@ -17,11 +17,11 @@ type Bridge = {
 }
 
 const bridge: Bridge | null = (() => {
-  const b = (globalThis as { triageDesktop?: Partial<Bridge> }).triageDesktop
+  const b = (globalThis as { juniorDesktop?: Partial<Bridge> }).juniorDesktop
   return b?.chrome === 'mac' && typeof b.onNav === 'function' ? (b as Bridge) : null
 })()
 
-/** Running inside Triage.app's window. */
+/** Running inside Junior.app's window. */
 export const isDesktop = bridge !== null
 
 if (bridge) document.documentElement.classList.add('desktop-mac')

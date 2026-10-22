@@ -40,7 +40,7 @@ export function useGlobalHotkeys({ route, navigate, newSession, newTerminal, ter
         openSettings()
         return
       }
-      // ⌘J: a new chat with Junior, from anywhere (no other ⌘J in the app or Triage.app's menus).
+      // ⌘J: a new chat with Junior, from anywhere (no other ⌘J in the app or Junior.app's menus).
       if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'j') {
         if (anyDialogOpen()) return
         e.preventDefault()

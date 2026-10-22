@@ -3,9 +3,9 @@
  * Claude Code itself reads:
  *
  *   workspace  <workspace>/library/{skills/<name>/SKILL.md, agents/<name>.md}
- *              a local plugin named "triage", loaded into this workspace's chat
- *              sessions, so its skills are `/triage:<name>`, its agents
- *              `triage:<name>`
+ *              a local plugin named "junior", loaded into this workspace's chat
+ *              sessions, so its skills are `/junior:<name>`, its agents
+ *              `junior:<name>`
  *   personal   <claude config dir>/{skills,agents}    (~/.claude unless the
  *              workspace's auth points elsewhere)
  *   project    <project>/.claude/{skills,agents}, for each registered project
@@ -25,8 +25,8 @@ import path from 'node:path'
 import type { LibraryEntry, LibraryKind, LibrarySource, LibraryTarget } from '../shared/protocol.js'
 import { readFields, slugName } from '../shared/skillFile.js'
 
-/** The plugin name the workspace library loads under, the `triage:` in `/triage:<skill>`. */
-export const WORKSPACE_PLUGIN = 'triage'
+/** The plugin name the workspace library loads under, the `junior:` in `/junior:<skill>`. */
+export const WORKSPACE_PLUGIN = 'junior'
 
 /** A folder holding skills/ and agents/: editable unless it's a plugin's. */
 export type LibraryRoot = {
@@ -51,7 +51,7 @@ export async function ensureWorkspacePlugin(dir: string): Promise<void> {
     await mkdir(path.dirname(manifest), { recursive: true })
     await writeFile(
       manifest,
-      JSON.stringify({ name: WORKSPACE_PLUGIN, description: "This triage workspace's own skills and agents." }, null, 2) + '\n',
+      JSON.stringify({ name: WORKSPACE_PLUGIN, description: "This junior workspace's own skills and agents." }, null, 2) + '\n',
     )
   }
 }
@@ -244,7 +244,7 @@ export function locate(p: unknown, roots: LibraryRoot[]): Located {
     }
     if (path.dirname(file) === agents && file.endsWith('.md')) return { root, kind: 'agent', item: file, file }
   }
-  throw new Error('not a skill or agent file triage knows about')
+  throw new Error('not a skill or agent file junior knows about')
 }
 
 /**

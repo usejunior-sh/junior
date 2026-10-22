@@ -4,9 +4,9 @@ import { HELP, cyan, die } from './ui.js'
 const args = process.argv.slice(2)
 export let explicitPort: number | null = null
 export let explicitColor: string | null = null
-/** `triage install --defer`: write the agent, never restart a running server. */
+/** `junior install --defer`: write the agent, never restart a running server. */
 export let deferInstall = false
-/** `triage goal …` flags (`--workspace` serves `triage add` too) */
+/** `junior goal …` flags (`--workspace` serves `junior add` too) */
 export const goalFlags: { doneWhen?: string; horizon?: string; state?: string; workspace?: string } = {}
 const GOAL_FLAGS: Record<string, keyof typeof goalFlags> = { '--done-when': 'doneWhen', '--horizon': 'horizon', '--state': 'state', '--workspace': 'workspace' }
 export const positional: string[] = []
@@ -34,7 +34,7 @@ for (let i = 0; i < args.length; i++) {
     if (v === undefined) die(`${a} needs a value`)
     goalFlags[GOAL_FLAGS[a.split('=')[0]!]!] = v
   } else if (a.startsWith('-')) {
-    die(`unknown option ${a} — try ${cyan('triage --help')}`)
+    die(`unknown option ${a} — try ${cyan('junior --help')}`)
   } else {
     positional.push(a)
   }

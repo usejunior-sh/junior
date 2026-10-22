@@ -179,7 +179,7 @@ function StatusTab({ conn }: { conn: ConnState }) {
       {status.launchAgent !== null && (
         <Row
           label="Keeps running"
-          value={status.launchAgent ? 'LaunchAgent installed — restarts after reboot or crash' : 'not installed — run `triage install` so jobs survive a reboot'}
+          value={status.launchAgent ? 'LaunchAgent installed — restarts after reboot or crash' : 'not installed — run `junior install` so jobs survive a reboot'}
           tone={status.launchAgent ? 'ok' : 'warn'}
         />
       )}

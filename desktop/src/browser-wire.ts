@@ -70,7 +70,7 @@ export const PROFILE_ID_RE = /^[a-z0-9][a-z0-9-]{0,31}$/
 /** A tab key: a session id, or `profile-<id>` for a profile's sign-in tab in Settings. */
 export const TAB_KEY_RE = /^(profile-)?[\w-]{1,80}$/
 
-export const partitionOf = (id: string): string => (id === DEFAULT_PROFILE ? 'persist:triage-browser' : `persist:triage-profile-${id}`)
+export const partitionOf = (id: string): string => (id === DEFAULT_PROFILE ? 'persist:junior-browser' : `persist:junior-profile-${id}`)
 
 const TWO_LEVEL = new Set(['co', 'com', 'org', 'net', 'ac', 'gov', 'edu', 'ne', 'or'])
 

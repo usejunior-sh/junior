@@ -16,8 +16,8 @@ import { createSession, getOrRevive } from '../session/sessions.js'
 import { linkSessionToItem } from '../settings-ops.js'
 import { handoffDiff } from './files.js'
 
-// Teams v2 (server/teams.ts, core/teams/engine.ts): a recipe run by triage. The
-// lead is the chat session that proposed it; workers are sessions triage spawns
+// Teams v2 (server/teams.ts, core/teams/engine.ts): a recipe run by Junior. The
+// lead is the chat session that proposed it; workers are sessions junior spawns
 // per step. The engine decides; this section carries its actions out.
 const TEAM_RUNS_KEY = 'team_runs'
 
@@ -73,7 +73,7 @@ async function backfillTeamRuns(rt: WorkspaceRuntime, run: TeamRun): Promise<voi
     starts[sid] = []
     events.forEach((e, i) => {
       const ev = e.event
-      if (ev.kind !== 'local_user' || ev.from !== 'triage' || !STEP_MESSAGE.test(ev.text)) return
+      if (ev.kind !== 'local_user' || ev.from !== 'junior' || !STEP_MESSAGE.test(ev.text)) return
       // A fresh context announces itself just before the step that starts it.
       const prev = events[i - 1]?.event
       const fresh = prev?.kind === 'notice' && prev.text.startsWith('fresh context')
@@ -140,7 +140,7 @@ export async function teamRunChanged(rt: WorkspaceRuntime, run: TeamRun): Promis
 
 /**
  * The run folder, plan, ledger, verify, reviews, handoffs, rendered from the
- * run (core/teams/files.ts); triage's code is its only writer. Coalesced: a
+ * run (core/teams/files.ts); junior's code is its only writer. Coalesced: a
  * burst of changes is one write, and an unchanged file is no write. Runs from
  * before the folder kept their Plan artifact; it is left as it was.
  */
@@ -166,11 +166,11 @@ async function syncPlan(rt: WorkspaceRuntime, run: TeamRun): Promise<void> {
 
 /**
  * Where a run's folder lives (.docs/team-handoffs.md): in the project's own
- * `.triage/` when it has one, so the run sits beside the code it changed; else
- * in the workspace folder under ~/.triage.
+ * `.junior/` when it has one, so the run sits beside the code it changed; else
+ * in the workspace folder under ~/.junior.
  */
 export function teamRunDir(rt: WorkspaceRuntime, runId: string, root: string | undefined): string {
-  const local = root ? path.join(root, '.triage') : null
+  const local = root ? path.join(root, '.junior') : null
   if (local) {
     try {
       if (statSync(local).isDirectory()) return path.join(local, 'team-runs', runId)
@@ -196,11 +196,11 @@ export async function syncRunFolder(rt: WorkspaceRuntime, run: TeamRun): Promise
   try {
     // Inside the project, the runs folder ignores itself: the team's own notes must never show up
     // in the diff a reviewer reads, or in a handoff's changed files.
-    if (run.root && dir.startsWith(path.join(run.root, '.triage') + path.sep)) {
+    if (run.root && dir.startsWith(path.join(run.root, '.junior') + path.sep)) {
       const ignore = path.join(path.dirname(dir), '.gitignore')
       if (!runFolderSeen.has(ignore)) {
         await mkdir(path.dirname(ignore), { recursive: true })
-        await writeFile(ignore, '# triage team runs — local working notes, never committed\n*\n', { flag: 'wx' }).catch(() => {})
+        await writeFile(ignore, '# junior team runs — local working notes, never committed\n*\n', { flag: 'wx' }).catch(() => {})
         runFolderSeen.set(ignore, '')
       }
     }
@@ -280,7 +280,7 @@ export async function applyTeamActions(rt: WorkspaceRuntime, run: TeamRun, actio
       const diff = a.diff ? await handoffDiff(rt, run, a.diff) : null
       if (diff) text += `\n\n${diff.text}`
       if (a.fresh) rt.freshNext.add(w.sessionId)
-      // The run starts at the next event: a fresh context's notice, else triage's message.
+      // The run starts at the next event: a fresh context's notice, else junior's message.
       const seen = rt.live.get(w.sessionId)?.lastSeq ?? (await rt.store.events.lastSeq(w.sessionId))
       stampRun(run, w.id, { startSeq: seen + 1, at: Date.now(), spendAtStart: run.spend[w.sessionId] ?? 0, ...(diff?.file ? { patch: diff.file } : {}) })
       await tellSession(rt, w.sessionId, text)
@@ -289,8 +289,8 @@ export async function applyTeamActions(rt: WorkspaceRuntime, run: TeamRun, actio
   await teamRunChanged(rt, run)
 }
 
-/** A message from triage itself: badged "from triage" in the transcript, framed as not-the-user for the model. */
+/** A message from Junior itself: badged "from Junior" in the transcript, framed as not-the-user for the model. */
 async function tellSession(rt: WorkspaceRuntime, sessionId: string, text: string): Promise<void> {
   const live = await getOrRevive(rt, sessionId)
-  await live?.sendUserMessage(text, undefined, undefined, { from: 'triage' })
+  await live?.sendUserMessage(text, undefined, undefined, { from: 'junior' })
 }

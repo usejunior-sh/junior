@@ -31,7 +31,7 @@ export type QueuedRun = { id: string; trigger: JobRunTrigger; slot: number }
  * the probe positively reports broken (needs auth, failed, disabled) blocks a
  * run. A server missing from a stale probe gets the benefit of the doubt, and
  * a run that truly can't reach it fails loudly with no-connector-tools. The
- * browser lives in Triage.app: a job that uses it skips while the app is closed.
+ * browser lives in Junior.app: a job that uses it skips while the app is closed.
  */
 function jobReady(rt: WorkspaceRuntime, w: Job, project: Project | null): true | string {
   if (w.browser && !browserHub.status.compatible) return BROWSER_NEEDS_APP

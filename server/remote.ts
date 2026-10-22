@@ -15,7 +15,7 @@
  * as remote and has no token. A loopback proxy in front of us (Vite in dev,
  * `tailscale serve`) is seen through via X-Forwarded-For.
  *
- * The token lives in ~/.triage/remote.json at 0600. Rotating it unpairs every
+ * The token lives in ~/.junior/remote.json at 0600. Rotating it unpairs every
  * device at once. Typing it on a phone is no fun, so Settings shows a 6-digit
  * pairing code instead: single use, ten minutes, burned after five misses,
  * short enough to type, too short-lived to guess (5 tries in a million).
@@ -27,10 +27,10 @@ import { chmod, mkdir, writeFile } from 'node:fs/promises'
 import type http from 'node:http'
 import os from 'node:os'
 import path from 'node:path'
-import { TRIAGE_DIR } from './state.js'
+import { JUNIOR_DIR } from './state.js'
 
-export const REMOTE_FILE = path.join(TRIAGE_DIR, 'remote.json')
-export const TOKEN_COOKIE = 'triage_token'
+export const REMOTE_FILE = path.join(JUNIOR_DIR, 'remote.json')
+export const TOKEN_COOKIE = 'junior_token'
 /** 400 days, the longest lifetime browsers honour. */
 const COOKIE_MAX_AGE = 400 * 24 * 60 * 60
 
@@ -234,7 +234,7 @@ export function pairPageHtml(error?: string, codes = true): string {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#000000">
-<title>triage — pair this device</title>
+<title>junior — pair this device</title>
 <style>
   :root { color-scheme: dark; }
   body { margin: 0; min-height: 100vh; background: #000; color: rgba(252,253,255,0.86);
@@ -250,7 +250,7 @@ export function pairPageHtml(error?: string, codes = true): string {
   .err { color: #ff2047; }
 </style></head><body><main>
 <h1>Pair this device.</h1>
-<p>This is a triage running on your Mac. On the Mac, open <b>Settings → Phone</b> and scan the QR code with this device's camera.</p>
+<p>This is a junior running on your Mac. On the Mac, open <b>Settings → Phone</b> and scan the QR code with this device's camera.</p>
 ${error ? `<p class="err">${error}</p>` : ''}
 ${codes ? CODE_FORM : ''}
 </main></body></html>`

@@ -24,8 +24,8 @@ const str = (v: unknown): string => (typeof v === 'string' ? v : '')
 
 /**
  * `model/list`'s answer as the picker's rows. Hidden models are dropped. Codex
- * names its efforts with the same strings triage does (low…max), plus a few of
- * its own (`ultra`) that triage has no slot for, so those are left out. A
+ * names its efforts with the same strings junior does (low…max), plus a few of
+ * its own (`ultra`) that Junior has no slot for, so those are left out. A
  * chosen effort then goes back to `turn/start` as the string Codex gave.
  */
 export function codexModels(data: unknown): ModelOption[] {

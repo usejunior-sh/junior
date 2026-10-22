@@ -6,12 +6,12 @@
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import path from 'node:path'
-import './dev-home.mjs' // TRIAGE_HOME → ~/.triage-dev unless already set
+import './dev-home.mjs' // JUNIOR_HOME → ~/.junior-dev unless already set
 
 process.env.PORT ||= '5188'
 
-console.log(`data: ${process.env.TRIAGE_HOME}`)
-if (!existsSync(path.join(process.env.TRIAGE_HOME, 'workspaces.json'))) {
+console.log(`data: ${process.env.JUNIOR_HOME}`)
+if (!existsSync(path.join(process.env.JUNIOR_HOME, 'workspaces.json'))) {
   console.log('  empty — stop dev and run `npm run dev:copy-prod` to start from a copy of prod')
 }
 

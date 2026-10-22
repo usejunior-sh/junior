@@ -3,7 +3,7 @@
  * the Providers popover. A claude.ai login is a Claude config dir (`~/.claude`,
  * or a config-dir workspace's own); an API key is one login however many
  * workspaces share it. Which one a session ran on comes from the starts
- * triage noted (login-ledger.ts) and, for spawns from before that ledger, the
+ * junior noted (login-ledger.ts) and, for spawns from before that ledger, the
  * inits every workspace's event log kept (core/usage/logins.ts does the pairing).
  */
 import type { UsageLogin } from '../../shared/protocol.js'

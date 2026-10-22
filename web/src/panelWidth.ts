@@ -9,8 +9,8 @@ import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPoi
 export const PANEL_DEFAULT = 280
 export const PANEL_MIN = 220
 export const PANEL_MAX = 520
-const KEY = 'triage.panelWidth'
-const COLLAPSED_KEY = 'triage.panelCollapsed'
+const KEY = 'junior.panelWidth'
+const COLLAPSED_KEY = 'junior.panelCollapsed'
 
 const clamp = (w: number) => Math.round(Math.max(PANEL_MIN, Math.min(PANEL_MAX, w)))
 

@@ -32,38 +32,38 @@ export function box(lines: string[]) {
 export const row = (label: string, value: string) => dim(label.padEnd(9)) + value
 
 export const HELP = `
-  ${bold('triage')} ${dim('v' + pkgVersion())} — ranked work inbox for engineers
+  ${bold('junior')} ${dim('v' + pkgVersion())} — ranked work inbox for engineers
 
   ${bold('Usage')}
-    ${cyan('triage')}             start the server in the background ${dim('(no-op if running)')}
-    ${cyan('triage serve')}       run the server in the foreground
-    ${cyan('triage stop')}        stop the background server
-    ${cyan('triage restart')}     stop, then start ${dim('(picks up a newly installed version)')}
-    ${cyan('triage status')}      show whether the server is running and where
-    ${cyan('triage logs')}        print the tail of the server log
+    ${cyan('junior')}             start the server in the background ${dim('(no-op if running)')}
+    ${cyan('junior serve')}       run the server in the foreground
+    ${cyan('junior stop')}        stop the background server
+    ${cyan('junior restart')}     stop, then start ${dim('(picks up a newly installed version)')}
+    ${cyan('junior status')}      show whether the server is running and where
+    ${cyan('junior logs')}        print the tail of the server log
 
-  ${bold('Keep it running')} ${dim('(macOS — jobs only run while triage runs)')}
-    ${cyan('triage install')}     install a LaunchAgent: starts at login, restarts after a crash
+  ${bold('Keep it running')} ${dim('(macOS — jobs only run while Junior runs)')}
+    ${cyan('junior install')}     install a LaunchAgent: starts at login, restarts after a crash
     ${dim('--defer')}            ${dim('write it without restarting a running server (takes effect at next login)')}
-    ${cyan('triage uninstall')}   remove the LaunchAgent
-    ${cyan('triage doctor')}      check node, claude, gh, the agent, and the server
+    ${cyan('junior uninstall')}   remove the LaunchAgent
+    ${cyan('junior doctor')}      check node, claude, gh, the agent, and the server
 
   ${bold('Workspaces')} ${dim('(.docs/workspaces.md)')}
-    ${cyan('triage workspace list')}              list workspaces ${dim('(default marked *)')}
-    ${cyan('triage workspace create <name>')}     create a workspace ${dim('(--color #rrggbb)')}
-    ${cyan('triage workspace use <name|id>')}     make a workspace the default
+    ${cyan('junior workspace list')}              list workspaces ${dim('(default marked *)')}
+    ${cyan('junior workspace create <name>')}     create a workspace ${dim('(--color #rrggbb)')}
+    ${cyan('junior workspace use <name|id>')}     make a workspace the default
 
   ${bold('Quick capture')} ${dim('(needs the server running)')}
-    ${cyan('triage add <title>')}                  file a to-do in the inbox, with you ${dim('(--workspace <name|id>)')}
+    ${cyan('junior add <title>')}                  file a to-do in the inbox, with you ${dim('(--workspace <name|id>)')}
 
   ${bold('Goals')} ${dim('(needs the server running)')}
-    ${cyan('triage goal create <title> --done-when <text>')}   start a goal ${dim('(--horizon today|until_done|ongoing)')}
-    ${cyan('triage goal list')}                    list goals ${dim('(--state plan_ready,waiting_you)')}
-    ${cyan('triage goal show <id>')}               a goal with its plan, handoff and latest log
+    ${cyan('junior goal create <title> --done-when <text>')}   start a goal ${dim('(--horizon today|until_done|ongoing)')}
+    ${cyan('junior goal list')}                    list goals ${dim('(--state plan_ready,waiting_you)')}
+    ${cyan('junior goal show <id>')}               a goal with its plan, handoff and latest log
 
   ${bold('Desktop app')} ${dim('(macOS)')}
-    ${cyan('triage app install')}    install Triage.app ${dim('(opens the UI in its own window)')}
-    ${cyan('triage app uninstall')}  remove Triage.app
+    ${cyan('junior app install')}    install Junior.app ${dim('(opens the UI in its own window)')}
+    ${cyan('junior app uninstall')}  remove Junior.app
 
   ${bold('Options')}
     ${cyan('--port <n>')}         port to serve on ${dim(`(default ${DEFAULT_PORT}; PORT env works too)`)}
@@ -73,13 +73,13 @@ export const HELP = `
     ${cyan('--help')}             show this help
 
   ${bold('Files')}
-    ${dim('~/.triage/server.log')}        server output when started in the background
-    ${dim('~/.triage/server.json')}       pid/port of the last started server
-    ${dim('~/.triage/workspaces.json')}   the workspace registry
-    ${dim('~/.triage/workspaces/<id>/')}  each workspace's DB and auth material
+    ${dim('~/.junior/server.log')}        server output when started in the background
+    ${dim('~/.junior/server.json')}       pid/port of the last started server
+    ${dim('~/.junior/workspaces.json')}   the workspace registry
+    ${dim('~/.junior/workspaces/<id>/')}  each workspace's DB and auth material
 `
 
 export function die(message: string): never {
-  console.error(`${red('✗')} triage: ${message}`)
+  console.error(`${red('✗')} junior: ${message}`)
   process.exit(1)
 }

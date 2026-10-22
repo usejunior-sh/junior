@@ -5,10 +5,10 @@ import { setSettingsTab } from '../settings.js'
 import { loadTeamLibrary, stepLine, teamsCall, usd, type TeamLibrary } from '../teams.js'
 
 const STATUS: Record<LibraryStatus, { label: string; title: string }> = {
-  default: { label: 'default', title: 'Exactly as triage ships it' },
-  edited: { label: 'edited', title: 'A triage default you changed — Reset puts it back' },
-  update: { label: 'newer default', title: 'You edited this, and triage has since shipped a newer default — Reset to take it (your edits are lost)' },
-  yours: { label: 'yours', title: 'Made by you — triage never touches it' },
+  default: { label: 'default', title: 'Exactly as junior ships it' },
+  edited: { label: 'edited', title: 'A junior default you changed — Reset puts it back' },
+  update: { label: 'newer default', title: 'You edited this, and Junior has since shipped a newer default — Reset to take it (your edits are lost)' },
+  yours: { label: 'yours', title: 'Made by you — junior never touches it' },
 }
 
 const asLib = (b: TeamLibraryResponse): TeamLibrary => {
@@ -141,7 +141,7 @@ function RowActions({
         </button>
       )}
       {(status === 'edited' || status === 'update') && (
-        <button type="button" className="btn sm ghost" onClick={onReset} title="Put back exactly what triage ships">
+        <button type="button" className="btn sm ghost" onClick={onReset} title="Put back exactly what junior ships">
           Reset
         </button>
       )}

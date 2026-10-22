@@ -32,7 +32,7 @@ type State = {
 
 type Catalog = { models: ModelOption[]; status: ModelsStatus; error?: string }
 
-const LAST_GOOD_KEY = 'triage.models.lastGood'
+const LAST_GOOD_KEY = 'junior.models.lastGood'
 const RETRY_MS = [3_000, 10_000, 30_000]
 
 function readLastGood(): ModelOption[] {

@@ -7,7 +7,7 @@
  * hostname, which server/remote.ts already treats as remote, so every
  * request through the tunnel still needs the pairing token.
  *
- * A stand-in until triage has its own relay (or a Cloudflare tunnel); the
+ * A stand-in until Junior has its own relay (or a Cloudflare tunnel); the
  * interface here, start, stop, a status with a URL, is what either would
  * implement too.
  */
@@ -16,11 +16,11 @@ import { readFileSync } from 'node:fs'
 import { rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import type { TunnelStatus } from '../shared/protocol.js'
-import { TRIAGE_DIR } from './state.js'
+import { JUNIOR_DIR } from './state.js'
 
 
 /** The last agent we started, so a daemon that died without cleaning up does not leave one holding the account's session. */
-const PID_FILE = path.join(TRIAGE_DIR, 'ngrok.pid')
+const PID_FILE = path.join(JUNIOR_DIR, 'ngrok.pid')
 
 /** Turn ngrok's error into something to act on; its own messages bury the fix. */
 function explain(raw: string): string {

@@ -258,7 +258,7 @@ export interface CheckoutStore {
   /** Every checkout, removed ones included, main first within a project. */
   list(): Promise<Checkout[]>
   create(c: Checkout): Promise<void>
-  /** What discovery moves (branch, state), plus what triage knows of a worktree it made itself (base, item). */
+  /** What discovery moves (branch, state), plus what junior knows of a worktree it made itself (base, item). */
   update(id: string, patch: CheckoutPatch): Promise<void>
   /** Drop a project's checkouts with the project. */
   removeForProject(projectId: string): Promise<void>

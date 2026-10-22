@@ -17,9 +17,9 @@ import { BROWSER_WIRE_VERSION, parseHostFrame } from '../core/browser/wire.js'
 import type { BrowserTabRow, BrowserTabStore } from '../core/store/types.js'
 import type { ServerMessage } from '../shared/protocol.js'
 
-// TRIAGE_DIR is fixed when state.ts loads, so the root is set before the imports that read it.
-const home = mkdtempSync(path.join(os.tmpdir(), 'triage-browser-'))
-process.env.TRIAGE_HOME = home
+// JUNIOR_DIR is fixed when state.ts loads, so the root is set before the imports that read it.
+const home = mkdtempSync(path.join(os.tmpdir(), 'junior-browser-'))
+process.env.JUNIOR_HOME = home
 const { BrowserProfiles, browserProfiles, readProfilesFile } = await import('../server/browser/profiles.js')
 const { BrowserHub } = await import('../server/browser/hub.js')
 const { browserGate } = await import('../server/browser/gate.js')
@@ -39,8 +39,8 @@ test('profiles: ids are slugs, unique, never "default"; Default keeps the old ja
   assert.equal(profileIdFor('Pendo — Test User!', new Set()), 'pendo-test-user')
   assert.equal(profileIdFor('Default', new Set(['default'])), 'default-1')
   assert.equal(profileIdFor('???', new Set()), 'profile')
-  assert.equal(partitionOf('default'), 'persist:triage-browser')
-  assert.equal(partitionOf('work'), 'persist:triage-profile-work')
+  assert.equal(partitionOf('default'), 'persist:junior-browser')
+  assert.equal(partitionOf('work'), 'persist:junior-profile-work')
   assert.equal(signinTabKey('work'), 'profile-work')
   assert.equal(profileOfSigninTab('profile-work'), 'work')
   assert.equal(profileOfSigninTab('1b2c3d4e-session'), null)
@@ -147,7 +147,7 @@ test('registry: Default always first, bad rows dropped', () => {
 })
 
 test('registry: create, rename, delete; Default stays; the file is 0600 and reloads', async () => {
-  const file = path.join(mkdtempSync(path.join(os.tmpdir(), 'triage-prof-')), 'browser-profiles.json')
+  const file = path.join(mkdtempSync(path.join(os.tmpdir(), 'junior-prof-')), 'browser-profiles.json')
   const reg = new BrowserProfiles(file)
   let changes = 0
   reg.onChange(() => changes++)
@@ -177,7 +177,7 @@ test('registry: create, rename, delete; Default stays; the file is 0600 and relo
 // ── the tab store ───────────────────────────────────────────────────────────
 
 test('store: browser_tabs upserts, keeps what a patch leaves out, lists by profile', async () => {
-  const store = openSqliteStore(path.join(mkdtempSync(path.join(os.tmpdir(), 'triage-tabs-')), 'triage.db'))
+  const store = openSqliteStore(path.join(mkdtempSync(path.join(os.tmpdir(), 'junior-tabs-')), 'junior.db'))
   await store.browserTabs.put('s1', { url: 'https://a', title: 'A', viewport: { width: 390, height: 844, deviceScaleFactor: 2, mobile: true } }, 10)
   await store.browserTabs.put('s1', { profile: 'work' }, 20)
   const row = await store.browserTabs.get('s1')
@@ -376,7 +376,7 @@ test('take over: while the user holds the tab every tool but browser_profiles wa
     (f) => (f.verb === 'state' ? { exists: true, url: 'http://localhost:3000/', title: 'App', loading: false, viewport: null, colorScheme: null, profile: 'default', popup: null, dialog: null } : null),
     async (hub) => {
       hub.setResolver(() => ({ store: tabs, defaultProfile: async () => 'default', leadSessionId: null, broadcast: (m) => told.push(m) }))
-      const server = makeBrowserMcp({ hub, shots: new ShotStore(mkdtempSync(path.join(os.tmpdir(), 'triage-shots-'))), sessionId: 't1', projectRoot: '/tmp/p', mode: 'chat' })
+      const server = makeBrowserMcp({ hub, shots: new ShotStore(mkdtempSync(path.join(os.tmpdir(), 'junior-shots-'))), sessionId: 't1', projectRoot: '/tmp/p', mode: 'chat' })
       const tools = (server.instance as unknown as { _registeredTools: Record<string, { handler?: (a: unknown, e: unknown) => Promise<{ isError?: boolean; content: { text?: string }[] }>; callback?: (a: unknown, e: unknown) => Promise<{ isError?: boolean; content: { text?: string }[] }> }> })._registeredTools
       const call = (name: string, args: unknown = {}) => {
         const t = tools[name]
@@ -430,7 +430,7 @@ test('dialog: a click that opens confirm() returns at once; other tools say a di
       return dialogUp ? NO_REPLY : {}
     },
     async (hub, host, seen) => {
-      const call = toolsOf(makeBrowserMcp({ hub, shots: new ShotStore(mkdtempSync(path.join(os.tmpdir(), 'triage-shots-'))), sessionId: 'd1', projectRoot: '/tmp/p', mode: 'chat' }))
+      const call = toolsOf(makeBrowserMcp({ hub, shots: new ShotStore(mkdtempSync(path.join(os.tmpdir(), 'junior-shots-'))), sessionId: 'd1', projectRoot: '/tmp/p', mode: 'chat' }))
       const clicking = call('browser_act', { action: 'click', uid: 4 })
       await sleep(50)
       host.send(JSON.stringify({ type: 'dialog', sessionId: 'd1', dialog: { type: 'confirm', message: 'Delete it?' } }))
@@ -472,7 +472,7 @@ test('a profile sign-in tab is never driven by a tool', async () => {
   await withHost(
     () => STATE,
     async (hub, _host, seen) => {
-      const call = toolsOf(makeBrowserMcp({ hub, shots: new ShotStore(mkdtempSync(path.join(os.tmpdir(), 'triage-shots-'))), sessionId: 'profile-work', projectRoot: '/tmp/p', mode: 'chat' }))
+      const call = toolsOf(makeBrowserMcp({ hub, shots: new ShotStore(mkdtempSync(path.join(os.tmpdir(), 'junior-shots-'))), sessionId: 'profile-work', projectRoot: '/tmp/p', mode: 'chat' }))
       for (const [name, args] of [['browser_open', { url: 'localhost:3000' }], ['browser_snapshot', {}], ['browser_act', { action: 'scroll' }]] as const) {
         const r = await call(name, args)
         assert.equal(r.isError, true, name)
@@ -485,7 +485,7 @@ test('a profile sign-in tab is never driven by a tool', async () => {
 
 test('downloads during an agent call land under the home folder', async () => {
   const { downloadDirFor } = await import('../server/browser/hub.js')
-  assert.equal(downloadDirFor('s1'), path.join(os.homedir(), 'Downloads', 'Triage', 's1'))
+  assert.equal(downloadDirFor('s1'), path.join(os.homedir(), 'Downloads', 'Junior', 's1'))
 })
 
 test('steps: what the driving strip says Junior is doing', async () => {
@@ -520,7 +520,7 @@ test('steps: a call puts its step on the tab while it runs, and the pane hears i
       hub.setResolver(() => ({ store: tabs, defaultProfile: async () => 'default', leadSessionId: null, broadcast: (m) => told.push(m) }))
       host.send(JSON.stringify({ type: 'tab', sessionId: 'st1', profile: 'default', url: 'http://localhost:3000/', title: 'App', viewport: null, colorScheme: null }))
       await sleep(30)
-      const call = toolsOf(makeBrowserMcp({ hub, shots: new ShotStore(mkdtempSync(path.join(os.tmpdir(), 'triage-shots-'))), sessionId: 'st1', projectRoot: '/tmp/p', mode: 'chat' }))
+      const call = toolsOf(makeBrowserMcp({ hub, shots: new ShotStore(mkdtempSync(path.join(os.tmpdir(), 'junior-shots-'))), sessionId: 'st1', projectRoot: '/tmp/p', mode: 'chat' }))
       await call('browser_act', { action: 'click', uid: 7 })
       await sleep(30)
       const steps = told.flatMap((m) => (m.type === 'browser_tab' ? [m.tab.agentStep] : []))

@@ -16,8 +16,8 @@ import { canMove, progressLine, reviewState, taskSummary, type ItemTask } from '
 import { scoreItem } from '../core/work/score.js'
 
 async function withStore(fn: (store: Store) => Promise<void>) {
-  const dir = mkdtempSync(path.join(tmpdir(), 'triage-tasks-'))
-  const store = openSqliteStore(path.join(dir, 'triage.db'))
+  const dir = mkdtempSync(path.join(tmpdir(), 'junior-tasks-'))
+  const store = openSqliteStore(path.join(dir, 'junior.db'))
   try {
     await fn(store)
   } finally {

@@ -251,7 +251,7 @@ test('not met on a task-loop team: the next round works new tasks', () => {
   assert.equal(run.tasks.T1.status, 'done', 'what was done stays done')
   assert.deepEqual(kinds(r2), ['notice', 'snapshot', 'notice', 'tell build:T2:1'])
   assert.match(tells(r2)[0].text, /### Your task: T2 CSV export\nDone when:\n- T2.1 a download has the totals/)
-  assert.throws(() => goalVerdict(run, { met: false, evidence: 'x', tasks: [] }, 10), /triage has not asked/)
+  assert.throws(() => goalVerdict(run, { met: false, evidence: 'x', tasks: [] }, 10), /junior has not asked/)
 })
 
 test('waiting on the world: asleep until the time, then Junior looks again; a pause keeps the wait', () => {

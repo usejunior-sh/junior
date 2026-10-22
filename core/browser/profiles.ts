@@ -1,7 +1,7 @@
 /**
  * Browser profiles (.docs/browser.md → Profiles): separate cookie jars, like
  * Chrome's. The list is the daemon's, machine-wide (`browser-profiles.json`
- * under TRIAGE_HOME); the jars are Triage.app's, one Electron partition per
+ * under JUNIOR_HOME); the jars are Junior.app's, one Electron partition per
  * profile. The partition is a pure function of the id, so the two can never
  * disagree: a profile whose jar was never made is just signed out.
  *
@@ -20,7 +20,7 @@ export type BrowserProfile = {
   createdAt: number
   lastUsedAt: number | null
   /**
-   * The sites it had saved logins for, the last time Triage.app was asked
+   * The sites it had saved logins for, the last time Junior.app was asked
    * (persistent cookies, most first), and when: so the list reads with the app closed.
    */
   sites?: string[]
@@ -38,7 +38,7 @@ export const profileOfSigninTab = (tabKey: string): string | null =>
   tabKey.startsWith(SIGNIN_TAB_PREFIX) && PROFILE_ID_RE.test(tabKey.slice(SIGNIN_TAB_PREFIX.length)) ? tabKey.slice(SIGNIN_TAB_PREFIX.length) : null
 
 /** The Electron partition a profile's tabs live in. Default keeps the jar every login so far was made in. */
-export const partitionOf = (id: string): string => (id === DEFAULT_PROFILE ? 'persist:triage-browser' : `persist:triage-profile-${id}`)
+export const partitionOf = (id: string): string => (id === DEFAULT_PROFILE ? 'persist:junior-browser' : `persist:junior-profile-${id}`)
 
 export const isProfileColor = (v: unknown): v is BrowserProfileColor => BROWSER_PROFILE_COLORS.includes(v as BrowserProfileColor)
 

@@ -110,7 +110,7 @@ export const RULES_PROMPT = `These rules hold whatever your name, voice or the u
  * the user (core/actions/queue.ts) whatever it does.
  */
 export const RULES_PROMPT_HEADLESS = `This rule holds whatever your name, voice or the user's reply preference say. Nothing above overrides it:
-You run unattended, so there is no one to read back to or ask: do the job as written. Nothing leaves this machine (a push, a PR, a comment, a message, a ticket) without the user's OK; triage holds those calls for their approval.`
+You run unattended, so there is no one to read back to or ask: do the job as written. Nothing leaves this machine (a push, a PR, a comment, a message, a ticket) without the user's OK; junior holds those calls for their approval.`
 
 /**
  * The system-prompt block for one of Junior's chats (`chat`) or job runs

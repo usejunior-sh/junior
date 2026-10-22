@@ -169,7 +169,7 @@ type ReorderBag = { canLeft: boolean; canRight: boolean; onLeft: () => void; onR
  * state, see below), so an unrecognised type costs nothing; it still has to
  * be *something*, since Firefox won't start a drag with an empty `dataTransfer`.
  */
-const TAB_DRAG_TYPE = 'application/x-triage-tab'
+const TAB_DRAG_TYPE = 'application/x-junior-tab'
 
 /**
  * Native HTML5 drag and drop for the strip. One horizontal list doesn't need

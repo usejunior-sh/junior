@@ -1,5 +1,5 @@
 /**
- * The card specs triage ships (./spec.ts). A workspace's `cards/<id>.json`
+ * The card specs junior ships (./spec.ts). A workspace's `cards/<id>.json`
  * for the same tool wins over these. Arg names are the connectors' own; a
  * name a tool doesn't send just leaves its slot empty, and every arg the
  * spec doesn't place still shows, under "All fields".

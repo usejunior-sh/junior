@@ -1,10 +1,10 @@
-// `npm run dev:copy-prod`: seed the dev data root (~/.triage-dev, see
-// dev-home.mjs) from prod's ~/.triage, so dev runs against real workspaces
+// `npm run dev:copy-prod`: seed the dev data root (~/.junior-dev, see
+// dev-home.mjs) from prod's ~/.junior, so dev runs against real workspaces
 // without its migrations, jobs or phone pairing ever touching prod.
 //
 // Copied: the workspace registry and every workspace folder (artifacts, agents,
 // teams, playbooks, dispatch, attachments, claude/, .env kept at 0600). Each
-// triage.db is snapshotted with VACUUM INTO: a consistent copy that includes
+// junior.db is snapshotted with VACUUM INTO: a consistent copy that includes
 // rows still in the WAL, safe while prod is running, never cp'd.
 // Not copied: server.json, server.log, remote.json, ngrok.pid, logs/, those
 // belong to the process that writes them.
@@ -12,7 +12,7 @@
 //   npm run dev:copy-prod              refuses if the dev root already has data
 //   npm run dev:copy-prod -- --force   replaces the dev workspaces
 //
-// TRIAGE_PROD_HOME overrides the source; TRIAGE_HOME overrides the destination.
+// JUNIOR_PROD_HOME overrides the source; JUNIOR_HOME overrides the destination.
 import { chmodSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -20,7 +20,7 @@ import { pathToFileURL } from 'node:url'
 import { DatabaseSync } from 'node:sqlite'
 import { DEV_HOME } from './dev-home.mjs'
 
-const DB_FILES = /^triage\.db(-wal|-shm|-journal)?$/
+const DB_FILES = /^junior\.db(-wal|-shm|-journal)?$/
 
 /** The server holding `home`'s DBs open, if one answers its server.json port. */
 async function liveServer(home) {
@@ -33,7 +33,7 @@ async function liveServer(home) {
   try {
     const res = await fetch(`http://127.0.0.1:${state.port}/api/health`, { signal: AbortSignal.timeout(1000) })
     const health = await res.json()
-    return health?.app === 'triage' ? state.port : null
+    return health?.app === 'junior' ? state.port : null
   } catch {
     return null
   }
@@ -57,7 +57,7 @@ export async function copyProd({ from, to, force = false, log = console.log }) {
   if (!existsSync(path.join(from, 'workspaces.json'))) throw new Error(`${from} has no workspaces.json — nothing to copy`)
 
   const port = await liveServer(to)
-  if (port) throw new Error(`a triage server is running on ${to} (port ${port}) — stop it first`)
+  if (port) throw new Error(`a Junior server is running on ${to} (port ${port}) — stop it first`)
 
   const registry = path.join(to, 'workspaces.json')
   const workspaces = path.join(to, 'workspaces')
@@ -83,15 +83,15 @@ export async function copyProd({ from, to, force = false, log = console.log }) {
       cpSync(path.join(src, name), path.join(dst, name), { recursive: true, preserveTimestamps: true })
     }
     if (existsSync(path.join(dst, '.env'))) chmodSync(path.join(dst, '.env'), 0o600)
-    if (existsSync(path.join(src, 'triage.db'))) snapshotDb(path.join(src, 'triage.db'), path.join(dst, 'triage.db'))
+    if (existsSync(path.join(src, 'junior.db'))) snapshotDb(path.join(src, 'junior.db'), path.join(dst, 'junior.db'))
     log(`  ${id}`)
   }
   return ids
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
-  const from = process.env.TRIAGE_PROD_HOME || path.join(os.homedir(), '.triage')
-  const to = process.env.TRIAGE_HOME || DEV_HOME
+  const from = process.env.JUNIOR_PROD_HOME || path.join(os.homedir(), '.junior')
+  const to = process.env.JUNIOR_HOME || DEV_HOME
   console.log(`copying ${from} → ${to}`)
   try {
     const ids = await copyProd({ from, to, force: process.argv.includes('--force') })

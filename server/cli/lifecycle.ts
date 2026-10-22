@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises'
-import { readState, DEFAULT_PORT, type Health, LOG_FILE, checkHealth, TRIAGE_DIR } from '../state.js'
+import { readState, DEFAULT_PORT, type Health, LOG_FILE, checkHealth, JUNIOR_DIR } from '../state.js'
 import { launchAgentInstalled, unloadLaunchAgent } from '../launchd.js'
 import { explicitPort } from './args.js'
 import { bold, box, cyan, die, dim, green, row, tilde, yellow } from './ui.js'
@@ -31,9 +31,9 @@ function buildLine(b: NonNullable<Health['build']>): string {
 
 export function printRunning(health: Health, verb: string, showDb = false) {
   const lines = [
-    `${green('●')} ${bold(`triage ${verb}`)}`,
+    `${green('●')} ${bold(`junior ${verb}`)}`,
     '',
-    `${dim('→')} ${bold(cyan(`http://triage.localhost:${health.port}`))}`,
+    `${dim('→')} ${bold(cyan(`http://junior.localhost:${health.port}`))}`,
     `${dim('  also http://localhost:' + health.port)}`,
     '',
     row('version', health.version),
@@ -47,7 +47,7 @@ export function printRunning(health: Health, verb: string, showDb = false) {
   }
   lines.push(row('logs', tilde(LOG_FILE)))
   if (showDb) lines.push(row('db', tilde(health.db)))
-  lines.push('', `${cyan('triage restart')} ${dim('·')} ${cyan('triage stop')} ${dim('·')} ${cyan('triage logs')}`)
+  lines.push('', `${cyan('junior restart')} ${dim('·')} ${cyan('junior stop')} ${dim('·')} ${cyan('junior logs')}`)
   box(lines)
 }
 
@@ -63,17 +63,17 @@ export async function logTail(lines: number): Promise<string> {
 export async function stop(port: number): Promise<boolean> {
   const health = await checkHealth(port)
   if (health === 'other') {
-    die(`port ${port} is in use by something that isn't triage — nothing to stop`)
+    die(`port ${port} is in use by something that isn't Junior — nothing to stop`)
   }
   if (!health) {
     const state = await readState()
     if (state && state.port === port && isAlive(state.pid)) {
       die(
-        `process ${state.pid} from ${TRIAGE_DIR}/server.json is alive but not answering ` +
-          `/api/health — not touching it; if it's a hung triage, run ${cyan(`kill ${state.pid}`)}`,
+        `process ${state.pid} from ${JUNIOR_DIR}/server.json is alive but not answering ` +
+          `/api/health — not touching it; if it's a hung Junior, run ${cyan(`kill ${state.pid}`)}`,
       )
     }
-    console.log(`${dim('○')} triage is not running`)
+    console.log(`${dim('○')} Junior is not running`)
     return false
   }
 
@@ -83,19 +83,19 @@ export async function stop(port: number): Promise<boolean> {
     )
   }
   // KeepAlive would restart a killed server: unload the agent first. It loads
-  // again on `triage start` or at the next login.
+  // again on `junior start` or at the next login.
   if (launchAgentInstalled()) await unloadLaunchAgent()
   process.kill(health.pid, 'SIGTERM')
   const deadline = Date.now() + 10_000
   while (Date.now() < deadline) {
     await new Promise((r) => setTimeout(r, 200))
     if (!isAlive(health.pid)) {
-      console.log(`${green('✓')} triage stopped ${dim(`(pid ${health.pid})`)}`)
+      console.log(`${green('✓')} Junior stopped ${dim(`(pid ${health.pid})`)}`)
       return true
     }
   }
   process.kill(health.pid, 'SIGKILL')
-  console.log(`${yellow('!')} triage did not exit within 10s — killed ${dim(`(pid ${health.pid})`)}`)
+  console.log(`${yellow('!')} Junior did not exit within 10s — killed ${dim(`(pid ${health.pid})`)}`)
   return true
 }
 
@@ -111,12 +111,12 @@ function isAlive(pid: number): boolean {
 export async function status(port: number) {
   const health = await checkHealth(port)
   if (health === 'other') {
-    console.log(`${dim('○')} triage is not running ${dim(`(port ${port} is in use by something else)`)}`)
+    console.log(`${dim('○')} Junior is not running ${dim(`(port ${port} is in use by something else)`)}`)
     process.exitCode = 1
     return
   }
   if (!health) {
-    console.log(`${dim('○')} triage is not running — start it with ${cyan('triage')}`)
+    console.log(`${dim('○')} junior is not running — start it with ${cyan('junior')}`)
     process.exitCode = 1
     return
   }

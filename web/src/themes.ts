@@ -4,7 +4,7 @@
  * (hairlines, washes, glows, tints, project hues, the terminal's ANSI colours)
  * is derived from it here. Adding a theme is adding one entry to THEMES.
  *
- * The two Triage themes are the exception: their tokens are hand-tuned in
+ * The two Junior themes are the exception: their tokens are hand-tuned in
  * styles/tokens.css (`:root` and `[data-theme="light"]`), so they carry a palette only
  * for the preview swatch and keep their own terminal colours. Every other theme
  * is compiled to a `:root[data-theme="<id>"]` block and injected once as a
@@ -60,7 +60,7 @@ export type Theme = {
 export const THEMES: ReadonlyArray<Theme> = [
   {
     id: 'dark',
-    name: 'Triage Dark',
+    name: 'Junior Dark',
     scheme: 'dark',
     handTuned: true,
     palette: {
@@ -95,7 +95,7 @@ export const THEMES: ReadonlyArray<Theme> = [
   },
   {
     id: 'light',
-    name: 'Triage Light',
+    name: 'Junior Light',
     scheme: 'light',
     handTuned: true,
     palette: {

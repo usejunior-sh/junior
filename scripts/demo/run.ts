@@ -5,11 +5,11 @@
 //   npm run demo:shots -- --theme light    (default dark)
 //   npm run demo:serve                     seed → demo server, left running to click around / capture by hand
 //
-// Flags: --port (5199), --home (~/.triage-demo), --out (marketing/shots), --no-build, --no-seed.
+// Flags: --port (5199), --home (~/.junior-demo), --out (marketing/shots), --no-build, --no-seed.
 //
-// The demo server is its own daemon: its own TRIAGE_HOME and port, a `gh`
+// The demo server is its own daemon: its own JUNIOR_HOME and port, a `gh`
 // stand-in first on its PATH, the built UI from dist/web. Prod (:5178) and
-// dev (:5188) are never touched. Desktop scenes get a stand-in for Triage.app's
+// dev (:5188) are never touched. Desktop scenes get a stand-in for Junior.app's
 // bridge, so the UI draws the app's own title bar, plus painted traffic lights.
 import { spawn, execFileSync, type ChildProcess } from 'node:child_process'
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync } from 'node:fs'
@@ -97,8 +97,8 @@ function newestIn(dir: string): number {
 }
 
 function startServer(): ChildProcess {
-  const env: NodeJS.ProcessEnv = { ...process.env, TRIAGE_HOME: HOME, PORT: String(PORT), PATH: `${path.join(HERE, 'bin')}:${process.env.PATH}` }
-  delete env.TRIAGE_DB // would point the demo's workspace at another database
+  const env: NodeJS.ProcessEnv = { ...process.env, JUNIOR_HOME: HOME, PORT: String(PORT), PATH: `${path.join(HERE, 'bin')}:${process.env.PATH}` }
+  delete env.JUNIOR_DB // would point the demo's workspace at another database
   const child = spawn(path.join(REPO, 'node_modules', '.bin', 'tsx'), ['server/index.ts'], {
     cwd: REPO,
     env,
@@ -178,12 +178,12 @@ async function warmUp(browser: Browser) {
 function initScript(scene: Scene) {
   const tabs = { tabs: OPEN_TABS, preview: null, titles: TAB_TITLES }
   return `
-    localStorage.setItem('triage.appearance.theme', ${JSON.stringify(THEME)});
-    localStorage.setItem('triage.tabs.default', ${JSON.stringify(JSON.stringify(tabs))});
+    localStorage.setItem('junior.appearance.theme', ${JSON.stringify(THEME)});
+    localStorage.setItem('junior.tabs.default', ${JSON.stringify(JSON.stringify(tabs))});
     ${
       scene.mobile
         ? ''
-        : `window.triageDesktop = {
+        : `window.juniorDesktop = {
       chrome: 'mac',
       back() {}, forward() {},
       navState: () => Promise.resolve({ canGoBack: true, canGoForward: false, fullscreen: false }),
@@ -214,7 +214,7 @@ const TRAFFIC_LIGHTS = `
 `
 
 /**
- * Where the demo really lives (`~/.triage-demo/projects/api`, under your own
+ * Where the demo really lives (`~/.junior-demo/projects/api`, under your own
  * username) → where a reader expects a repo to live. Applied to every text
  * node just before the shot.
  */
@@ -224,7 +224,7 @@ function redactions(): [string, string][] {
   return [
     [project, '/Users/alex/code/acme/api'],
     [tilde, '~/code/acme/api'],
-    [HOME, '~/.triage'],
+    [HOME, '~/.junior'],
   ]
 }
 

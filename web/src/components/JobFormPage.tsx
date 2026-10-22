@@ -26,7 +26,7 @@ import { type Preview, PreviewStep } from './jobform/PreviewStep.js'
 
 // Inbox thumbs-down → refine: the correction is appended to the instructions
 // so the rule stays human-readable. sessionStorage survives the hash change.
-export const REFINE_JOB_KEY = 'triage.job.refine'
+export const REFINE_JOB_KEY = 'junior.job.refine'
 
 type Form = {
   title: string

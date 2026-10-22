@@ -1,5 +1,5 @@
 /**
- * Claude Code through the Agent SDK: the one place triage calls `query()`.
+ * Claude Code through the Agent SDK: the one place junior calls `query()`.
  * Every session is full Claude Code: its own system prompt and tools, plus the
  * user's settings, plugins and MCP connectors from ~/.claude unless a spec
  * says otherwise.
@@ -51,12 +51,12 @@ function vetoHook(veto: ToolVeto): HookCallback {
 
 /**
  * The Workflow tool's receipt ends "Use /workflows to watch live progress", a
- * terminal command that doesn't exist in triage. A note right after the
+ * terminal command that doesn't exist in Junior. A note right after the
  * receipt outweighs the system prompt; the receipt itself stays untouched,
  * since the run card reads it.
  */
 const WORKFLOW_NOTE =
-  'Note from triage: /workflows does not exist here. The user watches this run in triage: its card in the chat opens a panel with every agent, its transcript and its cost, and Stop in the dock above the composer ends it. Point them there.'
+  'Note from Junior: /workflows does not exist here. The user watches this run in Junior: its card in the chat opens a panel with every agent, its transcript and its cost, and Stop in the dock above the composer ends it. Point them there.'
 const workflowNoteHook: HookCallback = async (input) =>
   input.hook_event_name === 'PostToolUse' && input.tool_name === 'Workflow'
     ? { hookSpecificOutput: { hookEventName: 'PostToolUse', additionalContext: WORKFLOW_NOTE } }

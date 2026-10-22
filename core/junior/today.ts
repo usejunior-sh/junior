@@ -190,7 +190,7 @@ export function planRows(input: {
   const rows = sorted.map((e): PlanRow => {
     const item = items.get(e.itemId)
     if (!item) {
-      return { itemId: e.itemId, title: 'An item that is no longer in triage', ref: e.itemId.split(':')[0] || 'item', url: '', owner: e.owner, addedBy: e.addedBy, status: { kind: 'todo', note: 'gone' }, startable: false, missing: true }
+      return { itemId: e.itemId, title: 'An item that is no longer in Junior', ref: e.itemId.split(':')[0] || 'item', url: '', owner: e.owner, addedBy: e.addedBy, status: { kind: 'todo', note: 'gone' }, startable: false, missing: true }
     }
     const mine = sessions.filter((s) => s.itemId === e.itemId).sort((a, b) => b.updatedAt - a.updatedAt)
     const waiting = mine.find((s) => s.waiting)

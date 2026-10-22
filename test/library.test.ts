@@ -77,7 +77,7 @@ test('setBody keeps the frontmatter byte for byte', () => {
 })
 
 async function fixture() {
-  const tmp = await mkdtemp(path.join(os.tmpdir(), 'triage-library-'))
+  const tmp = await mkdtemp(path.join(os.tmpdir(), 'junior-library-'))
   const home = path.join(tmp, 'claude')
   const project = path.join(tmp, 'repo')
   const lib = path.join(tmp, 'ws', 'library')
@@ -133,7 +133,7 @@ test('create makes a template in the target root and refuses a taken name', asyn
   await assert.rejects(createLibraryEntry({ kind: 'skill', target: 'workspace', name: 'release notes' }, roots), /already has/)
   const agent = await createLibraryEntry({ kind: 'agent', target: 'personal', name: 'critic' }, roots)
   assert.ok(agent.path.endsWith(path.join('agents', 'critic.md')))
-  assert.equal((await listLibrary('skill', roots)).find((s) => s.slug === 'release-notes')?.name, 'triage:release-notes')
+  assert.equal((await listLibrary('skill', roots)).find((s) => s.slug === 'release-notes')?.name, 'junior:release-notes')
   await assert.rejects(createLibraryEntry({ kind: 'skill', target: 'nowhere', name: 'x' }, roots), /pick where/)
 })
 

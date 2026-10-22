@@ -2,7 +2,7 @@ import type { TeamPermissions, TeamRecipe } from './recipe.js'
 
 export type Slice = { title: string; brief: string }
 export type Severity = 'P0' | 'P1' | 'P2'
-/** A review finding. `id` is triage's (`T2-F1`): stable across fix rounds, so a fixer closes each one by name. */
+/** A review finding. `id` is junior's (`T2-F1`): stable across fix rounds, so a fixer closes each one by name. */
 export type Finding = { id?: string; severity: Severity; where: string; problem: string; fix: string }
 export type FindingStatus = 'open' | 'fixed' | 'disputed' | 'deferred'
 /** A fixer's answer to one finding. */
@@ -60,13 +60,13 @@ export type Worker = {
   label: string
   color: string
   slice: Slice | null
-  /** null until triage spawns its session */
+  /** null until junior spawns its session */
   sessionId: string | null
 }
 
 export type CheckResult = { cmd: string; ok: boolean; tail: string }
 
-/** One handoff: a worker's submission, or triage's own record of a checks step. */
+/** One handoff: a worker's submission, or Junior's own record of a checks step. */
 export type Handoff = {
   id: string
   stepId: string
@@ -97,7 +97,7 @@ export type Handoff = {
 
 /**
  * One run: a worker's go at one step, for one task and fix round, what the
- * session page marks with a divider. Recorded when triage sends the step; a
+ * session page marks with a divider. Recorded when Junior sends the step; a
  * nudge or a resume is more of the same run, not a new one.
  */
 export type WorkerRun = {
@@ -189,7 +189,7 @@ export type TeamRun = {
   /** per task id */
   tasks: Record<string, TaskState>
   workers: Worker[]
-  /** every run, in the order triage sent them */
+  /** every run, in the order junior sent them */
   workerRuns: WorkerRun[]
   /** workers the current step still waits on */
   awaiting: string[]

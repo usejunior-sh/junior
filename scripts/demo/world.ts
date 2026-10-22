@@ -1,5 +1,5 @@
 // The demo world: a believable week for "Alex", an engineer at Acme, as
-// triage would hold it. Pure data: seed.ts writes it into a store. Every time
+// junior would hold it. Pure data: seed.ts writes it into a store. Every time
 // is relative to `now`, so a fresh seed always looks like today.
 //
 // Rules this file keeps (each one is a way a demo inbox goes wrong):

@@ -86,7 +86,7 @@ test('gateReadTools: the named connectors\' read tools only — never a write, n
 test('the gate checker\'s fence refuses every write tool, the shell and file tools; it allows the read tools and its verdict', () => {
   const reads = new Set(gateReadTools(['Linear'], [LINEAR]))
   for (const t of [...reads, GATE_VERDICT_FULL, 'ToolSearch']) assert.deepEqual(gateFenceDecision(reads, t), { allow: true }, t)
-  for (const t of ['mcp__claude_ai_Linear__update_issue', 'mcp__claude_ai_Linear__create_comment', 'mcp__sentry__get_issue', 'Bash', 'Write', 'Edit', 'Read', 'WebFetch', 'mcp__triage__create_work_item']) {
+  for (const t of ['mcp__claude_ai_Linear__update_issue', 'mcp__claude_ai_Linear__create_comment', 'mcp__sentry__get_issue', 'Bash', 'Write', 'Edit', 'Read', 'WebFetch', 'mcp__junior__create_work_item']) {
     const d = gateFenceDecision(reads, t)
     assert.equal(d.allow, false, t)
     if (!d.allow) assert.match(d.reason, /only reads/)
@@ -195,7 +195,7 @@ type Started = { goalId: string; sessionId: string; spec: StartSpec }
 
 /** Deps over a real store and ledger, a clock the test moves, and a checker that answers from `verdicts`. */
 function harness(dir: string) {
-  const store = openSqliteStore(path.join(dir, 'triage.db'))
+  const store = openSqliteStore(path.join(dir, 'junior.db'))
   const root = path.join(dir, 'artifacts')
   execFileSync('mkdir', ['-p', root])
   execFileSync('git', ['init', '-q'], { cwd: root })

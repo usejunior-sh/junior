@@ -28,21 +28,21 @@ import { linkSessionToItem } from './settings-ops.js'
 
 const GOAL_LEAD_TIMEOUT_MS = 20 * 60_000
 /** What a drafting lead may call beyond reads: the goal reads and its plan. */
-export const GOAL_LEAD_TOOLS = new Set(['mcp__triage__goal_get', 'mcp__triage__goal_list', 'mcp__triage__goal_propose_plan'])
+export const GOAL_LEAD_TOOLS = new Set(['mcp__junior__goal_get', 'mcp__junior__goal_list', 'mcp__junior__goal_propose_plan'])
 /** A brief's hidden tools, plus the goal writes that aren't the lead's. */
-export const GOAL_LEAD_DISALLOWED_TOOLS = [...BRIEF_DISALLOWED_TOOLS, ...['goal_create', 'goal_log_append', 'goal_handoff_write'].map((t) => `mcp__triage__${t}`)]
+export const GOAL_LEAD_DISALLOWED_TOOLS = [...BRIEF_DISALLOWED_TOOLS, ...['goal_create', 'goal_log_append', 'goal_handoff_write'].map((t) => `mcp__junior__${t}`)]
 
 export type GoalLead = { goalId: string; sessionId: string; seq: number; timer: ReturnType<typeof setTimeout>; release: () => void }
 
 /**
  * What a goal run's session can't reach: the questions nobody answers, the
- * triage writes outside its goal, and the unbound goal tools (it has its own,
+ * Junior writes outside its goal, and the unbound goal tools (it has its own,
  * bound to its goal, on the `goal` server). Write tools stay listed for a
  * worker that may write only so the filter in extrasFor can lift them.
  */
 export const GOAL_RUN_DISALLOWED_TOOLS = [
   ...BRIEF_DISALLOWED_TOOLS,
-  ...['goal_create', 'goal_propose_plan', 'goal_log_append', 'goal_handoff_write'].map((t) => `mcp__triage__${t}`),
+  ...['goal_create', 'goal_propose_plan', 'goal_log_append', 'goal_handoff_write'].map((t) => `mcp__junior__${t}`),
 ]
 
 /** One session the goal run loop started. */

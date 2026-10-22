@@ -8,7 +8,7 @@
  *   reviews.md      every finding by id, with its state
  *   handoffs/NN-…   each handoff, written once
  *
- * triage's code is the only writer: workers hand in through submit_step and
+ * junior's code is the only writer: workers hand in through submit_step and
  * the engine appends; nothing here is ever edited by an agent. Pure: the
  * server decides where the folder is and writes what changed.
  */
@@ -29,7 +29,7 @@ const SECTIONS: { kind: LedgerKind; title: string }[] = [
 ]
 
 export function renderLedger(run: TeamRun): string {
-  const out = [`# Ledger · ${run.title}`, 'What the team learned, in the order it was handed in. Appended by triage from each submit_step; never rewritten.']
+  const out = [`# Ledger · ${run.title}`, 'What the team learned, in the order it was handed in. Appended by Junior from each submit_step; never rewritten.']
   if (run.card.decisions.length) out.push(`## Decisions on the card\n${run.card.decisions.map((d) => `- ${d}`).join('\n')}`)
   for (const s of SECTIONS) {
     const xs = run.ledger.filter((e) => e.kind === s.kind)
@@ -41,7 +41,7 @@ export function renderLedger(run: TeamRun): string {
 
 export function renderVerify(run: TeamRun): string {
   const out = [`# How to check · ${run.title}`]
-  if (run.checkCmds?.length) out.push(`## The project's checks\ntriage runs these between steps, for free:\n${run.checkCmds.map((c) => `- \`${c}\``).join('\n')}`)
+  if (run.checkCmds?.length) out.push(`## The project's checks\nJunior runs these between steps, for free:\n${run.checkCmds.map((c) => `- \`${c}\``).join('\n')}`)
   if (run.baseline) {
     const lines = run.baseline.results.map((r) => `- \`${r.cmd}\`: ${r.ok ? 'passed' : `FAILED — already failing before any change\n\n  \`\`\`\n${r.tail.slice(-1200).replace(/\n/g, '\n  ')}\n  \`\`\``}`)
     out.push(`## When the run started (${when(run.baseline.at)})\n${lines.join('\n') || '- no checks configured'}`)

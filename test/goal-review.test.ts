@@ -60,7 +60,7 @@ let clock = 5_000_000
  * records each lead wake, `settle()` waits for every reaction emitted so far.
  * Nothing here uses a timer.
  */
-function harness(dir: string, store = openSqliteStore(path.join(dir, 'triage.db'))) {
+function harness(dir: string, store = openSqliteStore(path.join(dir, 'junior.db'))) {
   const root = path.join(dir, 'artifacts')
   execFileSync('mkdir', ['-p', root])
   execFileSync('git', ['init', '-q'], { cwd: root })
@@ -272,7 +272,7 @@ test('a wake that throws settles the event with the reason, never leaving it pen
 }))
 
 test('restart: an approval and a send-back nobody finished are replayed; an older wake is superseded', withDir(async (dir) => {
-  const dbFile = path.join(dir, 'triage.db')
+  const dbFile = path.join(dir, 'junior.db')
   const h = harness(dir, openSqliteStore(dbFile))
   // The daemon "dies" before reacting: emit drops every event on the floor.
   h.d.emit = () => {}

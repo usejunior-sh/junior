@@ -11,7 +11,7 @@ export function expandHome(p: string): string {
 
 /**
  * Open the OS-native folder chooser on the machine running the server, which,
- * since triage is a localhost app, is the user's own desktop. Returns the picked
+ * since Junior is a localhost app, is the user's own desktop. Returns the picked
  * absolute path, or null when the user dismisses the dialog. The picker command
  * exits non-zero on cancel; we treat that as a cancel rather than an error.
  */

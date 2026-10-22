@@ -20,7 +20,7 @@ type Proposal = {
   expiresInDays: number | null
 }
 
-const NOT_NOW_KEY = 'triage.ruleCard.notNow'
+const NOT_NOW_KEY = 'junior.ruleCard.notNow'
 const readNotNow = (): string[] => {
   try {
     const v = JSON.parse(localStorage.getItem(NOT_NOW_KEY) ?? '[]') as unknown

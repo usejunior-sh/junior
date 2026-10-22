@@ -23,7 +23,7 @@ export function buildIcon({ force = false } = {}) {
   if (!force && existsSync(out) && statSync(out).mtimeMs >= statSync(master).mtimeMs) {
     return { path: out, built: false }
   }
-  const tmp = mkdtempSync(path.join(os.tmpdir(), 'triage-icon-'))
+  const tmp = mkdtempSync(path.join(os.tmpdir(), 'junior-icon-'))
   try {
     const iconset = path.join(tmp, 'icon.iconset')
     mkdirSync(iconset)

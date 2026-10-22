@@ -15,7 +15,7 @@ const quiet = () => {}
 
 /** A prod root with one workspace whose DB is held open, so its rows sit in the WAL. */
 function prodHome() {
-  const root = mkdtempSync(path.join(os.tmpdir(), 'triage-prod-'))
+  const root = mkdtempSync(path.join(os.tmpdir(), 'junior-prod-'))
   const ws = path.join(root, 'workspaces', 'w1')
   mkdirSync(path.join(ws, 'artifacts'), { recursive: true })
   mkdirSync(path.join(root, 'logs'))
@@ -23,24 +23,24 @@ function prodHome() {
   writeFileSync(path.join(root, 'server.json'), '{"pid":1,"port":1}')
   writeFileSync(path.join(root, 'remote.json'), '{}')
   writeFileSync(path.join(root, 'ngrok.pid'), '1')
-  writeFileSync(path.join(root, 'logs', 'triage.jsonl'), '')
+  writeFileSync(path.join(root, 'logs', 'junior.jsonl'), '')
   writeFileSync(path.join(ws, '.env'), 'ANTHROPIC_API_KEY=x\n', { mode: 0o600 })
   writeFileSync(path.join(ws, 'artifacts', 'note.md'), '# note\n')
-  const db = new DatabaseSync(path.join(ws, 'triage.db'))
+  const db = new DatabaseSync(path.join(ws, 'junior.db'))
   db.exec('PRAGMA journal_mode = WAL; PRAGMA wal_autocheckpoint = 0; CREATE TABLE t (x); INSERT INTO t VALUES (1), (2)')
   return { root, db }
 }
 
 test('copies workspaces and snapshots live DBs, skipping per-process files', async () => {
   const { root, db } = prodHome()
-  const to = mkdtempSync(path.join(os.tmpdir(), 'triage-dev-'))
+  const to = mkdtempSync(path.join(os.tmpdir(), 'junior-dev-'))
   try {
     assert.deepEqual(await copyProd({ from: root, to, log: quiet }), ['w1'])
     const ws = path.join(to, 'workspaces', 'w1')
-    const copy = new DatabaseSync(path.join(ws, 'triage.db'), { readOnly: true })
+    const copy = new DatabaseSync(path.join(ws, 'junior.db'), { readOnly: true })
     assert.equal((copy.prepare('SELECT count(*) AS n FROM t').get() as { n: number }).n, 2)
     copy.close()
-    assert.equal(existsSync(path.join(ws, 'triage.db-wal')), false)
+    assert.equal(existsSync(path.join(ws, 'junior.db-wal')), false)
     assert.equal(readFileSync(path.join(ws, 'artifacts', 'note.md'), 'utf8'), '# note\n')
     assert.equal(statSync(path.join(ws, '.env')).mode & 0o777, 0o600)
     assert.ok(existsSync(path.join(to, 'workspaces.json')))
@@ -54,10 +54,10 @@ test('copies workspaces and snapshots live DBs, skipping per-process files', asy
 
 test('refuses to overwrite dev workspaces without --force, replaces them with it', async () => {
   const { root, db } = prodHome()
-  const to = mkdtempSync(path.join(os.tmpdir(), 'triage-dev-'))
+  const to = mkdtempSync(path.join(os.tmpdir(), 'junior-dev-'))
   try {
     await copyProd({ from: root, to, log: quiet })
-    const stale = path.join(to, 'workspaces', 'w1', 'triage.db-wal')
+    const stale = path.join(to, 'workspaces', 'w1', 'junior.db-wal')
     writeFileSync(stale, 'stale')
     await assert.rejects(copyProd({ from: root, to, log: quiet }), /--force/)
     await copyProd({ from: root, to, force: true, log: quiet })

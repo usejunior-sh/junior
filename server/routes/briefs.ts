@@ -136,7 +136,7 @@ export async function briefRoutes({ req, res, url, json, rt }: ScopedCtx): Promi
     return true
   }
   // One item file as a download (`itemFileUrl`). Always an attachment of an
-  // opaque type: a user's html or svg must never run on triage's origin.
+  // opaque type: a user's html or svg must never run on junior's origin.
   if (url.pathname === '/api/items/file' && req.method === 'GET') {
     const itemId = url.searchParams.get('item') ?? ''
     const fileId = url.searchParams.get('file') ?? ''

@@ -34,13 +34,13 @@ test('mcp tool names match Claude Code', () => {
   assert.equal(mcpToolName('my-server', 'x'), 'mcp__my-server__x')
 })
 
-test('fence: granted MCP tools and the triage write tool pass; the rest do not', () => {
+test('fence: granted MCP tools and the junior write tool pass; the rest do not', () => {
   assert.ok(allow('mcp__claude_ai_Notion__notion-search'))
-  assert.ok(allow('mcp__triage__upsert_work_item'))
+  assert.ok(allow('mcp__junior__upsert_work_item'))
   assert.ok(allow('ToolSearch'))
   assert.ok(!allow('mcp__claude_ai_Notion__notion-create-pages'))
   assert.ok(!allow('mcp__claude_ai_Slack__slack_send_message'))
-  assert.ok(!allow('mcp__triage__write_digest'))
+  assert.ok(!allow('mcp__junior__write_digest'))
   assert.ok(!allow('Task'))
   assert.ok(!allow('WebFetch')) // web not granted
 })
@@ -79,7 +79,7 @@ test('fence: writing needs the files-write grant, and stays inside the folder', 
 
 test('composition: allowlist, base tools, deferred tools', () => {
   const allowed = runAllowedTools(grants, 'items')
-  assert.ok(allowed.includes('mcp__triage__upsert_work_item') && !allowed.includes('mcp__triage__write_digest'))
+  assert.ok(allowed.includes('mcp__junior__upsert_work_item') && !allowed.includes('mcp__junior__write_digest'))
   assert.ok(allowed.includes('Read') && allowed.includes('Bash(gh pr list:*)'))
   assert.deepEqual(runBaseTools(grants).sort(), ['Bash', 'Glob', 'Grep', 'Read', 'ToolSearch'])
   assert.ok(runBaseTools([builtinGrant('web')]).includes('WebFetch'))

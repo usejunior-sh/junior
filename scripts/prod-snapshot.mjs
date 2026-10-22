@@ -1,10 +1,10 @@
-// Installs the current checkout as the global `triage`, without releasing it.
+// Installs the current checkout as the global `junior`, without releasing it.
 //
 // The tarball is labelled with a prerelease version, 1.0.4-dev.gabc1234, plus
-// `.dirty` if the tree has uncommitted changes, so `triage status` never shows
+// `.dirty` if the tree has uncommitted changes, so `junior status` never shows
 // unreleased code under a release number. package.json is restored byte for byte
 // afterwards, even if the build fails. Nothing is committed, tagged or published,
-// and the daemon is not restarted: run `triage restart` yourself.
+// and the daemon is not restarted: run `junior restart` yourself.
 import { execFileSync } from 'node:child_process'
 import { readFileSync, rmSync, writeFileSync } from 'node:fs'
 
@@ -28,4 +28,4 @@ try {
   rmSync(tarball, { force: true })
 }
 
-console.log(`\ninstalled triage ${version} — run \`triage restart\` to switch over`)
+console.log(`\ninstalled junior ${version} — run \`junior restart\` to switch over`)

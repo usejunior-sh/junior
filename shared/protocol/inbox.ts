@@ -84,7 +84,7 @@ export type ItemDetail = {
 export type ItemDetailResponse = { ok: true; detail: ItemDetail } | { ok: false; error: string }
 
 /**
- * What a triage session can learn about itself (GET /api/sessions/context?id=…).
+ * What a junior session can learn about itself (GET /api/sessions/context?id=…).
  * A session is spawned before it is linked to a work item, so this is the only
  * honest way for one to know what it was opened for. A lookup, not a prompt.
  */

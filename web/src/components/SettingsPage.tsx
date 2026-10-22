@@ -162,7 +162,7 @@ export function SettingsPage({ workspace, tab, onOpenSystem }: Props) {
                     {workspace?.providers ? (
                       <ProvidersTab key={workspace.id} workspace={workspace} />
                     ) : workspace ? (
-                      <div className="msg">Restart the triage server to manage providers — it is still running an older build.</div>
+                      <div className="msg">Restart the Junior server to manage providers — it is still running an older build.</div>
                     ) : (
                       <Loading />
                     )}

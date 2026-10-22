@@ -48,7 +48,7 @@ export async function postReviewOp(rt: WorkspaceRuntime, taskId: string, raw: un
   // Claim it first, so a double click posts once.
   if (!(await rt.store.tasks.move(t.id, 'queued', {}, Date.now()))) throw new Error('the task moved on before it could be posted')
   const at = Date.now()
-  const dir = mkdtempSync(path.join(tmpdir(), 'triage-review-'))
+  const dir = mkdtempSync(path.join(tmpdir(), 'junior-review-'))
   const file = path.join(dir, 'review.json')
   const command = `gh api -X POST repos/${pr.repo}/pulls/${pr.number}/reviews --input review.json`
   let url: string | null = null

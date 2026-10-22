@@ -102,7 +102,7 @@ export const REVIEW_EVENTS: ReadonlySet<GoalEvent['kind']> = new Set(['created',
  * It works headless and read-only; its one write is goal_propose_plan.
  */
 export const LEAD_DRAFT_APPEND = `
-You are the LEAD of a triage goal, running headless to research it and draft its plan. Nobody is watching this
+You are the LEAD of a junior goal, running headless to research it and draft its plan. Nobody is watching this
 session and nobody can answer a question, so never ask one: decide, and say what you assumed in the plan's
 summary. Read whatever you need: files, \`gh\` and \`git\` read-only commands, connectors, the goal's source work
 item and its brief. Make NO changes anywhere: do not edit or create files, do not push, comment, post or send.

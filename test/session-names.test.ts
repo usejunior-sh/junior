@@ -43,9 +43,9 @@ test('a message from another chat names it and says it is not the user', () => {
 })
 
 test('the store keeps a name and who started the session, and refuses a taken name in any case', async () => {
-  const dir = mkdtempSync(path.join(os.tmpdir(), 'triage-names-'))
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'junior-names-'))
   try {
-    const store = openSqliteStore(path.join(dir, 'triage.db'))
+    const store = openSqliteStore(path.join(dir, 'junior.db'))
     const parent = await store.sessions.create({ id: 'p', title: 'Parent', cwd: dir, projectId: null })
     const child = await store.sessions.create({ id: 'c', title: 'Child', cwd: dir, projectId: null, name: 'auth fix', startedBy: parent.id })
     assert.equal(child.name, 'auth fix')

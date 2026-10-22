@@ -75,7 +75,7 @@ type Started = { goalId: string; sessionId: string; spec: StartSpec }
 
 let clock = 9_000_000
 /** Deps over a real store and ledger; the engine records each session start and gives it an id. */
-function harness(dir: string, store = openSqliteStore(path.join(dir, 'triage.db'))) {
+function harness(dir: string, store = openSqliteStore(path.join(dir, 'junior.db'))) {
   const root = path.join(dir, 'artifacts')
   execFileSync('mkdir', ['-p', root])
   try {
@@ -319,7 +319,7 @@ test(
 test(
   'a restart mid-step resumes from the handoff and never files a queued action twice',
   withDir(async (dir) => {
-    const db = path.join(dir, 'triage.db')
+    const db = path.join(dir, 'junior.db')
     const h = harness(dir, openSqliteStore(db))
     const g = await approved(h)
     await leadDispatches(h, g.id, 's1')

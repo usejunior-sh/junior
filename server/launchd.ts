@@ -1,6 +1,6 @@
 /**
- * The macOS LaunchAgent that keeps triage running.
- * Jobs only run while the server runs; a detached `triage start` dies on
+ * The macOS LaunchAgent that keeps junior running.
+ * Jobs only run while the server runs; a detached `junior start` dies on
  * reboot or crash. A user LaunchAgent with KeepAlive restarts it, and runs as
  * the user, so it can reach the login keychain where Claude's credentials live.
  * Shared by the CLI (install/uninstall/start/stop) and the server (System
@@ -14,7 +14,7 @@ import { promisify } from 'node:util'
 
 const execFileP = promisify(execFile)
 
-export const LAUNCH_AGENT_LABEL = 'sh.usetriage.triage'
+export const LAUNCH_AGENT_LABEL = 'sh.usejunior.junior'
 export const launchAgentPlist = (): string => path.join(os.homedir(), 'Library', 'LaunchAgents', `${LAUNCH_AGENT_LABEL}.plist`)
 const domain = (): string => `gui/${process.getuid?.() ?? 501}`
 const service = (): string => `${domain()}/${LAUNCH_AGENT_LABEL}`
@@ -41,11 +41,11 @@ const xml = (s: string): string => s.replace(/&/g, '&amp;').replace(/</g, '&lt;'
 export type LaunchAgentSpec = {
   /** absolute node binary */
   node: string
-  /** absolute path of the triage CLI script; the agent runs `<node> <script> serve` */
+  /** absolute path of the junior CLI script; the agent runs `<node> <script> serve` */
   script: string
   port: number
   logFile: string
-  /** passed through to the server: PATH (so claude/gh/git resolve), HOME, TRIAGE_HOME… */
+  /** passed through to the server: PATH (so claude/gh/git resolve), HOME, JUNIOR_HOME… */
   env: Record<string, string>
 }
 
@@ -129,7 +129,7 @@ export async function uninstallLaunchAgent(): Promise<boolean> {
   return had
 }
 
-/** Load an installed agent (after `triage stop` unloaded it). */
+/** Load an installed agent (after `junior stop` unloaded it). */
 export async function loadLaunchAgent(): Promise<void> {
   if (await launchAgentLoaded()) return
   await execFileP('launchctl', ['bootstrap', domain(), launchAgentPlist()])

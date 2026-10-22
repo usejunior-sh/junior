@@ -1,5 +1,5 @@
 /**
- * The team recipes triage ships (core/teams/recipe.ts), seeded into every
+ * The team recipes junior ships (core/teams/recipe.ts), seeded into every
  * workspace's teams/ folder by TeamLibrary. Literal file text, not serialized
  * specs: these are the examples people copy, so they keep their comments.
  */
@@ -24,7 +24,7 @@ steps:
     output: verdict
     does: Prove each criterion on the card by running something; read the diff for what running can't show.
     on-fail: { back-to: build, max: 2 }
-source: triage
+source: junior
 ---
 Keep the card small: one shippable change, 2–4 criteria a checker can prove by running something.
 If the item is bigger than that, say so on the card and suggest Build instead.
@@ -62,7 +62,7 @@ steps:
     agent: lead
     output: report
     does: At most eight lines — what changed, what was verified and how, what is unresolved, how to try it.
-source: triage
+source: junior
 ---
 Split the work into 2–6 tasks, in order. Each task leaves the project working and can be checked on its own;
 work that only makes sense together is one task. Give each task 1–3 criteria a reviewer can prove by running
@@ -85,7 +85,7 @@ steps:
     does: Review only your slice of the diff against the card's criteria. Real defects only, each with file:line.
   - id: validate
     agent: validator
-    fan-out: { by: finding, max: 4 }   # triage splits the findings itself
+    fan-out: { by: finding, max: 4 }   # junior splits the findings itself
     output: verdict
     model: sonnet
     does: For each finding, try to prove it wrong — read the code, run it. Keep only what survives.
@@ -93,7 +93,7 @@ steps:
     agent: lead
     output: report
     does: Merge what survived into one review, worst first, duplicates folded. No style nits.
-source: triage
+source: junior
 ---
 Split by what a reviewer needs to hold in its head at once — a feature area, a layer, a risky file —
 not by line count. One area for a small diff; four only for a big one.
@@ -119,7 +119,7 @@ steps:
     agent: lead
     output: report
     does: One document — the answer first, then the evidence per question, then what is still unknown.
-source: triage
+source: junior
 ---
 Split into questions that don't overlap, so two researchers never read the same pages.
 One question is fine when the ask is narrow; parallel research pays off only on breadth.
@@ -147,7 +147,7 @@ steps:
     agent: lead
     output: report
     does: The diagnosis — the cause, the evidence, what was ruled out, and the smallest fix worth trying.
-source: triage
+source: junior
 ---
 Pick hypotheses that predict different things, so evidence can tell them apart.
 Two are enough when one is a strong favourite; three when it's a real mystery.

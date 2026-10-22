@@ -1,9 +1,9 @@
 /**
  * Codex through `codex app-server`: JSON-RPC 2.0 as newline-delimited JSON
  * over stdio, one subprocess per session. Chat sessions only: Codex has no
- * hook triage could fence a tool call with, so jobs, scans and team workers
+ * hook junior could fence a tool call with, so jobs, scans and team workers
  * stay on Claude (`hooks: false` keeps `requireVeto` refusing them), and it
- * can't host triage's in-process MCP server. The user's own
+ * can't host junior's in-process MCP server. The user's own
  * ~/.codex/config.toml brings its MCP servers instead.
  *
  * Every approval Codex asks for goes through `SessionSpec.approve`, so the
@@ -18,7 +18,7 @@ import { codexModels, createCodexMapper, toolCallsOf, unwrapShell, type CodexMap
 import type { AccountStatus, AgentSession, PermissionResult, PermissionUpdate, Provider, ProviderEvent, SpawnEnv, ToolApprovalContext, UserTurn } from './types.js'
 
 const CODEX_API_KEY_VAR = 'OPENAI_API_KEY'
-const CLIENT_INFO = { name: 'triage', title: 'triage', version: '1' }
+const CLIENT_INFO = { name: 'junior', title: 'junior', version: '1' }
 
 type Params = Record<string, unknown>
 type RpcError = { code?: number; message?: string }
@@ -283,7 +283,7 @@ export const codex: Provider = {
   },
   discovery: {
     // Codex's servers live in config.toml and connect inside its own process;
-    // triage doesn't hand any to it, so there is nothing to merge.
+    // junior doesn't hand any to it, so there is nothing to merge.
     configuredMcp: async () => ({ project: {}, local: {} }),
     transcriptDir: (env) => path.join(env?.CODEX_HOME || process.env.CODEX_HOME || path.join(os.homedir(), '.codex'), 'sessions'),
   },
@@ -345,19 +345,19 @@ export const codex: Provider = {
           const argv = Array.isArray(params.command) ? (params.command as unknown[]).map(String) : []
           const command = unwrapShell(argv.length >= 3 && /sh$/.test(argv[0]) ? `${argv[0]} ${argv[1]} '${argv.slice(2).join(' ')}'` : argv.join(' '))
           const r = await ask('Bash', { command }, { description: reason })
-          return { decision: allowed(r) ? 'approved' : { denied: { rejection: 'Denied by the user in triage.' } } }
+          return { decision: allowed(r) ? 'approved' : { denied: { rejection: 'Denied by the user in Junior.' } } }
         }
         case 'applyPatchApproval': {
           if (autoAcceptsEdits(mode)) return { decision: 'approved' }
           const files = Object.keys((params.fileChanges as Params | undefined) ?? {})
           for (const file_path of files.length ? files : ['']) {
             const r = await ask('Edit', { file_path }, { description: reason })
-            if (!allowed(r)) return { decision: { denied: { rejection: 'Denied by the user in triage.' } } }
+            if (!allowed(r)) return { decision: { denied: { rejection: 'Denied by the user in Junior.' } } }
           }
           return { decision: 'approved' }
         }
         // Extra sandbox access, questions and MCP forms have no prompt in
-        // triage yet: grant nothing and answer, so the turn carries on.
+        // junior yet: grant nothing and answer, so the turn carries on.
         case 'item/permissions/requestApproval':
           return { permissions: {}, scope: 'turn' }
         case 'item/tool/requestUserInput':
@@ -365,7 +365,7 @@ export const codex: Provider = {
         case 'mcpServer/elicitation/request':
           return { action: 'decline', content: null, _meta: null }
         default:
-          throw new Error(`triage doesn't handle ${method}`)
+          throw new Error(`junior doesn't handle ${method}`)
       }
     }
 

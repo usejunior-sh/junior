@@ -10,7 +10,7 @@
  */
 import { useSyncExternalStore } from 'react'
 
-const KEY = 'triage.composerDrafts'
+const KEY = 'junior.composerDrafts'
 
 let drafts: Record<string, string> = load()
 const listeners = new Set<() => void>()

@@ -1,5 +1,5 @@
 // Renders the menu-bar template images (src/trayTemplate.png + @2x) from the
-// triage mark (assets/brand/triage-mark.svg) — three round-capped strokes and a
+// junior mark (assets/brand/junior-mark.svg) — three round-capped strokes and a
 // dot — with plain node:zlib, so no image tooling is needed. Black glyph on
 // alpha: macOS tints template images for light/dark menu bars.
 // Run: node scripts/tray-icon.mjs

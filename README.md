@@ -1,7 +1,7 @@
-<a href="https://usetriage.sh">
+<a href="https://usejunior.sh">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/banner-dark.png">
-    <img src="docs/banner-light.png" alt="Triage. Triage finds the work. Junior finishes it. Junior's face, drawn in lavender dots, watches from the right." width="100%">
+    <img src="docs/banner-light.png" alt="Junior. Junior takes the work that doesn't need you. Junior's face, drawn in lavender dots, watches from the right." width="100%">
   </picture>
 </a>
 
@@ -11,36 +11,36 @@
   <a href="#features">Features</a> ·
   <a href="#fair-questions">FAQ</a> ·
   <a href="#development">Development</a> ·
-  <a href="https://usetriage.sh">Website</a>
+  <a href="https://usejunior.sh">Website</a>
 </p>
 
 <p align="center">
-  <a href="https://github.com/usetriage/triage/releases/latest"><img src="https://img.shields.io/github/v/release/usetriage/triage?label=release&color=ff6a1f&labelColor=1a1714" alt="latest release"></a>
+  <a href="https://github.com/usejunior-sh/junior/releases/latest"><img src="https://img.shields.io/github/v/release/usejunior-sh/junior?label=release&color=ff6a1f&labelColor=1a1714" alt="latest release"></a>
   <img src="https://img.shields.io/badge/macOS-Apple%20silicon%20%C2%B7%20Intel-efe9e3?labelColor=1a1714" alt="macOS, Apple silicon or Intel">
   <img src="https://img.shields.io/badge/runs%20on-Claude%20Code%20%C2%B7%20Codex-b4a0f4?labelColor=1a1714" alt="runs on Claude Code and Codex">
-  <a href="https://github.com/usetriage/triage/commits/main"><img src="https://img.shields.io/github/last-commit/usetriage/triage?color=efe9e3&labelColor=1a1714" alt="last commit"></a>
+  <a href="https://github.com/usejunior-sh/junior/commits/main"><img src="https://img.shields.io/github/last-commit/usejunior-sh/junior?color=efe9e3&labelColor=1a1714" alt="last commit"></a>
 </p>
 
-**Triage is a work inbox for senior engineers, with an AI junior engineer built in.**
+**Junior is an AI junior engineer for senior engineers. It runs your work inbox, on your Mac.**
 
-Triage watches GitHub, Slack, Linear and your other tools. It brings you what needs you. The rest goes to Junior, your AI junior engineer. It runs on your Mac, learns how you work, and needs you a little less each week.
+Junior watches GitHub, Slack, Linear and your other tools. It brings you what needs you. It takes the rest, and asks before anything goes out. It runs on your Mac, learns how you work, and needs you a little less each week.
 
 ```sh
-curl -fsSL https://usetriage.sh/install.sh | sh
+curl -fsSL https://usejunior.sh/install.sh | sh
 ```
 
-<sub>Installs Triage.app for macOS, Apple silicon or Intel. <a href="install.sh">Read install.sh first.</a> We would.</sub>
+<sub>Installs Junior.app for macOS, Apple silicon or Intel. <a href="install.sh">Read install.sh first.</a> We would.</sub>
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/flow-dark.png">
-  <img src="docs/flow-light.png" alt="Work arrives from GitHub, Slack, Linear and Sentry. Triage ranks it: two rows need you, three go to Junior. Junior fixes CI and drafts a reply, then holds the push and the reply for your OK. Sent without your OK: 0." width="100%">
+  <img src="docs/flow-light.png" alt="Work arrives from GitHub, Slack, Linear and Sentry. Junior ranks it: two rows need you, three go to Junior. Junior fixes CI and drafts a reply, then holds the push and the reply for your OK. Sent without your OK: 0." width="100%">
 </picture>
 
 <p align="center"><sub>Example work. Your Tuesday will have more of it.</sub></p>
 
 ## One inbox. Two owners.
 
-**Triage brings you what needs you. Junior takes what doesn't.** On your Mac, with your tools, and it asks before anything goes out.
+**Junior brings you what needs you. Junior takes what doesn't.** On your Mac, with your tools, and it asks before anything goes out.
 
 Every row in the inbox belongs to you or to Junior.
 
@@ -60,12 +60,12 @@ Three steps. One of them is reading a shell script.
 **01 · Install the Mac app.** One line in Terminal. The app isn't notarized yet, so read [install.sh](install.sh) first. We would.
 
 ```sh
-$ curl -fsSL https://usetriage.sh/install.sh | sh
-→ Triage.app installed
-→ triage, triage-mcp in ~/.local/bin
+$ curl -fsSL https://usejunior.sh/install.sh | sh
+→ Junior.app installed
+→ junior, junior-mcp in ~/.local/bin
 ```
 
-**02 · Connect your tools.** GitHub and Slack out of the box. Anything with an MCP server through a job. Triage uses the logins you already have.
+**02 · Connect your tools.** GitHub and Slack out of the box. Anything with an MCP server through a job. Junior uses the logins you already have.
 
 **03 · Hand Junior the rest.** One line, not an essay. Junior reads it back, plans, then works. You approve what goes out.
 
@@ -104,7 +104,7 @@ The rest of the job. What happens between the inbox and the push.
 
 | Step | Day 1 (today) | After a few weeks · planned | Later · planned |
 | --- | --- | --- | --- |
-| Find the issue | Triage | Triage | Triage |
+| Find the issue | Junior | Junior | Junior |
 | Write the fix | Junior, you review the diff | Junior, you skim the diff | Junior |
 | Open the PR | Junior drafts it, you approve | Junior, within your rules | Junior |
 | Get it green | Junior fixes CI, you approve replies | Junior | Junior |
@@ -135,7 +135,7 @@ Not without your OK. Pushes, PRs, comments and messages wait for you, word for w
 It asks before it pushes a branch. You're fine.
 
 **Does it work while my Mac sleeps?**<br>
-No. Junior runs on your Mac and stops when it sleeps, like the rest of us. Triage starts again after a reboot. Scheduled jobs that couldn't run are recorded as missed, not quietly dropped. Quitting the window doesn't stop it either. A LaunchAgent keeps the server up.
+No. Junior runs on your Mac and stops when it sleeps, like the rest of us. Junior starts again after a reboot. Scheduled jobs that couldn't run are recorded as missed, not quietly dropped. Quitting the window doesn't stop it either. A LaunchAgent keeps the server up.
 
 **What do I need?**<br>
 A Mac, Apple silicon or Intel. Claude Code, installed and logged in. Codex works too, for chats. The full list is under [Install](#install).
@@ -144,10 +144,10 @@ A Mac, Apple silicon or Intel. Claude Code, installed and logged in. Codex works
 GitHub and Slack out of the box. Linear, Sentry, Notion or anything with an MCP server comes in through a job. You set up a job by chatting with Junior. Details under [What feeds it](#what-feeds-it).
 
 **Where does my data live?**<br>
-On your Mac, under `~/.triage`. Triage holds no GitHub, Slack or Linear credentials; it uses the logins you already have. What you send to Claude, Codex or a connector still goes to that service. We won't pretend otherwise. More under [Privacy](#privacy).
+On your Mac, under `~/.junior`. Junior holds no GitHub, Slack or Linear credentials; it uses the logins you already have. What you send to Claude, Codex or a connector still goes to that service. We won't pretend otherwise. More under [Privacy](#privacy).
 
 **What does it cost?**<br>
-Nothing. Triage is free and open source, under the MIT licence. Junior runs on your own Claude or Codex plan, and each session shows what it cost, in dollars.
+Nothing. Junior is free and open source, under the MIT licence. Junior runs on your own Claude or Codex plan, and each session shows what it cost, in dollars.
 
 **Why install from Terminal?**<br>
 The app isn't notarized by Apple yet, so a browser download would get blocked. The script installs it properly. [Read install.sh first](install.sh). We would.
@@ -155,29 +155,29 @@ The app isn't notarized by Apple yet, so a browser download would get blocked. T
 ## Install
 
 ```sh
-curl -fsSL https://usetriage.sh/install.sh | sh
+curl -fsSL https://usejunior.sh/install.sh | sh
 ```
 
-Run the same line again to update. Triage.app brings its own Node, so there's nothing to install from npm. On launch it attaches to the Triage already running, or starts one. More in [desktop/README.md](desktop/README.md).
+Run the same line again to update. Junior.app brings its own Node, so there's nothing to install from npm. On launch it attaches to the Junior already running, or starts one. More in [desktop/README.md](desktop/README.md).
 
 | You need | Why |
 | --- | --- |
-| macOS, Apple silicon or Intel | Triage is a Mac app |
+| macOS, Apple silicon or Intel | Junior is a Mac app |
 | [Claude Code](https://claude.com/claude-code), logged in | Junior, jobs and briefs run on your login, not an API key |
 | `gh`, logged in | the GitHub source · optional |
 | claude.ai Slack connector | the Slack source · optional |
 | Codex, logged in | Codex chats · optional |
 
-The installer also puts `triage` and `triage-mcp` in `~/.local/bin`. The `triage` command is safe to run any time.
+The installer also puts `junior` and `junior-mcp` in `~/.local/bin`. The `junior` command is safe to run any time.
 
 ```sh
-triage             # start if not running, print the URL
-triage status      # version, build, port, live sessions
-triage restart     # how an update takes effect
-triage stop        # stop it (ends live sessions)
-triage logs        # tail the server log
-triage doctor      # check node, claude, gh, the agent and the server
-triage add "Look at the flaky deploy check"   # file a to-do from any terminal
+junior             # start if not running, print the URL
+junior status      # version, build, port, live sessions
+junior restart     # how an update takes effect
+junior stop        # stop it (ends live sessions)
+junior logs        # tail the server log
+junior doctor      # check node, claude, gh, the agent and the server
+junior add "Look at the flaky deploy check"   # file a to-do from any terminal
 ```
 
 <kbd>⌘</kbd> <kbd>⇧</kbd> <kbd>T</kbd> does the same from anywhere on your Mac.
@@ -192,7 +192,7 @@ triage add "Look at the flaky deploy check"   # file a to-do from any terminal
 | Slack | built in, through your claude.ai connector, read-only | unread DMs and mentions |
 | Linear, Sentry, PagerDuty, Notion… | a job, through any MCP server Claude Code can see | whatever the job is told to look for |
 | The web | a job, with Claude Code's own search and fetch | pages a job finds |
-| You | the composer, <kbd>⌘</kbd><kbd>⇧</kbd><kbd>T</kbd>, `triage add`, or MCP | anything |
+| You | the composer, <kbd>⌘</kbd><kbd>⇧</kbd><kbd>T</kbd>, `junior add`, or MCP | anything |
 
 Every item has a canonical id. The same PR asked about in Slack and requested on GitHub is one row, not two.
 
@@ -200,10 +200,10 @@ A job is what you would tell a colleague: where to look, what counts, how often.
 
 ## Connect your own agent
 
-Triage's tools work from any Claude Code, Codex or Cursor session.
+Junior's tools work from any Claude Code, Codex or Cursor session.
 
 ```sh
-claude mcp add triage -- triage-mcp                 # stdio
+claude mcp add junior -- junior-mcp                 # stdio
 # or point a client at http://localhost:5178/mcp    # streamable HTTP
 ```
 
@@ -211,17 +211,17 @@ Settings → MCP shows the URL for the workspace you're in, and the one command 
 
 ## Privacy
 
-Everything runs on your Mac. Data lives in SQLite under `~/.triage`, one database per workspace. The server answers only this machine, unless you pair a phone in Settings → Phone. Sources go through your `gh` login and your claude.ai connectors. Junior, jobs and briefs spend your Claude or Codex plan, and the app shows what each one cost.
+Everything runs on your Mac. Data lives in SQLite under `~/.junior`, one database per workspace. The server answers only this machine, unless you pair a phone in Settings → Phone. Sources go through your `gh` login and your claude.ai connectors. Junior, jobs and briefs spend your Claude or Codex plan, and the app shows what each one cost.
 
 ## Development
 
 ```sh
-git clone https://github.com/usetriage/triage && cd triage
+git clone https://github.com/usejunior-sh/junior && cd junior
 npm install
 npm run dev          # server on :5188, Vite on :5189. Open the Vite URL.
 ```
 
-Dev keeps its data in `~/.triage-dev`, so your migrations never touch your real inbox.
+Dev keeps its data in `~/.junior-dev`, so your migrations never touch your real inbox.
 
 The server is not run under a file watcher on purpose: restarting it kills live Claude subprocesses. Restart it by hand after changing `server/`. `npm run typecheck` covers both halves, `npm test` runs the unit tests, and `npm run smoke` is the end-to-end check against a running server.
 
@@ -229,9 +229,9 @@ The server is not run under a file watcher on purpose: restarting it kills live 
 | --- | --- |
 | `shared/protocol.ts` | the WebSocket contract, imported by both sides |
 | `core/` | the store, scoring, jobs, teams and goals, sources |
-| `server/` | HTTP and WebSocket server, the `triage` and `triage-mcp` bins |
+| `server/` | HTTP and WebSocket server, the `junior` and `junior-mcp` bins |
 | `web/` | Vite + React UI |
-| `desktop/` | Triage.app, the Electron window over the server |
+| `desktop/` | Junior.app, the Electron window over the server |
 
 ---
 
@@ -239,9 +239,9 @@ The server is not run under a file watcher on purpose: restarting it kills live 
 
 <p align="center">
   <sub>
-    <a href="https://usetriage.sh">usetriage.sh</a> ·
-    <a href="https://usetriage.sh/changelog">Changelog</a> ·
-    <a href="https://github.com/usetriage/triage/issues">Issues</a> ·
+    <a href="https://usejunior.sh">usejunior.sh</a> ·
+    <a href="https://usejunior.sh/changelog">Changelog</a> ·
+    <a href="https://github.com/usejunior-sh/junior/issues">Issues</a> ·
     MIT licence
   </sub>
 </p>

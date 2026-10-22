@@ -1,5 +1,5 @@
 /**
- * Rules (Triage for engineers, M4): jobs bring work in, rules decide what
+ * Rules (Junior for engineers, M4): jobs bring work in, rules decide what
  * Junior does with it. A rule is "when an item is here for this reason and is
  * this label, work it with this playbook", started alone (auto) or offered to
  * you (suggest). Plan artifact cb50520f, "Rules".
@@ -26,7 +26,7 @@ export type Rule = {
   playbook: Playbook | null
   start: RuleStart
   on: boolean
-  /** triage shipped it; you can switch it, not delete it */
+  /** junior shipped it; you can switch it, not delete it */
   builtin: boolean
   /** worked by a watch on the PRs you hand off: listed, not edited here */
   watch?: boolean

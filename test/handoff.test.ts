@@ -161,8 +161,8 @@ test('a snooze ends early when the source changes; archived never reopens', () =
 })
 
 test('the store keeps a hand-off through ingestion, and wakes a snoozed item that changed', async () => {
-  const dir = mkdtempSync(path.join(tmpdir(), 'triage-handoff-'))
-  const store = openSqliteStore(path.join(dir, 'triage.db'))
+  const dir = mkdtempSync(path.join(tmpdir(), 'junior-handoff-'))
+  const store = openSqliteStore(path.join(dir, 'junior.db'))
   try {
     const item: WorkItem = {
       id: 'github:acme/api#9', source: 'github', kind: 'own-pr-open', title: 'PR 9', url: 'https://github.com/acme/api/pull/9',

@@ -1,5 +1,5 @@
 /**
- * The brief's facts, gathered from what triage already holds: the ranked open
+ * The brief's facts, gathered from what junior already holds: the ranked open
  * inbox (with each item's stage and turn), the job runs that ended, and how
  * many sends went out. Deterministic; time is an argument. Pure and
  * browser-safe: the server only collects the inputs.

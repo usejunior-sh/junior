@@ -55,7 +55,7 @@ export async function settingsRoutes({ req, url, json, rt }: ScopedCtx): Promise
         if (!project) throw new Error('unknown project')
         const cached = rt.folderProbes.get(project.path)
         const probe = cached && !refresh && Date.now() - cached.probedAt < FOLDER_PROBE_TTL_MS ? cached : await probeConnectors(rt, project.path)
-        // the run's own server shadows any user server named triage, never offer it
+        // the run's own server shadows any user server named junior, never offer it
         const connectors = probe.connectors.filter((c) => c.server !== RESERVED_SERVER)
         body = { ok: true, probedAt: probe.probedAt, connectors, cwd: project.path, elsewhere: await localServersElsewhere(rt, project.path, connectors) }
       } else {

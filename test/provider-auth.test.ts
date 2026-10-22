@@ -10,10 +10,10 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSy
 import os from 'node:os'
 import path from 'node:path'
 
-// TRIAGE_DIR is fixed when state.ts loads, so the root is set before the import.
-const home = mkdtempSync(path.join(os.tmpdir(), 'triage-auth-'))
-process.env.TRIAGE_HOME = home
-delete process.env.TRIAGE_DB
+// JUNIOR_DIR is fixed when state.ts loads, so the root is set before the import.
+const home = mkdtempSync(path.join(os.tmpdir(), 'junior-auth-'))
+process.env.JUNIOR_HOME = home
+delete process.env.JUNIOR_DB
 delete process.env.CLAUDE_CONFIG_DIR
 const ws = await import('../server/workspaces.js')
 type WorkspaceRegistry = import('../server/workspaces.js').WorkspaceRegistry
@@ -84,7 +84,7 @@ test('config-dir spawns with CLAUDE_CONFIG_DIR at the workspace claude/ dir, cre
 })
 
 test('configured MCP: the folder .mcp.json and every folder private servers from .claude.json', async () => {
-  const dir = mkdtempSync(path.join(os.tmpdir(), 'triage-cfg-'))
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'junior-cfg-'))
   const cwd = path.join(dir, 'proj')
   mkdirSync(cwd)
   writeFileSync(path.join(cwd, '.mcp.json'), JSON.stringify({ mcpServers: { shared: { command: 'x' } } }))

@@ -16,8 +16,8 @@ const say = (text: string, parent: string | null = null) =>
   sdk({ type: 'assistant', parent_tool_use_id: parent, message: { role: 'assistant', content: [{ type: 'text', text }] } })
 const turnEnd = () => sdk({ type: 'result', subtype: 'success', total_cost_usd: 0.1, duration_ms: 1000, num_turns: 1 })
 
-const WRITE = 'mcp__triage__write_artifact'
-const UPDATE = 'mcp__triage__update_artifact'
+const WRITE = 'mcp__junior__write_artifact'
+const UPDATE = 'mcp__junior__update_artifact'
 
 const call = (id: string, name: string, input: Record<string, unknown>, parent: string | null = null) =>
   sdk({ type: 'assistant', parent_tool_use_id: parent, message: { role: 'assistant', content: [{ type: 'tool_use', id, name, input }] } })
@@ -29,7 +29,7 @@ const answer = (id: string, content: string, isError = false, parent: string | n
   })
 
 const pub = (over: Partial<ArtifactToolResult> = {}): ArtifactToolResult => ({
-  triage: 'artifact',
+  junior: 'artifact',
   action: 'created',
   id: 'art-1',
   title: 'Q3 report',

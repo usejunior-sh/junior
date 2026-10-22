@@ -25,8 +25,8 @@ import { runRows, type RunRow } from '../../../core/job/run-rows.js'
 type Tab = 'overview' | 'runs' | 'items'
 const WEEK_MS = 7 * 86_400_000
 const SHOW_RUNS = 7
-/** How a browser job's skip reads when Triage.app wasn't open to host its tab (server/jobs/preview.ts BROWSER_NEEDS_APP). */
-const NEEDS_APP = /needs Triage\.app/
+/** How a browser job's skip reads when Junior.app wasn't open to host its tab (server/jobs/preview.ts BROWSER_NEEDS_APP). */
+const NEEDS_APP = /needs Junior\.app/
 
 const fmtTokens = (n: number) => (n === 0 ? '0' : n < 1000 ? String(n) : n < 1_000_000 ? `${Math.round(n / 1000)}k` : `${(n / 1_000_000).toFixed(1)}M`)
 const fmtUsd = (n: number) => (n < 0.01 && n > 0 ? '<$0.01' : `$${n.toFixed(2)}`)
@@ -70,7 +70,7 @@ function outcomeText(r: RunRow): string {
     case 'missed':
       return r.coveredAt != null ? `missed · covered by the ${fmtWhen(r.coveredAt)} run` : 'missed · covered by a later run'
     case 'skipped':
-      if (NEEDS_APP.test(r.reason ?? '')) return "skipped · Triage.app wasn't open"
+      if (NEEDS_APP.test(r.reason ?? '')) return "skipped · Junior.app wasn't open"
       return r.reason?.startsWith('skipped') ? r.reason : `skipped · ${r.reason ?? 'no reason recorded'}`
     case 'skipped_budget':
       return `over the daily budget${r.reason ? ` · ${r.reason}` : ''}`
@@ -130,7 +130,7 @@ export function JobPage({ id, onNavigate }: { id: string; onNavigate: (hash: str
   // The health strip, all derived: runs this week, what they filed and cost,
   // and how many of the filed items the user kept (anything not archived).
   // Outcomes count the ledger's rows, so a slot skipped without a session
-  // (Triage.app closed, over budget) still shows; spend comes from receipts.
+  // (Junior.app closed, over budget) still shows; spend comes from receipts.
   const health = useMemo(() => {
     const since = Date.now() - WEEK_MS
     const week = runs.filter((r) => r.startedAt >= since)
@@ -153,7 +153,7 @@ export function JobPage({ id, onNavigate }: { id: string; onNavigate: (hash: str
   }, [runs, rows, items])
 
   const ledgerSession = (key: string) => ledger.find((l) => l.id === key)?.sessionId
-  // A browser job skips while Triage.app is closed; two in a row is worth a word.
+  // A browser job skips while Junior.app is closed; two in a row is worth a word.
   const skipsForApp = rows.length >= 2 && rows.slice(0, 2).every((r) => r.status === 'skipped' && NEEDS_APP.test(r.reason ?? ''))
 
   async function toggle(on: boolean) {
@@ -325,7 +325,7 @@ export function JobPage({ id, onNavigate }: { id: string; onNavigate: (hash: str
         </div>
 
         {error && <div className="msg error">{error}</div>}
-        {job.browser && skipsForApp && <div className="msg">This job needs the browser. Keep Triage.app open, or it skips.</div>}
+        {job.browser && skipsForApp && <div className="msg">This job needs the browser. Keep Junior.app open, or it skips.</div>}
         {job.draft && !job.enabled && (
           <div className="draftBanner" role="status">
             <span className="tag">Draft</span>

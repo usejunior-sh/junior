@@ -141,7 +141,7 @@ export function App() {
   const logUnread = useLogUnread()
   const current = sessions.find((s) => s.id === currentId) ?? null
   // The browser pane beside this session (.docs/browser.md), never on a phone. Outside
-  // Triage.app it opens to say the browser lives there.
+  // Junior.app it opens to say the browser lives there.
   const browserOpen = useBrowserOpen(currentId) && !mobile
   // A narrow window can't hold the chats list, a chat and the browser at once: while
   // the pane shows, the list steps aside for display only (the saved setting stays),
@@ -205,7 +205,7 @@ export function App() {
   // Name the workspace in the tab title, with one tab per workspace, the
   // favicon alone cannot tell them apart.
   useEffect(() => {
-    document.title = activeWorkspace ? `triage • ${activeWorkspace.name}` : 'triage'
+    document.title = activeWorkspace ? `junior • ${activeWorkspace.name}` : 'junior'
   }, [activeWorkspace?.name])
   // The bare home route: Junior's page is the product's home. Goals are hidden
   // (the engine stays), so an old link to one lands there too.
@@ -547,7 +547,7 @@ export function App() {
           <SettingsPage workspace={activeWorkspace} tab={route.tab} onOpenSystem={(tab) => setSystem({ open: true, tab })} />
         ) : (
         <>
-        {/* Triage.app's title bar carries the panel toggle, so the panel and tab band drop theirs. */}
+        {/* Junior.app's title bar carries the panel toggle, so the panel and tab band drop theirs. */}
         <PanelCollapseContext.Provider value={mobile || isDesktop ? null : collapsePanel}>{panel}</PanelCollapseContext.Provider>
         {!panelCollapsed && !mobile && panel && (
           <div

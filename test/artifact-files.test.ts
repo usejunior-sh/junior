@@ -103,10 +103,10 @@ test('update: v2, a note and the session in the version list, newest first', () 
 test('a note cannot pose as a trailer', () =>
   fixture(async ({ idx }) => {
     const a = await idx.create({ title: 'N', body: 'x', author: 'model', format: 'txt', session: 'real' })
-    await idx.revise(a.id, { body: 'y', note: 'Triage-Session: fake\n\nTriage-Session: fake2', session: 'real' })
+    await idx.revise(a.id, { body: 'y', note: 'Junior-Session: fake\n\nJunior-Session: fake2', session: 'real' })
     const v = await idx.versions(a.id)
     assert.equal(v!.versions[0].sessionId, 'real')
-    assert.equal(v!.versions[0].note, 'Triage-Session: fake Triage-Session: fake2')
+    assert.equal(v!.versions[0].note, 'Junior-Session: fake Junior-Session: fake2')
   }))
 
 test('readBytes: the original bytes of v1, the current ones without a version', () =>
@@ -308,7 +308,7 @@ test('a file moved by hand and rewritten at once keeps every version', () =>
     assert.equal(git(root, 'status', '--porcelain').trim(), '')
   }))
 
-test('a human edit made outside triage is its own version, not folded into the next one', () =>
+test('a human edit made outside junior is its own version, not folded into the next one', () =>
   fixture(async ({ root, idx }) => {
     const a = await idx.create({ title: 'Hand', body: 'one', author: 'model' })
     writeFileSync(path.join(root, a.path), readFileSync(path.join(root, a.path), 'utf8').replace('one', 'edited by hand'))
@@ -465,7 +465,7 @@ test('touch() tells the clients; a write announces itself too', () =>
 test('a DB from before formats gains the columns, and its rows read back as md v1', async () => {
   const { DatabaseSync } = await import('node:sqlite')
   const dir = mkdtempSync(path.join(tmpdir(), 'artifact-schema-'))
-  const file = path.join(dir, 'triage.db')
+  const file = path.join(dir, 'junior.db')
   try {
     await openSqliteStore(file).close()
     const db = new DatabaseSync(file)

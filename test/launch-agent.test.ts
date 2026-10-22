@@ -1,7 +1,7 @@
 /**
  * The LaunchAgent (server/launchd.ts) is what makes jobs a promise rather
  * than a hope: without it the daemon dies at the next reboot and nothing brings
- * it back. Triage.app writes it on launch, so two things have to hold — the
+ * it back. Junior.app writes it on launch, so two things have to hold — the
  * plist must name the exact node + script we meant, and `load: false` must be
  * able to write one without touching launchctl (the app does that while a
  * daemon is already serving, and bootstrapping then would crash-loop).
@@ -16,15 +16,15 @@ import os from 'node:os'
 import path from 'node:path'
 import { installLaunchAgent, launchAgentInstalled, launchAgentPlist, launchAgentPointsAt, plistFor } from '../server/launchd.js'
 
-const APP = '/Applications/Triage.app/Contents/Resources'
+const APP = '/Applications/Junior.app/Contents/Resources'
 const NODE = `${APP}/node/bin/node`
-const CLI = `${APP}/triage/dist/server/cli.js`
+const CLI = `${APP}/junior/dist/server/cli.js`
 
 const spec = {
   node: NODE,
   script: CLI,
   port: 5178,
-  logFile: '/Users/x/.triage/server.log',
+  logFile: '/Users/x/.junior/server.log',
   env: { PATH: '/usr/bin:/bin', HOME: '/Users/x' },
 }
 
@@ -34,7 +34,7 @@ const spec = {
  * HOME back early would point the rest of the test at the real one.
  */
 async function withHome<T>(fn: (home: string) => T | Promise<T>): Promise<T> {
-  const home = mkdtempSync(path.join(os.tmpdir(), 'triage-agent-'))
+  const home = mkdtempSync(path.join(os.tmpdir(), 'junior-agent-'))
   const prev = process.env.HOME
   process.env.HOME = home
   // These tests write a real plist. If the redirect ever stops working, the
@@ -55,7 +55,7 @@ async function withHome<T>(fn: (home: string) => T | Promise<T>): Promise<T> {
 
 test('plistFor runs `<node> <cli> serve` and restarts on crash and at login', () => {
   const xml = plistFor(spec)
-  assert.match(xml, /<string>\/Applications\/Triage\.app\/Contents\/Resources\/node\/bin\/node<\/string>/)
+  assert.match(xml, /<string>\/Applications\/Junior\.app\/Contents\/Resources\/node\/bin\/node<\/string>/)
   assert.match(xml, /<string>serve<\/string>/)
   // Without both of these a reboot or a crash leaves jobs dead.
   assert.match(xml, /<key>RunAtLoad<\/key>\s*<true\/>/)
@@ -76,8 +76,8 @@ test('installLaunchAgent({ load: false }) writes the plist without launchctl', a
     assert.equal(launchAgentInstalled(), false, 'a fresh HOME has no agent')
     await installLaunchAgent(spec, { load: false })
     assert.equal(launchAgentInstalled(), true)
-    const xml = readFileSync(path.join(home, 'Library/LaunchAgents/sh.usetriage.triage.plist'), 'utf8')
-    assert.match(xml, /sh\.usetriage\.triage/)
+    const xml = readFileSync(path.join(home, 'Library/LaunchAgents/sh.usejunior.junior.plist'), 'utf8')
+    assert.match(xml, /sh\.usejunior\.junior/)
     assert.equal(xml, plistFor(spec))
   })
 })
@@ -89,9 +89,9 @@ test('launchAgentPointsAt: the copy that wrote it, and nobody else', async () =>
     assert.equal(launchAgentPointsAt(NODE, CLI), true)
     // An app moved to ~/Applications, or the npm install this replaced: the
     // plist still exists, so "installed" is true while it restarts nothing.
-    const moved = '/Users/x/Applications/Triage.app/Contents/Resources'
+    const moved = '/Users/x/Applications/Junior.app/Contents/Resources'
     assert.equal(launchAgentInstalled(), true)
-    assert.equal(launchAgentPointsAt(`${moved}/node/bin/node`, `${moved}/triage/dist/server/cli.js`), false)
+    assert.equal(launchAgentPointsAt(`${moved}/node/bin/node`, `${moved}/junior/dist/server/cli.js`), false)
     assert.equal(launchAgentPointsAt('/usr/local/bin/node', CLI), false, 'node must match too')
   })
 })
@@ -108,7 +108,7 @@ test('launchAgentPointsAt: a partial path must not count as a match', async () =
 test('the plist is rewritten in place, not appended to', async () => {
   await withHome(async () => {
     await installLaunchAgent(spec, { load: false })
-    const moved = { ...spec, node: '/Users/x/Applications/Triage.app/Contents/Resources/node/bin/node' }
+    const moved = { ...spec, node: '/Users/x/Applications/Junior.app/Contents/Resources/node/bin/node' }
     await installLaunchAgent(moved, { load: false })
     const xml = readFileSync(launchAgentPlist(), 'utf8')
     assert.equal(xml, plistFor(moved))

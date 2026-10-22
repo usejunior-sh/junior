@@ -25,36 +25,36 @@ export const sessionScoped = (u: PermissionUpdate): PermissionUpdate => ({ ...u,
 /** Built-in tools whose only effect is reading. */
 const READ_TOOLS = new Set(['Read', 'Grep', 'Glob', 'LS', 'NotebookRead', 'WebFetch', 'WebSearch'])
 /** Our own MCP tools that only read (the inbox, the artifacts index), never prompt for these. */
-/** triage's own team tools: they record and route, and the team card is the approval, never a prompt. */
+/** Junior's own team tools: they record and route, and the team card is the approval, never a prompt. */
 export const TEAM_TOOLS = new Set([
-  'mcp__triage__list_teams',
-  'mcp__triage__propose_team',
-  'mcp__triage__split_step',
-  'mcp__triage__revise_plan',
-  'mcp__triage__submit_step',
-  'mcp__triage__goal_verdict',
-  'mcp__triage__goal_unstick',
-  'mcp__triage__ask_you',
+  'mcp__junior__list_teams',
+  'mcp__junior__propose_team',
+  'mcp__junior__split_step',
+  'mcp__junior__revise_plan',
+  'mcp__junior__submit_step',
+  'mcp__junior__goal_verdict',
+  'mcp__junior__goal_unstick',
+  'mcp__junior__ask_you',
   'mcp__team__submit_step',
 ])
 /** Starting and messaging other chats: local work, since each chat's own sends stay held. Never a prompt. */
-export const SESSION_TOOLS = new Set(['mcp__triage__start_session', 'mcp__triage__message_session'])
-export const TRIAGE_READ_TOOLS = new Set([
-  'mcp__triage__list_work_items',
-  'mcp__triage__get_work_item',
-  'mcp__triage__get_session_context',
-  'mcp__triage__get_workspace',
-  'mcp__triage__list_artifacts',
-  'mcp__triage__read_artifact',
-  'mcp__triage__goal_get',
-  'mcp__triage__goal_list',
-  'mcp__triage__get_today',
+export const SESSION_TOOLS = new Set(['mcp__junior__start_session', 'mcp__junior__message_session'])
+export const JUNIOR_READ_TOOLS = new Set([
+  'mcp__junior__list_work_items',
+  'mcp__junior__get_work_item',
+  'mcp__junior__get_session_context',
+  'mcp__junior__get_workspace',
+  'mcp__junior__list_artifacts',
+  'mcp__junior__read_artifact',
+  'mcp__junior__goal_get',
+  'mcp__junior__goal_list',
+  'mcp__junior__get_today',
   // Other chats, by name (server/session/spawn-ops.ts): reading where they stand.
-  'mcp__triage__read_session',
-  'mcp__triage__list_sessions',
+  'mcp__junior__read_session',
+  'mcp__junior__list_sessions',
   // Advance approvals: listing reads, proposing only shows a card. Only the user's Add makes one.
-  'mcp__triage__list_approvals',
-  'mcp__triage__propose_approval',
+  'mcp__junior__list_approvals',
+  'mcp__junior__propose_approval',
 ])
 
 // Verb tokens that mark a connector call's intent: READ_VERBS / WRITE_VERBS
@@ -62,10 +62,10 @@ export const TRIAGE_READ_TOOLS = new Set([
 // the same words, so the prompt's effect and the Actions page never disagree.
 
 export function classifyEffect(toolName: string): ToolEffect {
-  // Our own inbox: reading it is harmless; every other triage tool writes local
+  // Our own inbox: reading it is harmless; every other junior tool writes local
   // SQLite (create/edit/upsert/resolve).
-  if (TRIAGE_READ_TOOLS.has(toolName)) return 'read'
-  if (toolName.startsWith('mcp__triage__')) return 'local-write'
+  if (JUNIOR_READ_TOOLS.has(toolName)) return 'read'
+  if (toolName.startsWith('mcp__junior__')) return 'local-write'
 
   if (READ_TOOLS.has(toolName)) return 'read'
   // TodoWrite is the session's own scratch list. No effect past this session.

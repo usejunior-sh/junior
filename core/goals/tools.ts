@@ -1,7 +1,7 @@
 /**
  * Goal tool signatures.
  *
- * GOAL_TOOLS are part of the triage MCP contract (core/mcp/tools.ts `TOOLS`,
+ * GOAL_TOOLS are part of the junior MCP contract (core/mcp/tools.ts `TOOLS`,
  * and the zod copy `goalMcpTools` in server/goals.ts), served by every
  * transport and idempotent like the upserts. ENGINE_TOOLS are served only to a
  * goal's lead, on its per-wake SDK server: the lead decides through them, and
@@ -120,7 +120,7 @@ export const GOAL_TOOLS: readonly ToolDef[] = [
       "Propose the plan for a goal in draft_plan. It is validated and rejected, never repaired; a valid plan moves the goal to plan_ready for the user's review. Proposing the same plan again is a no-op.",
     inputSchema: {
       type: 'object',
-      properties: { goalId: { type: 'string' }, plan: PLAN_SCHEMA, sessionId: { type: 'string', description: 'your triage session id' } },
+      properties: { goalId: { type: 'string' }, plan: PLAN_SCHEMA, sessionId: { type: 'string', description: 'your junior session id' } },
       required: ['goalId', 'plan'],
     },
   },

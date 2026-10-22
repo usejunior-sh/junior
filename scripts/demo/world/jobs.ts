@@ -52,8 +52,8 @@ export function jobs(): DemoJob[] {
     },
     {
       id: ID.job.deps,
-      file: 'dependabot-triage',
-      title: 'Dependabot triage',
+      file: 'dependabot-junior',
+      title: 'Dependabot junior',
       schedule: '0 11 * * 1',
       tools: ['github'],
       output: 'items',

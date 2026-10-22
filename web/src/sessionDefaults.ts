@@ -7,11 +7,11 @@
 import type { EffortLevel } from '../../shared/protocol.js'
 import { isEffort } from './models.js'
 
-const MODEL_KEY = 'triage.newSession.model'
-const EFFORT_KEY = 'triage.newSession.effort'
+const MODEL_KEY = 'junior.newSession.model'
+const EFFORT_KEY = 'junior.newSession.effort'
 // Fast mode is stored as an explicit '1'. Anything else is off, so a stale
 // or garbled value can never quietly start billing at premium rates.
-const FAST_MODE_KEY = 'triage.newSession.fastMode'
+const FAST_MODE_KEY = 'junior.newSession.fastMode'
 
 export type SessionDefaults = {
   model?: string

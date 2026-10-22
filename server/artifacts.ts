@@ -5,10 +5,10 @@
  * (html, csv, txt, json, svg, pdf, images) is a pair, the file and a
  * `<file>.artifact.json` sidecar that holds id, title, author and refs.
  *
- *   ~/.triage/workspaces/<id>/artifacts/
+ *   ~/.junior/workspaces/<id>/artifacts/
  *     .git/          every server-side write is a commit. A version is one
  *                    commit that touched the artifact's file (`git log --follow`,
- *                    cut at a copy), numbered by its `Triage-Version` trailer
+ *                    cut at a copy), numbered by its `Junior-Version` trailer
  *     notes/         human notes (and model notes written via the MCP tool)
  *     briefs/        one brief per work item
  *     files/         non-markdown artifacts: <slug>-<id8>.<ext> + sidecar
@@ -57,7 +57,7 @@ const INDEX_TTL_MS = 15_000
 const VERSIONS_LISTED = 200
 const GIT_MAX_BUFFER = 64 * 1024 * 1024
 const SHOW_MAX_BUFFER = 30 * 1024 * 1024
-const GIT_IDENTITY = ['-c', 'user.name=triage', '-c', 'user.email=triage@localhost', '-c', 'commit.gpgsign=false']
+const GIT_IDENTITY = ['-c', 'user.name=junior', '-c', 'user.email=junior@localhost', '-c', 'commit.gpgsign=false']
 
 // Frontmatter: a deliberately small YAML subset, no dependency
 //
@@ -213,7 +213,7 @@ export type ArtifactFile = { artifact: Artifact; body: string; data: Record<stri
 
 const SIDE = ARTIFACT_SIDECAR_SUFFIX
 const extOf = (rel: string): string => path.extname(rel).slice(1).toLowerCase()
-/** The format a content path says it is: only the extensions triage writes are in the table. */
+/** The format a content path says it is: only the extensions Junior writes are in the table. */
 const formatOfRel = (rel: string): ArtifactFormat | null => {
   const e = extOf(rel)
   return isArtifactFormat(e) ? e : null
@@ -253,7 +253,7 @@ function mdFromFile(rel: string, text: string, st: Stat, knownId: string | null,
 
 /** What `<file>.artifact.json` holds: the identity a non-markdown file cannot carry itself. */
 type Sidecar = {
-  triage: 1
+  junior: 1
   id: string
   title: string
   author: ArtifactAuthor
@@ -324,9 +324,9 @@ const cleanNote = (s: string | undefined): string | undefined => {
 }
 
 /**
- * The note, the Triage-Session trailer and the Triage-Version trailer of a
+ * The note, the Junior-Session trailer and the Junior-Version trailer of a
  * commit message. Trailers count only in the last paragraph, and a version
- * only next to the Triage-Artifact line the server writes with it, so a note
+ * only next to the Junior-Artifact line the server writes with it, so a note
  * cannot pose as one.
  */
 function parseCommitMessage(msg: string): { note?: string; sessionId?: string; version?: number } {
@@ -334,10 +334,10 @@ function parseCommitMessage(msg: string): { note?: string; sessionId?: string; v
   let sessionId: string | undefined
   let version: number | undefined
   const last = paras[paras.length - 1]
-  if (last && last.split('\n').every((l) => /^Triage-(Session|Artifact|Version): \S+$/.test(l))) {
-    sessionId = /^Triage-Session: (\S+)$/m.exec(last)?.[1]
-    const v = /^Triage-Version: ([1-9]\d{0,8})$/m.exec(last)?.[1]
-    if (v && /^Triage-Artifact: /m.test(last)) version = Number(v)
+  if (last && last.split('\n').every((l) => /^Junior-(Session|Artifact|Version): \S+$/.test(l))) {
+    sessionId = /^Junior-Session: (\S+)$/m.exec(last)?.[1]
+    const v = /^Junior-Version: ([1-9]\d{0,8})$/m.exec(last)?.[1]
+    if (v && /^Junior-Artifact: /m.test(last)) version = Number(v)
     paras.pop()
   }
   const note = paras.join(' ').replace(/\s+/g, ' ').trim()
@@ -469,7 +469,7 @@ export class ArtifactIndex {
     } catch {
       // a sidecar that did not parse is replaced
     }
-    await this.writeText(sideRel, JSON.stringify({ ...d, triage: 1, id }, null, 2) + '\n')
+    await this.writeText(sideRel, JSON.stringify({ ...d, junior: 1, id }, null, 2) + '\n')
   }
 
   /** Re-read one file into the index (after a write). Returns the row. */
@@ -610,9 +610,9 @@ export class ArtifactIndex {
       const note = cleanNote(opts.note)
       if (note) args.push('-m', note)
       const trailers = [
-        opts.session && /^[\w.-]+$/.test(opts.session) ? `Triage-Session: ${opts.session}` : '',
-        opts.artifactId && /^[\w.-]+$/.test(opts.artifactId) ? `Triage-Artifact: ${opts.artifactId}` : '',
-        opts.artifactId && opts.version ? `Triage-Version: ${opts.version}` : '',
+        opts.session && /^[\w.-]+$/.test(opts.session) ? `Junior-Session: ${opts.session}` : '',
+        opts.artifactId && /^[\w.-]+$/.test(opts.artifactId) ? `Junior-Artifact: ${opts.artifactId}` : '',
+        opts.artifactId && opts.version ? `Junior-Version: ${opts.version}` : '',
       ].filter(Boolean)
       if (trailers.length) args.push('-m', trailers.join('\n'))
       await git(args)
@@ -625,7 +625,7 @@ export class ArtifactIndex {
 
   /**
    * Commit whatever is waiting in the working tree (a move or an edit made
-   * outside triage) as its own commit, before a write of ours. A move
+   * outside junior) as its own commit, before a write of ours. A move
    * committed alone is a pure rename, which git follows however much the
    * next version changes the file, and an edit made by hand is not folded
    * into Junior's version. Call it only inside `serial`, before the write.
@@ -647,8 +647,8 @@ export class ArtifactIndex {
 
   /**
    * The commits that touched one file, oldest first, numbered. A commit that
-   * carries a `Triage-Version` trailer keeps that number; one without (a
-   * commit made outside triage, or before versions) is the one after the
+   * carries a `Junior-Version` trailer keeps that number; one without (a
+   * commit made outside junior, or before versions) is the one after the
    * commit before it. Renames are followed; a copy is not: `--follow` also
    * detects copies, and a new file whose bytes match another artifact's is
    * its own artifact, so the history stops at the commit that made the copy.
@@ -872,7 +872,7 @@ export class ArtifactIndex {
   /**
    * Commit a write and fix the row's version. A write that makes a version
    * (`created` or `bump`) is numbered here, before the commit, and the number
-   * goes into the commit as a `Triage-Version` trailer: the number stays with
+   * goes into the commit as a `Junior-Version` trailer: the number stays with
    * its commit even when a file spent time over 10 MB with no history. git can
    * know more than the row (a backfill, a commit made elsewhere), so the next
    * number is after the newest one git holds.
@@ -917,7 +917,7 @@ export class ArtifactIndex {
     const rel = this.rel(`${subdir ?? 'files'}/${name}.${format}`)
     const now = new Date().toISOString()
     const side: Sidecar = {
-      triage: 1,
+      junior: 1,
       id,
       title: input.title,
       author: input.author,
@@ -1057,7 +1057,7 @@ export class ArtifactIndex {
       JSON.stringify(refs) !== JSON.stringify(art.refs)
     if (!contentChanged && !metaChanged) return { artifact: art, changed: false }
     const side: Sidecar = {
-      triage: 1,
+      junior: 1,
       id: art.id,
       title: patch.title ?? art.title,
       author: patch.author ?? art.author,

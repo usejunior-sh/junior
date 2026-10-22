@@ -7,7 +7,7 @@
 import { useCallback, useEffect, useState, type MouseEvent } from 'react'
 import type { RailSection } from './components/Rail.js'
 
-const key = (workspaceId: string) => `triage.tabs.${workspaceId || 'default'}`
+const key = (workspaceId: string) => `junior.tabs.${workspaceId || 'default'}`
 
 /**
  * What the band holds: tabs you pinned, the one document you are peeking at,
@@ -177,7 +177,7 @@ export function rowOpen(open: () => void, pin: () => void) {
  * the artifact you were reading, not the grid. Per workspace, per browser,
  * where *you* were, so the same reasoning (and storage) as the tabs above.
  */
-const routeKey = (workspaceId: string) => `triage.lastRoute.${workspaceId || 'default'}`
+const routeKey = (workspaceId: string) => `junior.lastRoute.${workspaceId || 'default'}`
 
 export type LastRoutes = Partial<Record<RailSection, string>>
 

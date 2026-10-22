@@ -1,8 +1,8 @@
 /**
  * Goals (.docs/goals/goals-engine.md), the server half of M1: the `goal*Op`
- * functions every door funnels through, the in-process triage MCP
- * (makeTriageMcp), the external MCP (core/mcp/tools.ts → these routes), the
- * HTTP API and the `triage goal` CLI, so a goal created one way reads the
+ * functions every door funnels through, the in-process junior MCP
+ * (makeJuniorMcp), the external MCP (core/mcp/tools.ts → these routes), the
+ * HTTP API and the `junior goal` CLI, so a goal created one way reads the
  * same every other way. Input is validated here once and rejected, never
  * repaired.
  *
@@ -967,7 +967,7 @@ export async function bootGoalRun(d: GoalDeps, eng: GoalEngine): Promise<number>
     const lost = await working(d, goal.id)
     // Rows a restart left open that nobody settles (an earlier session's): closed as failed.
     for (const r of await d.store.goals.sessions(goal.id)) if (r.endedAt === null && !lost.some((w) => w.sessionId === r.sessionId)) await d.store.goals.putSession({ ...r, endedAt: d.now(), outcome: r.outcome ?? 'failed' })
-    for (const w of lost) await goalSessionEndedOp(d, quiet, { goalId: goal.id, sessionId: w.sessionId, error: 'triage restarted', restart: true })
+    for (const w of lost) await goalSessionEndedOp(d, quiet, { goalId: goal.id, sessionId: w.sessionId, error: 'junior restarted', restart: true })
     const g = await d.store.goals.get(goal.id)
     if (g?.state === 'running') await engineMove(d, g, 'yield', null, d.now(), { restart: true })
     d.changed(goal.id)
@@ -1794,7 +1794,7 @@ export async function goalGetForReviewer(d: GoalDeps, goalId: string) {
 }
 
 // ---------------------------------------------------------------------------
-// The in-process triage MCP's goal tools (makeTriageMcp), the zod mirror of
+// The in-process junior MCP's goal tools (makeJuniorMcp), the zod mirror of
 // GOAL_TOOLS (core/goals/tools.ts), which the external transports serve.
 // Objects are loose so planFrom sees, and rejects, a key it doesn't know.
 // ---------------------------------------------------------------------------
@@ -1882,7 +1882,7 @@ export function goalMcpTools(d: GoalDeps) {
     tool(
       'goal_propose_plan',
       describe('goal_propose_plan'),
-      { goalId: z.string(), plan: planZ, sessionId: z.string().optional().describe('your triage session id') },
+      { goalId: z.string(), plan: planZ, sessionId: z.string().optional().describe('your junior session id') },
       run(async (a) => wrote(await goalProposePlanOp(d, a))),
     ),
     tool(

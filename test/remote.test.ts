@@ -52,16 +52,16 @@ test('accessOf: DNS rebinding reaches loopback under a foreign host and is not l
 test('accessOf: another device needs access on and the token', () => {
   const lan = (headers: Record<string, string>) => req('192.168.1.40', { host: '192.168.1.20:5178', ...headers })
   assert.equal(accessOf(lan({}), on), 'denied')
-  assert.equal(accessOf(lan({ cookie: `triage_token=${TOKEN}` }), off), 'denied')
-  assert.equal(accessOf(lan({ cookie: `triage_ws=x; triage_token=${TOKEN}` }), on), 'paired')
+  assert.equal(accessOf(lan({ cookie: `junior_token=${TOKEN}` }), off), 'denied')
+  assert.equal(accessOf(lan({ cookie: `junior_ws=x; junior_token=${TOKEN}` }), on), 'paired')
   assert.equal(accessOf(lan({ authorization: `Bearer ${TOKEN}` }), on), 'paired')
-  assert.equal(accessOf(lan({ cookie: 'triage_token=wrong' }), on), 'denied')
+  assert.equal(accessOf(lan({ cookie: 'junior_token=wrong' }), on), 'denied')
 })
 
 test('accessOf: a loopback proxy forwarding a phone is the phone, whatever Host it claims', () => {
   const proxied = (headers: Record<string, string>) => req('127.0.0.1', { 'x-forwarded-for': '192.168.1.40', ...headers })
   assert.equal(accessOf(proxied({ host: 'localhost:5189' }), on), 'denied')
-  assert.equal(accessOf(proxied({ host: '192.168.1.20:5189', cookie: `triage_token=${TOKEN}` }), on), 'paired')
+  assert.equal(accessOf(proxied({ host: '192.168.1.20:5189', cookie: `junior_token=${TOKEN}` }), on), 'paired')
   // A client-supplied loopback entry before the proxy's own does not count.
   assert.equal(accessOf(proxied({ host: 'localhost:5189', 'x-forwarded-for': '127.0.0.1, 192.168.1.40' }), on), 'denied')
   // The proxy in dev, forwarding this machine's own browser, is still local.

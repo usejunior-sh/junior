@@ -72,7 +72,7 @@ export async function browserGate(ctx: BrowserGateContext, toolName: string, inp
   // Everything is free on this machine: that is what testing is.
   const here = mem.url
   if (!here || isLocalUrl(here, ctx.projectRoot)) return null
-  if (!ctx.hub.status.compatible) return null // the tool answers "open Triage.app"
+  if (!ctx.hub.status.compatible) return null // the tool answers "open Junior.app"
 
   const d = new PageDriver(ctx.hub, ctx.sessionId)
   const facts = async (uid: unknown): Promise<ElementFacts | null> => (typeof uid === 'number' ? d.describe(uid).catch(() => null) : null)

@@ -1,6 +1,6 @@
 /**
  * Chats that start chats (start_session / message_session / read_session /
- * list_sessions in the triage MCP). A started session is an ordinary chat in
+ * list_sessions in the junior MCP). A started session is an ordinary chat in
  * the list: the only difference is that its first message came from another
  * chat, not the user. Sessions address each other by name, the handle
  * `/rename` sets (core/sessions/names.ts).

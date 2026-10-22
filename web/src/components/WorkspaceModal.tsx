@@ -158,7 +158,7 @@ export function WorkspaceModal({ mode, onClose }: Props) {
     return <dialog ref={dialog} className="wsModal" onClose={onClose} />
   }
 
-  const heading = mode.kind === 'onboarding' ? 'Welcome to triage — set up your workspace' : 'New workspace'
+  const heading = mode.kind === 'onboarding' ? 'Welcome to Junior — set up your workspace' : 'New workspace'
   const needsKey = authBackend === 'api-key' && !apiKey.trim() && !(target?.apiKeyHint && mode.kind !== 'create')
 
   return (

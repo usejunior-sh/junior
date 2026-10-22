@@ -43,7 +43,7 @@ export async function workspaceCmd(sub: string | undefined, name: string | undef
   }
 
   if (sub === 'create') {
-    if (!name) die(`workspace create needs a name, e.g. ${cyan('triage workspace create work')}`)
+    if (!name) die(`workspace create needs a name, e.g. ${cyan('junior workspace create work')}`)
     if (port) {
       const body = (await (
         await fetch(`http://localhost:${port}/api/workspaces`, {
@@ -67,10 +67,10 @@ export async function workspaceCmd(sub: string | undefined, name: string | undef
   }
 
   if (sub === 'use') {
-    if (!name) die(`workspace use needs a name or id, e.g. ${cyan('triage workspace use work')}`)
+    if (!name) die(`workspace use needs a name or id, e.g. ${cyan('junior workspace use work')}`)
     const reg = loadRegistry()
     const match = reg.workspaces.find((w) => w.id === name || w.name.toLowerCase() === name.toLowerCase())
-    if (!match) die(`no workspace named "${name}" — see ${cyan('triage workspace list')}`)
+    if (!match) die(`no workspace named "${name}" — see ${cyan('junior workspace list')}`)
     if (port) {
       const body = (await (
         await fetch(`http://localhost:${port}/api/workspaces/default`, {
@@ -88,5 +88,5 @@ export async function workspaceCmd(sub: string | undefined, name: string | undef
     return
   }
 
-  die(`unknown workspace command "${sub}" — try ${cyan('triage workspace list')}`)
+  die(`unknown workspace command "${sub}" — try ${cyan('junior workspace list')}`)
 }

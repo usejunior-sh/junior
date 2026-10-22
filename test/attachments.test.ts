@@ -1,7 +1,7 @@
 /**
  * Attached files (server/attachments.ts): name sanitizing, the upload store and
  * its caps, path traversal, and the validators for a message's `files` and an
- * item save's `files`. Files live in a temp dir — never ~/.triage.
+ * item save's `files`. Files live in a temp dir — never ~/.junior.
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -36,7 +36,7 @@ import {
 } from '../server/attachments.js'
 import { MAX_FILE_BYTES, MAX_FILES_PER_ITEM, MAX_FILES_PER_MESSAGE } from '../shared/protocol.js'
 
-const tmp = () => mkdtempSync(path.join(tmpdir(), 'triage-attach-'))
+const tmp = () => mkdtempSync(path.join(tmpdir(), 'junior-attach-'))
 const reqOf = (body: Buffer, headers: Record<string, string> = {}) =>
   Object.assign(Readable.from([body]), { headers }) as unknown as http.IncomingMessage
 const UNKNOWN = '00000000-0000-4000-8000-000000000000'
@@ -319,8 +319,8 @@ test('create_session checks its uploads before it makes a worktree or a session'
 })
 
 test('the store records an item\'s file refs and clears them', async () => {
-  const dir = mkdtempSync(path.join(tmpdir(), 'triage-attach-store-'))
-  const store = openSqliteStore(path.join(dir, 'triage.db'))
+  const dir = mkdtempSync(path.join(tmpdir(), 'junior-attach-store-'))
+  const store = openSqliteStore(path.join(dir, 'junior.db'))
   try {
     const id = 'manual:11111111-1111-4111-8111-111111111111'
     await store.items.createManual({ id, title: 'with a file' })

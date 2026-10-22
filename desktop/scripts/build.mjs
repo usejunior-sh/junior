@@ -1,4 +1,4 @@
-// Builds Triage.app: root build → stage the usetriage package with its prod
+// Builds Junior.app: root build → stage the usejunior package with its prod
 // deps → fetch an official Node → compile the Electron main → icon →
 // electron-builder (dir) → ad-hoc sign → zip (and optionally a dmg).
 //
@@ -22,7 +22,7 @@ const desktop = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const root = path.resolve(desktop, '..')
 const stage = path.join(desktop, '.stage')
 const cache = path.join(desktop, '.cache')
-const stageTriage = path.join(stage, 'triage')
+const stageJunior = path.join(stage, 'junior')
 const stageNode = path.join(stage, 'node')
 
 // ---- args
@@ -35,7 +35,7 @@ const option = (name) => {
 }
 const arch = option('--arch') ?? process.arch
 if (arch !== 'arm64' && arch !== 'x64') die(`--arch must be arm64 or x64, got ${arch}`)
-if (process.platform !== 'darwin') die('Triage.app builds on macOS only')
+if (process.platform !== 'darwin') die('Junior.app builds on macOS only')
 
 const version = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8')).version
 
@@ -79,7 +79,7 @@ function dirSize(dir) {
   return Number(execFileSync('du', ['-sk', dir], { encoding: 'utf8' }).split('\t')[0]) * 1024
 }
 
-console.log(bold(`Triage.app ${version} · mac-${arch}`))
+console.log(bold(`Junior.app ${version} · mac-${arch}`))
 
 // ---- 1. root build
 
@@ -92,52 +92,52 @@ if (flag('--skip-root-build') && existsSync(path.join(root, 'dist/server/cli.js'
 
 // ---- 2. stage the server: exactly the published package + prod deps
 
-step('stage server → .stage/triage')
+step('stage server → .stage/junior')
 {
   // npm pack gives exactly what `npm publish` ships (package.json "files").
-  const packDir = mkdtempSync(path.join(os.tmpdir(), 'triage-pack-'))
+  const packDir = mkdtempSync(path.join(os.tmpdir(), 'junior-pack-'))
   const packed = JSON.parse(execFileSync('npm', ['pack', '--json', '--ignore-scripts', '--pack-destination', packDir], { cwd: root, encoding: 'utf8' }))
   const tgz = path.join(packDir, packed[0].filename)
   execFileSync('tar', ['-xzf', tgz, '-C', packDir])
-  mkdirSync(stageTriage, { recursive: true })
-  for (const entry of readdirSync(stageTriage)) {
-    if (entry !== 'node_modules') rmSync(path.join(stageTriage, entry), { recursive: true, force: true })
+  mkdirSync(stageJunior, { recursive: true })
+  for (const entry of readdirSync(stageJunior)) {
+    if (entry !== 'node_modules') rmSync(path.join(stageJunior, entry), { recursive: true, force: true })
   }
-  cpSync(path.join(packDir, 'package'), stageTriage, { recursive: true })
+  cpSync(path.join(packDir, 'package'), stageJunior, { recursive: true })
   rmSync(packDir, { recursive: true, force: true })
   note(`${packed[0].filename} · ${packed[0].entryCount} files`)
 
   // Reinstall prod deps only when the lockfile or the arch changed.
   const lock = readFileSync(path.join(root, 'package-lock.json'))
   const key = `${sha256(lock)}-darwin-${arch}`
-  const marker = path.join(stageTriage, 'node_modules/.triage-stage')
+  const marker = path.join(stageJunior, 'node_modules/.junior-stage')
   if (existsSync(marker) && readFileSync(marker, 'utf8') === key) {
     note('node_modules up to date')
   } else {
-    writeFileSync(path.join(stageTriage, 'package-lock.json'), lock)
+    writeFileSync(path.join(stageJunior, 'package-lock.json'), lock)
     // --os/--cpu pick the target's optional deps (the Agent SDK's native
     // claude binary); --ignore-scripts because node-pty's install only checks
     // for its prebuild and the package's own postinstall is run below.
-    run('npm', ['ci', '--omit=dev', '--ignore-scripts', '--no-audit', '--no-fund', '--os=darwin', `--cpu=${arch}`], { cwd: stageTriage })
-    rmSync(path.join(stageTriage, 'package-lock.json'))
-    run(process.execPath, ['scripts/postinstall.mjs'], { cwd: stageTriage })
+    run('npm', ['ci', '--omit=dev', '--ignore-scripts', '--no-audit', '--no-fund', '--os=darwin', `--cpu=${arch}`], { cwd: stageJunior })
+    rmSync(path.join(stageJunior, 'package-lock.json'))
+    run(process.execPath, ['scripts/postinstall.mjs'], { cwd: stageJunior })
     prune(arch)
     writeFileSync(marker, key)
   }
-  note(`${rel(stageTriage)} · ${humanSize(dirSize(stageTriage))}`)
+  note(`${rel(stageJunior)} · ${humanSize(dirSize(stageJunior))}`)
 }
 
 // Drop what can never load on this target: node-pty's prebuilds for other
 // platforms and its C++ sources (it loads prebuilds/<platform>-<arch> only).
 function prune(target) {
-  const pty = path.join(stageTriage, 'node_modules/node-pty')
+  const pty = path.join(stageJunior, 'node_modules/node-pty')
   const keep = `darwin-${target}`
   for (const dir of readdirSync(path.join(pty, 'prebuilds'))) {
     if (dir !== keep) rmSync(path.join(pty, 'prebuilds', dir), { recursive: true, force: true })
   }
   for (const dir of ['deps', 'third_party', 'src']) rmSync(path.join(pty, dir), { recursive: true, force: true })
   if (!existsSync(path.join(pty, 'prebuilds', keep, 'pty.node'))) die(`node-pty has no prebuild for ${keep}`)
-  const sdkBin = path.join(stageTriage, `node_modules/@anthropic-ai/claude-agent-sdk-darwin-${target}/claude`)
+  const sdkBin = path.join(stageJunior, `node_modules/@anthropic-ai/claude-agent-sdk-darwin-${target}/claude`)
   if (!existsSync(sdkBin)) die(`the Agent SDK's native binary for darwin-${target} was not installed`)
   note(`pruned node-pty to ${keep}`)
 }
@@ -171,7 +171,7 @@ step('Node runtime → .stage/node')
     note(`sha256 ok ${dim(expected.slice(0, 16) + '…')}`)
 
     // Extract into a fresh directory, then take only bin/node and the LICENSE.
-    const tmp = mkdtempSync(path.join(os.tmpdir(), 'triage-node-'))
+    const tmp = mkdtempSync(path.join(os.tmpdir(), 'junior-node-'))
     execFileSync('tar', ['-xzf', tarball, '-C', tmp, `${name}/bin/node`, `${name}/LICENSE`])
     rmSync(stageNode, { recursive: true, force: true })
     mkdirSync(path.join(stageNode, 'bin'), { recursive: true })
@@ -239,7 +239,7 @@ step('icon → build/icon.icns')
 
 step('electron-builder')
 const outDir = path.join(desktop, 'release', arch === 'x64' ? 'mac' : `mac-${arch}`)
-const app = path.join(outDir, 'Triage.app')
+const app = path.join(outDir, 'Junior.app')
 {
   const args = ['--mac', 'dir', `--${arch}`, '--publish', 'never', `-c.extraMetadata.version=${version}`]
   // Reuse the Electron that npm already installed when it matches the target.
@@ -256,7 +256,7 @@ const app = path.join(outDir, 'Triage.app')
   // The npm-installed Electron still carries its "drop an app here" shell.
   rmSync(path.join(app, 'Contents/Resources/default_app.asar'), { force: true })
   // extraResources is filtered, so check the runtime actually made it in.
-  for (const p of ['node/bin/node', 'triage/dist/server/cli.js', 'triage/node_modules/node-pty/package.json', 'triage/node_modules/@anthropic-ai/claude-agent-sdk/package.json']) {
+  for (const p of ['node/bin/node', 'junior/dist/server/cli.js', 'junior/node_modules/node-pty/package.json', 'junior/node_modules/@anthropic-ai/claude-agent-sdk/package.json']) {
     if (!existsSync(path.join(app, 'Contents/Resources', p))) die(`Resources/${p} is missing from the app`)
   }
 }
@@ -308,7 +308,7 @@ function findMachO(dir) {
 // ---- 8. zip (+ dmg)
 
 step('package')
-const zip = path.join(desktop, 'release', `Triage-${version}-mac-${arch}.zip`)
+const zip = path.join(desktop, 'release', `Junior-${version}-mac-${arch}.zip`)
 {
   // ditto keeps the framework symlinks and the signatures intact.
   rmSync(zip, { force: true })
@@ -316,17 +316,17 @@ const zip = path.join(desktop, 'release', `Triage-${version}-mac-${arch}.zip`)
 }
 let dmg = null
 if (flag('--dmg')) {
-  dmg = path.join(desktop, 'release', `Triage-${version}-mac-${arch}.dmg`)
-  const src = mkdtempSync(path.join(os.tmpdir(), 'triage-dmg-'))
-  run('ditto', [app, path.join(src, 'Triage.app')])
+  dmg = path.join(desktop, 'release', `Junior-${version}-mac-${arch}.dmg`)
+  const src = mkdtempSync(path.join(os.tmpdir(), 'junior-dmg-'))
+  run('ditto', [app, path.join(src, 'Junior.app')])
   symlinkSync('/Applications', path.join(src, 'Applications'))
   rmSync(dmg, { force: true })
-  run('hdiutil', ['create', '-quiet', '-volname', 'Triage', '-srcfolder', src, '-ov', '-format', 'UDZO', dmg])
+  run('hdiutil', ['create', '-quiet', '-volname', 'Junior', '-srcfolder', src, '-ov', '-format', 'UDZO', dmg])
   rmSync(src, { recursive: true, force: true })
 }
 console.log(dim(`  done in ${((Date.now() - stepStart) / 1000).toFixed(1)}s`))
 
-console.log(`\n${green('●')} ${bold(`Triage ${version} (mac-${arch})`)}`)
+console.log(`\n${green('●')} ${bold(`Junior ${version} (mac-${arch})`)}`)
 console.log(`  app  ${rel(app)}  ${dim(humanSize(dirSize(app)))}`)
 console.log(`  zip  ${rel(zip)}  ${dim(humanSize(statSync(zip).size))}`)
 if (dmg) console.log(`  dmg  ${rel(dmg)}  ${dim(humanSize(statSync(dmg).size))}`)

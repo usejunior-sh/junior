@@ -142,7 +142,7 @@ export class GoalLedger {
   async commit(goalId: string, message: string): Promise<void> {
     if (!existsSync(path.join(this.root, '.git'))) return
     const rel = goalDir(goalId)
-    const git = (args: string[]) => pExecFile('git', ['-c', 'user.name=triage', '-c', 'user.email=triage@localhost', ...args], { cwd: this.root })
+    const git = (args: string[]) => pExecFile('git', ['-c', 'user.name=junior', '-c', 'user.email=junior@localhost', ...args], { cwd: this.root })
     try {
       await git(['add', '-A', '--', rel])
       const { stdout } = await git(['diff', '--cached', '--name-only', '--', rel])

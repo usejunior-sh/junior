@@ -85,7 +85,7 @@ test('sniffFormat: svg needs an <svg> element', () => {
 })
 
 const result: ArtifactToolResult = {
-  triage: 'artifact',
+  junior: 'artifact',
   action: 'created',
   id: 'abc',
   title: 'Q3 report',
@@ -107,7 +107,7 @@ test('parseArtifactResult: text, a wrong discriminator and missing fields are re
   assert.equal(parseArtifactResult('ok: created abc at notes/x.md'), null)
   assert.equal(parseArtifactResult('{not json'), null)
   assert.equal(parseArtifactResult('[]'), null)
-  assert.equal(parseArtifactResult(JSON.stringify({ ...result, triage: 'other' })), null)
+  assert.equal(parseArtifactResult(JSON.stringify({ ...result, junior: 'other' })), null)
   assert.equal(parseArtifactResult(JSON.stringify({ ...result, action: 'deleted' })), null)
   assert.equal(parseArtifactResult(JSON.stringify({ ...result, format: 'exe' })), null)
   assert.equal(parseArtifactResult(JSON.stringify({ ...result, id: '' })), null)

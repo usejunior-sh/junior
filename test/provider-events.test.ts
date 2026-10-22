@@ -22,7 +22,7 @@ const RECORDED: Record<string, unknown>[] = [
     session_id: SID,
     model: 'claude-opus-5-5',
     tools: ['Read', 'Edit', 'Agent'],
-    mcp_servers: [{ name: 'triage', status: 'connected' }],
+    mcp_servers: [{ name: 'junior', status: 'connected' }],
     terminal_slash_commands: ['login'],
     fast_mode_state: 'off',
     cwd: '/tmp/proj',

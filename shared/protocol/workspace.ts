@@ -5,7 +5,7 @@ export type SessionStatus = 'starting' | 'idle' | 'running' | 'error'
 // Workspaces (.docs/workspaces.md): the top-level scope isolating work from
 // personal. Each workspace has its own DB (projects, inbox, jobs, sessions)
 // and its own Claude auth backend. Every HTTP request and WS connection is
-// bound to exactly one workspace (?workspace= param, else the triage_ws
+// bound to exactly one workspace (?workspace= param, else the junior_ws
 // cookie, else the default).
 
 /**
@@ -34,7 +34,7 @@ export type Workspace = {
   /** config-dir backend: where that login lives, and the one-time login command */
   configDir?: string
   loginCommand?: string
-  /** Every agent triage knows, connected or not, the primary (Claude) first. */
+  /** Every agent junior knows, connected or not, the primary (Claude) first. */
   providers: WorkspaceProvider[]
   createdAt: number
 }

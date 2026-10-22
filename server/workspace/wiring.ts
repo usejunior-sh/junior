@@ -42,7 +42,7 @@ export const wireWorkspaces = (): Workspace[] => registry.workspaces.map(wireWor
 
 /**
  * "Which workspace am I bound to?": the current workspace a caller resolved to
- * (chat via cookie/param, external shim via TRIAGE_WORKSPACE) plus the roster of
+ * (chat via cookie/param, external shim via JUNIOR_WORKSPACE) plus the roster of
  * all workspaces so the caller can see what else exists and how to switch. The
  * one answer both the in-process tool and the stdio shim's get_workspace return.
  */

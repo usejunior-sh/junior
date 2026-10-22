@@ -20,7 +20,7 @@ export type GoalVerdictInput = {
 export function goalVerdict(run: TeamRun, v: GoalVerdictInput, at: number): Action[] {
   const g = goalOf(run)
   if (run.state !== 'running') throw new Error(`the run is ${run.state} — stop; the user resumes it`)
-  if (g.owes !== 'verdict') throw new Error('triage has not asked you to judge the done-when — the team is still working')
+  if (g.owes !== 'verdict') throw new Error('junior has not asked you to judge the done-when — the team is still working')
   const evidence = (v.evidence ?? '').trim().slice(0, 2000)
   if (!evidence) throw new Error('give the evidence: what you ran or looked at, and what it showed')
   const waitFor = v.waitFor?.trim().slice(0, 200)

@@ -12,7 +12,7 @@ const FLOATING = '[data-radix-popper-content-wrapper], [role="dialog"], [role="a
 const overlaps = (a: DOMRect, b: DOMRect) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom
 
 /**
- * Where the stage is, reported to Triage.app so the page sits on it. Null
+ * Where the stage is, reported to Junior.app so the page sits on it. Null
  * while it is hidden, collapsed, covered by one of our popovers, or `hidden`
  * (our own error page, a drag of the split). `inset` shrinks the rect, so a
  * ring drawn on the stage stays outside the page; `bottom` keeps a strip
@@ -110,7 +110,7 @@ export function useFrozenFrame(tabKey: string, covered: boolean, capturing: Muta
 
 // ── the split: the pane's width, dragged from its left edge ─────────────────
 
-const WIDTH_KEY = 'triage.browserWidth'
+const WIDTH_KEY = 'junior.browserWidth'
 const DEFAULT_FRACTION = 0.54
 const PANE_MIN = 360
 const CHAT_MIN = 380

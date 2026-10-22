@@ -1,5 +1,5 @@
 /**
- * What triage knows about Claude Code's own files, kept out of the SDK seam so
+ * What junior knows about Claude Code's own files, kept out of the SDK seam so
  * it loads without the SDK (teams.ts, workspaces.ts, tests): how a workspace's
  * auth becomes spawn env (ANTHROPIC_API_KEY, CLAUDE_CONFIG_DIR), where its
  * config and transcripts live (~/.claude.json, ~/.claude/projects), and the
@@ -101,7 +101,7 @@ export const CAN_TOOLS: Record<AgentCan, string[]> = {
   edit: ['Write', 'Edit', 'MultiEdit', 'NotebookEdit'],
   run: ['Bash'],
   web: ['WebSearch', 'WebFetch'],
-  // Not a built-in: the browser pane's own tools while Triage.app hosts them,
+  // Not a built-in: the browser pane's own tools while Junior.app hosts them,
   // else the user's chrome-devtools MCP server: loaded only for agents allowed
   // it (every other connector is left out, see strictMcpConfig at spawn).
   browser: ['mcp__browser', 'mcp__chrome-devtools'],

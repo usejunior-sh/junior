@@ -140,7 +140,7 @@ export function cardFrom(raw: unknown, recipe: TeamRecipe, prev?: TeamCard): Tea
     const model = typeof o.model === 'string' && o.model.trim() && o.model.trim() !== 'default' ? o.model.trim().slice(0, 80) : null
     let slices: Slice[] | null = null
     if (Array.isArray(o.slices) && o.slices.length) {
-      if (!leadSlices(recipe, i)) throw new Error(`step "${s.id}" takes no slices — ${s.fanOut ? 'triage splits it itself' : 'it has no fan-out'}`)
+      if (!leadSlices(recipe, i)) throw new Error(`step "${s.id}" takes no slices — ${s.fanOut ? 'junior splits it itself' : 'it has no fan-out'}`)
       slices = o.slices
         .map((x) => (x ?? {}) as Record<string, unknown>)
         .map((x) => ({ title: typeof x.title === 'string' ? x.title.trim().slice(0, 80) : '', brief: typeof x.brief === 'string' ? x.brief.trim().slice(0, 4000) : '' }))

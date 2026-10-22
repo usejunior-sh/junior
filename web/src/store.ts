@@ -50,7 +50,7 @@ export class Store {
   #workspaceId = ''
   #workspaces: readonly Workspace[] = []
   #onboarded = true
-  /** Which copy of triage this tab is talking to, null until `hello` lands. */
+  /** Which copy of Junior this tab is talking to, null until `hello` lands. */
   #build: Build | null = null
   /** Junior's persona in this workspace: the rail's name and face colour. */
   #persona: Persona = DEFAULT_PERSONA
@@ -218,7 +218,7 @@ export class Store {
    * URL: a plain `localhost:5178` bookmark should reopen the last workspace.
    */
   switchWorkspace(id: string) {
-    document.cookie = `triage_ws=${encodeURIComponent(id)}; path=/; max-age=31536000; samesite=lax`
+    document.cookie = `junior_ws=${encodeURIComponent(id)}; path=/; max-age=31536000; samesite=lax`
     gotoWorkspace(id)
   }
 
@@ -390,7 +390,7 @@ export class Store {
         break
       case 'error':
         // Server-level failure, not scoped to a session.
-        console.error('[triage] server error:', msg.message)
+        console.error('[junior] server error:', msg.message)
         break
     }
   }

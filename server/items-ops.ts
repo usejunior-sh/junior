@@ -111,7 +111,7 @@ export async function setItemFilesOp(rt: WorkspaceRuntime, id: string, plan: Non
 }
 
 // Work-item operations. One core, three callers: the HTTP routes below, the
-// in-process MCP server that web chats get (rt.triageMcp(), one per session), and the
+// in-process MCP server that web chats get (rt.juniorMcp(), one per session), and the
 // stdio shim (server/mcp.ts) which reaches them over HTTP. Every transport
 // funnels through these functions, so list/create/edit/upsert/resolve behave
 // identically no matter who calls them. Validation stays in workItemFrom/
@@ -222,7 +222,7 @@ async function linkedSessions(rt: WorkspaceRuntime, links: Link[]): Promise<Item
 /**
  * What a session is allowed to know about itself. A session is spawned before
  * `create_session` links it to a work item, so its system prompt cannot name
- * the item. It can only point here (shared/triageContext.ts).
+ * the item. It can only point here (shared/juniorContext.ts).
  */
 export async function sessionContextOp(rt: WorkspaceRuntime, rawId: unknown): Promise<SessionContext> {
   const id = typeof rawId === 'string' ? rawId.trim() : ''

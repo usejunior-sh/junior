@@ -11,7 +11,7 @@ export type PermissionBehavior = 'allow' | 'allow_always' | 'deny'
 /**
  * How much the session asks before acting. Mostly a subset of the SDK's own
  * `PermissionMode`, the ones that answer "how often am I interrupted", plus
- * one triage-native mode:
+ * one junior-native mode:
  *
  * - `'default' | 'acceptEdits' | 'auto' | 'bypassPermissions'` are the SDK's,
  *   passed straight through. ('plan' and 'dontAsk' are the SDK's other two,
@@ -46,7 +46,7 @@ export const isSessionMode = (v: unknown): v is SessionMode => SESSION_MODES.inc
  * - `read`, reads/lookups only (file reads, greps, `list_work_items`, and
  *   connector calls whose name is clearly a read). Auto-allowed under `gated`.
  * - `local-write`, side effects confined to this machine (file edits, shell,
- *   the triage inbox's own writes).
+ *   the junior inbox's own writes).
  * - `external-write`, a call that reaches outside this machine (post to
  *   Slack, open a Jira/Linear/GitHub item, …).
  *

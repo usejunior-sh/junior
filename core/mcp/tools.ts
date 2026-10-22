@@ -1,5 +1,5 @@
 /**
- * The triage MCP contract: one tool table, one dispatcher, two external
+ * The junior MCP contract: one tool table, one dispatcher, two external
  * transports.
  *
  * The stdio shim (server/mcp.ts, dependency-free, for clients that spawn a
@@ -17,7 +17,7 @@
 import { GOAL_TOOLS } from '../goals/tools.js'
 import { LEAD_LOG_ENTRIES } from '../goals/types.js'
 
-/** How a transport reaches the triage API. Returns the parsed JSON body. */
+/** How a transport reaches the junior API. Returns the parsed JSON body. */
 export type McpApi = (path: string, body?: unknown, method?: string) => Promise<unknown>
 
 /** What this connection is, for get_workspace to report back honestly. */
@@ -27,7 +27,7 @@ export type ToolResult = { text: string; isError: boolean }
 
 /** draft_job's skills/agents arguments, said once for every transport. */
 export const SKILLS_ARG =
-  'skills the runs may load, as Claude calls them: triage:<name> for the workspace library, <name> for personal ones, <plugin>:<name>. Only these load; omit for none'
+  'skills the runs may load, as Claude calls them: junior:<name> for the workspace library, <name> for personal ones, <plugin>:<name>. Only these load; omit for none'
 export const AGENTS_ARG = 'subagents the runs may hand work to, named the same way. Only these start; omit for none'
 /** draft_job's browser arguments: when to set them, and the question to ask first. */
 export const BROWSER_ARG =
@@ -42,7 +42,7 @@ export const TOOLS = [
   {
     name: 'list_work_items',
     description:
-      'Read the ranked triage queue: work items with their deterministic score, group, and rankWhy (why it ranked). Open items by default — pass status to read the done, snoozed or archived lists instead. Optional filters narrow by source or kind.',
+      'Read the ranked junior queue: work items with their deterministic score, group, and rankWhy (why it ranked). Open items by default — pass status to read the done, snoozed or archived lists instead. Optional filters narrow by source or kind.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -69,23 +69,23 @@ export const TOOLS = [
   {
     name: 'get_session_context',
     description:
-      "What a triage session is: its workspace, the work item it was opened for (with that item's brief and notes), and the artifacts attached to it. The ids it returns are what write_artifact's `links` needs.",
+      "What a junior session is: its workspace, the work item it was opened for (with that item's brief and notes), and the artifacts attached to it. The ids it returns are what write_artifact's `links` needs.",
     inputSchema: {
       type: 'object',
-      properties: { sessionId: { type: 'string', description: 'a triage session id' } },
+      properties: { sessionId: { type: 'string', description: 'a junior session id' } },
       required: ['sessionId'],
     },
   },
   {
     name: 'get_workspace',
     description:
-      'Which triage workspace this connection is acting in: `current` (id, name, whether it is the default, auth backend) plus `workspaces`, the roster of ids to switch among. This connection picks its workspace with the TRIAGE_WORKSPACE env var; an id that matches no workspace is refused by every other tool, and this one reports the id you requested and whether it matched. Everything you list/create/edit here lives in `current`.',
+      'Which junior workspace this connection is acting in: `current` (id, name, whether it is the default, auth backend) plus `workspaces`, the roster of ids to switch among. This connection picks its workspace with the JUNIOR_WORKSPACE env var; an id that matches no workspace is refused by every other tool, and this one reports the id you requested and whether it matched. Everything you list/create/edit here lives in `current`.',
     inputSchema: { type: 'object', properties: {} },
   },
   {
     name: 'upsert_work_item',
     description:
-      'Idempotently upsert one work item into the triage inbox. Id-keyed (e.g. "slack:<permalink-tail>", "github:owner/repo#123"), update-only-if-newer (by updatedAt), user-state-preserving: calling this repeatedly can never create duplicates or clobber done/snoozed/dismissed state. Invalid items are rejected, never repaired.',
+      'Idempotently upsert one work item into the junior inbox. Id-keyed (e.g. "slack:<permalink-tail>", "github:owner/repo#123"), update-only-if-newer (by updatedAt), user-state-preserving: calling this repeatedly can never create duplicates or clobber done/snoozed/dismissed state. Invalid items are rejected, never repaired.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -238,7 +238,7 @@ export const TOOLS = [
   {
     name: 'write_artifact',
     description:
-      "Publish a file as an artifact: a document, page, table, image or other output the user should open. Every version is kept. Text formats (md, html, csv, txt, json, svg): pass title, body and format. Binary or script-made files (pdf, png, jpg, gif, webp, or anything big): make the file, then pass from with its absolute path, inside the system temp folder (triage copies it). To change an artifact you already published, call update_artifact with its id. Never write report-v2.html. Files over 25 MB are refused. Returns the id and version.",
+      "Publish a file as an artifact: a document, page, table, image or other output the user should open. Every version is kept. Text formats (md, html, csv, txt, json, svg): pass title, body and format. Binary or script-made files (pdf, png, jpg, gif, webp, or anything big): make the file, then pass from with its absolute path, inside the system temp folder (junior copies it). To change an artifact you already published, call update_artifact with its id. Never write report-v2.html. Files over 25 MB are refused. Returns the id and version.",
     inputSchema: {
       type: 'object',
       properties: {
@@ -251,7 +251,7 @@ export const TOOLS = [
         body: { type: 'string', description: 'the content, for md html csv txt json svg. Up to 2 MB; bigger goes through from.' },
         from: {
           type: 'string',
-          description: 'absolute path of a file you made, in the temp folder. triage copies it; later edits to the original do not change the artifact.',
+          description: 'absolute path of a file you made, in the temp folder. junior copies it; later edits to the original do not change the artifact.',
         },
         note: { type: 'string', description: 'one line about this version (500 characters at most)' },
         refs: { type: 'array', items: { type: 'string' }, description: 'PR/issue URLs or Linear keys it is about' },
@@ -282,7 +282,7 @@ export const TOOLS = [
         id: { type: 'string' },
         title: { type: 'string' },
         body: { type: 'string' },
-        from: { type: 'string', description: 'absolute path of a file you made, in the temp folder; triage copies it' },
+        from: { type: 'string', description: 'absolute path of a file you made, in the temp folder; junior copies it' },
         note: { type: 'string', description: 'one line on what changed in this version (500 characters at most)' },
         refs: { type: 'array', items: { type: 'string' } },
       },

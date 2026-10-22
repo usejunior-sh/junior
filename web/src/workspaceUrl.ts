@@ -2,7 +2,7 @@
  * Which workspace this browser *tab* is bound to.
  *
  * The daemon already scopes every request to one workspace (`?workspace=`
- * param, else the `triage_ws` cookie, else the default). The cookie is
+ * param, else the `junior_ws` cookie, else the default). The cookie is
  * per-browser though, so two tabs could never hold two workspaces at once.
  * The tab's own answer lives in its URL instead, `/w/<id>/#/inbox`, and
  * rides the wire as the query param the server already honours, so the

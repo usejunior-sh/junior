@@ -174,7 +174,7 @@ test("the SDK's per-turn init is not a restart: background agents keep running, 
   const items = buildTranscript(events, undefined, { agents })
   assert.ok(!items.some((i) => i.kind === 'meta' && i.text.includes('resumed')))
 
-  // A real revival — triage marks it — does draw the marker, with the new process's model.
+  // A real revival — junior marks it — does draw the marker, with the new process's model.
   const revived = buildTranscript([...events, { kind: 'subprocess' }, { kind: 'local_user', text: 'and?' }, init()])
   assert.ok(revived.some((i) => i.kind === 'meta' && i.text === '— session resumed · claude-opus-5-5 —'))
 })

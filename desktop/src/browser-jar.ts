@@ -19,7 +19,7 @@ import { DEFAULT_PROFILE, partitionOf, PROFILE_ID_RE, siteOf, type DownloadState
 const CHROME_UA = `Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${process.versions.chrome.split('.')[0]}.0.0.0 Safari/537.36`
 const DOWNLOAD_MAX = 500 * 1024 * 1024
 const REFUSED_DOWNLOAD = /\.(app|pkg|dmg|command)$/i
-/** What a page may ask for; everything else hears no (Triage owns notifications). */
+/** What a page may ask for; everything else hears no (Junior owns notifications). */
 const ALLOWED_PERMISSIONS = new Set(['clipboard-sanitized-write', 'fullscreen'])
 /** Schemes a page can never hand to another app, even on your click. */
 const NEVER_EXTERNAL = /^(file|data|javascript|blob|about|chrome|devtools|http|https|ws|wss):/i
@@ -31,7 +31,7 @@ const SESSION_COOKIE_KEEP_S = 30 * 24 * 3600
 
 /**
  * ~/Downloads, spelled the way the daemon spells it (its job fence lets a run
- * read `~/Downloads/Triage/<session>`), so the two always agree, HOME included.
+ * read `~/Downloads/Junior/<session>`), so the two always agree, HOME included.
  */
 export const downloadsDir = () => path.join(os.homedir(), 'Downloads')
 
@@ -88,7 +88,7 @@ export class Jars {
       }
       // yours land in ~/Downloads; Junior's in a folder of the tab's own, where a job can find them
       const downloads = downloadsDir()
-      const dir = byAgent && tab ? path.join(downloads, 'Triage', tab.key) : downloads
+      const dir = byAgent && tab ? path.join(downloads, 'Junior', tab.key) : downloads
       let dest: string
       try {
         fs.mkdirSync(dir, { recursive: true })

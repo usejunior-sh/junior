@@ -1,8 +1,8 @@
 /**
  * The browser pane, client side (.docs/browser.md). The page itself is a
- * native view Triage.app lays over the pane's rect; this module is its remote
- * control, the preload's `triageDesktop.browser`, plus which sessions have
- * the pane open. Outside Triage.app (a browser tab, a phone) there is no
+ * native view Junior.app lays over the pane's rect; this module is its remote
+ * control, the preload's `juniorDesktop.browser`, plus which sessions have
+ * the pane open. Outside Junior.app (a browser tab, a phone) there is no
  * bridge, and the pane says where to find it.
  *
  * Profiles and each tab's remembered state are the daemon's: the list comes
@@ -82,16 +82,16 @@ type BrowserBridge = {
 }
 
 export const browserBridge: BrowserBridge | null = (() => {
-  const b = (globalThis as { triageDesktop?: { browser?: Partial<BrowserBridge> } }).triageDesktop?.browser
+  const b = (globalThis as { juniorDesktop?: { browser?: Partial<BrowserBridge> } }).juniorDesktop?.browser
   return b && typeof b.setPane === 'function' && typeof b.onState === 'function' ? (b as BrowserBridge) : null
 })()
 
-/** Triage.app can host the pane here. */
+/** Junior.app can host the pane here. */
 export const hasBrowser = browserBridge !== null
 
 // ── which sessions have the pane open (per browser, survives a reload) ──────
 
-const KEY = 'triage.browserOpen'
+const KEY = 'junior.browserOpen'
 let open: Set<string> = (() => {
   try {
     const v: unknown = JSON.parse(localStorage.getItem(KEY) ?? '[]')
@@ -131,7 +131,7 @@ export function useBrowserOpen(sessionId: string | null): boolean {
 // The agent opened a page: the pane on that session opens itself.
 browserBridge?.onActivity(({ sessionId }) => browserPane.set(sessionId, true))
 
-/** One tab's live state in Triage.app: what the pane's toolbar shows. `known` = the app has answered. */
+/** One tab's live state in Junior.app: what the pane's toolbar shows. `known` = the app has answered. */
 export function useBrowserState(tabKey: string): BrowserState & { known: boolean } {
   const [s, setS] = useState<BrowserState & { known: boolean }>({ sessionId: tabKey, exists: false, known: false })
   useEffect(() => {
@@ -295,7 +295,7 @@ export const deleteProfile = (id: string) => call<object>('DELETE', profilePath(
 export const clearProfile = (id: string, site?: string) => call<{ removed: number }>('POST', `${profilePath(id)}/clear`, site ? { site } : {})
 export const setDefaultProfile = (profile: string) => call<{ workspaceDefault: string }>('PUT', '/api/browser/default', { profile })
 
-/** The sites a profile holds saved cookies for, most cookies first; needs Triage.app. */
+/** The sites a profile holds saved cookies for, most cookies first; needs Junior.app. */
 export async function profileSites(id: string): Promise<Result<{ sites: BrowserSite[] }>> {
   const b = await call<Extract<BrowserSitesResponse, { ok: true }>>('GET', `${profilePath(id)}/sites`)
   if (b.ok) b.sites = [...b.sites].filter((s) => s.persistent > 0).sort((a, z) => z.persistent - a.persistent)

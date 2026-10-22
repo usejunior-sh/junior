@@ -1,9 +1,9 @@
 /**
- * Build identity (server/state.ts `classifyBuild`): which copy of triage is
+ * Build identity (server/state.ts `classifyBuild`): which copy of junior is
  * answering. Three can be installed at once — a checkout, the one staged inside
- * Triage.app, a global npm install — and the whole point is that a bare version
+ * Junior.app, a global npm install — and the whole point is that a bare version
  * number does not tell them apart. The table below is the contract the top-bar
- * badge, `triage status` and /api/health all read.
+ * badge, `junior status` and /api/health all read.
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -11,11 +11,11 @@ import os from 'node:os'
 import path from 'node:path'
 import { classifyBuild } from '../server/state.js'
 
-const APP = '/Applications/Triage.app/Contents/Resources/triage'
-const GLOBAL = '/Users/x/.local/lib/node_modules/usetriage'
+const APP = '/Applications/Junior.app/Contents/Resources/junior'
+const GLOBAL = '/Users/x/.local/lib/node_modules/usejunior'
 const CHECKOUT = '/Users/x/Code/novus-triage/triage-dev'
-const PROD_HOME = path.join(os.homedir(), '.triage')
-const DEV_HOME = path.join(os.homedir(), '.triage-dev')
+const PROD_HOME = path.join(os.homedir(), '.junior')
+const DEV_HOME = path.join(os.homedir(), '.junior-dev')
 
 type Expected = Pick<ReturnType<typeof classifyBuild>, 'channel' | 'surface' | 'commit' | 'dirty'>
 
@@ -83,14 +83,14 @@ test('classifyBuild: the data root is what separates a dev daemon from prod', ()
   assert.equal(classifyBuild(CHECKOUT, '1.0.3', PROD_HOME).prodData, true)
   assert.equal(classifyBuild(CHECKOUT, '1.0.3', DEV_HOME).prodData, false)
   // A checkout pointed at prod's data is the genuinely dangerous combination
-  // (TRIAGE_HOME=~/.triage npm run dev) — it must still read as prod data.
+  // (JUNIOR_HOME=~/.junior npm run dev) — it must still read as prod data.
   assert.equal(classifyBuild(CHECKOUT, '1.0.3', PROD_HOME).channel, 'dev')
 })
 
 test('classifyBuild: an app inside a node_modules-free path is never "global"', () => {
   // The app bundle wins over the node_modules test: its staged package has a
-  // node_modules of its own, and `<app>/Contents/Resources/triage/node_modules`
+  // node_modules of its own, and `<app>/Contents/Resources/junior/node_modules`
   // must not be mistaken for a global install.
-  const nested = path.join(APP, 'node_modules', 'usetriage')
+  const nested = path.join(APP, 'node_modules', 'usejunior')
   assert.equal(classifyBuild(nested, '1.0.3', PROD_HOME).surface, 'app')
 })

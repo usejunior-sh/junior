@@ -12,7 +12,7 @@ import { log } from '../log.js'
 import { slug } from '../artifacts.js'
 import { WorkspaceRuntime } from '../workspace/runtime.js'
 import { VERSION } from '../config.js'
-import { errResult, okResult } from '../triage-mcp.js'
+import { errResult, okResult } from '../junior-mcp.js'
 import { upsertItem } from '../settings-ops.js'
 import { invalidateInbox } from '../ws/send.js'
 import { briefFiledItem } from '../brief-run.js'
@@ -109,7 +109,7 @@ export function makeScanMcp(rt: WorkspaceRuntime, job: Job, runId: string, onUps
   let count = 0
   if (job.output === 'digest') return makeDigestMcp(rt, job, runId, onUpsert)
   return createSdkMcpServer({
-    name: 'triage',
+    name: 'junior',
     version: VERSION,
     tools: [
       tool(
@@ -194,7 +194,7 @@ const digestRelPath = (job: Job): string => `reports/${slug(job.title) || 'diges
 function makeDigestMcp(rt: WorkspaceRuntime, job: Job, runId: string, onWrite: (outcome: UpsertOutcome) => void) {
   let written = false
   return createSdkMcpServer({
-    name: 'triage',
+    name: 'junior',
     version: VERSION,
     tools: [
       tool(

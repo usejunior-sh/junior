@@ -5,7 +5,7 @@
  *   stage  new → briefing → ready → working → review → done
  *   turn   me | ai | others | none
  *
- * Both are derived from what triage can already see, the item's status and
+ * Both are derived from what Junior can already see, the item's status and
  * kind, its newest brief job, its newest dispatched session, never from model
  * output. Where the rules can't see the truth ("waiting on Niraj"), the user
  * sets an override; it holds until something newer happens to the item (a
@@ -232,7 +232,7 @@ function deriveFlow(item: FlowItem, s: FlowSignals): ItemFlow {
 
 /**
  * Your own PR, read from what GitHub says about it: waiting on reviewers,
- * approved, conflicting, red. These hold whatever step triage is on.
+ * approved, conflicting, red. These hold whatever step Junior is on.
  */
 function withOwnPr(item: FlowItem, f: ItemFlow): ItemFlow {
   if (item.ciFailing && isOwnPr(item)) return { ...f, stage: 'review', turn: 'me', next: 'fix CI', broken: 'CI failing' }

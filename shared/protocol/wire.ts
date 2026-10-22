@@ -19,7 +19,7 @@ export type SessionEvent =
       /** files saved under the session's attachments folder */
       files?: FileRef[]
       mentions?: ResolvedMention[]
-      /** who sent it when it wasn't the user. A teammate agent's label, or 'triage'; absent = the user */
+      /** who sent it when it wasn't the user. A teammate agent's label, or 'junior'; absent = the user */
       from?: string
       /** the session that sent it (start_session / message_session), so its badge links back */
       fromSession?: string
@@ -29,12 +29,12 @@ export type SessionEvent =
       mode?: 'goal'
     }
   | { kind: 'error'; message: string }
-  /** a line triage writes into the transcript itself. A team paused, a stage began */
+  /** a line Junior writes into the transcript itself. A team paused, a stage began */
   | { kind: 'notice'; text: string }
   /**
    * A new Claude subprocess took over a session that already had history (a
    * revival after the last one ended). Whatever the old one had running,
-   * subagents, background shells, ended with it. Written by triage, because
+   * subagents, background shells, ended with it. Written by Junior, because
    * the SDK's own `init` arrives at the start of every turn, not once per process.
    * `fresh`: started without resume, so its cost counters start from zero.
    */
@@ -217,7 +217,7 @@ export type ServerMessage =
       onboarded: boolean
       terminals: TerminalSummary[]
       checkouts: Checkout[]
-      /** which copy of triage this socket is talking to, the UI badges it */
+      /** which copy of Junior this socket is talking to, the UI badges it */
       build: Build
       /** the workspace's Junior persona: the rail's name and face colour from the first frame */
       persona: import('../../core/junior/persona.js').Persona

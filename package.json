@@ -1,19 +1,19 @@
 {
-  "name": "usetriage",
+  "name": "usejunior",
   "version": "1.0.5",
   "type": "module",
   "description": "Ranked work inbox for engineers — every item arrives with its action drafted, dispatch straight into your local Claude Code",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/usetriage/triage.git"
+    "url": "git+https://github.com/usejunior-sh/junior.git"
   },
-  "homepage": "https://usetriage.sh",
+  "homepage": "https://usejunior.sh",
   "publishConfig": {
     "access": "public"
   },
   "bin": {
-    "triage": "dist/server/cli.js",
-    "triage-mcp": "dist/server/mcp.js"
+    "junior": "dist/server/cli.js",
+    "junior-mcp": "dist/server/mcp.js"
   },
   "files": [
     "dist",
@@ -41,9 +41,9 @@
     "prod:snapshot": "node scripts/prod-snapshot.mjs",
     "app:snapshot": "node scripts/app-snapshot.mjs",
     "release": "node scripts/release.mjs",
-    "prod:local": "npm run build && npm pack && npm i -g ./usetriage-$npm_package_version.tgz && rm -f ./usetriage-$npm_package_version.tgz",
+    "prod:local": "npm run build && npm pack && npm i -g ./usejunior-$npm_package_version.tgz && rm -f ./usejunior-$npm_package_version.tgz",
     "app:build": "npm --prefix desktop run build --",
-    "dev:app": "npm --prefix desktop install && TRIAGE_APP_PORT=5188 TRIAGE_APP_URL=http://localhost:5189 npm --prefix desktop start",
+    "dev:app": "npm --prefix desktop install && JUNIOR_APP_PORT=5188 JUNIOR_APP_URL=http://localhost:5189 npm --prefix desktop start",
     "prepublishOnly": "npm run typecheck && npm run build",
     "postinstall": "node scripts/postinstall.mjs"
   },

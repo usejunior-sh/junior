@@ -64,7 +64,7 @@ export const AGENT_HEX: Record<AgentColor, string> = {
   cyan: '#4de1ff',
 }
 
-/** A worker's colour; the lead (and triage's own checks) draw in ink. */
+/** A worker's colour; the lead (and Junior's own checks) draw in ink. */
 export const colorOf = (c: string): string => AGENT_HEX[c as AgentColor] ?? 'var(--ink)'
 
 export const CAN_META: Record<AgentCan, { label: string; hint: string; short: string }> = {

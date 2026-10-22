@@ -27,7 +27,7 @@ type Props = {
 type Loaded = { content: string; version: string; eol: '\n' | '\r\n' }
 
 /** The shared split/unified preference: the session drawer reads the same key. */
-const modeKey = 'triage.changes.mode'
+const modeKey = 'junior.changes.mode'
 
 /**
  * Unsaved edits outlive the page: switching tabs unmounts it, and losing a

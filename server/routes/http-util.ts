@@ -26,7 +26,7 @@ export function readJsonBody(req: http.IncomingMessage, limit = 1_000_000): Prom
 
 /**
  * Which workspace a request belongs to: the ?workspace= param wins (explicit,
- * the MCP shim and scripts use it), then the triage_ws cookie (how the SPA
+ * the MCP shim and scripts use it), then the junior_ws cookie (how the SPA
  * rides: cookies travel on every fetch and on the WS upgrade with zero
  * call-site churn), then the default. A stale id falls back to the default
  * rather than erroring. A deleted workspace must not brick the UI.
@@ -36,7 +36,7 @@ function cookieWorkspace(req: http.IncomingMessage): string | undefined {
   if (!header) return undefined
   for (const part of header.split(';')) {
     const [k, ...v] = part.trim().split('=')
-    if (k === 'triage_ws') return decodeURIComponent(v.join('='))
+    if (k === 'junior_ws') return decodeURIComponent(v.join('='))
   }
   return undefined
 }

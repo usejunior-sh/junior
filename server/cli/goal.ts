@@ -31,7 +31,7 @@ function ago(at: number): string {
 
 export async function goalCmd(sub: string | undefined, rest: string[]) {
   const port = await serverPort()
-  if (!port) die(`goals need the server running — start it with ${cyan('triage')}`)
+  if (!port) die(`goals need the server running — start it with ${cyan('junior')}`)
   const ws = goalFlags.workspace ? `workspace=${encodeURIComponent(goalFlags.workspace)}` : ''
   const call = async <T>(p: string, body?: unknown): Promise<T> => {
     const url = `http://localhost:${port}${p}${ws ? (p.includes('?') ? '&' : '?') + ws : ''}`
@@ -45,7 +45,7 @@ export async function goalCmd(sub: string | undefined, rest: string[]) {
     const q = goalFlags.state ? `?states=${encodeURIComponent(goalFlags.state)}` : ''
     const body = await call<{ goals: WireGoal[]; waitingOnYou: number }>(`/api/goals${q}`)
     if (!body.goals.length) {
-      console.log(dim(`no goals — start one with ${cyan('triage goal create <title> --done-when <text>')}`))
+      console.log(dim(`no goals — start one with ${cyan('junior goal create <title> --done-when <text>')}`))
       return
     }
     const w = Math.max(...body.goals.map((g) => g.state.length))
@@ -59,7 +59,7 @@ export async function goalCmd(sub: string | undefined, rest: string[]) {
 
   if (sub === 'create') {
     const title = rest.join(' ').trim()
-    if (!title || !goalFlags.doneWhen) die(`goal create needs a title and --done-when, e.g. ${cyan('triage goal create "Ship the fix" --done-when "PR #12 is merged"')}`)
+    if (!title || !goalFlags.doneWhen) die(`goal create needs a title and --done-when, e.g. ${cyan('junior goal create "Ship the fix" --done-when "PR #12 is merged"')}`)
     const body = await call<{ goal: WireGoal; outcome: string }>('/api/goals', {
       title,
       doneWhen: goalFlags.doneWhen,
@@ -72,7 +72,7 @@ export async function goalCmd(sub: string | undefined, rest: string[]) {
 
   if (sub === 'show') {
     const id = rest[0]
-    if (!id) die(`goal show needs an id — see ${cyan('triage goal list')}`)
+    if (!id) die(`goal show needs an id — see ${cyan('junior goal list')}`)
     const body = await call<{ goal: WireGoal; turn: string; plan: string; handoff: string; log: string; ledgerWarning: string | null }>(`/api/goals/${encodeURIComponent(id)}`)
     const g = body.goal
     const budget = [g.budget?.usd != null ? `$${g.budget.usd}` : null, g.budget?.minutes != null ? `${g.budget.minutes} min` : null].filter(Boolean).join(' · ') || 'no cap'
@@ -90,18 +90,18 @@ export async function goalCmd(sub: string | undefined, rest: string[]) {
     return
   }
 
-  die(`unknown goal command "${sub}" — try ${cyan('triage goal list')}`)
+  die(`unknown goal command "${sub}" — try ${cyan('junior goal list')}`)
 }
 
 /**
- * `triage add "…"`, a one-line hand-off without opening the app: a manual
+ * `junior add "…"`, a one-line hand-off without opening the app: a manual
  * item through the same route the inbox's own add uses (createManualOp).
  */
 export async function addCmd(rest: string[]) {
   const title = rest.join(' ').trim()
-  if (!title) die(`add needs a title, e.g. ${cyan('triage add "Look at the flaky deploy check"')}`)
+  if (!title) die(`add needs a title, e.g. ${cyan('junior add "Look at the flaky deploy check"')}`)
   const port = await serverPort()
-  if (!port) die(`add needs the server running — start it with ${cyan('triage')}`)
+  if (!port) die(`add needs the server running — start it with ${cyan('junior')}`)
   // The HTTP API falls back to the default workspace for an id it doesn't
   // know, so a typo would file the item somewhere else, resolve it first.
   let ws = ''
@@ -109,7 +109,7 @@ export async function addCmd(rest: string[]) {
     const ref = goalFlags.workspace
     const { workspaces } = (await (await fetch(`http://localhost:${port}/api/workspaces`)).json()) as { workspaces: WireWorkspace[] }
     const match = workspaces.find((w) => w.id === ref || w.name.toLowerCase() === ref.toLowerCase())
-    if (!match) die(`no workspace named "${ref}" — see ${cyan('triage workspace list')}`)
+    if (!match) die(`no workspace named "${ref}" — see ${cyan('junior workspace list')}`)
     ws = `?workspace=${encodeURIComponent(match.id)}`
   }
   const res = await fetch(`http://localhost:${port}/api/items/manual${ws}`, {

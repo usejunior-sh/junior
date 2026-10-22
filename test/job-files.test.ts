@@ -1,7 +1,7 @@
 /**
  * Jobs as files (server/job-files.ts): the strict schema, the round trip,
  * grants against a probe, ids written into hand-made files, and seeding.
- * Files live in a temp dir — never ~/.triage.
+ * Files live in a temp dir — never ~/.junior.
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -94,7 +94,7 @@ test('grants are checked against the probe and take its scope', () => {
 })
 
 function withDir(fn: (root: string, files: JobFiles) => Promise<void>) {
-  const root = mkdtempSync(path.join(tmpdir(), 'triage-job-files-'))
+  const root = mkdtempSync(path.join(tmpdir(), 'junior-job-files-'))
   return fn(root, new JobFiles(root)).finally(() => rmSync(root, { recursive: true, force: true }))
 }
 
@@ -191,7 +191,7 @@ test('brief options are checked like every other key', () => {
 })
 
 test('enabling a drafted job drops its draft line, and nothing else', async () => {
-  const dir = mkdtempSync(path.join(tmpdir(), 'triage-job-draft-'))
+  const dir = mkdtempSync(path.join(tmpdir(), 'junior-job-draft-'))
   try {
     const files = new JobFiles(dir)
     await files.write('drafted', { ...spec, enabled: false, draft: true })

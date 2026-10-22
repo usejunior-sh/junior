@@ -102,7 +102,7 @@ function WhatCounts() {
         <>
           {s.errors.length > 0 && <div className="msg error">The file has problems, so the defaults stand in: {s.errors.join('; ')}</div>}
           <OverrideList title="Not a send" hint="Never held, never in the log. Remove one to count it again." entries={s.notAction} onRemove={(e) => void remove('not_action', e)} />
-          <OverrideList title="Always a send" hint="Held for your OK even where triage wouldn’t count it." entries={s.action} onRemove={(e) => void remove('action', e)} />
+          <OverrideList title="Always a send" hint="Held for your OK even where junior wouldn’t count it." entries={s.action} onRemove={(e) => void remove('action', e)} />
           {err && <div className="msg error">{err}</div>}
         </>
       )}

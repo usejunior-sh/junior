@@ -1,5 +1,5 @@
 /**
- * Triage.app's main process (ARCHITECTURE.md): windows over the local daemon,
+ * Junior.app's main process (ARCHITECTURE.md): windows over the local daemon,
  * a menu, a menu-bar icon. The app attaches, it does not own, quitting it
  * never stops the daemon, so live sessions and jobs carry on.
  *
@@ -47,19 +47,26 @@ let quitting = false
 // One connect at a time: did-fail-load, the watchdog and Retry all funnel here.
 let connecting = false
 let lastAutoConnect = 0
-let splash: SplashStatus = { state: 'starting', text: 'Looking for triage…' }
+let splash: SplashStatus = { state: 'starting', text: 'Looking for Junior…' }
 // The browser pane's tabs, and the link the daemon drives them through (.docs/browser.md).
 let browser: BrowserHost | null = null
 
 // An unpackaged app (`npm start` in desktop/) is the dev app: its own data
 // folder, so it never shares the installed app's single-instance lock, which
 // would quit it on launch and bring the installed window forward instead, nor its window state or the browser pane's cookies.
-// TRIAGE_APP_USER_DATA gives either app a folder of its own (QA runs), so it
+// JUNIOR_APP_USER_DATA gives either app a folder of its own (QA runs), so it
 // never touches a real login, lock or window state.
-if (!app.isPackaged) app.setName('Triage Dev')
-const userData = process.env.TRIAGE_APP_USER_DATA?.trim()
+if (!app.isPackaged) app.setName('Junior Dev')
+const userData = process.env.JUNIOR_APP_USER_DATA?.trim()
 if (userData) app.setPath('userData', path.resolve(userData))
-else if (!app.isPackaged) app.setPath('userData', path.join(app.getPath('appData'), 'Triage Dev'))
+else if (!app.isPackaged) app.setPath('userData', path.join(app.getPath('appData'), 'Junior Dev'))
+// The Triage → Junior rename: the old data folder (window state, the browser
+// pane's profiles and their logins) moves over once.
+if (!userData) {
+  const now = app.getPath('userData')
+  const before = path.join(path.dirname(now), path.basename(now).replace('Junior', 'Triage'))
+  if (before !== now && fs.existsSync(before) && !fs.existsSync(now)) fs.renameSync(before, now)
+}
 
 if (!app.requestSingleInstanceLock()) {
   app.quit()
@@ -100,9 +107,9 @@ function createWindow(url: string, bounds?: Partial<Rectangle>): BrowserWindow {
     ...state.bounds,
     minWidth: MIN_SIZE.width,
     minHeight: MIN_SIZE.height,
-    title: 'Triage',
+    title: 'Junior',
     backgroundColor: '#000000',
-    // No grey title bar: the traffic lights sit inside triage's own 44px bar
+    // No grey title bar: the traffic lights sit inside Junior's own 44px bar
     // (web/src/components/TopBar.tsx, desktop layout), centred vertically.
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 16, y: 15 },
@@ -112,7 +119,7 @@ function createWindow(url: string, bounds?: Partial<Rectangle>): BrowserWindow {
       contextIsolation: true,
       sandbox: true,
       nodeIntegration: false,
-      additionalArguments: [`--triage-version=${app.getVersion()}`],
+      additionalArguments: [`--junior-version=${app.getVersion()}`],
     },
   })
   target.set(w, url)
@@ -161,11 +168,11 @@ function createWindow(url: string, bounds?: Partial<Rectangle>): BrowserWindow {
     if (isMainFrame && isDaemonUrl(navUrl)) target.set(w, navUrl)
     sendNav(w)
   })
-  // A full navigation inside triage (switching workspace) moves the window's target with it.
+  // A full navigation inside Junior (switching workspace) moves the window's target with it.
   wc.on('did-navigate', (_e, navUrl) => {
     if (isDaemonUrl(navUrl)) target.set(w, navUrl)
   })
-  // Links out of triage go to the default browser. A same-origin window.open
+  // Links out of Junior go to the default browser. A same-origin window.open
   // (the workspace switcher's "open in a new tab") opens a workspace window.
   wc.setWindowOpenHandler(({ url: openUrl }) => {
     if (isDaemonUrl(openUrl)) openWorkspaceWindow(openUrl, w)
@@ -177,7 +184,7 @@ function createWindow(url: string, bounds?: Partial<Rectangle>): BrowserWindow {
     e.preventDefault()
     openExternal(navUrl)
   })
-  // The daemon went away under a load (restart, crash, `triage stop`).
+  // The daemon went away under a load (restart, crash, `junior stop`).
   wc.on('did-fail-load', (_e, code, _desc, failUrl, isMainFrame) => {
     if (!isMainFrame || code === -3 /* ERR_ABORTED: superseded by another load */ || !isDaemonUrl(failUrl)) return
     reconnect()
@@ -269,7 +276,7 @@ async function connect(how: 'ensure' | 'restart' = 'ensure') {
   if (connecting || allWindows().length === 0) return
   connecting = true
   try {
-    setSplash({ state: 'starting', text: how === 'restart' ? 'Restarting triage…' : 'Looking for triage…' })
+    setSplash({ state: 'starting', text: how === 'restart' ? 'Restarting Junior…' : 'Looking for Junior…' })
     await Promise.all(allWindows().map((w) => (onSplash(w) ? undefined : w.loadFile(SPLASH))))
     if (how === 'restart') await restartDaemon()
     else await ensureDaemon((text) => setSplash({ state: 'starting', text }))
@@ -298,7 +305,7 @@ function reconnect() {
   if (connecting || allWindows().length === 0) return
   if (Date.now() - lastAutoConnect < 10_000) {
     void Promise.all(allWindows().map((w) => w.loadFile(SPLASH))).then(() =>
-      setSplash({ state: 'error', text: 'Triage stopped answering', detail: `Nothing at ${daemonUrl()} — Retry to start it again, or check the log.` }),
+      setSplash({ state: 'error', text: 'Junior stopped answering', detail: `Nothing at ${daemonUrl()} — Retry to start it again, or check the log.` }),
     )
     return
   }
@@ -307,7 +314,7 @@ function reconnect() {
 }
 
 // A loaded SPA doesn't fail a load when the daemon dies, its socket just
-// drops. Two misses in a row (not one: `triage restart` is a short gap) sends
+// drops. Two misses in a row (not one: `junior restart` is a short gap) sends
 // every window back to the splash. And a splash showing an error recovers on
 // its own once a daemon appears.
 let misses = 0
@@ -327,7 +334,7 @@ async function watchdog() {
   }
 }
 
-async function confirmRestart(message = 'Restart the triage server?') {
+async function confirmRestart(message = 'Restart the Junior server?') {
   if (connecting) return
   const parent = BrowserWindow.getFocusedWindow() ?? (showWindow(), win)
   if (!parent) return
@@ -377,7 +384,7 @@ function buildMenu(): Menu {
         { type: 'separator' },
         { label: 'Open in Browser', click: () => void shell.openExternal(daemonUrl()) },
         { label: 'Open server log', click: () => void openLog() },
-        { label: 'Restart triage server…', click: () => void confirmRestart() },
+        { label: 'Restart Junior server…', click: () => void confirmRestart() },
         { type: 'separator' },
         { role: 'services' },
         { type: 'separator' },
@@ -410,8 +417,8 @@ function buildMenu(): Menu {
     {
       role: 'help',
       submenu: [
-        { label: 'usetriage.sh', click: () => void shell.openExternal('https://usetriage.sh') },
-        { label: 'Triage on GitHub', click: () => void shell.openExternal('https://github.com/usetriage/triage') },
+        { label: 'usejunior.sh', click: () => void shell.openExternal('https://usejunior.sh') },
+        { label: 'Junior on GitHub', click: () => void shell.openExternal('https://github.com/usejunior-sh/junior') },
       ],
     },
   ]
@@ -424,7 +431,7 @@ function createTray() {
   const icon = nativeImage.createFromPath(path.join(here, 'trayTemplate.png'))
   icon.setTemplateImage(true)
   tray = new Tray(icon)
-  tray.setToolTip('Triage')
+  tray.setToolTip('Junior')
   // Built on each open so the status line is current.
   const open = async () => tray?.popUpContextMenu(await trayMenu())
   tray.on('click', open)
@@ -435,29 +442,29 @@ async function trayMenu(): Promise<Menu> {
   // Don't let a hung port hold the menu up.
   const health = await Promise.race([probe(), new Promise<undefined>((r) => setTimeout(r, 600))])
   return Menu.buildFromTemplate([
-    { label: 'Open Triage', click: showWindow },
+    { label: 'Open Junior', click: showWindow },
     // Shown, not registered: the global shortcut already answers it.
     { label: 'Quick capture…', accelerator: CAPTURE_HOTKEY, registerAccelerator: false, click: toggleCapture },
     { label: statusLine(health), enabled: false },
     // Never restarted for you: it would stop live sessions.
     ...(isStale(health)
-      ? [{ label: 'Restart to update server…', click: () => void confirmRestart(`Restart triage to update its server to v${app.getVersion()}?`) }]
+      ? [{ label: 'Restart to update server…', click: () => void confirmRestart(`Restart Junior to update its server to v${app.getVersion()}?`) }]
       : []),
     { type: 'separator' },
     { label: 'Open in Browser', click: () => void shell.openExternal(daemonUrl()) },
     { label: 'Restart server…', click: () => void confirmRestart() },
     { type: 'separator' },
-    { label: 'Quit Triage', click: () => app.quit() },
+    { label: 'Quit Junior', click: () => app.quit() },
   ])
 }
 
 function statusLine(health: DaemonHealth | 'other' | null | undefined): string {
-  if (health === undefined) return 'triage · not answering'
-  if (health === null) return 'triage · not running'
-  if (health === 'other') return `port ${PORT} · not triage`
-  if (isStale(health)) return `triage v${health.version} running · app v${app.getVersion()}`
+  if (health === undefined) return 'junior · not answering'
+  if (health === null) return 'junior · not running'
+  if (health === 'other') return `port ${PORT} · not Junior`
+  if (isStale(health)) return `junior v${health.version} running · app v${app.getVersion()}`
   const n = health.liveSessions
-  return `triage v${health.version} · ${n} live session${n === 1 ? '' : 's'}`
+  return `junior v${health.version} · ${n} live session${n === 1 ? '' : 's'}`
 }
 
 /**
@@ -469,7 +476,7 @@ function isStale(health: DaemonHealth | 'other' | null | undefined): boolean {
   return app.isPackaged && !!health && health !== 'other' && health.version !== app.getVersion()
 }
 
-/** The daemon's origin: any loopback name (prod is triage.localhost) at PORT. */
+/** The daemon's origin: any loopback name (prod is junior.localhost) at PORT. */
 function isDaemonUrl(raw: string): boolean {
   try {
     const u = new URL(raw)

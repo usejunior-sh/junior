@@ -55,8 +55,8 @@ export type ToolItem = {
 
 export type ThinkingItem = { key: string; kind: 'thinking'; text: string }
 
-/** The in-process triage MCP's two publishing tools: a session declares an artifact by calling one. */
-export const ARTIFACT_TOOL_NAMES: ReadonlySet<string> = new Set(ARTIFACT_TOOLS.map((leaf) => `mcp__triage__${leaf}`))
+/** The in-process junior MCP's two publishing tools: a session declares an artifact by calling one. */
+export const ARTIFACT_TOOL_NAMES: ReadonlySet<string> = new Set(ARTIFACT_TOOLS.map((leaf) => `mcp__junior__${leaf}`))
 
 /** How much of a body the card keeps for its preview. */
 export const ARTIFACT_BODY_KEEP = 4000
@@ -167,7 +167,7 @@ export function buildTranscript(
 ): TranscriptItem[] {
   const items: TranscriptItem[] = []
   // The SDK sends init at the start of every turn, so only the first one is
-  // drawn. A revival is marked by triage's own `subprocess` event instead, and
+  // drawn. A revival is marked by Junior's own `subprocess` event instead, and
   // the init that follows it names the model the new process runs.
   let initSeen = false
   let resumed = false
@@ -308,7 +308,7 @@ export function buildTranscript(
               servers: m.mcp_servers ?? [],
               // Which servers actually put tools on the table. The status a
               // server reports and the tools a session got can disagree: the
-              // in-process triage server always wins its name, so a same-named
+              // in-process Junior server always wins its name, so a same-named
               // entry from ~/.claude that failed is the status being shown
               // while the working tools are right there in the list.
               mcpTools: (m.tools ?? []).filter((t) => t.startsWith('mcp__')),
@@ -400,7 +400,7 @@ function publishedBy(t: ToolItem): ArtifactToolResult | null {
   const id = made?.[1] ?? (typeof t.input.id === 'string' ? t.input.id : '')
   if (!path || !id) return null
   const title = typeof t.input.title === 'string' && t.input.title ? t.input.title : basename(path)
-  return { triage: 'artifact', action: made ? 'created' : 'updated', id, title, format: 'md', version: 0, size: 0, history: true, path, abs: '' }
+  return { junior: 'artifact', action: made ? 'created' : 'updated', id, title, format: 'md', version: 0, size: 0, history: true, path, abs: '' }
 }
 
 /**

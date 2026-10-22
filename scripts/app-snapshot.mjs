@@ -1,4 +1,4 @@
-// Puts the current checkout into Triage.app on this Mac, without releasing it.
+// Puts the current checkout into Junior.app on this Mac, without releasing it.
 //
 //   node scripts/app-snapshot.mjs [--arch arm64|x64] [--build-only]
 //
@@ -23,7 +23,7 @@ const option = (name) => {
 }
 const arch = option('--arch') ?? process.arch
 if (arch !== 'arm64' && arch !== 'x64') die(`--arch must be arm64 or x64, got ${arch}`)
-if (process.platform !== 'darwin') die('Triage.app builds on macOS only')
+if (process.platform !== 'darwin') die('Junior.app builds on macOS only')
 
 const git = (...args) => execFileSync('git', args, { encoding: 'utf8' }).trim()
 const run = (cmd, ...args) => execFileSync(cmd, args, { stdio: 'inherit' })
@@ -40,9 +40,9 @@ const sha = git('rev-parse', '--short', 'HEAD')
 const dirty = git('status', '--porcelain') !== ''
 const version = `${major}.${minor}.${Number(patch) + 1}-dev.g${sha}${dirty ? '.dirty' : ''}`
 
-console.log(`\nTriage.app ${version} · mac-${arch}${dirty ? ' · uncommitted changes included' : ''}\n`)
+console.log(`\nJunior.app ${version} · mac-${arch}${dirty ? ' · uncommitted changes included' : ''}\n`)
 
-const zip = path.join('desktop', 'release', `Triage-${version}-mac-${arch}.zip`)
+const zip = path.join('desktop', 'release', `Junior-${version}-mac-${arch}.zip`)
 try {
   // desktop/scripts/build.mjs reads this version for both the bundle and the
   // staged package, which is what server/state.ts later reports as the build.
@@ -55,7 +55,7 @@ if (!existsSync(zip)) die(`the build did not produce ${zip}`)
 
 if (argv.includes('--build-only')) {
   console.log(`\nbuilt ${zip}`)
-  console.log(`install it with:  TRIAGE_APP_ZIP=${zip} sh install.sh`)
+  console.log(`install it with:  JUNIOR_APP_ZIP=${zip} sh install.sh`)
   process.exit(0)
 }
 
@@ -65,5 +65,5 @@ if (argv.includes('--build-only')) {
 // that is exercised on every machine, so it is the one worth testing.
 execFileSync('sh', ['install.sh'], {
   stdio: 'inherit',
-  env: { ...process.env, TRIAGE_APP_ZIP: path.resolve(zip) },
+  env: { ...process.env, JUNIOR_APP_ZIP: path.resolve(zip) },
 })

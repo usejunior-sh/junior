@@ -109,7 +109,7 @@ export function WorkspaceTab({ workspace }: { workspace: Workspace }) {
       {!workspace.isDefault && (
         <Section
           title="Remove this workspace"
-          hint="Unregisters it from triage. Its folder — database, secrets, logs — stays on disk; nothing is deleted."
+          hint="Unregisters it from Junior. Its folder — database, secrets, logs — stays on disk; nothing is deleted."
         >
           <DeleteWorkspaceButton workspace={workspace} />
         </Section>

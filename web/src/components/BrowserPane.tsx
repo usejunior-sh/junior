@@ -1,7 +1,7 @@
 /**
  * The browser pane (.docs/browser.md): beside a chat, or alone in Settings →
  * Browser as a profile's sign-in tab. The toolbar is ours; the page under it
- * is a native view Triage.app lays over `.bpStage`, so the stage reports
+ * is a native view Junior.app lays over `.bpStage`, so the stage reports
  * where it is, and hides the view whenever one of our own popovers, our error
  * page or a drag of the split would otherwise sit underneath it.
  *
@@ -243,7 +243,7 @@ export function BrowserPane({ tabKey, onClose, embedded = false, onTerminal }: P
     }
   }, [picking, sessionId])
 
-  // Escape ends a pick from anywhere in the triage window.
+  // Escape ends a pick from anywhere in the junior window.
   useEffect(() => {
     if (!picking || !sessionId) return
     const onKey = (e: KeyboardEvent) => {
@@ -295,7 +295,7 @@ export function BrowserPane({ tabKey, onClose, embedded = false, onTerminal }: P
           </button>
         </div>
         <div className="bpEmpty">
-          <p className="bpLead">The browser lives in Triage.app.</p>
+          <p className="bpLead">The browser lives in Junior.app.</p>
           <p>Open this chat there to watch Junior check its work.</p>
         </div>
       </aside>
@@ -532,7 +532,7 @@ export function BrowserPane({ tabKey, onClose, embedded = false, onTerminal }: P
               </>
             ) : download.state === 'refused' ? (
               <>
-                Triage didn't save <span className="mono">{download.file}</span>.
+                Junior didn't save <span className="mono">{download.file}</span>.
               </>
             ) : (
               <>

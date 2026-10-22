@@ -37,7 +37,7 @@ export function browserHowTo(b: { profile: string; sites?: string[] }): string {
     ? `You may open only ${b.sites.join(', ')} (a *. name covers its subdomains), plus pages on this machine.`
     : 'You may open any site, plus pages on this machine.'
   return [
-    `Browser: you have Triage's browser, signed in as the user's "${b.profile}" profile. Open a page with browser_open, read it with browser_snapshot (pass find to narrow a big page) or browser_extract, and wait for it with browser_wait. Its URL identifies a find.`,
+    `Browser: you have Junior's browser, signed in as the user's "${b.profile}" profile. Open a page with browser_open, read it with browser_snapshot (pass find to narrow a big page) or browser_extract, and wait for it with browser_wait. Its URL identifies a find.`,
     where,
     "You may type, scroll and follow links. You can't press Send, Submit, Save or anything else that changes something: the run refuses it. Record what you found with your write tool instead.",
     'Never sign in or type a password. If a page asks you to log in, stop and say the profile needs signing in (Settings → Browser).',
@@ -81,7 +81,7 @@ export function composeRunPrompt(w: {
   const deferred = runDeferredTools(w.tools)
   const span = humanSpan(w.lookbackMs)
   const lines = [
-    `You are a triage scanner running ONE job, read-only unless a tool below says otherwise. It is now ${w.nowIso}.`,
+    `You are a junior scanner running ONE job, read-only unless a tool below says otherwise. It is now ${w.nowIso}.`,
     w.lateness ?? '',
     `Time window: if the instructions name one, use it. Otherwise look at roughly the last ${span}. If the instructions ask for what is true now (open tasks, pending reviews) rather than what is new, ignore this window.`,
     deferred.length
@@ -105,7 +105,7 @@ export function composeRunPrompt(w: {
 - body: the whole digest as markdown — lead with the two or three things worth attention and why, then the rest as a tight list with links; say what window you covered
 - refs: any GitHub PR/issue URLs or Linear keys you cite (omit if none)
 Do not file individual items. If there is nothing new in the window, do not call write_digest — just finish with one line saying so.`,
-          `write_digest is the ONLY triage write tool you may use. If you cannot access any of the integration tools at all, reply with exactly no-connector-tools and stop.`,
+          `write_digest is the ONLY junior write tool you may use. If you cannot access any of the integration tools at all, reply with exactly no-connector-tools and stop.`,
         ]
       : [
           `For EACH match, call the upsert_work_item tool exactly once with:
@@ -122,7 +122,7 @@ ${askGuide()}
 - refs: any other GitHub PR/issue URLs or Linear keys visible in the content (omit if none)
 ${filingPrompt(w.filing)}`,
           `The tool tells you when something is already filed. An "already filed and open" reply means the user has it: do not count it as new, move on to the next candidate.`,
-          `Call upsert_work_item at most ${MAX_ROWS_PER_RUN} times. It is the ONLY triage write tool you may use. If nothing matches, do not call it — just finish with a one-line summary of what you looked at. If you cannot access any of the integration tools at all, reply with exactly no-connector-tools and stop.`,
+          `Call upsert_work_item at most ${MAX_ROWS_PER_RUN} times. It is the ONLY junior write tool you may use. If nothing matches, do not call it — just finish with a one-line summary of what you looked at. If you cannot access any of the integration tools at all, reply with exactly no-connector-tools and stop.`,
         ]),
   ]
   return lines.filter(Boolean).join('\n\n')

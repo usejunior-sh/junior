@@ -8,7 +8,7 @@
  * light, dark) and one theme per scheme (the dark theme, the light theme). The
  * mode picks which of the two is showing. JS resolves it to one concrete theme
  * id and writes it to `document.documentElement[data-theme]`. The hand-tuned
- * Triage themes are styled in styles/tokens.css, the rest are compiled from their
+ * Junior themes are styled in styles/tokens.css, the rest are compiled from their
  * palettes into one injected <style> (see themes.ts).
  */
 import { useSyncExternalStore } from 'react'
@@ -28,10 +28,10 @@ export type Appearance = {
 
 // The mode keeps the key it had when it was the whole theme choice, so a saved
 // "light" or "dark" carries over unchanged.
-const MODE_KEY = 'triage.appearance.theme'
-const DARK_KEY = 'triage.appearance.darkTheme'
-const LIGHT_KEY = 'triage.appearance.lightTheme'
-const FONT_KEY = 'triage.appearance.fontSize'
+const MODE_KEY = 'junior.appearance.theme'
+const DARK_KEY = 'junior.appearance.darkTheme'
+const LIGHT_KEY = 'junior.appearance.lightTheme'
+const FONT_KEY = 'junior.appearance.fontSize'
 
 export const FONT_MIN = 12
 export const FONT_MAX = 18
@@ -105,7 +105,7 @@ function applyToDocument(a: Appearance) {
 }
 
 function installThemeStyles() {
-  const id = 'triage-themes'
+  const id = 'junior-themes'
   let el = document.getElementById(id) as HTMLStyleElement | null
   if (!el) {
     el = document.createElement('style')

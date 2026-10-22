@@ -17,7 +17,7 @@ function withDb(fn: (file: string) => Promise<void>) {
   return async () => {
     const dir = mkdtempSync(path.join(tmpdir(), 'goal-schema-'))
     try {
-      await fn(path.join(dir, 'triage.db'))
+      await fn(path.join(dir, 'junior.db'))
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }

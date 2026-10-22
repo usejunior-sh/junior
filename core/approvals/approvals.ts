@@ -1,5 +1,5 @@
 /**
- * Advance approvals (Triage for engineers, M2): your OK, given before the
+ * Advance approvals (Junior for engineers, M2): your OK, given before the
  * send. One names who + what + when ("DM Anirudha on Slack, any time"). A held
  * call it covers goes out alone, and the record says "allowed by: rule".
  *

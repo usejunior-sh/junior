@@ -4,7 +4,7 @@
  *
  *   <workspace>/jobs/<slug>.md       frontmatter = what the code enforces,
  *                                    body = the instruction
- *   <workspace>/jobs/.seeded.json    what triage wrote, so edits are never clobbered
+ *   <workspace>/jobs/.seeded.json    what Junior wrote, so edits are never clobbered
  *
  * The schema is strict: an unknown key is an error, never ignored, so a typo
  * can't silently drop a limit. A file that doesn't validate never crashes
@@ -65,7 +65,7 @@ export type JobFileSpec = {
   brief?: JobBrief
   /** drafted by a chat, not yet reviewed, stays off until you enable it */
   draft?: boolean
-  /** skills a run may load, as Claude calls them (`triage:<name>` for the workspace library's) */
+  /** skills a run may load, as Claude calls them (`junior:<name>` for the workspace library's) */
   skills?: string[]
   /** subagents a run may hand work to, named the same way */
   agents?: string[]
@@ -83,7 +83,7 @@ export const JOB_FILE_KEYS = [
   ...FILING_KEYS,
 ] as const
 
-/** A skill or agent name as Claude calls it: `name`, or `namespace:name` for a plugin's (the workspace library is `triage:`). */
+/** A skill or agent name as Claude calls it: `name`, or `namespace:name` for a plugin's (the workspace library is `junior:`). */
 const LIBRARY_NAME_RE = /^[A-Za-z0-9][\w.-]*(?::[A-Za-z0-9][\w.-]*)?$/
 
 /** A host a browser run may open: `app.pendo.io`, or `*.pendo.io` for it and its subdomains. Pages on this machine always open. */
@@ -179,7 +179,7 @@ export function parseJobFile(name: string, text: string): ParsedJobFile {
     const out: string[] = []
     for (const n of list) {
       if (!n) continue
-      if (!LIBRARY_NAME_RE.test(n)) errors.push(`${key}: "${n}" is not a name — write it as Claude calls it, e.g. triage:pr-review`)
+      if (!LIBRARY_NAME_RE.test(n)) errors.push(`${key}: "${n}" is not a name — write it as Claude calls it, e.g. junior:pr-review`)
       else if (!out.includes(n)) out.push(n)
     }
     return out
@@ -434,8 +434,8 @@ export function starterJobFile(projects: { id: string; name: string }[]): string
     '# built-ins: web, github, files-write · an MCP tool: <server>/<tool>',
     'tools: [web]',
     '# skills and agents the run may use, as Claude calls them (Settings → Skills, Agents):',
-    '# skills: [triage:pr-review]',
-    '# agents: [triage:code-reviewer]',
+    '# skills: [junior:pr-review]',
+    '# agents: [junior:code-reviewer]',
     '# items (one work item per match) or digest (one report per run)',
     'output: items',
     '# never, on_failure or always — a macOS notification',
@@ -488,7 +488,7 @@ export function renameLegacyFolders(root: string): void {
   }
 }
 
-/** What triage wrote, per file, the difference between "untouched" and "yours". */
+/** What Junior wrote, per file, the difference between "untouched" and "yours". */
 type Manifest = { version: 1; files: Record<string, { hash: string | null; removed?: boolean }> }
 
 const hash = (s: string) => createHash('sha256').update(s).digest('hex').slice(0, 16)
@@ -632,7 +632,7 @@ export class JobFiles {
   }
 
   /**
-   * Take shipped templates out: one still exactly as triage wrote it goes; one
+   * Take shipped templates out: one still exactly as Junior wrote it goes; one
    * you edited (turned on, reworded) is yours and stays.
    */
   async retire(names: string[]): Promise<void> {

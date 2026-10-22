@@ -9,13 +9,13 @@ export function dispatchPrompt(item: ScoredItem): string {
   const lines =
     item.source === 'manual'
       ? [
-          'Work item from the triage inbox — a to-do you added:',
+          'Work item from the junior inbox — a to-do you added:',
           item.title,
           ...(item.url ? [item.url] : []),
           ...(item.why ? [`Note: ${item.why}`] : []),
         ]
       : [
-          `Work item from the triage inbox — ${item.kind}:`,
+          `Work item from the junior inbox — ${item.kind}:`,
           item.title,
           item.url,
           `Why it ranked: ${item.rankWhy}`,

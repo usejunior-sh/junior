@@ -1,15 +1,15 @@
 /**
  * Which login paid for each usage entry. Claude Code's transcripts don't say,
- * so it is pieced together from two things triage knows:
+ * so it is pieced together from two things junior knows:
  *
  *  - the config dir a transcript sits under: one claude.ai login per dir
  *    (`~/.claude` is the machine's, a config-dir workspace has its own);
- *  - the starts triage recorded: each Claude spawn's init says whether it ran
+ *  - the starts junior recorded: each Claude spawn's init says whether it ran
  *    on an API key, and the server knows which key it handed it.
  *
  * A session can change login mid-life (its workspace moved to an API key and
  * it was resumed), so a session's starts are a timeline and each entry takes
- * the last start at or before it. A session triage never started (a terminal,
+ * the last start at or before it. A session junior never started (a terminal,
  * an IDE) has no starts and stays with its dir's login.
  */
 import { entryCost, type UsageEntry } from './ledger.js'

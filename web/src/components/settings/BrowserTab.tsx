@@ -27,7 +27,7 @@ import { Loading, Section } from './shared.js'
 // each its own cookie jar. You sign in to sites here, once, in a profile's
 // sign-in tab; Junior uses whichever profile you name in a chat or a job.
 
-const OUTSIDE_APP = 'Open Triage.app to sign in.'
+const OUTSIDE_APP = 'Open Junior.app to sign in.'
 const DEFAULT_HINT = "This workspace's default. Junior uses it unless you name another."
 
 /** The id says nothing the name doesn't when it is just the name, slugged: show it only when it differs. */
@@ -46,7 +46,7 @@ export function BrowserTab() {
   const [sites, setSites] = useState<Record<string, string[]>>({})
   const connected = !!snap?.app.connected
 
-  // Sites come from the jars, which are Triage.app's: read them while it's there.
+  // Sites come from the jars, which are Junior.app's: read them while it's there.
   const ids = snap?.profiles.map((p) => p.id).join(',') ?? ''
   const [sitesNonce, setSitesNonce] = useState(0)
   useEffect(() => {
@@ -66,7 +66,7 @@ export function BrowserTab() {
     if (!loadError) return <Loading />
     // An older daemon answers the route with the app's HTML, not JSON.
     return /JSON|Unexpected token/.test(loadError) ? (
-      <div className="msg">Restart the triage server to manage profiles. It is running an older build.</div>
+      <div className="msg">Restart the Junior server to manage profiles. It is running an older build.</div>
     ) : (
       <div className="msg error">Couldn't load profiles: {loadError}</div>
     )
@@ -100,7 +100,7 @@ export function BrowserTab() {
         {!hasBrowser ? (
           <div className="msg bpProfMsg">{OUTSIDE_APP} Sites are from the last time it was open.</div>
         ) : !connected ? (
-          <div className="msg bpProfMsg">Triage.app isn't open. Sites are from the last time it was.</div>
+          <div className="msg bpProfMsg">Junior.app isn't open. Sites are from the last time it was.</div>
         ) : null}
         <div className="bpProfiles" role="table" aria-label="Browser profiles">
           <div className="bpProfRow head" role="row">
@@ -224,9 +224,9 @@ function ProfileRow({
             </small>
           )}
         </span>
-        <span role="cell" className="bpSiteChips" title={sitesAt ? `As of ${spanText(Date.now() - sitesAt)} ago, when Triage.app was last open` : undefined}>
+        <span role="cell" className="bpSiteChips" title={sitesAt ? `As of ${spanText(Date.now() - sitesAt)} ago, when Junior.app was last open` : undefined}>
           {sites === null ? (
-            <span className="none">{connected ? '…' : 'Open Triage.app to see sites'}</span>
+            <span className="none">{connected ? '…' : 'Open Junior.app to see sites'}</span>
           ) : sites.length === 0 ? (
             <span className="none">No sites yet</span>
           ) : (

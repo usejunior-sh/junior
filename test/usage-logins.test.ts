@@ -1,7 +1,7 @@
 /**
  * Usage by login (core/usage/logins.ts, server/usage/login-ledger.ts): which
  * login paid for each transcript line. The config dir decides between
- * claude.ai logins; a start triage noted moves a session onto an API key from
+ * claude.ai logins; a start junior noted moves a session onto an API key from
  * that moment on, and a key is one login however many workspaces share it.
  */
 import { test } from 'node:test'
@@ -13,7 +13,7 @@ import type { UsageEntry } from '../core/usage/ledger.js'
 import { byLogin, loginOf, loginTotals, MACHINE_LOGIN, timelines, type LoginStart } from '../core/usage/logins.js'
 
 const home = await mkdtemp(join(tmpdir(), 'usage-logins-'))
-process.env.TRIAGE_HOME = home
+process.env.JUNIOR_HOME = home
 const { keyLogin, noteClaudeStart, notedStarts, startKey, UNKNOWN_KEY } = await import('../server/usage/login-ledger.js')
 
 const MAIN = '/home/.claude/projects'
@@ -40,7 +40,7 @@ const entry = (over: Partial<UsageEntry>): UsageEntry => ({
   ...over,
 })
 
-test('a session triage never started stays with its config dir', () => {
+test('a session junior never started stays with its config dir', () => {
   const none = timelines([])
   assert.equal(loginOf(entry({ root: MAIN }), none, roots), MACHINE_LOGIN)
   assert.equal(loginOf(entry({ root: PERSONAL }), none, roots), 'dir:personal')

@@ -8,7 +8,7 @@
  *                    list in the actions file is an action, nothing else is
  *   built-ins        never (Write, Edit… are local; Changes shows them)
  *
- * The actions file's overrides come first for both. triage's own in-process
+ * The actions file's overrides come first for both. Junior's own in-process
  * servers are local by construction. Pure and browser-safe.
  */
 import { describePart, matchPart, parsePattern, pushTarget, splitCommand, type BashPattern, type CommandPart } from './bash.js'

@@ -1,6 +1,6 @@
 {
-  "name": "Triage",
-  "short_name": "Triage",
+  "name": "Junior",
+  "short_name": "Junior",
   "description": "Ranked work inbox for engineers",
   "start_url": "/",
   "display": "standalone",

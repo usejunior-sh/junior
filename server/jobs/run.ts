@@ -25,7 +25,7 @@ function notifyRun(rt: WorkspaceRuntime, w: Job, status: JobRunStatus, detail?: 
   if (!failed && status !== 'ok') return
   const q = (s: string) => `"${s.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`
   const text = failed ? `${w.title} ${status === 'timeout' ? 'timed out' : 'failed'}${detail ? `: ${detail.slice(0, 120)}` : ''}` : `${w.title}: ${detail ?? 'ok'}`
-  execFile('osascript', ['-e', `display notification ${q(text)} with title ${q('triage')}`], (err) => {
+  execFile('osascript', ['-e', `display notification ${q(text)} with title ${q('junior')}`], (err) => {
     if (err) log('warn', 'job', `notification failed: ${err.message}`, { jobId: w.id, workspace: rt.meta.id })
   })
 }
@@ -80,7 +80,7 @@ export async function runJob(
     log('warn', 'job', `paused ${job.title}: its project was removed`, { jobId: job.id, workspace: rt.meta.id })
     return
   }
-  // The scheduler skips a browser job while Triage.app is closed (jobReady); a
+  // The scheduler skips a browser job while Junior.app is closed (jobReady); a
   // "Run now" meets the same rule here, as a skip, not a failure.
   if (job.browser && !browserHub.status.compatible) {
     const now = Date.now()
@@ -247,7 +247,7 @@ export async function runJob(
  * retry: the next run's look-back window overlaps the lost one.
  */
 export async function markInterruptedRuns(rt: WorkspaceRuntime): Promise<void> {
-  const error = 'interrupted: triage stopped during the run'
+  const error = 'interrupted: Junior stopped during the run'
   await ledger(rt, rt.store.jobRuns.sweepInterrupted(Date.now(), error))
   for (const row of rt.rows.values()) {
     if (row.kind !== 'job-run' || row.runStatus) continue

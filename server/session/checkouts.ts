@@ -61,13 +61,13 @@ export async function loadCheckouts(rt: WorkspaceRuntime): Promise<void> {
   if (n) log('info', 'checkouts', `stored a checkout on ${n} sessions`, { workspace: rt.meta.id })
 }
 
-/** New worktrees live in the workspace folder (`~/.triage-dev` in dev), never inside the repo. */
+/** New worktrees live in the workspace folder (`~/.junior-dev` in dev), never inside the repo. */
 const worktreesRoot = (rt: WorkspaceRuntime) => path.join(workspaceDir(rt.meta.id), 'worktrees')
 
 /**
  * Make a worktree of `project` on `branch` and get it ready: `git worktree
  * add`, then node_modules and `.env*` from the main folder. Discovery records
- * the row (one writer, so no duplicate), and then what only triage knows,
+ * the row (one writer, so no duplicate), and then what only junior knows,
  * the base it was cut from and the item it was made for, goes on it.
  */
 export async function makeWorktree(

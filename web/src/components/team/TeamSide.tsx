@@ -321,7 +321,7 @@ export function TeamSide({
                         )}
                       </div>
                     )}
-                    {s.fanOut && !sliceable && <div className="tsMeta">{s.fanOut.by === 'finding' ? 'triage splits the findings' : `same slices as ${run.recipe.steps[i - 1]?.id}`}</div>}
+                    {s.fanOut && !sliceable && <div className="tsMeta">{s.fanOut.by === 'finding' ? 'junior splits the findings' : `same slices as ${run.recipe.steps[i - 1]?.id}`}</div>}
                     {workers.length > 0 && run.state !== 'proposed' && (
                       <div className="tsWorkers">
                         {workers.map((x) => (

@@ -44,15 +44,15 @@ export type Checkout = {
   path: string
   /** the checked-out branch as last read from git; null = detached HEAD or not a repo */
   branch: string | null
-  /** the branch a worktree was cut from; null for main, and for worktrees made outside triage */
+  /** the branch a worktree was cut from; null for main, and for worktrees made outside junior */
   base: string | null
-  /** the work item a worktree was made for, when triage made it for one */
+  /** the work item a worktree was made for, when Junior made it for one */
   itemId: string | null
   state: CheckoutState
   createdAt: number
 }
 
-/** An editor triage found on this machine, for "Open in…" (GET /api/editors). */
+/** An editor Junior found on this machine, for "Open in…" (GET /api/editors). */
 export type Editor = { id: string; name: string }
 
 export type EditorsResponse = { ok: true; editors: Editor[] } | { ok: false; error: string }

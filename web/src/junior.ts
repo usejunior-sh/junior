@@ -68,7 +68,7 @@ export function startJuniorChat(text = '', opts: { intent?: 'job' } = {}) {
 
 // The brief's window: per browser, per workspace, where *you* were.
 
-const seenKey = (ws: string) => `triage.junior.seen.${ws || 'default'}`
+const seenKey = (ws: string) => `junior.junior.seen.${ws || 'default'}`
 
 function readSeen(ws: string): SeenState | null {
   try {

@@ -4,10 +4,10 @@
  * is its own directory holding its own SQLite file, so isolation is physical
  * (a workspace cannot read another's rows), never a WHERE clause.
  *
- *   ~/.triage/
+ *   ~/.junior/
  *     workspaces.json          registry (no secrets)
  *     workspaces/<id>/
- *       triage.db              the workspace's SQLite file
+ *       junior.db              the workspace's SQLite file
  *       .env                   secrets (the provider's API key), mode 0600
  *       <provider>/            private config dir for the config-dir backend
  *
@@ -22,7 +22,7 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSy
 import os from 'node:os'
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
-import { TRIAGE_DIR } from './state.js'
+import { JUNIOR_DIR } from './state.js'
 import type { WorkspaceAuthBackend } from '../shared/protocol.js'
 import { DEFAULT_PROVIDER, providerFor, toProviderId } from './providers/registry.js'
 import type { ProviderAuth, ProviderId } from './providers/types.js'
@@ -53,21 +53,21 @@ export type WorkspaceRegistry = {
   workspaces: WorkspaceMeta[]
 }
 
-export const REGISTRY_FILE = path.join(TRIAGE_DIR, 'workspaces.json')
-const WORKSPACES_DIR = path.join(TRIAGE_DIR, 'workspaces')
+export const REGISTRY_FILE = path.join(JUNIOR_DIR, 'workspaces.json')
+const WORKSPACES_DIR = path.join(JUNIOR_DIR, 'workspaces')
 /** the pre-workspaces single-DB location, migrated into the default workspace */
-const LEGACY_DB = path.join(TRIAGE_DIR, 'triage-dev.db')
+const LEGACY_DB = path.join(JUNIOR_DIR, 'junior-dev.db')
 
 export const workspaceDir = (id: string) => path.join(WORKSPACES_DIR, id)
-export const workspaceDbFile = (id: string) => path.join(workspaceDir(id), 'triage.db')
+export const workspaceDbFile = (id: string) => path.join(workspaceDir(id), 'junior.db')
 
 /**
- * Which SQLite file a workspace opens. TRIAGE_DB keeps its pre-workspaces
+ * Which SQLite file a workspace opens. JUNIOR_DB keeps its pre-workspaces
  * meaning, "the default workspace's DB lives here", so dev/test overrides
  * keep working; every other workspace always uses its own directory.
  */
 export function dbFileFor(id: string, defaultId: string): string {
-  if (process.env.TRIAGE_DB && id === defaultId) return process.env.TRIAGE_DB
+  if (process.env.JUNIOR_DB && id === defaultId) return process.env.JUNIOR_DB
   return workspaceDbFile(id)
 }
 export const workspaceEnvFile = (id: string) => path.join(workspaceDir(id), '.env')
@@ -98,7 +98,7 @@ export function slugify(name: string): string {
 }
 
 export function saveRegistry(reg: WorkspaceRegistry): void {
-  mkdirSync(TRIAGE_DIR, { recursive: true })
+  mkdirSync(JUNIOR_DIR, { recursive: true })
   writeFileSync(REGISTRY_FILE, JSON.stringify(reg, null, 2) + '\n')
 }
 
@@ -177,14 +177,14 @@ export function ensureWorkspaceDirs(id: string): void {
 }
 
 /**
- * One-time migration: the pre-workspaces DB (~/.triage/triage-dev.db, or
- * TRIAGE_DB) moves into the default workspace's directory, with its WAL/SHM
+ * One-time migration: the pre-workspaces DB (~/.junior/junior-dev.db, or
+ * JUNIOR_DB) moves into the default workspace's directory, with its WAL/SHM
  * siblings, so nothing is lost and the old path stops being written. Skipped
  * when the workspace DB already exists (never clobber) or there is nothing to
  * move.
  */
 function migrateLegacyDb(defaultId: string): void {
-  if (process.env.TRIAGE_DB) return // override in force: the default workspace uses it in place
+  if (process.env.JUNIOR_DB) return // override in force: the default workspace uses it in place
   const target = workspaceDbFile(defaultId)
   if (existsSync(target) || !existsSync(LEGACY_DB)) return
   ensureWorkspaceDirs(defaultId)
@@ -231,7 +231,7 @@ export function apiKeyHint(meta: Pick<WorkspaceMeta, 'id' | 'provider'>, provide
 }
 
 /**
- * What triage keeps for a provider's auth backend here, as its adapter reads
+ * What Junior keeps for a provider's auth backend here, as its adapter reads
  * it. A provider that isn't connected reads as `inherit`. A session already
  * on it still runs, on the machine's own login.
  */

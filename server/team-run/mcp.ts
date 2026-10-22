@@ -9,7 +9,7 @@ import { branchFromTitle } from '../../shared/branch.js'
 import { WorkspaceRuntime } from '../workspace/runtime.js'
 import { VERSION } from '../config.js'
 import { applyTeamActions, teamRunChanged, teamRunOf, usd, withTeamRun } from './state.js'
-import { errResult, okResult } from '../triage-mcp.js'
+import { errResult, okResult } from '../junior-mcp.js'
 import { errText } from '../errors.js'
 import { listTeamsOp, proposeTeamOp, teamRunFrom } from './ops.js'
 import { invalidateInbox } from '../ws/send.js'
@@ -32,7 +32,7 @@ export function makeTeamMcp(rt: WorkspaceRuntime, sessionId: string) {
 }
 
 const FINDING_SHAPE = z.object({
-  id: z.string().optional().describe('only to say an earlier finding is still not fixed: its id (e.g. "T2-F1"); triage numbers new ones'),
+  id: z.string().optional().describe('only to say an earlier finding is still not fixed: its id (e.g. "T2-F1"); junior numbers new ones'),
   severity: z.enum(['P0', 'P1', 'P2']).describe('P0 = a criterion unmet or something broken; P1 = a real defect likely to bite; P2 = worth fixing, not blocking'),
   where: z.string().describe('file:line, or the behaviour'),
   problem: z.string(),
@@ -60,10 +60,10 @@ const SUBMIT_SHAPE = {
   surprises: z.array(z.string()).max(10).optional().describe('what was not as expected'),
   failed: z.array(z.string()).max(10).optional().describe('approaches you tried that did not work, and why'),
   verify: z.array(z.string()).max(10).optional().describe('how to check this project or this change: commands, URLs, what to look at'),
-  files: z.array(z.string()).max(50).optional().describe('change steps: files you changed (triage replaces this with what git says)'),
+  files: z.array(z.string()).max(50).optional().describe('change steps: files you changed (junior replaces this with what git says)'),
   notes: z.array(z.string()).max(10).optional().describe('anything else for whoever comes next (prefer the typed fields above)'),
 }
-const SUBMIT_DESCRIPTION = 'Hand in your step of the team run. triage forwards it verbatim to whoever needs it next and moves the run on. Then END YOUR TURN.'
+const SUBMIT_DESCRIPTION = 'Hand in your step of the team run. junior forwards it verbatim to whoever needs it next and moves the run on. Then END YOUR TURN.'
 
 async function submitStepOp(rt: WorkspaceRuntime, sessionId: string, args: Submission) {
   const run = teamRunOf(rt, sessionId)
@@ -99,9 +99,9 @@ function submitStepTool(rt: WorkspaceRuntime, sessionId: string) {
   return tool('submit_step', SUBMIT_DESCRIPTION, SUBMIT_SHAPE, (args) => submitStepOp(rt, sessionId, args))
 }
 
-/** The lead's tools, in every chat's triage server: pick or draft a team, propose it, split a step, hand in its own steps. */
+/** The lead's tools, in every chat's Junior server: pick or draft a team, propose it, split a step, hand in its own steps. */
 export function teamLeadTools(rt: WorkspaceRuntime) {
-  const sid = z.string().describe('your triage session id — it is in your system prompt')
+  const sid = z.string().describe('your junior session id — it is in your system prompt')
   return [
     tool(
       'list_teams',
@@ -182,7 +182,7 @@ export function teamLeadTools(rt: WorkspaceRuntime) {
       async (args) => {
         try {
           const run = await proposeTeamOp(rt, args.sessionId, args)
-          return okResult(`${run.goal ? 'Goal' : 'Team'} card shown to the user (${run.recipe.label}, ${run.recipe.steps.length} steps, up to ${usd(run.card.budgetUsd)}). END YOUR TURN — they approve or edit it, then triage runs the steps and wakes you when you're needed.`)
+          return okResult(`${run.goal ? 'Goal' : 'Team'} card shown to the user (${run.recipe.label}, ${run.recipe.steps.length} steps, up to ${usd(run.card.budgetUsd)}). END YOUR TURN — they approve or edit it, then Junior runs the steps and wakes you when you're needed.`)
         } catch (err) {
           return errResult(errText(err))
         }
@@ -190,7 +190,7 @@ export function teamLeadTools(rt: WorkspaceRuntime) {
     ),
     tool(
       'split_step',
-      'Split the current fan-out step of your team run into slices — one worker each. Only when triage asks you to. Then END YOUR TURN.',
+      'Split the current fan-out step of your team run into slices — one worker each. Only when Junior asks you to. Then END YOUR TURN.',
       { sessionId: sid, slices: z.array(z.object({ title: z.string().describe('a few words'), brief: z.string().describe('what this worker looks at, and what could go wrong there') })).min(1).max(6) },
       async (args) => {
         const run = teamRunOf(rt, args.sessionId)
@@ -222,10 +222,10 @@ export function teamLeadTools(rt: WorkspaceRuntime) {
         }
       },
     ),
-    tool('submit_step', `${SUBMIT_DESCRIPTION} Only when triage hands you a step.`, { sessionId: sid, ...SUBMIT_SHAPE }, ({ sessionId, ...args }) => submitStepOp(rt, sessionId, args)),
+    tool('submit_step', `${SUBMIT_DESCRIPTION} Only when Junior hands you a step.`, { sessionId: sid, ...SUBMIT_SHAPE }, ({ sessionId, ...args }) => submitStepOp(rt, sessionId, args)),
     tool(
       'goal_verdict',
-      'Judge your goal\'s done-when — only when triage asks you to (the team finished a round, or a wait is over). Look for yourself first: run the checks, read the diff, query the connectors you can see. met: true closes the goal for the user to accept; met: false starts another round with the gap (and, for a team with a task loop, the next round\'s tasks); met: false with waitFor + waitMinutes sleeps until the world has moved (CI, a reviewer, a deploy) and wakes you then. Then END YOUR TURN.',
+      'Judge your goal\'s done-when — only when Junior asks you to (the team finished a round, or a wait is over). Look for yourself first: run the checks, read the diff, query the connectors you can see. met: true closes the goal for the user to accept; met: false starts another round with the gap (and, for a team with a task loop, the next round\'s tasks); met: false with waitFor + waitMinutes sleeps until the world has moved (CI, a reviewer, a deploy) and wakes you then. Then END YOUR TURN.',
       {
         sessionId: sid,
         met: z.boolean(),
@@ -245,7 +245,7 @@ export function teamLeadTools(rt: WorkspaceRuntime) {
           const probe = structuredClone(run)
           decide(probe)
           rt.goalDecisions.set(run.id, decide)
-          const said = probe.state === 'done' ? 'met — the user accepts the result' : probe.state === 'waiting' ? 'waiting — triage wakes you then' : 'not met — the next round starts when your turn ends'
+          const said = probe.state === 'done' ? 'met — the user accepts the result' : probe.state === 'waiting' ? 'waiting — junior wakes you then' : 'not met — the next round starts when your turn ends'
           return okResult(`Recorded: ${said}. END YOUR TURN now.`)
         } catch (err) {
           return errResult(errText(err))
@@ -254,7 +254,7 @@ export function teamLeadTools(rt: WorkspaceRuntime) {
     ),
     tool(
       'goal_unstick',
-      'Get your goal\'s team moving again — only when triage tells you the team is stuck (its fix rounds ran out on a failing review or failing checks). "retry" goes back to the change step with your guidance for the builder and a fresh set of fix rounds; "skip" leaves it unresolved and moves on. Every resume is logged with your why. Then END YOUR TURN.',
+      'Get your goal\'s team moving again — only when Junior tells you the team is stuck (its fix rounds ran out on a failing review or failing checks). "retry" goes back to the change step with your guidance for the builder and a fresh set of fix rounds; "skip" leaves it unresolved and moves on. Every resume is logged with your why. Then END YOUR TURN.',
       {
         sessionId: sid,
         action: z.enum(['retry', 'skip']),

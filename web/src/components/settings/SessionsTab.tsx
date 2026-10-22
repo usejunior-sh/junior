@@ -97,7 +97,7 @@ export function AboutTab({ onOpenSystem }: { onOpenSystem: (t: SystemTab) => voi
 
   return (
     <>
-      <Section title="triage" hint="A local web UI over the Claude Agent SDK. Everything runs on this machine; the daemon answers only this Mac (and phones you pair under Phone) and holds no Slack or GitHub credentials.">
+      <Section title="junior" hint="A local web UI over the Claude Agent SDK. Everything runs on this machine; the daemon answers only this Mac (and phones you pair under Phone) and holds no Slack or GitHub credentials.">
         {error && <div className="msg error">{error}</div>}
         {status && (
           <>

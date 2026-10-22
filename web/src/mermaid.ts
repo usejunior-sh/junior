@@ -82,7 +82,7 @@ async function renderOne(mermaid: Mermaid, code: string): Promise<string | null>
     // parse() first: render() plants an error graphic in the document when the
     // source is bad, and a bad source is routine here (someone is mid-sentence).
     await mermaid.parse(code)
-    const { svg } = await mermaid.render(`triage-mermaid-${++seq}`, code)
+    const { svg } = await mermaid.render(`junior-mermaid-${++seq}`, code)
     return DOMPurify.sanitize(svg, { USE_PROFILES: { svg: true, svgFilters: true, html: true } })
   } catch {
     return null

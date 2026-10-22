@@ -13,7 +13,7 @@ export type DemoItem = {
   created: number
   /** last source activity (ms ago) */
   updated: number
-  /** when triage first saw it (ms ago), drives "New" */
+  /** when Junior first saw it (ms ago), drives "New" */
   ingested: number
   ciFailing?: boolean
   isDraft?: boolean

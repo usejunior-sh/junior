@@ -38,7 +38,7 @@ export const formatMime = (f: ArtifactFormat): string => MIME[f]
 export const formatExt = (f: ArtifactFormat): string => f
 
 const EXT_ALIAS: Record<string, ArtifactFormat> = { htm: 'html', jpeg: 'jpg', markdown: 'md' }
-/** `.HTML`, `html`, `jpeg` → the format, or null for an extension triage does not publish. */
+/** `.HTML`, `html`, `jpeg` → the format, or null for an extension junior does not publish. */
 export function formatOfExt(ext: string): ArtifactFormat | null {
   const e = ext.replace(/^\./, '').toLowerCase()
   if (isArtifactFormat(e)) return e
@@ -53,7 +53,7 @@ export const ARTIFACT_HISTORY_MAX_BYTES = 10 * 1024 * 1024
 export const ARTIFACT_BODY_MAX_CHARS = 2_000_000
 /** A non-markdown file's identity lives in `<file>.artifact.json` beside it. */
 export const ARTIFACT_SIDECAR_SUFFIX = '.artifact.json'
-/** The in-process write tools, by leaf name (their full names are `mcp__triage__<leaf>`). */
+/** The in-process write tools, by leaf name (their full names are `mcp__junior__<leaf>`). */
 export const ARTIFACT_TOOLS = ['write_artifact', 'update_artifact'] as const
 
 const startsWith = (b: Uint8Array, sig: number[], at = 0) => sig.every((x, i) => b[at + i] === x)
@@ -144,7 +144,7 @@ export type ArtifactInput = {
   body?: string
   /** create: md (default) or any format; a binary one needs `from`. Human callers write md only. */
   format?: ArtifactFormat
-  /** model callers only: absolute path of a file triage copies in (a snapshot) */
+  /** model callers only: absolute path of a file junior copies in (a snapshot) */
   from?: string
   /** one line about this version */
   note?: string
@@ -197,7 +197,7 @@ export type ArtifactVersion = {
   /** ms */
   at: number
   note?: string
-  /** from the Triage-Session trailer of the commit */
+  /** from the Junior-Session trailer of the commit */
   sessionId?: string
   /** the file's path at that commit (it can differ after a rename) */
   path: string
@@ -215,7 +215,7 @@ export type ArtifactVersionsResponse =
  */
 export type ArtifactToolResult = {
   /** discriminator */
-  triage: 'artifact'
+  junior: 'artifact'
   action: ArtifactWriteAction
   id: string
   title: string
@@ -239,7 +239,7 @@ export function parseArtifactResult(text: string): ArtifactToolResult | null {
     return null
   }
   const r = v as Record<string, unknown> | null
-  if (!r || typeof r !== 'object' || r.triage !== 'artifact') return null
+  if (!r || typeof r !== 'object' || r.junior !== 'artifact') return null
   if (r.action !== 'created' && r.action !== 'updated' && r.action !== 'unchanged') return null
   if (typeof r.id !== 'string' || !r.id || typeof r.title !== 'string') return null
   if (!isArtifactFormat(r.format)) return null

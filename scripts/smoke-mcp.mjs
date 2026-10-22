@@ -1,6 +1,6 @@
 // End-to-end smoke test for the MCP surface, against a running server.
 //
-// Two halves, because triage speaks MCP through two doors and both have
+// Two halves, because junior speaks MCP through two doors and both have
 // broken silently before:
 //
 //   1. POST /mcp: the streamable-HTTP endpoint external clients (Claude
@@ -8,7 +8,7 @@
 //   2. Two *concurrent* chat sessions: the in-process server every web chat
 //      gets. Regression test for the bug where one server instance was shared
 //      across a workspace, so the second live session got `status: "failed"`
-//      and a chat with no mcp__triage__* tools. One cheap turn each.
+//      and a chat with no mcp__junior__* tools. One cheap turn each.
 //
 // Usage: node scripts/smoke-mcp.mjs   (PORT=5188 for the dev daemon)
 import { WebSocket } from 'ws'
@@ -44,7 +44,7 @@ async function httpEndpoint() {
   console.log(`\n# POST ${BASE}/mcp`)
 
   const init = await rpc({ jsonrpc: '2.0', id: 1, method: 'initialize' })
-  check('initialize answers', init.status === 200 && init.json?.result?.serverInfo?.name === 'triage', `status ${init.status}`)
+  check('initialize answers', init.status === 200 && init.json?.result?.serverInfo?.name === 'junior', `status ${init.status}`)
   check('initialize carries instructions', typeof init.json?.result?.instructions === 'string')
 
   const tools = await rpc({ jsonrpc: '2.0', id: 2, method: 'tools/list' })
@@ -71,14 +71,14 @@ async function httpEndpoint() {
 }
 
 /**
- * One chat session; resolves with whether it actually got the triage tools.
+ * One chat session; resolves with whether it actually got the junior tools.
  *
  * Checked on the tool list, not on the server's status row: a same-named
  * entry in ~/.claude can be the row that gets reported while the in-process
  * server is the one serving, so the status alone both false-alarms and, if it
  * ever read the other way, would hide a real outage.
  */
-function sessionTriageStatus(label) {
+function sessionJuniorStatus(label) {
   return new Promise((resolve) => {
     const sock = new WebSocket(`ws://localhost:${PORT}/ws`)
     let sessionId = null
@@ -112,8 +112,8 @@ function sessionTriageStatus(label) {
       if (ev.kind !== 'sdk') return
       const msg = ev.message
       if (msg.type === 'system' && msg.subtype === 'init') {
-        const tools = (msg.tools ?? []).filter((t) => t.startsWith('mcp__triage__'))
-        const row = (msg.mcp_servers ?? []).find((s) => s.name === 'triage')
+        const tools = (msg.tools ?? []).filter((t) => t.startsWith('mcp__junior__'))
+        const row = (msg.mcp_servers ?? []).find((s) => s.name === 'junior')
         clearTimeout(timer)
         done(tools.length > 0 ? 'serving' : `no tools (row says ${row?.status ?? 'absent'})`)
       }
@@ -123,14 +123,14 @@ function sessionTriageStatus(label) {
 
 async function concurrentSessions() {
   console.log('\n# two concurrent chat sessions (in-process server)')
-  const [a, b] = await Promise.all([sessionTriageStatus('a'), sessionTriageStatus('b')])
-  check('first session has the triage tools', a === 'serving', a)
-  check('second concurrent session has the triage tools', b === 'serving', b)
+  const [a, b] = await Promise.all([sessionJuniorStatus('a'), sessionJuniorStatus('b')])
+  check('first session has the junior tools', a === 'serving', a)
+  check('second concurrent session has the junior tools', b === 'serving', b)
 }
 
 const health = await fetch(`${BASE}/api/health`).catch(() => null)
 if (!health?.ok) {
-  console.log(`no triage daemon on ${BASE} — start one first (\`triage start\`, or \`npm run dev\` with PORT=5188)`)
+  console.log(`no junior daemon on ${BASE} — start one first (\`junior start\`, or \`npm run dev\` with PORT=5188)`)
   process.exit(2)
 }
 

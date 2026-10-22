@@ -1,5 +1,5 @@
 /**
- * One policy for chats and runs (Triage for engineers, M2): free unless it
+ * One policy for chats and runs (Junior for engineers, M2): free unless it
  * reaches a person. Local work runs; a command that destroys work asks; a
  * send waits on a card for your OK, now or in advance.
  *
@@ -95,7 +95,7 @@ export function chatBashVerdict(command: string, s: BranchScope, sortPart: (part
 }
 
 /**
- * A command that reaches triage's own approval endpoints: approving a held
+ * A command that reaches Junior's own approval endpoints: approving a held
  * send, adding an advance approval, approving a task, marking a tool "not an
  * action". Only the user does those, from the app. A speed bump for an agent,
  * not a wall: anything running as you can reach the daemon.

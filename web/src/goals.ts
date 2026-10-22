@@ -2,7 +2,7 @@
  * Goals on the client: the list (`GET /api/goals`) and one goal's page
  * (`GET /api/goals/<id>`), both refetched when the server sends
  * `goals_changed`. Goals are written by Junior through the goal_* tools and by
- * `triage goal`; the UI's one write is the plan review (GoalPage → POST
+ * `junior goal`; the UI's one write is the plan review (GoalPage → POST
  * /api/goals/<id>/comment | approve | send-back).
  */
 import { useCallback, useEffect, useRef, useState } from 'react'

@@ -154,8 +154,8 @@ export function EntryEditor({
         <div className="lbConfirm">
           <span>
             {confirming === 'item'
-              ? `Delete ${entry.name}${entry.kind === 'skill' ? ' and every file in its folder' : ''}? It moves to ~/.triage/trash, and open sessions stop seeing it.`
-              : `Delete ${rel}? It moves to ~/.triage/trash.`}
+              ? `Delete ${entry.name}${entry.kind === 'skill' ? ' and every file in its folder' : ''}? It moves to ~/.junior/trash, and open sessions stop seeing it.`
+              : `Delete ${rel}? It moves to ~/.junior/trash.`}
           </span>
           <span className="sp" />
           <button type="button" className="btn sm danger" onClick={() => void remove(confirming)}>
@@ -373,7 +373,7 @@ export function TeamAgentEditor({
             <span>{entry?.label ?? (agent.label || 'New team agent')}</span>
             <span className="lbSrc team">Teams</span>
             {entry && entry.status !== 'yours' && (
-              <span className="lbSrc">{entry.status === 'default' ? 'triage default' : entry.status === 'edited' ? 'edited default' : 'newer default available'}</span>
+              <span className="lbSrc">{entry.status === 'default' ? 'junior default' : entry.status === 'edited' ? 'edited default' : 'newer default available'}</span>
             )}
           </div>
           <div className="lbHeadSub">

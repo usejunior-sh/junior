@@ -1,7 +1,7 @@
 /**
  * The team run engine (core/teams/engine.ts): a run moved through the shipped
  * recipes by hand — approve, submissions, turn ends, checks — asserting the
- * actions triage would carry out. No server, no clock: time is an argument.
+ * actions junior would carry out. No server, no clock: time is an argument.
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -257,7 +257,7 @@ test('the plan renders from the run: status, tasks with marks, notes, decisions,
   assert.match(renderPlan(run), /## Outcome\nStopped before the end\./)
 })
 
-test('Review: the lead splits by area, triage splits the findings itself, the lead reports on everything', () => {
+test('Review: the lead splits by area, junior splits the findings itself, the lead reports on everything', () => {
   const run = runOf(recipeOf('review'))
   const a = approve(run, run.card)
   assert.deepEqual(kinds(a), ['snapshot', 'notice', 'tellLead'])
@@ -363,7 +363,7 @@ test('the card: checked against the recipe, budget defaults to the team\'s', () 
   assert.throws(() => cardFrom({ criteria: ['c'] }, review), /needs a goal/)
   assert.throws(() => cardFrom({ goal: 'g', criteria: [] }, review), /at least one acceptance criterion/)
   assert.throws(() => cardFrom({ goal: 'g', criteria: ['c'], steps: [{ id: 'nope' }] }, review), /no step "nope"/)
-  assert.throws(() => cardFrom({ goal: 'g', criteria: ['c'], steps: [{ id: 'validate', slices: [{ title: 'x', brief: '' }] }] }, review), /triage splits it itself/)
+  assert.throws(() => cardFrom({ goal: 'g', criteria: ['c'], steps: [{ id: 'validate', slices: [{ title: 'x', brief: '' }] }] }, review), /junior splits it itself/)
   assert.throws(() => cardFrom({ goal: 'g', criteria: ['c'], steps: [{ id: 'report', slices: [{ title: 'x', brief: '' }] }] }, review), /no fan-out/)
   const card = cardFrom({ goal: 'g', criteria: ['c'], steps: [{ id: 'review', model: 'haiku', slices: [{ title: 'a', brief: '' }, { title: 'b', brief: '' }] }] }, review)
   assert.deepEqual(card.steps.map((s) => [s.id, s.model, s.slices?.length ?? 0]), [['review', 'haiku', 2], ['validate', null, 0], ['report', null, 0]])
@@ -393,7 +393,7 @@ test('M6: a run stored before goals (no tasks, notes or revision) reads back fro
     const old = JSON.parse(JSON.stringify(run)) as Partial<TeamRun>
     delete old.tasks, delete old.notes, delete old.revision, delete old.task
     for (const s of old.recipe!.steps) delete (s as Partial<typeof s>).forEach
-    const store = openSqliteStore(path.join(dir, 'triage.db'))
+    const store = openSqliteStore(path.join(dir, 'junior.db'))
     await store.config.set('team_runs', [old])
     const [back] = (await store.config.get<TeamRun[]>('team_runs'))!
     const md = renderPlan(normalizeRun(back!))
@@ -476,7 +476,7 @@ test('planning: what the lead spent before it proposed goes on the run, under th
 
 test('backfill: a run stored before runs were recorded gets the same runs, placed at the step messages in each session', () => {
   const run = runOf(recipeOf('build'), { tasks: [{ title: 'a' }, { title: 'b' }] })
-  // Every message triage sends, per session, as the transcript would hold it (seq = position).
+  // Every message junior sends, per session, as the transcript would hold it (seq = position).
   const logs: Record<string, { seq: number; text: string }[]> = {}
   const send = (as: Action[]) => {
     for (const a of tells(spawn(run, as))) {

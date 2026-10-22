@@ -19,7 +19,7 @@ export function useWorkspaceId() {
   return useSyncExternalStore(store.subscribeStructural, store.getWorkspaceId)
 }
 
-/** Which copy of triage this tab is talking to, see shared/protocol.ts `Build`. */
+/** Which copy of Junior this tab is talking to, see shared/protocol.ts `Build`. */
 export function useBuild() {
   return useSyncExternalStore(store.subscribeStructural, store.getBuild)
 }
@@ -172,7 +172,7 @@ export function useHashRoute(): [Route, (hash: string, opts?: { replace?: boolea
     addEventListener('hashchange', onChange)
     return () => removeEventListener('hashchange', onChange)
   }, [])
-  // Every navigation is a history entry (Triage.app's ← → walk them); a
+  // Every navigation is a history entry (Junior.app's ← → walk them); a
   // redirect replaces instead, so Back never lands on the page that bounced.
   const navigate = useCallback((hash: string, opts?: { replace?: boolean }) => {
     if (opts?.replace) location.replace(`#${hash}`)

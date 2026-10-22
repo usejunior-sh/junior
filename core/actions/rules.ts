@@ -23,7 +23,7 @@ export type ActionRules = {
 
 export const ACTIONS_FILE_KEYS = ['bash', 'action', 'not_action'] as const
 
-/** What triage seeds. Edits are the user's from then on (server/actions-file.ts). */
+/** What junior seeds. Edits are the user's from then on (server/actions-file.ts). */
 export const DEFAULT_ACTIONS_FILE = `---
 # Bash commands that leave this machine, by the kind of action they record.
 # A command counts when one of its parts (split on && || ; |) starts with

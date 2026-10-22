@@ -1,7 +1,7 @@
 import type { BrowserProfile, BrowserProfileColor } from '../../core/browser/profiles.js'
 import type { ColorScheme, SiteCookies, Viewport } from '../../core/browser/wire.js'
 
-// The browser pane (.docs/browser.md). The page lives in Triage.app; these are
+// The browser pane (.docs/browser.md). The page lives in Junior.app; these are
 // the daemon's routes for what sessions saw there and for the element picker.
 
 export type BrowserShotKind = 'screenshot' | 'checkpoint' | 'compare' | 'pick'
@@ -31,12 +31,12 @@ export type BrowserPickResponse =
 export const BROWSER_SHOT_RE = /\[shot #(\d+)\]/g
 
 // Profiles (.docs/browser.md → Profiles): machine-wide, the daemon's list; the
-// cookie jars are Triage.app's. Every change is broadcast as `browser_profiles`.
+// cookie jars are Junior.app's. Every change is broadcast as `browser_profiles`.
 
 export type { BrowserProfile, BrowserProfileColor } from '../../core/browser/profiles.js'
 export type { SiteCookies as BrowserSite, Viewport as BrowserViewportSpec, ColorScheme as BrowserColorScheme } from '../../core/browser/wire.js'
 
-/** Whether Triage.app is there to host tabs, and speaks this daemon's wire. */
+/** Whether Junior.app is there to host tabs, and speaks this daemon's wire. */
 export type BrowserHostStatus = { connected: boolean; compatible: boolean; version: number | null }
 
 /** GET /api/browser/profiles */
@@ -48,10 +48,10 @@ export type BrowserProfilesResponse =
 export type BrowserProfileInput = { name?: string; color?: BrowserProfileColor }
 export type BrowserProfileResponse = { ok: true; profile: BrowserProfile } | { ok: false; error: string }
 
-/** GET /api/browser/profiles/:id/sites (needs Triage.app) */
+/** GET /api/browser/profiles/:id/sites (needs Junior.app) */
 export type BrowserSitesResponse = { ok: true; sites: SiteCookies[] } | { ok: false; error: string }
 
-/** POST /api/browser/profiles/:id/clear { site? } (needs Triage.app) */
+/** POST /api/browser/profiles/:id/clear { site? } (needs Junior.app) */
 export type BrowserClearResponse = { ok: true; removed: number } | { ok: false; error: string }
 
 /** PUT /api/browser/default { profile }: this workspace's default profile */
@@ -68,7 +68,7 @@ export type BrowserTabInfo = {
   title: string
   viewport: Viewport | null
   colorScheme: ColorScheme
-  /** a tab is open in Triage.app right now */
+  /** a tab is open in Junior.app right now */
   live: boolean
   /** the user took the tab over: Junior's browser tools wait until they hand it back */
   heldByUser: boolean

@@ -1,5 +1,5 @@
 /**
- * The browser pane's host (.docs/browser.md). Each triage session gets its own
+ * The browser pane's host (.docs/browser.md). Each junior session gets its own
  * tab, a WebContentsView in its profile's partition, no preload, sandboxed,
  * shown in whichever window's pane is on that session, else parked in a hidden
  * window where it keeps rendering, so the agent can screenshot it while you
@@ -9,7 +9,7 @@
  * we dial it (`/browser-host`) and run the verbs it sends, each scoped to one
  * session's tab, in the profile the frame names. The daemon decides profiles
  * and remembers tabs; the app never does. The debugger is only ever attached
- * to tabs, never to a triage window or a sign-in window.
+ * to tabs, never to a junior window or a sign-in window.
  */
 import {
   app,
@@ -91,7 +91,7 @@ export type PaneState = {
   error: { code: string; url: string } | null
 }
 
-/** The keys a tab hands to its pane instead of the page (or the app menu, where ⌘R would reload Triage). */
+/** The keys a tab hands to its pane instead of the page (or the app menu, where ⌘R would reload Junior). */
 type PaneKey = 'focus-url' | 'find' | 'reload' | 'back' | 'forward'
 
 type Pane = { win: BrowserWindow; sessionId: string | null; rect: Rectangle | null }
@@ -149,7 +149,7 @@ class Tab implements JarTab {
         contextIsolation: true,
         nodeIntegration: false,
         backgroundThrottling: false,
-        // no preload: a page can never reach window.triageDesktop
+        // no preload: a page can never reach window.juniorDesktop
       },
     })
     this.view.setBackgroundColor('#ffffff')
@@ -457,7 +457,7 @@ class Tab implements JarTab {
 export class BrowserHost {
   private readonly tabs = new Map<string, Tab>()
   private readonly panes = new Map<number, Pane>()
-  /** triage's own windows (never the parking window or a sign-in window) */
+  /** Junior's own windows (never the parking window or a sign-in window) */
   private readonly windows = new Set<BrowserWindow>()
   private park: BrowserWindow | null = null
   private ws: WebSocket | null = null
@@ -522,7 +522,7 @@ export class BrowserHost {
     }
     this.ws = ws
     ws.addEventListener('open', () => {
-      ws.send(JSON.stringify({ type: 'hello', version: WIRE_VERSION, app: `Triage.app ${this.version}` }))
+      ws.send(JSON.stringify({ type: 'hello', version: WIRE_VERSION, app: `Junior.app ${this.version}` }))
     })
     ws.addEventListener('message', (ev) => {
       let f: CallFrame | ProfileFrame
@@ -554,7 +554,7 @@ export class BrowserHost {
 
   private async handle(f: CallFrame) {
     const reply = (ok: boolean, payload: unknown) => this.reply(f.id, ok, payload)
-    if (this.quitting) return reply(false, 'Triage.app is quitting')
+    if (this.quitting) return reply(false, 'Junior.app is quitting')
     if (!TAB_KEY_RE.test(f.sessionId)) return reply(false, 'bad tab key')
     if (typeof f.profile !== 'string' || !PROFILE_ID_RE.test(f.profile)) return reply(false, `bad profile "${String(f.profile)}"`)
     const existing = this.tabs.get(f.sessionId)
@@ -836,7 +836,7 @@ export class BrowserHost {
     for (const w of this.windows) if (!w.isDestroyed()) w.webContents.send('browser:activity', { sessionId })
   }
 
-  /** The window a tab's sign-in window sits over: its pane's, else the first triage window you can see. */
+  /** The window a tab's sign-in window sits over: its pane's, else the first junior window you can see. */
   private anchorWindow(tab: Tab): BrowserWindow | null {
     const pane = this.paneOf(tab)?.win
     if (pane) return pane
@@ -900,7 +900,7 @@ export class BrowserHost {
     else if (key === 'back' && h.canGoBack()) h.goBack()
     else if (key === 'forward' && h.canGoForward()) h.goForward()
     const win = this.paneOf(tab)?.win
-    // the URL field and the find bar are in triage's page: it needs the keyboard back
+    // the URL field and the find bar are in Junior's page: it needs the keyboard back
     if (win && (key === 'focus-url' || key === 'find')) win.webContents.focus()
     this.toPanes('browser:key', { tabKey: tab.key, key })
   }
@@ -999,7 +999,7 @@ export class BrowserHost {
       const tab = p?.sessionId ? this.tabs.get(p.sessionId) : undefined
       if (tab) void this.parkTab(tab)
     })
-    // a reload of the triage UI drops its pane until it reports again
+    // a reload of the junior UI drops its pane until it reports again
     win.webContents.on('did-start-navigation', (d) => {
       if (!d.isMainFrame || d.isSameDocument) return
       parkShown()
@@ -1119,7 +1119,7 @@ export class BrowserHost {
       const img = await tab.wc.capturePage().catch(() => null)
       return img && !img.isEmpty() ? img.toDataURL() : null
     })
-    // "Show window" on the pane's sign-in strip: the window may be behind Triage
+    // "Show window" on the pane's sign-in strip: the window may be behind Junior
     ipcMain.on('browser:focus-popup', (_e, msg: { sessionId: string }) => {
       const win = this.tabs.get(msg.sessionId)?.popup
       if (!win || win.isDestroyed()) return

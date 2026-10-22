@@ -3,7 +3,7 @@
  * the run's shape, steps, who does each, fan-out, gates, fix loops, budget,
  * and whose body is plain-English advice to the lead. The lead only decides the
  * size (how many workers, which slices, what each brief says) inside that shape;
- * triage runs the steps.
+ * Junior runs the steps.
  *
  *   ---
  *   label: Review
@@ -33,7 +33,7 @@
 export type StepOutput = 'change' | 'findings' | 'verdict' | 'notes' | 'report'
 export const STEP_OUTPUTS: StepOutput[] = ['change', 'findings', 'verdict', 'notes', 'report']
 
-/** The two agents that are not files: the session's own agent, and triage's free typecheck/lint/test. */
+/** The two agents that are not files: the session's own agent, and junior's free typecheck/lint/test. */
 export const LEAD = 'lead'
 export const CHECKS = 'checks'
 

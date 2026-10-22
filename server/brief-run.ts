@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto'
 import os from 'node:os'
 import type { AgentCan, Artifact, BriefJob, BriefView } from '../shared/protocol.js'
 import type { StoredSession } from '../core/store/types.js'
-import { triageSessionAppend } from '../shared/triageContext.js'
+import { juniorSessionAppend } from '../shared/juniorContext.js'
 import { runSpent, workerAppend } from '../core/teams/engine.js'
 import { goalSessionMcpTools } from './goals.js'
 import { workerAppend as goalWorkerAppend, LEAD_RUN_APPEND } from '../core/goals/run.js'
@@ -22,7 +22,7 @@ import { juniorAppend } from './junior-ops.js'
 import { VERSION } from './config.js'
 import { GOAL_RUN_DISALLOWED_TOOLS } from './goal-glue.js'
 import { EDIT_TOOLS } from './session/changes.js'
-import { errResult, okResult } from './triage-mcp.js'
+import { errResult, okResult } from './junior-mcp.js'
 import { errText } from './errors.js'
 import { ANY_ITEM_ID_RE } from './validate.js'
 import { createSession, getOrRevive } from './session/sessions.js'
@@ -64,14 +64,14 @@ const broadcastBrief = (rt: WorkspaceRuntime, job: BriefJob) => {
 
 /**
  * Spawn-time extras by session kind. Every session gets the same thing first,
- * who it is inside triage (shared/triageContext.ts): the workspace, its own
- * triage session id, the artifacts folder. That is the layer that is knowable
+ * who it is inside Junior (shared/juniorContext.ts): the workspace, its own
+ * junior session id, the artifacts folder. That is the layer that is knowable
  * at spawn and true for the session's whole life; what *exists* right now is a
  * tool call, never a prompt. Brief sessions get the headless contract and their
  * write tool on top.
  */
 export async function extrasFor(rt: WorkspaceRuntime, row: StoredSession): Promise<SessionExtras> {
-  const identity = triageSessionAppend(row.kind, {
+  const identity = juniorSessionAppend(row.kind, {
     sessionId: row.id,
     workspaceId: rt.meta.id,
     workspaceName: rt.meta.name,
@@ -86,7 +86,7 @@ export async function extrasFor(rt: WorkspaceRuntime, row: StoredSession): Promi
     // Rebuilt per spawn like the brief server: one instance, one transport.
     const { agent, writes, can } = workerSpec(run, worker)
     const tools = rt.provider.agentTools(can as AgentCan[])
-    // An agent allowed the browser gets the pane's own tools while Triage.app
+    // An agent allowed the browser gets the pane's own tools while Junior.app
     // hosts them; without the app it falls back to the user's chrome-devtools.
     const pane = (can as AgentCan[]).includes('browser') && browserHub.status.compatible
     if (pane) delete tools.mcpServers?.['chrome-devtools']
@@ -96,7 +96,7 @@ export async function extrasFor(rt: WorkspaceRuntime, row: StoredSession): Promi
       mcp: { team: makeTeamMcp(rt, row.id), ...(pane ? { browser: browserMcpFor(rt, row) } : {}) },
       disallowedTools: tools.disallowedTools,
       // A worker loads only what its step needs: a short built-in list and
-      // triage's own servers (+ the browser if allowed), not every connector
+      // Junior's own servers (+ the browser if allowed), not every connector
       // and plugin in ~/.claude, whose schemas ride every call.
       tools: tools.tools,
       strictMcpConfig: true,
@@ -108,8 +108,8 @@ export async function extrasFor(rt: WorkspaceRuntime, row: StoredSession): Promi
       maxBudgetUsd: Math.max(0.25, run.budgetUsd - runSpent(run)),
     }
   }
-  // A chat gets the browser pane's tools: with Triage.app closed they answer
-  // "open Triage.app" rather than vanish, so a session never has to respawn.
+  // A chat gets the browser pane's tools: with Junior.app closed they answer
+  // "open Junior.app" rather than vanish, so a session never has to respawn.
   // It is one of Junior's chats, so it also gets the persona and today's plan.
   if (row.kind === 'chat') return { systemAppend: `${identity}${await juniorAppend(rt)}`, mcp: { browser: browserMcpFor(rt, row) } }
   // A goal run's session: its goal-bound tools, and its contract last.

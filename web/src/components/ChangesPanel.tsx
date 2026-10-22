@@ -17,7 +17,7 @@ import { PanelSearch } from './ContextPanel.js'
 
 /** A poll, not a push: nothing tells the daemon a file changed on disk. */
 const POLL_MS = 15_000
-const collapsedKey = 'triage.changes.collapsed'
+const collapsedKey = 'junior.changes.collapsed'
 
 export const STATUS_LETTER: Record<ChangeStatus, string> = { modified: 'M', added: 'A', deleted: 'D' }
 

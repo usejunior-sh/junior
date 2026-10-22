@@ -1,5 +1,5 @@
 import { callTool as callMcpTool, PROTOCOL_VERSION as MCP_PROTOCOL_VERSION, TOOLS as MCP_TOOLS } from '../core/mcp/tools.js'
-import { TRIAGE_MCP_INSTRUCTIONS } from '../shared/triageContext.js'
+import { JUNIOR_MCP_INSTRUCTIONS } from '../shared/juniorContext.js'
 import { PORT, VERSION } from './config.js'
 import { errText } from './errors.js'
 
@@ -8,7 +8,7 @@ import { errText } from './errors.js'
  * (core/mcp/tools.ts), reachable as a URL instead of a spawned process,
  * `http://localhost:5178/mcp` for a running daemon, `…:5188/mcp` in dev. No
  * per-session subprocess to spawn, resolve on PATH, or lose a connect race
- * with, which is most of what made MCP feel unreliable from outside triage.
+ * with, which is most of what made MCP feel unreliable from outside junior.
  *
  * The workspace rides in the URL (`?workspace=<id>`), not an env var, and an
  * id that matches nothing is refused at `initialize`. The client shows the
@@ -41,8 +41,8 @@ export async function mcpDispatch(msg: McpRpc, workspace: string | null, serverU
       return ok({
         protocolVersion: MCP_PROTOCOL_VERSION,
         capabilities: { tools: {} },
-        serverInfo: { name: 'triage', version: VERSION },
-        instructions: TRIAGE_MCP_INSTRUCTIONS,
+        serverInfo: { name: 'junior', version: VERSION },
+        instructions: JUNIOR_MCP_INSTRUCTIONS,
       })
     case 'ping':
       return ok({})

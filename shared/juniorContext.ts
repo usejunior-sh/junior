@@ -1,13 +1,13 @@
 /**
- * What triage tells a model about itself. The one place the product explains
+ * What junior tells a model about itself. The one place the product explains
  * its own vocabulary, split by how often each layer changes:
  *
- *   static concepts  → `TRIAGE_MCP_INSTRUCTIONS`, the MCP server's `instructions`
+ *   static concepts  → `JUNIOR_MCP_INSTRUCTIONS`, the MCP server's `instructions`
  *                      block. Identical for every session and every workspace,
  *                      so it caches; carried on both transports (the in-process
  *                      server in server/index.ts and the stdio shim in
  *                      server/mcp.ts) because both expose the same tools.
- *   session identity → `triageSessionAppend()`, appended to Claude Code's own
+ *   session identity → `juniorSessionAppend()`, appended to Claude Code's own
  *                      system prompt at spawn so it survives `resume`. Workspace,
  *                      session id, artifacts folder, known at spawn, fixed for
  *                      the session's life.
@@ -19,8 +19,8 @@
  * this file, so it stays a shim.
  */
 
-/** `instructions` for the triage MCP server: the vocabulary, not the contents. */
-export const TRIAGE_MCP_INSTRUCTIONS = `Triage is a local work inbox for one engineer. It ranks what actually needs them — GitHub, Slack, Linear, and their own to-dos — and runs one loop: identify → brief → dispatch. These tools are that inbox. Everything is on this machine; nothing here posts anywhere.
+/** `instructions` for the junior MCP server: the vocabulary, not the contents. */
+export const JUNIOR_MCP_INSTRUCTIONS = `Junior is a local work inbox for one engineer. It ranks what actually needs them — GitHub, Slack, Linear, and their own to-dos — and runs one loop: identify → brief → dispatch. These tools are that inbox. Everything is on this machine; nothing here posts anywhere.
 
 - work item — one piece of work, id-keyed: "github:owner/repo#12", "slack:…", "linear:KEY-1", "manual:<uuid>". Scanned items are upserted by their scanner and update-only-if-newer, so only "manual:" items can be edited here. Status is open, snoozed, done or archived; list_work_items shows open ones by default, get_work_item reads any of them.
 - artifact — a file in the workspace's artifacts folder (md, html, csv, txt, json, svg, pdf, png, jpg, gif, webp), versioned in git. You publish one with write_artifact and revise it by id with update_artifact; the user sees it as a card in the chat. Author is human or model; yours you may rewrite, human ones are refused — read them, cite them, propose changes in the chat, never overwrite them.
@@ -28,20 +28,20 @@ export const TRIAGE_MCP_INSTRUCTIONS = `Triage is a local work inbox for one eng
 - brief — a model-written artifact about one item, produced by a headless run against a playbook. Read the brief before starting work on an item.
 - playbook / dispatch template — the user's own prose for how a kind of item gets briefed and how its session opens. User-owned files; not yours to rewrite.
 
-- today's plan — one list of work items for the user and Junior for the current local day, each with an owner: "you" (the user) or "junior" (triage's agent, Junior). Done comes from the item's own status; unfinished rows carry over to the next day. get_today reads it; add_to_today and remove_from_today change it.
+- today's plan — one list of work items for the user and Junior for the current local day, each with an owner: "you" (the user) or "junior" (Junior, the agent). Done comes from the item's own status; unfinished rows carry over to the next day. get_today reads it; add_to_today and remove_from_today change it.
 
 list_work_items, get_work_item, get_session_context, list_artifacts, read_artifact and get_today are free reads — use them rather than guessing. Every other tool writes, and the user is asked first.`
 
-export type TriageSessionKind = 'chat' | 'job-run' | 'brief' | 'goal' | 'task'
+export type JuniorSessionKind = 'chat' | 'job-run' | 'brief' | 'goal' | 'task'
 
-export type TriageSessionIdentity = {
-  /** the triage session id: the handle for get_session_context and `links` */
+export type JuniorSessionIdentity = {
+  /** the junior session id: the handle for get_session_context and `links` */
   sessionId: string
   workspaceId: string
   workspaceName: string
   /** absolute path of the workspace's artifacts folder */
   artifactsRoot: string
-  /** the workspace's own skills and agents: a plugin its chat sessions load as `triage:` */
+  /** the workspace's own skills and agents: a plugin its chat sessions load as `junior:` */
   libraryRoot?: string
   /** what the user calls their junior engineer here (the persona's name); absent = Junior */
   juniorName?: string
@@ -50,16 +50,16 @@ export type TriageSessionIdentity = {
 }
 
 /**
- * The system-prompt append for a triage-spawned session: who it is and where to
+ * The system-prompt append for a junior-spawned session: who it is and where to
  * look. Deliberately says "look it up" rather than naming the work item. A
  * session is spawned before `create_session` links it to one (server/index.ts),
  * so at spawn time there is nothing true to say about it.
  */
-export function triageSessionAppend(kind: TriageSessionKind, id: TriageSessionIdentity): string {
+export function juniorSessionAppend(kind: JuniorSessionKind, id: JuniorSessionIdentity): string {
   const head = `
-You are running inside triage, a local work inbox, in its "${id.workspaceName}" workspace (id ${id.workspaceId}).
-This conversation is triage session ${id.sessionId}. The workspace's artifacts — notes, briefs and the files
-sessions publish, git-tracked — live at ${id.artifactsRoot}. Reach all of it through the mcp__triage__* tools.
+You are running inside Junior, a local work inbox, in its "${id.workspaceName}" workspace (id ${id.workspaceId}).
+This conversation is Junior session ${id.sessionId}. The workspace's artifacts — notes, briefs and the files
+sessions publish, git-tracked — live at ${id.artifactsRoot}. Reach all of it through the mcp__junior__* tools.
 
 Nothing about the current state of the inbox is in this prompt, because it would be out of date by the time
 you read it. Look it up instead: get_session_context with this session's id says which work item this session
@@ -80,7 +80,7 @@ back with the work rather than getting lost in the transcript.${kind === 'chat' 
  */
 export const jobsSection = (name: string) => `
 
-In triage you are ${name}, the user's junior engineer. A job is a standing assignment triage runs for them on
+In Junior you are ${name}, the user's junior engineer. A job is a standing assignment Junior runs for them on
 a schedule, headless, in one of their projects. When they want one ("every morning…", "keep an eye on…", or a
 message starting "New job:"), take it on the way a good junior engineer would:
 1. Read it back in a line or two: what the job is, what it does, and what it must never do.
@@ -119,7 +119,7 @@ says "our goal today is…", "get X done", or a message starts "New goal:":
 3. For a full goal, ask in ONE message whatever you can't look up (horizon: today, by a date, or until done;
    budget; which team), each with your suggested answer. Then call list_teams and propose_team with the
    card and a goal { doneWhen, horizon }. The user approves the card; the team then runs round after round,
-   and triage asks you to judge the done-when (goal_verdict) at the end of each round and to get the team
+   and junior asks you to judge the done-when (goal_verdict) at the end of each round and to get the team
    moving (goal_unstick) when it is stuck. Only the user passes a gate or raises the budget; ask them with
    ask_you, always with the answer you recommend.
 
@@ -134,7 +134,7 @@ in Ultracode in that same line.`
 
 /**
  * The session runs with Ultracode on (.docs/ultracode.md): the Workflow tool
- * fans a big job out to many agents in the background. What triage holds a
+ * fans a big job out to many agents in the background. What junior holds a
  * run to, on top of Claude Code's own guidance for the tool.
  */
 export const ULTRACODE_SECTION = `
@@ -145,7 +145,7 @@ Ultracode is on in this session: for a big job you may launch a Workflow run tha
   messages. Anything outbound stays with you, in the main thread, where the user approves it first.
 - The run goes on in the background and you are woken when it ends. Then report the result briefly: what was
   done, what failed, and what needs the user.
-- The user watches a run in triage, not a terminal. The Workflow tool's result says "Use /workflows to watch live
+- The user watches a run in Junior, not a terminal. The Workflow tool's result says "Use /workflows to watch live
   progress": ignore that line, /workflows doesn't exist here. Say instead that the run's card in this chat opens
   its panel (every agent, its transcript and its cost), and that Stop in the dock above the composer ends it.
 - Small or sequential work doesn't need a run: do it directly.`
@@ -157,7 +157,7 @@ export const ULTRACODE_ON_NOTE = `[Ultracode on]${ULTRACODE_SECTION}`
 export const ULTRACODE_OFF_NOTE = '[Ultracode off] Do not launch new Workflow runs unless the user asks. Runs already going carry on.'
 
 /**
- * Where a skill or agent the user asks for should go. Triage reloads skills
+ * Where a skill or agent the user asks for should go. Junior reloads skills
  * and agents in every live session when a turn writes one, so it is usable
  * straight away, say so rather than telling the user to restart.
  */
@@ -167,5 +167,5 @@ When the user asks you to create or change a skill or a subagent, write Claude C
 a skill is <dir>/skills/<name>/SKILL.md (frontmatter: name, description; then the instructions), an agent
 is <dir>/agents/<name>.md (frontmatter: name, description, optional tools and model; then its system prompt).
 Put it where the user says. With no preference: this workspace's library, ${root} (its skills load as
-/triage:<name> in this workspace's sessions); ~/.claude for "personal" or "everywhere"; <project>/.claude for
-one repo. Triage reloads skills and agents in every open session once your turn ends, so it is usable at once.`
+/junior:<name> in this workspace's sessions); ~/.claude for "personal" or "everywhere"; <project>/.claude for
+one repo. Junior reloads skills and agents in every open session once your turn ends, so it is usable at once.`

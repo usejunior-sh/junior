@@ -11,7 +11,7 @@ import path from 'node:path'
 import { openableFile } from '../server/editors.js'
 
 async function fixture() {
-  const base = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), 'triage-open-file-')))
+  const base = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), 'junior-open-file-')))
   const project = path.join(base, 'proj')
   const worktree = path.join(base, 'worktrees', 'feat-x')
   const sibling = path.join(base, 'proj-evil')

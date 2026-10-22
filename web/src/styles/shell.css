@@ -124,7 +124,7 @@ kbd { font-family: var(--mono); font-size: 0.8462rem; color: var(--ash); border:
   display: flex; align-items: center; gap: 12px; height: var(--bar-h); flex: none;
   padding: 0 12px 0 14px; border-bottom: 1px solid var(--hair);
 }
-/* Logo lockup: the brand asset (assets/brand/triage-lockup.svg) painted as a
+/* Logo lockup: the brand asset (assets/brand/junior-lockup.svg) painted as a
    mask filled with currentColor, so the one source file takes the theme's ink. */
 .logo { display: inline-flex; align-items: center; color: var(--ink); line-height: 1; }
 .logo .logoLockup {
@@ -171,7 +171,7 @@ kbd { font-family: var(--mono); font-size: 0.8462rem; color: var(--ash); border:
 .topIcon .connDot.connecting { background: var(--yellow); }
 .topIcon:disabled { color: var(--stone); background: transparent; cursor: default; }
 
-/* Triage.app's title bar (desktop.ts): the bar is the window's drag handle,
+/* Junior.app's title bar (desktop.ts): the bar is the window's drag handle,
    its controls are not. The left zone tracks rail + panel; the traffic lights
    (trafficLightPosition x 16, desktop/src/main.ts) sit in its 92px inset. */
 /* Set apart from the tabs below by a lifted surface and a lit bottom edge that

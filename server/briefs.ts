@@ -3,8 +3,8 @@
  * as files, the headless contract a brief session runs under, and the prompt
  * that carries the variable material.
  *
- *   ~/.triage/workspaces/<id>/playbooks/<ItemKind>.md   how to brief this kind
- *   ~/.triage/workspaces/<id>/dispatch/<ItemKind>.md    how a dispatched session opens
+ *   ~/.junior/workspaces/<id>/playbooks/<ItemKind>.md   how to brief this kind
+ *   ~/.junior/workspaces/<id>/dispatch/<ItemKind>.md    how a dispatched session opens
  *
  * Both are seeded with defaults on boot and never overwritten once present,
  * they are the user's to edit, like a skill. These two files are the only
@@ -283,7 +283,7 @@ export async function listPlaybooks(dir: string): Promise<{ kind: string; custom
 // brief session, so it survives `resume` and every iteration runs under it.
 
 export const BRIEF_SYSTEM_APPEND = `
-You are running headless inside triage to write a BRIEF about one work item. Nobody is watching this
+You are running headless inside Junior to write a BRIEF about one work item. Nobody is watching this
 session and nobody can answer a question, so never ask one — decide, and record the assumption under
 "Open questions". Read whatever you need: files, \`gh\` and \`git\` read-only commands, connectors. Make
 NO changes anywhere: do not edit or create files, do not push, comment, post, send, or resolve anything.
@@ -354,7 +354,7 @@ export const briefRelPath = (itemId: string): string =>
 // Dispatch templates: how a dispatched session opens, per kind. A tiny
 // mustache subset: {{var}}, {{#var}}…{{/var}} (when set), {{^var}}…{{/var}} (when not).
 
-export const DEFAULT_DISPATCH_TEMPLATE = `Work item from the triage inbox — {{kind}}:
+export const DEFAULT_DISPATCH_TEMPLATE = `Work item from the junior inbox — {{kind}}:
 {{title}}
 {{#url}}{{url}}
 {{/url}}{{#description}}Description: {{description}}

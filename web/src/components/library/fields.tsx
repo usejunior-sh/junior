@@ -14,7 +14,7 @@ export const SOURCE_LABEL: Record<Filter, string> = {
 }
 
 export const SOURCE_HINT: Record<LibrarySource | 'team', (kind: LibraryKind) => string> = {
-  workspace: (k) => `This workspace’s own — its sessions load them as ${k === 'skill' ? '/triage:<name>' : 'triage:<name>'}.`,
+  workspace: (k) => `This workspace’s own — its sessions load them as ${k === 'skill' ? '/junior:<name>' : 'junior:<name>'}.`,
   personal: () => 'Yours, in every Claude Code session on this machine.',
   project: () => 'Checked into the project — for everyone who works in it.',
   plugin: () => 'From an installed plugin — read-only; updates replace them.',

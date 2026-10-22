@@ -1,5 +1,5 @@
 /**
- * Sending the reply you approved (M4). Triage holds no Slack token: the send
+ * Sending the reply you approved (M4). Junior holds no Slack token: the send
  * goes through the Slack connector, from a one-turn headless run whose only
  * tool is slack_send_message. The model does not get to word it. The veto
  * lets exactly one call through, and only with the channel, the thread and

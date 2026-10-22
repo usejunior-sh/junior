@@ -18,7 +18,7 @@ import { slackConnected } from '../inbox/sync.js'
 export async function gateRoutes({ req, res, url, json, access }: RouteCtx): Promise<boolean> {
   if (access === 'denied') {
     if (url.pathname.startsWith('/api/') || url.pathname === MCP_PATH) {
-      json(401, { error: 'this device is not paired with triage' })
+      json(401, { error: 'this device is not paired with Junior' })
     } else {
       res.writeHead(401, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' })
       res.end(pairPageHtml(undefined, codesAllowed(req)))
@@ -79,9 +79,9 @@ export async function gateRoutes({ req, res, url, json, access }: RouteCtx): Pro
   }
 
   if (url.pathname === '/api/health') {
-    // The CLI's "is triage running" probe: see server/state.ts. Daemon-wide.
+    // The CLI's "is junior running" probe: see server/state.ts. Daemon-wide.
     json(200, {
-      app: 'triage',
+      app: 'junior',
       version: VERSION,
       build: BUILD,
       pid: process.pid,

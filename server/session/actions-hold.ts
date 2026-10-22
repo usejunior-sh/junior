@@ -91,7 +91,7 @@ export function sessionVeto(rt: WorkspaceRuntime, row: StoredSession): { veto?: 
         return d
       }
       if (toolName === 'Bash' && isArgsObject(input) && selfApproval(String(input.command ?? ''))) {
-        log('info', 'actions', 'refused a command that approves through triage’s API', { session: row.id, workspace: rt.meta.id })
+        log('info', 'actions', 'refused a command that approves through junior’s API', { session: row.id, workspace: rt.meta.id })
         return { allow: false, reason: 'Only the user approves sends and adds advance approvals, in the app. Propose one with propose_approval instead.' }
       }
       // Claude's auto mode runs local work; a command that destroys work still comes to you.

@@ -31,7 +31,7 @@ function dayLabel(date: string): string {
 const homely = (p: string) => p.replace(/^\/(?:Users|home)\/[^/]+/, '~')
 
 /** The login last picked, '' = all of them. */
-const LOGIN_KEY = 'triage.usageLogin'
+const LOGIN_KEY = 'junior.usageLogin'
 
 function readLogin(): string {
   try {
@@ -265,13 +265,13 @@ export function UsageTab({ refreshNonce }: { refreshNonce: number }) {
           </>
         ) : picked ? (
           <>
-            Only sessions on this claude.ai login{picked.id === 'machine' ? ', including ones started outside Triage' : ''}.
+            Only sessions on this claude.ai login{picked.id === 'machine' ? ', including ones started outside Junior' : ''}.
             Cost is the API list price of the same work, not a bill.
           </>
         ) : (
           <>
             Read from Claude Code’s own transcripts, so this counts every session on this machine — including
-            ones started outside Triage. Cost is calculated from API list prices; on a Pro or Max plan nothing
+            ones started outside Junior. Cost is calculated from API list prices; on a Pro or Max plan nothing
             is billed per token, so read it as what the same work would have cost on the API.
           </>
         )}

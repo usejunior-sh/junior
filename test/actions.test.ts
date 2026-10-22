@@ -113,9 +113,9 @@ test('push target: the branch a push names, or null for the current one', () => 
 // Sorting a tool call
 // ---------------------------------------------------------------------------
 
-test('sort: built-ins and triage’s own servers are never actions', () => {
+test('sort: built-ins and junior’s own servers are never actions', () => {
   for (const t of ['Write', 'Edit', 'Read', 'WebFetch', 'TodoWrite', 'Agent']) assert.equal(sort(t, { file_path: '/x' }), null)
-  assert.equal(sort('mcp__triage__create_work_item', { title: 'x' }), null)
+  assert.equal(sort('mcp__junior__create_work_item', { title: 'x' }), null)
   assert.equal(sort('mcp__team__submit_step'), null)
   assert.equal(sort('mcp__task__submit_task'), null)
   assert.equal(sort('mcp__browser__browser_act'), null)
@@ -313,7 +313,7 @@ test('fold: who allowed it — your prompt, a job’s grants, a rule; a denial i
   assert.equal(s.op === 'settle' && s.patch.status, 'denied')
   assert.equal(s.op === 'settle' && s.patch.allowedBy, null)
   // The result that follows a denial changes nothing more.
-  assert.deepEqual(t.feed(result('t2', 'Denied by the user in the triage web UI.', true), 4), [])
+  assert.deepEqual(t.feed(result('t2', 'Denied by the user in the junior web UI.', true), 4), [])
   // A job run's grants; a plain chat's allow rule; a failure is a failure.
   t = tracker({ sessionKind: 'job-run', jobId: 'w1' })
   t.feed(use('t3', tool, send), 1)
@@ -360,8 +360,8 @@ test('trimArgs: long strings clipped, shape kept', () => {
 // ---------------------------------------------------------------------------
 
 function freshStore() {
-  const dir = mkdtempSync(path.join(os.tmpdir(), 'triage-actions-'))
-  return openSqliteStore(path.join(dir, 'triage.db'))
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'junior-actions-'))
+  return openSqliteStore(path.join(dir, 'junior.db'))
 }
 
 /** A session's log with: a PR, two pushes to one branch (one bare), a denied comment, and noise. */
@@ -376,7 +376,7 @@ const LOG: Array<[SessionEvent, number]> = [
   [use('e', 'Bash', { command: 'gh pr comment 42 --body hi' }), 8],
   [ask('p', 'Bash', { command: 'gh pr comment 42 --body hi' }, 'e'), 9],
   [answer('p', 'deny'), 10],
-  [result('e', 'Denied by the user in the triage web UI.', true), 11],
+  [result('e', 'Denied by the user in the junior web UI.', true), 11],
 ]
 
 async function backfill(store: ReturnType<typeof freshStore>): Promise<void> {
@@ -523,7 +523,7 @@ test('fix 6: a push links to its branch or its "open a PR" hint, never remote ch
 })
 
 test('fix 10: quick overrides to the actions file are serialised — none lost', async () => {
-  const dir = mkdtempSync(path.join(os.tmpdir(), 'triage-actions-file-'))
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'junior-actions-file-'))
   const file = new ActionsFile(dir)
   await file.seed()
   await Promise.all(Array.from({ length: 8 }, (_, i) => file.setOverride('not_action', `mcp__s__tool_${i}`, true)))

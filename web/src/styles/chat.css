@@ -1,4 +1,4 @@
-/* Junior's name with its face, on the cards triage draws (questions, approvals, plans). */
+/* Junior's name with its face, on the cards junior draws (questions, approvals, plans). */
 /* Inline, not flex: the words after the name keep their leading space ("Junior wants to use…", "Junior’s plan"). */
 .jrLabel .jrFace { display: inline-block; vertical-align: middle; margin: -6px 9px -4px 0; }
 .jrLabel .jrWho { color: var(--ink); font-family: var(--sans); font-weight: 500; }

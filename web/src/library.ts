@@ -73,7 +73,7 @@ export function createPrompt(kind: LibraryKind, target: LibraryTarget, name: str
     '',
     WHAT[kind](target.dir, slug),
     '',
-    'Ask me anything you need first, then write it. Triage reloads skills and agents in open sessions when your turn ends.',
+    'Ask me anything you need first, then write it. Junior reloads skills and agents in open sessions when your turn ends.',
   ].join('\n')
 }
 

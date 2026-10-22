@@ -16,7 +16,7 @@ const timer = setTimeout(() => {
   process.exit(2)
 }, 240_000)
 
-const cwd = mkdtempSync(path.join(os.tmpdir(), 'triage-codex-'))
+const cwd = mkdtempSync(path.join(os.tmpdir(), 'junior-codex-'))
 execSync('git init -q && echo "hello" > a.txt && git add . && git -c user.email=t@t -c user.name=t commit -qm init', { cwd })
 
 const asked: string[] = []

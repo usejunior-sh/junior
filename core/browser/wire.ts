@@ -1,5 +1,5 @@
 /**
- * The browser host wire (.docs/browser.md): Triage.app's main process dials the
+ * The browser host wire (.docs/browser.md): Junior.app's main process dials the
  * daemon at `/browser-host` and executes the verbs the daemon sends, against
  * the one tab that belongs to the session named in the frame. The daemon
  * shapes (snapshots, logs, evidence) and decides which profile a tab is in;

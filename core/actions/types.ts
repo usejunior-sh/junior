@@ -89,7 +89,7 @@ export type ActionQueue = {
 }
 
 /** Who moved an action. */
-export type ActionActor = 'agent' | 'you' | 'triage'
+export type ActionActor = 'agent' | 'you' | 'junior'
 
 /** One step in a queued action's life, append-only, newest last. */
 export type ActionHistoryEntry = {
@@ -124,7 +124,7 @@ export const isActionWhy = (v: unknown): v is ActionWhy => ACTION_WHYS.includes(
  * mode: the session's permission mode (bypass or auto) let it through.
  * rule: an allow rule, your settings, an "always allow" earlier in the
  *       session, or a job's grants.
- * policy: triage's own fixed policy for that kind of session (a brief).
+ * policy: Junior's own fixed policy for that kind of session (a brief).
  */
 export type ActionAllowedBy = 'prompt' | 'mode' | 'rule' | 'policy'
 export const ACTION_ALLOWED_BY: readonly ActionAllowedBy[] = ['prompt', 'mode', 'rule', 'policy']

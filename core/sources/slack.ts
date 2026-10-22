@@ -47,7 +47,7 @@ export interface JobScanSpec {
   createsItems: boolean
 }
 
-const SCAN_PREAMBLE = `You are a triage scanner. Your Slack tools are deferred: first use ToolSearch to load mcp__claude_ai_Slack__slack_search_public_and_private, mcp__claude_ai_Slack__slack_read_channel and mcp__claude_ai_Slack__slack_read_thread, then use them (read-only) to perform every scan section below.
+const SCAN_PREAMBLE = `You are a junior scanner. Your Slack tools are deferred: first use ToolSearch to load mcp__claude_ai_Slack__slack_search_public_and_private, mcp__claude_ai_Slack__slack_read_channel and mcp__claude_ai_Slack__slack_read_thread, then use them (read-only) to perform every scan section below.
 
 Judge each candidate on its title and first ~200 characters; only read a full thread when that snippet is not enough to decide. Stay strictly inside each section's stated scope and time window.`
 
@@ -89,7 +89,7 @@ const SLACK_MCP_TOOLS = READ_ONLY_SLACK_TOOLS.filter((t) => t.startsWith('mcp__'
 
 export function composeJobRunPrompt(w: { scope: string; instruction: string; cursor?: string }): string {
   const window = w.cursor ? `messages newer than ${w.cursor}` : `messages from the last 7 days`
-  return `You are a triage scanner for ONE job. Your Slack tools are deferred: first call ToolSearch to load ${SLACK_MCP_TOOLS.join(', ')}, then use them (read-only) to perform the scan.
+  return `You are a junior scanner for ONE job. Your Slack tools are deferred: first call ToolSearch to load ${SLACK_MCP_TOOLS.join(', ')}, then use them (read-only) to perform the scan.
 
 Scan ${w.scope} ONLY, ${window}. Judge each candidate on its title and first ~200 characters; read a full thread only when the snippet is not enough to decide. Stay strictly inside ${w.scope} — never scan any other channel or DM.
 

@@ -19,7 +19,7 @@ import { log } from '../log.js'
 import { browserProfiles } from './profiles.js'
 
 export const NO_HOST =
-  'The browser lives in the Triage.app window, and Triage.app is not open (or is too old to host it). Tell the user to open Triage.app, then try again. Until then you cannot see the page.'
+  'The browser lives in the Junior.app window, and Junior.app is not open (or is too old to host it). Tell the user to open Junior.app, then try again. Until then you cannot see the page.'
 
 /** The presets `browser_viewport` knows; anything else is WxH. */
 export const VIEWPORTS: Record<string, Viewport> = {
@@ -36,12 +36,12 @@ export const FULL_LONG = 1568
 export const DIFF_LONG = 1000
 export const FULL_PAGE_MAX_CSS = 8000
 /**
- * Where Triage.app saves a download a tab made during an agent call: a job's
+ * Where Junior.app saves a download a tab made during an agent call: a job's
  * fence lets its run read there. Both sides spell it from the home folder
- * (`~/Downloads/Triage/<tab>`), never Electron's downloads setting, so they
+ * (`~/Downloads/Junior/<tab>`), never Electron's downloads setting, so they
  * can't disagree.
  */
-export const downloadDirFor = (tabKey: string) => path.join(os.homedir(), 'Downloads', 'Triage', tabKey)
+export const downloadDirFor = (tabKey: string) => path.join(os.homedir(), 'Downloads', 'Junior', tabKey)
 
 /** How long a tab's moves wait before they are written down: a redirect chain is one write. */
 const PERSIST_MS = 1000
@@ -165,7 +165,7 @@ export class BrowserHub {
     this.resolver = fn
   }
 
-  /** A host (Triage.app's main process) connected. The newest wins: a restarted app beats its old socket. */
+  /** A host (Junior.app's main process) connected. The newest wins: a restarted app beats its old socket. */
   attach(ws: WebSocket) {
     if (this.host && this.host !== ws) this.host.close(4000, 'replaced by a newer host')
     this.host = ws
@@ -491,7 +491,7 @@ export class BrowserHub {
     const st = this.status
     if (!ws || !st.connected || ws.readyState !== WebSocket.OPEN) return new Error(NO_HOST)
     if (!st.compatible) {
-      return new Error(`Triage.app speaks browser protocol v${st.version}, this triage expects v${BROWSER_WIRE_VERSION}. Tell the user to update Triage.app (or the daemon) so they match.`)
+      return new Error(`Junior.app speaks browser protocol v${st.version}, this Junior expects v${BROWSER_WIRE_VERSION}. Tell the user to update Junior.app (or the daemon) so they match.`)
     }
     return null
   }

@@ -123,16 +123,16 @@ export function McpTab({ workspace }: { workspace: Workspace | null }) {
           {client === 'claude' && (
             <>
               <Step n={1}>
-                Run this anywhere. <b>--scope user</b> makes triage available in every folder.
-                <Snippet text={`claude mcp add --transport http --scope user triage ${url}`} />
+                Run this anywhere. <b>--scope user</b> makes Junior available in every folder.
+                <Snippet text={`claude mcp add --transport http --scope user junior ${url}`} />
               </Step>
               <Step n={2}>
                 Or keep it to one project — run it in that folder, and the entry lands in its <code>.mcp.json</code>.
-                <Snippet text={`claude mcp add --transport http --scope project triage ${url}`} />
+                <Snippet text={`claude mcp add --transport http --scope project junior ${url}`} />
               </Step>
               <Step n={3}>
                 Check it.
-                <Snippet text="claude mcp get triage" />
+                <Snippet text="claude mcp get junior" />
               </Step>
             </>
           )}
@@ -141,7 +141,7 @@ export function McpTab({ workspace }: { workspace: Workspace | null }) {
             <>
               <Step n={1}>
                 Codex config is global — one entry, every folder.
-                <Snippet text={`codex mcp add triage --url ${url}`} />
+                <Snippet text={`codex mcp add junior --url ${url}`} />
               </Step>
               <Step n={2}>
                 Check it.
@@ -155,9 +155,9 @@ export function McpTab({ workspace }: { workspace: Workspace | null }) {
               <Step n={1}>
                 Put this in <code>~/.cursor/mcp.json</code> for every project, or <code>.cursor/mcp.json</code> inside one
                 project for just that folder.
-                <Snippet text={JSON.stringify({ mcpServers: { triage: { url } } }, null, 2)} />
+                <Snippet text={JSON.stringify({ mcpServers: { junior: { url } } }, null, 2)} />
               </Step>
-              <Step n={2}>Reload Cursor, then check Settings → MCP shows triage with its tools.</Step>
+              <Step n={2}>Reload Cursor, then check Settings → MCP shows Junior with its tools.</Step>
             </>
           )}
 
@@ -191,8 +191,8 @@ export function McpTab({ workspace }: { workspace: Workspace | null }) {
                 the daemon over the same API.
               </p>
               <Step n={1}>
-                Install triage globally, so the <code>triage-mcp</code> bin is on PATH.
-                <Snippet text="npm i -g usetriage" />
+                Install junior globally, so the <code>junior-mcp</code> bin is on PATH.
+                <Snippet text="npm i -g usejunior" />
               </Step>
               <Step n={2}>
                 Point the client at the bin. The environment carries what the URL otherwise would.
@@ -200,9 +200,9 @@ export function McpTab({ workspace }: { workspace: Workspace | null }) {
                   text={JSON.stringify(
                     {
                       mcpServers: {
-                        triage: {
-                          command: 'triage-mcp',
-                          env: { TRIAGE_URL: `http://localhost:${port}`, ...(qs ? { TRIAGE_WORKSPACE: workspace?.id } : {}) },
+                        junior: {
+                          command: 'junior-mcp',
+                          env: { JUNIOR_URL: `http://localhost:${port}`, ...(qs ? { JUNIOR_WORKSPACE: workspace?.id } : {}) },
                         },
                       },
                     },
@@ -224,8 +224,8 @@ export function McpTab({ workspace }: { workspace: Workspace | null }) {
           API. <b>Is the workspace id real</b> — an id that matches nothing is refused with the list of ids that do.
         </div>
         <div className="mcpNote">
-          A chat <i>inside</i> triage never needs any of this: it gets the same tools in-process, bound to its own
-          workspace. If such a chat lists a server named <code>triage</code> as failed while its <code>mcp__triage__*</code>{' '}
+          A chat <i>inside</i> Junior never needs any of this: it gets the same tools in-process, bound to its own
+          workspace. If such a chat lists a server named <code>junior</code> as failed while its <code>mcp__junior__*</code>{' '}
           tools work, that row belongs to a same-named entry in <code>~/.claude</code> — the in-process one wins the name.
         </div>
       </section>

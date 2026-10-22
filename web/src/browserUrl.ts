@@ -120,9 +120,9 @@ function errorWords(code: string, url: string): Omit<PageErrorView, 'host'> {
     case 'offline':
       return { kind: 'offline', lead: "You're offline.", line: "Reload once you're back online." }
     case 'cert':
-      return { kind: 'cert', lead: "This site's certificate isn't trusted.", line: "Triage won't open it. Check the address." }
+      return { kind: 'cert', lead: "This site's certificate isn't trusted.", line: "Junior won't open it. Check the address." }
     case 'blocked':
-      return { kind: 'blocked', lead: `Triage doesn't open ${scheme || 'these'}: links.`, line: null }
+      return { kind: 'blocked', lead: `Junior doesn't open ${scheme || 'these'}: links.`, line: null }
     default:
       return { kind: 'other', lead: `${host} didn't load.`, line: 'Reload to try again.' }
   }

@@ -27,8 +27,8 @@ type Props = {
   onCancel: () => void
 }
 
-const LAYOUT_KEY = 'triage.artifactEditor.layout'
-const draftKeyFor = (k: string) => `triage.artifactDraft.${k}`
+const LAYOUT_KEY = 'junior.artifactEditor.layout'
+const draftKeyFor = (k: string) => `junior.artifactDraft.${k}`
 
 function readLayout(): Layout {
   try {

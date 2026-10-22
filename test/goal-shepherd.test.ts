@@ -285,7 +285,7 @@ function withDir(fn: (dir: string) => Promise<void>) {
 type Started = { goalId: string; sessionId: string; spec: StartSpec }
 
 function harness(dir: string) {
-  const store = openSqliteStore(path.join(dir, 'triage.db'))
+  const store = openSqliteStore(path.join(dir, 'junior.db'))
   const root = path.join(dir, 'artifacts')
   execFileSync('mkdir', ['-p', root])
   execFileSync('git', ['init', '-q'], { cwd: root })

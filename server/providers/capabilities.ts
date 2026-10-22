@@ -17,7 +17,7 @@ export function requireCapabilities(provider: Pick<Provider, 'label' | 'capabili
 
 /**
  * The tool-call veto unattended work rests on: a fence run before every tool
- * call (`hooks`, RunSpec.veto) and triage asked before a gated tool runs
+ * call (`hooks`, RunSpec.veto) and junior asked before a gated tool runs
  * (`toolApproval`, SessionSpec.approve). A job runs with nobody watching and
  * a team's workers write to the checkout, so neither starts on an adapter that
  * can't be stopped mid-call.

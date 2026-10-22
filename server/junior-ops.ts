@@ -225,7 +225,7 @@ export function todayJson(plan: PlanView): string {
 /**
  * Today's plan in a new Junior session's context, and what to do when the
  * user adds to it mid-chat. A snapshot, said to be one: get_today reads it
- * live. (shared/triageContext.ts keeps live state out of prompts; this is
+ * live. (shared/juniorContext.ts keeps live state out of prompts; this is
  * the one deliberate exception, so "today we also want X" works in any chat.)
  */
 function todayAppend(plan: PlanView, name: string, now: number): string {
@@ -341,7 +341,7 @@ export async function juniorDayOp(rt: WorkspaceRuntime, q: { since: number; away
   const offerItems = items as OfferItem[]
   let seen: JuniorSeen | null = null
   {
-    // Every MCP server Claude Code can see is a source, by its plain name; triage's own server isn't one.
+    // Every MCP server Claude Code can see is a source, by its plain name; Junior's own server isn't one.
     const conns = new Map<string, boolean>()
     for (const c of rt.connectorCache?.connectors ?? []) {
       if (c.server === RESERVED_SERVER || c.name === RESERVED_SERVER) continue

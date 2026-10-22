@@ -336,7 +336,7 @@ export async function applyActionOps(store: ActionStore, ops: ActionOp[]): Promi
     } else {
       const rec = await store.byCall(op.sessionId, op.toolUseId)
       if (!rec) continue
-      // A held call's result is triage's own "queued" refusal: the record's
+      // A held call's result is Junior's own "queued" refusal: the record's
       // life is the queue's from here (core/actions/queue.ts), not the call's.
       if (rec.queue) continue
       let next = applySettle(rec, op.patch)

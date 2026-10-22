@@ -56,18 +56,18 @@ const kb = (n: number) => (n < 1000 ? `${n}` : `${(n / 1000).toFixed(1)}k`)
  */
 export async function teamRunFilesOp(rt: WorkspaceRuntime, run: TeamRun): Promise<TeamRunFile[]> {
   const out: TeamRunFile[] = []
-  const labelOf = (workerId: string | null) => (workerId ? workerById(run, workerId)?.label ?? workerId : 'triage')
+  const labelOf = (workerId: string | null) => (workerId ? workerById(run, workerId)?.label ?? workerId : 'junior')
   const everyone = [...new Set(run.workers.map((w) => w.label))]
 
-  // Ledger: the Plan (triage writes it, every agent reads it), the run folder's own files, then the item's brief and notes.
+  // Ledger: the Plan (Junior writes it, every agent reads it), the run folder's own files, then the item's brief and notes.
   await syncRunFolder(rt, run)
-  out.push({ group: 'ledger', name: 'plan.md', detail: 'goal, criteria, tasks, progress — and the outcome', writer: 'triage', readers: everyone, open: { kind: 'runfile', path: 'plan.md' }, runs: [], live: run.state !== 'done' && run.state !== 'stopped' })
+  out.push({ group: 'ledger', name: 'plan.md', detail: 'goal, criteria, tasks, progress — and the outcome', writer: 'junior', readers: everyone, open: { kind: 'runfile', path: 'plan.md' }, runs: [], live: run.state !== 'done' && run.state !== 'stopped' })
   const notFixed = Object.values(run.findingState).filter((v) => v.status !== 'fixed').length
   out.push(
-    { group: 'ledger', name: 'ledger.md', detail: 'decisions, where things are, surprises, what failed', writer: [...new Set(run.ledger.map((e) => e.by))].join(', ') || 'triage', readers: everyone, open: { kind: 'runfile', path: 'ledger.md' }, runs: [], badge: `${run.ledger.length}` },
-    { group: 'ledger', name: 'verify.md', detail: 'how to check this project', writer: 'triage', readers: everyone, open: { kind: 'runfile', path: 'verify.md' }, runs: [], ...(run.baseline ? { badge: run.baseline.results.every((r) => r.ok) ? 'baseline ok' : 'baseline failing' } : {}) },
+    { group: 'ledger', name: 'ledger.md', detail: 'decisions, where things are, surprises, what failed', writer: [...new Set(run.ledger.map((e) => e.by))].join(', ') || 'junior', readers: everyone, open: { kind: 'runfile', path: 'ledger.md' }, runs: [], badge: `${run.ledger.length}` },
+    { group: 'ledger', name: 'verify.md', detail: 'how to check this project', writer: 'junior', readers: everyone, open: { kind: 'runfile', path: 'verify.md' }, runs: [], ...(run.baseline ? { badge: run.baseline.results.every((r) => r.ok) ? 'baseline ok' : 'baseline failing' } : {}) },
   )
-  if (Object.keys(run.findingState).length) out.push({ group: 'ledger', name: 'reviews.md', detail: 'every finding by id', writer: 'triage', readers: [], open: { kind: 'runfile', path: 'reviews.md' }, runs: [], badge: notFixed ? `${notFixed} open` : 'all fixed' })
+  if (Object.keys(run.findingState).length) out.push({ group: 'ledger', name: 'reviews.md', detail: 'every finding by id', writer: 'junior', readers: [], open: { kind: 'runfile', path: 'reviews.md' }, runs: [], badge: notFixed ? `${notFixed} open` : 'all fixed' })
   const links = (await rt.store.links.list()).filter((l) => l.fromKind === 'artifact' && l.toKind === 'item' && l.toId === run.itemId && (l.role === 'brief' || l.role === 'context'))
   for (const l of links) {
     const a = await rt.store.artifacts.get(l.fromId)
@@ -134,7 +134,7 @@ export async function teamRunFilesOp(rt: WorkspaceRuntime, run: TeamRun): Promis
     const size = (await stat(r.patch).catch(() => null))?.size
     const rel = path.relative(dir, r.patch)
     const inside = !rel.startsWith('..') && !path.isAbsolute(rel)
-    out.push({ group: 'evidence', name: path.basename(r.patch), detail: inside ? rel : r.patch, writer: 'triage', readers: [labelOf(r.workerId)], open: inside ? { kind: 'runfile', path: rel } : { kind: 'file', path: r.patch }, runs: [r.id], ...(size != null ? { badge: kb(size) } : {}) })
+    out.push({ group: 'evidence', name: path.basename(r.patch), detail: inside ? rel : r.patch, writer: 'junior', readers: [labelOf(r.workerId)], open: inside ? { kind: 'runfile', path: rel } : { kind: 'file', path: r.patch }, runs: [r.id], ...(size != null ? { badge: kb(size) } : {}) })
   }
   return out
 }

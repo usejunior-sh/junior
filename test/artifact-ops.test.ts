@@ -181,7 +181,7 @@ test('from: outside the allowed roots, through a symlink, wrong extension, wrong
     await assert.rejects(create(fake), /not a PNG/)
     const bin = path.join(project, 'data.bin')
     writeFileSync(bin, PDF)
-    await assert.rejects(create(bin), /not a file type triage publishes/)
+    await assert.rejects(create(bin), /not a file type junior publishes/)
     await assert.rejects(create(path.join(project, 'missing.pdf')), /is gone/)
     mkdirSync(path.join(project, 'dir.pdf'))
     await assert.rejects(create(path.join(project, 'dir.pdf')), /a folder, not a file/)

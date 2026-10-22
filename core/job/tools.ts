@@ -29,7 +29,7 @@ export type JobToolGrant = {
 }
 
 /** The in-process server every run gets (its one write tool). A user server by this name is shadowed, so never offered. */
-export const RESERVED_SERVER = 'triage'
+export const RESERVED_SERVER = 'junior'
 
 export const BUILTIN_LABEL: Record<BuiltinToolId, string> = {
   web: 'Web',
@@ -206,15 +206,15 @@ export const mcpGrants = (grants: JobToolGrant[]) =>
 
 export type RunOutput = 'items' | 'digest'
 
-export const triageWriteTool = (output: RunOutput): string =>
-  output === 'digest' ? 'mcp__triage__write_digest' : 'mcp__triage__upsert_work_item'
+export const juniorWriteTool = (output: RunOutput): string =>
+  output === 'digest' ? 'mcp__junior__write_digest' : 'mcp__junior__upsert_work_item'
 
 /**
  * The exact tools a run may call: its grants, the project's read tools, its
- * one triage write tool, and the browser's when the job names a profile.
+ * one junior write tool, and the browser's when the job names a profile.
  */
 export function runAllowedTools(grants: JobToolGrant[], output: RunOutput = 'items', browser = false): string[] {
-  const tools = new Set<string>(['ToolSearch', triageWriteTool(output), ...PROJECT_TOOLS])
+  const tools = new Set<string>(['ToolSearch', juniorWriteTool(output), ...PROJECT_TOOLS])
   for (const g of grants) for (const t of g.tools) tools.add(t)
   if (browser) for (const t of BROWSER_JOB_TOOLS) tools.add(t)
   return [...tools]

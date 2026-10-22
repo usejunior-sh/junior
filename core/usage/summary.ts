@@ -138,7 +138,7 @@ export function summarize(entries: UsageEntry[], since: number, now: number): Us
 }
 
 /**
- * Spend folded by Claude session id: the join key onto a triage session's
+ * Spend folded by Claude session id: the join key onto a junior session's
  * `sdkSessionId`. Kept beside `summarize()` rather than inside it: the item
  * page wants one number per session and none of the day/model/project rollups.
  *

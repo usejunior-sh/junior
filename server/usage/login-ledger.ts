@@ -2,7 +2,7 @@
  * The column Claude Code's transcripts leave out: which login a session ran
  * on. Every Claude spawn's init is noted here as it passes through
  * `server/providers/claude.ts`, chats and headless runs alike, one JSON line
- * apiece in `<TRIAGE_HOME>/usage-logins.jsonl`. An API key is kept as a
+ * apiece in `<JUNIOR_HOME>/usage-logins.jsonl`. An API key is kept as a
  * fingerprint and its last four characters, never the key itself.
  *
  * A leaf module on purpose: the provider imports it, so it must not import
@@ -11,9 +11,9 @@
 import { createHash } from 'node:crypto'
 import { appendFile, readFile } from 'node:fs/promises'
 import path from 'node:path'
-import { TRIAGE_DIR } from '../state.js'
+import { JUNIOR_DIR } from '../state.js'
 
-const FILE = path.join(TRIAGE_DIR, 'usage-logins.jsonl')
+const FILE = path.join(JUNIOR_DIR, 'usage-logins.jsonl')
 
 /** An API key as a login: two workspaces on one key are one login. */
 export type KeyLogin = { id: string; hint?: string }

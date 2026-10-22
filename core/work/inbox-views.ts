@@ -1,5 +1,5 @@
 /**
- * The inbox views: one list of every work item, cut four ways (Triage for
+ * The inbox views: one list of every work item, cut four ways (Junior for
  * engineers, M0). Replaces the nine stage tabs as what the inbox shows; the
  * tabs (inbox-tabs.ts) still order the rows, so what is held on you, due or
  * waited on by a person still reads first. Pure, browser-safe.

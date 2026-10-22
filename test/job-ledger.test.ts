@@ -1,6 +1,6 @@
 /**
  * The slot ledger (`job_runs`) against a real sqlite store in a temp dir —
- * never ~/.triage. Time is always an argument.
+ * never ~/.junior. Time is always an argument.
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -12,8 +12,8 @@ import type { Store } from '../core/store/types.js'
 import type { NewJobSlotRun } from '../core/job/types.js'
 
 async function withStore(fn: (store: Store) => Promise<void>) {
-  const dir = mkdtempSync(path.join(tmpdir(), 'triage-ledger-'))
-  const store = openSqliteStore(path.join(dir, 'triage.db'))
+  const dir = mkdtempSync(path.join(tmpdir(), 'junior-ledger-'))
+  const store = openSqliteStore(path.join(dir, 'junior.db'))
   try {
     await fn(store)
   } finally {
@@ -69,10 +69,10 @@ test('boot sweep: running becomes interrupted with a reason, other statuses are 
     await jobRuns.insert(running('w1', 3000, { status: 'skipped', reason: 'overlap: x', endedAt: 3005 }))
     await jobRuns.insert(running('w2', 4000, { status: 'failed', reason: 'boom', endedAt: 4100 }))
     await jobRuns.insert(running('w2', 5000))
-    assert.equal(await jobRuns.sweepInterrupted(9000, 'interrupted: triage stopped'), 2)
+    assert.equal(await jobRuns.sweepInterrupted(9000, 'interrupted: junior stopped'), 2)
     const w1 = await jobRuns.list('w1')
     assert.deepEqual(w1.map((r) => r.status), ['skipped', 'ok', 'interrupted'])
-    assert.deepEqual([w1[2].reason, w1[2].endedAt], ['interrupted: triage stopped', 9000])
+    assert.deepEqual([w1[2].reason, w1[2].endedAt], ['interrupted: junior stopped', 9000])
     assert.deepEqual([w1[0].reason, w1[0].endedAt, w1[1].reason, w1[1].endedAt], ['overlap: x', 3005, undefined, 2100])
     const w2 = await jobRuns.list('w2')
     assert.deepEqual(w2.map((r) => r.status), ['interrupted', 'failed'])

@@ -100,7 +100,7 @@ test('pause and resume: take over from any working or waiting state, hand back t
   assert.deepEqual(triggersFrom('paused'), ['resume', 'cancel'])
 })
 
-test('triggersFrom splits what the user may click from what triage pulls', () => {
+test('triggersFrom splits what the user may click from what junior pulls', () => {
   assert.deepEqual(triggersFrom('plan_ready', 'you'), ['approve', 'send_back', 'cancel'])
   assert.deepEqual(triggersFrom('plan_ready', 'engine'), [])
   assert.deepEqual(triggersFrom('running', 'engine'), ['yield', 'wait_world', 'ask_you', 'result'])

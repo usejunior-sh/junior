@@ -59,8 +59,8 @@ test('the task is keyed on the request, or on the head when no request shows', (
 
 /** `handAll`: every PR is handed off as it is filed, as if you'd pressed First pass on each. */
 async function harness(fn: (h: { store: Store; deps: ReviewDeps; nodes: unknown[]; added: ItemTask[] }) => Promise<void>, handAll = true) {
-  const dir = mkdtempSync(path.join(tmpdir(), 'triage-review-'))
-  const store = openSqliteStore(path.join(dir, 'triage.db'))
+  const dir = mkdtempSync(path.join(tmpdir(), 'junior-review-'))
+  const store = openSqliteStore(path.join(dir, 'junior.db'))
   const nodes: unknown[] = []
   const added: ItemTask[] = []
   const deps: ReviewDeps = {

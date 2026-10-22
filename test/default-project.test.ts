@@ -1,6 +1,6 @@
 /**
  * Workspace → default project (decision 549a251e) against a real sqlite store
- * in a temp dir — never ~/.triage.
+ * in a temp dir — never ~/.junior.
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -12,8 +12,8 @@ import type { Store } from '../core/store/types.js'
 import type { WorkItem } from '../core/work/types.js'
 
 async function withStore(fn: (store: Store) => Promise<void>) {
-  const dir = mkdtempSync(path.join(tmpdir(), 'triage-projects-'))
-  const store = openSqliteStore(path.join(dir, 'triage.db'))
+  const dir = mkdtempSync(path.join(tmpdir(), 'junior-projects-'))
+  const store = openSqliteStore(path.join(dir, 'junior.db'))
   try {
     await fn(store)
   } finally {

@@ -1,4 +1,4 @@
-# Builds Triage.app for both Mac architectures on a release tag, attaches the
+# Builds Junior.app for both Mac architectures on a release tag, attaches the
 # zips and install.sh to that tag's GitHub release, then publishes it.
 #
 # /release pushes the tag and creates the release as a draft, so each job
@@ -25,7 +25,7 @@ concurrency:
 
 jobs:
   app:
-    name: Triage.app (${{ matrix.arch }})
+    name: Junior.app (${{ matrix.arch }})
     strategy:
       fail-fast: false
       matrix:
@@ -73,12 +73,12 @@ jobs:
 
       - name: Check the artifact
         run: |
-          zip="desktop/release/Triage-$VERSION-mac-${{ matrix.arch }}.zip"
+          zip="desktop/release/Junior-$VERSION-mac-${{ matrix.arch }}.zip"
           test -f "$zip"
           ls -lh "$zip"
           rm -rf /tmp/check && ditto -x -k "$zip" /tmp/check
-          codesign --verify --deep --strict /tmp/check/Triage.app
-          lipo -archs /tmp/check/Triage.app/Contents/MacOS/Triage
+          codesign --verify --deep --strict /tmp/check/Junior.app
+          lipo -archs /tmp/check/Junior.app/Contents/MacOS/Junior
 
       - name: Wait for the release
         run: |
@@ -91,7 +91,7 @@ jobs:
           exit 1
 
       - name: Upload
-        run: gh release upload "$TAG" "desktop/release/Triage-$VERSION-mac-${{ matrix.arch }}.zip" --repo "$GITHUB_REPOSITORY" --clobber
+        run: gh release upload "$TAG" "desktop/release/Junior-$VERSION-mac-${{ matrix.arch }}.zip" --repo "$GITHUB_REPOSITORY" --clobber
 
   # Only once both archs are up: a published release without its zips is a
   # broken `curl | sh` for anyone who installs in between.
@@ -107,7 +107,7 @@ jobs:
         with:
           ref: ${{ inputs.tag || github.ref }}
 
-      # The installer that matches this release; usetriage.sh/install.sh
+      # The installer that matches this release; usejunior.sh/install.sh
       # redirects to releases/latest/download/install.sh.
       - name: Upload install.sh
         run: gh release upload "$TAG" install.sh --repo "$GITHUB_REPOSITORY" --clobber

@@ -132,7 +132,7 @@ export function toolResult(r: ArtifactWriteResult, hint?: string): ArtifactToolR
   const a = r.artifact
   const h = hint ?? r.hint
   return {
-    triage: 'artifact',
+    junior: 'artifact',
     action: r.action,
     id: a.id,
     title: a.title,
@@ -158,7 +158,7 @@ const linkOutput = (rt: WorkspaceRuntime, artifactId: string, sessionId: string)
 
 /**
  * New artifact. A model call (a session, or an external client) may publish any
- * format: text ones as `body`, the rest as `from`, a file triage copies in. A
+ * format: text ones as `body`, the rest as `from`, a file junior copies in. A
  * human call writes markdown, as before. Calls from a session link the artifact
  * to it as `output`, so the chat and the session's list can show it.
  */

@@ -1,5 +1,5 @@
 /**
- * The team run engine (Teams v2): triage, not an agent, moves a run through
+ * The team run engine (Teams v2): junior, not an agent, moves a run through
  * its recipe's steps. Pure: every function takes the run, changes it in place
  * and returns the actions the server must carry out (tell a worker, run the
  * project's checks, post a notice, finish). No clock reads, no I/O, so the whole
@@ -93,7 +93,7 @@ export function beginStep(run: TeamRun, i: number): Action[] {
   if (s.fanOut.by === 'finding') {
     const slices = findingSlices(run, i, s.fanOut.max)
     if (!slices.length) {
-      record(run, { stepId: s.id, workerId: null, label: 'triage', summary: 'nothing to check — the step before reported no findings', body: '' })
+      record(run, { stepId: s.id, workerId: null, label: 'junior', summary: 'nothing to check — the step before reported no findings', body: '' })
       return [...pre, ...endStep(run)]
     }
     return [...pre, ...tellAll(run, i, workersFor(run, i, slices))]
@@ -175,12 +175,12 @@ export function stampRun(run: TeamRun, workerId: string, stamp: { startSeq: numb
   Object.assign(r, stamp)
 }
 
-/** How a step message from triage begins, not a nudge, a resume, or a request to split. */
+/** How a step message from Junior begins, not a nudge, a resume, or a request to split. */
 export const STEP_MESSAGE = /^(Task T\d+ \(\d+ of \d+\) — step "|Step "[^"]+" \(\d+ of \d+\))/
 
 /**
  * Runs stored before runs were recorded: one per handoff (and per worker still
- * on its step), placed in each session at the step messages triage sent it, in
+ * on its step), placed in each session at the step messages junior sent it, in
  * order. `starts` is those messages per session, oldest first.
  */
 export function backfillRuns(run: TeamRun, starts: Record<string, { seq: number; at: number; fresh: boolean }[]>): void {
@@ -262,7 +262,7 @@ function insistOnce(run: TeamRun, key: string, missing: string[], message: strin
 
 /**
  * A worker called submit_step. Recorded now; acted on when its turn ends, so
- * triage never messages a session mid-turn. Returns what to tell the caller.
+ * junior never messages a session mid-turn. Returns what to tell the caller.
  * A handoff that skips a criterion, or (in a fix round) an open finding, is
  * turned back once with the ids it missed; the second try is taken as it is.
  */
@@ -341,7 +341,7 @@ export function submit(run: TeamRun, sessionId: string, sub: Submission, at: num
   add('verify', sub.verify)
   add('note', sub.notes)
   run.submitted.push(w.id)
-  return 'Submitted. End your turn now — triage moves the run on.'
+  return 'Submitted. End your turn now — junior moves the run on.'
 }
 
 /** A session's turn ended: settle its submissions, nudge an awaited worker that stopped without one. */
@@ -442,7 +442,7 @@ export function continueGate(run: TeamRun, at = 0): Action[] {
   return advance(run)
 }
 
-/** triage ran the project's checks for a `checks` step. */
+/** junior ran the project's checks for a `checks` step. */
 export function checksDone(run: TeamRun, results: CheckResult[], at: number): Action[] {
   const s = currentStep(run)
   if (!s || s.agent !== CHECKS || run.state !== 'running') return []

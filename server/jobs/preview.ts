@@ -26,7 +26,7 @@ import { broadcast } from '../ws/send.js'
 import { VERSION } from '../config.js'
 import { DIGEST_SHAPE, identityFromUrl, rowFiling, upsertShape } from './scan-mcp.js'
 import type { JobFiling } from '../../core/job/filing.js'
-import { errResult, okResult } from '../triage-mcp.js'
+import { errResult, okResult } from '../junior-mcp.js'
 import { sortForWorkspace } from '../session/actions-record.js'
 
 export type JobPreview = {
@@ -40,8 +40,8 @@ export type JobPreview = {
 }
 const PREVIEW_TTL_MS = 15 * 60_000
 
-/** Why a browser job can't run: the pane lives in Triage.app. The job page matches "needs Triage.app" in a skip's reason: keep it. */
-export const BROWSER_NEEDS_APP = 'the browser needs Triage.app open'
+/** Why a browser job can't run: the pane lives in Junior.app. The job page matches "needs Junior.app" in a skip's reason: keep it. */
+export const BROWSER_NEEDS_APP = 'the browser needs Junior.app open'
 const BROWSER_PREFIX = mcpToolName('browser', '')
 
 /** What a run (real or dry) is made of: the job as saved, or the form as it stands. */
@@ -67,7 +67,7 @@ type PreviewSpec = Omit<RunSpec, 'project'> & { projectId: string }
 
 // Folder MCP servers: the `project` servers in a
 // folder's .mcp.json and the user's private `local` servers for that folder
-// (in Claude's own config). Read by triage and passed explicitly, never by
+// (in Claude's own config). Read by Junior and passed explicitly, never by
 // loading the project's settings, which would also load its hooks, and hooks
 // are shell commands that would run unattended.
 
@@ -95,7 +95,7 @@ export async function folderMcpServers(rt: WorkspaceRuntime, cwd: string): Promi
   const configured = await rt.provider.discovery.configuredMcp({ cwd, env: rt.env })
   add(configured.project, 'project')
   add(configured.local[cwd], 'local') // private per-folder servers win over the shared file, as in Claude Code
-  delete out.servers.triage // our own in-process server owns that name
+  delete out.servers.junior // our own in-process server owns that name
   return out
 }
 
@@ -132,7 +132,7 @@ export async function jobLimits(rt: WorkspaceRuntime, w: { timeoutMs?: number; m
 export async function jobQuery(
   rt: WorkspaceRuntime,
   spec: RunSpec,
-  triage: McpServers[string],
+  junior: McpServers[string],
   abort: AbortController,
   /** tab: the browser tab's key, the run's session id (a dry run's preview id); a browser job without one gets no browser */
   extra: { maxBudgetUsd?: number; includePartialMessages?: boolean; tab?: string } = {},
@@ -140,7 +140,7 @@ export async function jobQuery(
   // The fence below is the whole safety story: no veto, no run.
   requireVeto(rt.provider, 'job')
   // The browser: the job's profile, checked again (it may have been removed
-  // since the file was), and Triage.app open to host the tab.
+  // since the file was), and Junior.app open to host the tab.
   let browser: { profile: BrowserProfile; sites?: string[]; tab: string } | null = null
   if (spec.browser && extra.tab) {
     const found = checkBrowserProfile(spec.browser, listProfiles())
@@ -211,7 +211,7 @@ export async function jobQuery(
     ...(extra.includePartialMessages ? { streamDeltas: true } : {}),
     mcpServers: {
       ...folderServers,
-      triage,
+      junior,
       ...(tab && browser ? { browser: browserMcpFor(rt, tab, { mode: 'job', profile: browser.profile.id, ...(browser.sites ? { sites: browser.sites } : {}) }) } : {}),
     },
     abort,
@@ -256,7 +256,7 @@ export async function runJobPreview(rt: WorkspaceRuntime, pv: JobPreview, spec: 
   const wouldQueue: Array<{ tool: string; summary: string }> = []
   let digest: { title: string; body: string } | undefined
   const collector = createSdkMcpServer({
-    name: 'triage',
+    name: 'junior',
     version: VERSION,
     tools:
       spec.output === 'digest'

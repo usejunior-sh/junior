@@ -3,13 +3,13 @@
  *
  * A project's checkouts are its main folder plus every `git worktree` of the
  * same repo. They are *discovered* with `git worktree list`, so worktrees made
- * outside triage, by you, by an agent mid-session, show up too. Rows are
+ * outside junior, by you, by an agent mid-session, show up too. Rows are
  * stored so sessions and terminals can name one.
  *
- * Triage also makes them: it creates a worktree *before* the session starts,
+ * Junior also makes them: it creates a worktree *before* the session starts,
  * so the session's folder is the worktree, never the agent mid-session. New
  * ones live outside the repo, under the workspace folder, so nothing needs
- * ignoring and nothing scans them. Triage never runs `git switch` in the main
+ * ignoring and nothing scans them. Junior never runs `git switch` in the main
  * folder; that one is the user's.
  */
 import { execFile } from 'node:child_process'

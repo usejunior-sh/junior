@@ -159,7 +159,7 @@ export function ChatHeader({
 }
 
 /**
- * The chat's Browser button (not on a phone; outside Triage.app the pane says
+ * The chat's Browser button (not on a phone; outside Junior.app the pane says
  * where the browser lives). Once the chat uses a profile other than the
  * workspace's default, the label names it, "Browser · Work", with a swatch:
  * a bare coloured dot here would read as the header's "working" dot.
@@ -175,7 +175,7 @@ function BrowserButton({ sessionId, open }: { sessionId: string; open: boolean }
       className={`btn sm ghost browserBtn${open ? ' on' : ''}`}
       title={
         !hasBrowser
-          ? 'Open in Triage.app: the browser lives there.'
+          ? 'Open in Junior.app: the browser lives there.'
           : open
             ? 'Hide the browser'
             : `Show this chat's browser.${profile ? ` Profile: ${profile.name}.` : ''}`

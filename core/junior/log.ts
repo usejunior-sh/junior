@@ -1,5 +1,5 @@
 /**
- * Junior's log (Triage for engineers, M2): one feed of everything Junior did,
+ * Junior's log (Junior for engineers, M2): one feed of everything Junior did,
  * across items, newest first. Two views: All, and Sent (only what left your
  * Mac). Each Sent line says who allowed it: you, a rule (an advance
  * approval), or the policy (a push to your own branch, a draft PR). The log
@@ -102,7 +102,7 @@ export function allowedOf(a: Pick<LogAction, 'allowedBy' | 'allowedDetail' | 'se
       if (approvalIdIn(d)) return { by: 'rule', text: `rule · ${d!.replace(/\s*\(#[0-9a-f]{6}\)$/, '')}` }
       return a.sessionKind === 'job-run' ? { by: 'job', text: d ?? 'the job’s grants' } : { by: 'other', text: d ?? 'an allow rule' }
     case 'policy':
-      return { by: 'free', text: d ?? 'triage’s policy' }
+      return { by: 'free', text: d ?? 'Junior’s policy' }
     case 'mode':
       return { by: 'other', text: d ?? 'the session’s mode' }
     default:

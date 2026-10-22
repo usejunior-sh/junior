@@ -17,7 +17,7 @@ export const checkoutLabel = (c: Checkout) => c.branch ?? 'detached'
 
 // editors: detected once per page load, the last one used listed first
 
-const lastKey = 'triage.editor.last'
+const lastKey = 'junior.editor.last'
 let editors: readonly Editor[] = []
 let loaded = false
 let inflight: Promise<void> | null = null

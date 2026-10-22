@@ -26,7 +26,7 @@ export function makeBrowserMcp(ctx: BrowserToolContext) {
         'browser_open',
         job
           ? `Open a URL in this run's browser tab, in the profile the job names (its logins). ${ctx.sites?.length ? `Only these sites open: ${ctx.sites.join(', ')}.` : ''} Then read the page with browser_snapshot (find: to search it) and browser_wait. You can't press Send, Post, Save or the like: record what you found with your write tool.`
-          : `Open a URL in this session's browser tab (Triage.app's browser pane — the user watches the same page). Local URLs (localhost, 127.0.0.1, *.localhost, file: in the project) open without asking; another site asks the user once per session. A bare path like "/settings" is resolved against the current page. Each profile has its own logins: if the user names one ("use my Pendo profile"), pass profile (browser_profiles lists them). Never sign in for the user: if a page asks for a login, stop and ask them to sign in in the pane. ${VERIFY_LOOP}`,
+          : `Open a URL in this session's browser tab (Junior.app's browser pane — the user watches the same page). Local URLs (localhost, 127.0.0.1, *.localhost, file: in the project) open without asking; another site asks the user once per session. A bare path like "/settings" is resolved against the current page. Each profile has its own logins: if the user names one ("use my Pendo profile"), pass profile (browser_profiles lists them). Never sign in for the user: if a page asks for a login, stop and ask them to sign in in the pane. ${VERIFY_LOOP}`,
         {
           url: z.string().describe('http(s)://localhost:5173/settings, localhost:3000, /settings, or a file: URL'),
           wait: z.enum(['load', 'idle']).optional().describe('idle (default) also waits for the network to go quiet — for apps that fetch after load'),
@@ -396,7 +396,7 @@ export function makeBrowserMcp(ctx: BrowserToolContext) {
 
       tool(
         'browser_profiles',
-        "The browser profiles: separate logins, like Chrome profiles. Says which one this session's tab uses, the default, and (with Triage.app open) which sites each is signed in to. Pass a name to browser_open's profile to switch.",
+        "The browser profiles: separate logins, like Chrome profiles. Says which one this session's tab uses, the default, and (with Junior.app open) which sites each is signed in to. Pass a name to browser_open's profile to switch.",
         {},
         async () => {
           try {
@@ -418,7 +418,7 @@ export function makeBrowserMcp(ctx: BrowserToolContext) {
               const s = sites.get(p.id) ?? p.sites?.slice(0, 8)
               return `- ${p.name} (id ${p.id})${tags.length ? ` [${tags.join(', ')}]` : ''}${s ? (s.length ? ` — signed in to: ${s.join(', ')}` : ' — no saved logins') : ''}`
             })
-            if (!ctx.hub.status.compatible) lines.push('(Triage.app is closed: the sites are as of the last time it was open.)')
+            if (!ctx.hub.status.compatible) lines.push('(Junior.app is closed: the sites are as of the last time it was open.)')
             return text(lines.join('\n'))
           } catch (err) {
             return fail(err instanceof Error ? err.message : String(err))

@@ -13,7 +13,7 @@ export const AGENT_CANS: AgentCan[] = ['read', 'edit', 'run', 'web', 'browser']
 export const AGENT_COLORS = ['red', 'blue', 'green', 'yellow', 'purple', 'orange', 'pink', 'cyan'] as const
 export type AgentColor = (typeof AGENT_COLORS)[number]
 
-/** One agent: the fields of a Claude Code agent file triage understands. */
+/** One agent: the fields of a Claude Code agent file junior understands. */
 export type AgentSpec = {
   /** slug: the file name, and how a recipe step names it */
   name: string
@@ -28,7 +28,7 @@ export type AgentSpec = {
 }
 
 /**
- * Where a library file stands against what triage ships: untouched, edited,
+ * Where a library file stands against what junior ships: untouched, edited,
  * edited while a newer default shipped, or the user's own.
  */
 export type LibraryStatus = 'default' | 'edited' | 'update' | 'yours'
@@ -52,7 +52,7 @@ export type TeamLibraryResponse =
   | { ok: false; error: string }
 
 // Skills and agents (server/library.ts): every Claude Code skill and subagent a
-// session can see: the workspace's own (a local plugin, `triage:<name>`), the
+// session can see: the workspace's own (a local plugin, `junior:<name>`), the
 // user's (~/.claude), each project's (.claude/), and installed plugins' (read-only).
 
 export type LibraryKind = 'skill' | 'agent'
@@ -60,7 +60,7 @@ export type LibrarySource = 'workspace' | 'personal' | 'project' | 'plugin'
 
 export type LibraryEntry = {
   kind: LibraryKind
-  /** what Claude calls it: `/name` or the subagent type; `triage:name` / `plugin:name` when namespaced */
+  /** what Claude calls it: `/name` or the subagent type; `junior:name` / `plugin:name` when namespaced */
   name: string
   /** the folder (skill) or file stem (agent) */
   slug: string

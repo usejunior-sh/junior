@@ -37,7 +37,7 @@ function gitRepo(dir: string): string {
 }
 
 let clock = 1_000_000
-function deps(dir: string, root: string, store = openSqliteStore(path.join(dir, 'triage.db'))): GoalDeps & { store: ReturnType<typeof openSqliteStore>; seen: string[] } {
+function deps(dir: string, root: string, store = openSqliteStore(path.join(dir, 'junior.db'))): GoalDeps & { store: ReturnType<typeof openSqliteStore>; seen: string[] } {
   const seen: string[] = []
   const now = () => ++clock
   return { store, ledger: new GoalLedger(root, now), now, defaultProjectId: async () => null, changed: (id) => seen.push(id), emit: () => {}, seen }
@@ -55,7 +55,7 @@ const PLAN = {
 }
 
 test('store: create dedupes on key, move is first-writer-wins and logs the transition', withDir(async (dir) => {
-  const store = openSqliteStore(path.join(dir, 'triage.db'))
+  const store = openSqliteStore(path.join(dir, 'junior.db'))
   const base = { title: 'T', doneWhen: 'D', horizon: 'today' as const, sourceItemId: 'manual:1', key: 'manual:1', projectId: null, budget: { usd: 5, minutes: null }, priority: 0 }
   const a = await store.goals.create({ ...base, id: 'g1' }, 10)
   assert.equal(a.created, true)
@@ -176,7 +176,7 @@ test('ledger commits only the goal folder and warns after repeated failures', wi
   // A broken repo: files are still written; the warning appears after 3 failures in a row.
   const broken = path.join(dir, 'broken')
   execFileSync('mkdir', ['-p', broken])
-  writeFileSync(path.join(broken, '.git'), 'gitdir: /nonexistent/triage-test\n')
+  writeFileSync(path.join(broken, '.git'), 'gitdir: /nonexistent/junior-test\n')
   const ledger = new GoalLedger(broken)
   for (let i = 1; i <= 3; i++) {
     assert.equal(ledger.warning('g'), null)

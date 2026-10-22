@@ -31,8 +31,8 @@ const prNode = (number: number, sha: string, checks: Check[], over: Record<strin
 
 /** `handAll`: every PR is handed off as it is filed, as if you'd pressed Babysit on each. */
 async function harness(fn: (h: { store: Store; deps: BabysitDeps; nodes: unknown[]; added: [ItemTask, boolean][]; reruns: string[]; logs: Record<string, string> }) => Promise<void>, handAll = true) {
-  const dir = mkdtempSync(path.join(tmpdir(), 'triage-babysit-'))
-  const store = openSqliteStore(path.join(dir, 'triage.db'))
+  const dir = mkdtempSync(path.join(tmpdir(), 'junior-babysit-'))
+  const store = openSqliteStore(path.join(dir, 'junior.db'))
   const nodes: unknown[] = []
   const added: [ItemTask, boolean][] = []
   const reruns: string[] = []

@@ -22,10 +22,10 @@ export default defineConfig({
   server: {
     port: 5189,
     strictPort: true,
-    // `TRIAGE_DEV_LAN=1 npm run dev` to try the UI from a phone. The server
+    // `JUNIOR_DEV_LAN=1 npm run dev` to try the UI from a phone. The server
     // still wants the pairing token: xfwd tells it the request came from the
     // phone, not from this proxy on loopback.
-    host: process.env.TRIAGE_DEV_LAN === '1' ? true : undefined,
+    host: process.env.JUNIOR_DEV_LAN === '1' ? true : undefined,
     // `web/` is the Vite root; allow serving the sibling `assets/` in dev.
     fs: { allow: [repoRoot] },
     // Same-origin in dev, so the client's `ws://${location.host}/ws` works

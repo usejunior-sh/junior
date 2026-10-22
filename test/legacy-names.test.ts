@@ -14,7 +14,7 @@ import { defaultPlaybook } from '../server/briefs.js'
 
 /** A current DB, turned back into one from before the rename. */
 function legacyDb(): string {
-  const file = path.join(mkdtempSync(path.join(tmpdir(), 'triage-legacy-')), 'triage.db')
+  const file = path.join(mkdtempSync(path.join(tmpdir(), 'junior-legacy-')), 'junior.db')
   const fresh = openSqliteStore(file)
   void fresh.close()
   const db = new DatabaseSync(file)
@@ -75,7 +75,7 @@ test('a renamed DB opens again untouched — the saved inbox survives', async ()
 })
 
 test('the workspace folder moves to its new names; an untouched playbook becomes the new default', () => {
-  const root = mkdtempSync(path.join(tmpdir(), 'triage-legacy-ws-'))
+  const root = mkdtempSync(path.join(tmpdir(), 'junior-legacy-ws-'))
   mkdirSync(path.join(root, 'watches'))
   writeFileSync(path.join(root, 'watches', 'mine.md'), 'x')
   mkdirSync(path.join(root, 'playbooks'))
@@ -91,7 +91,7 @@ test('the workspace folder moves to its new names; an untouched playbook becomes
 })
 
 test('an existing jobs folder wins over a leftover old one', () => {
-  const root = mkdtempSync(path.join(tmpdir(), 'triage-legacy-ws-'))
+  const root = mkdtempSync(path.join(tmpdir(), 'junior-legacy-ws-'))
   mkdirSync(path.join(root, 'watches'))
   mkdirSync(path.join(root, 'jobs'))
   writeFileSync(path.join(root, 'jobs', 'new.md'), 'new')

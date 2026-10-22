@@ -16,7 +16,7 @@ import path from 'node:path'
 import { openSqliteStore } from '../core/store/sqlite.js'
 
 const ROOT = '/Users/me/Code/app'
-const DOWNLOADS = '/Users/me/Downloads/Triage/run-1'
+const DOWNLOADS = '/Users/me/Downloads/Junior/run-1'
 
 const spec: JobFileSpec = {
   id: 'j-1',
@@ -97,7 +97,7 @@ test('fence: a browser run reads its downloads, and writes nothing there', () =>
   assert.ok(fenceDecision(f, 'Glob', { pattern: `${DOWNLOADS}/*.csv` }).allow)
   assert.ok(fenceDecision(f, 'Read', { file_path: 'src/a.ts' }).allow)
   assert.ok(!fenceDecision(f, 'Write', { file_path: `${DOWNLOADS}/x.md` }).allow)
-  assert.ok(!fenceDecision(f, 'Read', { file_path: '/Users/me/Downloads/Triage/run-2/other.csv' }).allow)
+  assert.ok(!fenceDecision(f, 'Read', { file_path: '/Users/me/Downloads/Junior/run-2/other.csv' }).allow)
   assert.ok(!fenceDecision(f, 'Read', { file_path: '/Users/me/Downloads/secret.pdf' }).allow)
   // without the browser, the downloads folder is outside like anything else
   assert.ok(!fenceDecision(fenceFor([builtinGrant('web')], 'digest', ROOT), 'Read', { file_path: `${DOWNLOADS}/report.csv` }).allow)
@@ -124,9 +124,9 @@ test('run prompt: names the profile and the sites, and that it can only read', (
   assert.doesNotMatch(composeRunPrompt({ instruction: 'x', tools: [builtinGrant('web')], project: { name: 'app', path: ROOT }, lookbackMs: 1, nowIso: 'now' }), /Browser/)
 })
 
-test('a job keeps its browser through create, update and clear (temp store, never ~/.triage)', async () => {
-  const dir = mkdtempSync(path.join(tmpdir(), 'triage-job-browser-'))
-  const store = openSqliteStore(path.join(dir, 'triage.db'))
+test('a job keeps its browser through create, update and clear (temp store, never ~/.junior)', async () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'junior-job-browser-'))
+  const store = openSqliteStore(path.join(dir, 'junior.db'))
   try {
     const { jobs } = store
     await jobs.create({
@@ -139,7 +139,7 @@ test('a job keeps its browser through create, update and clear (temp store, neve
     // no tools but the browser: never read back as a legacy Slack job
     assert.deepEqual(stored?.tools, [])
     const allowed = runAllowedTools(stored!.tools, 'digest', true).filter((t) => t.startsWith('mcp__'))
-    assert.deepEqual(allowed.sort(), ['mcp__triage__write_digest', ...BROWSER_JOB_TOOLS].sort())
+    assert.deepEqual(allowed.sort(), ['mcp__junior__write_digest', ...BROWSER_JOB_TOOLS].sort())
     await jobs.update('w1', { browser: { profile: 'work' } })
     assert.deepEqual((await jobs.get('w1'))?.browser, { profile: 'work' })
     await jobs.update('w1', { title: 'W2' })

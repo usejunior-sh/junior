@@ -59,7 +59,7 @@ export async function noteTeamSpend(rt: WorkspaceRuntime, sessionId: string, del
     run.spend[sessionId] = (run.spend[sessionId] ?? 0) + delta
     run.rev += 1
     const spent = runSpent(run)
-    // The lead's verdict or unstick waits for its turn to end, like a handoff: triage never messages a
+    // The lead's verdict or unstick waits for its turn to end, like a handoff: junior never messages a
     // session mid-turn. Paused meanwhile (by you, or the budget), it waits for your resume instead.
     const decided = sessionId === run.leadSessionId ? rt.goalDecisions.get(run.id) : undefined
     const over = run.state === 'running' && (spent >= run.budgetUsd || overBudget)

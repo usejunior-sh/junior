@@ -49,7 +49,7 @@ export function AppearanceTab() {
         </Row>
       </Section>
       <Section title="Reset">
-        <Row label="Back to defaults" hint="Triage Dark, default text size.">
+        <Row label="Back to defaults" hint="Junior Dark, default text size.">
           <button type="button" className="btn" onClick={() => writeAppearance(APPEARANCE_DEFAULTS)}>
             Reset
           </button>

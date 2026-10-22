@@ -72,7 +72,7 @@ export function ChatFace({ mood, size, say, onClick }: { mood: Mood; size: numbe
 }
 
 /**
- * "Junior …" with its face: who is asking, on the cards triage draws in a chat
+ * "Junior …" with its face: who is asking, on the cards junior draws in a chat
  * (questions, approvals, plans). The face shows the state the card is in,
  * needs you while it waits, done once answered. The name is the persona's, so
  * a renamed Junior follows.

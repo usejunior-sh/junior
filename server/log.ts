@@ -4,7 +4,7 @@
  * there after a restart, and (c) machine-parseable with `jq`/grep.
  *
  * Records are structured (level, subsystem, message, optional `fields` bag) and
- * written one JSON object per line to ~/.triage/logs/triage-YYYY-MM-DD.jsonl.
+ * written one JSON object per line to ~/.junior/logs/junior-YYYY-MM-DD.jsonl.
  * The UI renders them human-readably; the file is the source of truth. On boot
  * we load recent lines back into the ring buffer so the panel is never empty.
  */
@@ -19,7 +19,7 @@ let seq = 0
 
 let logDir: string | null = null
 
-const dayFile = (d = new Date()) => path.join(logDir!, `triage-${d.toISOString().slice(0, 10)}.jsonl`)
+const dayFile = (d = new Date()) => path.join(logDir!, `junior-${d.toISOString().slice(0, 10)}.jsonl`)
 
 /** Point the logger at a directory and replay recent history into the buffer. */
 export function initLogFile(dir: string): void {
@@ -66,7 +66,7 @@ function pruneOld(): void {
   if (!logDir) return
   const cutoff = Date.now() - RETENTION_DAYS * 86_400_000
   for (const name of readdirSync(logDir)) {
-    const m = /^triage-(\d{4}-\d{2}-\d{2})\.jsonl$/.exec(name)
+    const m = /^junior-(\d{4}-\d{2}-\d{2})\.jsonl$/.exec(name)
     if (m && Date.parse(m[1]) < cutoff) {
       try {
         unlinkSync(path.join(logDir, name))

@@ -232,7 +232,7 @@ export function handleConnection(ws: WebSocket, req: http.IncomingMessage): void
         }
         case 'user_message': {
           if (!msg.text.trim() && !msg.images?.length && !msg.files?.length && !msg.mentions?.length) break
-          // `/rename <name>`: the session's handle, here and in Claude Code. Triage's to keep, so other
+          // `/rename <name>`: the session's handle, here and in Claude Code. Junior's to keep, so other
           // chats can address it (message_session); the command never reaches the model.
           const renamed = renameCommand(msg.text)
           if (renamed !== null && rt.rows.has(msg.sessionId)) {

@@ -77,7 +77,7 @@ test('chats: Claude holds sends, another agent asks before every change', () => 
   assert.equal(chatPermissionMode('codex'), 'gated')
 })
 
-test('selfApproval: an agent approving through triage’s API is spotted', async () => {
+test('selfApproval: an agent approving through junior’s API is spotted', async () => {
   const { selfApproval } = await import('../core/actions/policy.js')
   assert.ok(selfApproval(`curl -X POST http://localhost:5178/api/approvals -d '{"what":"slack-dm"}'`))
   assert.ok(selfApproval('curl -XPOST localhost:5188/api/actions/approve -d \'{"id":"x"}\''))

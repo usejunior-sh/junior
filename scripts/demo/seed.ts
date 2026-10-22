@@ -1,8 +1,8 @@
-// Seed a fake demo world (scripts/demo/world.ts) into its own TRIAGE_HOME, for
+// Seed a fake demo world (scripts/demo/world.ts) into its own JUNIOR_HOME, for
 // marketing screenshots. Writes straight to the store with no server running:
 // the server reads sessions, links and team runs into memory at boot.
 //
-//   tsx scripts/demo/seed.ts [--home ~/.triage-demo]
+//   tsx scripts/demo/seed.ts [--home ~/.junior-demo]
 //
 // The home is wiped and rebuilt on every run, so the data is always relative to
 // now. It refuses to touch a folder it didn't create (no `.demo-home` marker),
@@ -27,7 +27,7 @@ const HOUR = 60 * MIN
 const DAY = 24 * HOUR
 const MARKER = '.demo-home'
 
-export const DEFAULT_HOME = path.join(os.homedir(), '.triage-demo')
+export const DEFAULT_HOME = path.join(os.homedir(), '.junior-demo')
 
 // A settable clock: every store write stamps Date.now(), so pointing it at the
 // past is how rows get believable times without patching SQL afterwards.
@@ -71,7 +71,7 @@ export async function seed(home = DEFAULT_HOME): Promise<{ home: string; project
   const projectPath = path.join(home, 'projects', 'api')
   makeRepo(projectPath, now)
 
-  const store = openSqliteStore(path.join(ws, 'triage.db'))
+  const store = openSqliteStore(path.join(ws, 'junior.db'))
   try {
     at(now - 30 * DAY)
     await store.projects.create({ id: W.ID.project, name: 'api', repo: 'acme/api', path: projectPath })
@@ -219,7 +219,7 @@ async function writeTranscript(store: Store, sessionId: string, model: string, s
         await append(
           {
             kind: 'sdk',
-            message: { type: 'system', subtype: 'init', cwd, model, tools: ['Bash', 'Read', 'Edit', 'Grep', 'Write'], mcp_servers: [{ name: 'triage', status: 'connected' }] },
+            message: { type: 'system', subtype: 'init', cwd, model, tools: ['Bash', 'Read', 'Edit', 'Grep', 'Write'], mcp_servers: [{ name: 'junior', status: 'connected' }] },
           } as unknown as SessionEvent,
           1_000,
         )

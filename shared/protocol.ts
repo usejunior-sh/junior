@@ -1,5 +1,5 @@
 /**
- * The WebSocket contract between the triage server and its frontends.
+ * The WebSocket contract between the Junior server and its frontends.
  *
  * This is the only thing a frontend is allowed to know about the server,
  * "thin frontends, fat core" (see .docs/vision.md). Both `server/` and `web/`

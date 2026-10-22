@@ -77,11 +77,11 @@ export const MAX_FILES_PER_ITEM = 5
 /** POST /api/uploads?name=: the stored upload, ready to be named in `files`. */
 export type UploadResponse = { ok: true; file: FileRef } | { ok: false; error: string }
 
-/** Where an item image's raw bytes are served (the `triage_ws` cookie scopes it). */
+/** Where an item image's raw bytes are served (the `junior_ws` cookie scopes it). */
 export const itemImageUrl = (itemId: string, imageId: string): string =>
   `/api/items/image?item=${encodeURIComponent(itemId)}&image=${encodeURIComponent(imageId)}`
 
-/** Where an item file's bytes are served, as a download (the `triage_ws` cookie scopes it). */
+/** Where an item file's bytes are served, as a download (the `junior_ws` cookie scopes it). */
 export const itemFileUrl = (itemId: string, fileId: string): string =>
   `/api/items/file?item=${encodeURIComponent(itemId)}&file=${encodeURIComponent(fileId)}`
 

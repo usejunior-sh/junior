@@ -1,4 +1,4 @@
-// Cuts a release of triage: the scripted version of .claude/skills/release.
+// Cuts a release of Junior: the scripted version of .claude/skills/release.
 //
 //   node scripts/release.mjs [patch|minor|major|<x.y.z>] [--notes <file>]
 //
@@ -7,7 +7,7 @@
 // release notes drafted from the commits and opened in $EDITOR (or taken from
 // --notes) → one y/N gate → `npm version` + push with the tag → a *draft*
 // GitHub release. The tag push starts .github/workflows/desktop.yml, which
-// builds Triage.app for both arches, attaches the zips and install.sh, and
+// builds Junior.app for both arches, attaches the zips and install.sh, and
 // takes the release out of draft, so `curl | sh` never sees a half-built one.
 // Nothing is published to npm.
 import { execFileSync } from 'node:child_process'
@@ -16,7 +16,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { createInterface } from 'node:readline/promises'
 
-const REPO = 'usetriage/triage'
+const REPO = 'usejunior-sh/junior'
 
 const argv = process.argv.slice(2)
 const option = (name) => {
@@ -26,7 +26,7 @@ const option = (name) => {
 const notesFile = option('--notes')
 const bump = argv.find((a) => !a.startsWith('--') && a !== notesFile) ?? 'patch'
 
-// The personal gh account (push on usetriage/triage) lives in its own config
+// The personal gh account (push on usejunior-sh/junior) lives in its own config
 // dir; direnv sets it in this repo, but a shell without direnv would get the
 // work account and fail at `gh release create`.
 const ghConfig = path.join(os.homedir(), '.config', 'gh-triage')
@@ -93,12 +93,12 @@ if (notesFile) {
 } else {
   // A starting point, not the notes: commit subjects are rewritten in the
   // editor as user-visible outcomes under Added / Changed / Fixed.
-  const draft = path.join(mkdtempSync(path.join(os.tmpdir(), 'triage-release-')), 'NOTES.md')
+  const draft = path.join(mkdtempSync(path.join(os.tmpdir(), 'junior-release-')), 'NOTES.md')
   const lines = commits.filter((s) => !/^(chore|docs)(\(.*\))?:/.test(s)).map((s) => `- ${s}`)
   writeFileSync(
     draft,
     [
-      'Install or update: `curl -fsSL https://usetriage.sh/install.sh | sh`',
+      'Install or update: `curl -fsSL https://usejunior.sh/install.sh | sh`',
       '',
       '### Added',
       '',
@@ -134,14 +134,14 @@ if (!/^y(es)?$/i.test(answer.trim())) die('not confirmed — nothing was changed
 run('npm', 'version', version, '-m', 'release: v%s')
 run('git', 'push', '--follow-tags', 'origin', 'main')
 
-const notesOut = path.join(mkdtempSync(path.join(os.tmpdir(), 'triage-release-')), 'NOTES.md')
+const notesOut = path.join(mkdtempSync(path.join(os.tmpdir(), 'junior-release-')), 'NOTES.md')
 writeFileSync(notesOut, notes)
 run('gh', 'release', 'create', `v${version}`, '--repo', REPO, '--draft', '--title', `v${version}`, '--notes-file', notesOut)
 
 console.log(`
-v${version} is tagged and drafted. CI builds Triage.app and publishes it (~15–20 min):
+v${version} is tagged and drafted. CI builds Junior.app and publishes it (~15–20 min):
 
   gh run list --repo ${REPO} --workflow desktop.yml --limit 1
   gh run watch <run-id> --repo ${REPO} --exit-status
 
-then update this Mac:  curl -fsSL https://usetriage.sh/install.sh | sh  &&  triage restart`)
+then update this Mac:  curl -fsSL https://usejunior.sh/install.sh | sh  &&  junior restart`)

@@ -1,7 +1,7 @@
 /**
  * Worktrees phase 1 (server/worktrees.ts): `git worktree list` parsing, the
  * pure reconcile of checkout rows against it, and discovery end to end
- * against a real repo and sqlite store in a temp dir — never ~/.triage.
+ * against a real repo and sqlite store in a temp dir — never ~/.junior.
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -16,7 +16,7 @@ import { parseWorktreeList } from '../server/git.js'
 import { checkRemoval, createWorktree, prepareWorktree, reconcileCheckouts, recreateWorktree, removeWorktree, syncProjectCheckouts } from '../server/worktrees.js'
 import { branchFromTitle, plausibleBranch } from '../shared/branch.js'
 
-const project: Project = { id: 'p', name: 'triage', repo: '', path: '/code/triage' }
+const project: Project = { id: 'p', name: 'junior', repo: '', path: '/code/junior' }
 const row = (over: Partial<Checkout>): Checkout => ({
   id: 'c',
   projectId: 'p',
@@ -34,7 +34,7 @@ const ids = () => `new-${++n}`
 
 test('worktree list: branches, detached, prunable and bare', () => {
   const out = [
-    'worktree /code/triage\nHEAD aaa\nbranch refs/heads/main',
+    'worktree /code/junior\nHEAD aaa\nbranch refs/heads/main',
     'worktree /wt/a\nHEAD bbb\nbranch refs/heads/fix/a',
     'worktree /wt/b\nHEAD ccc\ndetached',
     'worktree /wt/gone\nHEAD ddd\nbranch refs/heads/old\nprunable gitdir file points to non-existent location',
@@ -42,7 +42,7 @@ test('worktree list: branches, detached, prunable and bare', () => {
     '',
   ].join('\n\n')
   assert.deepEqual(parseWorktreeList(out), [
-    { path: '/code/triage', branch: 'main', primary: true, prunable: false },
+    { path: '/code/junior', branch: 'main', primary: true, prunable: false },
     { path: '/wt/a', branch: 'fix/a', primary: false, prunable: false },
     { path: '/wt/b', branch: null, primary: false, prunable: false },
     { path: '/wt/gone', branch: 'old', primary: false, prunable: true },
@@ -54,13 +54,13 @@ test('reconcile: a project with no rows gets its main checkout', () => {
   assert.equal(plan.create.length, 1)
   assert.deepEqual(
     { kind: plan.create[0].kind, path: plan.create[0].path, branch: plan.create[0].branch, state: plan.create[0].state },
-    { kind: 'main', path: '/code/triage', branch: 'main', state: 'active' },
+    { kind: 'main', path: '/code/junior', branch: 'main', state: 'active' },
   )
 })
 
 test('reconcile: main follows the live branch; worktrees appear, move, go and come back', () => {
   const existing = [
-    row({ id: 'm', kind: 'main', path: '/code/triage', branch: 'main' }),
+    row({ id: 'm', kind: 'main', path: '/code/junior', branch: 'main' }),
     row({ id: 'a', path: '/wt/a', branch: 'fix/a' }),
     row({ id: 'b', path: '/wt/b', branch: 'fix/b' }),
     row({ id: 'c', path: '/wt/c', branch: 'fix/c', state: 'removed' }),
@@ -89,7 +89,7 @@ test('reconcile: main follows the live branch; worktrees appear, move, go and co
 })
 
 test('reconcile: when git cannot say, worktree rows are left alone', () => {
-  const existing = [row({ id: 'm', kind: 'main', path: '/code/triage', branch: null }), row({ id: 'a' })]
+  const existing = [row({ id: 'm', kind: 'main', path: '/code/junior', branch: null }), row({ id: 'a' })]
   const plan = reconcileCheckouts(project, existing, { mainBranch: null, worktrees: null }, 9, ids)
   assert.deepEqual(plan, { create: [], update: [] })
 })
@@ -106,11 +106,11 @@ const git = (cwd: string, ...args: string[]) =>
   execFileSync('git', ['-C', cwd, ...args], { stdio: 'pipe', env: { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null' } }).toString()
 
 async function withRepo(fn: (dir: string, store: Store) => Promise<void>) {
-  const dir = realpathSync(mkdtempSync(path.join(tmpdir(), 'triage-worktrees-')))
+  const dir = realpathSync(mkdtempSync(path.join(tmpdir(), 'junior-worktrees-')))
   const repo = path.join(dir, 'repo')
   execFileSync('git', ['init', '-q', '-b', 'main', repo])
   git(repo, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '--allow-empty', '-m', 'init')
-  const store = openSqliteStore(path.join(dir, 'triage.db'))
+  const store = openSqliteStore(path.join(dir, 'junior.db'))
   try {
     await fn(dir, store)
   } finally {
@@ -119,7 +119,7 @@ async function withRepo(fn: (dir: string, store: Store) => Promise<void>) {
   }
 }
 
-test('discovery finds a worktree made outside triage, and notices when it goes', () =>
+test('discovery finds a worktree made outside junior, and notices when it goes', () =>
   withRepo(async (dir, store) => {
     const repo = path.join(dir, 'repo')
     const p: Project = { id: 'p', name: 'repo', repo: '', path: repo }

@@ -4,7 +4,7 @@
  *
  * Seeded the way team and job templates are: written when missing, kept up
  * with the shipped default while the user hasn't touched it (a hash of what
- * triage wrote, in `.actions.seeded.json`), never overwritten once edited,
+ * Junior wrote, in `.actions.seeded.json`), never overwritten once edited,
  * and not brought back after a delete. A file that doesn't parse never
  * crashes anything: the defaults stand in, and its errors ride along for the
  * Actions page to show.

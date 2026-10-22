@@ -1,30 +1,30 @@
 #!/usr/bin/env node
 /**
- * Triage MCP server (stdio): the ingestion contract as MCP tools, so any
+ * Junior MCP server (stdio): the ingestion contract as MCP tools, so any
  * external scanner (a Claude Code routine, a cron'd headless session, a gh-aw
  * workflow) can *be* a job-runner: "read #channel, find X, call
  * upsert_work_item", and cannot create duplicates or clobber user state,
  * because every rule is enforced server-side (.docs/jobs.md).
  *
  * A thin shim: JSON-RPC 2.0 over stdio (newline-delimited, per the MCP stdio
- * transport), forwarding to the running triage server's HTTP API. Hand-rolled
+ * transport), forwarding to the running Junior server's HTTP API. Hand-rolled
  * on purpose, no MCP SDK dependency, and the SQLite
  * single-writer stays the server process.
  *
- *   claude mcp add triage -- npx tsx /path/to/server/mcp.ts
- *   TRIAGE_URL overrides the default http://localhost:5178
- *   TRIAGE_WORKSPACE names the workspace to act in (.docs/workspaces.md);
+ *   claude mcp add junior -- npx tsx /path/to/server/mcp.ts
+ *   JUNIOR_URL overrides the default http://localhost:5178
+ *   JUNIOR_WORKSPACE names the workspace to act in (.docs/workspaces.md);
  *   unset = the default workspace, an external agent never writes into an
  *   ambiguous workspace. A *set* id that no workspace matches is refused, not
  *   silently resolved to the default: a typo must not write into the wrong
  *   inbox. Only get_workspace still answers, so the mismatch is diagnosable.
  */
 import readline from 'node:readline'
-import { TRIAGE_MCP_INSTRUCTIONS } from '../shared/triageContext.js'
+import { JUNIOR_MCP_INSTRUCTIONS } from '../shared/juniorContext.js'
 import { callTool, PROTOCOL_VERSION, TOOLS } from '../core/mcp/tools.js'
 
-const BASE_URL = (process.env.TRIAGE_URL || 'http://localhost:5178').replace(/\/$/, '')
-const WORKSPACE = process.env.TRIAGE_WORKSPACE || ''
+const BASE_URL = (process.env.JUNIOR_URL || 'http://localhost:5178').replace(/\/$/, '')
+const WORKSPACE = process.env.JUNIOR_WORKSPACE || ''
 
 type JsonRpcRequest = { jsonrpc: '2.0'; id?: number | string; method: string; params?: Record<string, unknown> }
 
@@ -34,7 +34,7 @@ class ShimError extends Error {}
 /** What to tell the caller to run, picked from the URL they configured. */
 const startHint =
   BASE_URL === 'http://localhost:5178'
-    ? 'start it with `triage start`'
+    ? 'start it with `junior start`'
     : `start the daemon serving ${BASE_URL} (the dev one is \`npm run dev\`, port 5188)`
 
 async function api(path: string, body?: unknown, method?: string): Promise<unknown> {
@@ -49,24 +49,24 @@ async function api(path: string, body?: unknown, method?: string): Promise<unkno
     })
   } catch (err) {
     throw new ShimError(
-      `triage daemon not reachable at ${BASE_URL} — ${startHint}. (${err instanceof Error ? err.message : String(err)})`,
+      `junior daemon not reachable at ${BASE_URL} — ${startHint}. (${err instanceof Error ? err.message : String(err)})`,
     )
   }
   // The API answers JSON for its own failures too ({ ok: false, error }), so a
-  // body that will not parse means we are not talking to a triage server at
+  // body that will not parse means we are not talking to a Junior server at
   // all: a wrong port (the Vite dev server serves HTML on 5189) or a proxy.
   const text = await res.text()
   try {
     return JSON.parse(text) as unknown
   } catch {
     throw new ShimError(
-      `${BASE_URL} answered ${res.status} with a non-JSON body for ${path} — that is not the triage API. Check TRIAGE_URL.`,
+      `${BASE_URL} answered ${res.status} with a non-JSON body for ${path} — that is not the junior API. Check JUNIOR_URL.`,
     )
   }
 }
 
 /**
- * Refuse to act on a workspace the caller did not ask for. `TRIAGE_WORKSPACE`
+ * Refuse to act on a workspace the caller did not ask for. `JUNIOR_WORKSPACE`
  * is resolved server-side with a silent fallback to the default, so a typo'd
  * id would quietly write into the wrong inbox; checked once here instead, and
  * only the success is cached (a workspace created later heals on the next
@@ -87,7 +87,7 @@ async function workspaceRefusal(): Promise<string | null> {
     return null
   }
   const known = (body.workspaces ?? []).map((w) => w.id).join(', ')
-  return `refusing to act: TRIAGE_WORKSPACE="${WORKSPACE}" matches no workspace on ${BASE_URL}, which would silently fall back to "${body.current.id}". Known ids: ${known || '(none)'}. Fix TRIAGE_WORKSPACE (ids, not display names) or unset it to use the default.`
+  return `refusing to act: JUNIOR_WORKSPACE="${WORKSPACE}" matches no workspace on ${BASE_URL}, which would silently fall back to "${body.current.id}". Known ids: ${known || '(none)'}. Fix JUNIOR_WORKSPACE (ids, not display names) or unset it to use the default.`
 }
 
 function reply(id: number | string, result: unknown) {
@@ -114,11 +114,11 @@ rl.on('line', (line) => {
           reply(msg.id, {
             protocolVersion: PROTOCOL_VERSION,
             capabilities: { tools: {} },
-            serverInfo: { name: 'triage', version: '0.2.0' },
+            serverInfo: { name: 'junior', version: '0.2.0' },
             // The same self-description the in-process server carries, an
-            // external Claude Code session should learn what triage is from
-            // the same string a web chat does (shared/triageContext.ts).
-            instructions: TRIAGE_MCP_INSTRUCTIONS,
+            // external Claude Code session should learn what Junior is from
+            // the same string a web chat does (shared/juniorContext.ts).
+            instructions: JUNIOR_MCP_INSTRUCTIONS,
           })
           break
         case 'ping':
@@ -143,7 +143,7 @@ rl.on('line', (line) => {
           replyError(msg.id, -32601, `method not found: ${msg.method}`)
       }
     } catch (err) {
-      // A dead daemon or a wrong TRIAGE_URL is the caller's problem to fix, not
+      // A dead daemon or a wrong JUNIOR_URL is the caller's problem to fix, not
       // a protocol fault: hand it back as tool text they can read and act on.
       if (err instanceof ShimError && msg.method === 'tools/call') {
         reply(msg.id, { content: [{ type: 'text', text: err.message }], isError: true })

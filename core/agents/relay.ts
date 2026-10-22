@@ -8,7 +8,7 @@ import type { AgentRelay } from '../../shared/protocol.js'
  */
 export function frameAgentRelay(relay: AgentRelay, text: string): string {
   return [
-    `[triage relay] The user wrote a message for your subagent "${relay.label}" (agentId ${relay.agentId}).`,
+    `[junior relay] The user wrote a message for your subagent "${relay.label}" (agentId ${relay.agentId}).`,
     `Pass it on unchanged: call SendMessage with to: "${relay.agentId}" and the message text below, word for word.`,
     `Don't answer it yourself and don't rephrase it. Then carry on with what you were doing.`,
     '',

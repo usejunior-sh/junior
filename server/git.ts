@@ -49,7 +49,7 @@ export async function repoRoot(cwd: string): Promise<string | null> {
  * session, never something worth failing a turn over.
  */
 export async function snapshotTree(root: string): Promise<string | null> {
-  const index = path.join(os.tmpdir(), `triage-index-${randomUUID()}`)
+  const index = path.join(os.tmpdir(), `junior-index-${randomUUID()}`)
   const env = { GIT_INDEX_FILE: index }
   try {
     // An unborn HEAD (a repo with no commits yet) has nothing to read; the

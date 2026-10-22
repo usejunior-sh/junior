@@ -4,7 +4,7 @@
 // status surface: is the daemon up, is the scheduler ticking, are connectors
 // live, and its recent activity log.
 /**
- * Which copy of triage answered: computed from where the running code lives
+ * Which copy of Junior answered: computed from where the running code lives
  * and how its version is labelled (server/state.ts `buildInfo`). Several copies
  * coexist on one machine, so this is what lets the UI, the CLI and
  * `curl /api/health` all name the same one.
@@ -18,7 +18,7 @@
  *   release, a clean released version, the same bytes `curl | sh` hands out
  *
  * `surface` is where it is installed, which is a different axis: a preview and
- * a release both normally live in Triage.app.
+ * a release both normally live in Junior.app.
  */
 export type Build = {
   version: string
@@ -30,9 +30,9 @@ export type Build = {
   dirty: boolean
   /** the package root on disk: the unambiguous answer to "which copy?" */
   root: string
-  /** the state root this daemon reads: ~/.triage, or ~/.triage-dev in dev */
+  /** the state root this daemon reads: ~/.junior, or ~/.junior-dev in dev */
   home: string
-  /** `home` is prod's ~/.triage: false means this daemon is on dev's data */
+  /** `home` is prod's ~/.junior: false means this daemon is on dev's data */
   prodData: boolean
 }
 
@@ -56,7 +56,7 @@ export type SystemStatus = {
   githubReconcileAt: number | null
   githubNotice: string | null
   jobs: { total: number; enabled: number; overdue: number; failing: number; configErrors: number }
-  /** the macOS LaunchAgent that keeps triage running after reboot/crash: installed? (null off macOS) */
+  /** the macOS LaunchAgent that keeps junior running after reboot/crash: installed? (null off macOS) */
   launchAgent: boolean | null
   /** the workspace's global jobs switch: off = the scheduler never runs a job */
   jobsEnabled: boolean
@@ -212,7 +212,7 @@ export type UsageModelSlice = {
 export type SessionsUsage = {
   /** The window the ledger was scanned over. */
   days: number
-  /** Keyed by *triage* session id: ids with no transcript in the window are absent. */
+  /** Keyed by *junior* session id: ids with no transcript in the window are absent. */
   bySession: Record<string, SessionSpend>
   /** The same spend split by model, largest first. */
   models: UsageModelSlice[]

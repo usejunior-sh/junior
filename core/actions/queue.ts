@@ -10,10 +10,10 @@
  *   needs_you    → scheduled   sendAt = now         approve    you   (with args = edit, then approve)
  *   needs_you    → sent_back                       send back  you   (notes go to the drafting session)
  *   needs_you    → rejected                        reject     you
- *   needs_you    → expired     now ≥ expiresAt     expire     triage
+ *   needs_you    → expired     now ≥ expiresAt     expire     junior
  *   scheduled    → needs_you   now < sendAt        undo       you
- *   scheduled    → sending     now ≥ sendAt        claim      triage (one atomic update, never twice)
- *   sending      → succeeded | failed | unknown    settle     triage
+ *   scheduled    → sending     now ≥ sendAt        claim      junior (one atomic update, never twice)
+ *   sending      → succeeded | failed | unknown    settle     junior
  *   failed | unknown → scheduled                   retry      you
  *
  * The dispatch run is the only sender: a headless one-tool run, fenced so the
@@ -92,7 +92,7 @@ export function settledMessage(rec: Pick<ActionRecord, 'id' | 'summary' | 'statu
   const edited = rec.queue?.edits ? ' The user edited it before approving; what went out is their version.' : ''
   if (rec.status === 'succeeded') return `Action ${id} (${rec.summary}) was approved and sent${rec.link ? `: ${rec.link}` : '.'}${edited} Carry on.`
   if (rec.status === 'failed') return `Action ${id} (${rec.summary}) was approved but failed: ${rec.error ?? 'no reason given'}. Don't retry it yourself. Tell the user what failed.`
-  return `Action ${id} (${rec.summary}) was approved, but triage can't tell whether it went out (${rec.error ?? 'unknown'}). Don't retry it. Tell the user to check.`
+  return `Action ${id} (${rec.summary}) was approved, but Junior can't tell whether it went out (${rec.error ?? 'unknown'}). Don't retry it. Tell the user to check.`
 }
 
 /**
@@ -149,9 +149,9 @@ const ACTOR: Record<ActionMove['type'], ActionActor> = {
   undo: 'you',
   send_back: 'you',
   reject: 'you',
-  expire: 'triage',
-  claim: 'triage',
-  settle: 'triage',
+  expire: 'junior',
+  claim: 'junior',
+  settle: 'junior',
   retry: 'you',
 }
 

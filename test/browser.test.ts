@@ -1,7 +1,7 @@
 /**
  * The browser pane (.docs/browser.md): the page as text, what runs without
  * asking, page logs, the before/after image diff, the Verification note, and
- * the host link the daemon drives Triage.app through.
+ * the host link the daemon drives Junior.app through.
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -74,7 +74,7 @@ test('policy: reading and using the page never asks; leaving the machine and eva
   assert.ok(browserCallAllowed('mcp__browser__browser_open', { url: 'localhost:5173' }))
   assert.ok(!browserCallAllowed('mcp__browser__browser_open', { url: 'https://example.com' }))
   assert.ok(!browserCallAllowed('mcp__browser__browser_eval', { expression: '1' }))
-  assert.ok(!browserCallAllowed('mcp__triage__list_work_items', {}))
+  assert.ok(!browserCallAllowed('mcp__junior__list_work_items', {}))
 })
 
 test('logs: read since the last action, deduped, levels filtered', () => {
@@ -123,7 +123,7 @@ test('diff: no change is zero; a changed block is found and boxed', () => {
 })
 
 test('shots and the Verification note', async () => {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'triage-shots-'))
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'junior-shots-'))
   const shots = new ShotStore(root)
   const s1 = await shots.add('sess-1', Buffer.from('a'), 'image/webp', { kind: 'screenshot', url: 'http://localhost:5173/', title: 'Home', viewport: '1440×900 desktop' })
   const s2 = await shots.add('sess-1', Buffer.from('b'), 'image/png', { kind: 'compare', label: 'before', url: 'http://localhost:5173/', title: 'Home', viewport: '1440×900 desktop', note: '3% of pixels changed' })
@@ -154,7 +154,7 @@ test('wire: host frames are validated, not cast', () => {
   assert.equal(parseHostFrame('nope'), null)
 })
 
-/** A stand-in for Triage.app: answers the daemon's verbs over a real socket. */
+/** A stand-in for Junior.app: answers the daemon's verbs over a real socket. */
 async function withHost(version: number, answer: (f: Record<string, unknown>) => unknown, run: (hub: BrowserHub, host: WebSocket) => Promise<void>) {
   const wss = new WebSocketServer({ port: 0, host: '127.0.0.1' })
   await new Promise((r) => wss.once('listening', r))
@@ -180,7 +180,7 @@ async function withHost(version: number, answer: (f: Record<string, unknown>) =>
   }
 }
 
-test('hub: no host → the agent is told to open Triage.app', async () => {
+test('hub: no host → the agent is told to open Junior.app', async () => {
   const hub = new BrowserHub()
   await assert.rejects(hub.call('s1', { verb: 'state' }), (e: Error) => e.message === NO_HOST)
 })
@@ -215,7 +215,7 @@ test('hub: a host on another wire version is refused with what to update', async
     () => null,
     async (hub) => {
       assert.equal(hub.status.compatible, false)
-      await assert.rejects(hub.call('s', { verb: 'state' }), /update Triage\.app/)
+      await assert.rejects(hub.call('s', { verb: 'state' }), /update Junior\.app/)
     },
   )
 })

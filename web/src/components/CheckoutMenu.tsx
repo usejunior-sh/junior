@@ -11,7 +11,7 @@ import { checkoutLabel, openCheckout, useEditors } from '../checkouts.js'
 import { Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from '../ui/Menu.js'
 import { RemoveWorktreeDialog } from './RemoveWorktreeDialog.js'
 
-/** The end of a path is the part that tells folders apart: `…/triage-dev/feat-x`. */
+/** The end of a path is the part that tells folders apart: `…/junior-dev/feat-x`. */
 function shortPath(p: string): string {
   const home = p.replace(/^\/(?:Users|home)\/[^/]+/, '~')
   const parts = home.split('/')

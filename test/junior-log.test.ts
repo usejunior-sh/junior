@@ -56,7 +56,7 @@ test('the page: newest first, Sent filters, before pages', () => {
     actionLine(act(), null),
     actionLine(act({ id: 's1:t2', status: 'needs_you', settledAt: null, updatedAt: 300 }), null),
     taskLine({ id: 'k1', itemId: 'i', title: 'Fix lint', owner: 'junior', state: 'done', endedAt: 200 })!,
-    jobLine({ sessionId: 'j1', title: 'Sentry triage', status: 'ok', matches: 2, at: 400 }),
+    jobLine({ sessionId: 'j1', title: 'Sentry junior', status: 'ok', matches: 2, at: 400 }),
   ]
   assert.deepEqual(logPage(lines, 'all', null, 10).lines.map((l) => l.at), [400, 300, 200, 110])
   assert.deepEqual(logPage(lines, 'sent', null, 10).lines.map((l) => l.id), ['send:s1:t1'])

@@ -1,10 +1,10 @@
 /**
  * Shared between the CLI (server/cli.ts) and the server (server/index.ts):
  * where the daemon's state and log files live, and the health-check contract
- * the CLI uses to tell "triage is already running" apart from "something
+ * the CLI uses to tell "Junior is already running" apart from "something
  * else owns the port".
  *
- * The state file is never the source of truth for "is triage running",
+ * The state file is never the source of truth for "is junior running",
  * GET /api/health is. The state file only records which port (and pid) the
  * last server started on, so stop/status can find a non-default port after
  * the shell that started it is gone.
@@ -17,10 +17,10 @@ import { fileURLToPath } from 'node:url'
 import type { Build } from '../shared/protocol.js'
 
 export const DEFAULT_PORT = 5178
-/** TRIAGE_HOME relocates the whole state root (registry, workspaces, logs), used by tests. */
-export const TRIAGE_DIR = process.env.TRIAGE_HOME || path.join(os.homedir(), '.triage')
-export const STATE_FILE = path.join(TRIAGE_DIR, 'server.json')
-export const LOG_FILE = path.join(TRIAGE_DIR, 'server.log')
+/** JUNIOR_HOME relocates the whole state root (registry, workspaces, logs), used by tests. */
+export const JUNIOR_DIR = process.env.JUNIOR_HOME || path.join(os.homedir(), '.junior')
+export const STATE_FILE = path.join(JUNIOR_DIR, 'server.json')
+export const LOG_FILE = path.join(JUNIOR_DIR, 'server.log')
 
 export interface ServerState {
   pid: number
@@ -30,7 +30,7 @@ export interface ServerState {
 }
 
 export interface Health {
-  app: 'triage'
+  app: 'junior'
   version: string
   /** absent from a daemon older than build identity, treat as unknown */
   build?: Build
@@ -41,7 +41,7 @@ export interface Health {
 }
 
 /**
- * The package root: the directory holding usetriage's package.json. This file
+ * The package root: the directory holding usejunior's package.json. This file
  * lives at <repo>/server/state.ts in dev and <pkg>/dist/server/state.js when
  * published, so the root is one or two levels up.
  */
@@ -50,7 +50,7 @@ function pkgRoot(): { dir: string; version: string } | null {
   for (const dir of [path.join(here, '..'), path.join(here, '..', '..')]) {
     try {
       const pkg = JSON.parse(readFileSync(path.join(dir, 'package.json'), 'utf8'))
-      if (pkg.name === 'usetriage') return { dir, version: String(pkg.version) }
+      if (pkg.name === 'usejunior') return { dir, version: String(pkg.version) }
     } catch {
       // keep walking up
     }
@@ -63,13 +63,13 @@ export function pkgVersion(): string {
 }
 
 /**
- * Which copy of triage this is, from where its code sits on disk and how its
+ * Which copy of Junior this is, from where its code sits on disk and how its
  * version is labelled, never a flag someone has to remember to set, because
  * the flag is wrong exactly when it matters. Pure, so test/build.test.ts can
  * walk every combination without installing three copies.
  */
 export function classifyBuild(dir: string, version: string, home: string): Build {
-  // Inside Triage.app the package is staged at Contents/Resources/triage; a
+  // Inside Junior.app the package is staged at Contents/Resources/junior; a
   // global install sits under node_modules; anything else is the checkout.
   const surface: Build['surface'] = /\.app[/\\]Contents[/\\]Resources[/\\]/.test(dir + path.sep)
     ? 'app'
@@ -89,14 +89,14 @@ export function classifyBuild(dir: string, version: string, home: string): Build
     dirty: !!snapshot?.[2],
     root: dir,
     home,
-    // `npm run dev` points TRIAGE_HOME at ~/.triage-dev; prod uses ~/.triage.
-    prodData: home === path.join(os.homedir(), '.triage'),
+    // `npm run dev` points JUNIOR_HOME at ~/.junior-dev; prod uses ~/.junior.
+    prodData: home === path.join(os.homedir(), '.junior'),
   }
 }
 
 /**
  * This process's build. Several copies exist on one machine (a checkout, the
- * one inside Triage.app, a global install), and telling them apart by port or
+ * one inside Junior.app, a global install), and telling them apart by port or
  * version alone is how an afternoon gets lost, so it rides on /api/health,
  * /api/system and the WS hello, and the terminal, the CLI and the UI all name
  * the same build.
@@ -106,12 +106,12 @@ export function buildInfo(): Build {
   return classifyBuild(
     root?.dir ?? path.dirname(fileURLToPath(import.meta.url)),
     root?.version ?? 'unknown',
-    TRIAGE_DIR,
+    JUNIOR_DIR,
   )
 }
 
 export async function writeState(state: ServerState) {
-  await mkdir(TRIAGE_DIR, { recursive: true })
+  await mkdir(JUNIOR_DIR, { recursive: true })
   await writeFile(STATE_FILE, JSON.stringify(state, null, 2) + '\n')
 }
 
@@ -130,8 +130,8 @@ export async function clearState(pid: number) {
 }
 
 /**
- * Ask whoever is listening on `port` whether they are a triage server.
- * Three outcomes: a Health body (triage is running), 'other' (the port
+ * Ask whoever is listening on `port` whether they are a Junior server.
+ * Three outcomes: a Health body (Junior is running), 'other' (the port
  * answers but not with our health contract), null (nothing is listening).
  */
 export async function checkHealth(port: number): Promise<Health | 'other' | null> {
@@ -149,5 +149,5 @@ export async function checkHealth(port: number): Promise<Health | 'other' | null
 }
 
 function isHealth(body: unknown): body is Health {
-  return typeof body === 'object' && body !== null && (body as Health).app === 'triage'
+  return typeof body === 'object' && body !== null && (body as Health).app === 'junior'
 }

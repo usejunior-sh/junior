@@ -12,7 +12,7 @@ export async function workspaceRoutes({ req, res, url, json, rt }: ScopedCtx): P
   // The workspace this request resolved to, singular and scoped, unlike the
   // daemon-wide /api/workspaces list. Backs get_workspace so a chat or the stdio
   // shim can answer "which workspace am I in?" (and the shim can tell whether its
-  // TRIAGE_WORKSPACE matched or silently fell back to the default).
+  // JUNIOR_WORKSPACE matched or silently fell back to the default).
   if (url.pathname === '/api/workspace' && req.method === 'GET') {
     json(200, { ok: true, ...workspaceInfo(rt) })
     return true

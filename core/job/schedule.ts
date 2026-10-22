@@ -139,7 +139,7 @@ const ON_TIME_MS = 2 * 60_000
 export function describeLateness(slot: number, missed: number[], now: number): string | null {
   const late = now - slot
   if (late <= ON_TIME_MS && !missed.length) return null
-  const parts = [`This run was scheduled for ${slotTime(slot, now)} and is starting ${humanSpan(late)} late (the Mac was asleep or triage was off)`]
+  const parts = [`This run was scheduled for ${slotTime(slot, now)} and is starting ${humanSpan(late)} late (the Mac was asleep or junior was off)`]
   if (missed.length) {
     const listed = missed.slice(-10).map((m) => slotTime(m, now)).join(', ')
     const more = missed.length > 10 ? ` and ${missed.length - 10} earlier` : ''

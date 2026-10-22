@@ -1,9 +1,9 @@
 {
-  "name": "triage-desktop",
-  "productName": "Triage",
+  "name": "junior-desktop",
+  "productName": "Junior",
   "version": "1.0.3",
   "private": true,
-  "description": "Triage for macOS — a native window over the local triage daemon",
+  "description": "Junior for macOS — a native window over the local junior daemon",
   "type": "module",
   "main": "dist/main.js",
   "scripts": {

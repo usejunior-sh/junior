@@ -29,7 +29,7 @@ const CONTENT_TYPES: Record<string, string> = {
 }
 
 const NO_BUILD_HTML = `<!doctype html><meta charset="utf-8">
-<title>triage — no build</title>
+<title>junior — no build</title>
 <body style="font:14px/1.6 system-ui;max-width:34em;margin:12vh auto;color:#dce3f0;background:#0d1017">
 <h2 style="color:#e8b04b">No web build found</h2>
 <p>This server is serving the production bundle from <code>dist/web</code>, which does not exist yet.</p>

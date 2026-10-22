@@ -461,7 +461,7 @@ test('short refs: #478, NOV-140, #api, a project', () => {
   assert.equal(shortRef({ id: 'linear:NOV-140', source: 'linear', repo: 'NOV', url: '' }), 'NOV-140')
   assert.equal(shortRef({ id: 'slack:x', source: 'slack', repo: 'api', url: '' }), '#api')
   assert.equal(shortRef({ id: 'job:m:1', source: 'job', repo: '', url: '', refs: ['linear:NOV-9'] }), 'NOV-9')
-  assert.equal(shortRef({ id: 'manual:1', source: 'manual', repo: '', url: '' }, 'triage'), 'triage')
+  assert.equal(shortRef({ id: 'manual:1', source: 'manual', repo: '', url: '' }, 'junior'), 'junior')
   assert.equal(shortRef({ id: 'web:1', source: 'web', repo: '', url: 'https://github.com/a/b/issues/12' }), '#12')
 })
 

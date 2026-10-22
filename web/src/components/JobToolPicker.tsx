@@ -3,7 +3,7 @@
  * (Web, GitHub, writing files) plus every MCP server Claude Code can load in
  * the job's project folder, claude.ai connectors, global, local and project
  * servers, discovered by the server's probe, so a newly connected server
- * shows up without a triage release.
+ * shows up without a junior release.
  *
  * Selecting a server checks its default tools: our curated preset when we
  * have one, else the tools the server marks read-only. Everything else stays
@@ -40,7 +40,7 @@ const TABS: Array<{ id: TabId; label: string; scopes: ConnectorScope[] }> = [
   { id: 'other', label: 'Plugins & other', scopes: ['plugin', 'managed', 'unknown'] },
 ]
 
-/** A server from an older triage server carries no scope, read it as "unknown", never drop it. */
+/** A server from an older Junior server carries no scope, read it as "unknown", never drop it. */
 const scopeOf = (c: Connector): ConnectorScope => (SCOPE_ORDER.includes(c.scope) ? c.scope : 'unknown')
 
 const tilde = (p: string) => p.replace(/^\/(?:Users|home)\/[^/]+/, '~')
@@ -187,7 +187,7 @@ export function JobToolPicker({
         {probe.phase === 'error' && <div className="tsEmpty">{probe.message}</div>}
         {probe.phase === 'ready' && probe.stale && (
           <div className="tsEmpty warnText">
-            <AlertTriangle size={12} aria-hidden="true" /> The triage server is older than this page, so servers can’t be grouped. Restart it (e.g. <code>npm run dev</code>) to see every connection.
+            <AlertTriangle size={12} aria-hidden="true" /> The Junior server is older than this page, so servers can’t be grouped. Restart it (e.g. <code>npm run dev</code>) to see every connection.
           </div>
         )}
 

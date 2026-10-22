@@ -89,7 +89,7 @@ export class TerminalManager {
       if (k.startsWith('npm_') || k === 'INIT_CWD' || k === 'NODE_OPTIONS') continue
       env[k] = v
     }
-    Object.assign(env, { TERM: 'xterm-256color', COLORTERM: 'truecolor', TRIAGE_TERMINAL: id })
+    Object.assign(env, { TERM: 'xterm-256color', COLORTERM: 'truecolor', JUNIOR_TERMINAL: id })
     const proc = pty.spawn(shell, shellArgs(shell), {
       name: 'xterm-256color',
       cols: 120,

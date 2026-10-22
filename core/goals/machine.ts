@@ -45,7 +45,7 @@ export type GoalTrigger =
   | 'resume'
   | 'cancel'
 
-/** you = only the user's click pulls it; engine = only triage does, on an event. */
+/** you = only the user's click pulls it; engine = only junior does, on an event. */
 export type TriggerBy = 'you' | 'engine'
 
 type Rule = { from: readonly GoalState[]; to: GoalState; by: TriggerBy }
@@ -99,7 +99,7 @@ export type TransitionResult = { ok: true; from: GoalState; to: GoalState } | { 
 export function transition(from: GoalState, trigger: GoalTrigger, by: TriggerBy): TransitionResult {
   const rule = TRANSITIONS[trigger]
   if (!rule) return { ok: false, error: `unknown trigger "${trigger}"` }
-  if (rule.by !== by) return { ok: false, error: `${trigger} is ${rule.by === 'you' ? 'yours' : "triage's"} to pull, not ${by === 'you' ? 'yours' : "triage's"}` }
+  if (rule.by !== by) return { ok: false, error: `${trigger} is ${rule.by === 'you' ? 'yours' : "junior's"} to pull, not ${by === 'you' ? 'yours' : "junior's"}` }
   if (!rule.from.includes(from)) return { ok: false, error: `can't ${trigger.replace('_', ' ')} a goal that is ${from}` }
   return { ok: true, from, to: rule.to }
 }

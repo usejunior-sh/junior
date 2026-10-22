@@ -318,7 +318,7 @@ const rec = (over: Partial<ActionRecord>): ActionRecord => ({
 
 test('titles say what happened, never "Action"', () => {
   assert.equal(
-    actionTitle(rec({ kind: 'pr', status: 'succeeded', summary: 'gh pr create: stage + turn on work items', link: 'https://github.com/usetriage/triage/pull/2' })),
+    actionTitle(rec({ kind: 'pr', status: 'succeeded', summary: 'gh pr create: stage + turn on work items', link: 'https://github.com/usejunior-sh/junior/pull/2' })),
     'Opened PR #2 · stage + turn on work items',
   )
   assert.equal(actionTitle(rec({ kind: 'push', status: 'succeeded', summary: 'git push origin feat/x', groupKey: 'push:s1:feat/x' })), 'Pushed feat/x')
@@ -384,8 +384,8 @@ test('flow: an action waiting on approval puts the item on my turn, in Ready for
 // ---------------------------------------------------------------------------
 
 function freshStore() {
-  const dir = mkdtempSync(path.join(os.tmpdir(), 'triage-actions-q-'))
-  return openSqliteStore(path.join(dir, 'triage.db'))
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'junior-actions-q-'))
+  return openSqliteStore(path.join(dir, 'junior.db'))
 }
 
 test('store: queue state round-trips; a claim moves a due row once', async () => {
@@ -553,10 +553,10 @@ test('Bash dispatch fence: the approved command, in the foreground, once', () =>
 })
 
 test('a dispatched push links to the pushed branch', () => {
-  const out = 'To github.com:usetriage/triage.git\n * [new branch]      feat/x -> feat/x\n'
+  const out = 'To github.com:usejunior-sh/junior.git\n * [new branch]      feat/x -> feat/x\n'
   const o = dispatchOutcome({ allowed: true, connector: null, result: { isError: false, text: out } }, 'Bash', { bash: true, push: true })
   assert.equal(o.status, 'succeeded')
-  assert.equal(o.link, 'https://github.com/usetriage/triage/tree/feat/x')
+  assert.equal(o.link, 'https://github.com/usejunior-sh/junior/tree/feat/x')
 })
 
 test('settledMessage: a chat hears how its approved action ended', async () => {

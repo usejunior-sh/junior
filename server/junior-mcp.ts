@@ -1,6 +1,6 @@
 import { createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk'
 import { z } from 'zod'
-import { TRIAGE_MCP_INSTRUCTIONS } from '../shared/triageContext.js'
+import { JUNIOR_MCP_INSTRUCTIONS } from '../shared/juniorContext.js'
 import { AGENTS_ARG, BROWSER_ARG, BROWSER_SITES_ARG, SKILLS_ARG } from '../core/mcp/tools.js'
 import { type Ask, ASK_ORDER } from '../core/work/asks.js'
 import { WorkspaceRuntime } from './workspace/runtime.js'
@@ -21,27 +21,27 @@ export const errResult = (text: string) => ({ content: [{ type: 'text' as const,
 
 /**
  * `sessionId` is the chat this server instance belongs to (one instance per
- * session, see WorkspaceRuntime.triageMcp). The artifact writes use it to link
+ * session, see WorkspaceRuntime.juniorMcp). The artifact writes use it to link
  * what the session publishes to the session, so the model never has to pass it.
  */
-export function makeTriageMcp(rt: WorkspaceRuntime, sessionId?: string) {
+export function makeJuniorMcp(rt: WorkspaceRuntime, sessionId?: string) {
   return createSdkMcpServer({
-    name: 'triage',
+    name: 'junior',
     version: VERSION,
-    // Always load triage's tools, never defer them behind tool search, and,
+    // Always load junior's tools, never defer them behind tool search, and,
     // as a documented side effect, block session startup until this server is
     // connected (capped at the SDK's 5s connect timeout). Without it, when the
-    // user has many ~/.claude connectors, triage loses the init connection race
+    // user has many ~/.claude connectors, junior loses the init connection race
     // ("connector storm") and lands `status: "failed"` in system/init, leaving
-    // a chat with no mcp__triage__* tools so it falls back to the HTTP API.
-    // triage is in-process and connects in ~ms, so this guarantees its tools
+    // a chat with no mcp__junior__* tools so it falls back to the HTTP API.
+    // Junior is in-process and connects in ~ms, so this guarantees its tools
     // are present on turn 1 without slowing startup or dropping any connector.
     alwaysLoad: true,
-    // What triage is, in the one place the SDK will show a model before it
-    // picks a tool. Static by construction (shared/triageContext.ts) so it
+    // What Junior is, in the one place the SDK will show a model before it
+    // picks a tool. Static by construction (shared/juniorContext.ts) so it
     // caches, and shared verbatim with the stdio shim, one contract, two
     // transports, one explanation of it.
-    instructions: TRIAGE_MCP_INSTRUCTIONS,
+    instructions: JUNIOR_MCP_INSTRUCTIONS,
     tools: [
       // Teams v2: any chat can become a lead (list_teams, propose_team, split_step, submit_step).
       ...teamLeadTools(rt),
@@ -49,7 +49,7 @@ export function makeTriageMcp(rt: WorkspaceRuntime, sessionId?: string) {
       // goal_* tools stay in server/goals.ts but no chat is offered them.
       tool(
         'list_work_items',
-        'Read the ranked triage queue: work items with their score, group, and rankWhy (why it ranked). Open items by default — pass status to read the done, snoozed or archived lists instead. Optional filters narrow by source or kind.',
+        'Read the ranked junior queue: work items with their score, group, and rankWhy (why it ranked). Open items by default — pass status to read the done, snoozed or archived lists instead. Optional filters narrow by source or kind.',
         {
           status: z.enum(['open', 'snoozed', 'done', 'archived']).optional().describe('which list to read (default "open")'),
           source: z.enum(['github', 'slack', 'linear', 'manual']).optional().describe('only items from this source'),
@@ -133,8 +133,8 @@ export function makeTriageMcp(rt: WorkspaceRuntime, sessionId?: string) {
       ),
       tool(
         'get_session_context',
-        'What this session is: its workspace, the work item it was opened for (with that item\'s brief and notes), and the artifacts attached to it. Your own triage session id is in your system prompt. Call this before writing a note "here" — the ids it returns are what write_artifact\'s `links` needs.',
-        { sessionId: z.string().describe('a triage session id — yours is named in your system prompt') },
+        'What this session is: its workspace, the work item it was opened for (with that item\'s brief and notes), and the artifacts attached to it. Your own junior session id is in your system prompt. Call this before writing a note "here" — the ids it returns are what write_artifact\'s `links` needs.',
+        { sessionId: z.string().describe('a junior session id — yours is named in your system prompt') },
         async (args) => {
           try {
             return okResult(JSON.stringify(await sessionContextOp(rt, args.sessionId), null, 2))
@@ -145,7 +145,7 @@ export function makeTriageMcp(rt: WorkspaceRuntime, sessionId?: string) {
       ),
       tool(
         'get_workspace',
-        'Which triage workspace you are acting in: `current` (its id, name, whether it is the default, and its auth backend) plus `workspaces`, the full roster of ids to switch among. Everything you list/create/edit here lives in `current`. An external Claude Code session picks its workspace with the TRIAGE_WORKSPACE env var (an unknown id silently falls back to the default) — call this to confirm which one you actually landed in.',
+        'Which junior workspace you are acting in: `current` (its id, name, whether it is the default, and its auth backend) plus `workspaces`, the full roster of ids to switch among. Everything you list/create/edit here lives in `current`. An external Claude Code session picks its workspace with the JUNIOR_WORKSPACE env var (an unknown id silently falls back to the default) — call this to confirm which one you actually landed in.',
         {},
         async () => {
           try {
@@ -286,7 +286,7 @@ export function makeTriageMcp(rt: WorkspaceRuntime, sessionId?: string) {
       ),
       // Artifacts: files kept beside the inbox (.docs/next-version.md): notes,
       // pages, tables, images. Reads are auto-allowed; writes prompt like
-      // every other triage write, and the model may only rewrite its own.
+      // every other junior write, and the model may only rewrite its own.
       tool(
         'list_artifacts',
         "List this workspace's artifacts — files kept beside the work items (notes, briefs, pages, tables, images) — with id, title, format, version, author (human|model), refs, path and links. Read one with read_artifact.",
@@ -342,7 +342,7 @@ export function makeTriageMcp(rt: WorkspaceRuntime, sessionId?: string) {
           from: z
             .string()
             .optional()
-            .describe('absolute path of a file you made, in the project folder or the temp folder. triage copies it; later edits to the original do not change the artifact.'),
+            .describe('absolute path of a file you made, in the project folder or the temp folder. junior copies it; later edits to the original do not change the artifact.'),
           note: z.string().max(500).optional().describe('one line about this version'),
           refs: z.array(z.string()).optional().describe('GitHub PR/issue URLs or Linear keys this note is about'),
           links: z
@@ -371,7 +371,7 @@ export function makeTriageMcp(rt: WorkspaceRuntime, sessionId?: string) {
           id: z.string(),
           title: z.string().optional(),
           body: z.string().optional(),
-          from: z.string().optional().describe('absolute path of a file you made, in the project folder or the temp folder; triage copies it'),
+          from: z.string().optional().describe('absolute path of a file you made, in the project folder or the temp folder; junior copies it'),
           note: z.string().max(500).optional().describe('one line on what changed in this version'),
           refs: z.array(z.string()).optional(),
         },

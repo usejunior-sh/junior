@@ -71,7 +71,7 @@ export type TeamRunFile = {
   name: string
   /** a path or a short description, shown under the name */
   detail: string
-  /** who wrote it: `triage`, `you`, `Junior`, or a member's label */
+  /** who wrote it: `junior`, `you`, `Junior`, or a member's label */
   writer: string
   /** who reads it, when that's known */
   readers: string[]

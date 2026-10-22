@@ -1,6 +1,6 @@
 /**
  * `from:` on write_artifact / update_artifact: a file the session made, which
- * triage copies into the artifacts folder. The model names the path and triage
+ * junior copies into the artifacts folder. The model names the path and junior
  * copies it somewhere an HTTP route serves, so this is a file-exfiltration
  * surface and is narrow on purpose:
  *
@@ -55,7 +55,7 @@ export async function resolveSource(
     throw new Error('from: cannot be a file inside the artifacts folder; update the artifact by id instead')
   }
   const byExt = formatOfExt(path.extname(file))
-  if (!byExt) throw new Error(`from: .${path.extname(file).slice(1) || '(none)'} is not a file type triage publishes (${ARTIFACT_FORMATS.join(', ')})`)
+  if (!byExt) throw new Error(`from: .${path.extname(file).slice(1) || '(none)'} is not a file type junior publishes (${ARTIFACT_FORMATS.join(', ')})`)
   if (declared && declared !== byExt) throw new Error(`from: the file is .${path.extname(file).slice(1)} but the format is ${declared}`)
   const st = await stat(real)
   if (st.size > ARTIFACT_MAX_BYTES) throw new Error(`${Math.ceil(st.size / 104857.6) / 10} MB is over the 25 MB limit for an artifact`)

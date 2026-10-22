@@ -4,7 +4,7 @@
  * (POST /api/items/manual → createManualOp). Esc, or clicking away, dismisses.
  *
  * The window is a non-activating panel, so it takes the keyboard without
- * bringing Triage forward: the app you were in stays where it was, and gets
+ * bringing Junior forward: the app you were in stays where it was, and gets
  * the focus back when the panel hides.
  */
 import { BrowserWindow, globalShortcut, ipcMain, screen } from 'electron'
@@ -102,6 +102,6 @@ async function submit(raw: unknown): Promise<{ ok: true } | { ok: false; error: 
     const out = (await res.json().catch(() => ({ ok: false, error: `HTTP ${res.status}` }))) as { ok: boolean; error?: string }
     return out.ok ? { ok: true } : { ok: false, error: out.error ?? 'couldn’t add it' }
   } catch {
-    return { ok: false, error: 'triage isn’t answering' }
+    return { ok: false, error: 'junior isn’t answering' }
   }
 }
