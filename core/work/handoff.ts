@@ -34,6 +34,20 @@ export function heldBy(step: string | undefined, handoff: Handoff | undefined): 
   return null
 }
 
+/**
+ * The watches a workspace switches on or off one by one (Settings → Workspace):
+ * babysit fixes your PRs, review takes a first pass at PRs that ask for you.
+ * Off = it stops polling, and its queued tasks wait until it is back on.
+ */
+export type WatchId = 'babysit' | 'review'
+export type WatchSwitches = Record<WatchId, boolean>
+
+/** The watch a task came from; null = one you asked for (a retry, a resume, a playbook), which no switch holds. */
+export function watchOf(t: Pick<ItemTask, 'step' | 'why'>): WatchId | null {
+  if (t.why === 'you' || !t.step || !WATCH_STEPS.has(t.step)) return null
+  return t.step === 'review' ? 'review' : 'babysit'
+}
+
 /** What a stop on pause writes on a task, so resume knows which to run again. */
 export const PAUSED_ERROR = 'you paused it'
 

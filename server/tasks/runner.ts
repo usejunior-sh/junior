@@ -16,7 +16,7 @@ import { z } from 'zod'
 import { taskPrompt, type TaskPr } from '../../core/babysit/brief.js'
 import type { TaskRunScope } from '../../core/babysit/policy.js'
 import { capFor, modelFor, type BabysitSettings } from '../../core/babysit/settings.js'
-import { heldBy } from '../../core/work/handoff.js'
+import { heldBy, watchOf } from '../../core/work/handoff.js'
 import { MAX_COMMENTS, passLine, passMarkdown, reviewPrompt, VERDICT_LABEL, type FirstPass, type ReviewCtx } from '../../core/review/brief.js'
 import { POST_REVIEW_STEP, REVIEW_STEP } from '../../core/review/watch.js'
 import { isStale } from '../../core/babysit/watch.js'
@@ -49,7 +49,7 @@ import { log } from '../log.js'
 import { power } from '../power.js'
 import { checkoutList, makeWorktree, syncCheckouts } from '../session/checkouts.js'
 import { createSession, getOrRevive } from '../session/sessions.js'
-import { linkSessionToItem } from '../settings-ops.js'
+import { linkSessionToItem, watchesOn } from '../settings-ops.js'
 import { okResult, errResult } from '../junior-mcp.js'
 import { defaultBranch } from '../worktrees.js'
 import type { WorkspaceRuntime } from '../workspace/runtime.js'
@@ -125,7 +125,12 @@ async function pumpOnce(rt: WorkspaceRuntime): Promise<void> {
   const now = Date.now()
   const spent = await rt.store.tasks.spentSince(dayStart(now))
   // A task on an item you paused, or a watch's task on a PR you didn't hand off, is stopped when it comes up (startTask).
-  const queued = (await rt.store.tasks.inState(['queued'])).filter((t) => t.owner === 'junior')
+  // A task from a watch you switched off stays queued until you switch it back on.
+  const on = await watchesOn(rt)
+  const queued = (await rt.store.tasks.inState(['queued'])).filter((t) => {
+    const w = watchOf(t)
+    return t.owner === 'junior' && (!w || on[w])
+  })
   if (queued.length === 0) return
   if (spent >= s.budget.perDayUsd) {
     if (rt.taskBudgetHitOn !== dayKey(now)) {

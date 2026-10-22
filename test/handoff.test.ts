@@ -12,7 +12,7 @@ import path from 'node:path'
 import { babysitLine, bySuggestion, suggestionFor, type SuggestInput } from '../core/junior/suggest.js'
 import { sectionOf } from '../core/junior/sections.js'
 import { openSqliteStore } from '../core/store/sqlite.js'
-import { handedOff, heldBy, juniorWork, legacyHandoffs, openedPr, PAUSED_ERROR, prItemIn } from '../core/work/handoff.js'
+import { handedOff, heldBy, juniorWork, legacyHandoffs, openedPr, PAUSED_ERROR, prItemIn, watchOf } from '../core/work/handoff.js'
 import { snoozeClock, snoozeUntil } from '../core/work/snooze.js'
 import { shouldReopen } from '../core/work/state.js'
 import type { ItemTask } from '../core/work/tasks.js'
@@ -29,6 +29,19 @@ test('the gate: a watch task runs only on a PR you handed off; nothing runs on a
   // a playbook you started is a hand-off in itself; a pause still holds it
   assert.equal(heldBy('debug-plan', undefined), null)
   assert.equal(heldBy('debug-fix', 'paused'), PAUSED_ERROR)
+})
+
+test('the watch switches: a task from a watch waits on its switch; one you asked for never does', () => {
+  assert.equal(watchOf({ step: 'fix-ci', why: 'event' }), 'babysit')
+  assert.equal(watchOf({ step: 'rebase', why: 'event' }), 'babysit')
+  assert.equal(watchOf({ step: 'fix-thread', why: 'event' }), 'babysit')
+  assert.equal(watchOf({ step: 'review', why: 'playbook' }), 'review')
+  // a retry or a resume is you asking: no switch holds it
+  assert.equal(watchOf({ step: 'fix-ci', why: 'you' }), null)
+  // posting a review you approved, a playbook step, a task with no step
+  assert.equal(watchOf({ step: 'post-review', why: 'event' }), null)
+  assert.equal(watchOf({ step: 'debug-plan', why: 'playbook' }), null)
+  assert.equal(watchOf({ why: 'junior' }), null)
 })
 
 test('handed off: you said so, or Junior has a task of its own still open', () => {

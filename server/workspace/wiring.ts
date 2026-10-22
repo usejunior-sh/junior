@@ -5,7 +5,7 @@ import { log } from '../log.js'
 import { registry, WorkspaceRuntime } from './runtime.js'
 import { wireProviders } from './providers.js'
 import { readPersona } from '../junior-ops.js'
-import { jobsEnabled, migrateDefaultProject, settleJobsSwitch } from '../settings-ops.js'
+import { jobsEnabled, migrateDefaultProject, settleSwitches } from '../settings-ops.js'
 import { loadCheckouts } from '../session/checkouts.js'
 import { loadSessions } from '../session/sessions.js'
 import { markInterruptedRuns } from '../jobs/run.js'
@@ -65,8 +65,8 @@ export async function initRuntime(rt: WorkspaceRuntime): Promise<void> {
   await loadSessions(rt)
   await markInterruptedRuns(rt)
   await migrateJobProjects(rt)
-  // Seeding follows the jobs switch: on for a new workspace, as you left it for an older one.
-  await settleJobsSwitch(rt)
+  // Seeding follows the jobs switch: off for a new workspace, as you left it for an older one.
+  await settleSwitches(rt)
   if (await jobsEnabled(rt)) await seedJobTemplates(rt)
   else await syncJobFiles(rt, { force: true }).catch(() => {})
   await bootBriefs(rt)

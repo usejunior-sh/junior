@@ -65,6 +65,10 @@ export type PlaybookResponse = { ok: true; kind: string; body: string; custom: b
 export type WorkspaceSettings = {
   /** the global jobs switch; off = the scheduler never runs a job */
   jobsEnabled: boolean
+  /** the babysit watch: off = it stops polling your PRs and starts no fixes */
+  babysitEnabled: boolean
+  /** the first-pass review watch: off = it stops polling review requests and starts no reviews */
+  reviewsEnabled: boolean
   /** default per-run limits for jobs that don't set their own */
   jobTimeoutMs: number
   /** null = no cap */

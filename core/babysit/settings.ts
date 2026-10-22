@@ -1,8 +1,9 @@
 /**
  * Babysitting's settings, per workspace (Settings → Babysit): the model per
  * kind of task, and the money it may spend. First-pass reviews of PRs that ask
- * for yours (core/review) share the runner, so they live here too. There is no
- * on/off: Junior works only the PRs you hand it (core/work/handoff.ts). Stored
+ * for yours (core/review) share the runner, so they live here too. Each watch
+ * has its own switch (Settings → Workspace, `watchesOn` in server/settings-ops.ts),
+ * and either way Junior works only the PRs you hand it (core/work/handoff.ts). Stored
  * in config under `babysit.settings`; anything missing or invalid reads as the
  * default.
  */

@@ -8,7 +8,7 @@ import { ghLogin } from '../../core/sources/github.js'
 import { gh, runTickHooks, taskAdded } from '../babysit/glue.js'
 import { connectedRepos } from '../inbox/sync.js'
 import { log } from '../log.js'
-import { upsertItem } from '../settings-ops.js'
+import { upsertItem, watchesOn } from '../settings-ops.js'
 import type { WorkspaceRuntime } from '../workspace/runtime.js'
 import { invalidateInbox } from '../ws/send.js'
 import { reviewTickOp, type ReviewDeps, type ReviewSource } from './watch.js'
@@ -35,6 +35,7 @@ export async function reviewTick(rt: WorkspaceRuntime, force = false): Promise<v
   if (ticking.has(rt)) return
   ticking.add(rt)
   try {
+    if (!(await watchesOn(rt)).review) return
     const r = await reviewTickOp(reviewDeps(rt), Date.now(), force)
     if (r && (r.added || r.stopped)) invalidateInbox(rt)
   } finally {

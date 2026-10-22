@@ -16,7 +16,7 @@ import { legacyHandoffs } from '../../core/work/handoff.js'
 import { log } from '../log.js'
 import { errText } from '../errors.js'
 import { connectedRepos } from '../inbox/sync.js'
-import { upsertItem } from '../settings-ops.js'
+import { upsertItem, watchesOn } from '../settings-ops.js'
 import type { WorkspaceRuntime } from '../workspace/runtime.js'
 import { invalidateInbox } from '../ws/send.js'
 import { babysitTickOp, type BabysitDeps, type BabysitSource } from './watch.js'
@@ -129,6 +129,8 @@ export async function babysitTick(rt: WorkspaceRuntime, force = false): Promise<
   ticking.add(rt)
   try {
     await carryOverHandoffs(rt)
+    // Switched off here: no polling, no new tasks. The queued ones wait (pumpOnce).
+    if (!(await watchesOn(rt)).babysit) return
     const r = await babysitTickOp(babysitDeps(rt), Date.now(), force)
     if (r && (r.added || r.stopped)) invalidateInbox(rt)
   } finally {

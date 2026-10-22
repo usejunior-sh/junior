@@ -12,6 +12,7 @@ import { seedJobTemplates } from './jobs/ops.js'
 import { broadcast, broadcastSessionList, invalidateInbox } from './ws/send.js'
 import { browserProfiles } from './browser/profiles.js'
 import { DEFAULT_PROFILE } from '../core/browser/profiles.js'
+import type { WatchId, WatchSwitches } from '../core/work/handoff.js'
 
 // settings, briefs and dispatch
 
@@ -21,6 +22,7 @@ const BRIEFS_MODEL_KEY = 'briefs.defaultModel'
 const HIDDEN_MODELS_KEY = 'models.hidden'
 const CUSTOM_MODELS_KEY = 'models.custom'
 const BROWSER_PROFILE_KEY = 'browser.profile'
+const WATCH_KEYS: Record<WatchId, string> = { babysit: 'watch.babysit', review: 'watch.review' }
 const DEFAULT_BRIEF_CAP = 20
 export const BRIEF_TIMEOUT_MS = 300_000
 
@@ -38,22 +40,34 @@ export async function setWorkspaceBrowserProfile(rt: WorkspaceRuntime, ref: unkn
   return p.id
 }
 
-/** The global jobs switch: on for a workspace made since M4 (its Slack job ships on), as you left it before. */
+/** The global jobs switch: off for a new workspace, as you left it before. */
 export async function jobsEnabled(rt: WorkspaceRuntime): Promise<boolean> {
   return (await rt.store.config.get<boolean>(JOBS_ENABLED_KEY)) === true
 }
 
+/** Which watches run here: one switch each, read on every tick. */
+export async function watchesOn(rt: WorkspaceRuntime): Promise<WatchSwitches> {
+  const on = async (w: WatchId) => (await rt.store.config.get<boolean>(WATCH_KEYS[w])) === true
+  return { babysit: await on('babysit'), review: await on('review') }
+}
+
+const isFresh = async (rt: WorkspaceRuntime) => (await rt.store.sessions.list()).length === 0 && (await rt.store.items.listAll()).length === 0
+
 /**
- * Boot: a workspace that never set the switch gets it written down. A new
- * one (no sessions, no items) starts with jobs on, so the seeded Slack job
- * runs; one from before keeps jobs off, so an upgrade never starts spending
- * on its own.
+ * Boot: a workspace that never set its switches gets them written down. A new
+ * one (no sessions, no items) starts with jobs and every watch off, so nothing
+ * runs until you turn it on. One from before keeps jobs as they were (off) and
+ * its watches on, as they always ran.
  */
-export async function settleJobsSwitch(rt: WorkspaceRuntime): Promise<void> {
-  if ((await rt.store.config.get<boolean>(JOBS_ENABLED_KEY)) != null) return
-  const fresh = (await rt.store.sessions.list()).length === 0 && (await rt.store.items.listAll()).length === 0
-  await rt.store.config.set(JOBS_ENABLED_KEY, fresh)
-  log('info', 'job', `jobs ${fresh ? 'on (a new workspace)' : 'left off (a workspace from before)'}`, { workspace: rt.meta.id })
+export async function settleSwitches(rt: WorkspaceRuntime): Promise<void> {
+  const unset = async (key: string) => (await rt.store.config.get<boolean>(key)) == null
+  const keys = [JOBS_ENABLED_KEY, ...Object.values(WATCH_KEYS)]
+  const todo = (await Promise.all(keys.map(unset))).some(Boolean)
+  if (!todo) return
+  const fresh = await isFresh(rt)
+  if (await unset(JOBS_ENABLED_KEY)) await rt.store.config.set(JOBS_ENABLED_KEY, false)
+  for (const key of Object.values(WATCH_KEYS)) if (await unset(key)) await rt.store.config.set(key, !fresh)
+  log('info', 'job', fresh ? 'a new workspace: jobs and watches start off' : 'switches settled: watches on as before', { workspace: rt.meta.id })
 }
 
 export async function readSettings(rt: WorkspaceRuntime): Promise<WorkspaceSettings> {
@@ -61,8 +75,11 @@ export async function readSettings(rt: WorkspaceRuntime): Promise<WorkspaceSetti
   const model = await rt.store.config.get<string>(BRIEFS_MODEL_KEY)
   const timeout = await rt.store.config.get<number>(JOB_TIMEOUT_KEY)
   const budget = await rt.store.config.get<number>(JOB_BUDGET_KEY)
+  const watches = await watchesOn(rt)
   return {
     jobsEnabled: await jobsEnabled(rt),
+    babysitEnabled: watches.babysit,
+    reviewsEnabled: watches.review,
     jobTimeoutMs: typeof timeout === 'number' && timeout > 0 ? timeout : DEFAULT_JOB_TIMEOUT_MS,
     jobBudgetUsd: typeof budget === 'number' && budget > 0 ? budget : null,
     briefsDailyCap: typeof cap === 'number' && cap > 0 ? cap : DEFAULT_BRIEF_CAP,
@@ -94,6 +111,12 @@ export async function writeSettings(rt: WorkspaceRuntime, raw: unknown): Promise
     await rt.store.config.set(JOBS_ENABLED_KEY, r.jobsEnabled)
     if (r.jobsEnabled) await seedJobTemplates(rt)
     log('info', 'job', `jobs ${r.jobsEnabled ? 'enabled' : 'disabled'}`, { workspace: rt.meta.id })
+  }
+  for (const [field, w] of [['babysitEnabled', 'babysit'], ['reviewsEnabled', 'review']] as const) {
+    if (r[field] === undefined) continue
+    if (typeof r[field] !== 'boolean') throw new Error(`${field} must be a boolean`)
+    await rt.store.config.set(WATCH_KEYS[w], r[field])
+    log('info', w, `${w} watch ${r[field] ? 'on' : 'off'}`, { workspace: rt.meta.id })
   }
   if (r.jobTimeoutMs !== undefined) {
     const t = r.jobTimeoutMs
