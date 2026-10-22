@@ -1,7 +1,7 @@
 <a href="https://usejunior.sh">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/banner-dark.png">
-    <img src="docs/banner-light.png" alt="Junior. Junior takes the work that doesn't need you. Junior's face, drawn in lavender dots, watches from the right." width="100%">
+    <img src="docs/banner-light.png" alt="Junior. Your junior engineer. On your Mac. Junior takes the work that doesn't need you. Junior's face, a sky-blue key with round eyes and a small smile, looks out from the right." width="100%">
   </picture>
 </a>
 
@@ -15,10 +15,10 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/usejunior-sh/junior/releases/latest"><img src="https://img.shields.io/github/v/release/usejunior-sh/junior?label=release&color=ff6a1f&labelColor=1a1714" alt="latest release"></a>
-  <img src="https://img.shields.io/badge/macOS-Apple%20silicon%20%C2%B7%20Intel-efe9e3?labelColor=1a1714" alt="macOS, Apple silicon or Intel">
-  <img src="https://img.shields.io/badge/runs%20on-Claude%20Code%20%C2%B7%20Codex-b4a0f4?labelColor=1a1714" alt="runs on Claude Code and Codex">
-  <a href="https://github.com/usejunior-sh/junior/commits/main"><img src="https://img.shields.io/github/last-commit/usejunior-sh/junior?color=efe9e3&labelColor=1a1714" alt="last commit"></a>
+  <a href="https://github.com/usejunior-sh/junior/releases/latest"><img src="https://img.shields.io/github/v/release/usejunior-sh/junior?label=release&color=80b2f6&labelColor=141210" alt="latest release"></a>
+  <img src="https://img.shields.io/badge/macOS-Apple%20silicon%20%C2%B7%20Intel-f8f7f4?labelColor=141210" alt="macOS, Apple silicon or Intel">
+  <img src="https://img.shields.io/badge/runs%20on-Claude%20Code%20%C2%B7%20Codex-a9cdfc?labelColor=141210" alt="runs on Claude Code and Codex">
+  <a href="https://github.com/usejunior-sh/junior/commits/main"><img src="https://img.shields.io/github/last-commit/usejunior-sh/junior?color=f8f7f4&labelColor=141210" alt="last commit"></a>
 </p>
 
 **Junior is an AI junior engineer for senior engineers. It runs your work inbox, on your Mac.**
@@ -31,9 +31,11 @@ curl -fsSL https://usejunior.sh/install.sh | sh
 
 <sub>Installs Junior.app for macOS, Apple silicon or Intel. <a href="install.sh">Read install.sh first.</a> We would.</sub>
 
+<sub>Junior was called Triage until October 2026. Same app, one name now. Updating from Triage moves your data from <code>~/.triage</code> to <code>~/.junior</code> on first start.</sub>
+
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/flow-dark.png">
-  <img src="docs/flow-light.png" alt="Work arrives from GitHub, Slack, Linear and Sentry. Junior ranks it: two rows need you, three go to Junior. Junior fixes CI and drafts a reply, then holds the push and the reply for your OK. Sent without your OK: 0." width="100%">
+  <img src="docs/flow-light.png" alt="Work arrives from GitHub, Slack, Linear and Sentry. The inbox ranks it: two rows need you, three go to Junior. Junior fixes CI and drafts a reply, then holds the push and the reply for your OK. Sent without your OK: 0." width="100%">
 </picture>
 
 <p align="center"><sub>Example work. Your Tuesday will have more of it.</sub></p>
