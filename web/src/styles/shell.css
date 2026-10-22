@@ -125,10 +125,10 @@ kbd { font-family: var(--mono); font-size: 0.8462rem; color: var(--ash); border:
   display: flex; align-items: center; gap: 12px; height: var(--bar-h); flex: none;
   padding: 0 12px 0 14px; border-bottom: 1px solid var(--hair);
 }
-/* Logo lockup: the brand files (assets/brand/junior-lockup*.svg), white
-   wordmark on dark schemes, black on light; the key keeps its own colours. */
+/* The wordmark: the brand files (assets/brand/junior-wordmark*.svg), white on
+   dark schemes, black on light. No key: the rail's face is the one face. */
 .logo { display: inline-flex; align-items: center; line-height: 1; }
-.logo .logoLockup { display: block; height: 22px; width: auto; aspect-ratio: 4388 / 975; flex: none; }
+.logo .logoLockup { display: block; height: 18px; width: auto; aspect-ratio: 2982 / 784; flex: none; }
 :root[data-scheme="light"] .logo .logoOnDark,
 :root:not([data-scheme="light"]) .logo .logoOnLight { display: none; }
 .wsPill {
