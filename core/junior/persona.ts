@@ -22,7 +22,7 @@ export const VOICE_HINT: Record<Voice, string> = {
 export type Persona = {
   /** shows in the rail, the page, chats and reports */
   name: string
-  /** the face's body colour, `#rrggbb`; underside and brows are derived from it */
+  /** the face's colour, `#rrggbb` (the key's top); body, skirt and eyes are derived from it */
   colour: string
   /** the face's body outline (core/junior/shapes.ts) */
   shape: Shape
@@ -37,8 +37,8 @@ export const REPLY_MAX = 400
 
 /** The deck's eight presets. */
 export const SWATCHES: ReadonlyArray<readonly [label: string, hex: string]> = [
+  ['Sky', '#a9cdfc'],
   ['Lavender', '#b4a0f4'],
-  ['Sky', '#8cc4ff'],
   ['Mint', '#7fe0b4'],
   ['Butter', '#f5d77a'],
   ['Apricot', '#ffb27a'],
@@ -81,7 +81,6 @@ export function personaFrom(raw: unknown, base: Persona = DEFAULT_PERSONA): Pers
   return {
     name: 'name' in r ? cleanName(r.name) : base.name,
     colour: typeof r.colour === 'string' && HEX.test(r.colour) ? r.colour.toLowerCase() : base.colour,
-    // a persona saved before shapes has none: it keeps the slab it always had
     shape: isShape(r.shape) ? r.shape : isShape(base.shape) ? base.shape : DEFAULT_SHAPE,
     voice: isVoice(r.voice) ? r.voice : base.voice,
     replyStyle: 'replyStyle' in r ? cleanReplyStyle(r.replyStyle) : base.replyStyle,

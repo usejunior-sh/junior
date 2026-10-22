@@ -1,13 +1,14 @@
 /**
- * Junior's face (.docs/junior-goals-teams/junior-face.js, ported): a soft slab
- * with a darker underside, two pill eyes and two brows. Expressions are
- * states, hello, listen, think, working, needs, done, stuck, asleep, and
- * ease into each other.
+ * Junior's face: the brand's J key (brand v2,
+ * .docs/junior-goals-teams/junior-brand-v2.html), round eyes that catch the
+ * light and a small mouth. Expressions are states, hello, listen, think,
+ * working, needs, done, stuck, asleep, and ease into each other. The persona's
+ * shape and colour still apply: the key is the default shape, sky its colour.
  *
  * Motion: `follow` tracks the pointer (the Junior page only), `wander`
  * glances and blinks, `still` moves only when the mood changes (the rail).
- * Reduced motion turns all of it off. The face is the same at every size;
- * only its lines thicken below ~24px so the brows never thin out of sight.
+ * Reduced motion turns all of it off. Below 48px the eye highlights go and
+ * the eyes and mouth draw a little bigger, so the face survives at 16px.
  *
  * React renders the skeleton once; one shared animation frame loop moves
  * every face that needs it, writing attributes directly, so a face never
@@ -18,26 +19,30 @@ import { MOOD_LABEL, type Mood } from '../../../core/junior/mood.js'
 import { shapePaths, type Shape } from '../../../core/junior/shapes.js'
 import { usePersona } from '../junior.js'
 
+type Eye = { x: number; y: number; w: number; h: number }
+/** The mouth: one quadratic stroke, from a smile to a line to a dot. */
+type Mouth = { x1: number; y1: number; cx: number; cy: number; x2: number; y2: number; w: number }
+/** happy = eyes become up-arcs; shut = down-arcs; led = the orange needs-you light; zz = asleep; press = key down */
+type Geo = { eyes: [Eye, Eye]; mouth: Mouth; happy: number; shut: number; led: number; zz: number; press: number }
 
-type Eye = { x: number; y: number; w: number; h: number; rot: number }
-type Brow = { x1: number; y1: number; x2: number; y2: number; bend: number }
-type Geo = { eyes: [Eye, Eye]; brows: [Brow, Brow]; happy: number }
+const C = (x: number, y: number, r: number): Eye => ({ x, y, w: r * 2, h: r * 2 })
+const M = (x1: number, y1: number, cx: number, cy: number, x2: number, y2: number, w = 5.5): Mouth => ({ x1, y1, cx, cy, x2, y2, w })
+const dot = (x: number, y: number): Mouth => M(x - 0.5, y, x, y, x + 0.5, y, 9)
+const G = (eyes: [Eye, Eye], mouth: Mouth, more: Partial<Omit<Geo, 'eyes' | 'mouth'>> = {}): Geo => ({ eyes, mouth, happy: 0, shut: 0, led: 0, zz: 0, press: 0, ...more })
 
-const E = (x: number, y: number, w: number, h: number, rot = 0): Eye => ({ x, y, w, h, rot })
-const B = (x1: number, y1: number, x2: number, y2: number, bend = -2): Brow => ({ x1, y1, x2, y2, bend })
-
+// The brand sheet's eight moods, in the key's 128-unit grid.
 const MOODS: Record<Mood, Geo> = {
-  hello: { happy: 0, eyes: [E(37, 56, 13, 16), E(63, 56, 13, 16)], brows: [B(29, 41, 44, 40), B(56, 40, 71, 41)] },
-  listen: { happy: 0, eyes: [E(37, 52, 14.5, 18.5), E(63, 52, 14.5, 18.5)], brows: [B(29, 37, 44, 36), B(56, 36, 71, 37)] },
-  think: { happy: 0, eyes: [E(42, 51, 11.5, 14.5), E(68, 51, 11.5, 14.5)], brows: [B(31, 42, 46, 42, 0), B(58, 37, 73, 33, -3)] },
-  working: { happy: 0, eyes: [E(37, 57, 18, 10, -4), E(63, 57, 18, 10, 4)], brows: [B(28, 43, 44, 46, 0), B(56, 46, 72, 43, 0)] },
-  needs: { happy: 0, eyes: [E(37, 56, 14, 18.5), E(63, 55, 7.5, 19, 0)], brows: [B(29, 41, 44, 41), B(56, 35, 71, 31, -4)] },
-  done: { happy: 1, eyes: [E(37, 57, 16, 4), E(63, 57, 16, 4)], brows: [B(29, 40, 44, 39), B(56, 39, 71, 40)] },
-  stuck: { happy: 0, eyes: [E(37, 58, 11, 13), E(63, 58, 11, 13)], brows: [B(28, 44, 44, 37, -1), B(56, 37, 72, 44, -1)] },
-  asleep: { happy: 0, eyes: [E(37, 59, 15, 3.6), E(63, 59, 15, 3.6)], brows: [B(29, 46, 44, 46, 0), B(56, 46, 71, 46, 0)] },
+  hello: G([C(49, 55, 10.5), C(79, 55, 10.5)], M(56.5, 76, 64, 83, 71.5, 76)),
+  listen: G([C(49, 53, 12), C(79, 53, 12)], dot(64, 79)),
+  think: G([C(53, 50, 10), C(83, 50, 10)], M(60, 79, 65.5, 79, 71, 79)),
+  working: G([{ x: 49, y: 58, w: 20, h: 13 }, { x: 79, y: 58, w: 20, h: 13 }], M(58, 78, 64, 78, 70, 78)),
+  needs: G([C(52, 51, 11), C(82, 51, 11)], dot(64, 79), { led: 1 }),
+  done: G([C(49, 56, 10), C(79, 56, 10)], M(54, 74, 64, 86, 74, 74, 6), { happy: 1, press: 6 }),
+  stuck: G([C(49, 57, 8.5), C(79, 57, 8.5)], M(54, 80, 64, 75, 74, 80, 4.5)),
+  asleep: G([C(49, 56, 10), C(79, 56, 10)], M(60, 79, 64, 79, 68, 79, 4.5), { shut: 1, zz: 1 }),
 }
 
-const clone = (g: Geo): Geo => ({ happy: g.happy, eyes: [{ ...g.eyes[0] }, { ...g.eyes[1] }], brows: [{ ...g.brows[0] }, { ...g.brows[1] }] })
+const clone = (g: Geo): Geo => ({ ...g, eyes: [{ ...g.eyes[0] }, { ...g.eyes[1] }], mouth: { ...g.mouth } })
 
 // Colour: the persona's body colour; underside and brows derived from it.
 
@@ -71,14 +76,19 @@ function hslToHex(h: number, s: number, l: number): string {
 
 const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v))
 
-/** Body, underside, brows and eyes from one colour. */
-export function facePalette(body: string) {
-  const [h, s, l] = hexToHsl(/^#[0-9a-f]{6}$/i.test(body) ? body : '#b4a0f4')
+/** The brand's sky key, exactly. */
+const SKY = { top: '#a9cdfc', body: '#80b2f6', skirt: '#2f63c9', eye: '#0b1530' }
+
+/** Top, body, skirt and eyes from one colour (the key's top); sky is the brand's own. */
+export function facePalette(colour: string) {
+  const top = /^#[0-9a-f]{6}$/i.test(colour) ? colour.toLowerCase() : SKY.top
+  if (top === SKY.top) return SKY
+  const [h, s, l] = hexToHsl(top)
   return {
-    body,
-    edge: hslToHex(h, clamp(s * 0.72, 0, 1), clamp(l * 0.6, 0.14, 0.5)),
-    brow: hslToHex(h, clamp(s * 0.55, 0, 1), clamp(l - 0.2, 0.2, 0.6)),
-    eye: '#0d0b14',
+    top,
+    body: hslToHex(h, clamp(s * 0.93, 0, 1), clamp(l - 0.1, 0.2, 0.85)),
+    skirt: hslToHex((h + 6) % 360, clamp(s * 0.66, 0, 1), clamp(l * 0.59, 0.18, 0.55)),
+    eye: hslToHex((h + 10) % 360, clamp(s * 0.67, 0, 1), 0.12),
   }
 }
 
@@ -97,7 +107,20 @@ function bindPointer() {
   addEventListener('pointermove', (e) => (pointer = { x: e.clientX, y: e.clientY, t: performance.now() }), { passive: true })
 }
 
-type Els = { svg: SVGSVGElement; back: SVGPathElement; front: SVGPathElement; face: SVGGElement; eyes: SVGRectElement[]; arcs: SVGPathElement[]; brows: SVGPathElement[] }
+type Els = {
+  svg: SVGSVGElement
+  back: SVGPathElement
+  /** body + top + face: what moves down when the key is pressed */
+  key: SVGGElement
+  front: SVGGElement
+  face: SVGGElement
+  eyes: SVGRectElement[]
+  shines: SVGCircleElement[]
+  arcs: SVGPathElement[]
+  mouth: SVGPathElement
+  led: SVGGElement
+  zz: SVGGElement
+}
 
 /** One face's state: where it is, where it's going, where it looks. */
 class FaceCtl {
@@ -109,8 +132,12 @@ class FaceCtl {
   look: { x: number; y: number } | null = null
   /** how far the eyes travel when they look somewhere (1 = the Junior page's) */
   reach = 1
-  /** eyes and brows scaled about the face's centre (1 = the Junior page's); small faces read better bigger */
+  /** eyes and mouth scaled about the face's centre (1 = the Junior page's); small faces read better bigger */
   features = 1
+  /** below 48px: no highlights, bigger eyes, a thicker mouth (the brand's icon.svg) */
+  small = false
+  /** the thinnest line, in viewBox units, that still draws about a pixel */
+  line = 1
   nextGlance = performance.now() + 800 + Math.random() * 2000
   blinkAt = performance.now() + 1500 + Math.random() * 3000
   blinkP = -1
@@ -143,13 +170,9 @@ class FaceCtl {
         ;(a[f] as number) += d * k
       }
     }
-    for (let i = 0; i < 2; i++) {
-      ease(this.cur.eyes[i], t.eyes[i], ['x', 'y', 'w', 'h', 'rot'])
-      ease(this.cur.brows[i], t.brows[i], ['x1', 'y1', 'x2', 'y2', 'bend'])
-    }
-    const dh = t.happy - this.cur.happy
-    if (Math.abs(dh) > 0.005) moving = true
-    this.cur.happy += dh * k
+    for (let i = 0; i < 2; i++) ease(this.cur.eyes[i], t.eyes[i], ['x', 'y', 'w', 'h'])
+    ease(this.cur.mouth, t.mouth, ['x1', 'y1', 'cx', 'cy', 'x2', 'y2', 'w'])
+    ease(this.cur as unknown as Record<string, number>, t as unknown as Record<string, number>, ['happy', 'shut', 'led', 'zz', 'press'])
 
     const still = this.motion === 'still' || reduced()
     if (!still && this.look) {
@@ -187,17 +210,20 @@ class FaceCtl {
   }
 
   render() {
-    const { els } = this
+    const { els, cur } = this
     const gx = this.gaze.x
     const gy = this.gaze.y
-    const k = this.features
-    // Scaled about (50, 52), between the eyes and the brows, so the features grow in place.
-    const grow = k === 1 ? '' : ` translate(50 52) scale(${k}) translate(-50 -52)`
-    els.face.setAttribute('transform', `translate(${gx * 10 * this.reach} ${gy * 7 * this.reach})${grow}`)
-    els.front.setAttribute('transform', `translate(${gx * 3} ${gy * 2})`)
-    els.back.setAttribute('transform', `translate(${-gx * 4} ${-gy * 3})`)
+    const k = this.features * (this.small ? 1.14 : 1)
+    // Scaled about (64, 64), between the eyes and the mouth, so the features grow in place.
+    const grow = k === 1 ? '' : ` translate(64 64) scale(${k}) translate(-64 -64)`
+    els.key.setAttribute('transform', `translate(0 ${cur.press})`)
+    els.face.setAttribute('transform', `translate(${gx * 8 * this.reach} ${gy * 6 * this.reach})${grow}`)
+    els.front.setAttribute('transform', `translate(${gx * 2.5} ${gy * 2})`)
+    els.back.setAttribute('transform', `translate(${-gx * 3} ${-gy * 2})`)
     const blink = this.blinkP >= 0 ? 1 - 0.88 * Math.sin(Math.PI * this.blinkP) : 1
-    this.cur.eyes.forEach((e, i) => {
+    const open = Math.max(0, 1 - cur.happy - cur.shut)
+    const arcW = Math.max(5.5, this.line)
+    cur.eyes.forEach((e, i) => {
       const side = i === 0 ? -1 : 1
       const persp = 1 + side * gx * 0.1
       const w = e.w * persp
@@ -209,17 +235,26 @@ class FaceCtl {
       el.setAttribute('width', String(w))
       el.setAttribute('height', String(h))
       el.setAttribute('rx', String(Math.min(w, h) / 2))
-      el.setAttribute('transform', `rotate(${e.rot} ${x} ${y})`)
-      el.setAttribute('opacity', String(1 - this.cur.happy))
-      const s = 8 * 0.75
+      el.setAttribute('opacity', String(open))
+      // the highlight: up and left in the eye, gone when the eye narrows, shuts or is small
+      const r = Math.min(w, h) / 2
+      const sh = els.shines[i]
+      sh.setAttribute('cx', String(x - r * 0.33))
+      sh.setAttribute('cy', String(y - r * 0.38))
+      sh.setAttribute('r', String(r * 0.3))
+      sh.setAttribute('opacity', String(this.small || h < w * 0.8 ? 0 : open))
       const a = els.arcs[i]
-      a.setAttribute('d', `M${x - s} ${y + 3} Q${x} ${y - 7 * 0.8} ${x + s} ${y + 3}`)
-      a.setAttribute('opacity', String(this.cur.happy))
+      const up = `M${x - 9} ${y + 4} Q${x} ${y - 8} ${x + 9} ${y + 4}`
+      const down = `M${x - 9} ${y} Q${x} ${y + 6} ${x + 9} ${y}`
+      a.setAttribute('d', cur.happy >= cur.shut ? up : down)
+      a.setAttribute('stroke-width', String(arcW))
+      a.setAttribute('opacity', String(Math.max(cur.happy, cur.shut)))
     })
-    els.brows.forEach((el, i) => {
-      const b = this.cur.brows[i]
-      el.setAttribute('d', `M${b.x1} ${b.y1} Q${(b.x1 + b.x2) / 2} ${(b.y1 + b.y2) / 2 + b.bend} ${b.x2} ${b.y2}`)
-    })
+    const m = cur.mouth
+    els.mouth.setAttribute('d', `M${m.x1} ${m.y1} Q${m.cx} ${m.cy} ${m.x2} ${m.y2}`)
+    els.mouth.setAttribute('stroke-width', String(Math.max(m.w, this.small ? 7.5 : 0, this.line)))
+    els.led.setAttribute('opacity', String(cur.led))
+    els.zz.setAttribute('opacity', String(cur.zz))
   }
 }
 
@@ -257,20 +292,21 @@ type Props = {
   look?: { x: number; y: number } | null
   /** how far the eyes travel when they look somewhere; 1 = the Junior page's, more for small faces */
   reach?: number
-  /** eyes and brows scaled about the face's centre; 1 = the Junior page's, more for small faces */
+  /** eyes and mouth scaled about the face's centre; 1 = the Junior page's, more for small faces */
   features?: number
   className?: string
 }
 
-/** Junior's face at any size. Colour and name come from the workspace's persona. */
+/** Junior's face at any size. Colour, shape and name come from the workspace's persona. */
 export const JuniorFace = memo(function JuniorFace({ mood = 'hello', size = 40, motion = 'wander', colour, shape, decorative, className, look = null, reach = 1, features = 1 }: Props) {
   const persona = usePersona()
   const svg = useRef<SVGSVGElement>(null)
   const ctl = useRef<FaceCtl | null>(null)
   const p = facePalette(colour ?? persona.colour)
   const body = shapePaths(shape ?? persona.shape)
+  const small = size < 48
   // Lines in viewBox units, never thinner than about one screen pixel.
-  const line = Math.max(4.4, 112 / size)
+  const line = 112 / size
 
   // Build the controller once the skeleton is in the DOM (before paint, so the
   // eyes never flash empty); drop it with the face.
@@ -278,17 +314,24 @@ export const JuniorFace = memo(function JuniorFace({ mood = 'hello', size = 40, 
     const el = svg.current
     if (!el) return
     const q = <T extends Element>(sel: string) => [...el.querySelectorAll<T & Element>(sel)] as T[]
+    const one = <T extends Element>(part: string) => el.querySelector<T & Element>(`[data-part="${part}"]`)! as T
     const els: Els = {
       svg: el,
-      back: el.querySelector<SVGPathElement>('[data-part="back"]')!,
-      front: el.querySelector<SVGPathElement>('[data-part="front"]')!,
-      face: el.querySelector<SVGGElement>('[data-part="face"]')!,
+      back: one<SVGPathElement>('back'),
+      key: one<SVGGElement>('key'),
+      front: one<SVGGElement>('front'),
+      face: one<SVGGElement>('face'),
       eyes: q<SVGRectElement>('[data-part="eye"]'),
+      shines: q<SVGCircleElement>('[data-part="shine"]'),
       arcs: q<SVGPathElement>('[data-part="arc"]'),
-      brows: q<SVGPathElement>('[data-part="brow"]'),
+      mouth: one<SVGPathElement>('mouth'),
+      led: one<SVGGElement>('led'),
+      zz: one<SVGGElement>('zz'),
     }
     const c = new FaceCtl(els, mood, motion)
     ctl.current = c
+    c.small = small
+    c.line = line
     c.render()
     if (motion !== 'still' && !reduced()) {
       if (motion === 'follow') bindPointer()
@@ -311,8 +354,10 @@ export const JuniorFace = memo(function JuniorFace({ mood = 'hello', size = 40, 
     if (!c) return
     c.reach = reach
     c.features = features
+    c.small = small
+    c.line = line
     c.render()
-  }, [reach, features, motion])
+  }, [reach, features, motion, small, line])
 
   const lx = look?.x
   const ly = look?.y
@@ -328,7 +373,7 @@ export const JuniorFace = memo(function JuniorFace({ mood = 'hello', size = 40, 
     <svg
       ref={svg}
       className={className}
-      viewBox="-4 -4 112 110"
+      viewBox="8 10 112 112"
       width={size}
       height={size}
       role={decorative ? undefined : 'img'}
@@ -336,12 +381,30 @@ export const JuniorFace = memo(function JuniorFace({ mood = 'hello', size = 40, 
       aria-hidden={decorative ? true : undefined}
       style={{ overflow: 'visible', display: 'block', flex: 'none' }}
     >
-      <path data-part="back" d={body.back} fill={p.edge} />
-      <path data-part="front" d={body.front} fill={p.body} />
-      <g data-part="face">
-        {[0, 1].map((i) => <path key={`b${i}`} data-part="brow" fill="none" strokeWidth={line} strokeLinecap="round" stroke={p.brow} />)}
-        {[0, 1].map((i) => <rect key={`e${i}`} data-part="eye" fill={p.eye} />)}
-        {[0, 1].map((i) => <path key={`a${i}`} data-part="arc" fill="none" strokeWidth={line + 0.2} strokeLinecap="round" stroke={p.eye} opacity={0} />)}
+      <g transform={body.frame}>
+        <path data-part="back" d={body.back} fill={p.skirt} />
+      </g>
+      <g data-part="key">
+        <g data-part="front">
+          <g transform={body.frame}>
+            <path d={body.front} fill={body.top ? p.body : p.top} />
+          </g>
+          {body.top && <path d={body.top} fill={p.top} />}
+        </g>
+        <g data-part="face">
+          {[0, 1].map((i) => <rect key={`e${i}`} data-part="eye" fill={p.eye} />)}
+          {[0, 1].map((i) => <circle key={`s${i}`} data-part="shine" fill="#fff" />)}
+          {[0, 1].map((i) => <path key={`a${i}`} data-part="arc" fill="none" strokeLinecap="round" stroke={p.eye} opacity={0} />)}
+          <path data-part="mouth" fill="none" strokeLinecap="round" stroke={p.skirt} />
+        </g>
+      </g>
+      <g data-part="led" opacity={0}>
+        <circle cx={96} cy={31} r={9} fill="#ff6a1f" opacity={0.22} />
+        <circle cx={96} cy={31} r={4.5} fill="#ff6a1f" />
+      </g>
+      <g data-part="zz" opacity={0} fill={p.skirt} fontFamily="Geist Mono, ui-monospace, monospace" fontWeight={500}>
+        <text x={92} y={38} fontSize={13}>z</text>
+        <text x={101} y={28} fontSize={10}>z</text>
       </g>
     </svg>
   )

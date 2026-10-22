@@ -577,19 +577,19 @@ test('persona: names are one clean line; bad values keep what was there', () => 
   assert.equal(cleanName(''), 'Junior')
   assert.equal(cleanName(42), 'Junior')
   const p = personaFrom({ name: 'Pip', colour: 'red', voice: 'loud', replyStyle: 'Lead with what changed.\nNo emoji.', extra: 1 })
-  assert.deepEqual(p, { name: 'Pip', colour: DEFAULT_PERSONA.colour, shape: 'slab', voice: 'plain', replyStyle: 'Lead with what changed. No emoji.' })
+  assert.deepEqual(p, { name: 'Pip', colour: DEFAULT_PERSONA.colour, shape: 'key', voice: 'plain', replyStyle: 'Lead with what changed. No emoji.' })
   assert.deepEqual(personaFrom({ colour: '#8CC4FF' }, p), { ...p, colour: '#8cc4ff' })
   assert.deepEqual(personaFrom(null, p), p)
 })
 
-test('persona shape: one of the eight, kept when a patch has none; a persona saved before shapes is a slab', () => {
+test('persona shape: one of the nine, kept when a patch has none; a persona saved before shapes is the key', () => {
   assert.equal(personaFrom({ shape: 'ghost' }).shape, 'ghost')
-  assert.equal(personaFrom({ shape: 'triangle' }).shape, 'slab')
+  assert.equal(personaFrom({ shape: 'triangle' }).shape, 'key')
   const ghost = personaFrom({ shape: 'ghost' })
   assert.equal(personaFrom({ name: 'Pip' }, ghost).shape, 'ghost', 'a patch without a shape keeps the one there')
   const old = { name: 'Pip', colour: '#b4a0f4', voice: 'plain', replyStyle: '' }
-  assert.equal(personaFrom(old).shape, 'slab')
-  assert.equal(personaFrom({}, old as never).shape, 'slab')
+  assert.equal(personaFrom(old).shape, 'key')
+  assert.equal(personaFrom({}, old as never).shape, 'key')
   for (const [shape] of SHAPES) {
     const { back, front } = shapePaths(shape)
     assert.match(front, /^M[\d .CLZ-]+Z$/, `${shape}: a closed path`)

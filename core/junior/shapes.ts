@@ -1,15 +1,18 @@
 /**
- * Junior's body shapes (Settings → About me → Shape). Each is the face's front
- * path in the face's own viewBox (-4 -4 112 110); the darker underside is the
- * same outline nudged down and right, so every shape keeps the slab's sense of
- * depth. Every outline leaves room for the eyes (y≈56, x 37 and 63) and the
- * brows (y≈40), which don't move between shapes. Pure and browser-safe.
+ * Junior's body shapes (Settings → About me → Shape). The key is the brand's
+ * (brand v2, .docs/junior-goals-teams/junior-brand-v2.html): skirt, body and
+ * top, drawn in its 128-unit grid (viewBox 8 10 112 112), eyes at y 55, x 49
+ * and 79. The others are the older slab-era outlines in their own grid
+ * (-4 -4 112 110, eyes at y≈56, x 37 and 63), placed onto the key's grid by
+ * `frame`; their darker underside is the front nudged down and right.
+ * Pure and browser-safe.
  */
 
-export type Shape = 'slab' | 'pebble' | 'squircle' | 'pill' | 'bun' | 'cloud' | 'ghost' | 'blob'
+export type Shape = 'key' | 'slab' | 'pebble' | 'squircle' | 'pill' | 'bun' | 'cloud' | 'ghost' | 'blob'
 
 /** In picker order; the first is the default. */
 export const SHAPES: ReadonlyArray<readonly [shape: Shape, label: string]> = [
+  ['key', 'Key'],
   ['slab', 'Slab'],
   ['pebble', 'Pebble'],
   ['squircle', 'Squircle'],
@@ -20,10 +23,10 @@ export const SHAPES: ReadonlyArray<readonly [shape: Shape, label: string]> = [
   ['blob', 'Blob'],
 ]
 
-export const DEFAULT_SHAPE: Shape = 'slab'
+export const DEFAULT_SHAPE: Shape = 'key'
 export const isShape = (v: unknown): v is Shape => SHAPES.some(([s]) => s === v)
 
-const FRONT: Record<Shape, string> = {
+const FRONT: Record<Exclude<Shape, 'key'>, string> = {
   slab: 'M17 9 C39 5 65 5 83 11 C92 14 94 23 94 39 C94 57 93 73 87 82 C83 89 73 90 53 90 C33 90 19 90 12 84 C6 78 5 62 5 44 C5 26 7 13 17 9 Z',
   pebble: 'M48 4 C75 3 95 21 94 47 C93 74 77 92 50 91 C23 90 5 74 6 47 C7 21 22 5 48 4 Z',
   squircle: 'M50 5 C84 5 94 15 94 48 C94 81 84 90 50 90 C16 90 6 81 6 48 C6 15 16 5 50 5 Z',
@@ -43,8 +46,28 @@ function nudge(d: string, dx: number, dy: number): string {
   return d.replace(/(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)/g, (_, x: string, y: string) => `${Number(x) + dx} ${Number(y) + dy}`)
 }
 
-/** The two paths the face draws for a shape: its underside, then its front. */
-export function shapePaths(shape: Shape): { back: string; front: string } {
+/** A superellipse (n 4.5): the brand key's corner, as an absolute M/L path. */
+function squircle(cx: number, cy: number, a: number, b: number, n = 4.5): string {
+  let d = ''
+  for (let i = 0; i < 120; i++) {
+    const t = (i / 120) * Math.PI * 2
+    const c = Math.cos(t)
+    const s = Math.sin(t)
+    d += `${i ? 'L' : 'M'}${(cx + a * Math.sign(c) * Math.abs(c) ** (2 / n)).toFixed(2)} ${(cy + b * Math.sign(s) * Math.abs(s) ** (2 / n)).toFixed(2)}`
+  }
+  return d + 'Z'
+}
+
+const KEY = { back: squircle(64, 70, 54, 48), front: squircle(64, 62, 54, 48), top: squircle(64, 57, 43, 37) }
+/** The older outlines onto the key's grid: their eyes (37/63, 56) land on the key's (49/79, 55). */
+const OLD_FRAME = 'translate(6.3 -9.6) scale(1.154)'
+
+/**
+ * What the face draws for a shape: its underside, its front, the key's lighter
+ * top (the key only), and the transform that puts it on the key's grid.
+ */
+export function shapePaths(shape: Shape): { back: string; front: string; top?: string; frame?: string } {
   const s = isShape(shape) ? shape : DEFAULT_SHAPE
-  return { front: FRONT[s], back: s === 'slab' ? SLAB_BACK : nudge(FRONT[s], DEPTH.x, DEPTH.y) }
+  if (s === 'key') return { ...KEY }
+  return { front: FRONT[s], back: s === 'slab' ? SLAB_BACK : nudge(FRONT[s], DEPTH.x, DEPTH.y), frame: OLD_FRAME }
 }
