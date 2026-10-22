@@ -21,7 +21,7 @@
 
   .topbar.mobile { gap: 4px; height: 48px; padding: 0 max(6px, env(safe-area-inset-right)) 0 max(8px, env(safe-area-inset-left)); }
   .topbar.mobile .logo { padding-left: 6px; }
-  .topbar.mobile .logo .logoLockup { height: 17px; }
+  .topbar.mobile .logo .logoLockup { height: 14.5px; }
   .topbar.mobile .topIcon { height: 40px; min-width: 40px; }
   .topbar.mobile .topIcon .connDot { right: 8px; top: 9px; }
   .topbar.mobile .back { color: var(--ink); margin-right: -2px; }

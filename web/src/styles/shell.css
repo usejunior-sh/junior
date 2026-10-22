@@ -128,7 +128,7 @@ kbd { font-family: var(--mono); font-size: 0.8462rem; color: var(--ash); border:
 /* The wordmark: the brand files (assets/brand/junior-wordmark*.svg), white on
    dark schemes, black on light. No key: the rail's face is the one face. */
 .logo { display: inline-flex; align-items: center; line-height: 1; }
-.logo .logoLockup { display: block; height: 18px; width: auto; aspect-ratio: 2982 / 784; flex: none; }
+.logo .logoLockup { display: block; height: 15.5px; width: auto; aspect-ratio: 2982 / 784; flex: none; }
 :root[data-scheme="light"] .logo .logoOnDark,
 :root:not([data-scheme="light"]) .logo .logoOnLight { display: none; }
 .wsPill {
