@@ -56,6 +56,33 @@ const ROWS: Row[] = [
   ['git -C ../other push origin "$(git branch --show-current)"', onFeat, 'hold', 'the current branch of another folder'],
   ['cd ../other && git push origin @', onFeat, 'hold', 'after a cd, @ is another folder’s branch'],
   ['eval "git push origin feat/x && gh pr comment 1 --body hi"', onFeat, 'hold', 'one held part inside eval holds it'],
+  // The review's probe: the command itself, not just its target, only the shell knows.
+  ['eval "$CMD"', onFeat, 'hold', 'eval of a variable runs anything'],
+  ['eval $CMD', onFeat, 'hold', 'unquoted, too'],
+  ['bash -c "$CMD"', onFeat, 'hold', 'bash -c of a variable runs anything'],
+  ['$G push origin feat/x', onFeat, 'hold', 'the program is a variable'],
+  ['$G push origin main', onMain, 'hold', 'the program is a variable, on main'],
+  ['"$GIT" push origin main', onMain, 'hold', 'a quoted variable program'],
+  ['G=git; $G push origin main', onMain, 'hold', 'a program set a part earlier'],
+  ['$(which git) push origin main', onMain, 'hold', 'a substituted program'],
+  ['$(echo /usr/bin/git) push origin main', onMain, 'hold', 'a substituted program with a path in it'],
+  ['git $VERB origin main', onMain, 'hold', 'git’s verb only the shell knows'],
+  ['gh $SUB comment 1 --body hi', onFeat, 'hold', 'gh’s verb only the shell knows'],
+  ['echo "push origin main" | xargs git', onMain, 'hold', 'xargs supplies the verb'],
+  ['echo "pr comment 1 --body hi" | xargs gh', onFeat, 'hold', 'xargs supplies gh’s verb'],
+  ['echo "comment 1 --body hi" | xargs gh pr', onFeat, 'hold', 'xargs supplies gh’s subcommand'],
+  ["echo 'git push origin main' | xargs -I{} sh -c {}", onMain, 'hold', 'xargs supplies the whole script'],
+  ["echo 'git push origin main' | xargs -I % bash -c %", onFeat, 'hold', 'any placeholder'],
+  ['echo x.sh | xargs sh', onFeat, 'hold', 'xargs names the script file'],
+  ['echo "git push origin main" | xargs env', onFeat, 'hold', 'xargs supplies the program behind a wrapper'],
+  ['echo "git push origin main" | xargs -I{} {}', onFeat, 'hold', 'xargs supplies the program'],
+  ['echo main | xargs -e git push origin', onMain, 'hold', 'GNU -e takes no separate value'],
+  ['git push origin heads/main', onMain, 'hold', 'git reads heads/main as refs/heads/main'],
+  ['git push origin feat:heads/main', onFeat, 'hold', 'a heads/ destination is the default branch'],
+  ['git push origin feat:refs/remotes/origin/main', onFeat, 'hold', 'a ref that isn’t a branch is unknown'],
+  ['git push origin refs/tags/v1', onFeat, 'hold', 'a tag is not your branch'],
+  ['npx -c "git push origin main"', onFeat, 'hold', 'npx -c runs its string as a script'],
+  ['npx --call="gh pr comment 1 --body hi"', onFeat, 'hold', 'the --call= form of it'],
   // Near misses that stay free on your own branch.
   ['git push -u origin "$(git branch --show-current)"', onFeat, 'allow', 'the current-branch substitution is feat/x'],
   ['git push -u origin "$(git rev-parse --abbrev-ref HEAD)"', onFeat, 'allow', 'the rev-parse form of it'],
@@ -70,6 +97,18 @@ const ROWS: Row[] = [
   ['git push -o ci.skip origin feat/x', onFeat, 'allow', 'a push option and its value'],
   ['eval "git push origin feat/x"', onFeat, 'allow', 'eval is judged by what it runs'],
   ['bash -c "git push origin feat/x"', onFeat, 'allow', 'so is bash -c, as before'],
+  ['git push origin heads/feat/x', onFeat, 'allow', 'heads/feat/x is feat/x'],
+  ['git push origin HEAD:refs/heads/feat/x', onFeat, 'allow', 'a full branch ref, as before'],
+  ['npx -c "git push origin feat/x"', onFeat, 'allow', 'npx -c is judged by what it runs'],
+  ['npx -c "eslint ."', onFeat, 'allow', 'a local npx -c script'],
+  // Local commands that only look like the shapes above stay out of the way.
+  ['$HOME/bin/lint src', onMain, 'allow', 'a path through a variable to a named program'],
+  ['git ls-files -m | xargs git add', onMain, 'allow', 'xargs into a local git verb'],
+  ["git ls-files | xargs -I{} git checkout -- {}", onMain, 'allow', 'a placeholder in a local git verb’s arguments'],
+  ["find . -name '*.ts' | xargs sh -c 'wc -l \"$@\"' _", onMain, 'allow', 'a fixed script behind xargs'],
+  ['ls | xargs', onMain, 'allow', 'a bare xargs runs echo'],
+  ['git -C "$DIR" status', onMain, 'allow', 'a variable flag value is not the verb'],
+  ['bash -c \'echo "$HOME"\'', onMain, 'allow', 'a variable inside a fixed script'],
 ]
 
 for (const [cmd, scope, expected, why] of ROWS) {
@@ -91,6 +130,18 @@ test('pushRefs: what each refspec sends to', () => {
   assert.deepEqual(r('git push origin "$(git branch --show-current) extra"'), ['unknown'])
   assert.deepEqual(r('git push -- origin feat'), [{ branch: 'feat' }])
   assert.deepEqual(r('npm test'), [])
+  assert.deepEqual(r('git push origin heads/main'), [{ branch: 'main' }])
+  assert.deepEqual(r('git push origin tags/v1'), ['unknown'])
+})
+
+test('unknown commands sort as actions, so a hold has a card to wait on', () => {
+  const s = sort('$G push origin main')
+  assert.equal(s?.kind, 'other')
+  assert.equal(s?.why, 'unknown')
+  assert.equal(s?.whyDetail, null)
+  assert.equal(sort('echo "push origin main" | xargs git')?.why, 'unknown')
+  assert.equal(sort('git $OPTS push origin feat/x')?.kind, 'push', 'a matched pattern still names it')
+  assert.equal(sort('git ls-files -m | xargs git add'), null)
 })
 
 test('pushTarget names a branch only when exactly one is named', () => {

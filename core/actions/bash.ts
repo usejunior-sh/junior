@@ -153,11 +153,15 @@ export function splitCommand(src: string): CommandPart[] {
 
 /**
  * The script a command runs, when it runs one: `bash -c "git push && …"`,
- * `eval "git push origin main"` (its words joined, as eval does). Its parts
+ * `eval "git push origin main"` (its words joined, as eval does),
+ * `npx -c "…"`. Its parts
  * always follow it in splitCommand, so a caller judging parts may judge the
  * script's parts and skip this one.
  */
 export function scriptOf(part: CommandPart): string | null {
+  // `npx -c "…"` runs its string as a script, like `bash -c`.
+  const { calls } = peel(part)
+  if (calls.length) return calls.join('\n')
   const w = unwrap(part)
   if (w[0] === 'eval') return w.length > 1 ? w.slice(1).join(' ') : null
   if (!SHELLS.has(w[0])) return null
@@ -299,7 +303,8 @@ const WRAPPERS = new Map<string, Set<string>>([
   ['npx', new Set(['-p', '--package', '-c', '--call'])],
   ['bunx', new Set(['-p', '--package'])],
   // xargs adds words from its input to the command: see pushRefs.
-  ['xargs', new Set(['-I', '-n', '-P', '-L', '-d', '-E', '-e', '-s', '-J', '-R', '-a', '--arg-file', '--delimiter', '--max-args', '--max-procs', '--max-lines', '--max-chars'])],
+  // GNU's `-e[eof]`, `-i[str]` and `-l[n]` take their value attached, if at all.
+  ['xargs', new Set(['-I', '-n', '-P', '-L', '-d', '-E', '-s', '-J', '-R', '-a', '--arg-file', '--delimiter', '--max-args', '--max-procs', '--max-lines', '--max-chars'])],
 ])
 /** Global flags that take the next word as their value (`git -C dir push`, `gh -R o/r …`). */
 const VALUE_FLAGS = new Set(['-C', '-c', '-R', '--repo', '--git-dir', '--work-tree', '--namespace'])
@@ -323,22 +328,100 @@ export function unwrap(part: CommandPart): CommandPart {
 /** The wrappers a command runs under, by basename: `sudo xargs git push` → ['sudo', 'xargs']. */
 export const wrappersOf = (part: CommandPart): string[] => peel(part).wrappers
 
-/** Where the command proper starts (-1: a `for`/`case` header), and what wraps it. */
-function peel(part: CommandPart): { at: number; wrappers: string[] } {
-  const wrappers: string[] = []
+type Peeled = {
+  /** where the command proper starts; -1 for a `for`/`case` header */
+  at: number
+  /** the wrappers it runs under, by basename */
+  wrappers: string[]
+  /** the scripts of `npx -c "…"` */
+  calls: string[]
+  /** xargs's replace strings (`-I {}`, `-i`, `-J %`): where its input words land */
+  placeholders: string[]
+}
+
+/** Where the command proper starts, and what wraps it. */
+function peel(part: CommandPart): Peeled {
+  const out: Peeled = { at: 0, wrappers: [], calls: [], placeholders: [] }
   let i = 0
   while (i < part.length) {
     const w = part[i]
-    if (LIST_WORDS.has(w)) return { at: -1, wrappers }
-    const flags = WRAPPERS.get(basename(w))
+    if (LIST_WORDS.has(w)) return { ...out, at: -1 }
+    const name = basename(w)
+    const flags = WRAPPERS.get(name)
     if (LEAD_WORDS.has(w) || /^[A-Za-z_][A-Za-z0-9_]*=/.test(w)) i++
     else if (flags) {
-      wrappers.push(basename(w))
+      out.wrappers.push(name)
       i++
-      while (i < part.length && part[i].startsWith('-')) i += flags.has(part[i]) ? 2 : 1
+      while (i < part.length && part[i].startsWith('-')) {
+        const f = part[i]
+        const next = part[i + 1]
+        if (name === 'npx') {
+          if ((f === '-c' || f === '--call') && next !== undefined) out.calls.push(next)
+          else if (f.startsWith('--call=')) out.calls.push(f.slice('--call='.length))
+        } else if (name === 'xargs') {
+          if ((f === '-I' || f === '-J') && next !== undefined) out.placeholders.push(next)
+          else if (/^-[IJi]./.test(f)) out.placeholders.push(f.slice(2))
+          else if (f === '-i' || f === '--replace') out.placeholders.push('{}')
+          else if (f.startsWith('--replace=')) out.placeholders.push(f.slice('--replace='.length) || '{}')
+        }
+        i += flags.has(f) ? 2 : 1
+      }
     } else break
   }
-  return { at: i, wrappers }
+  out.at = i
+  return out
+}
+
+/** git and gh: where the verb sits, past the global flags and their values; -1 when there is none. */
+function verbAt(w: CommandPart): number {
+  for (let i = 1; i < w.length; i++) {
+    if (!w[i].startsWith('-')) return i
+    if (VALUE_FLAGS.has(w[i])) i++
+  }
+  return -1
+}
+
+/** git verbs that stay on this machine whatever words xargs adds to them. */
+const XARGS_LOCAL_GIT = new Set(['add', 'rm', 'mv', 'restore', 'checkout', 'diff', 'log', 'show', 'blame', 'grep', 'ls-files', 'status', 'rev-parse', 'cat-file', 'reset', 'check-ignore'])
+
+/**
+ * Does only the shell, or xargs's input, decide what this command runs?
+ * Then it can't be judged from its text, and is held like a send:
+ *
+ *   $G push origin main          the program is a variable or a substitution
+ *   git $VERB origin main        so is git's or gh's verb
+ *   … | xargs git                xargs supplies the verb (any gh, and git
+ *   … | xargs env                but for a few local verbs), the program
+ *   … | xargs -I{} sh -c {}      behind a wrapper, or the script itself
+ *
+ * `eval "$CMD"` and `bash -c "$CMD"` land here through their script's part.
+ */
+export function unknownCommand(part: CommandPart): boolean {
+  const { at, wrappers, calls, placeholders } = peel(part)
+  if (at < 0) return false
+  const w = unwrap(part)
+  const prog = w[0]
+  // `$G`, `"$GIT"`, `$(which git)`, `${X:-git}`: the basename still shows it.
+  if (prog !== undefined && /[$`)}]/.test(prog)) return true
+  if (prog === 'git' || prog === 'gh') {
+    const v = verbAt(w)
+    if (v !== -1 && EXPANSION.test(w[v])) return true
+  }
+  if (!wrappers.includes('xargs')) return false
+  // `xargs env`, `xargs sudo`: the command is the input. A bare `xargs` runs echo.
+  if (prog === undefined) return calls.length === 0 && wrappers[wrappers.length - 1] !== 'xargs'
+  const lands = (t: string) => placeholders.some((p) => p !== '' && t.includes(p))
+  if (lands(prog)) return true
+  const script = scriptOf(part)
+  if (script !== null) return !script.trim() || lands(script)
+  // `xargs sh` runs files named by its input.
+  if (SHELLS.has(prog)) return true
+  if (prog === 'gh') return true
+  if (prog === 'git') {
+    const v = verbAt(w)
+    return v === -1 || !XARGS_LOCAL_GIT.has(w[v])
+  }
+  return false
 }
 
 /** Parse one pattern line; a string is the reason it's no good. */
@@ -487,7 +570,11 @@ function refOf(spec: string): PushRef {
   if (EXPANSION.test(src) && !CURRENT_SUBST.test(src)) return 'unknown'
   if (CURRENT_SUBST.test(dst)) return 'current'
   if (EXPANSION.test(dst) || GLOB.test(ref)) return 'unknown'
-  dst = dst.replace(/^refs\/heads\//, '')
+  // git reads `heads/main` as refs/heads/main; any other ref (`refs/tags/v1`,
+  // `tags/v1`) is not a branch at all.
+  if (dst.startsWith('refs/heads/')) dst = dst.slice('refs/heads/'.length)
+  else if (/^(refs|tags|remotes)\//.test(dst)) return 'unknown'
+  else if (dst.startsWith('heads/')) dst = dst.slice('heads/'.length)
   if (!dst || dst === 'HEAD' || dst === '@') return 'unknown'
   return { branch: dst }
 }

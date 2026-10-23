@@ -5,13 +5,15 @@
  *   MCP connectors   1. the server's tool annotations → 2. verbs in the tool's
  *                    name (a write verb wins) → 3. unknown = an action
  *   Bash             split into simple commands; a part matching the outbound
- *                    list in the actions file is an action, nothing else is
+ *                    list in the actions file is an action, and so is one
+ *                    whose command only the shell knows (`$G push`, `xargs
+ *                    git`: unknown = an action); nothing else is
  *   built-ins        never (Write, Edit… are local; Changes shows them)
  *
  * The actions file's overrides come first for both. Junior's own in-process
  * servers are local by construction. Pure and browser-safe.
  */
-import { describePart, matchPart, parsePattern, pushTarget, splitCommand, type BashPattern, type CommandPart } from './bash.js'
+import { describePart, matchPart, parsePattern, pushTarget, splitCommand, unknownCommand, type BashPattern, type CommandPart } from './bash.js'
 import { bashOverride, parseActionsFile, withOverride, type ActionRules } from './rules.js'
 import type { ActionKind, ActionWhy } from './types.js'
 import { LOCAL_SERVERS, serverOf } from './own.js'
@@ -122,7 +124,8 @@ function sortBash(command: string, rules: ActionRules): SortedAction | null {
   const parts = splitCommand(command)
   const skip = rules.notAction.map(bashOverride).filter((p): p is BashPattern => !!p && typeof p !== 'string')
   const forced = rules.action.map(bashOverride).filter((p): p is BashPattern => !!p && typeof p !== 'string')
-  const hits: Array<{ kind: ActionKind; pattern: BashPattern; part: CommandPart; why: ActionWhy }> = []
+  // `pattern: null`: no pattern matched, but only the shell knows what the part runs.
+  const hits: Array<{ kind: ActionKind; pattern: BashPattern | null; part: CommandPart; why: ActionWhy }> = []
   for (const part of parts) {
     if (skip.some((p) => matchPart(part, p) >= 0)) continue
     const own = forced.find((p) => matchPart(part, p) >= 0)
@@ -132,15 +135,16 @@ function sortBash(command: string, rules: ActionRules): SortedAction | null {
     }
     const b = rules.bash.find((x) => matchPart(part, x.pattern) >= 0)
     if (b) hits.push({ kind: b.kind, pattern: b.pattern, part, why: 'bash pattern' })
+    else if (unknownCommand(part)) hits.push({ kind: 'other', pattern: null, part, why: 'unknown' })
   }
   if (!hits.length) return null
   const lead = [...hits].sort((a, b) => KIND_RANK.indexOf(a.kind) - KIND_RANK.indexOf(b.kind))[0]
-  const patterns = [...new Set(hits.map((h) => h.pattern.text))]
+  const patterns = [...new Set(hits.flatMap((h) => (h.pattern ? [h.pattern.text] : [])))]
   return {
     kind: lead.kind,
     why: lead.why,
-    whyDetail: patterns.join(', '),
-    summary: describePart(lead.part, lead.pattern),
+    whyDetail: patterns.length ? patterns.join(', ') : null,
+    summary: lead.pattern ? describePart(lead.part, lead.pattern) : clip(lead.part.join(' '), 140),
     ...(lead.kind === 'push' ? { pushBranch: pushTarget(lead.part) ?? '' } : {}),
   }
 }

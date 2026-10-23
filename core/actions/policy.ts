@@ -12,13 +12,15 @@
  *
  * Plain --force, deleting or mirroring, anything to the default branch, and
  * a target only the shell knows (`$B`, `"${BRANCH}"`, a glob, words fed in
- * by xargs) are held like any send. The checked-out branch by name (`HEAD`,
- * `@`, `"$(git branch --show-current)"`) is judged as that branch.
+ * by xargs) are held like any send. So is a command only the shell knows
+ * (`$G push`, `eval "$CMD"`, `… | xargs git`). The checked-out branch by
+ * name (`HEAD`, `@`, `"$(git branch --show-current)"`) is judged as that
+ * branch.
  *
  * Pure and browser-safe.
  */
 import type { PermissionMode, ProviderId } from '../../shared/protocol.js'
-import { pushRefs, scriptOf, splitCommand, unwrap, type CommandPart } from './bash.js'
+import { pushRefs, scriptOf, splitCommand, unknownCommand, unwrap, type CommandPart } from './bash.js'
 import type { SortedAction } from './sort.js'
 
 /**
@@ -99,7 +101,10 @@ export function chatBashVerdict(command: string, s: BranchScope, sortPart: (part
   // A `cd` first: the checked-out branch we know is the wrong folder's.
   if (parts.some((p) => unwrap(p)[0] === 'cd' || unwrap(p)[0] === 'pushd')) s = { ...s, current: null }
   for (const part of parts) {
-    // `eval "…"` and `bash -c "…"`: their own parts follow and are judged one by one.
+    // `$G push`, `xargs git`, `xargs -I{} sh -c {}`: the shell decides what runs, not us.
+    if (unknownCommand(part)) return { verdict: 'hold' }
+    // `eval "…"` and `bash -c "…"`: their own parts follow and are judged one by one
+    // (`eval "$CMD"` holds through its part, `$CMD`).
     if (scriptOf(part) !== null) continue
     const sorted = sortPart(part.join(' '))
     if (!sorted) continue
