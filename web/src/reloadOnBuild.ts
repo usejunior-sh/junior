@@ -86,6 +86,23 @@ export function loadedFrom(first: Build, pageUi: string | null): Build {
   return pageUi && first.ui ? { ...first, ui: pageUi } : first
 }
 
+/**
+ * A `build` off the socket that the rules can trust: the frame is cast, not
+ * validated, so a mismatched daemon could send anything. Only the fields
+ * buildKey and buildChanged read are checked; anything else is no build, and
+ * no reload.
+ */
+export function isBuild(v: unknown): v is Build {
+  if (typeof v !== 'object' || v === null) return false
+  const { version, root, channel, ui } = v as Record<string, unknown>
+  return (
+    typeof version === 'string' &&
+    typeof root === 'string' &&
+    (channel === 'dev' || channel === 'preview' || channel === 'release') &&
+    (ui === undefined || ui === null || typeof ui === 'string')
+  )
+}
+
 /** Read back a mark from storage; anything malformed is no mark. */
 export function parseReloadMark(raw: string | null): ReloadMark | null {
   if (!raw) return null

@@ -41,7 +41,8 @@ export function AddressField({
   const atRest = !editing && parts !== null
 
   return (
-    <form className={`bpUrl${editing ? ' on' : ''}`} onSubmit={go}>
+    // A URL is no edit of yours to lose on a reload (reloadGuard.ts).
+    <form className={`bpUrl${editing ? ' on' : ''}`} onSubmit={go} data-reload-exempt="">
       {atRest && (
         <button type="button" className="bpUrlRest mono" tabIndex={-1} aria-hidden="true" onMouseDown={(e) => e.preventDefault()} onClick={() => input.current?.focus()}>
           {parts.mark === 'secure' && <Lock size={12} className="bpMark" aria-hidden="true" />}

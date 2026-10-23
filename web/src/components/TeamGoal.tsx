@@ -227,6 +227,8 @@ function GoalEdit({ run, goal, onError }: { run: TeamRunView; goal: RunGoal | nu
         value={doneWhen}
         onChange={(e) => setDoneWhen(e.target.value)}
         onBlur={() => doneWhen.trim() && doneWhen.trim() !== goal.doneWhen && save({ doneWhen: doneWhen.trim(), horizon: kind })}
+        // Saves on blur, so out of focus it is never unsaved (reloadGuard.ts).
+        data-reload-exempt=""
         placeholder="The outcome Junior judges, e.g. “the PR is merged with checks green”"
         aria-label="Done when"
       />

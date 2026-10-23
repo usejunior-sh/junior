@@ -13,6 +13,7 @@ import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import type { Build } from '../../../shared/protocol.js'
 import { MOD_LABEL, isMac } from '../keys.js'
 import { reloadBlockers } from '../reloadGuard.js'
+import { buildKey } from '../reloadOnBuild.js'
 import { Tooltip } from '../ui/Tooltip.js'
 
 type Props = {
@@ -41,7 +42,7 @@ export function UpdateBar({ pending, mobile, onReload, onHide }: Props) {
   }, [confirming])
 
   // A newer build while confirming (or the bar going away) starts over.
-  const key = pending ? `${pending.version}|${pending.ui ?? ''}` : ''
+  const key = pending ? buildKey(pending) : ''
   useEffect(() => setConfirming(false), [key])
 
   const reload = () => {

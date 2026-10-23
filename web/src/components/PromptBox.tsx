@@ -279,6 +279,8 @@ export function PromptBox({
     <div
       id="composer"
       className={headBelow ? 'headBelow' : undefined}
+      // Its draft lives in localStorage, so the reload safety net skips it.
+      data-draft-persisted=""
       // A reload now would cost you what you're writing (reloadGuard.ts).
       data-reload-guard={text.trim() || attach.images.length > 0 || attach.files.length > 0 ? 'draft' : undefined}
     >

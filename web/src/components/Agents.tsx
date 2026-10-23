@@ -382,7 +382,8 @@ export function AgentComposer({ run, onSend }: { run: AgentRun; onSend: (text: s
     setText('')
   }
   return (
-    <div id="composer" className="agentComposer">
+    // Its text lives only here, so a reload now would lose it (reloadGuard.ts).
+    <div id="composer" className="agentComposer" data-reload-guard={text.trim() ? 'draft' : undefined}>
       <div className="frame card">
         <textarea
           className="acBox"

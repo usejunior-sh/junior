@@ -692,7 +692,7 @@ function FindBar({ tabKey, onClose }: { tabKey: string; onClose: () => void }) {
   }
 
   return (
-    <div className="bpFind" role="search">
+    <div className="bpFind" role="search" data-reload-exempt="">
       <Search size={12} className="bpMark" aria-hidden="true" />
       <input
         ref={input}

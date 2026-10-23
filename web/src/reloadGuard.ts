@@ -6,14 +6,23 @@
  * `data-reload-guard="<kind>"` while it is true (PromptBox with text or an
  * attachment, a card waiting on you, an editor with unsaved text). The rest is
  * read off the page itself: a text field you're typing in, an open dialog, and
- * a safety net for every editor that never marked itself: any editable field
- * on screen with text in it counts as an unsaved edit, focused or not, window
- * visible or not. Most of those editors keep nothing in storage, so a reload
- * would drop the text for good.
+ * a safety net for every editor that never marked itself: a textarea or
+ * contenteditable on screen that you typed text into since the page loaded
+ * counts as an unsaved edit, focused or not, window visible or not. Most of
+ * those editors keep nothing in storage, so a reload would drop the text.
  *
- * Composer drafts (PromptBox, `#composer`) already persist in localStorage and
- * mark themselves, so the safety net skips them; xterm's helper textarea holds
- * no text of yours and is skipped too.
+ * What the safety net leaves alone, so the quiet reload isn't held for nothing
+ * and the confirm never claims an edit that isn't there:
+ * - text you didn't type: a form opened on saved values, a log, the browser's
+ *   address (prefilled fields are not edits);
+ * - single-line inputs out of focus: settings fields save on blur, and filters
+ *   and searches are no edit (a focused one still counts as typing);
+ * - anything under `data-reload-exempt`: the browser's address and find fields,
+ *   a field that saves on blur, xterm's helper textarea;
+ * - a composer under `data-draft-persisted` (PromptBox): its draft lives in
+ *   localStorage, and it marks itself `draft` anyway.
+ * A composer that keeps its text only in memory (the subagent composer) marks
+ * itself `draft` instead.
  *
  * The rules are pure (`blockersOf` over plain facts) so
  * test/reload-on-build.test.ts can walk them without a DOM; `reloadBlockers`
@@ -35,7 +44,9 @@ export type FieldFacts = {
   text: string
   readOnly?: boolean
   disabled?: boolean
-  /** inside a composer that persists its own draft, or xterm's helper textarea */
+  /** you typed into it since the page loaded; a value it was given (a saved setting, a URL) is not yours to lose */
+  typed?: boolean
+  /** under `data-reload-exempt` or `data-draft-persisted`, or xterm's helper textarea */
   exempt?: boolean
 }
 
@@ -58,19 +69,22 @@ export function holdsText(f: FieldFacts): boolean {
 }
 
 /**
- * A field whose text a reload would drop: editable, not a persisted composer,
- * and not a search box (a filter isn't an edit, and the confirm would say so).
+ * A field out of focus whose text a reload would drop: a textarea or
+ * contenteditable you typed into, editable, not exempt. Single-line inputs
+ * never count here: settings save on blur, and a filter or search isn't an
+ * edit, so the confirm would say something untrue.
  */
 export function holdsUnsavedText(f: FieldFacts): boolean {
-  if (f.exempt || f.readOnly || f.disabled) return false
-  if (f.kind === 'input' && f.type === 'search') return false
+  if (f.exempt || f.readOnly || f.disabled || !f.typed) return false
+  if (f.kind === 'input') return false
   return holdsText(f)
 }
 
 export function blockersOf(p: PageFacts): Set<ReloadBlocker> {
   const out = new Set<ReloadBlocker>()
   for (const kind of p.guards) if (KINDS.has(kind)) out.add(kind as ReloadBlocker)
-  if (!p.hidden && p.focused && !p.focused.exempt && holdsText(p.focused)) out.add('typing')
+  // Only text you typed: focus resting in a field that shows a saved value loses nothing.
+  if (!p.hidden && p.focused && !p.focused.exempt && p.focused.typed && holdsText(p.focused)) out.add('typing')
   // Kept while hidden: text sitting in a field is lost whether you're looking or not.
   if (p.fields.some(holdsUnsavedText)) out.add('edit')
   if (p.dialogOpen) out.add('dialog')
@@ -80,19 +94,31 @@ export function blockersOf(p: PageFacts): Set<ReloadBlocker> {
 // gathering the facts (DOM)
 
 const FIELDS = 'textarea, input, [contenteditable]:not([contenteditable="false"])'
-const EXEMPT = '#composer, .xterm-helper-textarea'
+const EXEMPT = '[data-reload-exempt], [data-draft-persisted], .xterm-helper-textarea'
 const DIALOG = '[role="dialog"][data-state="open"], [role="alertdialog"], dialog[open]'
+
+/**
+ * Fields you typed into since the page loaded. `input` fires only for what you
+ * type, paste or drop, never for a value React sets, so a field opened on a
+ * saved value stays out until you change it. (A controlled field's
+ * defaultValue can't tell: React keeps it in step with the value.)
+ */
+const typedInto = new WeakSet<EventTarget>()
+if (typeof document !== 'undefined') {
+  document.addEventListener('input', (e) => e.target && typedInto.add(e.target), { capture: true })
+}
 
 function factsOf(el: Element): FieldFacts | null {
   const exempt = el.closest(EXEMPT) !== null
+  const typed = typedInto.has(el)
   if (el instanceof HTMLTextAreaElement) {
-    return { kind: 'textarea', text: el.value, readOnly: el.readOnly, disabled: el.disabled, exempt }
+    return { kind: 'textarea', text: el.value, readOnly: el.readOnly, disabled: el.disabled, typed, exempt }
   }
   if (el instanceof HTMLInputElement) {
-    return { kind: 'input', type: el.type, text: el.value, readOnly: el.readOnly, disabled: el.disabled, exempt }
+    return { kind: 'input', type: el.type, text: el.value, readOnly: el.readOnly, disabled: el.disabled, typed, exempt }
   }
   if (el instanceof HTMLElement && el.isContentEditable) {
-    return { kind: 'editable', text: el.textContent ?? '', exempt }
+    return { kind: 'editable', text: el.textContent ?? '', typed, exempt }
   }
   return null
 }

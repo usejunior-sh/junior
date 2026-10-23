@@ -26,7 +26,7 @@ import type { BriefJob,
 } from '../../shared/protocol.js'
 import { adoptWorkspace, boundWorkspace, gotoWorkspace } from './workspaceUrl.js'
 import { DEFAULT_PERSONA } from '../../core/junior/persona.js'
-import { buildChanged, buildKey, loadedFrom, parseReloadMark, shouldAutoReload, uiEntryOfSrc } from './reloadOnBuild.js'
+import { buildChanged, buildKey, isBuild, loadedFrom, parseReloadMark, shouldAutoReload, uiEntryOfSrc } from './reloadOnBuild.js'
 import { reloadBlockers } from './reloadGuard.js'
 
 /** The bundle this page runs: its own module script's hashed file name, null in dev (Vite serves /src/main.tsx). */
@@ -369,7 +369,7 @@ export class Store {
         // A new build behind the socket: reload onto it, quietly, unless that
         // would cost you something on screen. Return before notifying so the
         // old UI doesn't flash the new state on its way out.
-        if (msg.build && this.#considerBuild(msg.build)) return
+        if (isBuild(msg.build) && this.#considerBuild(msg.build)) return
         this.#notify()
         break
       case 'persona':
