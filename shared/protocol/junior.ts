@@ -10,6 +10,16 @@ export type { NeedsRow, NeedsTarget } from '../../core/junior/needs.js'
 export type { AddedBy, Owner, PlanRow, PlanStatus, PlanView, TodayEntry } from '../../core/junior/today.js'
 export type { CanDoFill, Offer } from '../../core/junior/offers.js'
 export type { MorningBrief, MorningRow } from '../../core/junior/morning.js'
+export type { HandoffReadiness, JuniorWork, WatchId } from '../../core/work/handoff.js'
+
+/**
+ * POST /api/handoff/start|pause|resume|not-now: the item as it is now, and
+ * whether its hand-off can do anything (a PR whose watch is off reads
+ * "watch-off"; the hand-off never turns the watch on).
+ */
+export type HandoffResponse =
+  | { ok: true; item: import('../../core/work/types.js').WorkItem; readiness: import('../../core/work/handoff.js').HandoffReadiness }
+  | { ok: false; error: string }
 
 /** GET/PUT /api/persona: the workspace's persona; PUT takes a partial patch. */
 export type PersonaResponse =

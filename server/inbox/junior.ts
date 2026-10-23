@@ -1,21 +1,25 @@
 /**
  * The inbox snapshot's Junior side (hand-offs, Phase 1): on each ranked item,
  * where it stands with Junior (core/work/handoff.ts), what Junior could take
- * on it (core/junior/suggest.ts), and the babysit watch's read of your PR.
- * Reads config only: the rules, and the watch's last poll.
+ * on it (core/junior/suggest.ts), the babysit watch's read of your PR,
+ * and whether its hand-off can do anything (a watch switched off reads
+ * "watch-off"). Reads config only: the rules, the watch switches, and the
+ * watch's last poll.
  */
 import { suggestionFor } from '../../core/junior/suggest.js'
 import { ruleFor, RULES_KEY, rulesConfigFrom, rulesOf } from '../../core/rules/rules.js'
-import { handedOff, juniorWork, openedPr } from '../../core/work/handoff.js'
+import { handedOff, handoffReadiness, juniorWork, openedPr } from '../../core/work/handoff.js'
 import type { ItemTask } from '../../core/work/tasks.js'
 import type { ScoredItem } from '../../core/work/types.js'
 import { BABYSIT_WATCH_KEY, type BabysitWatchState } from '../babysit/watch.js'
+import { watchesOn } from '../settings-ops.js'
 import type { WorkspaceRuntime } from '../workspace/runtime.js'
 
 export async function withJunior(rt: WorkspaceRuntime, ranked: ScoredItem[], tasks: ReadonlyMap<string, ItemTask[]>): Promise<void> {
-  const [rules, watch] = await Promise.all([
+  const [rules, watch, switches] = await Promise.all([
     rt.store.config.get(RULES_KEY).then((raw) => rulesOf(rulesConfigFrom(raw))),
     rt.store.config.get<BabysitWatchState>(BABYSIT_WATCH_KEY),
+    watchesOn(rt),
   ])
   const byId = new Map(ranked.map((i) => [i.id, i]))
   // the draft PRs Junior opened, by the item it opened them from
@@ -31,7 +35,7 @@ export async function withJunior(rt: WorkspaceRuntime, ranked: ScoredItem[], tas
     const isPr = i.reason === 'your-pr' || i.reason === 'review-requested'
     const pr = openedPr(ts)
     const work = juniorWork(i.handoff, ts, isPr, pr ? byId.get(pr)?.handoff === 'on' : false)
-    if (work) i.junior = work
+    if (work) i.junior = { ...work, readiness: handoffReadiness(i, switches) }
     const rule = ruleFor({ reason: i.reason, ...(i.label ? { label: i.label } : {}) }, rules)
     const s = suggestionFor({
       item: i,

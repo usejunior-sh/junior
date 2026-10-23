@@ -10,8 +10,9 @@
  *
  * Pure, browser-safe.
  */
-import type { Handoff } from './fields.js'
+import type { Handoff, Reason } from './fields.js'
 import type { ItemTask } from './tasks.js'
+import type { WorkSource } from './types.js'
 
 /** A PR at a glance, as the babysit watch last read it: what Junior would take on if you handed it off. */
 export type PrSeen = {
@@ -41,6 +42,29 @@ export function heldBy(step: string | undefined, handoff: Handoff | undefined): 
  */
 export type WatchId = 'babysit' | 'review'
 export type WatchSwitches = Record<WatchId, boolean>
+
+/**
+ * Whether a hand-off can do anything now, for the hand-off's answer and the
+ * With Junior row:
+ *   ready        Junior will work it: a playbook starts, or its watch is on
+ *   watch-off    a PR whose watch is switched off: handed off, nothing runs
+ *                until you turn `watch` on (a hand-off never turns it on)
+ *   unsupported  a PR Junior has no watch for: it didn't come from GitHub
+ */
+export type HandoffReadiness = { state: 'ready' } | { state: 'watch-off'; watch: WatchId } | { state: 'unsupported'; why: string }
+
+/** The watch that works a handed-off item; null = a playbook works it, no watch involved. */
+export function watchFor(reason: Reason): WatchId | null {
+  return reason === 'your-pr' ? 'babysit' : reason === 'review-requested' ? 'review' : null
+}
+
+export function handoffReadiness(item: { reason: Reason; source: WorkSource }, watches: WatchSwitches): HandoffReadiness {
+  const watch = watchFor(item.reason)
+  if (!watch) return { state: 'ready' }
+  // the watches read PRs through `gh`: a PR from anywhere else has none
+  if (item.source !== 'github') return { state: 'unsupported', why: watch === 'babysit' ? 'Junior babysits GitHub PRs only' : 'Junior reviews GitHub PRs only' }
+  return watches[watch] ? { state: 'ready' } : { state: 'watch-off', watch }
+}
 
 /** The watch a task came from; null = one you asked for (a retry, a resume, a playbook), which no switch holds. */
 export function watchOf(t: Pick<ItemTask, 'step' | 'why'>): WatchId | null {
@@ -82,6 +106,8 @@ export type JuniorWork = {
   pipeline?: Pipeline
   /** the draft PR Junior opened from this item, as its item id */
   pr?: string
+  /** whether its hand-off can do anything now (handoffReadiness); set by the inbox snapshot */
+  readiness?: HandoffReadiness
 }
 
 type T = Pick<ItemTask, 'owner' | 'state' | 'step' | 'createdAt' | 'output'>

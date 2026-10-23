@@ -12,11 +12,12 @@ import path from 'node:path'
 import { babysitLine, bySuggestion, suggestionFor, type SuggestInput } from '../core/junior/suggest.js'
 import { sectionOf } from '../core/junior/sections.js'
 import { openSqliteStore } from '../core/store/sqlite.js'
-import { handedOff, heldBy, juniorWork, legacyHandoffs, openedPr, PAUSED_ERROR, prItemIn, watchOf } from '../core/work/handoff.js'
+import { handedOff, handoffReadiness, heldBy, juniorWork, legacyHandoffs, openedPr, PAUSED_ERROR, prItemIn, watchFor, watchOf, type HandoffReadiness, type WatchSwitches } from '../core/work/handoff.js'
 import { snoozeClock, snoozeUntil } from '../core/work/snooze.js'
 import { shouldReopen } from '../core/work/state.js'
 import type { ItemTask } from '../core/work/tasks.js'
-import type { WorkItem } from '../core/work/types.js'
+import type { WorkItem, WorkSource } from '../core/work/types.js'
+import type { Reason } from '../core/work/fields.js'
 
 type T = Pick<ItemTask, 'owner' | 'state' | 'step' | 'createdAt' | 'output'>
 const task = (step: string, state: ItemTask['state'], over: Partial<T> = {}): T => ({ owner: 'junior', state, step, createdAt: 1, ...over })
@@ -212,4 +213,42 @@ test('the Junior page tab an item sits on: one per reason; a to-do waits in the 
   assert.equal(sectionOf({ reason: 'you-added' }), null)
   assert.equal(sectionOf({ reason: 'found', handoff: 'on' }), 'work')
   assert.equal(sectionOf({ reason: 'you-added', flow: { stage: 'working', turn: 'me' } as never }), 'work')
+})
+
+test('readiness: a hand-off knows when its watch is off, and never turns it on', () => {
+  const on: WatchSwitches = { babysit: true, review: true }
+  const off: WatchSwitches = { babysit: false, review: false }
+  const rows: [Reason, WorkSource, WatchSwitches, HandoffReadiness['state'], string?][] = [
+    // your PR: the babysit watch works it
+    ['your-pr', 'github', on, 'ready'],
+    ['your-pr', 'github', off, 'watch-off', 'babysit'],
+    ['your-pr', 'github', { babysit: false, review: true }, 'watch-off', 'babysit'],
+    ['your-pr', 'github', { babysit: true, review: false }, 'ready'],
+    // a review request: the review watch works it
+    ['review-requested', 'github', on, 'ready'],
+    ['review-requested', 'github', off, 'watch-off', 'review'],
+    ['review-requested', 'github', { babysit: true, review: false }, 'watch-off', 'review'],
+    ['review-requested', 'github', { babysit: false, review: true }, 'ready'],
+    // a PR from elsewhere: no watch reads it, whatever the switches say
+    ['your-pr', 'job', on, 'unsupported'],
+    ['review-requested', 'linear', on, 'unsupported'],
+    // everything else starts a playbook: no watch involved
+    ['asked', 'slack', off, 'ready'],
+    ['assigned', 'linear', off, 'ready'],
+    ['mentioned', 'github', off, 'ready'],
+    ['you-added', 'manual', off, 'ready'],
+    ['found', 'job', off, 'ready'],
+  ]
+  for (const [reason, source, watches, state, watch] of rows) {
+    const switches = Object.freeze({ ...watches })
+    const r = handoffReadiness({ reason, source }, switches)
+    assert.equal(r.state, state, `${reason} from ${source}`)
+    if (watch) assert.deepEqual(r, { state: 'watch-off', watch })
+    if (state === 'unsupported') assert.ok(r.state === 'unsupported' && r.why.length > 0)
+    // reads the switches, never writes them
+    assert.deepEqual(switches, watches)
+  }
+  assert.equal(watchFor('your-pr'), 'babysit')
+  assert.equal(watchFor('review-requested'), 'review')
+  assert.equal(watchFor('asked'), null)
 })

@@ -6,6 +6,7 @@ import { approvePlanOp, changePlanOp, sendReplyOp } from '../playbooks/ops.js'
 import { startPlaybookOp } from '../rules-ops.js'
 import { handoffOp, isHandoffVerb } from '../handoff-ops.js'
 import type { ScopedCtx } from './ctx.js'
+import type { HandoffResponse } from '../../shared/protocol.js'
 
 /**
  * Tasks on items (POST /api/tasks/<verb> {id, …}), first-pass reviews
@@ -52,7 +53,8 @@ export async function taskRoutes({ req, url, json, rt }: ScopedCtx): Promise<boo
   const ho = /^\/api\/handoff\/(start|pause|resume|not-now)$/.exec(url.pathname)?.[1]
   if (ho && isHandoffVerb(ho) && req.method === 'POST') {
     try {
-      json(200, { ok: true, item: await handoffOp(rt, ho, (await readJsonBody(req)) ?? {}) })
+      const { item, readiness } = await handoffOp(rt, ho, (await readJsonBody(req)) ?? {})
+      json(200, { ok: true, item, readiness } satisfies HandoffResponse)
     } catch (err) {
       json(400, { ok: false, error: errText(err) })
     }

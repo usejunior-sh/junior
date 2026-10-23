@@ -9,16 +9,21 @@
  *
  * Pause stops every task of Junior's on the item now; nothing of Junior's
  * runs on it until you resume (core/work/handoff.ts heldBy).
+ *
+ * Every answer carries the item's readiness: a PR handed off while its watch
+ * is off reads "watch-off", so the client can say so. A hand-off never turns
+ * a watch on; that stays your call in Settings → Automations.
  */
 import { ruleFor, STARTABLE } from '../core/rules/rules.js'
 import { isPlaybook, reasonOf, type Playbook } from '../core/work/fields.js'
-import { PAUSED_ERROR } from '../core/work/handoff.js'
+import { handoffReadiness, PAUSED_ERROR, type HandoffReadiness } from '../core/work/handoff.js'
 import type { WorkItem } from '../core/work/types.js'
 import { babysitTick } from './babysit/glue.js'
 import { errText } from './errors.js'
 import { log } from './log.js'
 import { reviewTick } from './review/glue.js'
 import { currentRules, startPlaybook } from './rules-ops.js'
+import { watchesOn } from './settings-ops.js'
 import { pumpTasks, stopTaskOp, tasksChanged } from './tasks/runner.js'
 import type { WorkspaceRuntime } from './workspace/runtime.js'
 
@@ -122,6 +127,12 @@ export async function notNowOp(rt: WorkspaceRuntime, raw: unknown): Promise<Work
   return (await rt.store.items.get(item.id))!
 }
 
-export function handoffOp(rt: WorkspaceRuntime, verb: HandoffVerb, raw: unknown): Promise<WorkItem> {
-  return verb === 'start' ? handOffOp(rt, raw) : verb === 'pause' ? pauseOp(rt, raw) : verb === 'resume' ? resumeOp(rt, raw) : notNowOp(rt, raw)
+/** Whether a hand-off of this item can do anything now: reads the watch switches, never writes them. */
+export async function readinessOf(rt: WorkspaceRuntime, item: WorkItem): Promise<HandoffReadiness> {
+  return handoffReadiness({ reason: reasonOf(item), source: item.source }, await watchesOn(rt))
+}
+
+export async function handoffOp(rt: WorkspaceRuntime, verb: HandoffVerb, raw: unknown): Promise<{ item: WorkItem; readiness: HandoffReadiness }> {
+  const item = await (verb === 'start' ? handOffOp(rt, raw) : verb === 'pause' ? pauseOp(rt, raw) : verb === 'resume' ? resumeOp(rt, raw) : notNowOp(rt, raw))
+  return { item, readiness: await readinessOf(rt, item) }
 }
