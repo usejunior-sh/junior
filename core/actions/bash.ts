@@ -131,6 +131,10 @@ function skipSubst(s: string, i: number): number {
 }
 
 const SHELLS = new Set(['bash', 'sh', 'zsh', 'dash'])
+const FIND_EXEC = new Set(['-exec', '-execdir', '-ok', '-okdir'])
+
+/** A word as one shell word again, for a script rebuilt from words: single-quoted. */
+const quote = (w: string): string => `'${w.replace(/'/g, `'\\''`)}'`
 
 /**
  * Split a shell command into its simple commands, each as a list of words.
@@ -154,19 +158,38 @@ export function splitCommand(src: string): CommandPart[] {
 /**
  * The script a command runs, when it runs one: `bash -c "git push && …"`,
  * `eval "git push origin main"` (its words joined, as eval does),
- * `npx -c "…"`. Its parts
+ * `npx -c "…"`, `env -S "git push" main` (the string split, then the rest),
+ * `find . -exec git push origin {} \;` (each `-exec` command). Its parts
  * always follow it in splitCommand, so a caller judging parts may judge the
  * script's parts and skip this one.
  */
 export function scriptOf(part: CommandPart): string | null {
+  const { at, calls, split } = peel(part)
+  // `env -S "git push origin" main`: env splits the string, then appends its other words.
+  if (split !== null) return [split, ...part.slice(at).map(quote)].join(' ')
   // `npx -c "…"` runs its string as a script, like `bash -c`.
-  const { calls } = peel(part)
   if (calls.length) return calls.join('\n')
   const w = unwrap(part)
-  if (w[0] === 'eval') return w.length > 1 ? w.slice(1).join(' ') : null
+  if (w[0] === 'eval') {
+    // eval takes no options, but skips a `--`: `eval -- "git push"` runs `git push`.
+    const args = w[1] === '--' ? w.slice(2) : w.slice(1)
+    return args.length ? args.join(' ') : null
+  }
+  if (w[0] === 'find') {
+    // `-exec cmd … ;` / `+`, and `-execdir`, `-ok`, `-okdir`: each runs its command per file.
+    const runs: string[] = []
+    for (let k = 1; k < w.length; k++) {
+      if (!FIND_EXEC.has(w[k])) continue
+      let end = k + 1
+      while (end < w.length && w[end] !== ';' && w[end] !== '+') end++
+      if (end > k + 1) runs.push(w.slice(k + 1, end).map(quote).join(' '))
+      k = end
+    }
+    return runs.length ? runs.join('\n') : null
+  }
   if (!SHELLS.has(w[0])) return null
-  const at = w.findIndex((x, k) => k > 0 && /^-[a-z]*c$/.test(x))
-  return at > 0 && w[at + 1] !== undefined ? w[at + 1] : null
+  const c = w.findIndex((x, k) => k > 0 && /^-[a-z]*c$/.test(x))
+  return c > 0 && w[c + 1] !== undefined ? w[c + 1] : null
 }
 
 /** The scripts of the command's substitutions, outermost only (`$( )`, backticks, `<( )`, `>( )`). */
@@ -296,7 +319,14 @@ const basename = (w: string): string => w.slice(w.lastIndexOf('/') + 1)
 const WRAPPERS = new Map<string, Set<string>>([
   ['sudo', new Set(['-u', '-g', '-U', '-C', '-h', '-p', '-r', '-t', '-D', '-R'])],
   ['command', new Set()],
-  ['env', new Set(['-u', '-C', '-S', '--unset', '--chdir', '--split-string'])],
+  ['builtin', new Set()],
+  // env's `-S "…"` is a script, not a value: see peel.
+  ['env', new Set(['-u', '-C', '--unset', '--chdir'])],
+  // timeout also takes a duration before the command: see POSITIONAL.
+  ['timeout', new Set(['-k', '-s', '--kill-after', '--signal'])],
+  ['nice', new Set(['-n', '--adjustment'])],
+  ['ionice', new Set(['-c', '-n', '-p', '-P', '-u', '--class', '--classdata', '--pid', '--pgid', '--uid'])],
+  ['stdbuf', new Set(['-i', '-o', '-e', '--input', '--output', '--error'])],
   ['time', new Set(['-o', '-f'])],
   ['nohup', new Set()],
   ['exec', new Set(['-a'])],
@@ -306,6 +336,8 @@ const WRAPPERS = new Map<string, Set<string>>([
   // GNU's `-e[eof]`, `-i[str]` and `-l[n]` take their value attached, if at all.
   ['xargs', new Set(['-I', '-n', '-P', '-L', '-d', '-E', '-s', '-J', '-R', '-a', '--arg-file', '--delimiter', '--max-args', '--max-procs', '--max-lines', '--max-chars'])],
 ])
+/** Wrappers that take plain words before the command: `timeout 60 git push`. */
+const POSITIONAL = new Map<string, number>([['timeout', 1]])
 /** Global flags that take the next word as their value (`git -C dir push`, `gh -R o/r …`). */
 const VALUE_FLAGS = new Set(['-C', '-c', '-R', '--repo', '--git-dir', '--work-tree', '--namespace'])
 
@@ -335,13 +367,15 @@ type Peeled = {
   wrappers: string[]
   /** the scripts of `npx -c "…"` */
   calls: string[]
+  /** env's `-S "…"` / `--split-string=…`: the command, split by env; the words after it are its arguments */
+  split: string | null
   /** xargs's replace strings (`-I {}`, `-i`, `-J %`): where its input words land */
   placeholders: string[]
 }
 
 /** Where the command proper starts, and what wraps it. */
 function peel(part: CommandPart): Peeled {
-  const out: Peeled = { at: 0, wrappers: [], calls: [], placeholders: [] }
+  const out: Peeled = { at: 0, wrappers: [], calls: [], split: null, placeholders: [] }
   let i = 0
   while (i < part.length) {
     const w = part[i]
@@ -358,6 +392,14 @@ function peel(part: CommandPart): Peeled {
         if (name === 'npx') {
           if ((f === '-c' || f === '--call') && next !== undefined) out.calls.push(next)
           else if (f.startsWith('--call=')) out.calls.push(f.slice('--call='.length))
+        } else if (name === 'env') {
+          if ((f === '-S' || f === '--split-string') && next !== undefined) {
+            out.split = next
+            i += 2
+            continue
+          }
+          if (f.startsWith('--split-string=')) out.split = f.slice('--split-string='.length)
+          else if (/^-S./.test(f)) out.split = f.slice(2)
         } else if (name === 'xargs') {
           if ((f === '-I' || f === '-J') && next !== undefined) out.placeholders.push(next)
           else if (/^-[IJi]./.test(f)) out.placeholders.push(f.slice(2))
@@ -366,6 +408,9 @@ function peel(part: CommandPart): Peeled {
         }
         i += flags.has(f) ? 2 : 1
       }
+      // The command env splits from its string is the command proper; what follows are its arguments.
+      if (out.split !== null) break
+      i += Math.min(POSITIONAL.get(name) ?? 0, part.length - i)
     } else break
   }
   out.at = i
@@ -397,8 +442,10 @@ const XARGS_LOCAL_GIT = new Set(['add', 'rm', 'mv', 'restore', 'checkout', 'diff
  * `eval "$CMD"` and `bash -c "$CMD"` land here through their script's part.
  */
 export function unknownCommand(part: CommandPart): boolean {
-  const { at, wrappers, calls, placeholders } = peel(part)
+  const { at, wrappers, calls, split, placeholders } = peel(part)
   if (at < 0) return false
+  // `xargs env -S "git push origin"`: xargs appends to the split command.
+  if (split !== null) return wrappers.includes('xargs')
   const w = unwrap(part)
   const prog = w[0]
   // `$G`, `"$GIT"`, `$(which git)`, `${X:-git}`: the basename still shows it.
@@ -559,6 +606,8 @@ const CURRENT_SUBST = new RegExp(String.raw`^(?:\$\(${CURRENT_CMD}\)|\`${CURRENT
 /** A redirection word: its operator, and its target when attached (`>log`, `2>&1`). */
 const REDIRECT = /^(?:[0-9]*(?:>>|>\||>&|<&|<<<|>|<)|&>>?)/
 /** `git push` flags whose value is the next word. */
+/** Config keys that decide where a push lands: a remote's push refspecs, push.default, a branch's upstream. */
+const PUSH_CONFIG = /^(?:remote\..+\.push|push\.default|branch\..+\.merge)=/i
 const PUSH_VALUE_FLAGS = new Set(['-o', '--push-option', '--repo', '--receive-pack', '--exec'])
 
 function refOf(spec: string): PushRef {
@@ -591,6 +640,9 @@ export function pushRefs(part: CommandPart): PushRef[] {
   if (wrappersOf(part).includes('xargs')) return ['unknown']
   // `git $OPTS push`: the flags before the verb could be anything.
   if (w.slice(1, at).some((t) => EXPANSION.test(t))) return ['unknown']
+  // `git -c remote.origin.push=HEAD:main push origin`: config can remap any refspec.
+  const pre = w.slice(1, at)
+  if (pre.some((t, k) => (pre[k - 1] === '-c' && PUSH_CONFIG.test(t)) || (t.startsWith('--config-env=') && PUSH_CONFIG.test(t.slice('--config-env='.length))))) return ['unknown']
   const args: string[] = []
   let opts = true
   for (let i = at + 1; i < w.length; i++) {
