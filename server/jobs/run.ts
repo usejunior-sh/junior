@@ -14,6 +14,7 @@ import { broadcast, broadcastSessionList, invalidateInbox } from '../ws/send.js'
 import { noteActionEvent } from '../session/actions-record.js'
 import { makeScanMcp } from './scan-mcp.js'
 import { holdIfAction } from '../session/actions-hold.js'
+import { ownServersOf } from '../../core/actions/own.js'
 import { deliverPendingSendBacks } from '../session/actions-send.js'
 import { syncInbox } from '../inbox/sync.js'
 
@@ -155,11 +156,13 @@ export async function runJob(
     )
     // Past the fence, an outbound connector call is held for you, not run
     // (core/actions/queue.ts). Dry runs (previews) never hold: they record nothing.
+    // Only the servers the run registered in-process count as Junior's own.
     const fence = runSpec.veto
     if (fence) {
+      const own = ownServersOf(runSpec.mcpServers)
       runSpec.veto = async (toolName, input, ctx) => {
         const d = await fence(toolName, input, ctx)
-        return d.allow ? holdIfAction(rt, session, toolName, input, ctx) : d
+        return d.allow ? holdIfAction(rt, session, toolName, input, { ...(ctx?.toolUseId ? { toolUseId: ctx.toolUseId } : {}), own }) : d
       }
     }
     const q = rt.provider.run(runSpec)

@@ -28,6 +28,7 @@ import { DIGEST_SHAPE, identityFromUrl, rowFiling, upsertShape } from './scan-mc
 import type { JobFiling } from '../../core/job/filing.js'
 import { errResult, okResult } from '../junior-mcp.js'
 import { sortForWorkspace } from '../session/actions-record.js'
+import { ownServersOf } from '../../core/actions/own.js'
 
 export type JobPreview = {
   id: string
@@ -304,13 +305,14 @@ export async function runJobPreview(rt: WorkspaceRuntime, pv: JobPreview, spec: 
     // (a connector write, an outbound command) is refused and listed instead.
     const fence = previewSpec.veto
     if (fence) {
+      const own = ownServersOf(previewSpec.mcpServers)
       previewSpec.veto = async (toolName, input, ctx) => {
         const d = await fence(toolName, input, ctx)
         if (!d.allow) return d
         const args = isArgsObject(input) ? input : {}
         let sorted = null
         try {
-          sorted = sortForWorkspace(rt)(toolName, args)
+          sorted = sortForWorkspace(rt, own)(toolName, args)
         } catch {
           // can't tell: refuse, a dry run loses nothing by it
           sorted = { summary: toolName }

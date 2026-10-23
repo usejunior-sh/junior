@@ -113,12 +113,23 @@ test('push target: the branch a push names, or null for the current one', () => 
 // Sorting a tool call
 // ---------------------------------------------------------------------------
 
-test('sort: built-ins and junior’s own servers are never actions', () => {
+test('sort: built-ins and the session’s own servers are never actions', () => {
   for (const t of ['Write', 'Edit', 'Read', 'WebFetch', 'TodoWrite', 'Agent']) assert.equal(sort(t, { file_path: '/x' }), null)
-  assert.equal(sort('mcp__junior__create_work_item', { title: 'x' }), null)
-  assert.equal(sort('mcp__team__submit_step'), null)
-  assert.equal(sort('mcp__task__submit_task'), null)
-  assert.equal(sort('mcp__browser__browser_act'), null)
+  const own = new Set(['junior', 'team', 'task', 'browser'])
+  const ownSort = (name: string, input: Record<string, unknown> = {}) => sortCall(name, input, { rules: DEFAULT_RULES, own })
+  assert.equal(ownSort('mcp__junior__create_work_item', { title: 'x' }), null)
+  assert.equal(ownSort('mcp__team__submit_step'), null)
+  assert.equal(ownSort('mcp__task__submit_task'), null)
+  assert.equal(ownSort('mcp__browser__browser_act'), null)
+})
+
+test('sort: a server’s name alone makes nothing Junior’s own', () => {
+  // No own set given: a server called junior, task or browser is sorted like any other.
+  assert.equal(sort('mcp__junior__create_work_item', { title: 'x' })?.why, 'name verb')
+  assert.equal(sort('mcp__task__create_task', { title: 'x' })?.why, 'name verb')
+  assert.equal(sort('mcp__browser__browser_act')?.why, 'unknown')
+  assert.equal(sort('mcp__browser__browser_snapshot')?.why, 'unknown')
+  assert.equal(sort('mcp__junior__list_work_items'), null, 'a read is still a read')
 })
 
 test('sort: annotations first, then name verbs, then unknown', () => {

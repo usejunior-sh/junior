@@ -1,3 +1,4 @@
+import { OWN_SERVER_NAMES } from '../../core/actions/own.js'
 import { overriddenOff, overrideEntries, sortCall, type ToolHints, withRowOverride } from '../../core/actions/sort.js'
 import type { StoredSession } from '../../core/store/types.js'
 import { type ActionOp, ActionTracker, applyActionOps, type TrackContext } from '../../core/actions/track.js'
@@ -28,9 +29,22 @@ function toolHints(rt: WorkspaceRuntime, toolName: string): ToolHints | undefine
   return undefined
 }
 
-/** Sort one call against the workspace's actions file and the connector's hints. */
-export const sortForWorkspace = (rt: WorkspaceRuntime) => (toolName: string, input: Record<string, unknown>) =>
-  sortCall(toolName, input, { rules: rt.actionsFile.current().rules, hints: toolHints(rt, toolName) })
+/**
+ * Sort one call against the workspace's actions file and the connector's
+ * hints. `own`: the servers the session registered in-process
+ * (core/actions/own.ts ownServersOf); a call to any other server, whatever
+ * its name, is sorted on its merits.
+ */
+export const sortForWorkspace = (rt: WorkspaceRuntime, own: ReadonlySet<string>) => (toolName: string, input: Record<string, unknown>) =>
+  sortCall(toolName, input, { rules: rt.actionsFile.current().rules, hints: toolHints(rt, toolName), own })
+
+/**
+ * What the record-only tracker counts as Junior's own: every one of its names.
+ * It replays history (backfill) and Codex sessions, whose `junior` is the
+ * stdio shim, so it can't know how a server was registered. It never gates:
+ * the hold (actions-hold.ts) sorts against the session's real in-process set.
+ */
+const TRACKER_OWN = OWN_SERVER_NAMES
 
 export function actionContext(rt: WorkspaceRuntime, row: StoredSession): TrackContext {
   return {
@@ -58,7 +72,7 @@ export function noteActionEvent(rt: WorkspaceRuntime, row: StoredSession, ev: Se
   if (row.provider !== 'claude') return
   let t = rt.actionTrackers.get(row.id)
   if (!t) {
-    t = new ActionTracker(actionContext(rt, row), sortForWorkspace(rt))
+    t = new ActionTracker(actionContext(rt, row), sortForWorkspace(rt, TRACKER_OWN))
     rt.actionTrackers.set(row.id, t)
   } else {
     // A session's mode, item and team can change mid-life; a record reads them as they are now.
@@ -112,7 +126,7 @@ export async function backfillActions(rt: WorkspaceRuntime, opts: { force?: bool
     if (row.provider !== 'claude') continue
     const events = await rt.store.events.read(row.id)
     if (!events.length) continue
-    const t = new ActionTracker(actionContext(rt, row), sortForWorkspace(rt))
+    const t = new ActionTracker(actionContext(rt, row), sortForWorkspace(rt, TRACKER_OWN))
     const ops = events.flatMap((e) => t.feed(e.event, e.createdAt))
     if (ops.length) await queueActionOps(rt, ops)
     sessions++

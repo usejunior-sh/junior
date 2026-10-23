@@ -30,7 +30,7 @@ import { ItemPlans } from './item/ItemPlans.js'
 import { ItemTimeline } from './item/ItemTimeline.js'
 import * as Tabs from '@radix-ui/react-tabs'
 import { verdictOf, type ItemTab } from '../../../core/work/verdict.js'
-import { isOwnTool } from '../../../core/actions/own.js'
+import { isOwnHandIn } from '../../../core/actions/own.js'
 import { useItemTasks } from './item/useItemTasks.js'
 import { ItemVerdict } from './item/ItemVerdict.js'
 import { NeedsYou } from './item/NeedsYou.js'
@@ -455,7 +455,7 @@ export function ItemPage({ id, onDispatch, onNavigate, onDirty }: Props) {
   const settled = !job || job.status === 'ready' || job.status === 'failed'
   const pill = briefPill(job, brief?.stale ?? false)
   const tasks = loadedTasks ?? []
-  const held = itemActions.actions.filter((a) => !a.hidden && a.status === 'needs_you' && !isOwnTool(a.tool))
+  const held = itemActions.actions.filter((a) => !a.hidden && a.status === 'needs_you' && !isOwnHandIn(a))
   const chats = linkedSessions.filter(({ s }) => s.kind !== 'task')
   // Dispatched chats and team runs hand the item off too; a brief run only reads it.
   const dispatched = chats.filter(({ s, role }) => role !== 'brief' && s.kind !== 'brief')

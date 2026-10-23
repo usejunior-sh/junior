@@ -11,12 +11,14 @@
  *   built-ins        never (Write, Edit… are local; Changes shows them)
  *
  * The actions file's overrides come first for both. Junior's own in-process
- * servers are local by construction. Pure and browser-safe.
+ * servers are local by construction, but only the ones the caller names in
+ * `own` (core/actions/own.ts): a server's name proves nothing. Pure and
+ * browser-safe.
  */
 import { describePart, matchPart, parsePattern, pushTarget, splitCommand, unknownCommand, type BashPattern, type CommandPart } from './bash.js'
 import { bashOverride, parseActionsFile, withOverride, type ActionRules } from './rules.js'
 import type { ActionKind, ActionWhy } from './types.js'
-import { LOCAL_SERVERS, serverOf } from './own.js'
+import { NO_OWN_SERVERS, serverOf } from './own.js'
 
 export { serverOf }
 
@@ -156,7 +158,8 @@ function sortBash(command: string, rules: ActionRules): SortedAction | null {
 export function sortCall(
   toolName: string,
   input: Record<string, unknown>,
-  ctx: { rules: ActionRules; hints?: ToolHints },
+  /** own: the session's in-process servers (ownServersOf); omitted = none, so every MCP call is sorted */
+  ctx: { rules: ActionRules; hints?: ToolHints; own?: ReadonlySet<string> },
 ): SortedAction | null {
   if (toolName === 'Bash') {
     const cmd = typeof input.command === 'string' ? input.command : ''
@@ -164,7 +167,7 @@ export function sortCall(
   }
   // Every other built-in touches this machine at most.
   if (!toolName.startsWith('mcp__')) return null
-  if (LOCAL_SERVERS.has(serverOf(toolName))) return null
+  if ((ctx.own ?? NO_OWN_SERVERS).has(serverOf(toolName))) return null
 
   const summary = describeTool(toolName, input)
   const kind = kindOfTool(toolName)
@@ -187,6 +190,18 @@ export function sortCall(
 
   // 3. Can't tell: count it; a wrong "yes" is one click to fix, a wrong "no" is invisible.
   return { kind, why: 'unknown', whyDetail: null, summary }
+}
+
+/**
+ * A call the sort couldn't judge (it threw): counted as an action, as an
+ * unknown tool is. The hold fails closed; a wrong "yes" is one click to fix.
+ */
+export function unsortedAction(toolName: string, input: Record<string, unknown>): SortedAction {
+  if (toolName === 'Bash') {
+    const cmd = typeof input.command === 'string' ? input.command : ''
+    return { kind: 'other', why: 'unknown', whyDetail: null, summary: clip(cmd.trim() || 'a shell command', 140) }
+  }
+  return { kind: toolName.startsWith('mcp__') ? kindOfTool(toolName) : 'other', why: 'unknown', whyDetail: null, summary: describeTool(toolName, input) }
 }
 
 /** The patterns a Bash record counted by, as written in its why ("git push, gh pr create"). */

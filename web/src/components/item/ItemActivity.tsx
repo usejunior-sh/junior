@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react'
 import type { ActionView, ItemEvent } from '../../../../shared/protocol.js'
 import type { ItemTask } from '../../../../core/work/tasks.js'
-import { isOwnTool } from '../../../../core/actions/own.js'
+import { isOwnHandIn } from '../../../../core/actions/own.js'
 import { relTime } from '../../itemUi.js'
 import { eventText } from './ItemTimeline.js'
 
@@ -17,8 +17,12 @@ function allowed(a: ActionView): string {
   return a.status.replace('_', ' ')
 }
 
-/** The sends on this item: what left the machine for it, and who allowed each one. Hand-ins never count. */
-export const sendsOf = (actions: readonly ActionView[]) => actions.filter((a) => !a.hidden && !isOwnTool(a.tool))
+/**
+ * The sends on this item: what left the machine for it, and who allowed each
+ * one. Hand-ins never count; a held call to a user's server named `browser`
+ * or `task` does (core/actions/own.ts isOwnHandIn).
+ */
+export const sendsOf = (actions: readonly ActionView[]) => actions.filter((a) => !a.hidden && !isOwnHandIn(a))
 
 /**
  * What happened on this item, newest first. Sent (the default) is what went

@@ -13,6 +13,7 @@ import { currentBranch } from '../git.js'
 import { defaultBranch } from '../worktrees.js'
 import { taskRunVerdict } from '../../core/babysit/policy.js'
 import { joinHeldCall, recordFor } from '../../core/actions/track.js'
+import { type SortedAction, unsortedAction } from '../../core/actions/sort.js'
 import { goalActionHeldOp } from '../goals.js'
 import { shortActionId } from '../../core/actions/view.js'
 import type { ActionRecord } from '../../core/actions/types.js'
@@ -78,8 +79,19 @@ function roleFenceOf(rt: WorkspaceRuntime, row: StoredSession): RoleFence | null
   return { write: writes, role: (worker.agent || 'worker').toLowerCase() }
 }
 
-/** A session's PreToolUse veto: its role fence first, then the hold. None for a session with neither. */
-export function sessionVeto(rt: WorkspaceRuntime, row: StoredSession): { veto?: ToolVeto } {
+/**
+ * What the hold knows about the call besides its name and args: the call's id,
+ * and the servers its session registered in-process (core/actions/own.ts
+ * ownServersOf). Only those count as Junior's own; a user's server named
+ * `browser` or `task` is sorted like any other.
+ */
+export type HoldContext = { toolUseId?: string; own: ReadonlySet<string> }
+
+/**
+ * A session's PreToolUse veto: its role fence first, then the hold. None for a
+ * session with neither. `own`: the servers it registered in-process.
+ */
+export function sessionVeto(rt: WorkspaceRuntime, row: StoredSession, own: ReadonlySet<string>): { veto?: ToolVeto } {
   const fence = roleFenceOf(rt, row)
   const chat = row.kind === 'chat' && row.provider === 'claude'
   if (!fence && !chat && !holdsActions(rt, row)) return {}
@@ -102,7 +114,7 @@ export function sessionVeto(rt: WorkspaceRuntime, row: StoredSession): { veto?: 
       // The browser on a signed-in site: a commit click asks, a password is refused (server/browser/gate.ts).
       const gate = await browserGateFor(row, { mode: 'chat' })(toolName, input)
       if (gate) return gate
-      return holdIfAction(rt, row, toolName, input, ctx)
+      return holdIfAction(rt, row, toolName, input, { ...(ctx?.toolUseId ? { toolUseId: ctx.toolUseId } : {}), own })
     },
   }
 }
@@ -112,8 +124,9 @@ export function sessionVeto(rt: WorkspaceRuntime, row: StoredSession): { veto?: 
  * as an action is refused with "queued as #…" and filed for approval, unless
  * the policy makes it free (a push to your own branch, a draft PR);
  * everything else passes. A held command is sent from the session's folder.
+ * It fails closed: a call it can't sort is held, not let through.
  */
-export async function holdIfAction(rt: WorkspaceRuntime, row: StoredSession, toolName: string, input: unknown, ctx?: { toolUseId?: string }): Promise<VetoDecision> {
+export async function holdIfAction(rt: WorkspaceRuntime, row: StoredSession, toolName: string, input: unknown, ctx: HoldContext): Promise<VetoDecision> {
   if (!holdable(toolName) || !holdsActions(rt, row)) return { allow: true }
   const args = isArgsObject(input) ? input : {}
   // A babysit task's shell (core/babysit/policy.ts): pushes to its PR's branch and
@@ -121,7 +134,7 @@ export async function holdIfAction(rt: WorkspaceRuntime, row: StoredSession, too
   // any other send falls through and is held like a chat's.
   const taskRun = rt.taskRuns.get(row.id)
   if (taskRun && toolName === 'Bash') {
-    const sort = sortForWorkspace(rt)
+    const sort = sortForWorkspace(rt, ctx.own)
     let v
     try {
       v = taskRunVerdict(String(args.command ?? ''), taskRun.scope, (part) => sort('Bash', { command: part }))
@@ -139,7 +152,7 @@ export async function holdIfAction(rt: WorkspaceRuntime, row: StoredSession, too
   if (toolName === 'Bash' && !taskRun) {
     if (!chatHoldsSends(row)) return { allow: true }
     const command = String(args.command ?? '')
-    const sort = sortForWorkspace(rt)
+    const sort = sortForWorkspace(rt, ctx.own)
     try {
       const scope = mayBeFree(command) ? await branchScope(row.cwd) : { current: null, defaultBranch: null }
       const v = chatBashVerdict(command, scope, (part) => sort('Bash', { command: part }))
@@ -149,12 +162,13 @@ export async function holdIfAction(rt: WorkspaceRuntime, row: StoredSession, too
     }
   }
   if (!toolName.startsWith('mcp__') && toolName !== 'Bash') return { allow: true }
-  let sorted
+  let sorted: SortedAction | null
   try {
-    sorted = sortForWorkspace(rt)(toolName, args)
+    sorted = sortForWorkspace(rt, ctx.own)(toolName, args)
   } catch (err) {
-    log('warn', 'actions', `could not sort a call to hold it: ${errText(err)}`, { session: row.id, workspace: rt.meta.id })
-    return { allow: true }
+    // Fail closed: a call we can't judge waits for the user, like an unknown tool.
+    log('warn', 'actions', `could not sort a call, holding it: ${errText(err)}`, { session: row.id, tool: toolName, workspace: rt.meta.id })
+    sorted = unsortedAction(toolName, args)
   }
   if (!sorted) return { allow: true }
   // A read-only task (a first pass, an answer's draft, a plan) sends nothing: the user does.
@@ -165,7 +179,7 @@ export async function holdIfAction(rt: WorkspaceRuntime, row: StoredSession, too
   // Approved in advance (core/approvals): it goes out now, and its record says which approval let it.
   const rule = await coveringApproval(rt, toolName, args)
   if (rule) {
-    await useApproval(rt, rule, row.id, ctx?.toolUseId)
+    await useApproval(rt, rule, row.id, ctx.toolUseId)
     return { allow: true, sure: `Approved in advance by the user: ${describeApproval(rule)}.` }
   }
   // A goal's worker: the same call any of the goal's sessions already filed
@@ -178,7 +192,7 @@ export async function holdIfAction(rt: WorkspaceRuntime, row: StoredSession, too
   const dup = rt.heldCalls.get(key)
   if (dup) {
     // The repeat is the same action: its call joins the record already waiting, so no second row appears.
-    const again = ctx?.toolUseId
+    const again = ctx.toolUseId
     if (again) {
       void onActionChain(rt, () => joinHeldCall(rt.store.actions, row.id, again, dup))
         .then(() => actionsChanged(rt, new Set([row.id])))
@@ -186,7 +200,7 @@ export async function holdIfAction(rt: WorkspaceRuntime, row: StoredSession, too
     }
     return { allow: false, reason: queuedMessage(dup) }
   }
-  const toolUseId = ctx?.toolUseId || `held-${randomUUID()}`
+  const toolUseId = ctx.toolUseId || `held-${randomUUID()}`
   const id = `${row.id}:${toolUseId}`
   rt.heldCalls.set(key, id)
   if (goalRun)

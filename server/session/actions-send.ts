@@ -12,6 +12,7 @@ import { frameTeamMessage } from '../teams.js'
 import type { AgentCan, SessionEvent } from '../../shared/protocol.js'
 import type { McpServers } from '../providers/types.js'
 import { serverOf } from '../../core/actions/sort.js'
+import { ownServersOf } from '../../core/actions/own.js'
 import { resultText } from '../../core/actions/link.js'
 import { browserHub, WorkspaceRuntime } from '../workspace/runtime.js'
 import { errText } from '../errors.js'
@@ -154,9 +155,10 @@ function continueJobRun(rt: WorkspaceRuntime, row: StoredSession, text: string, 
       )
       const fence = spec.veto
       if (!fence) throw new Error('no fence for this job run')
+      const own = ownServersOf(spec.mcpServers)
       spec.veto = async (toolName, input, ctx) => {
         const d = await fence(toolName, input, ctx)
-        return d.allow ? holdIfAction(rt, row, toolName, input, ctx) : d
+        return d.allow ? holdIfAction(rt, row, toolName, input, { ...(ctx?.toolUseId ? { toolUseId: ctx.toolUseId } : {}), own }) : d
       }
       spec.prompt = frameTeamMessage('junior', text)
       spec.resume = row.sdkSessionId ?? undefined

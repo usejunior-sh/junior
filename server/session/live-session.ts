@@ -20,6 +20,7 @@ import { browserHub, WorkspaceRuntime } from '../workspace/runtime.js'
 import { BRIEF_DISALLOWED_TOOLS, briefBashAllowed } from './brief-tools.js'
 import { endGoalSession, GOAL_LEAD_DISALLOWED_TOOLS, GOAL_LEAD_TOOLS, settleGoalLead } from '../goal-glue.js'
 import { sessionVeto } from './actions-hold.js'
+import { ownServersOf } from '../../core/actions/own.js'
 import { EDIT_TOOLS, reloadLibraryEverywhere, sessionRepoRoot, writesLibrary } from './changes.js'
 import { broadcast, broadcastSessionList } from '../ws/send.js'
 import { errText } from '../errors.js'
@@ -130,21 +131,22 @@ export class LiveSession {
         )
       : Promise.resolve()
     this.provider = providerFor(row.provider)
+    // The junior inbox as in-process tools, so a chat can list/create/edit
+    // work items directly: same tool surface as the stdio shim external
+    // Claude Code sessions get (server/mcp.ts). Scoped to this workspace.
+    // Brief sessions add their own `write_brief` server on top. An agent
+    // that can't host in-process servers (Codex) gets none of them: it
+    // reaches junior through its own configured `junior` MCP instead.
+    const mcpServers: McpServers = {
+      ...(this.provider.capabilities.inProcessMcp ? { junior: rt.juniorMcp(row.id), ...(extras.mcp ?? {}) } : {}),
+      ...((extras.externalMcp ?? {}) as McpServers),
+    }
     this.q = this.provider.openSession(this.input, {
       cwd: row.cwd,
       // Brief sessions: the headless contract rides in the system prompt so
       // it survives `resume` (.docs/next-version.md).
       ...(extras.systemAppend ? { systemAppend: extras.systemAppend } : {}),
-      // The junior inbox as in-process tools, so a chat can list/create/edit
-      // work items directly: same tool surface as the stdio shim external
-      // Claude Code sessions get (server/mcp.ts). Scoped to this workspace.
-      // Brief sessions add their own `write_brief` server on top. An agent
-      // that can't host in-process servers (Codex) gets none of them: it
-      // reaches junior through its own configured `junior` MCP instead.
-      mcpServers: {
-        ...(this.provider.capabilities.inProcessMcp ? { junior: rt.juniorMcp(row.id), ...(extras.mcp ?? {}) } : {}),
-        ...((extras.externalMcp ?? {}) as McpServers),
-      },
+      mcpServers,
       ...(extras.tools ? { tools: extras.tools } : {}),
       ...(extras.strictMcpConfig ? { strictMcp: true } : {}),
       disallowedTools: [...(row.kind === 'brief' ? BRIEF_DISALLOWED_TOOLS : row.kind === 'goal' && !rt.goalRuns.has(row.id) ? GOAL_LEAD_DISALLOWED_TOOLS : []), ...(extras.disallowedTools ?? [])],
@@ -182,8 +184,9 @@ export class LiveSession {
       // A read-only worker or brief is fenced, and a job run or a team worker
       // holds its outbound calls for you (core/actions/queue.ts), a hook, so
       // no mode or ~/.claude allow rule skips either. Chats keep asking now,
-      // through `approve` below.
-      ...(this.provider.capabilities.hooks ? sessionVeto(rt, row) : {}),
+      // through `approve` below. Only the servers registered in-process above
+      // count as Junior's own; a user's server of the same name is held like any other.
+      ...(this.provider.capabilities.hooks ? sessionVeto(rt, row, ownServersOf(mcpServers)) : {}),
       // Still set under every mode: the permissive modes short-circuit the
       // calls they cover before this runs, and whatever still reaches here
       // is a call that mode decided a human should see.
