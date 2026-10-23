@@ -193,10 +193,6 @@ function partWrites(part: CommandPart): string | null {
     }
     return null
   }
-  if (cmd === 'xargs') {
-    const at = verbAt(w, 1, new Set(['-I', '-n', '-P', '-L', '-d', '-E', '-s', '-J', '-R']))
-    return at < w.length ? partWrites(w.slice(at)) : null
-  }
   return null
 }
 

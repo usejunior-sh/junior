@@ -136,21 +136,33 @@ const SHELLS = new Set(['bash', 'sh', 'zsh', 'dash'])
  * Split a shell command into its simple commands, each as a list of words.
  * Not a shell: enough of one to find where commands start, quotes, escapes,
  * `$( )`, backticks, heredocs, comments and redirections (`2>&1` is not a
- * background `&`) are respected. `bash -c "…"` is opened up and split too,
- * and so is every command substitution (`$( )`, backticks, also inside
- * double quotes) and process substitution (`<( )`, `>( )`): what they run
- * comes after the command they sit in.
+ * background `&`) are respected. `bash -c "…"` and `eval "…"` are opened up
+ * and split too, also behind a wrapper (`env bash -c`, `xargs sh -c`), and
+ * so is every command substitution (`$( )`, backticks, also inside double
+ * quotes) and process substitution (`<( )`, `>( )`): what they run comes
+ * after the command they sit in.
  */
 export function splitCommand(src: string): CommandPart[] {
   const { parts, subs } = scan(src)
-  // `bash -c "git push && …"` runs a whole script: split it too.
   const opened = parts.flatMap((p) => {
-    const cmd = basename(p[0])
-    if (!SHELLS.has(cmd)) return [p]
-    const at = p.findIndex((w, k) => k > 0 && /^-[a-z]*c$/.test(w))
-    return at > 0 && p[at + 1] !== undefined ? [p, ...splitCommand(p[at + 1])] : [p]
+    const script = scriptOf(p)
+    return script === null ? [p] : [p, ...splitCommand(script)]
   })
   return [...opened, ...subs.flatMap((body) => splitCommand(body))]
+}
+
+/**
+ * The script a command runs, when it runs one: `bash -c "git push && …"`,
+ * `eval "git push origin main"` (its words joined, as eval does). Its parts
+ * always follow it in splitCommand, so a caller judging parts may judge the
+ * script's parts and skip this one.
+ */
+export function scriptOf(part: CommandPart): string | null {
+  const w = unwrap(part)
+  if (w[0] === 'eval') return w.length > 1 ? w.slice(1).join(' ') : null
+  if (!SHELLS.has(w[0])) return null
+  const at = w.findIndex((x, k) => k > 0 && /^-[a-z]*c$/.test(x))
+  return at > 0 && w[at + 1] !== undefined ? w[at + 1] : null
 }
 
 /** The scripts of the command's substitutions, outermost only (`$( )`, backticks, `<( )`, `>( )`). */
@@ -255,8 +267,9 @@ function scan(src: string): { parts: CommandPart[]; subs: string[] } {
     } else if (c === ';') {
       endPart()
       i += s[i + 1] === ';' ? 2 : 1
-    } else if (c === ')' || ((c === '(' || c === '{' || c === '}') && !inWord)) {
+    } else if (c === ')' || (c === '(' && !inWord) || (c === '{' && !inWord && /^\s?$/.test(s[i + 1] ?? '')) || (c === '}' && !inWord && /^[\s;&|)]?$/.test(s[i + 1] ?? ''))) {
       // An unquoted `)` always closes something: `(cd x; git push)` ends at it.
+      // `{` and `}` group only as words of their own: `{main,feat}` and `{}` are words.
       endPart()
       i++
     } else {
@@ -271,8 +284,23 @@ function scan(src: string): { parts: CommandPart[]; subs: string[] } {
 
 const basename = (w: string): string => w.slice(w.lastIndexOf('/') + 1)
 
-/** Words that run the next command rather than being it: `sudo git push`, `npx vercel deploy`. */
-const WRAPPERS = new Set(['sudo', 'command', 'env', 'time', 'nohup', 'exec', 'npx', 'bunx'])
+/**
+ * Words that run the next command rather than being it: `sudo git push`,
+ * `npx vercel deploy`, `xargs git push origin`. Each with the flags of its own
+ * that take the next word as their value (`sudo -u bob`, `xargs -I {}`).
+ */
+const WRAPPERS = new Map<string, Set<string>>([
+  ['sudo', new Set(['-u', '-g', '-U', '-C', '-h', '-p', '-r', '-t', '-D', '-R'])],
+  ['command', new Set()],
+  ['env', new Set(['-u', '-C', '-S', '--unset', '--chdir', '--split-string'])],
+  ['time', new Set(['-o', '-f'])],
+  ['nohup', new Set()],
+  ['exec', new Set(['-a'])],
+  ['npx', new Set(['-p', '--package', '-c', '--call'])],
+  ['bunx', new Set(['-p', '--package'])],
+  // xargs adds words from its input to the command: see pushRefs.
+  ['xargs', new Set(['-I', '-n', '-P', '-L', '-d', '-E', '-e', '-s', '-J', '-R', '-a', '--arg-file', '--delimiter', '--max-args', '--max-procs', '--max-lines', '--max-chars'])],
+])
 /** Global flags that take the next word as their value (`git -C dir push`, `gh -R o/r …`). */
 const VALUE_FLAGS = new Set(['-C', '-c', '-R', '--repo', '--git-dir', '--work-tree', '--namespace'])
 
@@ -286,18 +314,31 @@ const LIST_WORDS = new Set(['for', 'select', 'case'])
  * dropped, the program by its basename. A `for`/`case` header runs nothing: [].
  */
 export function unwrap(part: CommandPart): CommandPart {
+  const { at } = peel(part)
+  if (at < 0) return []
+  const rest = part.slice(at)
+  return rest.length ? [basename(rest[0]), ...rest.slice(1)] : rest
+}
+
+/** The wrappers a command runs under, by basename: `sudo xargs git push` → ['sudo', 'xargs']. */
+export const wrappersOf = (part: CommandPart): string[] => peel(part).wrappers
+
+/** Where the command proper starts (-1: a `for`/`case` header), and what wraps it. */
+function peel(part: CommandPart): { at: number; wrappers: string[] } {
+  const wrappers: string[] = []
   let i = 0
   while (i < part.length) {
     const w = part[i]
-    if (LIST_WORDS.has(w)) return []
+    if (LIST_WORDS.has(w)) return { at: -1, wrappers }
+    const flags = WRAPPERS.get(basename(w))
     if (LEAD_WORDS.has(w) || /^[A-Za-z_][A-Za-z0-9_]*=/.test(w)) i++
-    else if (WRAPPERS.has(basename(w))) {
+    else if (flags) {
+      wrappers.push(basename(w))
       i++
-      while (i < part.length && part[i].startsWith('-')) i++
+      while (i < part.length && part[i].startsWith('-')) i += flags.has(part[i]) ? 2 : 1
     } else break
   }
-  const rest = part.slice(i)
-  return rest.length ? [basename(rest[0]), ...rest.slice(1)] : rest
+  return { at: i, wrappers }
 }
 
 /** Parse one pattern line; a string is the reason it's no good. */
@@ -357,7 +398,8 @@ export function matchPart(part: CommandPart, p: BashPattern): number {
   const w = unwrap(part)
   let i = 0
   for (const [k, alts] of p.words.entries()) {
-    if (k > 0) while (i < w.length && w[i].startsWith('-')) i += VALUE_FLAGS.has(w[i]) ? 2 : 1
+    // Between leading words: flags, and words only the shell knows (`git $OPTS push`).
+    if (k > 0) while (i < w.length && (w[i].startsWith('-') || /[$`]/.test(w[i]))) i += VALUE_FLAGS.has(w[i]) ? 2 : 1
     if (i >= w.length || !alts.includes(w[i])) return -1
     i++
   }
@@ -418,26 +460,86 @@ export function describePart(part: CommandPart, p: BashPattern): string {
 }
 
 /**
- * The branch a `git push` names, if it names one: `git push origin feat`,
- * `git push -u origin HEAD:feat` → "feat". Null when it pushes the current
- * branch implicitly. The result says which, later (pushedBranch).
+ * What one refspec of a `git push` sends to: a branch by name, the
+ * checked-out branch (`HEAD`, `@`, no refspec at all, or exactly
+ * `"$(git branch --show-current)"`), or 'unknown' when only the shell knows:
+ * a variable, a substitution, a glob, a brace, or words fed in by xargs.
+ * An unknown target is never free.
  */
-export function pushTarget(part: CommandPart): string | null {
+export type PushRef = { branch: string } | 'current' | 'unknown'
+
+const EXPANSION = /[$`]/
+const GLOB = /[*?[\]{}]/
+const CURRENT_CMD = String.raw`\s*git\s+(?:branch\s+--show-current|rev-parse\s+--abbrev-ref\s+(?:HEAD|@))\s*`
+/** The current-branch substitution, word for word: `$(git branch --show-current)` or in backticks. */
+const CURRENT_SUBST = new RegExp(String.raw`^(?:\$\(${CURRENT_CMD}\)|\`${CURRENT_CMD}\`)$`)
+/** A redirection word: its operator, and its target when attached (`>log`, `2>&1`). */
+const REDIRECT = /^(?:[0-9]*(?:>>|>\||>&|<&|<<<|>|<)|&>>?)/
+/** `git push` flags whose value is the next word. */
+const PUSH_VALUE_FLAGS = new Set(['-o', '--push-option', '--repo', '--receive-pack', '--exec'])
+
+function refOf(spec: string): PushRef {
+  const ref = spec.replace(/^\+/, '')
+  if (ref === 'HEAD' || ref === '@' || CURRENT_SUBST.test(ref)) return 'current'
+  const colon = ref.lastIndexOf(':')
+  const src = colon === -1 ? '' : ref.slice(0, colon)
+  let dst = colon === -1 ? ref : ref.slice(colon + 1)
+  if (EXPANSION.test(src) && !CURRENT_SUBST.test(src)) return 'unknown'
+  if (CURRENT_SUBST.test(dst)) return 'current'
+  if (EXPANSION.test(dst) || GLOB.test(ref)) return 'unknown'
+  dst = dst.replace(/^refs\/heads\//, '')
+  if (!dst || dst === 'HEAD' || dst === '@') return 'unknown'
+  return { branch: dst }
+}
+
+/**
+ * Every place a `git push` sends to, one per refspec; ['current'] when it
+ * names none. [] when the command isn't a push.
+ */
+export function pushRefs(part: CommandPart): PushRef[] {
   const w = unwrap(part)
   const at = w.indexOf('push')
-  if (at === -1) return null
+  if (at === -1) return []
+  // xargs appends words from its input: a branch, a refspec, a flag.
+  if (wrappersOf(part).includes('xargs')) return ['unknown']
+  // `git $OPTS push`: the flags before the verb could be anything.
+  if (w.slice(1, at).some((t) => EXPANSION.test(t))) return ['unknown']
   const args: string[] = []
+  let opts = true
   for (let i = at + 1; i < w.length; i++) {
     const t = w[i]
-    if (t.startsWith('-')) {
-      if (t === '-o' || t === '--push-option' || t === '--repo' || t === '--receive-pack' || t === '--exec') i++
+    if (t.startsWith('<(') || t.startsWith('>(')) return ['unknown']
+    const redirect = REDIRECT.exec(t)
+    if (redirect) {
+      // `> log` takes the next word as its target; `>log` and `2>&1` carry it.
+      if (redirect[0] === t) i++
       continue
     }
-    if (/^[0-9]*>/.test(t) || t.startsWith('&>')) break
+    if (opts && t === '--') {
+      opts = false
+      continue
+    }
+    if (opts && t.startsWith('-')) {
+      // `-$F` could be `-f`; `--push-option=$X` could be anything.
+      if (EXPANSION.test(t)) return ['unknown']
+      if (PUSH_VALUE_FLAGS.has(t)) i++
+      continue
+    }
     args.push(t)
   }
-  const ref = args[1]
-  if (!ref || ref === 'HEAD') return null
-  const dst = ref.replace(/^\+/, '').split(':').pop() ?? ''
-  return dst.replace(/^refs\/heads\//, '') || null
+  // The remote: unquoted, `$R` could split into a remote and a refspec.
+  if (args[0] !== undefined && EXPANSION.test(args[0])) return ['unknown']
+  const specs = args.slice(1)
+  return specs.length ? specs.map(refOf) : ['current']
+}
+
+/**
+ * The branch a `git push` names, if it names exactly one: `git push origin
+ * feat`, `git push -u origin HEAD:feat` → "feat". Null when it pushes the
+ * current branch, more than one, or one only the shell knows. The result
+ * says which, later (pushedBranch).
+ */
+export function pushTarget(part: CommandPart): string | null {
+  const refs = pushRefs(part)
+  return refs.length === 1 && typeof refs[0] === 'object' ? refs[0].branch : null
 }

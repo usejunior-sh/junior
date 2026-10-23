@@ -10,13 +10,15 @@
  *   included: rebasing your own branch is yours to do)
  *   opening a draft PR (nobody is asked to look at it yet)
  *
- * Plain --force, deleting or mirroring, and anything to the default branch
- * are held like any send.
+ * Plain --force, deleting or mirroring, anything to the default branch, and
+ * a target only the shell knows (`$B`, `"${BRANCH}"`, a glob, words fed in
+ * by xargs) are held like any send. The checked-out branch by name (`HEAD`,
+ * `@`, `"$(git branch --show-current)"`) is judged as that branch.
  *
  * Pure and browser-safe.
  */
 import type { PermissionMode, ProviderId } from '../../shared/protocol.js'
-import { pushTarget, splitCommand, unwrap, type CommandPart } from './bash.js'
+import { pushRefs, scriptOf, splitCommand, unwrap, type CommandPart } from './bash.js'
 import type { SortedAction } from './sort.js'
 
 /**
@@ -44,6 +46,9 @@ function isDefault(branch: string, s: BranchScope): boolean {
   return s.defaultBranch ? branch === s.defaultBranch : branch === 'main' || branch === 'master'
 }
 
+/** Words before the program that point git at another repo: `GIT_DIR=…`, `env -C dir`. */
+const ELSEWHERE_PREFIX = (t: string): boolean => /^GIT_(DIR|WORK_TREE)=/.test(t) || t === '-C' || t.startsWith('--chdir')
+
 function freePush(part: CommandPart, s: BranchScope): boolean {
   const w = unwrap(part)
   const at = w.indexOf('push')
@@ -51,11 +56,20 @@ function freePush(part: CommandPart, s: BranchScope): boolean {
   const rest = w.slice(at + 1)
   if (rest.some((t) => t === '--force' || (FORCE_RE.test(t) && !t.startsWith('--')))) return false
   if (rest.some((t) => WIDE_PUSH.includes(t) || t.startsWith('+') || t.startsWith(':'))) return false
-  // Named (`origin feat`, `HEAD:feat`) or implicit: the checked-out branch, only
-  // when git runs in the session's own folder.
-  const elsewhere = w.slice(0, at).some((t) => t === '-C' || t.startsWith('--git-dir') || t.startsWith('--work-tree'))
-  const target = pushTarget(part) ?? (elsewhere ? null : s.current)
-  return !!target && !isDefault(target, s)
+  // Every refspec must be free. Named (`origin feat`, `HEAD:feat`) is judged as
+  // written; the checked-out branch (`HEAD`, `@`, none named) only when git runs
+  // in the session's own folder; one only the shell knows (`$B`, xargs) holds.
+  const prefix = part.slice(0, part.length - w.length)
+  const elsewhere = w.slice(0, at).some((t) => t === '-C' || t.startsWith('--git-dir') || t.startsWith('--work-tree')) || prefix.some(ELSEWHERE_PREFIX)
+  const refs = pushRefs(part)
+  return (
+    refs.length > 0 &&
+    refs.every((r) => {
+      if (r === 'unknown') return false
+      const target = r === 'current' ? (elsewhere ? null : s.current) : r.branch
+      return !!target && !isDefault(target, s)
+    })
+  )
 }
 
 const freeDraft = (part: CommandPart): boolean => unwrap(part).some((t) => t === '--draft' || t === '-d')
@@ -85,6 +99,8 @@ export function chatBashVerdict(command: string, s: BranchScope, sortPart: (part
   // A `cd` first: the checked-out branch we know is the wrong folder's.
   if (parts.some((p) => unwrap(p)[0] === 'cd' || unwrap(p)[0] === 'pushd')) s = { ...s, current: null }
   for (const part of parts) {
+    // `eval "…"` and `bash -c "…"`: their own parts follow and are judged one by one.
+    if (scriptOf(part) !== null) continue
     const sorted = sortPart(part.join(' '))
     if (!sorted) continue
     const why = freeSend(part, sorted.kind, s)

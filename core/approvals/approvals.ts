@@ -10,7 +10,7 @@
  *
  * Pure and browser-safe: time is always an argument.
  */
-import { splitCommand, unwrap } from '../actions/bash.js'
+import { splitCommand, unwrap, wrappersOf } from '../actions/bash.js'
 
 /** The kinds of send an approval can cover. */
 export type ApprovalWhat = 'slack-dm' | 'slack-post' | 'request-review'
@@ -119,7 +119,8 @@ export function callTarget(tool: string, args: Record<string, unknown>): { what:
  */
 export function reviewerOf(command: string): string | null {
   const parts = splitCommand(command)
-  if (parts.length !== 1) return null
+  // xargs could add a second reviewer, or another edit, from its input.
+  if (parts.length !== 1 || wrappersOf(parts[0]!).includes('xargs')) return null
   const w = unwrap(parts[0]!)
   if (w[0] !== 'gh' || w[1] !== 'pr' || w[2] !== 'edit') return null
   let login: string | null = null
