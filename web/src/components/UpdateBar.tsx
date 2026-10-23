@@ -11,7 +11,7 @@
 import { RotateCw, X } from 'lucide-react'
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import type { Build } from '../../../shared/protocol.js'
-import { MOD_LABEL } from '../keys.js'
+import { MOD_LABEL, isMac } from '../keys.js'
 import { reloadBlockers } from '../reloadGuard.js'
 import { Tooltip } from '../ui/Tooltip.js'
 
@@ -77,9 +77,12 @@ export function UpdateBar({ pending, mobile, onReload, onHide }: Props) {
                 {!mobile && <span className="ubMore"> {SECOND}</span>}
               </span>
               {!mobile && (
+                // The tooltip is for the pointer. A screen reader already reads the
+                // whole version (the ellipsis is only CSS) plus the sr-only note.
                 <Tooltip content={versionTitle} side="bottom">
-                  <span className="ubVer" tabIndex={-1}>
+                  <span className="ubVer">
                     {version}
+                    {pending?.dirty && <span className="sr-only"> (uncommitted changes)</span>}
                   </span>
                 </Tooltip>
               )}
@@ -97,9 +100,20 @@ export function UpdateBar({ pending, mobile, onReload, onHide }: Props) {
               </>
             ) : (
               <>
-                <button ref={reloadRef} type="button" className="btn xs" disabled={reloading} onClick={tryReload}>
+                <button
+                  ref={reloadRef}
+                  type="button"
+                  className="btn xs"
+                  disabled={reloading}
+                  onClick={tryReload}
+                  aria-keyshortcuts={isMac ? 'Meta+R' : 'Control+R'}
+                >
                   {reloading ? 'Reloading…' : 'Reload'}
-                  {!mobile && !reloading && <kbd className="ubKbd">{MOD_LABEL}R</kbd>}
+                  {!mobile && !reloading && (
+                    <kbd className="ubKbd" aria-hidden="true">
+                      {MOD_LABEL}R
+                    </kbd>
+                  )}
                 </button>
                 <Tooltip content="Hide until the next update" side="bottom" align="end">
                   <button type="button" className="topIcon" aria-label="Hide until the next update" onClick={onHide}>

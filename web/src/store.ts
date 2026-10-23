@@ -26,8 +26,17 @@ import type { BriefJob,
 } from '../../shared/protocol.js'
 import { adoptWorkspace, boundWorkspace, gotoWorkspace } from './workspaceUrl.js'
 import { DEFAULT_PERSONA } from '../../core/junior/persona.js'
-import { buildChanged, buildKey, parseReloadMark, shouldAutoReload } from './reloadOnBuild.js'
+import { buildChanged, buildKey, loadedFrom, parseReloadMark, shouldAutoReload, uiEntryOfSrc } from './reloadOnBuild.js'
 import { reloadBlockers } from './reloadGuard.js'
+
+/** The bundle this page runs: its own module script's hashed file name, null in dev (Vite serves /src/main.tsx). */
+const PAGE_UI: string | null = (() => {
+  for (const s of document.querySelectorAll<HTMLScriptElement>('script[type="module"][src]')) {
+    const ui = uiEntryOfSrc(s.src)
+    if (ui) return ui
+  }
+  return null
+})()
 
 /** sessionStorage key for the loop guard: which build this tab last reloaded itself for, and when. */
 const RELOAD_MARK = 'junior.reloadedFor'
@@ -187,10 +196,10 @@ export class Store {
 
   /** True when the page is on its way out (an automatic reload). */
   #considerBuild(next: Build): boolean {
-    if (!this.#loadedBuild) {
-      this.#loadedBuild = next
-      return false
-    }
+    // The first hello names the daemon; the page's own script names the
+    // bundle it runs. They differ only for a page loaded mid update, which
+    // then falls through and is handled like any other change.
+    this.#loadedBuild ??= loadedFrom(next, PAGE_UI)
     if (!buildChanged(this.#loadedBuild, next)) {
       // Same build (a plain restart, a workspace switch), or rolled back to
       // the one this page runs: nothing to reload.

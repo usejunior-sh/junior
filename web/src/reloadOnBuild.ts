@@ -8,8 +8,9 @@
  * the store asks, test/reload-on-build.test.ts walks the table.
  *
  * The page compares against the build it was loaded with (the first `hello`
- * of this page load), not the last one, so an update then a rollback lands
- * back on what the page already runs and asks for nothing.
+ * of this page load, its bundle read off the page itself: loadedFrom), not the
+ * last one, so an update then a rollback lands back on what the page already
+ * runs and asks for nothing.
  */
 import type { Build } from '../../shared/protocol.js'
 
@@ -61,6 +62,28 @@ export function shouldAutoReload(
   if (!buildChanged(loaded, next) || busy) return false
   if (!last) return true
   return last.key !== buildKey(next) && now - last.at >= RELOAD_COOLDOWN_MS
+}
+
+/**
+ * The hashed entry file a page's module script points at
+ * (`/assets/index-B3k9xQ.js` → `index-B3k9xQ.js`), the same name the server's
+ * uiEntryOf reads off index.html. Null for anything else, Vite's dev
+ * `/src/main.tsx` included.
+ */
+export function uiEntryOfSrc(src: string): string | null {
+  return /\/(index-[\w-]+\.js)(?:[?#].*)?$/.exec(src)?.[1] ?? null
+}
+
+/**
+ * The build this page runs, from the first `hello` plus the bundle the page
+ * itself loaded (`pageUi`). The page's own bundle wins: a page loaded mid
+ * update (the old daemon served index.html, the new one answered the socket)
+ * runs the old bundle under the new daemon's hello, and must still see the
+ * change. Only when both sides name a bundle; a page or daemon without one
+ * keeps the hello as it is, so an old daemon never looks changed.
+ */
+export function loadedFrom(first: Build, pageUi: string | null): Build {
+  return pageUi && first.ui ? { ...first, ui: pageUi } : first
 }
 
 /** Read back a mark from storage; anything malformed is no mark. */

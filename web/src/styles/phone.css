@@ -335,3 +335,7 @@ html.kbOpen .shell.mobile .panel { bottom: 0; }
   .updateBar .btn.xs { height: 36px; padding: 0 12px; font-size: 0.9231rem; }
   .updateBar .topIcon { height: 40px; min-width: 40px; }
 }
+/* With the keyboard up the visual viewport is short and the bar would sit right
+   over what you're typing: it steps aside and comes back when the keyboard
+   closes. The live region has already announced it. */
+html.kbOpen .updateBar { display: none; }

@@ -184,7 +184,7 @@ kbd { font-family: var(--mono); font-size: 0.8462rem; color: var(--ash); border:
 .updateBar .ubText { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .updateBar .ubVer {
   min-width: 0; max-width: 24ch; flex: 0 1 auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  font-family: var(--mono); font-size: 0.9231em; color: var(--ash); outline: none;
+  font-family: var(--mono); font-size: 0.9231em; color: var(--ash);
 }
 .updateBar .ubActs { display: flex; align-items: center; gap: 6px; flex: none; margin-left: auto; padding-left: 12px; }
 .updateBar .ubKbd { margin-left: 2px; line-height: 16px; }

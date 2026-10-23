@@ -23,6 +23,7 @@
     "web/src/transcript.ts",
     "web/src/browserUrl.ts",
     "web/src/reloadOnBuild.ts",
+    "web/src/reloadGuard.ts",
     "web/src/components/browser/steps.ts",
     "vite.config.ts"
   ]
