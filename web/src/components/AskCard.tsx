@@ -49,7 +49,7 @@ export const AskCard = memo(function AskCard({ item, questions, onRespond, junio
   if (item.resolved) return <ResolvedAsk item={item} questions={questions} junior={junior} />
 
   return (
-    <div className="perm ask">
+    <div className="perm ask" data-reload-guard="card">
       <div className="q">{junior ? <JuniorLabel mood="needs" say="I’ll wait for your answer"> has a question</JuniorLabel> : 'Asking'}</div>
       {questions.map((q, qi) => {
         const sel = picked[qi] ?? []

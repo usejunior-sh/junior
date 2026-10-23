@@ -23,7 +23,7 @@ const EFFECT_BADGE: Record<string, { label: string; hint: string }> = {
 export const PermissionCard = memo(function PermissionCard({ item, onRespond, junior = true }: Props) {
   const badge = item.effect ? EFFECT_BADGE[item.effect] : undefined
   return (
-    <div className="perm">
+    <div className="perm" data-reload-guard={item.resolved ? undefined : 'card'}>
       <div className="q">
         {junior ? (
           <JuniorLabel
@@ -122,7 +122,7 @@ export const PlanCard = memo(function PlanCard({
   junior = true,
 }: Props & { plan: string; refs?: RefIndex; onRef?: (hash: string) => void }) {
   return (
-    <div className="perm planCard">
+    <div className="perm planCard" data-reload-guard={item.resolved ? undefined : 'card'}>
       <div className="q">
         {junior ? (
           <JuniorLabel

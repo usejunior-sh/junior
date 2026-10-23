@@ -276,7 +276,12 @@ export function PromptBox({
   }
 
   return (
-    <div id="composer" className={headBelow ? 'headBelow' : undefined}>
+    <div
+      id="composer"
+      className={headBelow ? 'headBelow' : undefined}
+      // A reload now would cost you what you're writing (reloadGuard.ts).
+      data-reload-guard={text.trim() || attach.images.length > 0 || attach.files.length > 0 ? 'draft' : undefined}
+    >
       <div
         className={'frame card' + (dragging ? ' dragging' : '')}
         onDragOver={(e) => {

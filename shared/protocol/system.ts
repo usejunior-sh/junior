@@ -34,6 +34,14 @@ export type Build = {
   home: string
   /** `home` is prod's ~/.junior: false means this daemon is on dev's data */
   prodData: boolean
+  /**
+   * The web bundle this daemon serves: the hashed entry file in
+   * dist/web/index.html (index-B3k9xQ.js), null when there is no build.
+   * Two snapshots of one commit share a version; this tells them apart, so an
+   * open page knows it is running an old UI (web/src/reloadOnBuild.ts).
+   * Absent from a daemon older than this field.
+   */
+  ui?: string | null
 }
 
 export type SystemStatus = {

@@ -326,3 +326,12 @@ html.kbOpen .shell.mobile .panel { bottom: 0; }
   .rtbl { display: block; overflow-x: auto; }
 }
 
+/* The update bar on a phone (UpdateBar.tsx): 44px for touch, first sentence
+   only, no version and no ⌘R hint; side padding follows the mobile top bar. */
+@media (max-width: 767px), (pointer: coarse) and (max-height: 500px) {
+  .updateBar { height: 44px; padding: 0 max(6px, env(safe-area-inset-right)) 0 max(8px, env(safe-area-inset-left)); }
+  .updateBar .ubMore, .updateBar .ubVer, .updateBar .ubKbd { display: none; }
+  .updateBar .ubActs { padding-left: 8px; gap: 4px; }
+  .updateBar .btn.xs { height: 36px; padding: 0 12px; font-size: 0.9231rem; }
+  .updateBar .topIcon { height: 40px; min-width: 40px; }
+}

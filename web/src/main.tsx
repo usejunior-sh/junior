@@ -41,7 +41,9 @@ trackInputModality()
 store.connect()
 // Phones suspend background tabs and drop their sockets: reconnect the moment
 // the page is looked at again, not on the next retry tick.
-document.addEventListener('visibilitychange', () => document.visibilityState === 'visible' && store.resume())
+document.addEventListener('visibilitychange', () =>
+  document.visibilityState === 'visible' ? store.resume() : store.reloadIfIdle(),
+)
 window.addEventListener('online', () => store.resume())
 window.addEventListener('pageshow', (e) => e.persisted && store.resume())
 

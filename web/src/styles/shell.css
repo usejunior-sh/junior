@@ -169,6 +169,26 @@ kbd { font-family: var(--mono); font-size: 0.8462rem; color: var(--ash); border:
 .topIcon .connDot.needs { background: var(--orange); box-shadow: 0 0 0 2px var(--glow-orange); }
 .topIcon:disabled { color: var(--stone); background: transparent; cursor: default; }
 
+/* The update bar (UpdateBar.tsx): one quiet line under the top bar when the
+   daemon changed build but a reload now would cost you something. A full-bleed
+   band one step off the canvas, hairline under it; neutral ink, no orange (nothing
+   needs you), no sky (Junior isn't acting), no yellow (not a warning). */
+.updateBar {
+  display: flex; align-items: center; gap: 8px; height: 32px; flex: none; min-width: 0;
+  padding: 0 12px 0 14px; background: var(--card); border-bottom: 1px solid var(--hair);
+  font-size: 0.8462rem; color: var(--body); animation: ubIn 120ms ease-out;
+}
+@keyframes ubIn { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .updateBar { animation: none; } }
+.updateBar .ubIc { flex: none; color: var(--ash); }
+.updateBar .ubText { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.updateBar .ubVer {
+  min-width: 0; max-width: 24ch; flex: 0 1 auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font-family: var(--mono); font-size: 0.9231em; color: var(--ash); outline: none;
+}
+.updateBar .ubActs { display: flex; align-items: center; gap: 6px; flex: none; margin-left: auto; padding-left: 12px; }
+.updateBar .ubKbd { margin-left: 2px; line-height: 16px; }
+
 /* Junior.app's title bar (desktop.ts): the bar is the window's drag handle,
    its controls are not. The left zone tracks rail + panel; the traffic lights
    (trafficLightPosition x 16, desktop/src/main.ts) sit in its 92px inset. */

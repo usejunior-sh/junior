@@ -26,6 +26,29 @@ import type { BriefJob,
 } from '../../shared/protocol.js'
 import { adoptWorkspace, boundWorkspace, gotoWorkspace } from './workspaceUrl.js'
 import { DEFAULT_PERSONA } from '../../core/junior/persona.js'
+import { buildChanged, buildKey, parseReloadMark, shouldAutoReload } from './reloadOnBuild.js'
+import { reloadBlockers } from './reloadGuard.js'
+
+/** sessionStorage key for the loop guard: which build this tab last reloaded itself for, and when. */
+const RELOAD_MARK = 'junior.reloadedFor'
+
+function readReloadMark() {
+  try {
+    return parseReloadMark(sessionStorage.getItem(RELOAD_MARK))
+  } catch {
+    return null
+  }
+}
+
+/** Mark, then reload. The mark is what stops two flapping daemons from bouncing the page. */
+function reloadFor(b: Build) {
+  try {
+    sessionStorage.setItem(RELOAD_MARK, JSON.stringify({ key: buildKey(b), at: Date.now() }))
+  } catch {
+    // storage off: reload anyway, the cooldown just won't apply
+  }
+  location.reload()
+}
 
 export type ConnState = 'connecting' | 'connected' | 'disconnected'
 export type BrowserFrame = Extract<ServerMessage, { type: 'browser_profiles' | 'browser_tab' | 'browser_download' }>
@@ -52,6 +75,12 @@ export class Store {
   #onboarded = true
   /** Which copy of Junior this tab is talking to, null until `hello` lands. */
   #build: Build | null = null
+  /** The build this page was loaded with: the first `hello`'s, set once (reloadOnBuild.ts). */
+  #loadedBuild: Build | null = null
+  /** A newer build than this page runs, held because a reload now would cost you something (UpdateBar). */
+  #updatePending: Build | null = null
+  /** The pending build whose bar you hid: hidden for this page load, until a different build arrives. */
+  #updateHiddenFor: string | null = null
   /** Junior's persona in this workspace: the rail's name and face colour. */
   #persona: Persona = DEFAULT_PERSONA
 
@@ -91,6 +120,9 @@ export class Store {
   getWorkspaces = (): readonly Workspace[] => this.#workspaces
   getOnboarded = (): boolean => this.#onboarded
   getBuild = (): Build | null => this.#build
+  /** The build waiting for a reload, or null: nothing changed, it reloaded already, or you hid the bar. */
+  getUpdatePending = (): Build | null =>
+    this.#updatePending && buildKey(this.#updatePending) !== this.#updateHiddenFor ? this.#updatePending : null
   getPersona = (): Persona => this.#persona
   getTerminals = (): readonly TerminalSummary[] => this.#terminals
   getCheckouts = (): readonly Checkout[] => this.#checkouts
@@ -149,6 +181,54 @@ export class Store {
       this.#reconnectTimer = setTimeout(() => this.connect(), 1500)
     }
     ws.onmessage = (e) => this.#handle(JSON.parse(String(e.data)) as ServerMessage)
+  }
+
+  // the build behind the socket (reloadOnBuild.ts, reloadGuard.ts)
+
+  /** True when the page is on its way out (an automatic reload). */
+  #considerBuild(next: Build): boolean {
+    if (!this.#loadedBuild) {
+      this.#loadedBuild = next
+      return false
+    }
+    if (!buildChanged(this.#loadedBuild, next)) {
+      // Same build (a plain restart, a workspace switch), or rolled back to
+      // the one this page runs: nothing to reload.
+      this.#updatePending = null
+      return false
+    }
+    const busy = reloadBlockers({ hidden: document.visibilityState === 'hidden' }).size > 0
+    if (shouldAutoReload(this.#loadedBuild, next, busy, readReloadMark())) {
+      reloadFor(next)
+      return true
+    }
+    this.#updatePending = next
+    return false
+  }
+
+  /** The bar's Reload: you asked, so no guard and no mark (the cooldown is for reloads nobody asked for). */
+  reloadForUpdate = () => location.reload()
+
+  /** The bar's ✕: gone for this page load, back if a different build arrives. */
+  hideUpdate = () => {
+    if (!this.#updatePending) return
+    this.#updateHiddenFor = buildKey(this.#updatePending)
+    this.#notify()
+  }
+
+  /**
+   * The window went to the background with the bar up: if nothing is in
+   * flight any more (a focused field doesn't count, nobody types in a hidden
+   * window), reload now, so you come back on the new build. Never while the
+   * window is visible: a page that jumps right after you press Send is worse
+   * than a bar.
+   */
+  reloadIfIdle() {
+    const pending = this.#updatePending
+    if (!pending) return
+    if (shouldAutoReload(this.#loadedBuild, pending, reloadBlockers({ hidden: true }).size > 0, readReloadMark())) {
+      reloadFor(pending)
+    }
   }
 
   /**
@@ -277,6 +357,10 @@ export class Store {
         this.#checkouts = msg.checkouts
         this.#build = msg.build
         if (msg.persona) this.#persona = msg.persona
+        // A new build behind the socket: reload onto it, quietly, unless that
+        // would cost you something on screen. Return before notifying so the
+        // old UI doesn't flash the new state on its way out.
+        if (msg.build && this.#considerBuild(msg.build)) return
         this.#notify()
         break
       case 'persona':

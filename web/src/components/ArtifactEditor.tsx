@@ -155,7 +155,7 @@ export function ArtifactEditor({ draftKey, initialTitle, initialBody, crumb, sav
   }
 
   return (
-    <div className="artEditor">
+    <div className="artEditor" data-reload-guard={dirty ? 'edit' : undefined}>
       <div className="artEditBar">
         <span className="crumb" title={crumb}>
           {crumb}

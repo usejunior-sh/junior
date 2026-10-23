@@ -70,7 +70,7 @@ export function pkgVersion(): string {
  * the flag is wrong exactly when it matters. Pure, so test/build.test.ts can
  * walk every combination without installing three copies.
  */
-export function classifyBuild(dir: string, version: string, home: string): Build {
+export function classifyBuild(dir: string, version: string, home: string, ui: string | null = null): Build {
   // Inside Junior.app the package is staged at Contents/Resources/junior; a
   // global install sits under node_modules; anything else is the checkout.
   const surface: Build['surface'] = /\.app[/\\]Contents[/\\]Resources[/\\]/.test(dir + path.sep)
@@ -93,6 +93,24 @@ export function classifyBuild(dir: string, version: string, home: string): Build
     home,
     // `npm run dev` points JUNIOR_HOME at ~/.junior-dev; prod uses ~/.junior.
     prodData: home === path.join(os.homedir(), '.junior'),
+    ui,
+  }
+}
+
+/**
+ * The hashed entry script named by a built index.html, or null. Vite renames
+ * it on every content change, so it identifies the bundle a page is running.
+ */
+export function uiEntryOf(html: string): string | null {
+  return /<script[^>]*\ssrc="[^"]*\/(index-[\w-]+\.js)"/.exec(html)?.[1] ?? null
+}
+
+/** The web bundle under a package root: <root>/dist/web in a checkout and in the package alike. */
+function uiEntry(dir: string): string | null {
+  try {
+    return uiEntryOf(readFileSync(path.join(dir, 'dist', 'web', 'index.html'), 'utf8'))
+  } catch {
+    return null
   }
 }
 
@@ -109,6 +127,7 @@ export function buildInfo(): Build {
     root?.dir ?? path.dirname(fileURLToPath(import.meta.url)),
     root?.version ?? 'unknown',
     JUNIOR_DIR,
+    root ? uiEntry(root.dir) : null,
   )
 }
 

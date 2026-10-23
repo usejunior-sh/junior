@@ -134,6 +134,8 @@ export function ActionCard({
       open={isOpen}
       onOpenChange={pinnedOpen ? undefined : setOpen}
       className={`astub st-${a.status}${needs ? ' need' : ''}${a.status === 'failed' ? ' fail' : ''}${pinnedOpen ? ' pinned' : ''}`}
+      // Waiting on you, or half-way through an edit / note: hold an automatic reload (reloadGuard.ts).
+      data-reload-guard={mode !== 'view' ? 'edit' : needs ? 'card' : undefined}
     >
       <div className="arow1">
         <Collapsible.Trigger asChild disabled={pinnedOpen}>

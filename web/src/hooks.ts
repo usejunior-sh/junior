@@ -24,6 +24,11 @@ export function useBuild() {
   return useSyncExternalStore(store.subscribeStructural, store.getBuild)
 }
 
+/** A newer build waiting for a reload (the UpdateBar), or null. */
+export function useUpdatePending() {
+  return useSyncExternalStore(store.subscribeStructural, store.getUpdatePending)
+}
+
 export function useOnboarded() {
   return useSyncExternalStore(store.subscribeStructural, store.getOnboarded)
 }

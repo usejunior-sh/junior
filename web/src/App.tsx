@@ -25,6 +25,7 @@ import { type OpenTab, TabBand } from './components/TabBand.js'
 import { useDrafts, draftStore, draftTitle } from './drafts.js'
 import { TerminalPage } from './components/TerminalPage.js'
 import { TopBar } from './components/TopBar.js'
+import { UpdateBar } from './components/UpdateBar.js'
 import { isDesktop } from './desktop.js'
 import { Transcript } from './components/Transcript.js'
 import { AgentHeader, AgentBrief, AgentOutcome, AgentDock, AgentComposer } from './components/Agents.js'
@@ -44,7 +45,7 @@ import { usePendingActions } from './actions.js'
 import { ArtifactPage } from './components/ArtifactPage.js'
 import { DefaultProjectGate } from './components/DefaultProjectGate.js'
 import { type WorkspaceModalMode, WorkspaceModal } from './components/WorkspaceModal.js'
-import { useConn, useSessions, useTerminals, useCheckouts, useHashRoute, useEvents, useWorkspaces, useBuild, useWorkspaceId, useOnboarded } from './hooks.js'
+import { useConn, useSessions, useTerminals, useCheckouts, useHashRoute, useEvents, useWorkspaces, useBuild, useUpdatePending, useWorkspaceId, useOnboarded } from './hooks.js'
 import { useInbox, inboxStore } from './inboxStore.js'
 import { useArtifacts, artifactStore } from './artifactStore.js'
 import { useModels, findModel } from './models.js'
@@ -92,6 +93,7 @@ export function App() {
   const [composeSignal, setComposeSignal] = useState(0)
   const workspaces = useWorkspaces()
   const build = useBuild()
+  const updatePending = useUpdatePending()
   const workspaceId = useWorkspaceId()
   const onboarded = useOnboarded()
   const [wsModal, setWsModal] = useState<WorkspaceModalMode | null>(null)
@@ -527,6 +529,7 @@ export function App() {
         build={build}
         desktop={isDesktop ? { panelCollapsed, onTogglePanel: panelStepsAside ? () => setKeepPanel(true) : panelSize.toggleCollapsed } : undefined}
       />
+      <UpdateBar pending={updatePending} mobile={mobile} onReload={store.reloadForUpdate} onHide={store.hideUpdate} />
 
       <div
         className={`shell${panelSize.dragging ? ' resizing' : ''}${panelCollapsed ? ' collapsed' : ''}${mobile ? ' mobile' : ''}${sheet ? ' sheetOpen' : ''}`}

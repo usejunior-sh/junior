@@ -77,7 +77,7 @@ export function JobFileEditor({ id, onNavigate }: { id?: string; onNavigate: (ha
   }
 
   return (
-    <div className="page">
+    <div className="page" data-reload-guard={dirty ? 'edit' : undefined}>
       <div className="glow blue" aria-hidden="true" />
       <div className="inner wfile">
         <div className="crumbs">
