@@ -8,7 +8,8 @@ import { localServersElsewhere } from '../jobs/preview.js'
 import { addToTodayOp, ensureToday, juniorDayOp, matchTodayOp, openTodayOp, removeFromTodayOp, savePersonaOp, todayView, userFirstName } from '../junior-ops.js'
 import { readJsonBody } from './http-util.js'
 import { errText } from '../errors.js'
-import { readSettings, writeSettings } from '../settings-ops.js'
+import { readSettings, touchesWatches, writeSettings } from '../settings-ops.js'
+import { invalidateInbox } from '../ws/send.js'
 import type { ScopedCtx } from './ctx.js'
 
 export async function settingsRoutes({ req, url, json, rt }: ScopedCtx): Promise<boolean> {
@@ -126,8 +127,12 @@ export async function settingsRoutes({ req, url, json, rt }: ScopedCtx): Promise
     let body: SettingsResponse
     try {
       if (req.method === 'GET') body = { ok: true, settings: await readSettings(rt) }
-      else if (req.method === 'PUT') body = { ok: true, settings: await writeSettings(rt, await readJsonBody(req)) }
-      else throw new Error('method not allowed')
+      else if (req.method === 'PUT') {
+        const patch = await readJsonBody(req)
+        body = { ok: true, settings: await writeSettings(rt, patch) }
+        // each handed-off PR's readiness is read off the switches at sync: resync, so its row stops saying "off"
+        if (touchesWatches(patch)) invalidateInbox(rt)
+      } else throw new Error('method not allowed')
     } catch (err) {
       body = { ok: false, error: errText(err) }
     }

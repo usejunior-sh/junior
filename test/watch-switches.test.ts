@@ -10,7 +10,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { openSqliteStore } from '../core/store/sqlite.js'
 import type { Store } from '../core/store/types.js'
-import { jobsEnabled, readSettings, settleSwitches, watchesOn, writeSettings } from '../server/settings-ops.js'
+import { jobsEnabled, readSettings, settleSwitches, touchesWatches, watchesOn, writeSettings } from '../server/settings-ops.js'
 import type { WorkspaceRuntime } from '../server/workspace/runtime.js'
 
 async function withRt(fn: (rt: WorkspaceRuntime, store: Store) => Promise<void>) {
@@ -64,4 +64,12 @@ test('each watch saves on its own, and only as a boolean', async () => {
     await assert.rejects(writeSettings(rt, { babysitEnabled: 'yes' }), /babysitEnabled must be a boolean/)
     assert.equal((await readSettings(rt)).babysitEnabled, false)
   })
+})
+
+test('a patch that flips a watch switch resyncs the inbox; others do not', () => {
+  assert.equal(touchesWatches({ babysitEnabled: true }), true)
+  assert.equal(touchesWatches({ reviewsEnabled: false }), true)
+  assert.equal(touchesWatches({ jobsEnabled: true }), false)
+  assert.equal(touchesWatches({ babysitEnabled: 'yes' }), false)
+  assert.equal(touchesWatches(null), false)
 })

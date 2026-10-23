@@ -3,7 +3,8 @@
  * pause it, resume it, or "not this one" to its suggestion. The row moves at
  * once; the inbox refetch the server's broadcast brings settles it.
  */
-import type { HandoffReadiness, HandoffResponse, ScoredItem } from '../../shared/protocol.js'
+import type { HandoffReadiness, HandoffResponse, ScoredItem, SettingsResponse, WatchId } from '../../shared/protocol.js'
+import { markWatchOn } from '../../core/junior/watch-off.js'
 import type { Handoff } from '../../core/work/fields.js'
 import { inboxStore } from './inboxStore.js'
 import { signalIds } from './components/inbox/rowHelpers.js'
@@ -40,6 +41,29 @@ export async function sendHandoff(verb: HandoffVerb, itemId: string, playbook?: 
 /** Null when it went through; else what went wrong, in a line. */
 export async function handoff(verb: HandoffVerb, itemId: string, playbook?: string): Promise<string | null> {
   return (await sendHandoff(verb, itemId, playbook)).error
+}
+
+/**
+ * Turn a watch on from a row it holds up: the same switch as Settings →
+ * Automations (PUT /api/settings). A local setting, not a send. Null when it
+ * went through; the rows stop saying "off" at once and the server's resync
+ * settles them.
+ */
+export async function turnOnWatch(watch: WatchId): Promise<string | null> {
+  try {
+    const r = await fetch('/api/settings', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(watch === 'babysit' ? { babysitEnabled: true } : { reviewsEnabled: true }),
+    })
+    const b = (await r.json().catch(() => ({ ok: false, error: `HTTP ${r.status}` }))) as SettingsResponse
+    if (!b.ok) return b.error
+  } catch (err) {
+    return err instanceof Error ? err.message : String(err)
+  }
+  inboxStore.patch((items) => markWatchOn(items, watch))
+  void inboxStore.refreshAfterChange()
+  return null
 }
 
 /** Snooze from the Junior page: the row leaves at once. */

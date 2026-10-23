@@ -17,6 +17,8 @@
  * Pure and browser-safe: the page renders what this decides.
  */
 import type { Group, ScoredItem } from '../work/types.js'
+import { watchFor, type WatchId } from '../work/handoff.js'
+import { WATCH_CANT_CHIP, WATCH_OFF_CHIP } from './watch-off.js'
 
 export type LedgerTab = 'needs' | 'up' | 'reviews' | 'prs' | 'with' | 'waiting'
 export type LedgerGroup = 'waiting' | 'stuck' | 'cycle' | 'fyi'
@@ -80,6 +82,30 @@ export function ledgerCount(items: readonly Item[], tab: LedgerTab): { n: number
 export const personWaits = (i: Item): boolean => i.group === 'blocking' && i.junior?.stage !== 'needs-you'
 
 /**
+ * The handed-off PR waits on a switched-off watch: nothing will run on it
+ * until you turn `watch` on. Only where that is the whole story: Junior has
+ * nothing under way (watching), or only a first pass queued behind the switch.
+ * Paused, needs-you and anything actually running say their own thing.
+ */
+export function watchOffOf(i: Item): WatchId | null {
+  const r = i.junior?.readiness
+  if (i.handoff !== 'on' || r?.state !== 'watch-off') return null
+  return idleBehindSwitch(i) ? r.watch : null
+}
+
+/** A handed-off PR no watch can read (it didn't come from GitHub): nothing will ever run on it. */
+export function cantWatchOf(i: Item): WatchId | null {
+  if (i.handoff !== 'on' || i.junior?.readiness?.state !== 'unsupported') return null
+  return idleBehindSwitch(i) ? watchFor(i.reason) : null
+}
+
+const idleBehindSwitch = (i: Item): boolean => {
+  if (i.junior?.stage === 'paused' || i.junior?.stage === 'needs-you') return false
+  const review = i.tasks?.review
+  return review ? review.state === 'queued' : i.junior?.stage === 'watching'
+}
+
+/**
  * Junior's state in a word or two, in sky; `quiet` greys it out (nothing for
  * you to do there). Empty when Junior has nothing to say about the item.
  */
@@ -87,6 +113,11 @@ export function juniorState(i: Item): { text: string; quiet: boolean } {
   const say = (text: string, quiet = false) => ({ text, quiet })
   if (i.handoff === 'paused' || i.junior?.stage === 'paused') return say('Paused', true)
   if (i.junior?.stage === 'needs-you') return say('Paused on you')
+  // a switched-off watch, never "Babysitting": nothing will run until you turn it on
+  const off = watchOffOf(i)
+  if (off) return say(WATCH_OFF_CHIP[off], true)
+  const cant = cantWatchOf(i)
+  if (cant) return say(WATCH_CANT_CHIP[cant], true)
   const r = i.tasks?.review
   if (r) {
     if (r.state === 'queued') return say('Queued', true)

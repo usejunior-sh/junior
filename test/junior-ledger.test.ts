@@ -4,7 +4,9 @@
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { juniorState, ledgerCount, ledgerProgress, ledgerRows, personWaits } from '../core/junior/ledger.js'
+import { cantWatchOf, juniorState, ledgerCount, ledgerProgress, ledgerRows, personWaits, watchOffOf } from '../core/junior/ledger.js'
+import { capText, capsFrom, markWatchOn, turnOnTitle, usd, withAnswer } from '../core/junior/watch-off.js'
+import type { HandoffReadiness, WorkStage } from '../core/work/handoff.js'
 import type { ScoredItem } from '../core/work/types.js'
 
 const item = (id: string, over: Partial<ScoredItem> = {}): ScoredItem =>
@@ -72,4 +74,90 @@ test('progress: only a working pipeline draws a bar', () => {
   assert.equal(ledgerProgress({ ...ticket, junior: { stage: 'working', pipeline: { done: 2, at: 'junior' } } }), 0.4)
   assert.equal(ledgerProgress({ ...ticket, junior: { stage: 'watching', pipeline: { done: 5, at: null } } }), null)
   assert.equal(ledgerProgress(ticket), null)
+})
+
+// ---------- a handed-off PR whose watch is off (handoff-readiness-ui) ----------
+
+type Review = NonNullable<NonNullable<ScoredItem['tasks']>['review']>
+const tasksWith = (state: Review['state']): ScoredItem['tasks'] => ({ line: null, running: false, queued: 0, needsYou: 0, next: null, lastDone: null, review: { state, verdict: null, line: null } })
+const OFF_BABYSIT: HandoffReadiness = { state: 'watch-off', watch: 'babysit' }
+const OFF_REVIEW: HandoffReadiness = { state: 'watch-off', watch: 'review' }
+const READY: HandoffReadiness = { state: 'ready' }
+const CANT: HandoffReadiness = { state: 'unsupported', why: 'Junior babysits GitHub PRs only' }
+const myPr = (stage: WorkStage, readiness: HandoffReadiness | undefined, over: Partial<ScoredItem> = {}) =>
+  item('pr', { kind: 'own-pr-open', reason: 'your-pr', handoff: 'on', junior: { stage, ...(readiness ? { readiness } : {}) }, ...over })
+const reviewPr = (stage: WorkStage, readiness: HandoffReadiness | undefined, state?: Review['state']) =>
+  item('rv', { kind: 'review-requested', reason: 'review-requested', handoff: 'on', junior: { stage, ...(readiness ? { readiness } : {}) }, ...(state ? { tasks: tasksWith(state) } : {}) })
+
+test('watch off: the state column says so, never "Babysitting"; the right rows win over it', () => {
+  const rows: [string, ScoredItem, string, boolean][] = [
+    ['babysit off, watching', myPr('watching', OFF_BABYSIT), 'Babysitting off', true],
+    ['babysit on, watching', myPr('watching', READY), 'Babysitting', true],
+    ['no readiness yet (old snapshot)', myPr('watching', undefined), 'Babysitting', true],
+    ['babysit off, you paused it', myPr('paused', OFF_BABYSIT, { handoff: 'paused' }), 'Paused', true],
+    ['babysit off, needs you', myPr('needs-you', OFF_BABYSIT), 'Paused on you', false],
+    ['babysit off, a task running', myPr('working', OFF_BABYSIT), 'Working', false],
+    ['review off, nothing queued', reviewPr('watching', OFF_REVIEW), 'Reviews off', true],
+    ['review off, a pass queued behind the switch', reviewPr('working', OFF_REVIEW, 'queued'), 'Reviews off', true],
+    ['review off, reading now', reviewPr('working', OFF_REVIEW, 'reviewing'), 'Reading', false],
+    ['review off, first pass ready', reviewPr('needs-you', OFF_REVIEW, 'ready'), 'Paused on you', false],
+    ['review off, posted', reviewPr('handed-in', OFF_REVIEW, 'posted'), 'Posted', true],
+    ['review off, failed', reviewPr('working', OFF_REVIEW, 'failed'), 'Stuck', false],
+    ['review on, queued', reviewPr('working', READY, 'queued'), 'Queued', true],
+    ['not from GitHub, babysit', myPr('watching', CANT, { source: 'manual' }), 'Can’t babysit', true],
+    ['not from GitHub, review', reviewPr('watching', { state: 'unsupported', why: 'x' }), 'Can’t review', true],
+  ]
+  for (const [name, i, text, quiet] of rows) assert.deepEqual(juniorState(i), { text, quiet }, name)
+})
+
+test('watch off is never orange-worthy: a switched-off row waits on no one', () => {
+  const i = myPr('watching', OFF_BABYSIT, { group: 'blocking' })
+  assert.equal(juniorState(i).quiet, true)
+  assert.deepEqual(ledgerRows([i], 'needs'), [])
+})
+
+test('watchOffOf and cantWatchOf: only a handed-off row, idle behind the switch', () => {
+  assert.equal(watchOffOf(myPr('watching', OFF_BABYSIT)), 'babysit')
+  assert.equal(watchOffOf(myPr('watching', OFF_BABYSIT, { handoff: undefined })), null)
+  assert.equal(watchOffOf(myPr('watching', READY)), null)
+  assert.equal(watchOffOf(reviewPr('working', OFF_REVIEW, 'queued')), 'review')
+  assert.equal(watchOffOf(reviewPr('working', OFF_REVIEW, 'reviewing')), null)
+  assert.equal(cantWatchOf(myPr('watching', CANT)), 'babysit')
+  assert.equal(cantWatchOf(myPr('watching', OFF_BABYSIT)), null)
+})
+
+test('the cap and the Turn on title: dollars from the settings, or a pointer when unknown', () => {
+  assert.equal(usd(20), '$20')
+  assert.equal(usd(1.5), '$1.50')
+  const caps = { perDayUsd: 20, perReviewUsd: 1 }
+  assert.equal(capText('babysit', caps), 'Up to $20 a day')
+  assert.equal(capText('review', caps), 'Up to $1 a review, $20 a day')
+  assert.equal(capText('babysit', null), null)
+  assert.equal(turnOnTitle('babysit', caps), 'Turns on babysitting for every PR you hand off. Up to $20 a day, set in Settings → Automations.')
+  assert.equal(turnOnTitle('review', caps), 'Turns on first-pass reviews for every PR you hand off. Up to $1 a review, $20 a day.')
+  assert.equal(turnOnTitle('babysit', null), 'Turns on babysitting for every PR you hand off. Limits are in Settings → Automations.')
+  assert.ok(!turnOnTitle('review', null).includes('undefined'))
+  assert.deepEqual(capsFrom({ ok: true, settings: { budget: { perTaskUsd: 3, perDayUsd: 20, perReviewUsd: 1 } } }), caps)
+  assert.equal(capsFrom({ ok: false, error: 'nope' }), null)
+  assert.equal(capsFrom({ ok: true, settings: { budget: { perDayUsd: 'x', perReviewUsd: 1 } } }), null)
+  assert.equal(capsFrom(null), null)
+})
+
+test('the hand-off answer reads "off" before the refetch lands; the snapshot wins after', () => {
+  const justHanded = item('pr', { kind: 'own-pr-open', reason: 'your-pr', handoff: 'on' })
+  const a = withAnswer(justHanded, { pr: OFF_BABYSIT })
+  assert.equal(juniorState(a).text, 'Babysitting off')
+  assert.equal(withAnswer(justHanded, { pr: READY }), justHanded)
+  assert.equal(withAnswer(justHanded, {}), justHanded)
+  const settled = myPr('watching', READY)
+  assert.equal(juniorState(withAnswer(settled, { pr: OFF_BABYSIT })).text, 'Babysitting')
+  assert.equal(withAnswer({ ...justHanded, handoff: 'paused' as const }, { pr: OFF_BABYSIT }).junior, undefined)
+})
+
+test('turning a watch on clears "off" from its rows only', () => {
+  const rows = [myPr('watching', OFF_BABYSIT), reviewPr('watching', OFF_REVIEW), fyi]
+  const after = markWatchOn(rows, 'babysit')
+  assert.deepEqual(after.map((i) => juniorState(i).text), ['Babysitting', 'Reviews off', ''])
+  assert.equal(after[2], fyi)
+  assert.equal(rows[0]!.junior!.readiness!.state, 'watch-off', 'the input is not mutated')
 })

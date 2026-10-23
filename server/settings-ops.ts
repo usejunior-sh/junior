@@ -104,6 +104,12 @@ function modelIdList(v: unknown, field: string): string[] {
   return [...new Set((v as string[]).map((x) => x.trim()))]
 }
 
+/** A settings patch that flips a watch switch (babysitEnabled, reviewsEnabled). */
+export function touchesWatches(raw: unknown): boolean {
+  const r = (raw ?? {}) as Record<string, unknown>
+  return typeof r.babysitEnabled === 'boolean' || typeof r.reviewsEnabled === 'boolean'
+}
+
 export async function writeSettings(rt: WorkspaceRuntime, raw: unknown): Promise<WorkspaceSettings> {
   const r = (raw ?? {}) as Record<string, unknown>
   if (r.jobsEnabled !== undefined) {

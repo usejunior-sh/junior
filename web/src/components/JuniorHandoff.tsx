@@ -16,20 +16,22 @@
  * suggestion and where it stands with Junior (server/inbox/junior.ts).
  */
 import { X, ChevronDown } from 'lucide-react'
-import { useEffect, useState, type ReactNode } from 'react'
-import type { JuniorDay, ScoredItem } from '../../../shared/protocol.js'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
+import type { HandoffReadiness, JuniorDay, ScoredItem } from '../../../shared/protocol.js'
 import type { Verdict } from '../../../core/review/brief.js'
 import { bySuggestion, STARTS, SUGGEST_SHOWN, type Suggestion } from '../../../core/junior/suggest.js'
 import { sectionOf } from '../../../core/junior/sections.js'
+import { watchOffOf } from '../../../core/junior/ledger.js'
 import { PIPELINE_STEPS, type Pipeline } from '../../../core/work/handoff.js'
 import { itemHash } from '../hooks.js'
-import { handoff, snoozeItem, VERB, type HandoffVerb } from '../handoff.js'
+import { sendHandoff, snoozeItem, VERB, type HandoffVerb } from '../handoff.js'
 import { inboxStore, useInbox } from '../inboxStore.js'
 import { kindIcon, shortAge } from '../itemUi.js'
 import { JuniorBrief } from './JuniorBrief.js'
 import { JuniorFace } from './JuniorFace.js'
 import { NeedsLine } from './JuniorToday.js'
 import { SnoozeMenu } from './SnoozeMenu.js'
+import { WatchOffNote, type WatchOffNoteState } from './WatchOff.js'
 
 type Nav = { onNavigate: (hash: string) => void }
 
@@ -48,16 +50,17 @@ const refOf = (i: ScoredItem) => {
   return m && i.source === 'github' ? `${i.repo}#${m[1]}` : i.repo
 }
 
-/** One verb at a time, its error in a line under the list. */
-function useAct(): { busy: string | null; error: string | null; act: (verb: HandoffVerb, id: string, playbook?: string) => void } {
+/** One verb at a time, its error in a line under the list; `onStarted` hears a hand-off's readiness. */
+function useAct(onStarted?: (id: string, readiness: HandoffReadiness) => void): { busy: string | null; error: string | null; act: (verb: HandoffVerb, id: string, playbook?: string) => void } {
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const act = (verb: HandoffVerb, id: string, playbook?: string) => {
     setBusy(id)
     setError(null)
-    void handoff(verb, id, playbook).then((err) => {
+    void sendHandoff(verb, id, playbook).then(({ error, readiness }) => {
       setBusy(null)
-      setError(err)
+      setError(error)
+      if (verb === 'start' && readiness) onStarted?.(id, readiness)
     })
   }
   return { busy, error, act }
@@ -125,18 +128,35 @@ function Err({ error }: { error: string | null }) {
 export function JuniorSuggested({ day, onNavigate }: { day: JuniorDay | null } & Nav) {
   const items = useItems()
   const snap = useInbox()
-  const { busy, error, act } = useAct()
+  // the latest hand-off whose watch is off: one note at a time, inline, never a modal
+  const [note, setNote] = useState<WatchOffNoteState | null>(null)
+  const [noteError, setNoteError] = useState<string | null>(null)
+  const { busy, error, act } = useAct((id, r) => {
+    if (r.state !== 'watch-off') return
+    setNoteError(null)
+    setNote({ itemId: id, title: items.find((i) => i.id === id)?.title ?? 'that PR', watch: r.watch })
+  })
+  const sectionRef = useRef<HTMLElement>(null)
+  const dismissNote = () => {
+    setNote(null)
+    setNoteError(null)
+    // the note's buttons are gone: focus the first row, or the heading when the list is empty
+    requestAnimationFrame(() => sectionRef.current?.querySelector<HTMLElement>('.hoRow .tx, .jrLh')?.focus())
+  }
   const [all, setAll] = useState(false)
   const rows = items.filter((i): i is ScoredItem & { suggestion: Suggestion } => !!i.suggestion).sort(bySuggestion)
   const shown = all ? rows : rows.slice(0, SUGGEST_SHOWN)
   const snoozed = snap.counts?.snoozed ?? 0
   return (
     <>
-      <section aria-label="Suggested">
-        <h2 className="jrLh">
+      <section aria-label="Suggested" ref={sectionRef}>
+        <h2 className="jrLh" tabIndex={-1}>
           I could take these <span className="n">{rows.length}</span>
           <span className="aside">nothing starts until you hand it off</span>
         </h2>
+        <div className="jrNoteWrap">
+          <WatchOffNote note={note} items={items} onDismiss={dismissNote} onError={setNoteError} />
+        </div>
         {rows.length === 0 ? (
           <p className="jrEmpty">
             <JuniorFace mood="hello" size={18} motion="still" decorative /> Nothing to suggest right now. I’ll add things here as they come in.
@@ -172,7 +192,7 @@ export function JuniorSuggested({ day, onNavigate }: { day: JuniorDay | null } &
             )}
           </div>
         )}
-        <Err error={error} />
+        <Err error={error ?? noteError} />
         {snoozed > 0 && (
           <p className="jrQuiet">
             {snoozed} snoozed. They come back early if something changes.{' '}
@@ -194,6 +214,7 @@ export function JuniorSuggested({ day, onNavigate }: { day: JuniorDay | null } &
 function prState(i: ScoredItem): { tone?: 'live' | 'need' | 'paused'; label: ReactNode; sub: string } {
   if (i.handoff === 'paused') return { tone: 'paused', label: <span className="chip paused">Paused</span>, sub: 'Nothing runs until you resume.' }
   if (i.junior?.stage === 'needs-you') return { tone: 'need', label: <span className="chip need">Needs you</span>, sub: i.tasks?.next?.title ?? 'Open it to see.' }
+  if (watchOffOf(i) === 'babysit') return { label: 'Babysitting off', sub: 'Nothing runs until you turn it on.' }
   if (i.handoff === 'on') return { tone: 'live', label: 'Babysitting', sub: i.junior?.stage === 'working' ? (i.tasks?.line ?? 'Working on it.') : 'Nothing to do right now.' }
   return { label: 'Not handed off', sub: i.suggestion?.would ?? ((i.seen?.draft ?? i.isDraft) ? 'A draft. I won’t suggest it.' : 'Nothing to do yet.') }
 }
@@ -260,6 +281,7 @@ const CHIP: Record<Verdict, string> = { approve: 'Approve', comment: 'Comment', 
 function reviewState(i: ScoredItem): { tone?: 'live' | 'need' | 'paused'; label: ReactNode; sub: string; ready: boolean } {
   const r = i.tasks?.review
   if (i.handoff === 'paused') return { tone: 'paused', label: <span className="chip paused">Paused</span>, sub: 'No first pass until you resume.', ready: false }
+  if (watchOffOf(i) === 'review') return { label: 'Reviews off', sub: 'Nothing runs until you turn it on.', ready: false }
   if (!i.handoff && !r) {
     const asks = slackAsks(i)
     return { label: 'Not handed off', sub: `Waiting ${shortAge(i.createdAt)}${asks.length ? ` · ${asks.join(', ')} asked in Slack` : ''}.`, ready: false }
@@ -476,6 +498,14 @@ function PipelineBars({ p }: { p: Pipeline }) {
   )
 }
 
+/** A With Junior row's line: never "nothing to do" while its watch is off. */
+function watchLine(i: ScoredItem): string {
+  const off = watchOffOf(i)
+  if (off) return off === 'babysit' ? 'Babysitting is off' : 'Reviews are off'
+  const w = i.junior!
+  return i.tasks?.line ?? (w.stage === 'watching' ? (i.reason === 'your-pr' ? 'Babysitting · nothing to do' : 'Waiting on a request') : '—')
+}
+
 const PLAYBOOK_WORD: Record<string, string> = { babysit: 'babysitting', review: 'first pass', answer: 'drafting a reply', 'debug-fix': 'debug and fix', investigate: 'investigating' }
 
 export function JuniorWith({ day, onNavigate }: { day: JuniorDay | null } & Nav) {
@@ -496,7 +526,7 @@ export function JuniorWith({ day, onNavigate }: { day: JuniorDay | null } & Nav)
         item={i}
         lead={<Dot tone={w.stage === 'needs-you' ? 'need' : w.stage === 'paused' ? 'paused' : w.stage === 'handed-in' ? 'ok' : 'live'} />}
         meta={joined([refOf(i), ...(i.playbook ? [PLAYBOOK_WORD[i.playbook] ?? i.playbook] : []), ...(i.tasks?.lastDone && w.stage === 'handed-in' ? [i.tasks.lastDone] : [])])}
-        mid={w.pipeline ? <PipelineBars p={w.pipeline} /> : <span className="state">{i.tasks?.line ?? (w.stage === 'watching' ? (i.reason === 'your-pr' ? 'Babysitting · nothing to do' : 'Waiting on a request') : '—')}</span>}
+        mid={w.pipeline ? <PipelineBars p={w.pipeline} /> : <span className="state">{watchLine(i)}</span>}
         onNavigate={onNavigate}
       >
         {prWaits && (

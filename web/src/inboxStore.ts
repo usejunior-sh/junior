@@ -92,6 +92,11 @@ export const inboxStore = {
       })
     return inflight
   },
+
+  /** A refetch queued behind any load already in flight, so it can't be answered by a snapshot taken before a change. */
+  refreshAfterChange(): Promise<void> {
+    return (inflight ?? Promise.resolve()).then(() => inboxStore.refresh())
+  },
 }
 
 // Once loaded, stay current: a chat's create_work_item, a job run and another
@@ -103,7 +108,7 @@ store.onInboxChanged(() => {
   if (!snap.loaded || pending) return
   pending = setTimeout(() => {
     pending = null
-    void (inflight ?? Promise.resolve()).then(() => inboxStore.refresh())
+    void inboxStore.refreshAfterChange()
   }, 150)
 })
 

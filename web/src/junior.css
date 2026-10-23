@@ -275,6 +275,20 @@ button.jlTitle:hover { text-decoration: underline; text-decoration-color: var(--
 .hoRow .pipe i.you { background: var(--orange); }
 .hoRow .pipe .pl { font-family: var(--mono); font-size: 0.8077rem; color: var(--ash); }
 
+/* A PR handed off while its watch is off: the note under Suggested's heading after such a hand-off,
+   and the spend cap next to Turn on. Neutral: a switched-off watch waits on no one, so never orange. */
+.jrNote {
+  display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; align-items: center; gap: 14px;
+  min-height: 48px; padding: 8px 2px; border-top: 1px solid var(--hair); border-bottom: 1px solid var(--hair);
+}
+.jrNoteWrap:has(.jrNote) + .hoRows { border-top: 0; }
+.jrNote .k { display: grid; place-items: center; }
+.jrNote .tx { margin: 0; min-width: 0; color: var(--body); font-size: 0.9231rem; line-height: 1.45; }
+.jrNote .ti { display: inline-block; max-width: min(40ch, 100%); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; color: var(--ink); }
+.jrNote .acts { display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
+.jrNote .cap { display: block; margin-top: 2px; }
+.jrNote .cap, .jhXp .acts .cap { font-family: var(--mono); font-size: 0.8462rem; color: var(--ash); }
+
 @media (prefers-reduced-motion: reduce) {
   .jrDot.live, .jrPlanRow.fresh { animation: none; }
 }
@@ -308,6 +322,11 @@ button.jlTitle:hover { text-decoration: underline; text-decoration-color: var(--
   .hoRow .mid, .hoRow .acts { grid-column: 2; }
   .hoRow .acts { justify-content: flex-start; margin-top: 4px; }
   .hoRow .btn.xs { height: 32px; }
+  .jrNote { grid-template-columns: 18px minmax(0, 1fr); gap: 4px 10px; padding: 10px 0; }
+  .jrNote .k { align-self: start; padding-top: 6px; }
+  .jrNote .acts { grid-column: 2; justify-content: flex-start; margin-top: 4px; }
+  .jrNote .btn.xs, .jrNote .iconBtn.sm { height: 32px; }
+  .jrNote .iconBtn.sm { width: 32px; }
   .jrRow .m, .jrRow .go { display: none; }
   .jrCards { grid-template-columns: 1fr; }
   .jrMe .mrow { grid-template-columns: 1fr; gap: 4px; }
@@ -485,5 +504,6 @@ button.jlTitle:hover { text-decoration: underline; text-decoration-color: var(--
   .jhXp .lbl { padding-top: 8px; }
   .jhXp .acts { grid-column: 1; margin-top: 10px; }
   .jhXp .acts .btn { height: 36px; }
+  .jhXp .acts .cap { flex-basis: 100%; order: 9; }
   .jhXp .keys, .jhKeys, .jhKbd { display: none; }
 }

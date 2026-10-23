@@ -12,14 +12,16 @@
  */
 import { ChevronRight, X } from 'lucide-react'
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import type { NeedsRow, ScoredItem } from '../../../shared/protocol.js'
-import { juniorState, LEDGER_GROUP_TITLE, ledgerGroup, ledgerProgress, ledgerRows, personWaits, type LedgerGroup, type LedgerTab } from '../../../core/junior/ledger.js'
+import type { HandoffReadiness, NeedsRow, ScoredItem, WatchId } from '../../../shared/protocol.js'
+import { cantWatchOf, juniorState, LEDGER_GROUP_TITLE, ledgerGroup, ledgerProgress, ledgerRows, personWaits, watchOffOf, type LedgerGroup, type LedgerTab } from '../../../core/junior/ledger.js'
+import { TURN_ON_LABEL, WATCH_CANT_SAYS, WATCH_OFF_SAYS, WATCH_STILL_OFF, withAnswer } from '../../../core/junior/watch-off.js'
 import { itemHash } from '../hooks.js'
-import { doneItem, handoff, snoozeItem, VERB, type HandoffVerb } from '../handoff.js'
+import { doneItem, sendHandoff, snoozeItem, turnOnWatch, VERB, type HandoffVerb } from '../handoff.js'
 import { anyDialogOpen, isGoSequence, isTypingTarget } from '../keys.js'
 import { kindIcon, shortAge } from '../itemUi.js'
 import { JuniorFace } from './JuniorFace.js'
 import { SnoozeMenu } from './SnoozeMenu.js'
+import { TurnOnButton, WatchCap } from './WatchOff.js'
 
 type Nav = { onNavigate: (hash: string) => void }
 
@@ -54,10 +56,16 @@ function whoOf(i: ScoredItem, me: string | null): string {
 /** The playbook a hand-off starts: the suggestion's, else a reply on Slack, a fix for a bug, else a look into it. */
 const playbookOf = (i: ScoredItem): string => i.suggestion?.playbook ?? (i.reason === 'asked' && i.source === 'slack' ? 'answer' : i.label === 'bug' ? 'debug-fix' : 'investigate')
 
-/** The one verb ⏎ does on an open row. */
-type Primary = { label: string; run: () => void }
+/** The one verb ⏎ does on an open row; `watch` when it turns a switched-off watch on. */
+type Primary = { label: string; run: () => void; watch?: WatchId }
 
-function primaryOf(i: ScoredItem, act: (verb: HandoffVerb, id: string, playbook?: string) => void, open: () => void): Primary {
+type Act = (verb: HandoffVerb, id: string, playbook?: string) => void
+type TurnOn = (watch: WatchId, id: string) => void
+
+function primaryOf(i: ScoredItem, act: Act, open: () => void, turnOn: TurnOn): Primary {
+  // a local switch, not a send: safe on ⏎, its label and limit on screen
+  const off = watchOffOf(i)
+  if (off) return { label: TURN_ON_LABEL[off], run: () => turnOn(off, i.id), watch: off }
   if (i.junior?.stage === 'needs-you' || i.tasks?.review?.state === 'ready' || i.tasks?.review?.state === 'failed') return { label: i.tasks?.review?.state === 'ready' ? 'Read pass' : 'Open', run: open }
   if (i.handoff === 'paused') return { label: 'Resume', run: () => act('resume', i.id) }
   if (i.handoff === 'on' && (i.junior?.stage === 'working' || i.junior?.stage === 'watching')) return { label: 'Pause', run: () => act('pause', i.id) }
@@ -89,6 +97,11 @@ function contextOf(i: ScoredItem): string {
 function juniorSays(i: ScoredItem): string {
   if (i.handoff === 'paused') return 'Paused. Nothing runs until you resume.'
   if (i.junior?.stage === 'needs-you') return i.tasks?.next?.title ? `I need you: ${i.tasks.next.title}.` : 'I need you here. Open it to see.'
+  // never "nothing to do" while the watch is off: nothing will run until you turn it on
+  const off = watchOffOf(i)
+  if (off) return WATCH_OFF_SAYS[off]
+  const cant = cantWatchOf(i)
+  if (cant) return WATCH_CANT_SAYS[cant]
   const r = i.tasks?.review
   if (r?.state === 'ready') return r.line ?? 'My first pass is ready. Nothing is posted.'
   if (r?.state === 'reviewing') return 'Reading the diff now.'
@@ -102,19 +115,36 @@ function juniorSays(i: ScoredItem): string {
   return 'Not handed to me. Nothing starts until you hand it off.'
 }
 
-/** One verb at a time, its error in a line under the list. */
-function useAct() {
+/**
+ * One verb at a time, its error in a line under the list. Keeps each
+ * hand-off's answer, so a PR handed off with its watch off reads "off" before
+ * the refetch lands. `turnOn` flips a watch on; `onTurnedOn` gets the row.
+ */
+function useAct(onTurnedOn: (id: string) => void) {
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const act = (verb: HandoffVerb, id: string, playbook?: string) => {
+  const [answered, setAnswered] = useState<Readonly<Record<string, HandoffReadiness>>>({})
+  const [turning, setTurning] = useState<WatchId | null>(null)
+  const act: Act = (verb, id, playbook) => {
     setBusy(id)
     setError(null)
-    void handoff(verb, id, playbook).then((err) => {
+    void sendHandoff(verb, id, playbook).then(({ error, readiness }) => {
       setBusy(null)
-      setError(err)
+      setError(error)
+      if (verb === 'start' && readiness) setAnswered((a) => ({ ...a, [id]: readiness }))
     })
   }
-  return { busy, error, act }
+  const turnOn: TurnOn = (watch, id) => {
+    setTurning(watch)
+    setError(null)
+    void turnOnWatch(watch).then((err) => {
+      setTurning(null)
+      if (err) return setError(`${WATCH_STILL_OFF[watch]} ${err}`)
+      setAnswered((a) => Object.fromEntries(Object.entries(a).filter(([, r]) => !(r.state === 'watch-off' && r.watch === watch))))
+      onTurnedOn(id)
+    })
+  }
+  return { busy, error, act, answered, turning, turnOn }
 }
 
 const Kbd = ({ children }: { children: ReactNode }) => <kbd className="jhKbd">{children}</kbd>
@@ -131,12 +161,20 @@ type Props = Nav & {
 }
 
 export function JuniorLedger({ tab, items, needs, me, empty, onNavigate }: Props) {
-  const { busy, error, act } = useAct()
+  const listRef = useRef<HTMLDivElement>(null)
+  // the Turn on button leaves once its row is ready: give focus to the row itself, unless it went elsewhere
+  const focusRow = (id: string) =>
+    requestAnimationFrame(() => {
+      const row = [...(listRef.current?.querySelectorAll<HTMLElement>('.jhItem') ?? [])].find((el) => el.dataset.key === id)
+      const a = document.activeElement
+      if (!a || a === document.body || row?.contains(a)) row?.querySelector<HTMLElement>('.jhRow')?.focus()
+    })
+  const { busy, error, act, answered, turning, turnOn } = useAct(focusRow)
   const lines = useMemo<Line[]>(() => {
     const out: Line[] = tab === 'needs' ? needs.map((n) => ({ key: `need:${n.key}`, group: 'waiting' as const, need: n })) : []
-    for (const i of ledgerRows(items, tab)) out.push({ key: i.id, group: ledgerGroup(i), item: i })
+    for (const i of ledgerRows(items.map((i) => withAnswer(i, answered)), tab)) out.push({ key: i.id, group: ledgerGroup(i), item: i })
     return out
-  }, [items, needs, tab])
+  }, [items, needs, tab, answered])
   // Up next folds its long FYI tail into a link to the inbox.
   const fyiAll = tab === 'up' ? lines.filter((l) => l.group === 'fyi').length : 0
   const firstFyi = lines.findIndex((l) => l.group === 'fyi')
@@ -147,7 +185,6 @@ export function JuniorLedger({ tab, items, needs, me, empty, onNavigate }: Props
   const [sel, setSel] = useState<number | null>(null)
   const [open, setOpen] = useState<ReadonlySet<string>>(() => new Set())
   const [snoozing, setSnoozing] = useState<string | null>(null)
-  const listRef = useRef<HTMLDivElement>(null)
   const at = sel === null ? null : Math.min(sel, Math.max(0, shown.length - 1))
 
   const toggle = (key: string) =>
@@ -162,12 +199,12 @@ export function JuniorLedger({ tab, items, needs, me, empty, onNavigate }: Props
   const goNeed = (n: NeedsRow) => onNavigate(n.target.kind === 'session' ? n.target.id : '/junior/log')
 
   // The keys: only while nothing else wants them (a text box, a menu, a `g` sequence).
-  const live = useRef({ shown, at, open, act, onNavigate })
-  live.current = { shown, at, open, act, onNavigate }
+  const live = useRef({ shown, at, open, act, turnOn, onNavigate })
+  live.current = { shown, at, open, act, turnOn, onNavigate }
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey || isTypingTarget(e) || isGoSequence(e) || anyDialogOpen()) return
-      const { shown, at, open, act, onNavigate } = live.current
+      const { shown, at, open, act, turnOn, onNavigate } = live.current
       const line = at === null ? undefined : shown[at]
       // a focused button or link answers Space and Enter itself
       if ((e.key === ' ' || e.key === 'Enter') && (e.target as HTMLElement | null)?.closest?.('button, a, [role="menuitem"]')) return
@@ -196,7 +233,7 @@ export function JuniorLedger({ tab, items, needs, me, empty, onNavigate }: Props
       if (e.key === 'Enter') {
         e.preventDefault()
         if (line.need) return goNeed(line.need)
-        return primaryOf(line.item, act, () => openItem(line.item.id)).run()
+        return primaryOf(line.item, act, () => openItem(line.item.id), turnOn).run()
       }
       if (!line.item) return
       if (e.key === 'o') return openItem(line.item.id)
@@ -239,7 +276,7 @@ export function JuniorLedger({ tab, items, needs, me, empty, onNavigate }: Props
         return (
           <Fragment key={line.key}>
             {head}
-            <div className={`jhItem${isOpen ? ' open' : ''}${focus ? ' focus' : ''}`}>
+            <div className={`jhItem${isOpen ? ' open' : ''}${focus ? ' focus' : ''}`} data-key={line.key}>
               {line.need ? (
                 <NeedLine need={line.need} open={isOpen} onClick={click} onGo={() => goNeed(line.need)} />
               ) : (
@@ -248,6 +285,8 @@ export function JuniorLedger({ tab, items, needs, me, empty, onNavigate }: Props
                   me={me}
                   open={isOpen}
                   busy={busy === line.item.id}
+                  turning={turning}
+                  turnOn={turnOn}
                   snoozing={snoozing === line.key}
                   onSnoozing={(o) => setSnoozing(o ? line.key : null)}
                   onClick={click}
@@ -295,6 +334,8 @@ function ItemLine({
   me,
   open,
   busy,
+  turning,
+  turnOn,
   snoozing,
   onSnoozing,
   onClick,
@@ -305,10 +346,13 @@ function ItemLine({
   me: string | null
   open: boolean
   busy: boolean
+  /** the watch a Turn on is switching on right now */
+  turning: WatchId | null
+  turnOn: TurnOn
   snoozing: boolean
   onSnoozing: (open: boolean) => void
   onClick: () => void
-  act: (verb: HandoffVerb, id: string, playbook?: string) => void
+  act: Act
   onOpen: () => void
 }) {
   const who = whoOf(i, me)
@@ -316,7 +360,8 @@ function ItemLine({
   const st = juniorState(i)
   const p = ledgerProgress(i)
   const hot = personWaits(i) && ledgerGroup(i) === 'waiting'
-  const primary = primaryOf(i, act, onOpen)
+  const primary = primaryOf(i, act, onOpen, turnOn)
+  const capId = `jhCap-${i.id}`
   return (
     <>
       <button type="button" className="jhRow" aria-expanded={open} onClick={onClick}>
@@ -350,9 +395,21 @@ function ItemLine({
           <span className="lbl jr">Junior</span>
           <span className="said">{juniorSays(i)}</span>
           <div className="acts">
-            <button type="button" className="btn sm primary" disabled={busy} onClick={primary.run}>
-              {primary.label} <Kbd>⏎</Kbd>
-            </button>
+            {primary.watch ? (
+              <>
+                <TurnOnButton watch={primary.watch} busy={turning === primary.watch} onClick={primary.run} className="btn sm primary" capId={capId}>
+                  {primary.label} <Kbd>⏎</Kbd>
+                </TurnOnButton>
+                <WatchCap watch={primary.watch} id={capId} />
+                <button type="button" className="btn sm" disabled={busy} onClick={() => act('pause', i.id)}>
+                  Pause
+                </button>
+              </>
+            ) : (
+              <button type="button" className="btn sm primary" disabled={busy} onClick={primary.run}>
+                {primary.label} <Kbd>⏎</Kbd>
+              </button>
+            )}
             {primary.run !== onOpen && (
               <button type="button" className="btn sm" onClick={onOpen}>
                 Open <Kbd>O</Kbd>
