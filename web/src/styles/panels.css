@@ -63,7 +63,7 @@
 .cardHead .branch { display: inline-flex; align-items: center; gap: 5px; font-family: var(--mono); font-size: 0.8846rem; color: var(--ash); white-space: nowrap; }
 .cardHead .branch svg { color: var(--stone); }
 .cardHead .path { margin-left: auto; color: var(--stone); font-size: 0.8462rem; font-family: var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-#composer .frame #box { padding: 6px 0 0; }
+#composer .frame #box { padding: 10px 0 0; }
 .chip.pick { cursor: pointer; }
 .chip .pdot { width: 6px; height: 6px; border-radius: var(--r-full); flex: none; }
 

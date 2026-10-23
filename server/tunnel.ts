@@ -12,7 +12,7 @@
  * implement too.
  */
 import { spawn, execFileSync, type ChildProcess } from 'node:child_process'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import type { TunnelStatus } from '../shared/protocol.js'
@@ -21,6 +21,9 @@ import { JUNIOR_DIR } from './state.js'
 
 /** The last agent we started, so a daemon that died without cleaning up does not leave one holding the account's session. */
 const PID_FILE = path.join(JUNIOR_DIR, 'ngrok.pid')
+
+/** Junior's own ngrok config, so it can use a different account from the user's default ngrok. Used only when it exists. */
+const CONFIG_FILE = path.join(JUNIOR_DIR, 'ngrok.yml')
 
 /** Turn ngrok's error into something to act on; its own messages bury the fix. */
 function explain(raw: string): string {
@@ -54,7 +57,8 @@ export class NgrokTunnel {
     this.#set({ state: 'starting' })
     let child: ChildProcess
     try {
-      child = spawn('ngrok', ['http', String(port), '--log', 'stdout', '--log-format', 'json'], {
+      const config = existsSync(CONFIG_FILE) ? ['--config', CONFIG_FILE] : []
+      child = spawn('ngrok', ['http', String(port), ...config, '--log', 'stdout', '--log-format', 'json'], {
         stdio: ['ignore', 'pipe', 'pipe'],
       })
     } catch (err) {
