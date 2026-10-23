@@ -38,6 +38,25 @@ const NO_BUILD_HTML = `<!doctype html><meta charset="utf-8">
 <p>For a production-style run: <code>npm run build &amp;&amp; npm start</code>.</p>
 </body>`
 
+/**
+ * Only this origin may frame the app. Without it any site could put the UI in
+ * an invisible frame and steer a click onto Approve. `SAMEORIGIN`, not `DENY`:
+ * the UI frames its own artifact and PDF URLs (ArtifactCard, artifact/HtmlView),
+ * which are served by server/artifact-serve.ts with their own headers, not these.
+ * Junior.app loads the page top-level (BrowserWindow.loadURL in
+ * desktop/src/main.ts), so it is unaffected. In dev, Vite serves the HTML
+ * shell, so these only apply to the built bundle.
+ */
+export const SPA_FRAME_HEADERS: Readonly<Record<string, string>> = Object.freeze({
+  'Content-Security-Policy': "frame-ancestors 'self'",
+  'X-Frame-Options': 'SAMEORIGIN',
+})
+
+/** The headers every SPA response (the HTML shell and its static assets) is sent with. */
+export function spaHeaders(contentType: string): Record<string, string> {
+  return { 'content-type': contentType, ...SPA_FRAME_HEADERS }
+}
+
 export async function serveWeb(pathname: string, res: http.ServerResponse) {
   // Any path that is not a real asset falls back to index.html (SPA routing).
   const rel = pathname === '/' ? 'index.html' : pathname.replace(/^\/+/, '')
@@ -47,13 +66,13 @@ export async function serveWeb(pathname: string, res: http.ServerResponse) {
   for (const file of [candidate, path.join(WEB_DIR, 'index.html')]) {
     try {
       const body = await readFile(file)
-      res.writeHead(200, { 'content-type': CONTENT_TYPES[path.extname(file)] ?? 'application/octet-stream' })
+      res.writeHead(200, spaHeaders(CONTENT_TYPES[path.extname(file)] ?? 'application/octet-stream'))
       res.end(body)
       return
     } catch {
       // try the SPA fallback next
     }
   }
-  res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
+  res.writeHead(200, spaHeaders('text/html; charset=utf-8'))
   res.end(NO_BUILD_HTML)
 }

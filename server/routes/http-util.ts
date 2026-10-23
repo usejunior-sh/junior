@@ -3,24 +3,45 @@ import { defaultRuntime, runtimes, WorkspaceRuntime } from '../workspace/runtime
 
 /**
  * A form's worth of JSON. Routes that carry base64 screenshots pass a bigger
- * `limit`. A single macOS screenshot blows past 1MB once base64'd, and a
- * body that dies mid-upload reads to the user as "the network broke".
+ * `limit` (bytes). A single macOS screenshot blows past 1MB once base64'd, and
+ * a body that dies mid-upload reads to the user as "the network broke".
+ * Past the limit the request is destroyed, so an endless body can't keep
+ * filling memory after the promise has already given up.
  */
 export function readJsonBody(req: http.IncomingMessage, limit = 1_000_000): Promise<unknown> {
   return new Promise((resolve, reject) => {
-    let data = ''
-    req.on('data', (chunk) => {
-      data += chunk
-      if (data.length > limit) reject(new Error('body too large'))
+    const chunks: Buffer[] = []
+    let size = 0
+    let settled = false
+    const fail = (err: unknown) => {
+      if (settled) return
+      settled = true
+      chunks.length = 0
+      reject(err)
+    }
+    req.on('data', (chunk: Buffer | string) => {
+      if (settled) return
+      const buf = typeof chunk === 'string' ? Buffer.from(chunk) : chunk
+      size += buf.length
+      if (size > limit) {
+        fail(new Error('body too large'))
+        req.destroy()
+        return
+      }
+      chunks.push(buf)
     })
     req.on('end', () => {
+      if (settled) return
+      settled = true
+      // decode once at the end: a multi-byte character can straddle two chunks
+      const data = Buffer.concat(chunks).toString('utf8')
       try {
         resolve(data ? JSON.parse(data) : null)
       } catch (err) {
         reject(err)
       }
     })
-    req.on('error', reject)
+    req.on('error', fail)
   })
 }
 
