@@ -8,6 +8,7 @@ import { webManifest } from '../phone.js'
 import { registry, runtimes, WorkspaceRuntime } from '../workspace/runtime.js'
 import { readJsonBody } from './http-util.js'
 import { errText } from '../errors.js'
+import { supervisorHealth } from '../supervise.js'
 import { BUILD, pExecFile, PORT, VERSION } from '../config.js'
 import type { RouteCtx } from './ctx.js'
 import { expandHome } from '../folders.js'
@@ -89,6 +90,7 @@ export async function gateRoutes({ req, res, url, json, access }: RouteCtx): Pro
       db: dbFileFor(registry.defaultId, registry.defaultId),
       liveSessions: [...runtimes.values()].reduce((n, rt) => n + rt.live.size, 0),
       workspaces: runtimes.size,
+      ...(supervisorHealth() ? { unhealthy: supervisorHealth() } : {}),
     })
     return true
   }

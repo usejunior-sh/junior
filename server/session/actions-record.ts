@@ -11,6 +11,7 @@ import { planCard } from '../../core/cards/spec.js'
 import { WorkspaceRuntime } from '../workspace/runtime.js'
 import { teamRunOf } from '../team-run/state.js'
 import { errText } from '../errors.js'
+import { fireAndLog } from '../supervise.js'
 import { broadcast } from '../ws/send.js'
 
 // Outbound actions (core/actions, record only).
@@ -85,7 +86,7 @@ export function noteActionEvent(rt: WorkspaceRuntime, row: StoredSession, ev: Se
     log('warn', 'actions', `could not sort an event: ${errText(err)}`, { session: row.id, workspace: rt.meta.id })
     return
   }
-  if (ops.length) void queueActionOps(rt, ops)
+  if (ops.length) fireAndLog(rt, 'actions', queueActionOps(rt, ops))
 }
 
 /** Apply ops on the workspace's action chain, in order; resolves when they're stored. */

@@ -46,6 +46,7 @@ import { babysitSettings, ghBabysitSource, onBabysitTick, onTaskAdded } from '..
 import { pExecFile, VERSION } from '../config.js'
 import { errText } from '../errors.js'
 import { log } from '../log.js'
+import { fireAndLog } from '../supervise.js'
 import { power } from '../power.js'
 import { checkoutList, makeWorktree, syncCheckouts } from '../session/checkouts.js'
 import { createSession, getOrRevive } from '../session/sessions.js'
@@ -261,7 +262,7 @@ async function startTask(rt: WorkspaceRuntime, t: ItemTask, s: BabysitSettings):
     perTaskUsd: capFor(t.step, s),
     // The Mac stays awake while a task runs: a sleeping Mac hangs a headless run.
     release: power.hold(`task ${t.id}`),
-    timer: setTimeout(() => void endTaskSession(rt, row.id, `timed out after ${TASK_SESSION_TIMEOUT_MS / 60_000} minutes`), TASK_SESSION_TIMEOUT_MS),
+    timer: setTimeout(() => fireAndLog(rt, 'tasks', endTaskSession(rt, row.id, `timed out after ${TASK_SESSION_TIMEOUT_MS / 60_000} minutes`)), TASK_SESSION_TIMEOUT_MS),
   }
   rt.taskRuns.set(row.id, run)
   const moved = await rt.store.tasks.move(t.id, 'running', { sessionId: row.id, model }, Date.now())
@@ -324,7 +325,7 @@ async function startItemTask(rt: WorkspaceRuntime, t: ItemTask, s: BabysitSettin
     scope: fix ? { headRef: branch, defaultBranch: base, draftPr: true } : { headRef: '', defaultBranch: base, readOnly: true },
     perTaskUsd: capFor(t.step, s),
     release: power.hold(`task ${t.id}`),
-    timer: setTimeout(() => void endTaskSession(rt, row.id, `timed out after ${TASK_SESSION_TIMEOUT_MS / 60_000} minutes`), TASK_SESSION_TIMEOUT_MS),
+    timer: setTimeout(() => fireAndLog(rt, 'tasks', endTaskSession(rt, row.id, `timed out after ${TASK_SESSION_TIMEOUT_MS / 60_000} minutes`)), TASK_SESSION_TIMEOUT_MS),
   }
   rt.taskRuns.set(row.id, run)
   const moved = await rt.store.tasks.move(t.id, 'running', { sessionId: row.id, model }, Date.now())
@@ -372,7 +373,7 @@ export async function endTaskSession(rt: WorkspaceRuntime, sessionId: string, er
   run.release()
   const live = rt.live.get(sessionId)
   if (live) {
-    if (error) void live.interrupt()
+    if (error) fireAndLog(rt, 'tasks', live.interrupt())
     live.stop()
   }
   try {
@@ -390,8 +391,8 @@ export async function endTaskSession(rt: WorkspaceRuntime, sessionId: string, er
     log('error', 'tasks', `could not settle task ${run.taskId}: ${errText(err)}`, { workspace: rt.meta.id })
   }
   broadcastSessionList(rt)
-  void syncCheckouts(rt)
-  void pumpTasks(rt)
+  fireAndLog(rt, 'tasks', syncCheckouts(rt))
+  fireAndLog(rt, 'tasks', pumpTasks(rt))
 }
 
 const UNHANDED_CHARS = 600
@@ -700,9 +701,13 @@ onTaskAdded((rt, task, stuck) => {
   if (stuck) taskNeedsYou(rt, { kind: 'stuck', task })
   // Approved in advance: the request goes out alone and nothing pings you. Else it waits for you.
   else if (task.step === 'request-review')
-    void requestUnderApproval(rt, task).then((sent) => {
-      if (!sent) taskNeedsYou(rt, { kind: 'review', task })
-    })
-  void pumpTasks(rt)
+    fireAndLog(
+      rt,
+      'tasks',
+      requestUnderApproval(rt, task).then((sent) => {
+        if (!sent) taskNeedsYou(rt, { kind: 'review', task })
+      }),
+    )
+  return pumpTasks(rt)
 })
-onBabysitTick((rt) => void pumpTasks(rt))
+onBabysitTick((rt) => pumpTasks(rt))

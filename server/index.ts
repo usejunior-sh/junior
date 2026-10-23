@@ -26,6 +26,7 @@ import path from 'node:path'
 import { WebSocketServer } from 'ws'
 import { clearState, JUNIOR_DIR, writeState } from './state.js'
 import { initLogFile, log } from './log.js'
+import { installSupervisor } from './supervise.js'
 import { accessOf, isLoopbackAddress, sameOrigin } from './remote.js'
 import { BROWSER_HOST_PATH } from '../core/browser/wire.js'
 import { PORT, VERSION } from './config.js'
@@ -56,6 +57,16 @@ import type { RouteCtx, ScopedCtx } from './routes/ctx.js'
 
 // Daemon-wide logs (one process, one log stream); workspace ids ride in fields.
 initLogFile(path.join(JUNIOR_DIR, 'logs'))
+
+// A stray rejection is logged, not fatal; an uncaught exception waits for the turns to end.
+installSupervisor({
+  midTurn: () => {
+    let n = 0
+    for (const rt of runtimes.values()) for (const live of rt.live.values()) if (live.status === 'running') n++
+    return n
+  },
+  exit: shutdown,
+})
 
 startTicks()
 
@@ -173,9 +184,17 @@ server.listen(PORT, () => {
 for (const sig of ['SIGINT', 'SIGTERM'] as const) {
   process.on(sig, () => {
     log('info', 'server', `received ${sig} — shutting down`)
+    shutdown(0)
+  })
+}
+
+function shutdown(code: number): void {
+  try {
     tunnel.stop()
     for (const rt of runtimes.values()) rt.terminals.killAll()
-    clearState(process.pid).finally(() => process.exit(0))
-  })
+  } catch (err) {
+    console.error('[server] cleanup failed:', err)
+  }
+  clearState(process.pid).finally(() => process.exit(code))
 }
 

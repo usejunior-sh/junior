@@ -14,7 +14,7 @@ import type { ItemTask } from '../../core/work/tasks.js'
 import { reasonOf } from '../../core/work/fields.js'
 import { legacyHandoffs } from '../../core/work/handoff.js'
 import { log } from '../log.js'
-import { errText } from '../errors.js'
+import { fireAndLog } from '../supervise.js'
 import { connectedRepos } from '../inbox/sync.js'
 import { upsertItem, watchesOn } from '../settings-ops.js'
 import type { WorkspaceRuntime } from '../workspace/runtime.js'
@@ -64,30 +64,26 @@ export async function rememberReviewer(rt: WorkspaceRuntime, repo: string, login
   await rt.store.config.set(REVIEWERS_KEY, { ...all, [repo]: { login, at: Date.now(), by: 'you' } satisfies LearnedReviewer })
 }
 
-/** Hooks the runner and notifications attach to: a task was added. */
-const addedHooks: ((rt: WorkspaceRuntime, task: ItemTask, stuck: boolean) => void)[] = []
-export function onTaskAdded(fn: (rt: WorkspaceRuntime, task: ItemTask, stuck: boolean) => void): void {
+/** Hooks the runner and notifications attach to: a task was added. A hook may return work nobody awaits. */
+type AddedHook = (rt: WorkspaceRuntime, task: ItemTask, stuck: boolean) => void | Promise<unknown>
+const addedHooks: AddedHook[] = []
+export function onTaskAdded(fn: AddedHook): void {
   addedHooks.push(fn)
 }
 
-/** A watch added a task: the runner and notifications hear of it. */
+/** A watch added a task: the runner and notifications hear of it. One hook's failure is logged, never the watch's. */
 export function taskAdded(rt: WorkspaceRuntime, task: ItemTask, stuck: boolean): void {
-  for (const fn of addedHooks) {
-    try {
-      fn(rt, task, stuck)
-    } catch (err) {
-      log('error', 'babysit', `task hook failed: ${errText(err)}`, { workspace: rt.meta.id })
-    }
-  }
+  for (const fn of addedHooks) fireAndLog(rt, 'babysit', () => fn(rt, task, stuck))
 }
 
 /** Hooks run after every tick: the runner's pump. */
-const tickHooks: ((rt: WorkspaceRuntime) => void)[] = []
-export function onBabysitTick(fn: (rt: WorkspaceRuntime) => void): void {
+type TickHook = (rt: WorkspaceRuntime) => void | Promise<unknown>
+const tickHooks: TickHook[] = []
+export function onBabysitTick(fn: TickHook): void {
   tickHooks.push(fn)
 }
 export function runTickHooks(rt: WorkspaceRuntime): void {
-  for (const fn of tickHooks) fn(rt)
+  for (const fn of tickHooks) fireAndLog(rt, 'babysit', () => fn(rt))
 }
 
 export function babysitDeps(rt: WorkspaceRuntime): BabysitDeps {

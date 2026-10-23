@@ -45,6 +45,9 @@ export function printRunning(health: Health, verb: string, showDb = false) {
   if (health.liveSessions > 0) {
     lines.push(row('sessions', yellow(`${health.liveSessions} live`)))
   }
+  if (health.unhealthy) {
+    lines.push(row('health', yellow(`exits once the current turns end: ${health.unhealthy.reason}`)))
+  }
   lines.push(row('logs', tilde(LOG_FILE)))
   if (showDb) lines.push(row('db', tilde(health.db)))
   lines.push('', `${cyan('junior restart')} ${dim('·')} ${cyan('junior stop')} ${dim('·')} ${cyan('junior logs')}`)

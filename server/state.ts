@@ -38,6 +38,8 @@ export interface Health {
   port: number
   db: string
   liveSessions: number
+  /** set after an uncaught exception mid-turn: the daemon exits once the turns end (server/supervise.ts) */
+  unhealthy?: { since: number; reason: string }
 }
 
 /**
