@@ -152,7 +152,7 @@ export const STARTABLE: readonly Playbook[] = ['answer', 'debug-fix', 'investiga
 export const PLAYBOOK_STEPS: Partial<Record<Playbook, readonly string[]>> = {
   answer: ['answer', 'send-reply'],
   'debug-fix': ['debug-plan', 'approve-plan', 'debug-fix'],
-  investigate: ['investigate'],
+  investigate: ['investigate', 'decide'],
 }
 
 /** The playbook a task step belongs to. */

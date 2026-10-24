@@ -2,7 +2,7 @@ import { errText } from '../errors.js'
 import { approveTaskOp, babysitSettingsOp, retryTaskOp, skipTaskOp, stopTaskOp } from '../tasks/ops.js'
 import { readJsonBody } from './http-util.js'
 import { postReviewOp, reviewAgainOp, reviewHeadOp } from '../review/post.js'
-import { approvePlanOp, changePlanOp, sendReplyOp } from '../playbooks/ops.js'
+import { approvePlanOp, changePlanOp, goAheadOp, lookAgainOp, sendReplyOp } from '../playbooks/ops.js'
 import { sendBotRepliesOp } from '../tasks/bot-replies.js'
 import { draftNudgeOp, sendNudgeOp } from '../tasks/nudge.js'
 import { startPlaybookOp } from '../rules-ops.js'
@@ -39,13 +39,15 @@ export async function taskRoutes({ req, url, json, rt }: ScopedCtx): Promise<boo
     }
     return true
   }
-  // Playbooks on any item (server/playbooks/ops.ts): send the drafted reply, approve or send back the plan.
-  const pb = /^\/api\/tasks\/(send-reply|approve-plan|change-plan)$/.exec(url.pathname)?.[1]
+  // Playbooks on any item (server/playbooks/ops.ts): send the drafted reply, approve or send back the plan, decide on the options.
+  const pb = /^\/api\/tasks\/(send-reply|approve-plan|change-plan|go-ahead|look-again)$/.exec(url.pathname)?.[1]
   if (pb && req.method === 'POST') {
     try {
       const body = ((await readJsonBody(req)) ?? {}) as { id?: unknown }
       if (typeof body.id !== 'string' || !body.id) throw new Error('id required')
-      const task = pb === 'send-reply' ? await sendReplyOp(rt, body.id, body) : pb === 'approve-plan' ? await approvePlanOp(rt, body.id, body) : await changePlanOp(rt, body.id, body)
+      const ops = { 'send-reply': sendReplyOp, 'approve-plan': approvePlanOp, 'change-plan': changePlanOp, 'go-ahead': goAheadOp, 'look-again': lookAgainOp }
+      const op = ops[pb as keyof typeof ops]
+      const task = await op(rt, body.id, body)
       json(200, { ok: true, task })
     } catch (err) {
       json(400, { ok: false, error: errText(err) })

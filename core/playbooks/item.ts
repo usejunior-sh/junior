@@ -4,7 +4,9 @@
  *
  *   answer        read the thread and the code, draft a reply. Sending it is
  *                 a task on you ("Send reply"), from an editable card.
- *   investigate   read-only; an options brief on the item.
+ *   investigate   read-only; an options brief on the item, then stop: its
+ *                 recommendation waits for you ("Decide"). Do it, and the
+ *                 change runs like an approved fix plan; or look again.
  *   debug-fix     plan first (debug-plan, read-only), then stop: the plan
  *                 waits for you ("Approve plan"). Approved, the fix runs in
  *                 a worktree and opens a draft PR, which babysit then keeps green.
@@ -20,6 +22,7 @@ import type { WorkItem } from '../work/types.js'
 export const ANSWER_STEP = 'answer'
 export const SEND_REPLY_STEP = 'send-reply'
 export const INVESTIGATE_STEP = 'investigate'
+export const DECIDE_STEP = 'decide'
 export const DEBUG_PLAN_STEP = 'debug-plan'
 export const APPROVE_PLAN_STEP = 'approve-plan'
 export const DEBUG_FIX_STEP = 'debug-fix'
@@ -120,7 +123,7 @@ export function investigatePrompt(item: WorkItem, project: { name: string; path:
     '5. **Open questions**: only the ones the user must answer.',
     '',
     '## When you finish',
-    'Call `submit_brief` once: `title`, `body` (the whole brief), `summary` (one line: the recommendation), `decisions`. Then end your turn.',
+    'Call `submit_brief` once: `title`, `body` (the whole brief), `summary` (one line: the recommendation, as what you would do: "Add Inbox to PAGE_TABS in App.tsx"), `decisions`. Then end your turn. The user decides next: if they say do it, a later task makes the change.',
   ])
 }
 
@@ -150,7 +153,7 @@ export function debugPlanPrompt(item: WorkItem, project: { name: string; path: s
 
 export function debugFixPrompt(item: WorkItem, w: { branch: string; base: string; note?: string }): string {
   return clean([
-    "You are Junior, the user's junior engineer. The user approved your plan for this bug. Make the fix and open a draft PR.",
+    "You are Junior, the user's junior engineer. The user approved your plan for this item (the Plan below). Make the change and open a draft PR.",
     '',
     '## How you work here',
     `- This folder is your own worktree on a new branch, \`${w.branch}\`, from \`${w.base}\`. Change what the plan says, and nothing else.`,

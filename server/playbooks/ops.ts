@@ -1,11 +1,12 @@
 /**
  * What you do with a first pass on an item (core/playbooks/item.ts): send
- * the drafted reply, approve the fix plan, or send the plan back with a note.
+ * the drafted reply, approve the fix plan, or send the plan back with a note;
+ * on an investigation, do what Junior recommends, or have it look again.
  * Only your OK sends the reply, and it lands in Junior's log under Sent.
  */
 import { recordFor } from '../../core/actions/track.js'
 import type { ActionRecord } from '../../core/actions/types.js'
-import { APPROVE_PLAN_STEP, DEBUG_FIX_STEP, DEBUG_PLAN_STEP, MAX_REPLY_CHARS, SEND_REPLY_STEP, slackThreadOf } from '../../core/playbooks/item.js'
+import { APPROVE_PLAN_STEP, DEBUG_FIX_STEP, DEBUG_PLAN_STEP, DECIDE_STEP, INVESTIGATE_STEP, MAX_REPLY_CHARS, SEND_REPLY_STEP, slackThreadOf } from '../../core/playbooks/item.js'
 import { isApprovedSend, sendPrompt, sentLink, SLACK_SEND_TOOL, type ApprovedSend } from '../../core/playbooks/send.js'
 import type { ItemTask } from '../../core/work/tasks.js'
 import { sourceOf } from '../../shared/sources.js'
@@ -176,6 +177,55 @@ export async function changePlanOp(rt: WorkspaceRuntime, taskId: string, raw: un
     Date.now(),
   )
   if (!again) throw new Error('could not add the new plan')
+  tasksChanged(rt)
+  void pumpTasks(rt)
+  return again
+}
+
+const noteOf = (raw: unknown) => (typeof (raw as { note?: unknown })?.note === 'string' ? (raw as { note: string }).note.trim().slice(0, 2000) : '')
+
+/**
+ * You said do it on an investigation: its recommendation (your note wins)
+ * becomes the item's plan, with the options brief under it, and the change
+ * runs like an approved fix: Junior's own branch, a draft PR.
+ */
+export async function goAheadOp(rt: WorkspaceRuntime, taskId: string, raw: unknown): Promise<ItemTask> {
+  const t = await waitingTask(rt, taskId, DECIDE_STEP, 'decision made')
+  const note = noteOf(raw)
+  const rec = typeof t.input?.recommendation === 'string' ? t.input.recommendation : t.title
+  const artifactId = typeof t.input?.artifactId === 'string' ? t.input.artifactId : null
+  const brief = artifactId ? await rt.artifacts.read(artifactId).catch(() => null) : null
+  const plan = [
+    `Go with the recommendation: ${rec}`,
+    ...(note ? ['', `The user's note (it wins over the brief): ${note}`] : []),
+    ...(brief?.body.trim() ? ['', '#### The options brief', brief.body.trim()] : []),
+  ].join('\n')
+  const done = await rt.store.tasks.move(t.id, 'done', { output: { summary: note ? `do it: ${note}` : 'do it' } }, Date.now())
+  if (!done) throw new Error('the task moved on before it could be decided')
+  await rt.store.items.setPlan(t.itemId, plan)
+  await rt.store.items.addDecision(t.itemId, { at: Date.now(), by: 'you', text: note ? `Do it: ${note}` : `Do it: ${rec}`, taskId: t.id })
+  const fix = await rt.store.tasks.add(
+    { itemId: t.itemId, title: 'Make the change', owner: 'junior', why: 'playbook', whyDetail: 'you said do it', step: DEBUG_FIX_STEP, key: `fix:${t.id}`, ...(note ? { input: { note } } : {}) },
+    Date.now(),
+  )
+  if (!fix) throw new Error('could not add the change')
+  tasksChanged(rt)
+  void pumpTasks(rt)
+  return fix
+}
+
+/** You want something else: Junior investigates again, with your note in the item's decisions. */
+export async function lookAgainOp(rt: WorkspaceRuntime, taskId: string, raw: unknown): Promise<ItemTask> {
+  const t = await waitingTask(rt, taskId, DECIDE_STEP, 'decision sent back')
+  const note = noteOf(raw)
+  if (!note) throw new Error('say what Junior should look at')
+  if (!(await rt.store.tasks.move(t.id, 'skipped', { error: `look again: ${note}` }, Date.now()))) throw new Error('the task moved on')
+  await rt.store.items.addDecision(t.itemId, { at: Date.now(), by: 'you', text: `Look again: ${note}`, taskId: t.id })
+  const again = await rt.store.tasks.add(
+    { itemId: t.itemId, title: 'Investigate options', owner: 'junior', why: 'you', whyDetail: 'look again', step: INVESTIGATE_STEP, key: `investigate:again:${Date.now()}` },
+    Date.now(),
+  )
+  if (!again) throw new Error('could not add the new investigation')
   tasksChanged(rt)
   void pumpTasks(rt)
   return again

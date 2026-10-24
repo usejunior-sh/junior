@@ -3,7 +3,7 @@ import type { ItemDetailResponse } from '../../../../shared/protocol.js'
 import type { ItemTask } from '../../../../core/work/tasks.js'
 import { useInbox } from '../../inboxStore.js'
 
-export type TaskVerb = 'approve' | 'retry' | 'stop' | 'skip' | 'post-review' | 'review-again' | 'send-reply' | 'approve-plan' | 'change-plan' | 'send-bot-replies'
+export type TaskVerb = 'approve' | 'retry' | 'stop' | 'skip' | 'post-review' | 'review-again' | 'send-reply' | 'approve-plan' | 'change-plan' | 'go-ahead' | 'look-again' | 'send-bot-replies'
 
 /** POST /api/tasks/<verb>: null when it went through, else what went wrong. */
 export async function taskVerb(verb: TaskVerb, body: Record<string, unknown>): Promise<string | null> {

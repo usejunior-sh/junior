@@ -26,6 +26,7 @@ import {
   ANSWER_STEP,
   answerPrompt,
   APPROVE_PLAN_STEP,
+  DECIDE_STEP,
   DEBUG_FIX_STEP,
   DEBUG_PLAN_STEP,
   debugFixPrompt,
@@ -41,7 +42,7 @@ import {
 import type { Checkout, Project } from '../../shared/protocol.js'
 import { BABYSIT_WATCH_KEY, pollBabysitSoon, type BabysitWatchState } from '../babysit/watch.js'
 import { REVIEW_WATCH_KEY, type ReviewWatchState } from '../review/watch.js'
-import { createArtifactOp } from '../artifacts-ops.js'
+import { createArtifactOp, toolResult } from '../artifacts-ops.js'
 import { readLocalChecks } from '../babysit/ci-steps.js'
 import { readRepoContract } from '../repo-contract.js'
 import { repoNotes } from '../../core/work/contract-apply.js'
@@ -596,7 +597,18 @@ function submitReplyTool(rt: WorkspaceRuntime, sessionId: string) {
   )
 }
 
-/** Investigate's hand-in: the options brief, an artifact on the item. */
+/**
+ * What a hand-in that saved an artifact answers with: the artifact's envelope,
+ * so the chat shows it as a card, and this hint, so the last line says so.
+ */
+const attachedHint = (what: 'brief' | 'plan' | 'review') =>
+  `Handed in: the ${what} is attached to the item, and the user sees it as a card here. End your turn with one line saying the ${what} is attached, then ${what === 'review' ? 'your verdict' : 'what you recommend'}. Nothing more.`
+
+/**
+ * Investigate's hand-in: the options brief, an artifact on the item, and
+ * "Decide", a task on you with its recommendation: Junior changes nothing
+ * until you say do it.
+ */
 function submitBriefTool(rt: WorkspaceRuntime, sessionId: string) {
   return tool(
     'submit_brief',
@@ -612,15 +624,33 @@ function submitBriefTool(rt: WorkspaceRuntime, sessionId: string) {
       if ('error' in got) return errResult(got.error)
       const { run, t, item } = got
       try {
-        const { artifact } = await createArtifactOp(
+        const made = await createArtifactOp(
           rt,
           { title: a.title, format: 'md', body: a.body, note: 'Options, by Junior', ...(item.url ? { refs: [item.url] } : {}), links: [{ kind: 'item', id: item.id, role: 'context' }] },
           'model',
           { sessionId },
         )
+        const artifact = made.artifact
         await addDecisions(rt, run.itemId, t.id, a.decisions)
         await finish(rt, t.id, 'done', { output: { summary: a.summary, artifactId: artifact.id } })
-        return okResult('Handed in. End your turn now.')
+        const rec = a.summary.trim().replace(/\.$/, '')
+        const decide = await rt.store.tasks.add(
+          {
+            itemId: item.id,
+            title: rec.length > 120 ? `${rec.slice(0, 119).trimEnd()}…` : rec,
+            owner: 'you',
+            state: 'waiting',
+            why: 'playbook',
+            whyDetail: 'investigate stops at the options',
+            step: DECIDE_STEP,
+            key: `decide:${t.id}`,
+            input: { artifactId: artifact.id, investigateTaskId: t.id, recommendation: a.summary.trim() },
+          },
+          Date.now(),
+        )
+        if (decide) taskNeedsYou(rt, { kind: 'decide', task: decide })
+        tasksChanged(rt)
+        return okResult(JSON.stringify(toolResult(made, attachedHint('brief'))))
       } catch (err) {
         return errResult(`Could not save the brief: ${errText(err)}`)
       }
@@ -648,12 +678,13 @@ function submitPlanTool(rt: WorkspaceRuntime, sessionId: string) {
       if ('error' in got) return errResult(got.error)
       const { run, t, item } = got
       try {
-        const { artifact } = await createArtifactOp(
+        const made = await createArtifactOp(
           rt,
           { title: `Plan: ${item.title}`.slice(0, 200), format: 'md', body: planMarkdown(item, a.plan, a.confidence), note: `Plan, ${a.confidence} confidence`, ...(item.url ? { refs: [item.url] } : {}), links: [{ kind: 'item', id: item.id, role: 'context' }] },
           'model',
           { sessionId },
         )
+        const artifact = made.artifact
         await rt.store.items.setPlan(item.id, a.plan.trim())
         await addDecisions(rt, run.itemId, t.id, a.decisions)
         await finish(rt, t.id, 'done', { output: { summary: `${a.summary} (${a.confidence} confidence)`, artifactId: artifact.id } })
@@ -673,7 +704,7 @@ function submitPlanTool(rt: WorkspaceRuntime, sessionId: string) {
         )
         if (approve) taskNeedsYou(rt, { kind: 'plan', task: approve })
         tasksChanged(rt)
-        return okResult('Handed in. End your turn now.')
+        return okResult(JSON.stringify(toolResult(made, attachedHint('plan'))))
       } catch (err) {
         return errResult(`Could not save the plan: ${errText(err)}`)
       }
@@ -718,7 +749,7 @@ function submitReviewTool(rt: WorkspaceRuntime, sessionId: string) {
       const pass: FirstPass = { verdict: a.verdict, summary: a.summary.trim(), comments: a.comments, ...(a.skipped?.trim() ? { skipped: a.skipped.trim() } : {}), sha: run.headSha }
       const at = Date.now()
       try {
-        const { artifact } = await createArtifactOp(
+        const made = await createArtifactOp(
           rt,
           {
             title: `Review: ${ref.repo}#${ref.number}`,
@@ -731,6 +762,7 @@ function submitReviewTool(rt: WorkspaceRuntime, sessionId: string) {
           'model',
           { sessionId },
         )
+        const artifact = made.artifact
         for (const text of a.decisions ?? []) await rt.store.items.addDecision(run.itemId, { at, by: 'junior', text, taskId: t.id })
         await finish(rt, t.id, 'done', { output: { summary: passLine(pass), artifactId: artifact.id, sha: pass.sha, verdict: pass.verdict } })
         const post = await rt.store.tasks.add(
@@ -749,7 +781,7 @@ function submitReviewTool(rt: WorkspaceRuntime, sessionId: string) {
         )
         if (post) taskNeedsYou(rt, { kind: 'post-review', task: post, verdict: pass.verdict })
         tasksChanged(rt)
-        return okResult('Handed in. End your turn now.')
+        return okResult(JSON.stringify(toolResult(made, attachedHint('review'))))
       } catch (err) {
         return errResult(`Could not save the review: ${errText(err)}`)
       }

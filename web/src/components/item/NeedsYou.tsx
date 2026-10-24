@@ -103,6 +103,8 @@ export function NeedsYou({ item, verdict, tasks, held, onChanged, onNavigate, on
           }
           case 'approve-plan':
             return <PlanCard key={t.id} {...props} onNavigate={onNavigate} />
+          case 'decide':
+            return <DecideCard key={t.id} {...props} onNavigate={onNavigate} />
           case 'nudge':
             // a draft it can't read falls back to the plain card, Skip still works
             return !nudgeInputOf(t.input) ? (
@@ -291,6 +293,40 @@ function PlanCard({ t, busy, act, onNavigate }: { t: ItemTask; busy: boolean; ac
         </button>
         <button type="button" className="btn xs" disabled={busy || !note.trim()} onClick={() => void act('change-plan', t, { note })}>
           Send it back
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/** Junior's options are in: its recommendation, and your call. Do it, or have it look again. */
+function DecideCard({ t, busy, act, onNavigate }: { t: ItemTask; busy: boolean; act: Act; onNavigate: (hash: string) => void }) {
+  const [note, setNote] = useState('')
+  const artifactId = str(t.input?.artifactId)
+  return (
+    <div className="needCard">
+      <div className="nTop">
+        <span className="jrMark" aria-hidden="true">J</span>
+        <span className="nTitle">{t.title}</span>
+        {artifactId && (
+          <button type="button" className="linkBtn" onClick={() => onNavigate(`/artifact/${artifactId}`)}>
+            Read the options
+          </button>
+        )}
+      </div>
+      <div className="nRead">That’s what I’d do. Say do it and I make the change on my own branch, then open a draft PR. Or tell me what to look at instead.</div>
+      <div className="nRec">
+        <textarea value={note} placeholder="A note for Junior: “go with option 2” (optional to do it, needed to look again)" onChange={(e) => setNote(e.target.value)} rows={2} />
+      </div>
+      <div className="nActs">
+        <button type="button" className="btn xs primary" disabled={busy} onClick={() => void act('go-ahead', t, note.trim() ? { note } : {})}>
+          Do it
+        </button>
+        <button type="button" className="btn xs" disabled={busy || !note.trim()} onClick={() => void act('look-again', t, { note })}>
+          Look again
+        </button>
+        <button type="button" className="btn xs ghost" disabled={busy} onClick={() => void act('skip', t)}>
+          Not now
         </button>
       </div>
     </div>

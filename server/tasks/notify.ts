@@ -21,6 +21,7 @@ export type NeedsYou =
   | { kind: 'reply'; task: ItemTask }
   | { kind: 'bot-replies'; task: ItemTask }
   | { kind: 'plan'; task: ItemTask }
+  | { kind: 'decide'; task: ItemTask }
   | { kind: 'budget'; spent: number; limit: number; waiting: number }
 
 /** The notification's title and line, or null for one that shouldn't ping. Pure. */
@@ -37,6 +38,8 @@ export function needsYouText(n: NeedsYou, pr: string | null): { title: string; b
       return { title: `Bot replies ready${pr ? ` on ${pr}` : ''}`, body: `${n.task.title}: Junior drafted them. Nothing is sent until you send it.` }
     case 'plan':
       return { title: 'Plan ready', body: 'Junior found the cause and wrote the fix plan. Nothing changes until you approve it.' }
+    case 'decide':
+      return { title: 'Options ready', body: `${n.task.title}? Nothing changes until you say do it.` }
     case 'stuck':
       return { title: `Junior is stuck${pr ? ` on ${pr}` : ''}`, body: n.task.error ? `${n.task.title}: ${n.task.error}` : n.task.title }
     case 'budget':
