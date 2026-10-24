@@ -37,6 +37,7 @@ import {
   type JobToolGrant,
 } from '../core/job/tools.js'
 import { JOB_NOTIFY, type JobBrief, type JobBrowser, type JobNotify, type JobOutput } from '../core/job/types.js'
+import type { JobSchema } from '../core/job/recipe.js'
 import { FILING_KEYS, filingFrom, filingKeys, type JobFiling } from '../core/job/filing.js'
 import { type BrowserProfile, findProfile } from '../core/browser/profiles.js'
 import type { LibrarySource } from '../shared/protocol.js'
@@ -330,6 +331,9 @@ export function serializeJobFile(s: JobFileSpec): string {
   Object.assign(data, filingKeys(s.filing))
   return serializeFrontmatter(data, `\n${s.instruction.trim()}\n`)
 }
+
+/** The strict schema as recipes take it (core/job/recipe.ts `toRecipe`, `fromRecipe`). */
+export const JOB_SCHEMA: JobSchema<JobFileSpec> = { parse: parseJobFile, serialize: serializeJobFile }
 
 /**
  * Check a spec's MCP grants against what the connector probes found: every
