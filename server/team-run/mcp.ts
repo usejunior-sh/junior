@@ -244,7 +244,7 @@ export function teamLeadTools(rt: WorkspaceRuntime) {
           // Checked now on a copy, so a mistake comes back to you; carried out when your turn ends.
           const probe = structuredClone(run)
           decide(probe)
-          rt.goalDecisions.set(run.id, decide)
+          rt.leadDecisions.set(run.id, decide)
           const said = probe.state === 'done' ? 'met — the user accepts the result' : probe.state === 'waiting' ? 'waiting — junior wakes you then' : 'not met — the next round starts when your turn ends'
           return okResult(`Recorded: ${said}. END YOUR TURN now.`)
         } catch (err) {
@@ -268,7 +268,7 @@ export function teamLeadTools(rt: WorkspaceRuntime) {
           const at = Date.now()
           const decide = (r: TeamRun) => unstick(r, u, at)
           decide(structuredClone(run))
-          rt.goalDecisions.set(run.id, decide)
+          rt.leadDecisions.set(run.id, decide)
           return okResult(`Recorded: ${u.action === 'retry' ? 'retry' : 'skip'} — the team moves when your turn ends, logged as resumed by Junior. END YOUR TURN now.`)
         } catch (err) {
           return errResult(errText(err))

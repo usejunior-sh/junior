@@ -1,7 +1,5 @@
 import { startSleepWatch } from './power.js'
 import { log } from './log.js'
-import { GATE_SWEEP_INTERVAL_MS } from '../core/goals/types.js'
-import { WATCH_TICK_MS } from '../core/goals/shepherd.js'
 import { runtimes } from './workspace/runtime.js'
 import { runDueJobs } from './jobs/queue.js'
 import { tickActions } from './session/actions-send.js'
@@ -9,7 +7,6 @@ import { errText } from './errors.js'
 import { wakeTeamGoals } from './team-run/mcp.js'
 import { invalidateInbox } from './ws/send.js'
 import { SCHEDULER_TICK_MS } from './jobs/scheduler.js'
-import { sweepGates, watchPrs } from './goal-glue.js'
 import { INBOX_KEEP_WARM_MS, syncInbox } from './inbox/sync.js'
 import { babysitTick } from './babysit/glue.js'
 import { reviewTick } from './review/glue.js'
@@ -47,17 +44,6 @@ export function startTicks() {
         .catch((err) => log('error', 'scheduler', `snooze wake failed: ${err}`, { workspace: rt.meta.id }))
     }
   }, SCHEDULER_TICK_MS).unref()
-
-  // The gate sweep: every 5 minutes, in every workspace. Nothing
-  // due = no session started.
-  setInterval(() => {
-    for (const rt of runtimes.values()) sweepGates(rt).catch((err) => log('error', 'goals', `gate sweep failed: ${errText(err)}`, { workspace: rt.meta.id }))
-  }, GATE_SWEEP_INTERVAL_MS).unref()
-
-  // The PR watcher: a cheap tick; each watched PR is polled on its own back-off.
-  setInterval(() => {
-    for (const rt of runtimes.values()) watchPrs(rt).catch((err) => log('error', 'goals', `PR watcher failed: ${errText(err)}`, { workspace: rt.meta.id }))
-  }, WATCH_TICK_MS).unref()
 
   // Babysitting your PRs: a cheap tick; the search runs every minute while
   // something moves, every 5 otherwise (core/babysit/watch.ts).

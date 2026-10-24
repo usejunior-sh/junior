@@ -41,7 +41,6 @@ async function withHold(fn: (f: Fixture) => Promise<void>) {
     meta: { id: 'ws-test' },
     store,
     clients: new Set(),
-    goalRuns: new Map(),
     taskRuns: new Map(),
     sessionTeam: new Map(),
     teamRuns: new Map(),

@@ -1,8 +1,6 @@
-import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import type { StoredSession } from '../../core/store/types.js'
 import { type RoleFence, roleFenceDecision } from '../../core/teams/fence.js'
-import { roleWrites } from '../../core/teams/writes.js'
 import type { ToolVeto, VetoDecision } from '../providers/types.js'
 import { log } from '../log.js'
 import { type ActionMove, canonJson, heldEntry, heldRecord, holdable, isArgsObject, move, queuedMessage, sendDelay } from '../../core/actions/queue.js'
@@ -13,7 +11,6 @@ import { defaultBranch } from '../worktrees.js'
 import { taskRunVerdict } from '../../core/babysit/policy.js'
 import { joinHeldCall, recordFor } from '../../core/actions/track.js'
 import { type SortedAction, unsortedAction } from '../../core/actions/sort.js'
-import { goalActionHeldOp } from '../goals.js'
 import { shortActionId } from '../../core/actions/view.js'
 import type { ActionRecord } from '../../core/actions/types.js'
 import type { ActionVerb } from '../../shared/protocol.js'
@@ -46,9 +43,9 @@ export const isTeamWorker = (rt: WorkspaceRuntime, sessionId: string): boolean =
 /** Every Claude chat, a team's lead and workers included: local work runs, sends are held. */
 const chatHoldsSends = (row: StoredSession): boolean => row.provider === 'claude' && row.kind === 'chat'
 
-/** Does this session hold its outbound calls for approval? Chats, job runs, goal workers and task runs do. */
+/** Does this session hold its outbound calls for approval? Chats (team leads and workers included), job runs and task runs do. */
 const holdsActions = (rt: WorkspaceRuntime, row: StoredSession): boolean =>
-  row.provider === 'claude' && (row.kind === 'job-run' || (rt.goalRuns.get(row.id)?.role ?? 'lead') !== 'lead' || rt.taskRuns.has(row.id) || chatHoldsSends(row))
+  row.provider === 'claude' && (row.kind === 'job-run' || rt.taskRuns.has(row.id) || chatHoldsSends(row))
 
 /** The branch a chat's shell is on and the repo's default one: what a free push is judged against. */
 async function branchScope(cwd: string): Promise<BranchScope> {
@@ -62,14 +59,7 @@ async function branchScope(cwd: string): Promise<BranchScope> {
  */
 function roleFenceOf(rt: WorkspaceRuntime, row: StoredSession): RoleFence | null {
   if (row.kind === 'brief') return { write: false, role: 'brief' }
-  const goalRun = rt.goalRuns.get(row.id)
-  if (goalRun)
-    return {
-      write: roleWrites(goalRun.role),
-      role: goalRun.role,
-      // Reviewer independence: not the builders' handoff, log or transcripts.
-      ...(goalRun.role === 'reviewer' ? { hidden: [rt.goalLedger.goalPath(goalRun.goalId), `${path.sep}.claude${path.sep}projects${path.sep}`] } : {}),
-    }
+  // A session the retired goals engine started: read-only if anything revives it.
   if (row.kind === 'goal') return { write: false, role: 'lead' }
   const run = teamRunOf(rt, row.id)
   const worker = run && run.leadSessionId !== row.id ? [...run.workers].reverse().find((w) => w.sessionId === row.id) : undefined
@@ -181,11 +171,6 @@ export async function holdIfAction(rt: WorkspaceRuntime, row: StoredSession, too
     await useApproval(rt, rule, row.id, ctx.toolUseId)
     return { allow: true, sure: `Approved in advance by the user: ${describeApproval(rule)}.` }
   }
-  // A goal's worker: the same call any of the goal's sessions already filed
-  // before a crash, or by the worker this one replaced, is that action.
-  const goalRun = rt.goalRuns.get(row.id)
-  const filed = goalRun ? rt.goalHeld.find(goalRun.goalId, toolName, args) : null
-  if (filed) return { allow: false, reason: queuedMessage(filed) }
   // The same call with the same args, still waiting: name the action already filed.
   const key = `${row.id}\u0000${toolName}\u0000${canonJson(args)}`
   const dup = rt.heldCalls.get(key)
@@ -202,10 +187,6 @@ export async function holdIfAction(rt: WorkspaceRuntime, row: StoredSession, too
   const toolUseId = ctx.toolUseId || `held-${randomUUID()}`
   const id = `${row.id}:${toolUseId}`
   rt.heldCalls.set(key, id)
-  if (goalRun)
-    void goalActionHeldOp(rt.goalDeps, rt.goalHeld, { goalId: goalRun.goalId, sessionId: row.id, actionId: id, tool: toolName, args }).catch((err) =>
-      log('warn', 'goals', `could not note a held action on its goal: ${errText(err)}`, { session: row.id, workspace: rt.meta.id }),
-    )
   const now = Date.now()
   const base = recordFor(actionContext(rt, row), toolUseId, toolName, args, sorted, now)
   void onActionChain(rt, async () => {
@@ -255,8 +236,6 @@ export async function moveAction(rt: WorkspaceRuntime, id: string, m: ActionMove
     return r.next
   })
   if (next.status !== 'needs_you') forgetHeld(rt, id)
-  // Sent back or lapsed: a goal's worker may file the same call again.
-  if (next.status === 'sent_back' || next.status === 'expired') rt.goalHeld.drop(id)
   actionsChanged(rt, new Set([next.sessionId]))
   return next
 }

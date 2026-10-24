@@ -9,7 +9,6 @@ import { claimSessionFiles, resolveUploads } from '../attachments.js'
 import { type FileRef, MAX_FILES_PER_MESSAGE, MAX_IMAGES_PER_MESSAGE } from '../../shared/protocol.js'
 import { itemImageAttachments } from '../itemImages.js'
 import { log } from '../log.js'
-import { goalMessageOp, goalOfSession, goalWorkerMessageOp } from '../goals.js'
 import { BUILD, PORT } from '../config.js'
 import { resolveRuntime } from '../routes/http-util.js'
 import { remote, remoteWs } from '../phone.js'
@@ -28,7 +27,6 @@ import { itemFilesForSession } from '../items-ops.js'
 import { sessionNotice } from '../team-run/state.js'
 import { errText } from '../errors.js'
 import { checkModelChoice } from '../workspace/probes.js'
-import { goalEngineFor } from '../goal-glue.js'
 
 export function handleConnection(ws: WebSocket, req: http.IncomingMessage): void {
   const url = new URL(req.url ?? '/ws', `http://localhost:${PORT}`)
@@ -240,27 +238,10 @@ export function handleConnection(ws: WebSocket, req: http.IncomingMessage): void
             await sessionNotice(rt, msg.sessionId, r instanceof Error ? `Not renamed: ${r.message}` : r ? `Named this session "${r}".` : 'Cleared this session\'s name.')
             break
           }
-          // A goal's session: a live one takes the message (its goal keeps a copy);
-          // one that has ended is gone for good, so the message goes to the goal's lead.
-          const row = rt.rows.get(msg.sessionId)
-          if (row?.kind === 'goal' && !rt.goalLeads.has(row.id)) {
-            const run = rt.goalRuns.get(row.id)
-            if (run) void goalWorkerMessageOp(rt.goalDeps, run.goalId, row.id, msg.text.trim()).catch(() => {})
-            else {
-              const goal = await goalOfSession(rt.goalDeps, row.id).catch(() => null)
-              // Plan review: the drafting lead's session is revived as before.
-              if (goal && goal.state !== 'draft_plan' && goal.state !== 'plan_ready') {
-                // The lead gets text only, so attached files stay behind, and the user is told.
-                const dropped = msg.files?.length ? ` ${msg.files.length === 1 ? 'The attached file was' : 'The attached files were'} not sent — files can't go to the goal's lead.` : ''
-                if (!msg.text.trim()) {
-                  await sessionNotice(rt, row.id, `Not sent: this session has ended.${dropped}`)
-                  break
-                }
-                const r = await goalMessageOp(rt.goalDeps, goalEngineFor(rt), { goalId: goal.id, text: msg.text.trim() }).catch((err: unknown) => err)
-                await sessionNotice(rt, row.id, r instanceof Error ? `Not sent: ${r.message}` : `This session has ended; your message went to the goal's lead.${dropped}`)
-                break
-              }
-            }
+          // A session the retired goals engine started has no engine to go back to.
+          if (rt.rows.get(msg.sessionId)?.kind === 'goal') {
+            await sessionNotice(rt, msg.sessionId, 'Not sent. This session ran under the old goals engine, which is retired. Ask Junior in a new chat.')
+            break
           }
           const session = await getOrRevive(rt, msg.sessionId)
           let files: FileRef[] = []

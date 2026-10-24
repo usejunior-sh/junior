@@ -18,7 +18,6 @@ import { frameSessionMessage } from '../../core/sessions/frame.js'
 import { AsyncQueue } from './async-queue.js'
 import { browserHub, WorkspaceRuntime } from '../workspace/runtime.js'
 import { BRIEF_DISALLOWED_TOOLS, briefBashAllowed } from './brief-tools.js'
-import { endGoalSession, GOAL_LEAD_DISALLOWED_TOOLS, GOAL_LEAD_TOOLS, settleGoalLead } from '../goal-glue.js'
 import { sessionVeto } from './actions-hold.js'
 import { ownServersOf } from '../../core/actions/own.js'
 import { EDIT_TOOLS, reloadLibraryEverywhere, sessionRepoRoot, writesLibrary } from './changes.js'
@@ -154,7 +153,7 @@ export class LiveSession {
       mcpServers,
       ...(extras.tools ? { tools: extras.tools } : {}),
       ...(extras.strictMcpConfig ? { strictMcp: true } : {}),
-      disallowedTools: [...(row.kind === 'brief' ? BRIEF_DISALLOWED_TOOLS : row.kind === 'goal' && !rt.goalRuns.has(row.id) ? GOAL_LEAD_DISALLOWED_TOOLS : []), ...(extras.disallowedTools ?? [])],
+      disallowedTools: [...(row.kind === 'brief' || row.kind === 'goal' ? BRIEF_DISALLOWED_TOOLS : []), ...(extras.disallowedTools ?? [])],
       // The session's agent's auth in this workspace: api-key / config-dir
       // spawn with overrides; inherit passes nothing.
       ...(rt.envFor(row.provider) ? { env: rt.envFor(row.provider) } : {}),
@@ -328,8 +327,6 @@ export class LiveSession {
           this.rt.files.invalidate(this.row.cwd)
           // A brief run is one turn: its result is the run's end.
           if (this.row.kind === 'brief') void onBriefTurnDone(this.rt, this.row.id)
-          // So is a goal lead's: it proposed the plan, or it never will.
-          if (this.row.kind === 'goal') void settleGoalLead(this.rt, this.row.id)
           // A skill or agent this turn wrote is usable now, here and in every other session.
           if (this.libraryTouched) {
             this.libraryTouched = false
@@ -347,8 +344,6 @@ export class LiveSession {
           this.costSeen = step.seen
           const delta = step.delta
           if (this.rt.sessionTeam.has(this.row.id)) void noteTeamSpend(this.rt, this.row.id, delta, ev.overBudget)
-          // A goal session is one turn too: the run loop books its spend and moves the goal on.
-          if (this.rt.goalRuns.has(this.row.id)) void endGoalSession(this.rt, this.row.id, null, delta)
           // A task session is one turn too: it handed in (or didn't), the runner settles it.
           if (this.rt.taskRuns.has(this.row.id)) {
             const said = (ev.record as { result?: unknown }).result
@@ -377,8 +372,6 @@ export class LiveSession {
       if (this.rt.live.get(this.row.id) === this) this.rt.live.delete(this.row.id)
       broadcastSessionList(this.rt)
       if (this.row.kind === 'brief') void onBriefSessionEnded(this.rt, this.row.id)
-      if (this.row.kind === 'goal') void settleGoalLead(this.rt, this.row.id, 'the lead session ended before it proposed a plan')
-      if (this.rt.goalRuns.has(this.row.id)) void endGoalSession(this.rt, this.row.id, 'the session ended before its turn finished')
       if (this.rt.taskRuns.has(this.row.id)) void endTaskSession(this.rt, this.row.id, 'the session ended before its turn finished')
     }
   }
@@ -552,29 +545,6 @@ export class LiveSession {
         return Promise.resolve({ behavior: 'allow', updatedInput: toolInput })
       }
     }
-    // Brief sessions are headless (.docs/next-version.md): nobody is there to
-    // answer a prompt, so the policy is fixed, reads and the brief's own write
-    // tool run, narrow read-only gh/git commands run, everything else is denied.
-    // A goal's drafting lead is headless too: reads, read-only gh/git, and its plan.
-    // A goal run's sessions are headless as well. The role fence and the hold
-    // have vetoed already, so a worker may edit inside its worktree and run the
-    // shell (outbound calls were queued for approval before they got here).
-    const goalRun = this.rt.goalRuns.get(this.row.id)
-    if (goalRun) {
-      const own = toolName.startsWith('mcp__goal__')
-      const inTree = (p: unknown) => typeof p === 'string' && !path.relative(this.row.cwd, path.resolve(this.row.cwd, p)).startsWith('..')
-      const allowed =
-        own ||
-        effect === 'read' ||
-        (goalRun.role === 'lead'
-          ? toolName === 'Bash' && briefBashAllowed(toolInput)
-          : toolName === 'Bash' || (EDIT_TOOLS.has(toolName) && inTree(toolInput.file_path ?? toolInput.notebook_path)))
-      return Promise.resolve(
-        allowed
-          ? { behavior: 'allow', updatedInput: toolInput }
-          : { behavior: 'deny', message: `This is a goal's headless ${goalRun.role}: that tool isn't open to it. Note what you needed in goal_log_append.` },
-      )
-    }
     // A task session is headless: the push policy and the hold have vetoed already,
     // so it may edit inside its worktree, run the shell, and hand in.
     if (this.rt.taskRuns.has(this.row.id)) {
@@ -587,14 +557,19 @@ export class LiveSession {
           : { behavior: 'deny', message: "This is a headless task session: that tool isn't open to it. If the task needs it, hand in blocked and say why." },
       )
     }
+    // A session the retired goals engine started (kind 'goal') is read-only
+    // if anything revives it: reads and read-only gh/git, nothing else.
     if (this.row.kind === 'goal') {
-      const allowed = GOAL_LEAD_TOOLS.has(toolName) || effect === 'read' || (toolName === 'Bash' && briefBashAllowed(toolInput))
+      const allowed = effect === 'read' || (toolName === 'Bash' && briefBashAllowed(toolInput))
       return Promise.resolve(
         allowed
           ? { behavior: 'allow', updatedInput: toolInput }
-          : { behavior: 'deny', message: "This is a goal's drafting lead: only reads, read-only gh/git commands, and goal_propose_plan are allowed." },
+          : { behavior: 'deny', message: 'This session ran under the old goals engine, which is retired. It can only read. Ask in a new chat.' },
       )
     }
+    // Brief sessions are headless (.docs/next-version.md): nobody is there to
+    // answer a prompt, so the policy is fixed, reads and the brief's own write
+    // tool run, narrow read-only gh/git commands run, everything else is denied.
     if (this.row.kind === 'brief') {
       const allowed =
         toolName === 'mcp__brief__write_brief' || effect === 'read' || (toolName === 'Bash' && briefBashAllowed(toolInput))

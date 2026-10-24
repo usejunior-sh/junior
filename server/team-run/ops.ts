@@ -61,11 +61,11 @@ export async function noteTeamSpend(rt: WorkspaceRuntime, sessionId: string, del
     const spent = runSpent(run)
     // The lead's verdict or unstick waits for its turn to end, like a handoff: junior never messages a
     // session mid-turn. Paused meanwhile (by you, or the budget), it waits for your resume instead.
-    const decided = sessionId === run.leadSessionId ? rt.goalDecisions.get(run.id) : undefined
+    const decided = sessionId === run.leadSessionId ? rt.leadDecisions.get(run.id) : undefined
     const over = run.state === 'running' && (spent >= run.budgetUsd || overBudget)
     // Past the budget a "met" still closes the goal, it spends nothing more.
     if (decided && run.state === 'running' && (!over || closes(run, decided))) {
-      rt.goalDecisions.delete(run.id)
+      rt.leadDecisions.delete(run.id)
       try {
         return await applyTeamActions(rt, run, decided(run))
       } catch (err) {
@@ -402,9 +402,9 @@ export async function resumeTeamOp(rt: WorkspaceRuntime, raw: unknown): Promise<
     await sessionNotice(rt, run.leadSessionId, `${run.goal ? 'Goal' : 'Team'} resumed by you — budget ${usd(run.budgetUsd)} (${usd(spent)} spent).`)
     const actions = resume(run, Date.now(), raised ? `raised the budget from ${usd(before)} to ${usd(run.budgetUsd)} and resumed` : 'resumed after a pause')
     // A verdict or unstick the lead gave just before the pause: carry it out now, instead of asking again.
-    const decided = rt.goalDecisions.get(run.id)
+    const decided = rt.leadDecisions.get(run.id)
     if (decided && run.state === 'running') {
-      rt.goalDecisions.delete(run.id)
+      rt.leadDecisions.delete(run.id)
       try {
         return await applyTeamActions(rt, run, decided(run))
       } catch (err) {
@@ -427,7 +427,7 @@ export async function stopTeamOp(rt: WorkspaceRuntime, raw: unknown): Promise<vo
       live.stop()
     }
     run.state = 'stopped'
-    rt.goalDecisions.delete(run.id)
+    rt.leadDecisions.delete(run.id)
     if (run.root) run.endTree = (await snapshotTree(run.root)) ?? undefined
     run.awaiting = []
     run.rev += 1

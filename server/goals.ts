@@ -695,7 +695,7 @@ export async function goalPumpIdle(d: GoalDeps): Promise<void> {
 export const GOALS_MAX_TEAM_KEY = 'goals.maxTeam'
 
 /** The user's max team size (Settings → Teams): the most workers one goal runs at once. */
-export async function goalMaxTeam(d: GoalDeps): Promise<number> {
+export async function goalMaxTeam(d: Pick<GoalDeps, 'store'>): Promise<number> {
   const v = Number(await d.store.config.get<number>(GOALS_MAX_TEAM_KEY))
   return Number.isInteger(v) && v > 0 ? v : DEFAULT_MAX_TEAM
 }

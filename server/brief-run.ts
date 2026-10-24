@@ -6,9 +6,6 @@ import type { AgentCan, Artifact, BriefJob, BriefView } from '../shared/protocol
 import type { StoredSession } from '../core/store/types.js'
 import { juniorSessionAppend } from '../shared/juniorContext.js'
 import { runSpent, workerAppend } from '../core/teams/engine.js'
-import { goalSessionMcpTools } from './goals.js'
-import { workerAppend as goalWorkerAppend, LEAD_RUN_APPEND } from '../core/goals/run.js'
-import { LEAD_DRAFT_APPEND } from '../core/goals/review.js'
 import { BRIEF_SYSTEM_APPEND, briefRelPath, composeBriefPrompt, isPlaybookName, readPlaybook, seedDispatchTemplates, seedPlaybooks } from './briefs.js'
 import { log } from './log.js'
 import type { Job } from '../core/job/types.js'
@@ -20,7 +17,6 @@ import { TEAM_COMPACT_WINDOW, teamRunOf, workerSpec } from './team-run/state.js'
 import { makeTeamMcp } from './team-run/mcp.js'
 import { juniorAppend } from './junior-ops.js'
 import { VERSION } from './config.js'
-import { GOAL_RUN_DISALLOWED_TOOLS } from './goal-glue.js'
 import { EDIT_TOOLS } from './session/changes.js'
 import { errResult, okResult } from './junior-mcp.js'
 import { errText } from './errors.js'
@@ -112,18 +108,6 @@ export async function extrasFor(rt: WorkspaceRuntime, row: StoredSession): Promi
   // "open Junior.app" rather than vanish, so a session never has to respawn.
   // It is one of Junior's chats, so it also gets the persona and today's plan.
   if (row.kind === 'chat') return { systemAppend: `${identity}${await juniorAppend(rt)}`, mcp: { browser: browserMcpFor(rt, row) } }
-  // A goal run's session: its goal-bound tools, and its contract last.
-  const goalRun = rt.goalRuns.get(row.id)
-  if (goalRun) {
-    const mcp = { goal: createSdkMcpServer({ name: 'goal', version: VERSION, alwaysLoad: true, tools: goalSessionMcpTools(rt.goalDeps, goalRun) }) }
-    const spec = goalRun.spec
-    if (spec.role === 'lead') return { systemAppend: `${identity}\n${LEAD_RUN_APPEND}`, mcp, disallowedTools: GOAL_RUN_DISALLOWED_TOOLS }
-    return {
-      systemAppend: `${identity}\n${goalWorkerAppend(goalRun.role, spec.writes, goalRun.agentPrompt)}\n\n${spec.context}`,
-      mcp,
-      disallowedTools: GOAL_RUN_DISALLOWED_TOOLS.filter((t) => spec.writes || !EDIT_TOOLS.has(t)),
-    }
-  }
   // A babysit task's session: its submit_task tool, its per-task budget, the headless contract last.
   const taskRun = rt.taskRuns.get(row.id)
   // Strict: none of ~/.claude's connectors and plugins, whose schemas would ride every call.
@@ -149,8 +133,6 @@ export async function extrasFor(rt: WorkspaceRuntime, row: StoredSession): Promi
       ...(review ? { disallowedTools: [...EDIT_TOOLS] } : {}),
     }
   }
-  // A goal's lead: the drafting contract last, like a brief's.
-  if (row.kind === 'goal') return { systemAppend: `${identity}\n${LEAD_DRAFT_APPEND}` }
   if (row.kind !== 'brief') return { systemAppend: identity }
   let e = rt.briefExtras.get(row.id)
   if (!e) {

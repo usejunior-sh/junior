@@ -86,7 +86,7 @@ export async function readSettings(rt: WorkspaceRuntime): Promise<WorkspaceSetti
     briefsDefaultModel: typeof model === 'string' && model ? model : null,
     hiddenModels: await readIdList(rt, HIDDEN_MODELS_KEY),
     customModels: await readIdList(rt, CUSTOM_MODELS_KEY),
-    goalsMaxTeam: await goalMaxTeam(rt.goalDeps),
+    goalsMaxTeam: await goalMaxTeam(rt),
     browserProfile: await workspaceBrowserProfile(rt),
   }
 }

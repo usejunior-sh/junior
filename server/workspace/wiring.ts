@@ -1,6 +1,5 @@
 import { apiKeyHint, loginCommandFor, toAuthBackend, workspaceAuthDir, type WorkspaceMeta } from '../workspaces.js'
 import type { Workspace } from '../../shared/protocol.js'
-import { bootGoalRun, loadGoalHeld, replayGoalEvents } from '../goals.js'
 import { log } from '../log.js'
 import { registry, WorkspaceRuntime } from './runtime.js'
 import { wireProviders } from './providers.js'
@@ -11,7 +10,6 @@ import { loadSessions } from '../session/sessions.js'
 import { markInterruptedRuns } from '../jobs/run.js'
 import { migrateJobProjects, seedJobTemplates, syncJobFiles } from '../jobs/ops.js'
 import { bootBriefs } from '../brief-run.js'
-import { goalEngineFor } from '../goal-glue.js'
 import { errText } from '../errors.js'
 import { loadTeamRuns } from '../team-run/state.js'
 import { probeConnectors, probeModels } from './probes.js'
@@ -70,11 +68,6 @@ export async function initRuntime(rt: WorkspaceRuntime): Promise<void> {
   if (await jobsEnabled(rt)) await seedJobTemplates(rt)
   else await syncJobFiles(rt, { force: true }).catch(() => {})
   await bootBriefs(rt)
-  // Plan review events the last daemon wrote but never finished: wake their lead, queue their steps.
-  await replayGoalEvents(rt.goalDeps, goalEngineFor(rt)).catch((err) => log('error', 'goals', `replay failed: ${errText(err)}`, { workspace: rt.meta.id }))
-  // the goals that were mid-session when the daemon died pick up from their handoff, and nothing they queued is filed twice.
-  await loadGoalHeld(rt.goalDeps, rt.goalHeld).catch((err) => log('error', 'goals', `could not load held actions: ${errText(err)}`, { workspace: rt.meta.id }))
-  await bootGoalRun(rt.goalDeps, goalEngineFor(rt)).catch((err) => log('error', 'goals', `could not resume running goals: ${errText(err)}`, { workspace: rt.meta.id }))
   await rt.teamLibrary.seed().catch((err) => log('error', 'teams', `could not seed agents and teams: ${err}`, { workspace: rt.meta.id }))
   await loadTeamRuns(rt)
   // The last snapshot makes the first page load instant, but only while it

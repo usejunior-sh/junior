@@ -10,8 +10,6 @@ import { providerFor } from '../providers/registry.js'
 import { TerminalManager } from '../terminals.js'
 import { FileIndexes } from '../files.js'
 import { ArtifactIndex } from '../artifacts.js'
-import { GoalLedger } from '../../core/goals/ledger.js'
-import { type GoalDeps, GoalHeldIndex, onGoalEvent } from '../goals.js'
 import { BrowserHub, browserGate, makeBrowserMcp, ShotStore, type BrowserGate } from '../browser.js'
 import { TeamLibrary } from '../teams.js'
 import { JobFiles, renameLegacyFolders } from '../job-files.js'
@@ -22,18 +20,14 @@ import { ActionTracker } from '../../core/actions/track.js'
 import type { TreeChange } from '../git.js'
 import { log } from '../log.js'
 import { openSqliteStore } from '../../core/store/sqlite.js'
-import { blockFromRecipe } from '../../core/goals/blocks.js'
 import { ensureWorkspacePlugin } from '../library.js'
 import { LiveSession, type SessionExtras } from '../session/live-session.js'
 import type { QueuedRun } from '../jobs/queue.js'
 import type { JobPreview } from '../jobs/preview.js'
-import { goalEngineFor, type GoalLead, type GoalRun } from '../goal-glue.js'
 import type { TaskRun } from '../tasks/runner.js'
 import type { OpenTurn } from '../session/changes.js'
 import { errText } from '../errors.js'
-import { broadcast, invalidateInbox } from '../ws/send.js'
-import { defaultProject } from '../session/sessions.js'
-import { createManualOp } from '../items-ops.js'
+import { broadcast } from '../ws/send.js'
 import { makeJuniorMcp } from '../junior-mcp.js'
 
 // Workspace runtimes: everything that used to be a module singleton, one per
@@ -117,9 +111,6 @@ export class WorkspaceRuntime {
   readonly files = new FileIndexes()
   /** the workspace's markdown artifacts, indexed from its artifacts folder (.docs/next-version.md) */
   readonly artifacts: ArtifactIndex
-  /** goals (server/goals.ts): their ledger folders in the artifacts repo, and what every goal op needs */
-  readonly goalLedger: GoalLedger
-  readonly goalDeps: GoalDeps
   /** what sessions saw in the browser pane: screenshots, checkpoints, diffs (.docs/browser.md) */
   readonly shots: ShotStore
   /** playbooks and dispatch templates: the two prose-customisable stages, as files */
@@ -133,12 +124,6 @@ export class WorkspaceRuntime {
   briefPumping = false
   readonly briefTimers = new Map<string, ReturnType<typeof setTimeout>>()
   readonly briefExtras = new Map<string, SessionExtras>()
-  /** goal id → its drafting lead while one runs (startGoalLead) */
-  readonly goalLeads = new Map<string, GoalLead>()
-  /** the sessions the goal run loop started (run leads and workers), by session id */
-  readonly goalRuns = new Map<string, GoalRun>()
-  /** actions a goal's workers queued, across sessions and restarts (server/goals.ts GoalHeldIndex) */
-  readonly goalHeld = new GoalHeldIndex()
   /** the sessions the task runner started, one per running task, by session id (server/tasks/runner.ts) */
   readonly taskRuns = new Map<string, TaskRun>()
   taskPumping = false
@@ -165,8 +150,8 @@ export class WorkspaceRuntime {
   readonly sessionTeam = new Map<string, string>()
   /** run id → the tail of its action chain (withTeamRun) */
   readonly teamLocks = new Map<string, Promise<unknown>>()
-  /** a goal lead's verdict or unstick, checked when it called the tool and carried out when its turn ends */
-  readonly goalDecisions = new Map<string, (run: TeamRun) => TeamAction[]>()
+  /** a team lead's goal verdict or unstick, checked when it called the tool and carried out when its turn ends */
+  readonly leadDecisions = new Map<string, (run: TeamRun) => TeamAction[]>()
   /** sessions whose next spawn starts a fresh Claude session (a checker's clean context) */
   readonly freshNext = new Set<string>()
 
@@ -211,28 +196,6 @@ export class WorkspaceRuntime {
       broadcast(this, { type: 'artifacts_changed' }),
     )
     void this.artifacts.ensure()
-    this.goalLedger = new GoalLedger(this.artifacts.root)
-    this.goalDeps = {
-      store: this.store,
-      ledger: this.goalLedger,
-      now: Date.now,
-      defaultProjectId: async () => (await defaultProject(this))?.id ?? null,
-      changed: (goalId) => {
-        broadcast(this, { type: 'goals_changed', goalId })
-        // A goal's state is its item's flow (flowSignals): the Inbox reads it again.
-        invalidateInbox(this)
-      },
-      // Plan review reacts the moment its event is written (server/goals.ts onGoalEvent), no polling.
-      emit: (ev) =>
-        void onGoalEvent(this.goalDeps, goalEngineFor(this), ev).catch((err) =>
-          log('error', 'goals', `event ${ev.kind} on ${ev.goalId}: ${errText(err)}`, { workspace: meta.id }),
-        ),
-      // A goal made in chat lives under a new manual item, like a team proposed from one.
-      itemFor: (goal) =>
-        createManualOp(this, { title: goal.title.slice(0, 120), description: `Goal — done when: ${goal.doneWhen}`, ...(goal.projectId ? { projectId: goal.projectId } : {}) }),
-      // the workspace's team recipes are the workflow blocks a plan may name.
-      blocks: async () => (await this.teamLibrary.list()).teams.flatMap((t) => (t.recipe ? [blockFromRecipe(t.name, t.recipe)] : [])),
-    }
     this.playbookDir = path.join(workspaceDir(meta.id), 'playbooks')
     this.shots = new ShotStore(path.join(workspaceDir(meta.id), 'browser'))
     this.dispatchDir = path.join(workspaceDir(meta.id), 'dispatch')

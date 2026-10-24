@@ -16,7 +16,7 @@ import type { WorkspaceRuntime } from '../server/workspace/runtime.js'
 async function withRt(fn: (rt: WorkspaceRuntime, store: Store) => Promise<void>) {
   const dir = mkdtempSync(path.join(tmpdir(), 'junior-switches-'))
   const store = openSqliteStore(path.join(dir, 'junior.db'))
-  const rt = { store, meta: { id: 'test' }, clients: new Set(), goalDeps: { store } } as unknown as WorkspaceRuntime
+  const rt = { store, meta: { id: 'test' }, clients: new Set() } as unknown as WorkspaceRuntime
   try {
     await fn(rt, store)
   } finally {
