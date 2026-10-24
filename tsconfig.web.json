@@ -47,6 +47,7 @@
     "core/babysit/bot-triage.ts",
     "core/babysit/bot-card.ts",
     "core/babysit/deps.ts",
+    "core/babysit/dep-batch.ts",
     "core/review/brief.ts",
     "core/work/due.ts",
     "core/work/fade.ts",

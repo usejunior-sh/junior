@@ -25,6 +25,7 @@ import { libraryRootsFor } from './session/changes.js'
 import { inboxAlerts } from './inbox/flow.js'
 import { getFocusHoursOp, type FocusView } from './settings-ops.js'
 import { nudgeMarksOp } from './tasks/nudge.js'
+import { depBatchOp } from './babysit/dep-batch.js'
 
 // Junior (.docs/junior-goals-teams): the persona, the Junior page's day, and
 // today's plan. The rules are pure and tested in core/junior/; everything
@@ -385,6 +386,12 @@ export async function juniorDayOp(rt: WorkspaceRuntime, q: { since: number; away
     log('warn', 'junior', `could not list the workspace library: ${errText(err)}`, { workspace: rt.meta.id })
   }
 
+  // Dependency PRs that can go together: a suggestion only, nothing queued (core/babysit/dep-batch.ts)
+  const depBatch = await depBatchOp(rt, now).catch((err) => {
+    log('warn', 'junior', `could not read dependency PRs: ${errText(err)}`, { workspace: rt.meta.id })
+    return null
+  })
+
   const you = await userFirstName()
   return {
     you: { name: you, initial: (you ?? 'You')[0].toUpperCase() },
@@ -403,6 +410,7 @@ export async function juniorDayOp(rt: WorkspaceRuntime, q: { since: number; away
     jobsOn: jobs.filter((j) => j.enabled).length,
     focus: juniorFocus(await getFocusHoursOp(rt, now)),
     nudges,
+    depBatch,
   }
 }
 

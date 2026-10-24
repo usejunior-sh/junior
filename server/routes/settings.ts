@@ -1,5 +1,5 @@
 import os from 'node:os'
-import { type CommandsResponse, type ConnectorsResponse, type ContextOpenResponse, type FocusEndResponse, type RememberResponse, isProviderId, type JuniorDayResponse, type ModelsResponse, type PersonaResponse, type PlaybookResponse, type PlaybooksResponse, type ScoreWeightsResponse, type SettingsResponse, type TodayMatchResponse, type TodayResponse } from '../../shared/protocol.js'
+import { type CommandsResponse, type ConnectorsResponse, type DepMergeResponse, type DepNotNowResponse, type ContextOpenResponse, type FocusEndResponse, type RememberResponse, isProviderId, type JuniorDayResponse, type ModelsResponse, type PersonaResponse, type PlaybookResponse, type PlaybooksResponse, type ScoreWeightsResponse, type SettingsResponse, type TodayMatchResponse, type TodayResponse } from '../../shared/protocol.js'
 import { RESERVED_SERVER } from '../../core/job/tools.js'
 import { isPlaybookName, listPlaybooks, readDispatchTemplate, readPlaybook, writeDispatchTemplate, writePlaybook } from '../briefs.js'
 import { FOLDER_PROBE_TTL_MS, probeCommands, probeConnectors, probeModels, usableCommands } from '../workspace/probes.js'
@@ -7,6 +7,7 @@ import { expandHome } from '../folders.js'
 import { localServersElsewhere } from '../jobs/preview.js'
 import { addToTodayOp, ensureToday, juniorDayOp, juniorFocus, matchTodayOp, openTodayOp, removeFromTodayOp, savePersonaOp, todayView, userFirstName } from '../junior-ops.js'
 import { readJsonBody } from './http-util.js'
+import { depMergeOp, depMergeRunOp, depNotNowOp } from '../babysit/dep-batch.js'
 import { errText } from '../errors.js'
 import { clearScoreWeightOp, endFocusOp, listScoreWeightsOp, openContextFileOp, rememberOp, readSettings, setScoreWeightOp, touchesWatches, writeSettings } from '../settings-ops.js'
 import { invalidateInbox } from '../ws/send.js'
@@ -138,6 +139,37 @@ export async function settingsRoutes({ req, url, json, rt, access }: ScopedCtx):
       body = { ok: false, error: errText(err) }
     }
     json(body.ok ? 200 : 502, body)
+    return true
+  }
+  // The dependency batch (server/babysit/dep-batch.ts): the Merge press is the approval.
+  if (url.pathname === '/api/deps/merge' && req.method === 'POST') {
+    let body: DepMergeResponse
+    try {
+      body = { ok: true, run: await depMergeOp(rt, await readJsonBody(req, 10_000)) }
+    } catch (err) {
+      body = { ok: false, error: errText(err) }
+    }
+    json(body.ok ? 200 : 400, body)
+    return true
+  }
+  if (url.pathname.startsWith('/api/deps/merge/') && req.method === 'GET') {
+    let body: DepMergeResponse
+    try {
+      body = { ok: true, run: depMergeRunOp(rt, decodeURIComponent(url.pathname.slice('/api/deps/merge/'.length))) }
+    } catch (err) {
+      body = { ok: false, error: errText(err) }
+    }
+    json(body.ok ? 200 : 404, body)
+    return true
+  }
+  if (url.pathname === '/api/deps/not-now' && req.method === 'POST') {
+    let body: DepNotNowResponse
+    try {
+      body = { ok: true, ...(await depNotNowOp(rt, await readJsonBody(req, 10_000))) }
+    } catch (err) {
+      body = { ok: false, error: errText(err) }
+    }
+    json(body.ok ? 200 : 400, body)
     return true
   }
   if (url.pathname === '/api/focus/end' && req.method === 'POST') {

@@ -105,6 +105,12 @@ export type JuniorDay = {
    * suggestion only: no draft exists until you pick Draft nudge.
    */
   nudges: Record<string, import('../../core/work/nudge-suggest.js').NudgeMark>
+  /**
+   * 2+ green minor or patch dependency PRs as one suggested row on Needs you
+   * (core/babysit/dep-batch.ts). A read: nothing is queued until the user
+   * presses Merge. Null = no batch (or "Not now").
+   */
+  depBatch?: import('../../core/babysit/dep-batch.js').DepBatchView | null
 }
 export type JuniorDayResponse = { ok: true; day: JuniorDay } | { ok: false; error: string }
 
@@ -116,6 +122,15 @@ export type { NudgeMark, NudgeRoute } from '../../core/work/nudge-suggest.js'
  * POST /api/tasks/send-nudge {id, text?, byHand?}: the task after the send.
  */
 export type NudgeTaskResponse = { ok: true; task: import('../../core/work/tasks.js').ItemTask } | { ok: false; error: string }
+
+/**
+ * POST /api/deps/merge { refs }: the Merge press, the approval. Answers at
+ * once with the run; GET /api/deps/merge/<id> reads its rows as they go.
+ */
+export type DepMergeResponse = { ok: true; run: import('../../core/babysit/dep-batch.js').DepMergeRun } | { ok: false; error: string }
+/** POST /api/deps/not-now { refs }: hide this batch for a day, or until a new PR joins. */
+export type DepNotNowResponse = { ok: true; until: number } | { ok: false; error: string }
+export type { DepBatchRow, DepBatchView, DepMergeRow, DepMergeRun, DepMergeState } from '../../core/babysit/dep-batch.js'
 
 /** GET /api/today, POST /api/today/open|add|remove, today's plan. */
 export type TodayResponse = { ok: true; plan: import('../../core/junior/today.js').PlanView } | { ok: false; error: string }
