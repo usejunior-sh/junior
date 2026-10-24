@@ -14,6 +14,7 @@
  * is off reads "watch-off", so the client can say so. A hand-off never turns
  * a watch on; that stays your call in Settings → Automations.
  */
+import { afterReason, clearSuppression, isNotNowReason, readSuppressState, REASON_WORDS, type NotNowReason, type Suppression, type SuppressState, SUPPRESS_KEY } from '../core/junior/suggest.js'
 import { ruleFor, STARTABLE } from '../core/rules/rules.js'
 import { isPlaybook, reasonOf, type Playbook } from '../core/work/fields.js'
 import { handoffNote, handoffReadiness, PAUSED_ERROR, type HandoffReadiness } from '../core/work/handoff.js'
@@ -63,7 +64,7 @@ export async function handOffOp(rt: WorkspaceRuntime, raw: unknown): Promise<Wor
   const item = await itemOf(rt, raw)
   const note = handoffNote((raw as { note?: unknown })?.note)
   if (watched(item)) {
-    await rt.store.items.setFields(item.id, { handoff: 'on', notNow: null })
+    await rt.store.items.setFields(item.id, { handoff: 'on', notNow: null, notNowReason: null })
     const what = reasonOf(item) === 'your-pr' ? 'babysit it' : 'do a first pass'
     await rt.store.items.addDecision(item.id, { at: Date.now(), by: 'you', text: `Handed to Junior to ${what}${note ? `. Note: ${note}` : ''}` })
     log('info', 'handoff', `handed off ${item.id}: ${what}`, { workspace: rt.meta.id })
@@ -127,6 +128,67 @@ export async function notNowOp(rt: WorkspaceRuntime, raw: unknown): Promise<Work
   await rt.store.items.setFields(item.id, { notNow: item.updatedAt })
   tasksChanged(rt)
   return (await rt.store.items.get(item.id))!
+}
+
+// "Not this one", with a reason (core/junior/suggest.ts): the reason is kept on
+// the item; two matching reasons for one repo and kind add a suppression, kept
+// in one config value and listed in Junior's notebook. HTTP only: your own signal.
+
+const suppressWrites = new WeakMap<WorkspaceRuntime, Promise<unknown>>()
+
+/** One writer at a time per workspace, so two quick reasons can't drop one. */
+function serialSuppress<T>(rt: WorkspaceRuntime, fn: () => Promise<T>): Promise<T> {
+  const next = (suppressWrites.get(rt) ?? Promise.resolve()).catch(() => undefined).then(fn)
+  suppressWrites.set(rt, next)
+  return next
+}
+
+export async function readSuppressions(rt: WorkspaceRuntime): Promise<SuppressState> {
+  return readSuppressState(await rt.store.config.get<unknown>(SUPPRESS_KEY))
+}
+
+/** Every suppression in force, newest first. */
+export async function listSuppressionsOp(rt: WorkspaceRuntime): Promise<Suppression[]> {
+  return [...(await readSuppressions(rt)).suppressions].sort((a, b) => (a.since < b.since ? 1 : a.since > b.since ? -1 : 0))
+}
+
+/**
+ * Why not this one ({ itemId, reason }): kept on the item, with when. Answers
+ * the suppression it made, when it made one. Saying a reason also marks the
+ * item not this one, so a reason never arrives without its mark.
+ */
+export async function notNowReasonOp(rt: WorkspaceRuntime, raw: unknown, now = Date.now()): Promise<{ item: WorkItem; reason: NotNowReason; suppression: Suppression | null }> {
+  const item = await itemOf(rt, raw)
+  const reason = (raw as { reason?: unknown })?.reason
+  if (!isNotNowReason(reason)) throw new Error('reason must be not-mine, too-small or handled')
+  const at = new Date(now).toISOString()
+  const made = await serialSuppress(rt, async () => {
+    await rt.store.items.setFields(item.id, { notNow: item.notNow ?? item.updatedAt, notNowReason: { reason, at } })
+    const items = await rt.store.items.list()
+    const state = await readSuppressions(rt)
+    const out = afterReason(state, items, item.id)
+    if (out.made) await rt.store.config.set(SUPPRESS_KEY, out.state)
+    return out.made
+  })
+  await rt.store.items.addDecision(item.id, { at: now, by: 'you', text: `Not this one: ${REASON_WORDS[reason]}` })
+  log('info', 'handoff', `not this one, ${reason}: ${item.id}${made ? `; stopped suggesting ${made.key}` : ''}`, { workspace: rt.meta.id })
+  tasksChanged(rt)
+  return { item: (await rt.store.items.get(item.id))!, reason, suppression: made }
+}
+
+/** Clear one ({ key }): Junior suggests that kind in that repo again. */
+export async function clearSuppressionOp(rt: WorkspaceRuntime, raw: unknown, now = Date.now()): Promise<{ cleared: Suppression; suppressions: Suppression[] }> {
+  const key = (raw as { key?: unknown } | null)?.key
+  if (typeof key !== 'string' || !key.trim()) throw new Error('key is required')
+  const removed = await serialSuppress(rt, async () => {
+    const out = clearSuppression(await readSuppressions(rt), key, new Date(now).toISOString())
+    if (out.removed) await rt.store.config.set(SUPPRESS_KEY, out.state)
+    return out.removed
+  })
+  if (!removed) throw new Error(`nothing is suppressed for ${key}`)
+  log('info', 'handoff', `suggesting ${key} again`, { workspace: rt.meta.id })
+  tasksChanged(rt)
+  return { cleared: removed, suppressions: await listSuppressionsOp(rt) }
 }
 
 /** Whether a hand-off of this item can do anything now: reads the watch switches, never writes them. */

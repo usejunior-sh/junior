@@ -3,10 +3,10 @@
  * where it stands with Junior (core/work/handoff.ts), what Junior could take
  * on it (core/junior/suggest.ts), the babysit watch's read of your PR,
  * and whether its hand-off can do anything (a watch switched off reads
- * "watch-off"). Reads config only: the rules, the watch switches, and the
- * watch's last poll.
+ * "watch-off"). Reads config only: the rules, the watch switches, the
+ * watch's last poll, and the kinds you asked Junior to stop suggesting.
  */
-import { suggestionFor } from '../../core/junior/suggest.js'
+import { readSuppressState, suggestionFor, suppressedKeys, SUPPRESS_KEY } from '../../core/junior/suggest.js'
 import { ruleFor, RULES_KEY, rulesConfigFrom, rulesOf } from '../../core/rules/rules.js'
 import { handedOff, handoffReadiness, juniorWork, openedPr } from '../../core/work/handoff.js'
 import type { ItemTask } from '../../core/work/tasks.js'
@@ -16,10 +16,11 @@ import { watchesOn } from '../settings-ops.js'
 import type { WorkspaceRuntime } from '../workspace/runtime.js'
 
 export async function withJunior(rt: WorkspaceRuntime, ranked: ScoredItem[], tasks: ReadonlyMap<string, ItemTask[]>): Promise<void> {
-  const [rules, watch, switches] = await Promise.all([
+  const [rules, watch, switches, suppressed] = await Promise.all([
     rt.store.config.get(RULES_KEY).then((raw) => rulesOf(rulesConfigFrom(raw))),
     rt.store.config.get<BabysitWatchState>(BABYSIT_WATCH_KEY),
     watchesOn(rt),
+    rt.store.config.get<unknown>(SUPPRESS_KEY).then((raw) => suppressedKeys(readSuppressState(raw))),
   ])
   const byId = new Map(ranked.map((i) => [i.id, i]))
   // the draft PRs Junior opened, by the item it opened them from
@@ -44,6 +45,7 @@ export async function withJunior(rt: WorkspaceRuntime, ranked: ScoredItem[], tas
       ...(seen ? { seen } : {}),
       juniorPr: opened.has(i.id),
       rule: rule ? { playbook: rule.playbook, start: rule.start } : null,
+      suppressed,
     })
     if (s) i.suggestion = s
   }

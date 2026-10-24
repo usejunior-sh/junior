@@ -22,6 +22,24 @@ export type HandoffResponse =
   | { ok: true; item: import('../../core/work/types.js').WorkItem; readiness: import('../../core/work/handoff.js').HandoffReadiness }
   | { ok: false; error: string }
 
+export type { NotNowMark, NotNowReason, Suppression } from '../../core/junior/suggest.js'
+
+/**
+ * POST /api/handoff/reason { itemId, reason }: why not this one. The item as
+ * it is now, and the suppression the reason made, when it made one.
+ */
+export type NotNowReasonResponse =
+  | { ok: true; item: import('../../core/work/types.js').WorkItem; reason: import('../../core/junior/suggest.js').NotNowReason; suppression: import('../../core/junior/suggest.js').Suppression | null }
+  | { ok: false; error: string }
+
+/**
+ * GET /api/suggest/suppressions, POST /api/suggest/suppressions/clear { key }:
+ * the kinds Junior stopped suggesting, newest first; a clear answers the one it removed.
+ */
+export type SuppressionsResponse =
+  | { ok: true; suppressions: import('../../core/junior/suggest.js').Suppression[]; cleared?: import('../../core/junior/suggest.js').Suppression }
+  | { ok: false; error: string }
+
 /** GET/PUT /api/persona: the workspace's persona; PUT takes a partial patch. */
 export type PersonaResponse =
   | {

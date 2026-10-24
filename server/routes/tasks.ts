@@ -6,9 +6,9 @@ import { approvePlanOp, changePlanOp, sendReplyOp } from '../playbooks/ops.js'
 import { sendBotRepliesOp } from '../tasks/bot-replies.js'
 import { draftNudgeOp, sendNudgeOp } from '../tasks/nudge.js'
 import { startPlaybookOp } from '../rules-ops.js'
-import { handoffOp, isHandoffVerb } from '../handoff-ops.js'
+import { clearSuppressionOp, handoffOp, isHandoffVerb, listSuppressionsOp, notNowReasonOp } from '../handoff-ops.js'
 import type { ScopedCtx } from './ctx.js'
-import type { HandoffResponse, NudgeTaskResponse } from '../../shared/protocol.js'
+import type { HandoffResponse, NotNowReasonResponse, NudgeTaskResponse, SuppressionsResponse } from '../../shared/protocol.js'
 
 /**
  * Tasks on items (POST /api/tasks/<verb> {id, …}), first-pass reviews
@@ -58,6 +58,28 @@ export async function taskRoutes({ req, url, json, rt }: ScopedCtx): Promise<boo
     try {
       const { item, readiness } = await handoffOp(rt, ho, (await readJsonBody(req)) ?? {})
       json(200, { ok: true, item, readiness } satisfies HandoffResponse)
+    } catch (err) {
+      json(400, { ok: false, error: errText(err) })
+    }
+    return true
+  }
+  // Why not this one (server/handoff-ops.ts): the reason on the item, and a suppression after two matching ones.
+  if (url.pathname === '/api/handoff/reason' && req.method === 'POST') {
+    try {
+      json(200, { ok: true, ...(await notNowReasonOp(rt, (await readJsonBody(req)) ?? {})) } satisfies NotNowReasonResponse)
+    } catch (err) {
+      json(400, { ok: false, error: errText(err) })
+    }
+    return true
+  }
+  // The kinds Junior stopped suggesting: listed and cleared in Junior's notebook.
+  if (url.pathname === '/api/suggest/suppressions' && req.method === 'GET') {
+    json(200, { ok: true, suppressions: await listSuppressionsOp(rt) } satisfies SuppressionsResponse)
+    return true
+  }
+  if (url.pathname === '/api/suggest/suppressions/clear' && req.method === 'POST') {
+    try {
+      json(200, { ok: true, ...(await clearSuppressionOp(rt, (await readJsonBody(req)) ?? {})) } satisfies SuppressionsResponse)
     } catch (err) {
       json(400, { ok: false, error: errText(err) })
     }

@@ -135,6 +135,8 @@ export interface WorkItem {
   handoff?: import('./fields.js').Handoff
   /** "Not this one": the `updatedAt` it had then. Suggested again only once it changes. */
   notNow?: string
+  /** why you said not this one, when you said: not mine, too small, already handled (core/junior/suggest.ts) */
+  notNowReason?: import('../junior/suggest.js').NotNowMark
   /**
    * "Not useful" on a Needs you row: the quiet key it had then (core/junior/ledger.ts
    * quietKey). Off Needs you until the item's `updatedAt` or what Junior waits on moves.
