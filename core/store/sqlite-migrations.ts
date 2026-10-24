@@ -200,6 +200,34 @@ export const ACTIONS_TRACK_INDEX = 'CREATE INDEX IF NOT EXISTS idx_actions_kind_
  */
 export const ITEM_EVENTS_AT_INDEX = 'CREATE INDEX IF NOT EXISTS idx_item_events_at ON item_events(at)'
 
+/**
+ * Team runs (core/teams/engine-types.ts TeamRun; goals are team runs with
+ * `goal` set): one row per run, the run itself as JSON, plus the columns the
+ * lists read. `goal` is 0/1. `team_run_events` is append-only, keyed
+ * (run_id, seq). IF NOT EXISTS throughout: migration 39 and
+ * ensureDurableSchema both run it. The legacy `team_runs` config value is
+ * copied in by copyLegacyTeamRuns (core/store/sqlite-team-runs.ts), not here:
+ * the copy is guarded by its own marker, so it holds however the version
+ * counter got here.
+ */
+export const TEAM_RUNS_SCHEMA = `CREATE TABLE IF NOT EXISTS team_runs (
+     id         TEXT PRIMARY KEY,
+     status     TEXT NOT NULL,
+     goal       INTEGER NOT NULL DEFAULT 0,
+     created_at INTEGER NOT NULL,
+     updated_at INTEGER NOT NULL,
+     json       TEXT NOT NULL
+   );
+   CREATE INDEX IF NOT EXISTS idx_team_runs_status ON team_runs(status);
+   CREATE INDEX IF NOT EXISTS idx_team_runs_updated ON team_runs(updated_at DESC);
+   CREATE TABLE IF NOT EXISTS team_run_events (
+     run_id TEXT NOT NULL,
+     seq    INTEGER NOT NULL,
+     at     INTEGER NOT NULL,
+     json   TEXT NOT NULL,
+     PRIMARY KEY (run_id, seq)
+   );`
+
 export const MIGRATIONS: string[] = [
   `CREATE TABLE sessions (
      id             TEXT PRIMARY KEY,
@@ -571,4 +599,7 @@ export const MIGRATIONS: string[] = [
   // 38: the attention split (core/junior/attention.ts) reads item events by
   // window. Also converged by ensureDurableSchema.
   ITEM_EVENTS_AT_INDEX,
+  // 39: team runs get their own tables (core/store/sqlite-team-runs.ts). Also
+  // converged by ensureDurableSchema.
+  TEAM_RUNS_SCHEMA,
 ]

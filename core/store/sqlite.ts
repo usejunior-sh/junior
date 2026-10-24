@@ -22,6 +22,7 @@ import { SqliteItemTasks } from './sqlite-tasks.js'
 import { SqliteToday } from './sqlite-today.js'
 import { SqliteApprovals } from './sqlite-approvals.js'
 import { SqliteBrowserTabs } from './sqlite-browser-tabs.js'
+import { copyLegacyTeamRuns, SqliteTeamRuns } from './sqlite-team-runs.js'
 
 export function openSqliteStore(file: string): Store {
   if (file !== ':memory:') mkdirSync(path.dirname(file), { recursive: true })
@@ -32,6 +33,7 @@ export function openSqliteStore(file: string): Store {
   migrate(db)
   ensureDurableSchema(db)
   renameLegacyValues(db)
+  copyLegacyTeamRuns(db)
 
   return {
     sessions: new SqliteSessions(db),
@@ -53,6 +55,7 @@ export function openSqliteStore(file: string): Store {
     tasks: new SqliteItemTasks(db),
     approvals: new SqliteApprovals(db),
     browserTabs: new SqliteBrowserTabs(db),
+    teamRuns: new SqliteTeamRuns(db),
     close: async () => db.close(),
   }
 }

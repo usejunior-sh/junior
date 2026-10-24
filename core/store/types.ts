@@ -45,6 +45,7 @@ import type { AdvanceApproval } from '../approvals/approvals.js'
 import type { ColorScheme, Viewport } from '../browser/wire.js'
 import type { Decision, Handoff, ItemLabel, Playbook, Reason } from '../work/fields.js'
 import type { ItemTask, NewTask, TaskState } from '../work/tasks.js'
+import type { TeamRun } from '../teams/engine-types.js'
 
 export type StoredSession = {
   id: string
@@ -737,6 +738,34 @@ export interface BrowserTabStore {
   withProfile(profile: string): Promise<string[]>
 }
 
+/** One line of a team run's append-only log. `data` is whatever the caller wrote, as JSON. */
+export type TeamRunEvent<T = unknown> = {
+  runId: string
+  /** 1, 2, 3… per run, in the order appended */
+  seq: number
+  at: number
+  data: T
+}
+
+/**
+ * Team runs (core/teams/engine.ts), goals included: one row per run instead of
+ * one config value rewritten on every save. A run is open until it is `done`
+ * or `stopped` (TEAM_RUN_CLOSED_STATES in core/store/sqlite-team-runs.ts).
+ */
+export interface TeamRunStore {
+  /** Insert or replace the whole run. `at` is its updated_at. */
+  upsert(run: TeamRun, at: number): Promise<void>
+  get(id: string): Promise<TeamRun | null>
+  /** Every run not done or stopped, oldest first: what boot needs in memory. */
+  listOpen(): Promise<TeamRun[]>
+  /** The latest-touched runs, newest first. `goal` keeps only goals (true) or only plain team runs (false). */
+  listRecent(limit: number, opts?: { goal?: boolean }): Promise<TeamRun[]>
+  /** Append to the run's log; returns the line with its seq. */
+  appendEvent<T>(runId: string, data: T, at: number): Promise<TeamRunEvent<T>>
+  /** The run's log, oldest first. */
+  events(runId: string): Promise<TeamRunEvent[]>
+}
+
 export interface Store {
   sessions: SessionStore
   events: EventStore
@@ -757,5 +786,6 @@ export interface Store {
   tasks: ItemTaskStore
   approvals: ApprovalStore
   browserTabs: BrowserTabStore
+  teamRuns: TeamRunStore
   close(): Promise<void>
 }
