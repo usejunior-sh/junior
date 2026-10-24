@@ -106,8 +106,8 @@ const DOC_KINDS: readonly TabKind[] = ['item', 'artifact', 'job', 'job-form', 'c
 
 export function kindOfKey(key: string): TabKind | null {
   const cut = key.indexOf(':')
-  // A session is the one key with no prefix; the pinned Junior and inbox are not kinds.
-  if (cut === -1) return key === 'inbox' || key === 'junior' ? null : 'session'
+  // A session is the one key with no prefix; Junior's page is not a tab kind.
+  if (cut === -1) return key === 'inbox' ? 'inbox' : key === 'junior' ? null : 'session'
   const p = key.slice(0, cut)
   if (p === 'term') return 'terminal'
   if (p === 'draft') return 'draft'
@@ -131,6 +131,7 @@ export const GENERIC: Record<TabKind, string> = {
   'job-form': 'Job',
   change: 'File',
   run: 'Team run',
+  inbox: 'Inbox',
 }
 
 /**

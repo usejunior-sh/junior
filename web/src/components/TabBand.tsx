@@ -19,6 +19,7 @@ import {
   X,
   XCircle,
   type LucideProps,
+  Inbox,
 } from 'lucide-react'
 import {
   useCallback,
@@ -56,7 +57,7 @@ const homely = (p: string) => p.replace(/^\/(?:Users|home)\/[^/]+/, '~')
  * would be lost; the rest are *documents*, which is why only they are ever
  * peeked at rather than pinned.
  */
-export type TabKind = 'session' | 'terminal' | 'draft' | 'item' | 'artifact' | 'job' | 'job-form' | 'change' | 'run'
+export type TabKind = 'session' | 'terminal' | 'draft' | 'item' | 'artifact' | 'job' | 'job-form' | 'change' | 'run' | 'inbox'
 
 const ICON: Record<TabKind, ComponentType<LucideProps>> = {
   session: MessageSquare,
@@ -68,6 +69,7 @@ const ICON: Record<TabKind, ComponentType<LucideProps>> = {
   'job-form': CalendarClock,
   change: FileDiff,
   run: FolderOpen,
+  inbox: Inbox,
 }
 
 export type OpenTab = {

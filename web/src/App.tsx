@@ -277,6 +277,11 @@ export function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentId, conn, openTab])
 
+  // Inbox is a regular tab: opening it pins it, and it can be closed.
+  useEffect(() => {
+    if (route.page === 'inbox') openTab('inbox')
+  }, [route.page, openTab])
+
   const { respond, sendMessage, setPlanning, setUltracode, setModel, setFastMode, interrupt, stopAgent, stopShell, backgroundAgent, messageAgent, renameSession, setPinned, deleteSession, newSession, newSessionIn, discardDraft, syncInbox, openItem } = useSessionActions({ currentId, currentDraftId, navigate, closeTab })
 
   const { newTerminal, newTerminalIn, renameTerminal, closeTerminal, terminalCwd } = useTerminalActions({ closeTab, currentTerminalId, terminals, navigate, current, currentTerminal, currentDraft })
@@ -396,6 +401,7 @@ export function App() {
             ? [{ key, kind: 'terminal', title: t.title, color: projectColor(t.projectId ?? t.cwd), running: t.status === 'running', ...worktreeTag(t.checkoutId) }]
             : []
         }
+        if (key === 'inbox') return [{ key, kind: 'inbox', title: 'Inbox', color: 'var(--stone)', running: false }]
         if (isDocKey(key)) {
           const t = docTab(key)
           return t ? [t] : []
