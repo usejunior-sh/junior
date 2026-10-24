@@ -31,6 +31,7 @@ import { kindIcon, shortAge } from '../itemUi.js'
 import { JuniorBrief } from './JuniorBrief.js'
 import { JuniorFace } from './JuniorFace.js'
 import { NeedsLine } from './JuniorToday.js'
+import { ReadyChips } from './ReadyChips.js'
 import { SnoozeMenu } from './SnoozeMenu.js'
 import { WatchOffNote, type WatchOffNoteState } from './WatchOff.js'
 
@@ -527,7 +528,7 @@ export function JuniorWith({ day, onNavigate }: { day: JuniorDay | null } & Nav)
         item={i}
         lead={<Dot tone={w.stage === 'needs-you' ? 'need' : w.stage === 'paused' ? 'paused' : w.stage === 'handed-in' ? 'ok' : 'live'} />}
         meta={joined([refOf(i), ...(i.playbook ? [PLAYBOOK_WORD[i.playbook] ?? i.playbook] : []), ...(i.tasks?.lastDone && w.stage === 'handed-in' ? [i.tasks.lastDone] : [])])}
-        mid={w.pipeline ? <PipelineBars p={w.pipeline} /> : <span className="state">{watchLine(i)}</span>}
+        mid={w.pipeline ? <PipelineBars p={w.pipeline} /> : handBackLine(i) && !watchOffOf(i) && i.seen?.ready ? <ReadyChips ready={i.seen.ready} evidence={false} /> : <span className="state">{watchLine(i)}</span>}
         onNavigate={onNavigate}
       >
         {prWaits && (

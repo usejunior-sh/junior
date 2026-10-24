@@ -21,6 +21,7 @@
 import type { Group, ScoredItem } from '../work/types.js'
 import { watchFor, type WatchId } from '../work/handoff.js'
 import { WATCH_CANT_CHIP, WATCH_OFF_CHIP } from './watch-off.js'
+import { readyLine, type Readiness } from '../babysit/ready.js'
 
 export type LedgerTab = 'needs' | 'up' | 'reviews' | 'prs' | 'with' | 'waiting'
 export type LedgerGroup = 'waiting' | 'stuck' | 'cycle' | 'fyi'
@@ -38,7 +39,7 @@ const OF_GROUP: Record<Group, LedgerGroup> = { blocking: 'waiting', 'blocked-sta
 
 type Item = Pick<
   ScoredItem,
-  'id' | 'kind' | 'reason' | 'group' | 'score' | 'handoff' | 'junior' | 'tasks' | 'suggestion' | 'flow' | 'peopleWaiting' | 'updatedAt' | 'notUseful'
+  'id' | 'kind' | 'reason' | 'group' | 'score' | 'handoff' | 'junior' | 'tasks' | 'suggestion' | 'flow' | 'peopleWaiting' | 'updatedAt' | 'notUseful' | 'seen'
 >
 
 /** Where an item sits in Up next: the scorer's group. */
@@ -142,10 +143,19 @@ const idleBehindSwitch = (i: Item): boolean => {
 }
 
 /**
+ * The hand-back gate the babysit watch last read on your PR
+ * (core/babysit/ready.ts): the open card's Ready line. Null on anything
+ * that isn't your PR, or before the watch has read it.
+ */
+export const readyOf = (i: Pick<Item, 'reason' | 'seen'>): Readiness | null => (i.reason === 'your-pr' ? (i.seen?.ready ?? null) : null)
+
+/**
  * Junior's state in a word or two, in sky; `quiet` greys it out (nothing for
  * you to do there). Empty when Junior has nothing to say about the item.
+ * `ready` is set on a PR Junior watches whose gate it has read: the row draws
+ * it as a pill, and `text` is the full line for the row's accessible name.
  */
-export function juniorState(i: Item): { text: string; quiet: boolean } {
+export function juniorState(i: Item): { text: string; quiet: boolean; ready?: Readiness } {
   const say = (text: string, quiet = false) => ({ text, quiet })
   if (i.handoff === 'paused' || i.junior?.stage === 'paused') return say('Paused', true)
   if (i.junior?.stage === 'needs-you') return say('Paused on you')
@@ -164,7 +174,11 @@ export function juniorState(i: Item): { text: string; quiet: boolean } {
     return say('Set aside', true)
   }
   if (i.junior?.stage === 'working') return say('Working')
-  if (i.junior?.stage === 'watching') return say(i.reason === 'your-pr' ? 'Babysitting' : 'Watching', true)
+  if (i.junior?.stage === 'watching') {
+    const ready = readyOf(i)
+    if (ready) return { text: readyLine(ready), quiet: !ready.ready, ready }
+    return say(i.reason === 'your-pr' ? 'Babysitting' : 'Watching', true)
+  }
   if (i.junior?.stage === 'handed-in') return say('Handed in', true)
   if (i.handoff === 'on') return say('On it')
   if (i.suggestion) return say(i.suggestion.playbook === 'babysit' ? 'Can babysit' : i.suggestion.playbook === 'review' ? 'Can first-pass' : 'Can take')

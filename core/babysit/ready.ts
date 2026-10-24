@@ -52,6 +52,11 @@ export type ReadyPr = {
   behind: boolean
 }
 
+/** The labels for a fact still settling, not yet a thing left to fix: CI running, no CI yet, merge unknown. */
+export const CI_RUNNING = 'CI running'
+export const NO_CI_YET = 'no CI yet'
+export const MERGE_UNKNOWN = 'merge unknown'
+
 const short = (sha: string) => sha.slice(0, 7)
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
 const names = (xs: readonly string[], max = 3) => (xs.length > max ? `${xs.slice(0, max).join(', ')} and ${xs.length - max} more` : xs.join(', '))
@@ -63,7 +68,7 @@ function ciCheck(pr: ReadyPr): ReadyCheck {
   const checksUrl = at(pr.url, '/checks')
   const red = pr.checks.filter((c) => c.status === 'failure')
   const pending = pr.checks.filter((c) => c.status === 'pending')
-  if (pr.checks.length === 0) return { id: 'ci', ok: false, label: 'no CI yet', evidence: `No check has reported on ${sha} yet.`, url: checksUrl }
+  if (pr.checks.length === 0) return { id: 'ci', ok: false, label: NO_CI_YET, evidence: `No check has reported on ${sha} yet.`, url: checksUrl }
   if (red.length > 0)
     return {
       id: 'ci',
@@ -76,7 +81,7 @@ function ciCheck(pr: ReadyPr): ReadyCheck {
     return {
       id: 'ci',
       ok: false,
-      label: 'CI running',
+      label: CI_RUNNING,
       evidence: `${pending.length} of ${plural(pr.checks.length, 'check')} still running on ${sha}: ${names(pending.map((c) => c.name))}.`,
       url: pending[0]!.url ?? checksUrl,
     }
@@ -95,7 +100,7 @@ function mergeableCheck(pr: ReadyPr): ReadyCheck {
   const url = at(pr.url)
   if (pr.mergeable === 'MERGEABLE') return { id: 'mergeable', ok: true, label: 'no conflicts', evidence: `Merges cleanly into ${pr.baseRef}.`, url }
   if (pr.mergeable === 'CONFLICTING') return { id: 'mergeable', ok: false, label: 'conflicts', evidence: `Conflicts with ${pr.baseRef}.`, url }
-  return { id: 'mergeable', ok: false, label: 'merge unknown', evidence: `GitHub hasn't worked out yet whether it merges into ${pr.baseRef}.`, url }
+  return { id: 'mergeable', ok: false, label: MERGE_UNKNOWN, evidence: `GitHub hasn't worked out yet whether it merges into ${pr.baseRef}.`, url }
 }
 
 function behindCheck(pr: ReadyPr): ReadyCheck {
@@ -132,3 +137,39 @@ export function handBackLine(i: { reason: string; junior?: { stage: string } | u
   if (i.reason !== 'your-pr' || i.junior?.stage !== 'watching' || !i.seen?.ready) return null
   return readyLine(i.seen.ready)
 }
+
+/**
+ * How a chip reads on screen (web/src/components/ReadyChips.tsx):
+ *
+ *   ok     passes
+ *   wait   still settling (CI running, no CI yet, merge unknown): not yours, never orange
+ *   left   something left to do, in ink
+ *   needs  left, on an item that is on Needs you: the only orange
+ */
+export type ChipTone = 'ok' | 'wait' | 'left' | 'needs'
+
+export function chipTone(c: Pick<ReadyCheck, 'ok' | 'label'>, needsYou: boolean): ChipTone {
+  if (c.ok) return 'ok'
+  if (c.label === CI_RUNNING || c.label === NO_CI_YET || c.label === MERGE_UNKNOWN) return 'wait'
+  return needsYou ? 'needs' : 'left'
+}
+
+/**
+ * The closed row's one pill: "Ready", or the first thing left in line order
+ * plus how many more ("lint red" +1). Never orange: the closed row shows it
+ * only while Junior is watching, which is never Needs you.
+ */
+export function readySummary(r: Pick<Readiness, 'ready' | 'checks'>): { label: string; tone: ChipTone; more: number } {
+  const left = r.checks.filter((c) => !c.ok)
+  if (r.ready || left.length === 0) return { label: 'Ready', tone: 'ok', more: 0 }
+  return { label: left[0]!.label, tone: chipTone(left[0]!, false), more: left.length - 1 }
+}
+
+/** A chip's link, only when it is a plain https URL: anything else draws as text, never a link. */
+export const chipHref = (c: Pick<ReadyCheck, 'url'>): string | null => (c.url && /^https:\/\/[^\s]+$/i.test(c.url) ? c.url : null)
+
+/** The evidence a chip shows under the chips: one that isn't passing, or one with no link to open. */
+export const showsEvidence = (c: Pick<ReadyCheck, 'ok' | 'url'>): boolean => !c.ok || !chipHref(c)
+
+/** Junior's sentence under the chips, while it watches the PR: the chips already say which. */
+export const handBackSays = (r: Pick<Readiness, 'ready'>): string => (r.ready ? 'Ready for review. All four checks pass.' : "Not ready yet. I'll hand it back when all four pass.")

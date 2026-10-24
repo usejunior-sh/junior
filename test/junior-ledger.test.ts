@@ -4,7 +4,7 @@
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { ageHot, cantWatchOf, juniorState, ledgerCount, ledgerProgress, ledgerRows, NOT_USEFUL_HOLD_MAX_MS, NOT_USEFUL_NOTICE_MS, NOT_USEFUL_UNDO_MS, personWaits, quieted, quietKey, watchOffOf } from '../core/junior/ledger.js'
+import { ageHot, cantWatchOf, juniorState, readyOf, ledgerCount, ledgerProgress, ledgerRows, NOT_USEFUL_HOLD_MAX_MS, NOT_USEFUL_NOTICE_MS, NOT_USEFUL_UNDO_MS, personWaits, quieted, quietKey, watchOffOf } from '../core/junior/ledger.js'
 import { capText, capsFrom, markWatchOn, turnOnTitle, usd, withAnswer } from '../core/junior/watch-off.js'
 import type { HandoffReadiness, WorkStage } from '../core/work/handoff.js'
 import type { ScoredItem } from '../core/work/types.js'
@@ -213,4 +213,45 @@ test('not useful: an Undo on screen is always one the server takes', () => {
   assert.ok(NOT_USEFUL_HOLD_MAX_MS >= NOT_USEFUL_NOTICE_MS)
   // the cap ends well inside the server's window: slack for the round trip and a slow clock
   assert.ok(NOT_USEFUL_UNDO_MS - NOT_USEFUL_HOLD_MAX_MS >= 5_000)
+})
+
+// ---------- readiness on the row (ready-because-ui) ----------
+
+const gate = (ready: boolean) =>
+  ({
+    ready,
+    sha: 'abc1234',
+    checks: [
+      { id: 'ci', ok: true, label: 'CI green', evidence: '2 checks passed on abc1234.', url: 'https://github.com/acme/web/pull/1/checks' },
+      { id: 'threads', ok: ready, label: ready ? '0 threads' : '1 thread open', evidence: ready ? 'No review threads.' : 'Open: priya on db.ts.', url: 'https://github.com/acme/web/pull/1' },
+      { id: 'mergeable', ok: true, label: 'no conflicts', evidence: 'Merges cleanly into main.', url: 'https://github.com/acme/web/pull/1' },
+      { id: 'behind', ok: true, label: 'up to date', evidence: 'Not behind main.', url: 'https://github.com/acme/web/pull/1' },
+    ],
+  }) as const
+const seenWith = (ready: boolean) => ({ red: [], bots: 0, people: ready ? 0 : 1, rebase: null, draft: false, ready: gate(ready) }) as unknown as ScoredItem['seen']
+
+test('readyOf: the gate on your own PR only, once the watch has read it', () => {
+  const mine = item('pr', { kind: 'own-pr-open', reason: 'your-pr', seen: seenWith(true) })
+  assert.equal(readyOf(mine)?.ready, true)
+  assert.equal(readyOf({ ...mine, seen: undefined }), null)
+  assert.equal(readyOf({ ...mine, reason: 'review-requested' }), null)
+})
+
+test('juniorState: a watched PR with a read gate carries it, with the full line for the row label', () => {
+  const pr = item('pr', { kind: 'own-pr-open', reason: 'your-pr', handoff: 'on', junior: { stage: 'watching' } })
+  const ready = juniorState({ ...pr, seen: seenWith(true) })
+  assert.equal(ready.text, 'Ready because: CI green · 0 threads · no conflicts · up to date')
+  assert.equal(ready.quiet, false)
+  assert.equal(ready.ready?.ready, true)
+  const left = juniorState({ ...pr, seen: seenWith(false) })
+  assert.equal(left.text, 'Not ready: 1 thread open')
+  assert.equal(left.quiet, true)
+  // before the first read: the word it always said
+  assert.deepEqual(juniorState(pr), { text: 'Babysitting', quiet: true })
+  // paused, needs you and a first pass still win over the gate
+  assert.deepEqual(juniorState({ ...pr, handoff: 'paused', seen: seenWith(true) }), { text: 'Paused', quiet: true })
+  assert.deepEqual(juniorState({ ...pr, junior: { stage: 'needs-you' }, seen: seenWith(false) }), { text: 'Paused on you', quiet: false })
+  assert.equal(juniorState({ ...pr, junior: { stage: 'working' }, seen: seenWith(true) }).ready, undefined)
+  // not handed off: no pill, the suggestion's word
+  assert.equal(juniorState({ ...pr, handoff: undefined, junior: undefined, seen: seenWith(true), suggestion: { playbook: 'babysit', head: '', would: '', tier: 2 } }).text, 'Can babysit')
 })

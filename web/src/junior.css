@@ -453,6 +453,12 @@ button.jlTitle:hover { text-decoration: underline; text-decoration-color: var(--
 .jhRow .tc .tt.ref { font-family: var(--mono); font-size: 0.9231rem; color: var(--ash); }
 .jhRow .jrc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.9615rem; color: var(--blue); }
 .jhRow .jrc.quiet { color: var(--ash); }
+/* the closed row's readiness pill (ReadyChips.tsx ReadySummary): the pill ellipsizes before its +N does */
+.jhRow .jrc.rdyCol { display: flex; align-items: center; min-width: 0; }
+.rdySum { display: flex; align-items: center; min-width: 0; max-width: 100%; }
+.rdySum .rdyChip { min-width: 0; max-width: 100%; }
+.rdySum .rdyChip .l { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.rdyMore { flex: none; margin-left: 6px; font-family: var(--mono); font-size: 0.8077rem; color: var(--ash); }
 .jhRow .prog { display: block; height: 3px; border-radius: 3px; background: var(--hair-strong); overflow: hidden; }
 .jhRow .prog i { display: block; height: 100%; background: var(--blue); }
 .jhRow .wh { display: flex; gap: 7px; align-items: center; min-width: 0; font-family: var(--mono); font-size: 0.9231rem; color: var(--ash); white-space: nowrap; }
@@ -486,6 +492,28 @@ button.jlTitle:hover { text-decoration: underline; text-decoration-color: var(--
 .jhXp .ev .mono { font-family: var(--mono); font-size: 0.9231rem; color: var(--ash); }
 .jhXp .ev a { display: inline-flex; align-items: center; gap: 4px; color: var(--blue); }
 .jhXp .ev a:hover { text-decoration: underline; }
+/* "Ready because…" (ReadyChips.tsx): four hairline pills in mono, each a link to its evidence; orange only on t-needs */
+.rdyWrap { display: block; min-width: 0; }
+.rdy { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.rdy li { display: flex; }
+.rdyChip {
+  display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 8px; border: 1px solid var(--hair-strong); border-radius: var(--r-full);
+  background: transparent; font-family: var(--mono); font-size: 0.8462rem; line-height: 1; white-space: nowrap; color: var(--ink);
+}
+.rdyChip.sm { height: 20px; font-size: 0.8077rem; }
+.rdyChip .g { flex: none; }
+.rdyChip.t-ok { color: var(--charcoal); }
+.rdyChip.t-ok .g { color: var(--green); }
+.rdyChip.t-wait { color: var(--ash); border-color: var(--hair); }
+.rdyChip.t-wait .g { color: var(--ash); }
+.rdyChip.t-left .g { color: var(--mute); }
+.rdyChip.t-needs, .rdyChip.t-needs .g { color: var(--orange); }
+.rdyChip.t-needs { border-color: var(--edge-orange); }
+a.rdyChip { cursor: pointer; text-decoration: none; }
+a.rdyChip:hover { border-color: var(--hair-bright); color: var(--ink); }
+a.rdyChip.t-needs:hover { border-color: var(--edge-orange-hi); color: var(--orange); }
+a.rdyChip:focus-visible { outline: 1px solid var(--hair-bright); outline-offset: 1px; }
+.rdyEv { display: block; margin-top: 6px; color: var(--charcoal); overflow-wrap: anywhere; }
 .jhXp .said { color: var(--body); }
 .jhXp .acts { grid-column: 2; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 2px; }
 .jhXp .acts .btn { gap: 6px; }
@@ -545,6 +573,9 @@ button.jlTitle:hover { text-decoration: underline; text-decoration-color: var(--
   /* main's run drops to its own line, with a full tap target */
   .jhXp .ev { display: block; }
   .jhXp .ev a { display: flex; min-height: 36px; width: fit-content; }
+  /* readiness chips: whole pills wrap, each a full tap target */
+  .rdy { gap: 8px; }
+  .rdy .rdyChip { height: auto; min-height: 32px; padding: 0 10px; }
   .jhXp .acts .cap { flex-basis: 100%; order: 9; }
   .jhXp .keys, .jhKeys, .jhKbd { display: none; }
   .jhXp .acts .nuPhone { display: inline-flex; }

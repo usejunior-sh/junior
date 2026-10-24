@@ -9,7 +9,7 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { handBackLine, readiness, readyAt, readyLine, READY_CHECK_IDS, type ReadyCheckId, type ReadyPr } from '../core/babysit/ready.js'
+import { chipHref, chipTone, handBackLine, handBackSays, readiness, readyAt, readyLine, readySummary, READY_CHECK_IDS, showsEvidence, type ChipTone, type ReadyCheckId, type ReadyPr } from '../core/babysit/ready.js'
 import { babysitEvents, decide, newBabysitWatch, seenOf } from '../core/babysit/watch.js'
 import type { BabysitPr } from '../core/babysit/pr.js'
 import type { PrCheck, PrThread } from '../core/goals/shepherd.js'
@@ -168,4 +168,53 @@ test('the tick: the gate rides on each PR it read, and gates the request', async
     await store.close()
     rmSync(dir, { recursive: true, force: true })
   }
+})
+
+// ---------- the chips (ready-because-ui) ----------
+
+test('chip tone: passing, settling, left, and orange only on Needs you', () => {
+  const ci = (over: Partial<ReadyPr>) => readiness(at(over)).checks[0]!
+  const rows: [string, ReturnType<typeof ci>, ChipTone, ChipTone][] = [
+    ['CI green', ci({}), 'ok', 'ok'],
+    ['lint red', ci({ checks: [check('lint', 'failure')] }), 'left', 'needs'],
+    ['CI running', ci({ checks: [check('e2e', 'pending')] }), 'wait', 'wait'],
+    ['no CI yet', ci({ checks: [] }), 'wait', 'wait'],
+    ['merge unknown', readiness(at({ mergeable: 'UNKNOWN' })).checks[2]!, 'wait', 'wait'],
+    ['conflicts', readiness(at({ mergeable: 'CONFLICTING' })).checks[2]!, 'left', 'needs'],
+    ['thread open', readiness(at({ threads: [thread()] })).checks[1]!, 'left', 'needs'],
+    ['behind main', readiness(at({ behind: true })).checks[3]!, 'left', 'needs'],
+  ]
+  for (const [name, c, off, on] of rows) {
+    assert.equal(chipTone(c, false), off, `${name}, not on Needs you`)
+    assert.equal(chipTone(c, true), on, `${name}, on Needs you`)
+  }
+})
+
+test('closed-row summary: Ready, or the first thing left in line order plus how many more', () => {
+  assert.deepEqual(readySummary(readiness(green)), { label: 'Ready', tone: 'ok', more: 0 })
+  assert.deepEqual(readySummary(readiness(at({ checks: [check('lint', 'failure')], threads: [thread()] }))), { label: 'lint red', tone: 'left', more: 1 })
+  assert.deepEqual(readySummary(readiness(at({ threads: [thread()], behind: true, mergeable: 'CONFLICTING' }))), { label: '1 thread open', tone: 'left', more: 2 })
+  // settling reads ash, never orange, even first in line
+  assert.deepEqual(readySummary(readiness(at({ checks: [check('e2e', 'pending')] }))), { label: 'CI running', tone: 'wait', more: 0 })
+})
+
+test('every chip on a real read links to its evidence over https', () => {
+  const r = readiness(at({ checks: [check('lint', 'failure', { url: 'https://ci/lint' })], threads: [thread({ url: 'https://github.com/acme/api/pull/12#discussion_r1' })] }))
+  assert.deepEqual(r.checks.map(chipHref), ['https://ci/lint', 'https://github.com/acme/api/pull/12#discussion_r1', URL, URL])
+  assert.deepEqual(readiness(green).checks.map(chipHref), [`${URL}/checks`, URL, URL, URL])
+})
+
+test('a chip with no link, or a link that is not https, draws as text and shows its evidence', () => {
+  for (const url of [null, '', 'javascript:alert(1)', 'http://github.com/x', 'https://a b']) {
+    const c = { ok: true, url }
+    assert.equal(chipHref(c), null, String(url))
+    assert.equal(showsEvidence(c), true, String(url))
+  }
+  assert.equal(showsEvidence({ ok: true, url: URL }), false)
+  assert.equal(showsEvidence({ ok: false, url: URL }), true)
+})
+
+test("Junior's line under the chips says what happens next, not which checks", () => {
+  assert.equal(handBackSays(readiness(green)), 'Ready for review. All four checks pass.')
+  assert.equal(handBackSays(readiness(at({ threads: [thread()] }))), "Not ready yet. I'll hand it back when all four pass.")
 })

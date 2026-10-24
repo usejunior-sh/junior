@@ -20,8 +20,8 @@ import type { HandoffReadiness, NeedsRow, RowMove, ScoredItem, WatchId } from '.
 import { enterVerb, rowLabel, rowMove, type RowLine } from '../../../core/junior/row-move.js'
 import { needsMoveText } from '../../../core/junior/needs.js'
 import { isMainRed, MAIN_RED_SAYS, mainRedEvidence } from '../../../core/junior/main-red.js'
-import { handBackLine } from '../../../core/babysit/ready.js'
-import { ageHot, cantWatchOf, juniorState, LEDGER_GROUP_TITLE, ledgerGroup, ledgerProgress, ledgerRows, NOT_USEFUL_HOLD_MAX_MS, NOT_USEFUL_NOTICE_MS, watchOffOf, type LedgerGroup, type LedgerTab } from '../../../core/junior/ledger.js'
+import { handBackLine, handBackSays } from '../../../core/babysit/ready.js'
+import { ageHot, cantWatchOf, juniorState, onNeeds, readyOf, LEDGER_GROUP_TITLE, ledgerGroup, ledgerProgress, ledgerRows, NOT_USEFUL_HOLD_MAX_MS, NOT_USEFUL_NOTICE_MS, watchOffOf, type LedgerGroup, type LedgerTab } from '../../../core/junior/ledger.js'
 import { TURN_ON_LABEL, WATCH_CANT_SAYS, WATCH_OFF_SAYS, WATCH_STILL_OFF, withAnswer } from '../../../core/junior/watch-off.js'
 import { itemHash } from '../hooks.js'
 import { doneItem, markNotUseful, sendHandoff, snoozeItem, turnOnWatch, undoNotUseful, VERB, type HandoffVerb } from '../handoff.js'
@@ -29,6 +29,7 @@ import { anyDialogOpen, isGoSequence, isTypingTarget } from '../keys.js'
 import { kindIcon, shortAge } from '../itemUi.js'
 import { isMobile, useIsMobile } from '../useMobile.js'
 import { JuniorFace } from './JuniorFace.js'
+import { ReadyChips, ReadySummary } from './ReadyChips.js'
 import { SnoozeMenu } from './SnoozeMenu.js'
 import { TurnOnButton, WatchCap } from './WatchOff.js'
 
@@ -164,9 +165,9 @@ function juniorSays(i: ScoredItem): string {
   if (r?.state === 'queued') return 'Queued for a first pass.'
   if (r?.state === 'failed') return 'I got stuck on the first pass. Open it to see why.'
   if (r?.line) return r.line
-  // nothing under way: ready only when the gate passes, else what's left (core/babysit/ready.ts)
-  const back = handBackLine(i)
-  if (back) return `${back}.`
+  // nothing under way: ready only when the gate passes, else what's left (core/babysit/ready.ts).
+  // The card's Ready line shows which checks; Junior says what happens next.
+  if (handBackLine(i) && i.seen?.ready) return handBackSays(i.seen.ready)
   if (i.tasks?.line) return i.tasks.line
   if (i.junior?.stage === 'watching') return i.reason === 'your-pr' ? 'Babysitting. Nothing to do right now.' : 'Watching for changes.'
   if (i.junior?.stage === 'handed-in') return i.tasks?.lastDone ?? 'Done for now.'
@@ -573,6 +574,7 @@ function ItemLine({
   const who = whoOf(i, me)
   const Icon = kindIcon(i)
   const st = juniorState(i)
+  const ready = readyOf(i)
   const p = ledgerProgress(i)
   const hot = ageHot(i)
   const primary = primaryOf(i, move, act, onOpen, turnOn)
@@ -612,7 +614,13 @@ function ItemLine({
             <i style={{ width: `${Math.round(p * 100)}%` }} />
           </span>
         ) : (
-          <span className={`jrc${st.quiet ? ' quiet' : ''}`}>{st.text}</span>
+          st.ready ? (
+            <span className="jrc rdyCol" title={st.text}>
+              <ReadySummary ready={st.ready} />
+            </span>
+          ) : (
+            <span className={`jrc${st.quiet ? ' quiet' : ''}`}>{st.text}</span>
+          )
         )}
         <span className="wh">
           {refOf(i) && (
@@ -634,6 +642,12 @@ function ItemLine({
             {contextOf(i)}
             <MainRedLine i={i} />
           </span>
+          {ready && (
+            <>
+              <span className="lbl">Ready</span>
+              <ReadyChips ready={ready} needsYou={onNeeds(i)} />
+            </>
+          )}
           <span className="lbl jr">Junior</span>
           <span className="said">{juniorSays(i)}</span>
           <div className="acts">
