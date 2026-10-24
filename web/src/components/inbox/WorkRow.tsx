@@ -114,7 +114,7 @@ function rowState(item: ScoredItem, brief: { label: string; tone: string } | nul
   if (!f) return { text: brief?.label ?? (ASKS[item.ask] ?? ASKS.read).name, tone: brief ? brief.tone : `ask-${item.ask}` }
   if (f.broken) return { text: cap(f.broken), tone: 'flow-broken' }
   if (f.turn === 'me') return f.next ? { text: cap(f.next), tone: 'flow-ask' } : { text: (ASKS[item.ask] ?? ASKS.read).name, tone: `ask-${item.ask}` }
-  if (f.turn === 'ai') return { text: f.stage === 'briefing' ? (brief?.label === 'brief queued' ? 'Brief queued' : 'Briefing…') : 'AI working', tone: 'flow-ai' }
+  if (f.turn === 'ai') return { text: f.stage === 'briefing' ? (brief?.label === 'brief queued' ? 'Brief queued' : 'Briefing…') : TURN_LABEL.ai, tone: 'flow-ai' }
   if (f.turn === 'others') return { text: f.note ? f.note : 'Waiting', tone: 'flow-others' }
   return { text: STAGE_LABEL[f.stage], tone: 'flow-none' }
 }

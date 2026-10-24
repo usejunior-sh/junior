@@ -93,13 +93,18 @@ export type TeamRecipe = {
  * How much a team's workers do without asking, chosen per run on the card:
  * - `ask`, the builder's file edits run; every shell command asks you
  * - `local`, edits and shell commands run; anything that leaves this machine is held for you
- * - `everything`. Nothing asks and nothing is held
- * In every mode a worker's push, PR or comment from the shell is refused (`everything` aside):
+ * `everything`, from older files and runs, is read as `local`: a send always waits for you.
+ * In every mode a worker's push, PR or comment from the shell is refused:
  * the team hands work in, it never sends it.
  */
-export type TeamPermissions = 'ask' | 'local' | 'everything'
-export const TEAM_PERMISSIONS: TeamPermissions[] = ['ask', 'local', 'everything']
+export type TeamPermissions = 'ask' | 'local'
+export const TEAM_PERMISSIONS: TeamPermissions[] = ['ask', 'local']
 export const isTeamPermissions = (v: unknown): v is TeamPermissions => TEAM_PERMISSIONS.includes(v as TeamPermissions)
+/** A stored or written level, read as one the card offers: `everything` (retired) is `local`, anything else unknown is null. */
+export function teamPermissionsFrom(v: unknown): TeamPermissions | null {
+  if (v === 'everything') return 'local'
+  return isTeamPermissions(v) ? v : null
+}
 
 export type Effort = 'low' | 'medium' | 'high' | 'xhigh' | 'max'
 const EFFORTS: Effort[] = ['low', 'medium', 'high', 'xhigh', 'max']
@@ -310,8 +315,8 @@ export function parseRecipe(name: string, file: string): ParsedRecipe {
 
   let permissions: TeamPermissions | null = null
   if (data.permissions !== undefined) {
-    const p = text(data.permissions)
-    if (!isTeamPermissions(p)) errors.push(`permissions must be one of ${TEAM_PERMISSIONS.join(', ')}`)
+    const p = teamPermissionsFrom(text(data.permissions))
+    if (!p) errors.push(`permissions must be one of ${TEAM_PERMISSIONS.join(', ')}`)
     else permissions = p
   }
 

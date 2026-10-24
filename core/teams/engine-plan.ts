@@ -1,4 +1,4 @@
-import { type RecipeStep, type TeamRecipe, taskLoop, CHECKS, isTeamPermissions, LEAD } from './recipe.js'
+import { type RecipeStep, type TeamRecipe, taskLoop, CHECKS, teamPermissionsFrom, LEAD } from './recipe.js'
 import type { CardStep, Finding, GoalHorizonKind, Handoff, PlanTask, ResumeBy, RunGoal, RunGoalHorizon, Slice, TaskStatus, TeamCard, TeamRun, Worker } from './engine-types.js'
 import type { SessionEvent } from '../../shared/protocol.js'
 
@@ -57,8 +57,9 @@ export function normalizeRun(run: TeamRun): TeamRun {
   run.card.tasks ??= []
   run.card.decisions ??= []
   // Runs from before the choice existed ran as `ask` does now.
-  run.card.permissions ??= 'local'
-  run.recipe.permissions ??= null
+  // `everything` is retired: it always ran as `local` (server/session/live-session.ts).
+  run.card.permissions = teamPermissionsFrom(run.card.permissions) ?? 'local'
+  run.recipe.permissions = teamPermissionsFrom(run.recipe.permissions)
   run.recipe.fast ??= null
   run.card.fast ??= false
   run.task ??= null
@@ -163,7 +164,7 @@ export function cardFrom(raw: unknown, recipe: TeamRecipe, prev?: TeamCard): Tea
     steps,
     budgetUsd: Number.isFinite(b) && b > 0 ? Math.min(Math.round(b * 100) / 100, MAX_RUN_BUDGET_USD) : recipe.budgetUsd,
     // One policy (core/actions/policy.ts): local work runs, sends wait for you, unless the card says ask first.
-    permissions: isTeamPermissions(r.permissions) ? r.permissions : prev?.permissions ?? recipe.permissions ?? 'local',
+    permissions: teamPermissionsFrom(r.permissions) ?? prev?.permissions ?? recipe.permissions ?? 'local',
     fast: typeof r.fast === 'boolean' ? r.fast : prev?.fast ?? recipe.fast ?? false,
     note: typeof r.note === 'string' ? r.note.trim().slice(0, 2000) : '',
   }

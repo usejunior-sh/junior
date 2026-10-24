@@ -207,7 +207,7 @@ export function App() {
   // Name the workspace in the tab title, with one tab per workspace, the
   // favicon alone cannot tell them apart.
   useEffect(() => {
-    document.title = activeWorkspace ? `junior • ${activeWorkspace.name}` : 'junior'
+    document.title = activeWorkspace ? `Junior • ${activeWorkspace.name}` : 'Junior'
   }, [activeWorkspace?.name])
   // The bare home route: Junior's page is the product's home. Goals are hidden
   // (the engine stays), so an old link to one lands there too.

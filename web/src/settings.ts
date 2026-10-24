@@ -54,7 +54,7 @@ export const SETTINGS_TABS: ReadonlyArray<SettingsTabMeta> = [
   { id: 'agents', label: 'Agents', sub: 'Every subagent a chat here can hand work to. Edits are live in open chats.', group: 'workspace', fill: true },
   // 'teams' stays in the type but is unlisted while the teams UI is hidden (the engine stays); old links open Workspace.
   { id: 'connectors', label: 'Connectors', sub: 'What a dispatched session can reach — claude.ai connectors and local MCP servers.', group: 'workspace', fill: true },
-  { id: 'mcp', label: 'MCP', sub: 'How another agent — Claude Code, Codex, Cursor — connects to this inbox from outside junior.', group: 'workspace' },
+  { id: 'mcp', label: 'MCP', sub: 'How another agent — Claude Code, Codex, Cursor — connects to this inbox from outside Junior.', group: 'workspace' },
   { id: 'activity', label: 'Activity', sub: 'Recent job runs in this workspace — what ran, when, and what it filed.', group: 'diagnostics', fill: true },
   { id: 'usage', label: 'Usage', sub: 'What Claude Code has cost on this machine — tokens, spend, and where they went.', group: 'diagnostics', fill: true },
   { id: 'logs', label: 'Logs', sub: 'The daemon’s log, filterable by level and subsystem.', group: 'diagnostics', fill: true },

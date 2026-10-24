@@ -516,9 +516,27 @@ test('permissions: local unless picked (one policy); the team file can preselect
   const preset = parseRecipe('build', SHIPPED_RECIPES.build.replace(/^budget: .*$/m, (l) => `${l}\npermissions: local`)).recipe!
   assert.equal(preset.permissions, 'local')
   assert.equal(cardFrom({ goal: 'g', criteria: ['c'] }, preset).permissions, 'local')
-  assert.deepEqual(parseRecipe('x', SHIPPED_RECIPES.build.replace(/^budget: .*$/m, (l) => `${l}\npermissions: yolo`)).errors, ['permissions must be one of ask, local, everything'])
+  assert.deepEqual(parseRecipe('x', SHIPPED_RECIPES.build.replace(/^budget: .*$/m, (l) => `${l}\npermissions: yolo`)).errors, ['permissions must be one of ask, local'])
   spawn(run, approve(run, picked))
   assert.equal(run.state, 'running')
+})
+
+test('permissions: the retired `everything` level is read as `local`, in a file, a card and a stored run', () => {
+  const old = parseRecipe('build', SHIPPED_RECIPES.build.replace(/^budget: .*$/m, (l) => `${l}\npermissions: everything`))
+  assert.deepEqual(old.errors, [], 'an older team file still parses')
+  assert.equal(old.recipe!.permissions, 'local')
+  assert.equal(cardFrom({ goal: 'g', criteria: ['c'] }, old.recipe!).permissions, 'local', 'the card preselects local')
+  const run = runOf(recipeOf('build'))
+  assert.equal(cardFrom({ ...run.card, permissions: 'everything' }, run.recipe, { ...run.card, permissions: 'ask' }).permissions, 'local', 'a sent everything is local, not the previous pick')
+  const stored = runOf(recipeOf('build'))
+  ;(stored.card as { permissions: string }).permissions = 'everything'
+  ;(stored.recipe as { permissions: string | null }).permissions = 'everything'
+  const read = normalizeRun(stored)
+  assert.equal(read.card.permissions, 'local')
+  assert.equal(read.recipe.permissions, 'local')
+  const unknown = runOf(recipeOf('build'))
+  ;(unknown.recipe as { permissions: string | null }).permissions = 'yolo'
+  assert.equal(normalizeRun(unknown).recipe.permissions, null, 'an unknown stored level is dropped, not kept')
 })
 
 test('handoffs: criteria by id (turned back once), the ledger feeds the next task, the reviewer sees pointers not claims', () => {

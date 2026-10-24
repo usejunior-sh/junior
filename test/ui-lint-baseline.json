@@ -80,8 +80,7 @@
       "colours": 2
     },
     "web/src/teams.ts": {
-      "colours": 3,
-      "bannedPhrases": 1
+      "colours": 3
     },
     "web/src/usageFormat.ts": {
       "colours": 7

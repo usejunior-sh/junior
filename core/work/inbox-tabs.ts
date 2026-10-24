@@ -8,7 +8,7 @@
  *   3. People waiting     your turn, and a person asked: reviews, replies, decisions
  *   4. New                your turn, arrived in the last day
  *   5. Brief ready        a brief, a team proposal or a goal's plan waits on you
- *   6. AI working         briefing, a session running, a team running
+ *   6. With Junior        briefing, a session running, a team running
  *   7. To review          a session or team finished, your PR to merge
  *   8. Waiting on others  your PR with reviewers, follow-ups, your own overrides
  *   9. Backlog            everything else open: older new items
@@ -35,7 +35,7 @@ export const TAB_TITLE: Record<InboxTab, string> = {
   people: 'People waiting',
   new: 'New',
   ready: 'Brief ready',
-  ai: 'AI working',
+  ai: 'With Junior',
   review: 'To review',
   others: 'Waiting on others',
   backlog: 'Backlog',

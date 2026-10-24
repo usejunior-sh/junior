@@ -16,6 +16,7 @@ import type {
   TeamRunResponse,
   TeamRunView,
 } from '../../shared/protocol.js'
+import type { TeamPermissions } from '../../core/teams/recipe.js'
 
 export type TeamLibrary = { teams: RecipeEntry[]; agents: AgentEntry[]; dir: string }
 
@@ -91,11 +92,10 @@ export function stepLine(s: { id: string; agent: string; output: string | null; 
   return `${s.id}${s.fanOut ? ` ×${s.fanOut.max}` : ''}`
 }
 
-/** The three levels a team can run at (TeamPermissions), as the card offers them. */
-export const PERMISSION_META: Record<'ask' | 'local' | 'everything', { label: string; hint: string }> = {
+/** The two levels a team can run at (TeamPermissions), as the card offers them. */
+export const PERMISSION_META: Record<TeamPermissions, { label: string; hint: string }> = {
   ask: { label: 'Commands ask', hint: 'The builder’s edits run; every shell command asks you. You stay at the desk.' },
-  local: { label: 'Local free, outbound held', hint: 'Edits and commands run unasked; anything that leaves this Mac waits for you. Start it and walk away.' },
-  everything: { label: 'Everything runs', hint: 'Nothing asks and nothing is held — pushes and posts included. Only for work you’d let go out unseen.' },
+  local: { label: 'Local free, outbound held', hint: 'Edits and commands run unasked. Anything that leaves this Mac waits for you.' },
 }
 
 type TeamGoalsState = { goals: TeamGoalSummary[]; waitingOnYou: number; loaded: boolean; error: string | null }

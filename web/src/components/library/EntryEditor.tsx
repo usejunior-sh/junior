@@ -373,7 +373,7 @@ export function TeamAgentEditor({
             <span>{entry?.label ?? (agent.label || 'New team agent')}</span>
             <span className="lbSrc team">Teams</span>
             {entry && entry.status !== 'yours' && (
-              <span className="lbSrc">{entry.status === 'default' ? 'junior default' : entry.status === 'edited' ? 'edited default' : 'newer default available'}</span>
+              <span className="lbSrc">{entry.status === 'default' ? 'Junior default' : entry.status === 'edited' ? 'edited default' : 'newer default available'}</span>
             )}
           </div>
           <div className="lbHeadSub">

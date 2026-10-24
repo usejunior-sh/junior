@@ -106,7 +106,7 @@ export function PhoneTab() {
         <div className="setRow">
           <div className="lbl">
             <b>Allow other devices</b>
-            <small>Off: junior only answers this Mac, as it always has.</small>
+            <small>Off: Junior only answers this Mac, as it always has.</small>
           </div>
           <div className="ctl">
             <Switch.Root
@@ -213,7 +213,7 @@ function PairSection({
               Point the camera at the code and open the link. ngrok shows a one-time warning page first — tap <b>Visit Site</b>.
             </Step>
             <Step n={2}>
-              Share → <b>Add to Home Screen</b> to open junior like an app.
+              Share → <b>Add to Home Screen</b> to open Junior like an app.
             </Step>
             <Step n={3}>
               Keep this Mac awake: while it sleeps, the address stops answering.
@@ -236,7 +236,7 @@ function PairSection({
             Point the camera at the code and open the link. The phone is paired from then on — no code to type.
           </Step>
           <Step n={2}>
-            Share → <b>Add to Home Screen</b> to open junior like an app.
+            Share → <b>Add to Home Screen</b> to open Junior like an app.
           </Step>
           <Step n={3}>
             Nothing loads? Check that the phone is on the same network, and that macOS Firewall lets <b>node</b> accept incoming

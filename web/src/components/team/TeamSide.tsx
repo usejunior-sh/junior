@@ -321,7 +321,7 @@ export function TeamSide({
                         )}
                       </div>
                     )}
-                    {s.fanOut && !sliceable && <div className="tsMeta">{s.fanOut.by === 'finding' ? 'junior splits the findings' : `same slices as ${run.recipe.steps[i - 1]?.id}`}</div>}
+                    {s.fanOut && !sliceable && <div className="tsMeta">{s.fanOut.by === 'finding' ? 'Junior splits the findings' : `same slices as ${run.recipe.steps[i - 1]?.id}`}</div>}
                     {workers.length > 0 && run.state !== 'proposed' && (
                       <div className="tsWorkers">
                         {workers.map((x) => (
@@ -370,7 +370,7 @@ export function TeamSide({
               ))}
             </RadioGroup.Root>
           ) : (
-            <div className="edText">{card.permissions ? PERMISSION_META[card.permissions].label : <span className="muted">not picked</span>}</div>
+            <div className="edText">{card.permissions ? (PERMISSION_META[card.permissions] ?? PERMISSION_META.local).label : <span className="muted">not picked</span>}</div>
           )}
           {editable && !card.permissions && <div className="tsMeta warn">Pick one — the team can’t start until you do.</div>}
         </section>

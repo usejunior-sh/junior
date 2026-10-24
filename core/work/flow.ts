@@ -34,7 +34,7 @@ export const STAGE_LABEL: Record<Stage, string> = {
 
 export const TURN_LABEL: Record<Turn, string> = {
   me: 'My turn',
-  ai: 'AI working',
+  ai: 'With Junior',
   others: 'Waiting on others',
   none: 'Nobody',
 }

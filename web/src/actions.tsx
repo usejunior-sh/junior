@@ -85,7 +85,7 @@ export function allowedText(a: ActionView): string {
     case 'rule':
       return a.allowedDetail ?? 'an allow rule'
     case 'policy':
-      return a.allowedDetail ? `junior · ${a.allowedDetail}` : 'junior’s policy'
+      return a.allowedDetail ? `Junior · ${a.allowedDetail}` : 'Junior’s policy'
     default:
       return a.status === 'denied' ? 'nobody — denied' : '—'
   }
