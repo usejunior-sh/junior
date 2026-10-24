@@ -77,15 +77,14 @@ export function offerFor(i: OfferItem, now: number): Offer {
     }
   }
   if (i.ask === 'reply') {
-    // Where Junior can post the reply itself, it waits for your OK; elsewhere you copy it and send it.
+    // Every source reads the same: Junior drafts, and nothing goes out until you send it. A chat holds
+    // an outbound post (a gh comment, a Slack reply) on an approval card, so this stays true everywhere.
     const to = i.author ? ` to ${i.author}` : ''
     return {
       title: `Draft a reply${to} on ${ref}`,
-      detail: src.canReply ? `${clip(i.title, 60)}. I draft it; nothing is posted until you send it.` : `${clip(i.title, 60)}. I draft it; you copy it and send it.`,
+      detail: `${clip(i.title, 60)}. I draft it; nothing is posted until you send it.`,
       because,
-      say: src.canReply
-        ? `Draft a reply${to} on ${ref} (${i.url}) for me to edit. Nothing gets posted until I send it.`
-        : `Draft a reply${to} on ${ref} (${i.url}) for me to edit. I'll copy it and send it myself.`,
+      say: `Draft a reply${to} on ${ref} (${i.url}) for me to edit. Nothing gets posted until I send it.`,
     }
   }
   // A to-do is named by its own words, in full in the message, so Junior can find it; anything else

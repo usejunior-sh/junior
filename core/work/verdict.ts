@@ -15,6 +15,7 @@
  * Pure, browser-safe.
  */
 import { askOf } from './asks.js'
+import { sourceOf } from '../../shared/sources.js'
 import type { ItemTask } from './tasks.js'
 import type { ItemFlow } from './flow.js'
 import type { WorkItem } from './types.js'
@@ -42,7 +43,7 @@ const count = (n: number) => WORDS[n] ?? String(n)
 
 /** "Nirajsinh Rajput" → "Nirajsinh"; a manual item or no author → null. */
 function who(item: VerdictItem): string | null {
-  if (item.source === 'manual') return null
+  if (sourceOf(item.source).yours) return null
   const first = item.author.trim().replace(/^@/, '').split(/\s+/)[0]
   return first || null
 }

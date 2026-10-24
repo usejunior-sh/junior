@@ -67,7 +67,10 @@ export interface SourceDescriptor {
   link: (ref: string) => string | null
   /** what Junior starts on a hand-off when nothing else (reason, rule) decides; null = none */
   playbook: Playbook | null
-  /** Junior can send an approved reply there itself */
+  /**
+   * The server has its own reply route there (sendReplyOp). This is not "a reply can go out":
+   * a chat can still post on any source through its tools, held on an approval card.
+   */
   canReply: boolean
   /** how, when it can */
   reply: ReplyRoute | null
@@ -231,7 +234,8 @@ export function sourceLabel(id: string): string {
   return words.map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
 }
 
-// Neutral descriptors are built once per id, so repeat lookups are cheap and identity-stable.
+// Neutral descriptors are cached per id so repeat lookups are cheap. The cache resets at its cap,
+// so don't compare descriptors by identity.
 const neutral = new Map<string, SourceDescriptor>()
 const NEUTRAL_CACHE_MAX = 256
 

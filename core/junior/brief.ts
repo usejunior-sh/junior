@@ -181,7 +181,7 @@ function terse(f: BriefFacts, now: number): Segment[] {
   if (items.length) out.push('Done: ', ...joinList(capped(items, itemRef, more), ','), '. ')
   if (jobs.length) out.push('Jobs: ', ...joinList(capped(jobs, (j) => [jobRef(j), ` ×${j.runs}${j.filed ? ` (${j.filed} filed)` : ''}`], more), ','), '. ')
   if (f.sent > 0) out.push({ label: `Sent: ${f.sent}`, target: { kind: 'actions' } }, '. ')
-  if (f.arrived.length) out.push('In: ', f.arrived.map((a) => `${a.count} ${a.label.replace(/^the /, '')}`).join(', '), '. ')
+  if (f.arrived.length) out.push('In: ', f.arrived.map((a) => `${a.count} ${a.label.replace(/^(the|a) /, '')}`).join(', '), '. ')
   const people = byPerson(f.blocking)
   if (people.length) out.push('Blocking: ', ...joinList(capped(people, (b) => [personRef(b), ` (${b.where}, ${shortAge(b.since, now)})`], more), ','), '.')
   if (!out.length) return ['Quiet.']

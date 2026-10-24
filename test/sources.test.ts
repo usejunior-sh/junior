@@ -8,6 +8,7 @@ import assert from 'node:assert/strict'
 import { isKnownSource, KNOWN_SOURCES, linkForRef, NEUTRAL_SOURCE, sourceLabel, sourceOf, sourceRef } from '../shared/sources.js'
 import { shortRef } from '../core/junior/today.js'
 import { offerFor, sourceWord, canDoFill, type OfferItem } from '../core/junior/offers.js'
+import { briefText, composeBrief } from '../core/junior/brief.js'
 import { handoffReadiness } from '../core/work/handoff.js'
 import { identityFromUrl } from '../server/jobs/scan-mcp.js'
 import { openSqliteStore } from '../core/store/sqlite.js'
@@ -115,15 +116,19 @@ const offer = (over: Partial<OfferItem>): OfferItem => ({
   ...over,
 })
 
-test('offers: the reply line follows canReply', () => {
+test('offers: every source keeps the held-send reply line', () => {
   const slack = offerFor(offer({}), 0)
   assert.match(slack.detail, /nothing is posted until you send it/)
   assert.match(slack.say, /Nothing gets posted until I send it/)
 
   const sentry = offerFor(offer({ source: 'sentry', id: 'sentry:1', repo: 'api-prod' }), 0)
   assert.equal(sentry.title, 'Draft a reply to Priya on api-prod')
-  assert.match(sentry.detail, /you copy it and send it/)
-  assert.match(sentry.say, /copy it and send it myself/)
+  assert.match(sentry.detail, /nothing is posted until you send it/)
+  assert.match(sentry.say, /Nothing gets posted until I send it/)
+
+  const gh = offerFor(offer({ source: 'github', id: 'github:o/r#12', kind: 'reply-needed', repo: 'o/r' }), 0)
+  assert.match(gh.detail, /nothing is posted until you send it/)
+  assert.match(gh.say, /Nothing gets posted until I send it/)
   assert.equal(sentry.because, 'Sentry')
 })
 
@@ -176,4 +181,21 @@ test('rows with old and new source values both load', async () => {
   const back = new Map((await store.items.listAll()).map((i) => [i.id, i.source]))
   for (const it of items) assert.equal(back.get(it.id), it.source, it.id)
   assert.equal(sourceOf(back.get('sentry:ABC-1')).known, false)
+})
+
+test('brief, terse: arrivals drop a leading "a" or "the" (a job, a source, the web)', () => {
+  const facts = {
+    since: 0,
+    away: false,
+    finished: [],
+    sent: 0,
+    arrived: [
+      { label: sourceOf('job').from, count: 3 },
+      { label: sourceOf('').from, count: 2 },
+      { label: sourceOf('web').from, count: 1 },
+      { label: sourceOf('sentry').from, count: 1 },
+    ],
+    blocking: [],
+  }
+  assert.equal(briefText(composeBrief(facts, 'terse', 0)), 'In: 3 job, 2 source, 1 web, 1 Sentry.')
 })

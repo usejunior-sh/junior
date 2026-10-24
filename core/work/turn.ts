@@ -32,6 +32,7 @@
 import { askOf, type Ask } from './asks.js'
 import type { ItemFlow } from './flow.js'
 import { mainRedOnly } from './handoff.js'
+import { sourceOf } from '../../shared/sources.js'
 import type { MessageStatus } from './status.js'
 import type { ScoredItem, WorkItem } from './types.js'
 
@@ -206,7 +207,7 @@ export function turnOf(item: TurnItem, ctx: TurnContext = {}): TurnOf {
   if (juniorReviews) return at('junior-watching')
 
   // A person asked you. A to-do you wrote yourself isn't one.
-  if (item.source !== 'manual' && (item.peopleWaiting > 0 || HUMAN_ASKS.has(ask))) return at('person-asks')
+  if (!sourceOf(item.source).yours && (item.peopleWaiting > 0 || HUMAN_ASKS.has(ask))) return at('person-asks')
 
   // Handed to Junior, nothing under way.
   if (!paused && item.junior?.stage === 'watching') return at('junior-watching')

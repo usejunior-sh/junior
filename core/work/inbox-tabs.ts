@@ -17,6 +17,7 @@
  * so the counts add up. Snoozed and Archived are the item's status, not a rule.
  */
 import { dueOf } from './due.js'
+import { sourceOf } from '../../shared/sources.js'
 import { isStuck, type ItemFlow } from './flow.js'
 import type { Ask } from './asks.js'
 import type { WorkItem } from './types.js'
@@ -89,7 +90,7 @@ const ms = (iso: string): number => Date.parse(iso) || 0
 
 /** Someone, not something, is waiting on you. A to-do you wrote yourself isn't one. */
 export function isHumanAsk(item: TabItem): boolean {
-  if (item.source === 'manual') return false
+  if (sourceOf(item.source).yours) return false
   return item.peopleWaiting > 0 || HUMAN_ASKS.has(item.ask)
 }
 
