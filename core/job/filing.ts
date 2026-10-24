@@ -26,6 +26,10 @@ export type JobFiling = {
 
 export const DEFAULT_FILING: JobFiling = { reasons: ['found'], labels: [] }
 
+/** The labels a job may file under: all but `friction`, which only you file (the ⌘⇧. capture). */
+export const JOB_LABELS: readonly ItemLabel[] = ITEM_LABELS.filter((l) => l !== 'friction')
+const isJobLabel = (v: unknown): v is ItemLabel => isItemLabel(v) && JOB_LABELS.includes(v)
+
 /** Reasons a job may file under: the ones a scanner can't (your PRs and review requests are GitHub's). */
 export const JOB_REASONS: readonly Reason[] = ['asked', 'assigned', 'mentioned', 'found']
 
@@ -43,7 +47,8 @@ export function filingFrom(d: Partial<Record<(typeof FILING_KEYS)[number], Raw>>
   }
   const labels: ItemLabel[] = []
   for (const l of list(d.labels)) {
-    if (!isItemLabel(l)) errors.push(`labels: "${l}" is not one of ${ITEM_LABELS.join(', ')}`)
+    if (l === 'friction') errors.push(`labels: friction is yours to file, not a job's`)
+    else if (!isItemLabel(l)) errors.push(`labels: "${l}" is not one of ${JOB_LABELS.join(', ')}`)
     else if (!labels.includes(l)) labels.push(l)
   }
   const start = list(d.start_alone)
@@ -77,7 +82,7 @@ export function filingFromJson(raw: string | null | undefined): JobFiling | unde
     const reasons = strs(o.reasons).filter(isReason)
     return {
       reasons: reasons.length ? reasons : ['found'],
-      labels: strs(o.labels).filter(isItemLabel),
+      labels: strs(o.labels).filter(isJobLabel),
       ...(t ? { tiers: { start: strs(t.start), show: strs(t.show), ignore: strs(t.ignore) } } : {}),
     }
   } catch {
@@ -86,7 +91,10 @@ export function filingFromJson(raw: string | null | undefined): JobFiling | unde
 }
 
 /** The labels a row may pick from. */
-export const labelsOf = (f: JobFiling | undefined): readonly ItemLabel[] => (f?.labels.length ? f.labels : ITEM_LABELS)
+export function labelsOf(f: JobFiling | undefined): readonly ItemLabel[] {
+  const mine = f?.labels.filter(isJobLabel) ?? []
+  return mine.length ? mine : JOB_LABELS
+}
 
 const REASON_HELP: Record<Reason, string> = {
   asked: 'asked: someone asks the user something and waits on their answer',
@@ -104,6 +112,8 @@ const LABEL_HELP: Record<ItemLabel, string> = {
   question: 'question: someone wants an answer or an explanation',
   feature: 'feature: something new to build',
   idea: 'idea: a thought worth keeping, no work asked yet',
+  // never offered to a run (JOB_LABELS leaves it out); here for the Record
+  friction: '',
 }
 
 /** What the run prompt adds for a job's filing: the reason, label and tier to give each row. */

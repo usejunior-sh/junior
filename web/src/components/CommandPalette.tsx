@@ -10,6 +10,7 @@ import type {
   JobsResponse,
 } from '../../../shared/protocol.js'
 import { MOD_LABEL } from '../keys.js'
+import { frictionKeyLabel } from '../shortcuts.js'
 import { SETTINGS_TABS, type SettingsTab } from '../settings.js'
 import { grantLabel } from '../../../core/job/tools.js'
 
@@ -35,6 +36,7 @@ type Props = {
   onAddJob: () => void
   onOpenSettings: (tab?: SettingsTab) => void
   onHelp: () => void
+  onNoteFriction: () => void
 }
 
 const SECTION_ORDER: Command['section'][] = ['Actions', 'Pages', 'Settings', 'Projects', 'Chats', 'Terminals', 'Jobs', 'Work items']
@@ -53,6 +55,7 @@ export function CommandPalette({
   onAddJob,
   onOpenSettings,
   onHelp,
+  onNoteFriction,
 }: Props) {
   const dialog = useRef<HTMLDialogElement>(null)
   const [query, setQuery] = useState('')
@@ -98,6 +101,7 @@ export function CommandPalette({
       { id: 'sync', section: 'Actions', label: 'Sync inbox now', run: onSyncInbox },
       { id: 'addjob', section: 'Actions', label: 'Add job', run: onAddJob },
       { id: 'help', section: 'Actions', label: 'Keyboard shortcuts', hint: '?', run: onHelp },
+      { id: 'friction', section: 'Actions', label: 'Note what annoyed you', hint: frictionKeyLabel(MOD_LABEL), run: onNoteFriction },
       { id: 'settings', section: 'Actions', label: 'Settings', hint: `${MOD_LABEL},`, run: () => onOpenSettings() },
       ...SETTINGS_TABS.map((t): Command => ({
         id: `set:${t.id}`,
@@ -149,11 +153,12 @@ export function CommandPalette({
         id: `w:${i.id}`,
         section: 'Work items',
         label: i.title,
-        hint: `${i.repo} · ${i.rankWhy}`,
+        // the label rides in the hint, so typing "friction" lists every note from ⌘⇧.
+        hint: `${i.repo} · ${i.rankWhy}${i.label === 'friction' ? ' · friction' : ''}`,
         run: () => onOpenItem(i),
       })),
     ],
-    [sessions, terminals, items, projects, jobs, onNavigate, onNewSession, onNewTerminal, onOpenItem, onNewSessionIn, onSyncInbox, onAddJob, onOpenSettings, onHelp],
+    [sessions, terminals, items, projects, jobs, onNavigate, onNewSession, onNewTerminal, onOpenItem, onNewSessionIn, onSyncInbox, onAddJob, onOpenSettings, onHelp, onNoteFriction],
   )
 
   const shown = useMemo(() => {

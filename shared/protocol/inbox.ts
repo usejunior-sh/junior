@@ -161,6 +161,8 @@ export type ManualItemInput = {
   /** extra links: the Slack thread, the PR, a doc; the complete list, [] clears */
   urls?: string[]
   priority?: number
+  /** what it is (core/work/fields.ts ITEM_LABELS), e.g. `friction` from the ⌘⇧. capture */
+  label?: import('../../core/work/fields.js').ItemLabel
   /** the complete desired image set: new base64 uploads and the refs to keep */
   images?: ItemImageEdit[]
   /** the complete desired file set, as ids: files the item holds are kept, upload ids are claimed */

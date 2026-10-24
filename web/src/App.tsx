@@ -13,6 +13,7 @@ import { useBrowserOpen, useWindowNarrower } from './browser.js'
 import { PanelCollapseContext, NewTerminalMenu } from './components/ContextPanel.js'
 import { needsYouText, useInboxTabs, useInboxViews, resolveView } from './inboxTabs.js'
 import { HelpOverlay } from './components/HelpOverlay.js'
+import { FrictionCapture } from './components/FrictionCapture.js'
 import { InboxPage } from './components/InboxPage.js'
 import { JuniorPage } from './components/JuniorPage.js'
 import { usePersona, useRailMood } from './junior.js'
@@ -89,6 +90,7 @@ export function App() {
   // Fetched once per session for the transcript's turn markers.
   const sessionChanges = useSessionChanges(currentId)
   const [helpOpen, setHelpOpen] = useState(false)
+  const [frictionOpen, setFrictionOpen] = useState(false)
   const [system, setSystem] = useState<{ open: boolean; tab: SystemTab }>({ open: false, tab: 'status' })
   const [composeSignal, setComposeSignal] = useState(0)
   const workspaces = useWorkspaces()
@@ -354,7 +356,7 @@ export function App() {
     navigate('/junior')
   }, [tabs, preview, closeAllTabs, navigate])
 
-  useGlobalHotkeys({ route, navigate, newSession, newTerminal, terminalCwd, goTo, currentId, panelSize, setHelpOpen, setPaletteOpen, setComposeSignal })
+  useGlobalHotkeys({ route, navigate, newSession, newTerminal, terminalCwd, goTo, currentId, panelSize, setHelpOpen, setPaletteOpen, setFrictionOpen, setComposeSignal })
 
   const { create, addJob, refineJob, dispatch, dispatchById, continueInMain } = useDispatchers({ navigate, pendingDraft, setCreateError, inbox, checkouts })
 
@@ -835,8 +837,10 @@ export function App() {
         onAddJob={addJob}
         onOpenSettings={(tab) => openSettings(tab)}
         onHelp={() => setHelpOpen(true)}
+        onNoteFriction={() => setFrictionOpen(true)}
       />
       <HelpOverlay open={helpOpen} onClose={() => setHelpOpen(false)} />
+      <FrictionCapture open={frictionOpen} onOpenChange={setFrictionOpen} route={route} sessions={sessions} />
       <SystemModal
         open={system.open}
         initialTab={system.tab}

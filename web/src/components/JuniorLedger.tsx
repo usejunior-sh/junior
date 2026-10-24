@@ -32,6 +32,7 @@ import { JuniorFace } from './JuniorFace.js'
 import { ReadyChips, ReadySummary } from './ReadyChips.js'
 import { SnoozeMenu } from './SnoozeMenu.js'
 import { TurnOnButton, WatchCap } from './WatchOff.js'
+import { setSelectedItem } from '../selection.js'
 
 type Nav = { onNavigate: (hash: string) => void }
 
@@ -249,6 +250,10 @@ export function JuniorLedger({ tab, items, needs, me, empty, moves, onNavigate }
   const [open, setOpen] = useState<ReadonlySet<string>>(() => new Set())
   const [snoozing, setSnoozing] = useState<string | null>(null)
   const at = sel === null ? null : Math.min(sel, Math.max(0, shown.length - 1))
+  // The item under the cursor, for the friction capture (⌘⇧.) to name. NeedLine rows have none.
+  const cursorId = at === null ? null : (shown[at]?.item?.id ?? null)
+  useEffect(() => setSelectedItem(cursorId), [cursorId])
+  useEffect(() => () => setSelectedItem(null), [])
 
   // "Not useful": one notice at a time, in the marked row's slot
   const [gone, setGone] = useState<Gone | null>(null)

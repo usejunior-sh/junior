@@ -232,6 +232,7 @@ export function WorkRow({
           </span>
         )}
         <span className="name">{item.title}</span>
+        {item.label === 'friction' && <span className="tag">friction</span>}
         {signals && <span className="signals">{signals}</span>}
         {dueText && (
           <span

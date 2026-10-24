@@ -1,4 +1,7 @@
 /** Shared guards for global hotkeys. */
+import { shortcutsFor } from './shortcuts.js'
+
+export { isFrictionKey } from './shortcuts.js'
 
 /** True when the event originates in a text-entry control, letter keys belong to it. */
 export function isTypingTarget(e: KeyboardEvent): boolean {
@@ -16,6 +19,19 @@ export function anyDialogOpen(): boolean {
     document.querySelector(
       'dialog[open], [data-popover-open], [data-radix-popper-content-wrapper], [role="dialog"][data-state="open"]',
     ) !== null
+  )
+}
+
+/**
+ * True while a modal is up that isn't the palette or the `?` overlay (those
+ * two close for a global key): a native modal `<dialog>`, or a Radix Dialog /
+ * AlertDialog. Popovers and menus don't count; they sit in a popper wrapper.
+ */
+export function blockingModalOpen(): boolean {
+  const native = [...document.querySelectorAll('dialog')].some((d) => d.matches(':modal') && d.id !== 'palette' && d.id !== 'helpOverlay')
+  if (native) return true
+  return [...document.querySelectorAll('[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"]')].some(
+    (el) => !el.closest('[data-radix-popper-content-wrapper]'),
   )
 }
 
@@ -47,32 +63,5 @@ document.addEventListener(
 export const isMac = navigator.platform.startsWith('Mac')
 export const MOD_LABEL = isMac ? '⌘' : 'Ctrl+'
 
-/** Every global key, for the `?` overlay and the Shortcuts settings tab. */
-export const SHORTCUTS: ReadonlyArray<[keys: string, what: string]> = [
-  [`${MOD_LABEL}K`, 'Search — chats, items, projects, commands'],
-  [`${MOD_LABEL},`, 'Settings'],
-  [`${MOD_LABEL}B`, 'Hide / show the side panel'],
-  [`${MOD_LABEL}J`, 'New chat with Junior'],
-  ['n', 'New chat (in the inbox: new work item)'],
-  ['Shift+Tab', 'New chat: switch Solo / Ultracode'],
-  ['g h', 'Go to Junior (home)'],
-  ['g i', 'Go to Inbox'],
-  ['g s', 'Go to Chats'],
-  ['g t', 'Go to Terminals (n opens a new one there)'],
-  ['g j', 'Go to Jobs'],
-  ['g p', 'Projects (in Settings)'],
-  ['g c', 'Connectors (in Settings)'],
-  ['j / k', 'Inbox: move selection'],
-  ['Enter', 'Inbox: open the selected item'],
-  ['o', 'Inbox: open the selected item at its source'],
-  ['d', 'Inbox: start a chat on the selected item'],
-  ['b', 'Inbox: brief the selected item (or the checked ones)'],
-  ['Space', 'Inbox: check / uncheck the selected item'],
-  ['e', 'Inbox: mark selected item done'],
-  ['z', 'Inbox: snooze selected item until tomorrow'],
-  ['t / m / w / l', 'Inbox: due today / next workday / this week / later'],
-  ['x', 'Inbox: archive selected item'],
-  ['r', 'Inbox: refresh'],
-  ['?', 'Keyboard shortcuts'],
-  ['Esc', 'Close dialogs'],
-]
+/** Every global key, for the `?` overlay and the Shortcuts settings tab (shortcuts.ts, pure, so tests can read it). */
+export const SHORTCUTS = shortcutsFor(MOD_LABEL)

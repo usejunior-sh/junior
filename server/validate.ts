@@ -8,6 +8,7 @@ import { isValidCron } from '../core/job/cron.js'
 import { isPlaybookName } from './briefs.js'
 import { isAsk } from '../core/work/asks.js'
 import { parseDue } from '../core/work/due.js'
+import { isItemLabel, ITEM_LABELS } from '../core/work/fields.js'
 import { canonicalizeRefs } from '../core/work/link.js'
 import { WorkspaceRuntime } from './workspace/runtime.js'
 import { itemImageEdits, itemUrls } from './items-ops.js'
@@ -218,6 +219,10 @@ export async function manualItemFrom(rt: WorkspaceRuntime, raw: unknown, opts: {
     if (p === null || p === 0) input.priority = 0
     else if (typeof p === 'number' && Number.isInteger(p) && p >= 1 && p <= 4) input.priority = p
     else throw new Error('priority must be 1–4')
+  }
+  if (r.label !== undefined && r.label !== null) {
+    if (!isItemLabel(r.label)) throw new Error(`label must be one of: ${ITEM_LABELS.join(', ')}`)
+    input.label = r.label
   }
   const urls = itemUrls(r.urls)
   if (urls) input.urls = urls

@@ -25,6 +25,14 @@
   .topbar.mobile .topIcon { height: 40px; min-width: 40px; }
   .topbar.mobile .topIcon .connDot { right: 8px; top: 9px; }
   .topbar.mobile .back { color: var(--ink); margin-right: -2px; }
+  /* friction capture: full width under the 48px bar, a 44px line, no key hints (no Esc on touch;
+     the keyboard's return key files). Done and error lines wrap instead of clipping. */
+  .frictionAnchor { top: calc(48px + env(safe-area-inset-top) + 8px); }
+  .uiMenu.frictionPop { width: calc(100vw - 24px); }
+  .frictionLine { height: 44px; }
+  .frictionFoot { min-height: 32px; padding-top: 6px; padding-bottom: 6px; }
+  .frictionFoot .fpKeys { display: none; }
+  .frictionFoot .fpLeft.err, .frictionFoot .fpLeft:has(.ok) { white-space: normal; overflow-wrap: anywhere; }
   .topTitle {
     flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     color: var(--ink); font-size: 1.0667rem; font-weight: 500; letter-spacing: -0.2px;

@@ -262,7 +262,7 @@ export async function resolveItemOp(rt: WorkspaceRuntime, rawId: unknown): Promi
 }
 
 export async function createManualOp(rt: WorkspaceRuntime, raw: unknown): Promise<string> {
-  const { images, ...input } = await manualItemFrom(rt, raw)
+  const { images, label, ...input } = await manualItemFrom(rt, raw)
   const filePlan = await itemFilePlan(rt, raw, [])
   const due = dueInput((raw as Record<string, unknown>).due, Date.now())
   const id = `manual:${randomUUID()}`
@@ -271,6 +271,7 @@ export async function createManualOp(rt: WorkspaceRuntime, raw: unknown): Promis
   // The item has to exist before its images can hang off it, the folder is
   // named after the id the line above minted.
   try {
+    if (label) await rt.store.items.setFields(id, { label })
     if (images?.length) await setItemImagesOp(rt, id, images)
     if (filePlan?.order.length) await setItemFilesOp(rt, id, filePlan)
   } catch (err) {
@@ -290,10 +291,11 @@ export async function createManualOp(rt: WorkspaceRuntime, raw: unknown): Promis
 export async function editManualOp(rt: WorkspaceRuntime, id: string, raw: unknown): Promise<void> {
   if (!id || !id.startsWith('manual:'))
     throw new Error('edit_work_item only edits manual items (id must start with "manual:")')
-  const { images, ...patch } = await manualItemFrom(rt, raw, { partial: true })
+  const { images, label, ...patch } = await manualItemFrom(rt, raw, { partial: true })
   const filePlan = await itemFilePlan(rt, raw, (await rt.store.items.get(id))?.files ?? [])
   const due = dueInput((raw as Record<string, unknown>).due, Date.now())
   await rt.store.items.updateManual(id, patch)
+  if (label) await rt.store.items.setFields(id, { label })
   if (due !== undefined) await rt.store.items.setDue(id, due)
   if (images) await setItemImagesOp(rt, id, images)
   if (filePlan) await setItemFilesOp(rt, id, filePlan)

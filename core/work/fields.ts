@@ -17,8 +17,12 @@ import type { ItemKind, WorkItem } from './types.js'
 export type Reason = 'your-pr' | 'review-requested' | 'asked' | 'assigned' | 'mentioned' | 'you-added' | 'found'
 export const REASONS: readonly Reason[] = ['your-pr', 'review-requested', 'asked', 'assigned', 'mentioned', 'you-added', 'found']
 
-export type ItemLabel = 'bug' | 'improvement' | 'question' | 'feature' | 'idea'
-export const ITEM_LABELS: readonly ItemLabel[] = ['bug', 'improvement', 'question', 'feature', 'idea']
+/**
+ * `friction` is yours alone: something in Junior annoyed you, noted with one
+ * key (⌘⇧.) to fix later. Jobs can't file it (core/job/filing.ts).
+ */
+export type ItemLabel = 'bug' | 'improvement' | 'question' | 'feature' | 'idea' | 'friction'
+export const ITEM_LABELS: readonly ItemLabel[] = ['bug', 'improvement', 'question', 'feature', 'idea', 'friction']
 
 export type Playbook = 'babysit' | 'review' | 'answer' | 'debug-fix' | 'investigate' | 'plan'
 export const PLAYBOOKS: readonly Playbook[] = ['babysit', 'review', 'answer', 'debug-fix', 'investigate', 'plan']

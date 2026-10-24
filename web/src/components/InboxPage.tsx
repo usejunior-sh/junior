@@ -7,6 +7,7 @@ import { BriefComposerDialog } from './BriefComposer.js'
 import { DueDialog } from './DueDialog.js'
 import { ago } from '../itemUi.js'
 import { isTypingTarget, anyDialogOpen, isGoSequence } from '../keys.js'
+import { setSelectedItem } from '../selection.js'
 import { type Section, SECTION_ORDER, dueFor, parseDue } from '../../../core/work/due.js'
 import type { Turn } from '../../../core/work/flow.js'
 import { OPEN_TABS, type TabEntry } from '../../../core/work/inbox-tabs.js'
@@ -210,6 +211,10 @@ export function InboxPage({ view, tabs, views, onDispatch, onRefineJob, onOpenIt
 
   // Items in on-screen order: the open entries, then the status list.
   const ordered = useMemo<readonly ScoredItem[]>(() => [...entries.map((e) => e.item), ...others], [entries, others])
+  // The row under the cursor, for the friction capture (⌘⇧.) to name.
+  const cursorId = ordered[sel]?.id ?? null
+  useEffect(() => setSelectedItem(cursorId), [cursorId])
+  useEffect(() => () => setSelectedItem(null), [])
 
   // The live selection: checked open rows still on screen. Ids of rows that
   // already left the view (done via the keyboard, refreshed away) don't count.

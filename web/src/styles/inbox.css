@@ -101,6 +101,8 @@
 .wrow .t .fresh { flex: none; font-family: var(--mono); font-size: 0.8077rem; }
 .wrow .t .fresh.new { color: var(--green); }
 .wrow .t .fresh.updated { color: var(--blue); }
+/* a note from ⌘⇧. (FrictionCapture): its label as plain mono text, no chip */
+.wrow .t .tag { flex: none; font-family: var(--mono); font-size: 0.8077rem; color: var(--ash); }
 .wrow .t .waited { flex: none; font-family: var(--mono); font-size: 0.8462rem; color: var(--ash); }
 .wrow .t .waited.stuck { color: var(--amber); }
 

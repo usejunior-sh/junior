@@ -2,12 +2,12 @@ import { type Dispatch, type SetStateAction, useRef, useEffect } from 'react'
 import { startJuniorChat } from '../junior.js'
 import type { RailSection } from '../components/Rail.js'
 import type { Route } from '../hooks.js'
-import { anyDialogOpen, isTypingTarget } from '../keys.js'
+import { anyDialogOpen, blockingModalOpen, isFrictionKey, isTypingTarget } from '../keys.js'
 import { openSettings } from '../settings.js'
 import { usePanelWidth } from '../panelWidth.js'
 import type { Navigate } from './types.js'
 
-export function useGlobalHotkeys({ route, navigate, newSession, newTerminal, terminalCwd, goTo, currentId, panelSize, setHelpOpen, setPaletteOpen, setComposeSignal }: {
+export function useGlobalHotkeys({ route, navigate, newSession, newTerminal, terminalCwd, goTo, currentId, panelSize, setHelpOpen, setPaletteOpen, setFrictionOpen, setComposeSignal }: {
   route: Route
   navigate: Navigate
   newSession: () => void
@@ -18,6 +18,7 @@ export function useGlobalHotkeys({ route, navigate, newSession, newTerminal, ter
   panelSize: ReturnType<typeof usePanelWidth>
   setHelpOpen: Dispatch<SetStateAction<boolean>>
   setPaletteOpen: Dispatch<SetStateAction<boolean>>
+  setFrictionOpen: Dispatch<SetStateAction<boolean>>
   setComposeSignal: Dispatch<SetStateAction<number>>
 }) {
   // pending "g" prefix for two-key sequences (g i, g s, g j, g p, g c)
@@ -27,6 +28,16 @@ export function useGlobalHotkeys({ route, navigate, newSession, newTerminal, ter
   // outside text fields and while no dialog is open.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
+      // ⌘⇧.: note what annoyed you (FrictionCapture). Like ⌘K, it works while typing;
+      // again closes it. Not over another modal: that makes the page behind it inert.
+      if (isFrictionKey(e)) {
+        e.preventDefault()
+        if (blockingModalOpen()) return
+        setHelpOpen(false)
+        setPaletteOpen(false)
+        setFrictionOpen((v) => !v)
+        return
+      }
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault()
         setHelpOpen(false)

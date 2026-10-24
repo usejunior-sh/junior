@@ -295,3 +295,34 @@ dialog.sheet[open] { display: grid; }
 .markdownPreviewClose { position: static; }
 .markdownPreviewBody { flex: 1; overflow: auto; }
 
+
+/* ---------- friction capture (⌘⇧., FrictionCapture.tsx) ----------
+   One line under the top bar, centred on the window. The user's own note, so
+   no orange (it doesn't need you now) and no sky (it isn't Junior speaking). */
+.frictionAnchor { position: fixed; top: calc(var(--bar-h) + 8px); left: 50%; width: 0; height: 0; pointer-events: none; }
+.uiMenu.frictionPop {
+  width: min(520px, calc(100vw - 24px)); min-width: 0; padding: 0;
+  transform-origin: var(--radix-popover-content-transform-origin);
+}
+.frictionPop form { display: flex; flex-direction: column; margin: 0; }
+.frictionLine {
+  height: 40px; width: 100%; padding: 0 12px; border: 0; outline: none; background: transparent;
+  font-family: var(--sans); font-size: 1.0769rem; color: var(--ink); caret-color: var(--ink);
+}
+.frictionLine::placeholder { color: var(--ash); }
+.frictionLine:focus, .frictionLine:focus-visible { outline: none; box-shadow: none; }
+.frictionLine[readonly] { color: var(--charcoal); }
+.frictionFoot {
+  display: flex; align-items: center; gap: 8px; min-height: 28px; padding: 0 12px;
+  border-top: 1px solid var(--hair);
+  font-family: var(--mono); font-size: 0.8462rem; color: var(--ash);
+}
+.frictionFoot .fpLeft { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.frictionFoot .fpLeft .id { color: var(--mute); }
+.frictionFoot .fpLeft .ok { color: var(--green); }
+.frictionFoot .fpLeft:has(.ok) { color: var(--charcoal); }
+.frictionFoot .fpLeft.err { color: var(--red-ink); }
+.frictionFoot .dot { color: var(--stone); }
+.frictionFoot .fpHint { flex: none; white-space: nowrap; }
+.frictionFoot .fpHint kbd { margin-right: 2px; }
+@media (prefers-reduced-motion: reduce) { .uiMenu.frictionPop[data-state="open"] { animation: none; } }
