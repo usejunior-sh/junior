@@ -48,6 +48,7 @@ import { itemRoutes } from './routes/items.js'
 import { itemWriteRoutes } from './routes/items-write.js'
 import { taskRoutes } from './routes/tasks.js'
 import { approvalRoutes } from './routes/approvals.js'
+import { learningRoutes } from './routes/learnings.js'
 import { settingsRoutes } from './routes/settings.js'
 import { libraryRoutes } from './routes/library.js'
 import { artifactFileRoutes } from './routes/artifact-files.js'
@@ -95,6 +96,7 @@ const server = http.createServer(async (req, res) => {
   if (await itemWriteRoutes(scoped)) return
   if (await taskRoutes(scoped)) return
   if (await approvalRoutes(scoped)) return
+  if (await learningRoutes(scoped)) return
   if (await settingsRoutes(scoped)) return
   if (await libraryRoutes(scoped)) return
   if (await artifactFileRoutes(scoped)) return

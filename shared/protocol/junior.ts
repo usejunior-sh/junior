@@ -100,3 +100,19 @@ export type TodayAddRequest = { itemId?: string; title?: string; owner: import('
 export type TodayMatchResponse =
   | { ok: true; match: { id: string; title: string; ref: string; onToday: boolean } | null }
   | { ok: false; error: string }
+
+// Learnings with receipts (core/junior/learnings.ts), behind Junior's notebook.
+export type { Learning, LearningScope, LearningSource, LearningStatus } from '../../core/junior/learnings.js'
+
+/** GET /api/learnings[?all=1]: proposed and kept (candidates too with all=1), and files that didn't parse. */
+export type LearningsResponse =
+  | {
+      ok: true
+      learnings: import('../../core/junior/learnings.js').Learning[]
+      broken: { id: string; file: string; errors: string[] }[]
+      path: string
+    }
+  | { ok: false; error: string }
+
+/** POST /api/learnings/keep|forget {id}, /api/learnings/edit {id, text?, scope?, confirm?}: the learning after (or as forgotten). */
+export type LearningResponse = { ok: true; learning: import('../../core/junior/learnings.js').Learning } | { ok: false; error: string }

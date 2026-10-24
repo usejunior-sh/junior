@@ -10,6 +10,7 @@ import { SCHEDULER_TICK_MS } from './jobs/scheduler.js'
 import { INBOX_KEEP_WARM_MS, syncInbox } from './inbox/sync.js'
 import { babysitTick } from './babysit/glue.js'
 import { reviewTick } from './review/glue.js'
+import { sweepLearningsTick } from './learnings-ops.js'
 // the runner registers its hooks on the babysit tick when loaded
 import './tasks/runner.js'
 import { BABYSIT_FAST_MS } from '../core/babysit/watch.js'
@@ -33,6 +34,8 @@ export function startTicks() {
       tickActions(rt).catch((err) => log('error', 'actions', `tick failed: ${errText(err)}`, { workspace: rt.meta.id }))
       // Goals asleep on the world: time's up, Junior looks again.
       wakeTeamGoals(rt).catch((err) => log('error', 'teams', `goal wake failed: ${errText(err)}`, { workspace: rt.meta.id }))
+      // Learnings unused for 28 days go (at most every 6 hours; never throws).
+      void sweepLearningsTick(rt)
       rt.store.items
         .wakeSnoozed(Date.now())
         .then((woken) => {

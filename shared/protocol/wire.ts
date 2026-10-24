@@ -309,6 +309,8 @@ export type ServerMessage =
   | { type: 'actions_changed'; sessionId?: string }
   /** Advance approvals changed (added, revoked, used): Settings → Approvals and Rule cards refetch. */
   | { type: 'approvals_changed' }
+  /** Learnings changed (proposed, kept, edited, forgotten, expired): Junior's notebook refetches. */
+  | { type: 'learnings_changed' }
   /** The workspace's Junior persona changed (About me, or a chat's set_reply_style), the whole persona. */
   | { type: 'persona'; persona: import('../../core/junior/persona.js').Persona }
   /** Today's plan changed (a row added or removed, the day drafted), refetch. */
