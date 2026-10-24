@@ -413,6 +413,12 @@ export interface WorkItemStore {
   markSurfaced(entries: readonly SurfacedEntry[], at: number): Promise<string[]>
   /** Append a note (surfaced, not-useful) to an item's log; its status doesn't move. False = no such item. */
   note(id: string, event: ItemNoteKind, actor: ItemActor, at: number, detail?: Record<string, unknown>): Promise<boolean>
+  /**
+   * Take back the newest `event` by `actor` on the item, if it was written at
+   * or after `since`: the one exception to the append-only log, for an undo
+   * within seconds. False = nothing that new to take back.
+   */
+  unnote(id: string, event: ItemNoteKind, actor: ItemActor, since: number): Promise<boolean>
   /** Every item event with `at` in [since, until), oldest first, each with its item's id. */
   eventsBetween(since: number, until: number): Promise<ItemWindowEvent[]>
   /** Set (or clear, with null) the human's description on any item. Never touched by ingestion. */
@@ -429,7 +435,7 @@ export interface WorkItemStore {
   /** Give every item without a project the one `assign` picks; returns how many were set. */
   backfillProjects(assign: (item: WorkItem) => string | null): Promise<number>
   /**
-   * Set or clear (null) reason · label · parent · playbook · handoff · notNow (core/work/fields.ts).
+   * Set or clear (null) reason · label · parent · playbook · handoff · notNow · notUseful (core/work/fields.ts).
    * Absent keys are left alone. Never touched by ingestion.
    */
   setFields(id: string, patch: ItemFieldsPatch): Promise<void>
@@ -446,6 +452,7 @@ export type ItemFieldsPatch = {
   playbook?: Playbook | null
   handoff?: Handoff | null
   notNow?: string | null
+  notUseful?: string | null
 }
 
 /**

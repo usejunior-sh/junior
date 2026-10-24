@@ -11,7 +11,7 @@ import { readJsonBody } from './http-util.js'
 import { ANY_ITEM_ID_RE, ITEM_STATUSES } from '../validate.js'
 import { invalidateInbox } from '../ws/send.js'
 import { listItemsByStatus } from '../inbox/sync.js'
-import { itemDetailOp, sessionContextOp } from '../items-ops.js'
+import { itemDetailOp, markNotUsefulOp, sessionContextOp, undoNotUsefulOp } from '../items-ops.js'
 import { errText } from '../errors.js'
 import { jobFileReference, jobSpecFrom, saveJobText } from '../jobs/ops.js'
 import { jobLibrary } from '../session/changes.js'
@@ -36,6 +36,19 @@ export async function itemRoutes({ req, url, json, rt }: ScopedCtx): Promise<boo
       await rt.store.items.transition(id, { status: statusV, actor: 'user', snoozeUntil })
       invalidateInbox(rt)
       log('info', 'inbox', `${statusV}: ${id} (by user)`, { id, status: statusV, actor: 'user', workspace: rt.meta.id })
+      body = { ok: true }
+    } catch (err) {
+      body = { ok: false, error: err instanceof Error ? err.message : String(err) }
+    }
+    json(body.ok ? 200 : 400, body)
+    return true
+  }
+  // "Not useful" on a Needs you row, or its undo (`undo: true`), from the Junior page.
+  if (url.pathname === '/api/items/not-useful' && req.method === 'POST') {
+    let body: ItemStateResponse
+    try {
+      const parsed = (await readJsonBody(req)) as { id?: unknown; undo?: unknown } | null
+      await (parsed?.undo === true ? undoNotUsefulOp(rt, parsed) : markNotUsefulOp(rt, parsed))
       body = { ok: true }
     } catch (err) {
       body = { ok: false, error: err instanceof Error ? err.message : String(err) }

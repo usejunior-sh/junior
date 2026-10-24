@@ -4,7 +4,7 @@
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { cantWatchOf, juniorState, ledgerCount, ledgerProgress, ledgerRows, personWaits, watchOffOf } from '../core/junior/ledger.js'
+import { ageHot, cantWatchOf, juniorState, ledgerCount, ledgerProgress, ledgerRows, personWaits, quieted, quietKey, watchOffOf } from '../core/junior/ledger.js'
 import { capText, capsFrom, markWatchOn, turnOnTitle, usd, withAnswer } from '../core/junior/watch-off.js'
 import type { HandoffReadiness, WorkStage } from '../core/work/handoff.js'
 import type { ScoredItem } from '../core/work/types.js'
@@ -160,4 +160,49 @@ test('turning a watch on clears "off" from its rows only', () => {
   assert.deepEqual(after.map((i) => juniorState(i).text), ['Babysitting', 'Reviews off', ''])
   assert.equal(after[2], fyi)
   assert.equal(rows[0]!.junior!.readiness!.state, 'watch-off', 'the input is not mutated')
+})
+
+// ---------------------------------------------------------------------------
+// "Not useful": off Needs you until something new happens on the item
+// ---------------------------------------------------------------------------
+
+const readyTasks = { line: null, running: false, queued: 0, needsYou: 0, next: null, lastDone: null, review: { state: 'ready' as const, verdict: null, line: null } }
+const askTasks = (id: string) => ({ line: null, running: false, queued: 0, needsYou: 1, next: { id, title: 'Which branch?', owner: 'you' as const }, lastDone: null })
+
+test('not useful: a quieted item leaves Needs you, reads in Up next, and drops the counts', () => {
+  const ready = item('ready', { kind: 'review-requested', reason: 'review-requested', group: 'blocking', score: 100, peopleWaiting: 1, tasks: readyTasks })
+  const marked = { ...ready, notUseful: quietKey(ready) }
+  assert.equal(quieted(marked), true)
+  assert.equal(quieted(ready), false, 'an unmarked item is unaffected')
+  assert.deepEqual(ledgerRows([marked, paused, ticket], 'needs').map((i) => i.id), ['paused'])
+  assert.deepEqual(ledgerRows([marked, paused, ticket], 'up').map((i) => i.id), ['ready', 'ticket'])
+  assert.deepEqual(ledgerCount([marked, paused, ticket], 'needs'), { n: 1, hot: 1 })
+  // moved, not hidden; nothing marked shows orange anywhere
+  assert.equal(ledgerCount([marked, paused, ticket], 'up').hot, 0)
+  assert.equal(ageHot(ready), true)
+  assert.equal(ageHot(marked), false)
+  const pausedMarked = { ...paused, notUseful: quietKey(paused) }
+  assert.deepEqual(ledgerCount([pausedMarked], 'with'), { n: 1, hot: 0 })
+  assert.deepEqual(ledgerCount([pausedMarked], 'needs'), { n: 0, hot: 0 })
+})
+
+test('not useful: the row comes back when a comment, commit or message lands (updatedAt moves)', () => {
+  const asked = { ...paused, tasks: askTasks('t1') }
+  const marked = { ...asked, notUseful: quietKey(asked) }
+  assert.deepEqual(ledgerRows([marked], 'needs'), [])
+  const commented = { ...marked, updatedAt: '2026-10-22T09:15:00Z' }
+  assert.equal(quieted(commented), false)
+  assert.deepEqual(ledgerRows([commented], 'needs').map((i) => i.id), ['paused'])
+  assert.deepEqual(ledgerRows([commented], 'up'), [])
+})
+
+test('not useful: the row comes back when Junior waits on you for a different task', () => {
+  const asked = { ...paused, tasks: askTasks('t1') }
+  const marked = { ...asked, notUseful: quietKey(asked) }
+  assert.equal(quieted({ ...marked, tasks: askTasks('t1') }), true)
+  assert.equal(quieted({ ...marked, tasks: askTasks('t2') }), false)
+  assert.deepEqual(ledgerRows([{ ...marked, tasks: askTasks('t2') }], 'needs').map((i) => i.id), ['paused'])
+  // a first pass that became ready is new too
+  const ready = item('r', { kind: 'review-requested', reason: 'review-requested', group: 'blocking', tasks: { ...readyTasks, review: { ...readyTasks.review, state: 'reviewing' as const } } })
+  assert.equal(quieted({ ...ready, notUseful: quietKey(ready), tasks: readyTasks }), false)
 })

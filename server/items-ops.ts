@@ -7,6 +7,8 @@ import type { ItemStatus } from '../core/work/state.js'
 import type { UpsertOutcome } from '../core/store/types.js'
 import { dueInput } from '../core/work/due.js'
 import { reasonOf } from '../core/work/fields.js'
+import { taskSummary } from '../core/work/tasks.js'
+import { quietKey, waitKeyOf } from '../core/junior/ledger.js'
 import { ANY_ITEM_ID_RE, ITEM_STATUSES, manualItemFrom, MAX_URLS_PER_ITEM, workItemFrom } from './validate.js'
 import { BASE64, base64Bytes } from './ws/parse.js'
 import { WorkspaceRuntime } from './workspace/runtime.js'
@@ -296,4 +298,42 @@ export async function editManualOp(rt: WorkspaceRuntime, id: string, raw: unknow
   if (images) await setItemImagesOp(rt, id, images)
   if (filePlan) await setItemFilesOp(rt, id, filePlan)
   invalidateInbox(rt)
+}
+
+/** How long after a "not useful" mark its undo is taken: the 5 s the notice shows, plus slack. */
+export const NOT_USEFUL_UNDO_MS = 10_000
+
+async function itemForNote(rt: WorkspaceRuntime, raw: unknown): Promise<WorkItem> {
+  const id = typeof (raw as { id?: unknown } | null)?.id === 'string' ? (raw as { id: string }).id.trim() : ''
+  if (!ANY_ITEM_ID_RE.test(id)) throw new Error('need an item id')
+  const item = await rt.store.items.get(id)
+  if (!item) throw new Error('no such item')
+  return item
+}
+
+/**
+ * "Not useful" on a Needs you row: it shouldn't have reached you. One
+ * `not-useful` event by you, and a stamp (core/junior/ledger.ts quietKey) that
+ * keeps it off Needs you until something new happens on it. The same stamp
+ * twice is a no-op, so a stale client can't write a second event. Your own
+ * signal: HTTP only, never on the MCP surface.
+ */
+export async function markNotUsefulOp(rt: WorkspaceRuntime, raw: unknown, now = Date.now()): Promise<void> {
+  const item = await itemForNote(rt, raw)
+  const tasks = taskSummary(await rt.store.tasks.list(item.id)) ?? undefined
+  const stamp = quietKey({ updatedAt: item.updatedAt, tasks })
+  if (item.notUseful === stamp) return
+  await rt.store.items.note(item.id, 'not-useful', 'user', now, { from: 'needs', wait: waitKeyOf({ tasks }) })
+  await rt.store.items.setFields(item.id, { notUseful: stamp })
+  invalidateInbox(rt)
+  log('info', 'inbox', `not useful: ${item.id} (by user)`, { id: item.id, workspace: rt.meta.id })
+}
+
+/** Undo within seconds: the mark's event is taken back and the stamp cleared. Later, the mark stands. */
+export async function undoNotUsefulOp(rt: WorkspaceRuntime, raw: unknown, now = Date.now()): Promise<void> {
+  const item = await itemForNote(rt, raw)
+  if (!(await rt.store.items.unnote(item.id, 'not-useful', 'user', now - NOT_USEFUL_UNDO_MS))) throw new Error('the undo window has passed')
+  await rt.store.items.setFields(item.id, { notUseful: null })
+  invalidateInbox(rt)
+  log('info', 'inbox', `not useful, undone: ${item.id} (by user)`, { id: item.id, workspace: rt.meta.id })
 }

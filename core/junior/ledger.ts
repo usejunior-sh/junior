@@ -5,7 +5,9 @@
  *
  *   needs     Needs you: Junior waiting on you. Items it is paused on or has a
  *             first pass ready for; the page puts the sessions, plans, gates
- *             and sends held on you (core/junior/needs.ts) above them
+ *             and sends held on you (core/junior/needs.ts) above them. An
+ *             item you marked "not useful" leaves until something new
+ *             happens on it (`quieted`), and reads in Up next meanwhile
  *   up        Up next: the task list, everything else open, in the scorer's
  *             groups (core/work/score.ts): someone waiting · stuck · this
  *             cycle · FYI
@@ -36,7 +38,7 @@ const OF_GROUP: Record<Group, LedgerGroup> = { blocking: 'waiting', 'blocked-sta
 
 type Item = Pick<
   ScoredItem,
-  'id' | 'kind' | 'reason' | 'group' | 'score' | 'handoff' | 'junior' | 'tasks' | 'suggestion' | 'flow' | 'peopleWaiting'
+  'id' | 'kind' | 'reason' | 'group' | 'score' | 'handoff' | 'junior' | 'tasks' | 'suggestion' | 'flow' | 'peopleWaiting' | 'updatedAt' | 'notUseful'
 >
 
 /** Where an item sits in Up next: the scorer's group. */
@@ -44,6 +46,23 @@ export const ledgerGroup = (i: Item): LedgerGroup => OF_GROUP[i.group]
 
 /** Junior is waiting on you: paused on you, or its first pass waits for your OK. */
 export const juniorWaits = (i: Item): boolean => i.junior?.stage === 'needs-you' || i.tasks?.review?.state === 'ready'
+
+/**
+ * What Junior waits on you for, in a word: the task it paused on, a first pass
+ * waiting for your OK, or nothing. A new question from Junior is new, even if
+ * nothing changed at the source.
+ */
+export const waitKeyOf = (i: Pick<Item, 'tasks'>): string =>
+  i.tasks?.next ? `next:${i.tasks.next.id}` : i.tasks?.review?.state === 'ready' ? 'review' : ''
+
+/** What "not useful" stamps on the item: its source time and what Junior waits on. Either moving is "something new". */
+export const quietKey = (i: Pick<Item, 'updatedAt' | 'tasks'>): string => `${i.updatedAt}|${waitKeyOf(i)}`
+
+/** You marked it not useful, and nothing new has happened on it since. */
+export const quieted = (i: Pick<Item, 'updatedAt' | 'tasks' | 'notUseful'>): boolean => !!i.notUseful && i.notUseful === quietKey(i)
+
+/** On Needs you: Junior waits on you, and you haven't marked it not useful since the last new thing. */
+export const onNeeds = (i: Item): boolean => juniorWaits(i) && !quieted(i)
 
 /** You are waiting on someone else: their turn, or your PR waiting on review. */
 export const isWaitingOnOthers = (i: Item): boolean => i.flow?.turn === 'others' || i.kind === 'own-pr-open' || i.kind === 'own-pr-stale'
@@ -53,10 +72,11 @@ export function ledgerRows<T extends Item>(items: readonly T[], tab: LedgerTab):
   const byScore = (a: T, b: T) => b.score - a.score
   switch (tab) {
     case 'needs':
-      return items.filter(juniorWaits).sort(byScore)
+      return items.filter(onNeeds).sort(byScore)
     case 'up': {
       const at = (i: T) => LEDGER_GROUPS.indexOf(ledgerGroup(i))
-      return items.filter((i) => i.kind !== 'digest' && !juniorWaits(i)).sort((a, b) => at(a) - at(b) || byScore(a, b))
+      // a quieted item is moved here, not hidden
+      return items.filter((i) => i.kind !== 'digest' && !onNeeds(i)).sort((a, b) => at(a) - at(b) || byScore(a, b))
     }
     case 'reviews':
       return items.filter((i) => i.reason === 'review-requested').sort((a, b) => Number(b.tasks?.review?.state === 'ready') - Number(a.tasks?.review?.state === 'ready') || byScore(a, b))
@@ -71,15 +91,21 @@ export function ledgerRows<T extends Item>(items: readonly T[], tab: LedgerTab):
   }
 }
 
-/** A tab's count, and how many of those wait on you (orange): all of Needs you, a person on the rest. */
+/**
+ * A tab's count, and how many of those wait on you (orange): all of Needs you,
+ * a person on the rest. Nothing marked not useful counts as orange.
+ */
 export function ledgerCount(items: readonly Item[], tab: LedgerTab): { n: number; hot: number } {
   const rows = ledgerRows(items, tab)
   if (tab === 'needs') return { n: rows.length, hot: rows.length }
-  return { n: rows.length, hot: tab === 'waiting' || tab === 'with' ? rows.filter(juniorWaits).length : rows.filter((i) => personWaits(i) && !juniorWaits(i)).length }
+  return { n: rows.length, hot: tab === 'waiting' || tab === 'with' ? rows.filter(onNeeds).length : rows.filter((i) => personWaits(i) && !juniorWaits(i)).length }
 }
 
 /** A person waits on you: the age column turns orange. Junior waiting on you does not. */
 export const personWaits = (i: Item): boolean => i.group === 'blocking' && i.junior?.stage !== 'needs-you'
+
+/** The row's age reads orange: a person waits, it's in their group, and you haven't marked it not useful. */
+export const ageHot = (i: Item): boolean => personWaits(i) && ledgerGroup(i) === 'waiting' && !quieted(i)
 
 /**
  * The handed-off PR waits on a switched-off watch: nothing will run on it

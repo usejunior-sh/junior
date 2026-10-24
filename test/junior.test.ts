@@ -17,6 +17,14 @@ import { DEFAULT_PERSONA, RULES_PROMPT, RULES_PROMPT_HEADLESS, cleanName, person
 import { SHAPES, shapePaths } from '../core/junior/shapes.js'
 import { carryOver, dayKey, draftPlan, matchItem, planRows, refsIn, shortRef, type PlanItem, type TodayEntry } from '../core/junior/today.js'
 import { openSqliteStore } from '../core/store/sqlite.js'
+import { markNotUsefulOp, NOT_USEFUL_UNDO_MS, undoNotUsefulOp } from '../server/items-ops.js'
+import type { WorkspaceRuntime } from '../server/workspace/runtime.js'
+import type { WorkItem } from '../core/work/types.js'
+import { quieted } from '../core/junior/ledger.js'
+import { taskSummary } from '../core/work/tasks.js'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
 
 const MIN = 60_000
 const HOUR = 60 * MIN
@@ -675,3 +683,77 @@ test('today store: an emptied day stays opened; a drafted day counts as planned'
     await store.close()
   }
 })
+
+// ---------------------------------------------------------------------------
+// "Not useful" on a Needs you row: the op (server/items-ops.ts)
+// ---------------------------------------------------------------------------
+
+async function withNotUseful(fn: (rt: WorkspaceRuntime, item: WorkItem) => Promise<void>) {
+  const dir = mkdtempSync(path.join(tmpdir(), 'junior-not-useful-'))
+  const store = openSqliteStore(path.join(dir, 'junior.db'))
+  const rt = { store, meta: { id: 'test' }, clients: new Set(), inboxCache: null } as unknown as WorkspaceRuntime
+  const item: WorkItem = {
+    id: 'github:acme/web#3318', source: 'github', kind: 'review-requested', title: 'Bump eslint-plugin-react', url: 'https://github.com/acme/web/pull/3318',
+    repo: 'acme/web', author: 'priya', peopleWaiting: 1, createdAt: '2026-10-22T08:00:00Z', updatedAt: '2026-10-22T09:00:00Z',
+  }
+  try {
+    await store.items.upsert(item)
+    await fn(rt, item)
+  } finally {
+    await store.close()
+    rmSync(dir, { recursive: true, force: true })
+  }
+}
+
+const notUsefulEvents = async (rt: WorkspaceRuntime, id: string) => (await rt.store.items.events(id)).filter((e) => e.event === 'not-useful')
+
+test('not useful: one event by you and a stamp; the same stamp again writes nothing', () =>
+  withNotUseful(async (rt, item) => {
+    const t = (await rt.store.tasks.add({ itemId: item.id, title: 'Which base branch?', owner: 'junior', why: 'you' }, NOW))!
+    await rt.store.tasks.move(t.id, 'waiting', {}, NOW + 1)
+    await markNotUsefulOp(rt, { id: item.id }, NOW + 2)
+    const evs = await notUsefulEvents(rt, item.id)
+    assert.equal(evs.length, 1)
+    assert.equal(evs[0]!.actor, 'user')
+    assert.deepEqual(evs[0]!.detail, { from: 'needs', wait: `next:${t.id}` })
+    const got = (await rt.store.items.get(item.id))!
+    assert.equal(got.notUseful, `2026-10-22T09:00:00Z|next:${t.id}`)
+    assert.equal(quieted({ ...got, tasks: taskSummary(await rt.store.tasks.list(item.id)) ?? undefined }), true)
+    await markNotUsefulOp(rt, { id: item.id }, NOW + 3)
+    assert.equal((await notUsefulEvents(rt, item.id)).length, 1)
+  }))
+
+test('not useful: a scan keeps the stamp, and new source activity un-quiets it', () =>
+  withNotUseful(async (rt, item) => {
+    await markNotUsefulOp(rt, { id: item.id }, NOW)
+    await rt.store.items.upsert({ ...item, updatedAt: '2026-10-22T10:00:00Z' })
+    const got = (await rt.store.items.get(item.id))!
+    assert.equal(got.notUseful, '2026-10-22T09:00:00Z|')
+    assert.equal(quieted(got), false)
+  }))
+
+test('not useful: undo within the window takes the event back and clears the stamp', () =>
+  withNotUseful(async (rt, item) => {
+    await markNotUsefulOp(rt, { id: item.id }, NOW)
+    await undoNotUsefulOp(rt, { id: item.id }, NOW + 5_000)
+    assert.equal((await notUsefulEvents(rt, item.id)).length, 0)
+    assert.equal((await rt.store.items.get(item.id))!.notUseful, undefined)
+    assert.ok((await rt.store.items.events(item.id)).some((e) => e.event === 'created'), 'the rest of the log stays')
+    // nothing left to undo
+    await assert.rejects(undoNotUsefulOp(rt, { id: item.id }, NOW + 6_000), /the undo window has passed/)
+  }))
+
+test('not useful: undo after the window is refused and the mark stands', () =>
+  withNotUseful(async (rt, item) => {
+    await markNotUsefulOp(rt, { id: item.id }, NOW)
+    await assert.rejects(undoNotUsefulOp(rt, { id: item.id }, NOW + NOT_USEFUL_UNDO_MS + 1), /the undo window has passed/)
+    assert.equal((await notUsefulEvents(rt, item.id)).length, 1)
+    assert.equal((await rt.store.items.get(item.id))!.notUseful, '2026-10-22T09:00:00Z|')
+  }))
+
+test('not useful: an unknown item is refused', () =>
+  withNotUseful(async (rt) => {
+    await assert.rejects(markNotUsefulOp(rt, { id: 'github:acme/web#1' }, NOW), /no such item/)
+    await assert.rejects(undoNotUsefulOp(rt, { id: 'github:acme/web#1' }, NOW), /no such item/)
+    await assert.rejects(markNotUsefulOp(rt, {}, NOW), /need an item id/)
+  }))

@@ -455,6 +455,15 @@ export class SqliteWorkItems implements WorkItemStore {
     return true
   }
 
+  async unnote(id: string, event: ItemNoteKind, actor: string, since: number): Promise<boolean> {
+    const last = this.db
+      .prepare('SELECT seq, at FROM item_events WHERE item_id = ? AND event = ? AND actor = ? ORDER BY seq DESC LIMIT 1')
+      .get(id, event, actor) as { seq: number; at: number } | undefined
+    if (!last || last.at < since) return false
+    this.db.prepare('DELETE FROM item_events WHERE item_id = ? AND seq = ?').run(id, last.seq)
+    return true
+  }
+
   async eventsBetween(since: number, until: number): Promise<ItemWindowEvent[]> {
     // idx_item_events_at (migration 38)
     const rows = this.db
@@ -478,7 +487,7 @@ export class SqliteWorkItems implements WorkItemStore {
 
   async setFields(id: string, patch: ItemFieldsPatch): Promise<void> {
     this.patchPayload(id, (next) => {
-      for (const k of ['reason', 'label', 'parent', 'playbook', 'handoff', 'notNow'] as const) {
+      for (const k of ['reason', 'label', 'parent', 'playbook', 'handoff', 'notNow', 'notUseful'] as const) {
         if (!(k in patch)) continue
         const v = patch[k]
         if (v == null) delete next[k]
