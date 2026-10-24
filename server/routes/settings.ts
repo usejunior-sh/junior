@@ -1,5 +1,5 @@
 import os from 'node:os'
-import { type CommandsResponse, type ConnectorsResponse, isProviderId, type JuniorDayResponse, type ModelsResponse, type PersonaResponse, type PlaybookResponse, type PlaybooksResponse, type SettingsResponse, type TodayMatchResponse, type TodayResponse } from '../../shared/protocol.js'
+import { type CommandsResponse, type ConnectorsResponse, isProviderId, type JuniorDayResponse, type ModelsResponse, type PersonaResponse, type PlaybookResponse, type PlaybooksResponse, type ScoreWeightsResponse, type SettingsResponse, type TodayMatchResponse, type TodayResponse } from '../../shared/protocol.js'
 import { RESERVED_SERVER } from '../../core/job/tools.js'
 import { isPlaybookName, listPlaybooks, readDispatchTemplate, readPlaybook, writeDispatchTemplate, writePlaybook } from '../briefs.js'
 import { FOLDER_PROBE_TTL_MS, probeCommands, probeConnectors, probeModels, usableCommands } from '../workspace/probes.js'
@@ -8,7 +8,7 @@ import { localServersElsewhere } from '../jobs/preview.js'
 import { addToTodayOp, ensureToday, juniorDayOp, matchTodayOp, openTodayOp, removeFromTodayOp, savePersonaOp, todayView, userFirstName } from '../junior-ops.js'
 import { readJsonBody } from './http-util.js'
 import { errText } from '../errors.js'
-import { readSettings, touchesWatches, writeSettings } from '../settings-ops.js'
+import { clearScoreWeightOp, listScoreWeightsOp, readSettings, setScoreWeightOp, touchesWatches, writeSettings } from '../settings-ops.js'
 import { invalidateInbox } from '../ws/send.js'
 import type { ScopedCtx } from './ctx.js'
 
@@ -68,6 +68,22 @@ export async function settingsRoutes({ req, url, json, rt }: ScopedCtx): Promise
       body = { ok: false, error: String(err) }
     }
     json(body.ok ? 200 : 502, body)
+    return true
+  }
+  // Score weights you set (core/work/weights.ts): list, set, clear. All three through the settings ops.
+  if (url.pathname === '/api/score-weights' && req.method === 'GET') {
+    json(200, { ok: true, weights: await listScoreWeightsOp(rt) } satisfies ScoreWeightsResponse)
+    return true
+  }
+  if ((url.pathname === '/api/score-weights' || url.pathname === '/api/score-weights/clear') && req.method === 'POST') {
+    let body: ScoreWeightsResponse
+    try {
+      const raw = (await readJsonBody(req, 10_000)) ?? {}
+      body = url.pathname.endsWith('/clear') ? { ok: true, ...(await clearScoreWeightOp(rt, raw)) } : { ok: true, ...(await setScoreWeightOp(rt, raw)) }
+    } catch (err) {
+      body = { ok: false, error: errText(err) }
+    }
+    json(body.ok ? 200 : 400, body)
     return true
   }
   // settings, briefs, playbooks, dispatch

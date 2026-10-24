@@ -10,7 +10,7 @@ import type { ItemStatus } from '../../core/work/state.js'
 import { linkByRefs } from '../../core/work/link.js'
 import { rank } from '../../core/work/score.js'
 import { WorkspaceRuntime } from '../workspace/runtime.js'
-import { jobsEnabled, upsertItem } from '../settings-ops.js'
+import { jobsEnabled, readScoreWeights, upsertItem } from '../settings-ops.js'
 import { overdueJobs } from '../jobs/scheduler.js'
 import { inboxAlerts, withFlows } from './flow.js'
 import { recordSurfaced } from '../attention-ops.js'
@@ -142,7 +142,7 @@ export function syncInbox(rt: WorkspaceRuntime): Promise<InboxSnapshot> {
           }
         }
       }
-      const { items: ranked } = buildInbox({ items, notices, now })
+      const { items: ranked } = buildInbox({ items, notices, now, weights: await readScoreWeights(rt) })
       await withFlows(rt, ranked, true)
       const tasks = await rt.store.tasks.forItems(ranked.map((i) => i.id))
       for (const i of ranked) {
@@ -207,7 +207,7 @@ export async function listItemsByStatus(rt: WorkspaceRuntime, status: ItemStatus
     const deleted = await rt.store.items.deletedIds()
     for (const i of items) if (deleted.has(i.id)) i.deleted = true
   }
-  return withFlows(rt, linkByRefs(rank(items, now)), false)
+  return withFlows(rt, linkByRefs(rank(items, now, await readScoreWeights(rt))), false)
 }
 
 /** How many rows each status tab holds. The same scoping and folding its list gets. */

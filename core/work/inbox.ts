@@ -9,6 +9,7 @@
 import { linkByRefs } from './link.js'
 import { rank } from './score.js'
 import type { ScoredItem, WorkItem } from './types.js'
+import type { ScoreWeight } from './weights.js'
 
 export interface InboxOptions {
   /** items already read from the durable store (one row per id) */
@@ -16,6 +17,8 @@ export interface InboxOptions {
   /** degraded/skipped sources, for a gray line in the frontends */
   notices?: string[]
   now?: number
+  /** the corrections you set (weights.ts); expired ones are ignored at `now` */
+  weights?: readonly ScoreWeight[]
 }
 
 export interface InboxResult {
@@ -26,5 +29,5 @@ export interface InboxResult {
 /** Score and link a set of work items into the ranked view the inbox renders. */
 export function buildInbox(opts: InboxOptions): InboxResult {
   const now = opts.now ?? Date.now()
-  return { items: linkByRefs(rank(opts.items, now)), notices: opts.notices ?? [] }
+  return { items: linkByRefs(rank(opts.items, now, opts.weights)), notices: opts.notices ?? [] }
 }

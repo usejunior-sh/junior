@@ -4,6 +4,7 @@ import type { ItemStatus } from '../../core/work/state.js'
 import { log, logSubsystems, recentLogs } from '../log.js'
 import { linkByRefs } from '../../core/work/link.js'
 import { rank } from '../../core/work/score.js'
+import { readScoreWeights } from '../settings-ops.js'
 import { serializeJobFile, starterJobFile } from '../job-files.js'
 import { scanUsage } from '../../core/usage/ledger.js'
 import { summarize as summarizeUsage } from '../../core/usage/summary.js'
@@ -143,7 +144,7 @@ export async function itemRoutes({ req, url, json, rt }: ScopedCtx): Promise<boo
       const id = url.searchParams.get('id') ?? ''
       const all = await rt.store.items.listAll()
       const mine = all.filter((it) => it.jobId === id || (it.foundBy ?? []).some((p) => p.jobId === id))
-      body = { ok: true, items: linkByRefs(rank(mine)) }
+      body = { ok: true, items: linkByRefs(rank(mine, Date.now(), await readScoreWeights(rt))) }
     } catch (err) {
       body = { ok: false, error: err instanceof Error ? err.message : String(err) }
     }
@@ -210,7 +211,7 @@ export async function itemRoutes({ req, url, json, rt }: ScopedCtx): Promise<boo
       const runId = url.searchParams.get('runId') ?? ''
       const all = await rt.store.items.listAll()
       const mine = all.filter((it) => (it.foundBy ?? []).some((p) => p.runId === runId))
-      body = { ok: true, items: linkByRefs(rank(mine)) }
+      body = { ok: true, items: linkByRefs(rank(mine, Date.now(), await readScoreWeights(rt))) }
     } catch (err) {
       body = { ok: false, error: err instanceof Error ? err.message : String(err) }
     }

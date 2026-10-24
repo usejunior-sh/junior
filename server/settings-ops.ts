@@ -11,6 +11,7 @@ import { broadcast, broadcastSessionList, invalidateInbox } from './ws/send.js'
 import { browserProfiles } from './browser/profiles.js'
 import { DEFAULT_PROFILE } from '../core/browser/profiles.js'
 import type { WatchId, WatchSwitches } from '../core/work/handoff.js'
+import { dropWeight, liveWeights, putWeight, readWeights, type ScoreWeight, type ScoreWeightView, viewOf, weightFrom } from '../core/work/weights.js'
 
 // settings, briefs and dispatch
 
@@ -213,4 +214,56 @@ export async function linkSessionToItem(rt: WorkspaceRuntime, sessionId: string,
   await rt.store.links.add({ fromKind: 'session', fromId: sessionId, toKind: 'item', toId: itemId, role })
   rt.sessionItem.set(sessionId, itemId)
   broadcastSessionList(rt)
+}
+
+// Score weights you set (core/work/weights.ts): "this person matters", kept in
+// one config value. Every reader and writer goes through these ops: the HTTP
+// route, and the inbox ranking. A change re-ranks on the next inbox read.
+
+const SCORE_WEIGHTS_KEY = 'score.weights'
+const weightWrites = new WeakMap<WorkspaceRuntime, Promise<unknown>>()
+
+/** One writer at a time per workspace, so two quick corrections can't drop one. */
+function serialWeights<T>(rt: WorkspaceRuntime, fn: () => Promise<T>): Promise<T> {
+  const next = (weightWrites.get(rt) ?? Promise.resolve()).catch(() => undefined).then(fn)
+  weightWrites.set(rt, next)
+  return next
+}
+
+/** Every stored weight, expired ones included (the ranking drops those at its own `now`). */
+export async function readScoreWeights(rt: WorkspaceRuntime): Promise<ScoreWeight[]> {
+  return readWeights(await rt.store.config.get<unknown>(SCORE_WEIGHTS_KEY))
+}
+
+/** The live weights, newest first, each with when it expires and how it reads. */
+export async function listScoreWeightsOp(rt: WorkspaceRuntime, now = Date.now()): Promise<ScoreWeightView[]> {
+  return liveWeights(await readScoreWeights(rt), now).map(viewOf)
+}
+
+/** Set a weight { key, delta, reason? }. The same key again replaces it and renews its 60 days. */
+export async function setScoreWeightOp(rt: WorkspaceRuntime, raw: unknown, now = Date.now()): Promise<{ weight: ScoreWeightView; weights: ScoreWeightView[] }> {
+  const out = weightFrom(raw, now)
+  if (!out.ok) throw new Error(out.error)
+  const weight = out.weight
+  await serialWeights(rt, async () => {
+    await rt.store.config.set(SCORE_WEIGHTS_KEY, putWeight(await readScoreWeights(rt), weight, now))
+  })
+  log('info', 'inbox', `weight set: ${viewOf(weight).label}`, { key: weight.key, delta: weight.delta, workspace: rt.meta.id })
+  invalidateInbox(rt)
+  return { weight: viewOf(weight), weights: await listScoreWeightsOp(rt, now) }
+}
+
+/** Clear one weight by key ({ key }). Expired ones are pruned on the way. */
+export async function clearScoreWeightOp(rt: WorkspaceRuntime, raw: unknown, now = Date.now()): Promise<{ weights: ScoreWeightView[] }> {
+  const key = (raw as { key?: unknown } | null)?.key
+  if (typeof key !== 'string' || !key.trim()) throw new Error('key is required')
+  const removed = await serialWeights(rt, async () => {
+    const out = dropWeight(await readScoreWeights(rt), key, now)
+    if (out.removed) await rt.store.config.set(SCORE_WEIGHTS_KEY, out.weights)
+    return out.removed
+  })
+  if (!removed) throw new Error(`no weight for ${key}`)
+  log('info', 'inbox', `weight cleared: ${key}`, { workspace: rt.meta.id })
+  invalidateInbox(rt)
+  return { weights: await listScoreWeightsOp(rt, now) }
 }

@@ -5,7 +5,8 @@
  */
 import { ASKS, askOf } from './asks.js'
 import { reasonOf } from './fields.js'
-import type { Group, ItemKind, ScoredItem, WorkItem } from './types.js'
+import type { Group, ItemKind, RankPart, ScoredItem, WorkItem } from './types.js'
+import { type ScoreWeight, signed, weightParts } from './weights.js'
 
 export const BASE: Record<ItemKind, number> = {
   'review-requested': 100,
@@ -73,29 +74,52 @@ export function daysSince(iso: string, now = Date.now()): number {
   return Math.max(0, (now - Date.parse(iso)) / 86_400_000)
 }
 
-export function scoreItem(item: WorkItem, now = Date.now()): ScoredItem {
+/**
+ * Score one item, as a sum of named parts. `weights` are the corrections you
+ * set (weights.ts): each live one that matches adds exactly its delta, as its
+ * own part, and is named at the end of rankWhy so the order never moves for a
+ * reason you can't see.
+ */
+export function scoreItem(item: WorkItem, now = Date.now(), weights: readonly ScoreWeight[] = []): ScoredItem {
   const waitDays = daysSince(item.updatedAt, now)
   const { base, group } = placeOf(item)
-  const ageWeight = ageWeightFor(group)
-  let score =
-    base + item.peopleWaiting * 15 + Math.min(waitDays, WAIT_CAP_DAYS) * ageWeight
-  if (item.ciFailing) score += 10
-  score += PRIORITY_BOOST[item.priority ?? 0] ?? 0
-  if (item.isDraft) score -= 25
+  const parts: RankPart[] = [{ points: base, label: baseLabel(item) }]
+  if (item.peopleWaiting > 0) {
+    parts.push({ points: item.peopleWaiting * 15, label: item.peopleWaiting === 1 ? '1 person waiting' : `${item.peopleWaiting} people waiting` })
+  }
+  const aged = Math.round(Math.min(waitDays, WAIT_CAP_DAYS) * ageWeightFor(group) * 10) / 10
+  if (aged > 0) parts.push({ points: aged, label: `waited ${age(waitDays)}` })
+  if (item.ciFailing) parts.push({ points: 10, label: 'CI failing' })
+  const boost = PRIORITY_BOOST[item.priority ?? 0] ?? 0
+  if (boost) parts.push({ points: boost, label: `${PRIORITY_WORD[item.priority!]} priority` })
+  if (item.isDraft) parts.push({ points: -25, label: 'draft' })
+  const mine = weightParts(item, weights, now)
+  for (const w of mine) parts.push({ points: w.points, label: w.label, weight: w.key })
+  const score = Math.round(parts.reduce((sum, p) => sum + p.points, 0) * 10) / 10
+  const said = mine.map((w) => ` · ${signed(w.points)} ${w.label}`).join('')
   return {
     ...item,
-    score: Math.round(score * 10) / 10,
+    score,
     group,
-    rankWhy: reasonFor(item, waitDays),
+    rankWhy: reasonFor(item, waitDays) + said,
+    rankParts: parts,
     ask: askOf(item),
     reason: reasonOf(item),
   }
 }
 
-export function rank(items: WorkItem[], now = Date.now()): ScoredItem[] {
+export function rank(items: WorkItem[], now = Date.now(), weights: readonly ScoreWeight[] = []): ScoredItem[] {
   return items
-    .map((i) => scoreItem(i, now))
+    .map((i) => scoreItem(i, now, weights))
     .sort((a, b) => b.score - a.score || a.id.localeCompare(b.id))
+}
+
+const PRIORITY_WORD: Record<number, string> = { 1: 'urgent', 2: 'high', 3: 'normal', 4: 'low' }
+
+/** The base part's name: the kind in words, or a job hit's ask. */
+function baseLabel(item: WorkItem): string {
+  if (item.kind === 'job-hit') return `${ASKS[askOf(item)].name.toLowerCase()}, from a job`
+  return item.kind.replace(/-/g, ' ')
 }
 
 function age(waitDays: number): string {

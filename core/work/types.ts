@@ -142,11 +142,23 @@ export interface WorkItem {
   notUseful?: string
 }
 
+/** One term of an item's score. `weight` names the weight you set (weights.ts) when it is one. */
+export interface RankPart {
+  points: number
+  label: string
+  weight?: string
+}
+
 export interface ScoredItem extends WorkItem {
   score: number
   group: Group
   /** one human-readable line: why this ranked where it did */
   rankWhy: string
+  /**
+   * the score as a sum, one named part per term (score.ts), weights you set
+   * included: what the reason chip shows. Parts add up to `score`.
+   */
+  rankParts?: RankPart[]
   /** what the item asks of you (asks.ts), resolved: a job hit's stored `ask` or its kind's */
   ask: import('./asks.js').Ask
   /** why it is here (fields.ts), resolved: what was stored or the kind's */

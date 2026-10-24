@@ -8,7 +8,17 @@ import type { SessionKind } from './workspace.js'
 // Ranked work items. The domain types live in core/work/types.ts (fat core);
 // re-exported here so frontends keep importing one contract file.
 
-export type { Group, ItemKind, Provenance, ScoredItem, WorkItem, WorkSource } from '../../core/work/types.js'
+export type { Group, ItemKind, Provenance, RankPart, ScoredItem, WorkItem, WorkSource } from '../../core/work/types.js'
+export type { ScoreWeight, ScoreWeightView } from '../../core/work/weights.js'
+
+/**
+ * Score weights you set (GET /api/score-weights, POST /api/score-weights
+ * { key, delta, reason? }, POST /api/score-weights/clear { key }). Every
+ * answer carries the live list; a set also returns the weight it wrote.
+ */
+export type ScoreWeightsResponse =
+  | { ok: true; weights: import('../../core/work/weights.js').ScoreWeightView[]; weight?: import('../../core/work/weights.js').ScoreWeightView }
+  | { ok: false; error: string }
 
 export type InboxSnapshot = {
   syncedAt: number
