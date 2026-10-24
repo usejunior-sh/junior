@@ -25,7 +25,7 @@
 
 /* ---------- phone: menus, popovers and the remaining fixed-width dialogs ---------- */
 @media (max-width: 767px), (pointer: coarse) and (max-height: 500px) {
-  #deleteSession, dialog.projModal, dialog.artDialog {
+  #deleteSession, dialog.artDialog {
     width: calc(100vw - 16px); max-width: none;
     margin: calc(env(safe-area-inset-top) + 8px) 8px auto;
     max-height: calc(var(--vvh, 100dvh) - env(safe-area-inset-top) - 16px); overflow-y: auto;
