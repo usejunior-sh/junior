@@ -20,6 +20,7 @@ import { defaultProject } from '../session/sessions.js'
 import { type JobPreview, runJobPreview } from './preview.js'
 import { invalidateInbox } from '../ws/send.js'
 import { listProfiles } from '../browser/profiles.js'
+import { curatedTemplateFiles } from './templates.js'
 
 /**
  * The Slack job (M4): seeded on, the way Slack work reaches the inbox. One
@@ -82,11 +83,12 @@ export async function migrateJobProjects(rt: WorkspaceRuntime): Promise<void> {
 /**
  * The shipped templates as job files. The Slack job runs in the workspace's
  * default project (where Junior reads code to answer); with none yet it is
- * held, asking for one, and picks one up once a project is added.
+ * held, asking for one, and picks one up once a project is added. The curated
+ * chores (server/jobs/templates.ts) land there too, off until you turn them on.
  */
 async function jobTemplateFiles(rt: WorkspaceRuntime): Promise<Record<string, JobFileSpec>> {
-  const project = await defaultProject(rt)
-  return { slack: { id: 'template-slack', project: project?.id ?? '', ...SLACK_TEMPLATE } }
+  const project = (await defaultProject(rt))?.id ?? ''
+  return { slack: { id: 'template-slack', project, ...SLACK_TEMPLATE }, ...curatedTemplateFiles(project) }
 }
 
 /**
