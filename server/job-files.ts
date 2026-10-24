@@ -223,8 +223,8 @@ export function parseJobFile(name: string, text: string): ParsedJobFile {
       ? { ...(briefModel ? { model: briefModel } : {}), ...(briefTemplate && PLAYBOOK_RE.test(briefTemplate) ? { template: briefTemplate } : {}) }
       : undefined
 
-  const filing = filingFrom({ reason: d.reason, labels: d.labels, start_alone: d.start_alone, only_show: d.only_show, ignore: d.ignore }, errors)
-  if (filing && output === 'digest') errors.push('reason, labels and tiers work with output: items — a digest files no items')
+  const filing = filingFrom({ reason: d.reason, labels: d.labels, start_alone: d.start_alone, only_show: d.only_show, ignore: d.ignore, source: d.source }, errors)
+  if (filing && output === 'digest') errors.push('reason, labels, tiers and source work with output: items — a digest files no items')
 
   const draftRaw = str(d.draft) || 'false'
   if (draftRaw !== 'true' && draftRaw !== 'false') errors.push('draft must be true or false')
@@ -452,6 +452,7 @@ export function starterJobFile(projects: { id: string; name: string }[]): string
     '# brief_template: job-hit (a playbook in playbooks/; default = the item\'s kind)',
     '# browser: work           (a browser profile, Settings → Browser: runs get the browser)',
     '# browser_sites: [app.pendo.io]  (the only sites it may open; *.pendo.io for subdomains)',
+    '# source: sentry          (where its finds live, kebab-case; GitHub, Slack, Linear links keep theirs)',
     '---',
     '',
     'What to look for, where, and what counts as a match.',

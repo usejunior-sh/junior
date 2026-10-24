@@ -25,7 +25,7 @@ import { jobLibrary } from '../session/changes.js'
 import { broadcast } from '../ws/send.js'
 import { VERSION } from '../config.js'
 import { DIGEST_SHAPE, identityFromUrl, rowFiling, upsertShape } from './scan-mcp.js'
-import type { JobFiling } from '../../core/job/filing.js'
+import { filedSource, type JobFiling } from '../../core/job/filing.js'
 import { errResult, okResult } from '../junior-mcp.js'
 import { sortForWorkspace } from '../session/actions-record.js'
 import { ownServersOf } from '../../core/actions/own.js'
@@ -285,6 +285,7 @@ export async function runJobPreview(rt: WorkspaceRuntime, pv: JobPreview, spec: 
                 why: args.why,
                 ask: args.ask,
                 ...rowFiling(spec.filing, args),
+                source: filedSource(spec.filing, ident.source),
               })
               return okResult(existing ? `already filed, ${existing.status}: ${ident.id}` : `new: filed ${ident.id}`)
             }),

@@ -5,8 +5,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { parseJobFile, serializeJobFile } from '../server/job-files.js'
-import { filingPrompt } from '../core/job/filing.js'
-import { rowFiling } from '../server/jobs/scan-mcp.js'
+import { filedSource, filingFromJson, filingPrompt, isJobSource } from '../core/job/filing.js'
+import { identityFromUrl, rowFiling } from '../server/jobs/scan-mcp.js'
 
 const file = (extra: string) => `---
 id: j1
@@ -74,4 +74,53 @@ test('the seeded Slack job parses clean: asked or mentioned, three tiers, on', a
   assert.deepEqual(spec.filing?.reasons, ['asked', 'mentioned'])
   assert.equal(spec.filing?.tiers?.start.length, 2)
   assert.equal(spec.filing?.tiers?.ignore.length, 2)
+})
+
+test('source: a job names where its finds live, and the name goes back the same', () => {
+  const { spec, errors } = parseJobFile('pd', file('source: pagerduty'))
+  assert.deepEqual(errors, [])
+  assert.deepEqual(spec.filing, { reasons: ['found'], labels: [], source: 'pagerduty' })
+  assert.match(serializeJobFile(spec), /^source: pagerduty$/m)
+  assert.deepEqual(parseJobFile('pd', serializeJobFile(spec)).spec.filing, spec.filing)
+  // stored as JSON on the job row and read back
+  assert.deepEqual(filingFromJson(JSON.stringify(spec.filing)), spec.filing)
+  // it sits beside the other filing keys
+  assert.deepEqual(parseJobFile('s', file('source: pager-duty\nlabels: [bug]')).spec.filing, { reasons: ['found'], labels: ['bug'], source: 'pager-duty' })
+})
+
+test('source: a bad value is an error that holds the job, never a crash or a guess', () => {
+  for (const bad of ['Sentry', 'pager duty', 'pager_duty', '-sentry', 'sentry-', '9lives', 'a'.repeat(41)]) {
+    const { spec, errors } = parseJobFile('j', file(`source: "${bad}"`))
+    assert.ok(errors.some((e) => e.startsWith('source:') && e.includes('kebab-case')), `${bad}: ${errors.join('; ')}`)
+    assert.equal(spec.filing, undefined, bad)
+  }
+  // Junior's own sources come from the link, not the file
+  for (const own of ['github', 'slack', 'linear', 'web', 'job', 'manual']) {
+    assert.ok(parseJobFile('j', file(`source: ${own}`)).errors.some((e) => e.includes(`"${own}" is Junior's own`)), own)
+  }
+  assert.ok(parseJobFile('j', file('source: [sentry, pagerduty]')).errors.some((e) => e.includes('source must be one name')))
+  assert.ok(parseJobFile('j', file('source: sentry\noutput: digest')).errors.some((e) => e.includes('source') && e.includes('digest')))
+  // a hand-edited row that lost its way reads as no source
+  assert.equal(filingFromJson(JSON.stringify({ reasons: ['found'], labels: [], source: 'Not OK' }))?.source, undefined)
+  assert.equal(isJobSource('sentry'), true)
+  assert.equal(isJobSource('github'), false)
+})
+
+test('source: links no source owns file under the job\'s; GitHub, Slack and Linear keep theirs', () => {
+  const pd = { reasons: ['found' as const], labels: [], source: 'pagerduty' }
+  const web = identityFromUrl('https://acme.pagerduty.com/incidents/Q1ABC')!
+  assert.equal(web.source, 'web')
+  assert.equal(filedSource(pd, web.source), 'pagerduty')
+  assert.equal(filedSource(pd, identityFromUrl('https://github.com/acme/api/pull/12')!.source), 'github')
+  assert.equal(filedSource(pd, identityFromUrl('NOV-140')!.source), 'linear')
+  assert.equal(filedSource(pd, 'slack'), 'slack')
+})
+
+test('source: without the key, filing is exactly as before', () => {
+  assert.equal(parseJobFile('j', file('')).spec.filing, undefined)
+  assert.doesNotMatch(serializeJobFile(parseJobFile('j', file('')).spec), /^source:/m)
+  assert.equal(filedSource(undefined, 'web'), 'web')
+  assert.equal(filedSource({ reasons: ['asked'], labels: [] }, 'web'), 'web')
+  assert.equal(filedSource(undefined, 'github'), 'github')
+  assert.equal(filingFromJson(JSON.stringify({ reasons: ['asked'], labels: ['bug'] }))?.source, undefined)
 })

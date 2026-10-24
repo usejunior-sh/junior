@@ -253,6 +253,8 @@ export interface JobPreviewRow {
   reason?: string
   label?: string
   tier?: string
+  /** the source the real run would file it under (filing.ts filedSource) */
+  source?: string
 }
 
 /** What a dry run returns: the would-be items or the would-be digest, and what it cost. Nothing is saved. */

@@ -8,6 +8,12 @@
  *   start_alone: [...]             what Junior may start on alone (plain words)
  *   only_show: [...]               what is filed for you to see, nothing started
  *   ignore: [...]                  what is never filed
+ *   source: sentry                 the source its finds belong to (kebab-case)
+ *
+ * `source` names where a find lives when its link is one Junior doesn't own:
+ * a Sentry job's issue links read as Sentry, not as "the web". A GitHub,
+ * Slack or Linear link keeps its own source, so its ref, watches and reply
+ * route stay intact. Absent = the link decides, as before.
  *
  * The tiers are plain-English lists, read by the run; the run tags each row
  * "start" or "show", and code holds "show" rows back from starting alone.
@@ -15,6 +21,7 @@
  * Pure and browser-safe.
  */
 import { isItemLabel, isReason, ITEM_LABELS, type ItemLabel, type Reason } from '../work/fields.js'
+import { isKnownSource, KNOWN_SOURCES, type WorkSource } from '../../shared/sources.js'
 
 export type JobFiling = {
   /** the reasons a row may carry; the first is the default */
@@ -22,6 +29,8 @@ export type JobFiling = {
   /** the labels a row may carry; empty = any */
   labels: ItemLabel[]
   tiers?: { start: string[]; show: string[]; ignore: string[] }
+  /** the source its finds belong to (`source: pagerduty`); absent = the link decides */
+  source?: string
 }
 
 export const DEFAULT_FILING: JobFiling = { reasons: ['found'], labels: [] }
@@ -33,7 +42,22 @@ const isJobLabel = (v: unknown): v is ItemLabel => isItemLabel(v) && JOB_LABELS.
 /** Reasons a job may file under: the ones a scanner can't (your PRs and review requests are GitHub's). */
 export const JOB_REASONS: readonly Reason[] = ['asked', 'assigned', 'mentioned', 'found']
 
-export const FILING_KEYS = ['reason', 'labels', 'start_alone', 'only_show', 'ignore'] as const
+export const FILING_KEYS = ['reason', 'labels', 'start_alone', 'only_show', 'ignore', 'source'] as const
+
+/** A job's own source: kebab-case, as an MCP server is usually named ("sentry", "pager-duty"). */
+const SOURCE_RE = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/
+const SOURCE_MAX = 40
+
+/** A source a job may declare: kebab-case, and not one Junior already knows (those come from the link). */
+export const isJobSource = (v: unknown): v is string => typeof v === 'string' && v.length <= SOURCE_MAX && SOURCE_RE.test(v) && !isKnownSource(v)
+
+/**
+ * The source a filed row carries: the job's own when the link is one no
+ * known source owns (it read as `web`), else the link's. Pure.
+ */
+export function filedSource(f: JobFiling | undefined, linkSource: WorkSource): WorkSource {
+  return linkSource === 'web' && f?.source && isJobSource(f.source) ? f.source : linkSource
+}
 
 type Raw = string | string[] | undefined
 const list = (v: Raw): string[] => (Array.isArray(v) ? v : typeof v === 'string' && v.trim() ? [v] : []).map((s) => s.trim()).filter(Boolean)
@@ -55,8 +79,16 @@ export function filingFrom(d: Partial<Record<(typeof FILING_KEYS)[number], Raw>>
   const show = list(d.only_show)
   const ignore = list(d.ignore)
   const tiers = start.length || show.length || ignore.length ? { start, show, ignore } : undefined
-  if (!reasons.length && !labels.length && !tiers) return undefined
-  return { reasons: reasons.length ? reasons : ['found'], labels, ...(tiers ? { tiers } : {}) }
+  let source: string | undefined
+  if (Array.isArray(d.source)) errors.push('source must be one name, e.g. source: sentry')
+  else if (typeof d.source === 'string' && d.source.trim()) {
+    const s = d.source.trim()
+    if (isKnownSource(s)) errors.push(`source: "${s}" is Junior's own (${KNOWN_SOURCES.join(', ')}); their links are recognised without it`)
+    else if (!isJobSource(s)) errors.push(`source: "${s}" must be lower-case kebab-case, up to ${SOURCE_MAX} characters, e.g. sentry or pager-duty`)
+    else source = s
+  }
+  if (!reasons.length && !labels.length && !tiers && !source) return undefined
+  return { reasons: reasons.length ? reasons : ['found'], labels, ...(tiers ? { tiers } : {}), ...(source ? { source } : {}) }
 }
 
 /** The filing → frontmatter keys, only what differs from the default. */
@@ -69,6 +101,7 @@ export function filingKeys(f: JobFiling | undefined): Record<string, string | st
   if (f.tiers?.start.length) out.start_alone = f.tiers.start
   if (f.tiers?.show.length) out.only_show = f.tiers.show
   if (f.tiers?.ignore.length) out.ignore = f.tiers.ignore
+  if (f.source) out.source = f.source
   return out
 }
 
@@ -84,6 +117,7 @@ export function filingFromJson(raw: string | null | undefined): JobFiling | unde
       reasons: reasons.length ? reasons : ['found'],
       labels: strs(o.labels).filter(isJobLabel),
       ...(t ? { tiers: { start: strs(t.start), show: strs(t.show), ignore: strs(t.ignore) } } : {}),
+      ...(isJobSource(o.source) ? { source: o.source } : {}),
     }
   } catch {
     return undefined

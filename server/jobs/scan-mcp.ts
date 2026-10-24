@@ -17,7 +17,7 @@ import { errResult, okResult } from '../junior-mcp.js'
 import { upsertItem } from '../settings-ops.js'
 import { invalidateInbox } from '../ws/send.js'
 import { briefFiledItem } from '../brief-run.js'
-import { DEFAULT_FILING, labelsOf, type JobFiling } from '../../core/job/filing.js'
+import { DEFAULT_FILING, filedSource, labelsOf, type JobFiling } from '../../core/job/filing.js'
 import { isItemLabel, isReason, type ItemLabel, type Reason } from '../../core/work/fields.js'
 import { isTier, type Tier } from '../../core/rules/rules.js'
 import { applyRules } from '../rules-ops.js'
@@ -132,7 +132,8 @@ export function makeScanMcp(rt: WorkspaceRuntime, job: Job, runId: string, onUps
             const filed = rowFiling(job.filing, args)
             const item: CoreWorkItem = {
               id: ident.id,
-              source: ident.source,
+              // a Sentry job's links read as Sentry, not the web (filing.ts filedSource)
+              source: filedSource(job.filing, ident.source),
               kind: job.createsItems ? 'job-hit' : 'fyi',
               title: args.title,
               url: ident.url,
