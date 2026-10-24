@@ -13,6 +13,13 @@
  * item row "not useful": it leaves until something new happens on it, and a
  * one-line notice holds its slot for 5 s with Undo (U).
  *
+ * A promise row (kind `promise`, core/work/promise-view.ts) reads "Owed to
+ * Dev · overdue 1d" over your own words in a mono quote chip; the state cell
+ * says when it's due, orange only once it's late. ⏎ opens the thread. N on
+ * a promise row, on any tab, is "Not a promise": the row leaves, its thread
+ * files no more promises, and a notice holds the slot for 5 s (no Undo: the
+ * server has none).
+ *
  * A Waiting row with a due nudge (day.nudges) reads "Waiting 3d · Draft
  * nudge?". Opening it drafts nothing: ⏎ (or the button) asks the server for
  * the draft, a Nudge row opens with the text in a box, and only ⌘↩ in the box
@@ -45,7 +52,7 @@ import { TURN_ON_LABEL, WATCH_CANT_SAYS, WATCH_OFF_SAYS, WATCH_STILL_OFF, withAn
 import { itemHash } from '../hooks.js'
 import { CLOSE_HINT, CLOSE_ONLY_EMPTY, CLOSE_SHOWN, CLOSE_TITLE, closeGroupLabel, closeMoreLabel, closeOrder, closeSays, KEEP_TITLE, keptSaid } from '../../../core/work/close.js'
 import { closeWithNote } from '../closeDraft.js'
-import { doneItem, keepOpen, markNotUseful, sendHandoff, snoozeItem, turnOnWatch, undoNotUseful, VERB, type HandoffVerb } from '../handoff.js'
+import { doneItem, keepOpen, markNotAPromise, markNotUseful, sendHandoff, snoozeItem, turnOnWatch, undoNotUseful, VERB, type HandoffVerb } from '../handoff.js'
 import { anyDialogOpen, isGoSequence, isTypingTarget } from '../keys.js'
 import { kindIcon, shortAge } from '../itemUi.js'
 import { playbookOf, refOf } from '../refs.js'
@@ -61,6 +68,7 @@ import { TurnOnButton, WatchCap } from './WatchOff.js'
 import { setSelectedItem } from '../selection.js'
 import { handOffOf, pauseOf } from '../itemVerbs.js'
 import { DepBatchLine } from './DepBatchLine.js'
+import { promiseDue, promiseSays, quoted, saidWhen, type PromiseDue } from '../../../core/work/promise-view.js'
 
 type Nav = { onNavigate: (hash: string) => void }
 
@@ -75,7 +83,10 @@ const GONE_OUT_MS = 120
  * list), how to put it back, when it was marked (the hold's cap counts from
  * there) and the mark's request (an undo waits for it).
  */
-type Gone = { item: ScoredItem; at: number; wasOpen: boolean; leaving: boolean; markedAt: number; marking: Promise<string | null> }
+type Gone = { item: ScoredItem; at: number; wasOpen: boolean; leaving: boolean; markedAt: number; marking: Promise<string | null>; kind: GoneKind }
+
+/** What took the row: "not useful" (Undo within 5 s), or "not a promise" (no undo). */
+type GoneKind = 'not-useful' | 'not-a-promise'
 
 /**
  * One line of the ledger: an inbox item, something Junior is held on (a
@@ -99,8 +110,16 @@ const initials = (name: string) =>
 /** Who the row is about: the person who asked, you for your own, Junior for a job's find. */
 function whoOf(i: ScoredItem, me: string | null): string {
   if (i.kind === 'manual' || (me && i.author === me)) return 'You'
+  // a promise names who's owed; with no one named it is simply yours
+  if (i.kind === 'promise' && !i.author.trim()) return 'You'
   if (!i.author) return i.source === 'job' ? 'Junior' : '—'
   return i.author.replace(/^@/, '')
+}
+
+/** A promise row's facts, while it is yours (not handed to Junior). */
+function promiseOf(i: ScoredItem): NonNullable<ScoredItem['promise']> | null {
+  if (i.kind !== 'promise' || !i.promise) return null
+  return i.junior || i.handoff === 'on' || i.handoff === 'paused' ? null : i.promise
 }
 
 /** The one verb ⏎ does on an open row; `watch` when it turns a switched-off watch on. */
@@ -113,6 +132,8 @@ function primaryOf(i: ScoredItem, move: RowLine | null, act: Act, open: () => vo
   // a local switch, not a send: safe on ⏎, its label and limit on screen
   const off = watchOffOf(i)
   if (off) return { label: TURN_ON_LABEL[off], run: () => turnOn(off, i.id), watch: off }
+  // a promise you keep yourself: ⏎ takes you back to the thread you said it in
+  if (promiseOf(i) && i.url) return { label: 'Open thread', run: () => window.open(i.url, '_blank', 'noopener,noreferrer') }
   // ⏎ says the move only where pressing it finishes the move (reading, resuming), never "Answer Priya"
   const ev = enterVerb(move, i.handoff === 'paused')
   if (ev) return ev.does === 'open' ? { label: ev.label, run: open } : { label: ev.label, run: () => act('resume', i.id) }
@@ -402,10 +423,11 @@ export function JuniorLedger({ tab, items, rows, needs, me, empty, moves, nudges
   const follow = useRef<{ id: string; until: number } | null>(null)
   const rowEl = (key: string) => [...(listRef.current?.querySelectorAll<HTMLElement>('.jhItem') ?? [])].find((el) => el.dataset.key === key)
 
-  const markGone = (item: ScoredItem, index: number, how: 'key' | 'click') => {
+  const markGone = (item: ScoredItem, index: number, how: 'key' | 'click', kind: GoneKind = 'not-useful') => {
     const focusInside = !!rowEl(item.id)?.contains(document.activeElement)
-    const marking = markNotUseful(item)
-    setGone({ item, at: index, wasOpen: open.has(item.id), leaving: false, markedAt: Date.now(), marking })
+    const promise = kind === 'not-a-promise'
+    const marking = promise ? markNotAPromise(item) : markNotUseful(item)
+    setGone({ item, at: index, wasOpen: open.has(item.id), leaving: false, markedAt: Date.now(), marking, kind })
     setHeld({ hover: false, focus: false })
     setNuError(null)
     setOpen((o) => {
@@ -413,7 +435,7 @@ export function JuniorLedger({ tab, items, rows, needs, me, empty, moves, nudges
       n.delete(item.id)
       return n
     })
-    setSaid(`Marked not useful: ${item.title}. ${isMobile() ? 'Tap Undo within 5 seconds.' : 'Press U or Undo within 5 seconds.'}`)
+    setSaid(promise ? `Marked not a promise: ${item.promise?.quote ?? item.title}.` : `Marked not useful: ${item.title}. ${isMobile() ? 'Tap Undo within 5 seconds.' : 'Press U or Undo within 5 seconds.'}`)
     const focusUndo = () => {
       const undo = listRef.current?.querySelector<HTMLElement>('.jhGone .undo')
       if (!undo) return
@@ -423,25 +445,27 @@ export function JuniorLedger({ tab, items, rows, needs, me, empty, moves, nudges
     // The clicked button is gone: focus goes to Undo, never to body. A key press keeps
     // focus off Undo, so the next Space or Enter can't take the mark back: if focus was
     // in the marked row, it goes to the row now in the slot (where the cursor is). U undoes.
-    if (how === 'click') requestAnimationFrame(focusUndo)
-    else if (focusInside)
+    // no Undo on "not a promise": focus goes to the row now in the slot, as after a key
+    if (how === 'click' && !promise) requestAnimationFrame(focusUndo)
+    else if (focusInside || how === 'click')
       requestAnimationFrame(() => {
         const rows = listRef.current?.querySelectorAll<HTMLElement>('.jhItem > .jhRow')
         const row = rows?.length ? rows[Math.min(index, rows.length - 1)] : null
         // nothing left but the notice: Undo is the only place focus can go
         if (row) row.focus()
-        else focusUndo()
+        else if (!promise) focusUndo()
+        else emptyRef.current?.focus()
       })
     void marking.then((err) => {
       if (!err) return
       setGone((g) => (g?.item.id === item.id ? null : g))
-      setNuError(`Couldn’t mark it not useful. ${err}`)
+      setNuError(promise ? `Couldn’t mark it. ${err}` : `Couldn’t mark it not useful. ${err}`)
     })
   }
 
   const undoGone = () => {
     const g = live.current.notice
-    if (!g) return
+    if (!g || g.kind !== 'not-useful') return
     setGone(null)
     if (g.wasOpen) setOpen((o) => new Set(o).add(g.item.id))
     restoring.current = g.item.id
@@ -689,12 +713,18 @@ export function JuniorLedger({ tab, items, rows, needs, me, empty, moves, nudges
       const { shown, at, open, tab, notice, markGone, undoGone } = live.current
       if (e.key === 'u') {
         // only while you can see the notice's Undo
-        if (!notice) return
+        if (notice?.kind !== 'not-useful') return
         e.preventDefault()
         return undoGone()
       }
       const line = at === null ? undefined : shown[at]
-      if (tab !== 'needs' || !line?.item || !open.has(line.key)) return
+      if (!line?.item || !open.has(line.key)) return
+      // a promise row, on any tab: "not a promise" (it replaces "not useful" there)
+      if (promiseOf(line.item)) {
+        e.preventDefault()
+        return markGone(line.item, at!, 'key', 'not-a-promise')
+      }
+      if (tab !== 'needs') return
       e.preventDefault()
       markGone(line.item, at!, 'key')
     }
@@ -702,7 +732,13 @@ export function JuniorLedger({ tab, items, rows, needs, me, empty, moves, nudges
     return () => document.removeEventListener('keydown', onKey, true)
   }, [])
 
-  const goneLine = notice && <GoneLine key={`gone:${notice.item.id}`} title={notice.item.title} leaving={notice.leaving} phone={phone} onUndo={undoGone} onHold={hold} />
+  const goneLine =
+    notice &&
+    (notice.kind === 'not-a-promise' ? (
+      <GoneLine key={`gone:${notice.item.id}`} said="Not a promise." title="No more promises from this thread." leaving={notice.leaving} phone={phone} onHold={hold} />
+    ) : (
+      <GoneLine key={`gone:${notice.item.id}`} said="Marked not useful" title={notice.item.title} leaving={notice.leaving} phone={phone} onUndo={undoGone} onHold={hold} />
+    ))
   const noticeAt = notice ? Math.min(notice.at, shown.length) : -1
   const whyRow = why ? shown.findIndex((l) => l.key === why.item.id) : -1
   // under its row while the row stays; in its slot once it has left
@@ -775,7 +811,8 @@ export function JuniorLedger({ tab, items, rows, needs, me, empty, moves, nudges
                 onClick={click}
                 act={act}
                 onOpen={() => openItem(line.item.id)}
-                onNotUseful={tab === 'needs' ? () => markGone(line.item, n, 'click') : undefined}
+                onNotUseful={tab === 'needs' && !promiseOf(line.item) ? () => markGone(line.item, n, 'click') : undefined}
+                onNotAPromise={promiseOf(line.item) ? () => markGone(line.item, n, 'click', 'not-a-promise') : undefined}
                 onKeep={line.item.close ? () => keep(line.item) : undefined}
                 onCloseNote={line.item.close ? () => closeNote(line.item) : undefined}
                 supervised={tab === 'with'}
@@ -876,6 +913,7 @@ function ItemLine({
   onNotUseful,
   onKeep,
   onCloseNote,
+  onNotAPromise,
   supervised = false,
   nudge,
   onNotNow,
@@ -905,6 +943,8 @@ function ItemLine({
   onKeep?: () => void
   /** a Close? row only: a chat draft to close it with a note */
   onCloseNote?: () => void
+  /** a promise row: "not a promise", its thread files no more */
+  onNotAPromise?: () => void
   /** With Junior only: the supervision line under the title, when there's something unseen */
   supervised?: boolean
   /** a due nudge, or one you drafted */
@@ -920,10 +960,14 @@ function ItemLine({
   const hot = ageHot(i)
   const primary = primaryOf(i, move, act, onOpen, turnOn)
   const capId = `jhCap-${i.id}`
-  const ref = refOf(i)
+  // a promise: your words as a chip, where = the thread it was said in, the due in the state cell
+  const pr = i.kind === 'promise' ? (i.promise ?? null) : null
+  const mine = promiseOf(i)
+  const due = pr ? promiseDue(i.dueAt ?? pr.dueAt, Date.now()) : null
+  const ref = pr ? refOf({ id: pr.thread, source: i.source, repo: i.repo }) : refOf(i)
   const title = i.title?.trim()
   // the cited brief replaces the Context line on Needs you; an open card is the only cost
-  const brief = open && onNeeds(i) ? briefLines(i, me, Date.now()) : []
+  const brief = open && onNeeds(i) && !pr ? briefLines(i, me, Date.now()) : []
   const lead = brief.length ? keptLead(i) : null
   // a weight you set counts on this row: a quiet "you set this", last so it gives way first
   const adjusted = isAdjusted(i)
@@ -937,7 +981,7 @@ function ItemLine({
   const nui = nudge?.ui
   const offer = !!mark && (!nui || nui.phase === 'drafting' || nui.phase === 'failed')
   const waited = mark ? nudgeWaited(shortAge(mark.since)) : ''
-  const stateText = mark ? (nui?.phase === 'open' ? waited : `${waited} · ${NUDGE_ASK}`) : st.text
+  const stateText = mark ? (nui?.phase === 'open' ? waited : `${waited} · ${NUDGE_ASK}`) : mine ? (due?.cell ?? '') : st.text
   const showOpen = offer || nui?.phase === 'open' || primary.run !== onOpen
   return (
     <>
@@ -955,8 +999,12 @@ function ItemLine({
         </span>
         {move ? (
           <span className="tc">
-            <MoveText verb={move.verb} reasons={reasons ?? move.reasons} withJunior={move.withJunior} />
-            {title ? (
+            <MoveText verb={move.verb} reasons={reasons ?? move.reasons} withJunior={move.withJunior} late={due?.overdue ? due.reason : undefined} />
+            {pr ? (
+              <span className="tt pq">
+                <QuoteChip quote={pr.quote} />
+              </span>
+            ) : title ? (
               <span className="tt" title={title}>
                 {title}
               </span>
@@ -973,7 +1021,7 @@ function ItemLine({
           </span>
         ) : (
           <span className="tt">
-            {i.title}
+            {pr ? <QuoteChip quote={pr.quote} /> : i.title}
             {adjusted && <span className="rsMark"> · you set this</span>}
             {offer && (
               <span className="ndgPh" aria-hidden="true">
@@ -996,6 +1044,8 @@ function ItemLine({
               </>
             )}
           </span>
+        ) : mine ? (
+          <span className={`jrc pqDue${due?.overdue ? ' late' : ''}`}>{due?.cell ?? ''}</span>
         ) : (
           st.ready ? (
             <span className="jrc rdyCol" title={st.text}>
@@ -1020,7 +1070,9 @@ function ItemLine({
       </button>
       {open && (
         <div className="jhXp">
-          {brief.length ? (
+          {pr ? (
+            <PromiseFacts quote={pr.quote} saidAt={pr.saidAt} place={i.repo} owed={who === 'You' ? null : who} due={due} />
+          ) : brief.length ? (
             <>
               {lead && (
                 <>
@@ -1050,7 +1102,7 @@ function ItemLine({
             </>
           )}
           <span className="lbl jr">Junior</span>
-          <span className="said">{i.close ? closeSays(i.close) : mark ? nudgeSays(mark) : juniorSays(i)}</span>
+          <span className="said">{i.close ? closeSays(i.close) : mark ? nudgeSays(mark) : mine ? promiseSays(i.author, due) : juniorSays(i)}</span>
           {nui?.phase === 'open' && (
             <>
               <span className="lbl">Nudge</span>
@@ -1135,6 +1187,12 @@ function ItemLine({
                 <X size={13} aria-hidden="true" /> Not this one
               </button>
             )}
+            {onNotAPromise && (
+              // the key strip is hidden on a phone: there this is the way in
+              <button type="button" className="btn sm ghost npPhone" aria-label="Not a promise: stop filing promises from this thread" onClick={onNotAPromise}>
+                Not a promise
+              </button>
+            )}
             {onNotUseful && (
               // the key strip is hidden on a phone: there this is the way in
               <button type="button" className="btn sm ghost nuPhone" aria-label="Not useful: this didn’t need you" onClick={onNotUseful}>
@@ -1160,6 +1218,18 @@ function ItemLine({
                   <Kbd>N</Kbd>not useful
                 </button>
               )}
+              {onNotAPromise && (
+                <button
+                  type="button"
+                  className="jhKey"
+                  aria-keyshortcuts="n"
+                  aria-label="Not a promise: stop filing promises from this thread"
+                  title="Not a promise. This thread files no more promises."
+                  onClick={onNotAPromise}
+                >
+                  <Kbd>N</Kbd>not a promise
+                </button>
+              )}
             </span>
           </div>
         </div>
@@ -1173,17 +1243,21 @@ function ItemLine({
  * quieter than a row: no card, no colour. Hover or focus holds it.
  */
 function GoneLine({
+  said,
   title,
   leaving,
   phone,
   onUndo,
   onHold,
 }: {
+  /** what happened: "Marked not useful", "Not a promise." */
+  said: string
   title: string
   leaving: boolean
   /** on a phone Undo is the card's own `btn sm`, with no key */
   phone: boolean
-  onUndo: () => void
+  /** none: the mark can't be taken back */
+  onUndo?: () => void
   onHold: (what: 'hover' | 'focus', on: boolean) => void
 }) {
   return (
@@ -1196,11 +1270,13 @@ function GoneLine({
         if (!e.currentTarget.contains(e.relatedTarget as Node | null)) onHold('focus', false)
       }}
     >
-      <span className="w">Marked not useful</span>
-      <span className="sep" aria-hidden="true">
-        ·
-      </span>
-      {phone ? (
+      <span className="w">{said}</span>
+      {onUndo && (
+        <span className="sep" aria-hidden="true">
+          ·
+        </span>
+      )}
+      {!onUndo ? null : phone ? (
         <button type="button" className="btn sm undo" onClick={onUndo}>
           Undo
         </button>
@@ -1298,7 +1374,7 @@ function SupervisionText({ files, sends, line }: { files: number; sends: number;
   )
 }
 
-function MoveText({ verb, reasons, withJunior }: { verb: string; reasons: readonly string[]; withJunior: boolean }) {
+function MoveText({ verb, reasons, withJunior, late }: { verb: string; reasons: readonly string[]; withJunior: boolean; late?: string }) {
   const parts = withJunior ? [{ text: 'with Junior', wj: true }, ...reasons.map((text) => ({ text, wj: false }))] : reasons.map((text) => ({ text, wj: false }))
   const full = [verb, ...(withJunior ? ['with Junior'] : []), ...reasons].join(' · ')
   return (
@@ -1307,7 +1383,7 @@ function MoveText({ verb, reasons, withJunior }: { verb: string; reasons: readon
       {parts.length > 0 && (
         <span className="rs">
           {parts.map((r, n) => (
-            <span key={n} className={r.wj ? 'wj' : undefined}>
+            <span key={n} className={r.wj ? 'wj' : late && r.text === late ? 'late' : undefined}>
               <i className="sep" aria-hidden="true">
                 {' · '}
               </i>
@@ -1317,5 +1393,48 @@ function MoveText({ verb, reasons, withJunior }: { verb: string; reasons: readon
         </span>
       )}
     </span>
+  )
+}
+
+/**
+ * Your own words on a promise row, in a mono chip with curly quotes: not
+ * filled, no colour, it is what you said, not a status. One line closed
+ * (the full quote in `title`), unclamped in the open card.
+ */
+function QuoteChip({ quote }: { quote: string }) {
+  const q = quoted(quote)
+  return (
+    <span className="pqChip" title={q}>
+      {q}
+    </span>
+  )
+}
+
+/** The open promise card's facts: what you said and when, who's owed, when it's due. */
+function PromiseFacts({ quote, saidAt, place, owed, due }: { quote: string; saidAt: number; place: string; owed: string | null; due: PromiseDue | null }) {
+  return (
+    <>
+      <span className="lbl">You said</span>
+      <span className="ctx pqSaid">
+        <QuoteChip quote={quote} />
+        <span className="pqWhen">
+          {' · '}
+          {saidWhen(saidAt, Date.now())}
+          {place ? ` in ${place}` : ''}
+        </span>
+      </span>
+      {owed && (
+        <>
+          <span className="lbl">Owed to</span>
+          <span className="ctx">{owed}</span>
+        </>
+      )}
+      {due && (
+        <>
+          <span className="lbl">Due</span>
+          <span className={`ctx${due.overdue ? ' pqLate' : ''}`}>{due.line}</span>
+        </>
+      )}
+    </>
   )
 }

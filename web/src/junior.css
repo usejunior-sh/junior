@@ -562,6 +562,18 @@ a.rdyChip:focus-visible { outline: 1px solid var(--hair-bright); outline-offset:
 .jhRow .jrc.ndgCell .sep { color: var(--stone); white-space: pre; }
 .jhRow .jrc.ndgCell .ask { color: var(--blue); }
 .ndgPh { display: none; font-family: var(--mono); font-size: 0.9231rem; color: var(--blue); }
+/* a promise row (core/work/promise-view.ts): your words in a mono chip, never filled; orange only once it's late */
+.pqChip {
+  display: inline-block; max-width: 100%; padding: 1px 6px; border: 1px solid var(--hair-strong); border-radius: var(--r-xs); vertical-align: baseline;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); font-size: 12px; line-height: 1.4; color: var(--ink);
+}
+.jhRow .tc .tt.pq { display: flex; min-width: 0; }
+.jhRow .mv .rs .late, .jhRow .jrc.pqDue.late { color: var(--orange); }
+.jhRow .jrc.pqDue { color: var(--ash); }
+.jhXp .pqSaid .pqChip { white-space: normal; overflow-wrap: anywhere; }
+.jhXp .pqWhen { font-family: var(--mono); font-size: 0.9231rem; color: var(--ash); }
+.jhXp .pqLate { color: var(--orange); }
+.jhXp .acts .npPhone { display: none; }
 .ndg { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .ndg .aimpact { font-family: var(--mono); font-size: 0.9231rem; line-height: 1.5; color: var(--mute); }
 .ndg .aimpact .apart { display: inline-block; max-width: 100%; overflow-wrap: anywhere; vertical-align: top; }
@@ -708,6 +720,9 @@ a.rdyChip:focus-visible { outline: 1px solid var(--hair-bright); outline-offset:
   .jhXp .acts .cap { flex-basis: 100%; order: 9; }
   .jhXp .keys, .jhKeys, .jhKbd { display: none; }
   .jhXp .acts .nuPhone { display: inline-flex; }
+  /* a promise: the chip wraps to two lines at most; Not a promise is a button here (the key strip is hidden) */
+  .jhXp .acts .npPhone { display: inline-flex; }
+  .jhRow .pqChip { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; white-space: normal; overflow-wrap: anywhere; }
   /* the nudge: the ask under the title, the box full width, 36px buttons, no key hints */
   .jhRow .tc .ndgPh, .jhRow > .tt .ndgPh { display: block; }
   .jhXp .ndgErr { grid-column: 1; }

@@ -148,5 +148,25 @@ export async function keepOpen(item: ScoredItem): Promise<string | null> {
   }
 }
 
+/**
+ * "Not a promise" on a promise row (server/inbox/promises.ts): the row leaves
+ * at once, and its thread files no more promises. There is no undo on the
+ * server. Null when it went through; else the error, as a sentence (the
+ * refetch then brings the row back).
+ */
+export async function markNotAPromise(item: ScoredItem): Promise<string | null> {
+  inboxStore.patch((items) => items.filter((i) => i.id !== item.id))
+  try {
+    const r = await fetch('/api/items/not-a-promise', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: item.id }) })
+    const b = (await r.json().catch(() => ({ ok: false, error: `HTTP ${r.status}` }))) as ItemStateResponse
+    if (b.ok) return null
+    void inboxStore.refresh()
+    return sentence(b.error)
+  } catch (err) {
+    void inboxStore.refresh()
+    return sentence(err instanceof Error ? err.message : String(err))
+  }
+}
+
 /** The verb on a suggestion's button (itemVerbs.ts, store-free). */
 export { VERB } from './itemVerbs.js'

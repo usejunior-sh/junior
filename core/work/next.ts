@@ -31,6 +31,7 @@ import type { ItemFlow } from './flow.js'
 import { turnOf, type TurnContext, type TurnItem, type TurnOf, type TurnReason, type WhoseTurn } from './turn.js'
 import type { WorkItem } from './types.js'
 import { fixFraction, graceReasons, graceShown } from '../babysit/grace.js'
+import { promiseDue, promiseVerb } from './promise-view.js'
 
 /** What the next move is. One per item. */
 export type NextAction =
@@ -66,7 +67,7 @@ export interface NextMove {
 /** What the rules read off an item. */
 export type NextItem = TurnItem &
   Pick<WorkItem, 'author'> &
-  Partial<Pick<WorkItem, 'updatedAt' | 'priority' | 'isDraft'>> & { flow?: ItemFlow }
+  Partial<Pick<WorkItem, 'updatedAt' | 'priority' | 'isDraft' | 'dueAt' | 'promise'>> & { flow?: ItemFlow }
 
 /** What the item can't say about itself. */
 export interface NextContext extends TurnContext {
@@ -91,6 +92,8 @@ export const NEXT_VERBS: ReadonlySet<string> = new Set([
   'Make',
   'Merge',
   'Nudge',
+  // a promise row leads with who's owed, not a verb: "Owed to Dev", "Your promise" (promise-view.ts)
+  'Owed',
   'Pick',
   'Read',
   'Resolve',
@@ -101,6 +104,7 @@ export const NEXT_VERBS: ReadonlySet<string> = new Set([
   'Skim',
   'Wait',
   'Work',
+  'Your',
 ])
 
 /** What every rule and phrase reads, worked out once. */
@@ -161,6 +165,7 @@ function objectOf(x: Facts): string {
   if (x.ownPr || k === 'reply-needed') return 'your PR'
   if (k === 'ticket-assigned') return 'the ticket'
   if (k === 'manual') return 'the to-do'
+  if (k === 'promise') return 'your promise'
   if (k === 'digest') return 'the digest'
   if (k === 'fyi') return 'the update'
   if (k === 'job-hit') return "the job's find"
@@ -186,6 +191,8 @@ function askVerb(x: Facts): string {
     case 'do':
       if (k === 'ticket-assigned') return 'Work the ticket'
       if (k === 'manual') return 'Do the to-do'
+      // your own words: who's owed, never "Answer Dev"
+      if (k === 'promise') return promiseVerb(x.item.promise?.owedTo ?? x.item.author)
       return nameOr(x, (n) => `Do ${n}'s ask`, 'Do the task')
     case 'read':
       if (k === 'digest') return 'Read the digest'
@@ -299,8 +306,11 @@ function reasonsOf(x: Facts, action: NextAction): string[] {
   const { item, turn } = x
   const out: string[] = []
   const a = age(x.now - sinceOf(item))
+  // a promise's due leads its reasons, while it is still yours or Junior's
+  const due = item.kind === 'promise' && turn.turn !== 'others' ? promiseDue(item.dueAt ?? item.promise?.dueAt, x.now) : null
   if (turn.turn === 'junior') {
     out.push('with Junior')
+    if (due) out.push(due.reason)
     // your PR, handed off: Junior waits out your push, or says how many fixes it spent (babysit/grace.ts)
     const g = x.ownPr && item.handoff === 'on' ? graceShown(item.seen, x.now) : null
     if (g && 'graceUntil' in g) out.push(...graceReasons(g.graceUntil))
@@ -311,9 +321,12 @@ function reasonsOf(x: Facts, action: NextAction): string[] {
     if (a && turn.reason !== 'snoozed' && turn.reason !== 'closed') out.push(`waiting ${a}`)
     if (turn.reason === 'snoozed') out.push('snoozed')
     if (turn.reason === 'closed') out.push('closed')
-  } else if (a) {
-    const person = x.name !== null && (item.peopleWaiting > 0 || HUMAN_ASKS.has(x.ask))
-    out.push(person ? `waited ${a}` : `open ${a}`)
+  } else {
+    if (due) out.push(due.reason)
+    if (a) {
+      const person = x.name !== null && (item.peopleWaiting > 0 || HUMAN_ASKS.has(x.ask))
+      out.push(person ? `waited ${a}` : `open ${a}`)
+    }
   }
   if (x.ctx.blocks?.trim()) out.push(`blocks ${clip(x.ctx.blocks.trim(), 3)}`)
   if (item.peopleWaiting > 1) out.push(`${item.peopleWaiting} waiting`)

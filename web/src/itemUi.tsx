@@ -43,6 +43,7 @@ export const KIND_LABEL: Record<string, string> = {
   'job-hit': 'job match',
   digest: 'digest',
   manual: 'to-do',
+  promise: 'promise',
   fyi: 'fyi',
 }
 

@@ -59,6 +59,7 @@
     "core/work/nudge-view.ts",
     "core/work/status.ts",
     "core/work/next.ts",
+    "core/work/promise-view.ts",
     "core/work/inbox-tabs.ts",
     "core/work/inbox-views.ts",
     "core/work/link.ts",

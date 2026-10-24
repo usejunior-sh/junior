@@ -66,6 +66,8 @@ export function moveKey(i: MoveItem): string {
     i.seen?.fixes ?? '',
     i.peopleWaiting,
     i.priority ?? '',
+    // a promise's due (its reasons read it)
+    i.dueAt ?? '',
   ].join('|')
 }
 
