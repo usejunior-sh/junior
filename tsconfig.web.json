@@ -62,6 +62,8 @@
     "core/actions/types.ts",
     "core/actions/own.ts",
     "core/actions/bash.ts",
+    "core/actions/sort.ts",
+    "core/actions/rules.ts",
     "core/approvals",
     "core/actions/count.ts",
     "core/actions/view.ts",
