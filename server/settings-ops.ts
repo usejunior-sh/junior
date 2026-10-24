@@ -11,6 +11,7 @@ import { broadcast, broadcastSessionList, invalidateInbox } from './ws/send.js'
 import { browserProfiles } from './browser/profiles.js'
 import { DEFAULT_PROFILE } from '../core/browser/profiles.js'
 import type { WatchId, WatchSwitches } from '../core/work/handoff.js'
+import { describeFocus, endFocus, focusFrom, inFocus, readFocus, type FocusHours } from '../core/work/focus.js'
 import { dropWeight, liveWeights, putWeight, readWeights, type ScoreWeight, type ScoreWeightView, viewOf, weightFrom } from '../core/work/weights.js'
 
 // settings, briefs and dispatch
@@ -21,6 +22,7 @@ const BRIEFS_MODEL_KEY = 'briefs.defaultModel'
 const HIDDEN_MODELS_KEY = 'models.hidden'
 const CUSTOM_MODELS_KEY = 'models.custom'
 const BROWSER_PROFILE_KEY = 'browser.profile'
+const FOCUS_HOURS_KEY = 'focus.hours'
 const WATCH_KEYS: Record<WatchId, string> = { babysit: 'watch.babysit', review: 'watch.review' }
 const DEFAULT_BRIEF_CAP = 20
 export const BRIEF_TIMEOUT_MS = 300_000
@@ -86,6 +88,7 @@ export async function readSettings(rt: WorkspaceRuntime): Promise<WorkspaceSetti
     hiddenModels: await readIdList(rt, HIDDEN_MODELS_KEY),
     customModels: await readIdList(rt, CUSTOM_MODELS_KEY),
     browserProfile: await workspaceBrowserProfile(rt),
+    focusHours: await readFocusHours(rt),
   }
 }
 
@@ -266,4 +269,51 @@ export async function clearScoreWeightOp(rt: WorkspaceRuntime, raw: unknown, now
   log('info', 'inbox', `weight cleared: ${key}`, { workspace: rt.meta.id })
   invalidateInbox(rt)
   return { weights: await listScoreWeightsOp(rt, now) }
+}
+
+// Focus hours (core/work/focus.ts): set by chat (the junior MCP's
+// set_focus_hours), one config value per workspace. No form, no settings field.
+
+/** The workspace's focus hours; null = none set. */
+export async function readFocusHours(rt: WorkspaceRuntime): Promise<FocusHours | null> {
+  return readFocus(await rt.store.config.get<unknown>(FOCUS_HOURS_KEY))
+}
+
+export interface FocusView {
+  focus: FocusHours | null
+  /** in a focus window right now: until when (epoch ms) */
+  now: { until: number } | null
+  /** the setting in words */
+  text: string
+}
+
+const focusView = (focus: FocusHours | null, now: number): FocusView => ({ focus, now: inFocus(focus, now), text: describeFocus(focus) })
+
+/** Focus hours and whether they are on right now. */
+export async function getFocusHoursOp(rt: WorkspaceRuntime, now = Date.now()): Promise<FocusView> {
+  return focusView(await readFocusHours(rt), now)
+}
+
+/**
+ * Set them from { windows: [{ days, start, end }], waitMinutes? }; an empty
+ * list clears them. A new setting starts fresh: an earlier "End focus" is dropped.
+ */
+export async function setFocusHoursOp(rt: WorkspaceRuntime, raw: unknown, now = Date.now()): Promise<FocusView> {
+  const out = focusFrom(raw)
+  if (!out.ok) throw new Error(out.error)
+  await rt.store.config.set(FOCUS_HOURS_KEY, out.value)
+  log('info', 'inbox', out.value ? `focus hours set: ${describeFocus(out.value)}` : 'focus hours cleared', { workspace: rt.meta.id })
+  invalidateInbox(rt)
+  return focusView(out.value, now)
+}
+
+/** "End focus": the rest of the current window is skipped; the next one starts as set. */
+export async function endFocusOp(rt: WorkspaceRuntime, now = Date.now()): Promise<FocusView> {
+  const focus = await readFocusHours(rt)
+  if (!focus || !inFocus(focus, now)) return focusView(focus, now)
+  const ended = endFocus(focus, now)
+  await rt.store.config.set(FOCUS_HOURS_KEY, ended)
+  log('info', 'inbox', 'focus ended early', { workspace: rt.meta.id, until: ended.endedUntil })
+  invalidateInbox(rt)
+  return focusView(ended, now)
 }

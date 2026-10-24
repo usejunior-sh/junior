@@ -58,6 +58,7 @@
     "core/work/link.ts",
     "core/work/weights.ts",
     "core/work/corrections.ts",
+    "core/work/focus.ts",
     "core/job/types.ts",
     "core/job/filing.ts",
     "core/playbooks/item.ts",

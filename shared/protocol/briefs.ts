@@ -1,5 +1,6 @@
 import type { Artifact } from './artifacts.js'
 import type { Mention } from './mentions.js'
+import type { FocusHours } from '../../core/work/focus.js'
 
 // Briefs, a playbook run against one work
 // item that writes a markdown brief (an artifact linked with role `brief`).
@@ -83,6 +84,8 @@ export type WorkspaceSettings = {
   customModels: string[]
   /** the browser profile this workspace's sessions use unless one picks another (.docs/browser.md) */
   browserProfile: string
+  /** focus hours (core/work/focus.ts), set by chat; null = none. Read-only here: PUT ignores it */
+  focusHours: FocusHours | null
 }
 export type SettingsResponse = { ok: true; settings: WorkspaceSettings } | { ok: false; error: string }
 

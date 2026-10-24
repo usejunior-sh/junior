@@ -11,6 +11,7 @@ import { teamLeadTools } from './team-run/mcp.js'
 import { createManualOp, editManualOp, itemDetailOp, listItemsOp, resolveItemOp, sessionContextOp, upsertItemOp } from './items-ops.js'
 import { addToTodayOp, ensureToday, removeFromTodayOp, savePersonaOp, todayJson, todayView } from './junior-ops.js'
 import { errText } from './errors.js'
+import { endFocusOp, getFocusHoursOp, setFocusHoursOp } from './settings-ops.js'
 import { workspaceInfo } from './workspace/wiring.js'
 import { draftJobOp, draftJobText, tryJobOp } from './jobs/ops.js'
 import { addLinkOp, createArtifactOp, listArtifactsOp, toolResult, updateArtifactOp } from './artifacts-ops.js'
@@ -117,6 +118,59 @@ export function makeJuniorMcp(rt: WorkspaceRuntime, sessionId?: string) {
           try {
             const p = await savePersonaOp(rt, { replyStyle: args.text })
             return okResult(p.replyStyle ? `ok: saved. New sessions read: "${p.replyStyle}"` : 'ok: cleared')
+          } catch (err) {
+            return errResult(errText(err))
+          }
+        },
+      ),
+      // Focus hours (core/work/focus.ts): set by chat, never a form. The read is free; setting and ending prompt like any write.
+      tool(
+        'get_focus_hours',
+        'The user\'s focus hours: the windows, how long a person must wait to get through, and whether focus is on right now (until when). During focus only people waiting past that time and prod-red items reach Needs you; the rest is held until it ends.',
+        {},
+        async () => {
+          try {
+            return okResult(JSON.stringify(await getFocusHoursOp(rt), null, 2))
+          } catch (err) {
+            return errResult(errText(err))
+          }
+        },
+      ),
+      tool(
+        'set_focus_hours',
+        'Set the user\'s focus hours when they ask for deep-work time ("focus 9–12 on weekdays"). Replaces what was set; an empty windows list clears it. During a window only people waiting at least waitMinutes and prod-red items (urgent, or from an incident tool) reach Needs you; everything else is held until the window ends. Times are the Mac\'s local time. Ask the wait only if they mention it; it defaults to 60 minutes.',
+        {
+          windows: z
+            .array(
+              z.object({
+                days: z.union([z.string(), z.array(z.string())]).describe('"weekdays", "weekends", "every day", or day names like ["mon", "wed"]'),
+                start: z.string().describe('local clock time, e.g. "9:00" or "9am"'),
+                end: z.string().describe('local clock time, e.g. "12:00"; before the start = runs past midnight'),
+              }),
+            )
+            .max(14)
+            .describe('the focus windows; empty clears focus hours'),
+          waitMinutes: z.number().int().min(0).max(10080).optional().describe('a person waiting this many minutes gets through (default 60)'),
+        },
+        async (args) => {
+          try {
+            const view = await setFocusHoursOp(rt, args)
+            return okResult(`ok: ${view.text}${view.now ? ` Focus is on now, until ${new Date(view.now.until).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}.` : ''}`)
+          } catch (err) {
+            return errResult(`not set: ${errText(err)}`)
+          }
+        },
+      ),
+      tool(
+        'end_focus',
+        'End the current focus window early, when the user says they are done focusing. Held items come back to Needs you; the next window starts as set.',
+        {},
+        async () => {
+          try {
+            const before = await getFocusHoursOp(rt)
+            if (!before.now) return okResult('Focus is not on right now; nothing to end.')
+            await endFocusOp(rt)
+            return okResult('ok: focus ended. Everything held is back on Needs you.')
           } catch (err) {
             return errResult(errText(err))
           }
