@@ -16,11 +16,15 @@
  *      check, no completed run, or a latest run that passed: not main-red.
  *   2. A flaky line that names a file the PR changed is the PR's own failure
  *      (a test it touched timed out), so it's a fix, not a rerun.
+ *   3. The repo's own flaky patterns (`flaky:` in `.junior/junior.md`, see
+ *      core/work/contract.ts) are read before the built-in test: a check
+ *      the repo says flakes this way is flaky, rule 2 still applying.
  *
  * Pure: no I/O, no clock. The server fetches the default branch's check runs
  * (`ci-sort-glue`). The flake test is ci.ts's, so there is one regex.
  */
 import { looksFlaky, type PrCheck } from './ci.js'
+import { FLAKY_LOG_TAIL, flakyMatch, type RepoContract } from '../work/contract.js'
 
 /** One check run on the default branch's head, as the GitHub API reports it (any case). */
 export type MainRun = {
@@ -40,7 +44,7 @@ export type CiSortVerdict = 'main-red' | 'flaky' | 'fix'
 
 export type CiSort =
   | { verdict: 'main-red'; why: string; evidence: { url: string | null; sha: string | null; conclusion: string; completedAt: string | null } }
-  | { verdict: 'flaky'; why: string; evidence: { match: string; source: 'log' | 'conclusion' } }
+  | { verdict: 'flaky'; why: string; evidence: { match: string; source: 'log' | 'conclusion' | 'repo'; pattern?: string } }
   | { verdict: 'fix'; why: string; evidence: { touched: string[] } }
 
 /** How a main run ends that means main is red. Cancelled isn't: a newer push usually cancels it. */
@@ -80,6 +84,15 @@ export function flakyLine(log: string): string | null {
   return clip(log.trim().split(/\r?\n/)[0] ?? '', 200)
 }
 
+/** The first log line a repo flaky pattern matches, clipped; the pattern's first match when it spans lines. */
+export function repoFlakyLine(log: string, pattern: string): string | null {
+  const re = new RegExp(pattern, 'i')
+  const tail = log.length > FLAKY_LOG_TAIL ? log.slice(-FLAKY_LOG_TAIL) : log
+  for (const line of tail.split(/\r?\n/)) if (re.test(line)) return clip(line.trim(), 200)
+  const m = re.exec(tail)
+  return m ? clip(m[0].trim(), 200) : null
+}
+
 /** The changed files the text names by path, in PR order, at most a few. */
 export function touchedFiles(text: string, prFiles: readonly string[]): string[] {
   if (!text) return []
@@ -97,7 +110,14 @@ export function touchedFiles(text: string, prFiles: readonly string[]): string[]
  * runs (null when they couldn't be read), `log` the failing check's output
  * (empty when unread), `prFiles` the paths the PR changed.
  */
-export function classify(check: Pick<PrCheck, 'name' | 'conclusion'>, defaultBranchRuns: readonly MainRun[] | null | undefined, log: string, prFiles: readonly string[]): CiSort {
+export function classify(
+  check: Pick<PrCheck, 'name' | 'conclusion'>,
+  defaultBranchRuns: readonly MainRun[] | null | undefined,
+  log: string,
+  prFiles: readonly string[],
+  /** the repo's contract: its `flaky:` patterns only (core/work/contract.ts) */
+  repo?: Pick<RepoContract, 'flaky'> | null,
+): CiSort {
   const main = latestMainRun(check.name, defaultBranchRuns)
   if (main && MAIN_RED.has(up(main.conclusion)))
     return {
@@ -105,6 +125,11 @@ export function classify(check: Pick<PrCheck, 'name' | 'conclusion'>, defaultBra
       why: 'Main is red too · not yours',
       evidence: { url: main.url, sha: main.sha ?? null, conclusion: up(main.conclusion), completedAt: main.completedAt ?? null },
     }
+
+  const own = log && repo?.flaky.length ? flakyMatch(repo, check.name, log) : null
+  const ownLine = own ? repoFlakyLine(log, own.log) : null
+  if (own && ownLine && touchedFiles(ownLine, prFiles).length === 0)
+    return { verdict: 'flaky', why: `Flaky, per the repo's .junior/: ${clip(ownLine, 80)}`, evidence: { match: ownLine, source: 'repo', pattern: own.log } }
 
   const line = flakyLine(log)
   if (line && touchedFiles(line, prFiles).length === 0) return { verdict: 'flaky', why: `Looks flaky: ${clip(line, 80)}`, evidence: { match: line, source: 'log' } }

@@ -18,6 +18,7 @@ import { babysitSearch, BABYSIT_QUERY, parseBabysit, type BabysitPr } from '../.
 import { afterDecision, BABYSIT_FAST_MS, BABYSIT_SLOW_MS, babysitEvents, batchBotThreads, decide, newBabysitWatch, pollSoon, seenOf, type BabysitWatch } from '../../core/babysit/watch.js'
 import { classify, type MainRun } from '../../core/babysit/ci-sort.js'
 import type { MainRedCheck, PrSeen } from '../../core/work/handoff.js'
+import type { RepoContract } from '../../core/work/contract.js'
 import { fixesShown, graceFor, inGrace, juniorPushed, PUSH_SLACK_MS } from '../../core/babysit/grace.js'
 
 /** The watch's memory, one JSON blob in config: the next poll and each PR's watch, by item id. */
@@ -52,8 +53,13 @@ export interface BabysitDeps {
   repos(): Promise<string[]>
   /** file or refresh the PR's item (projects assigned like any scan) */
   upsertItem(item: WorkItem): Promise<void>
-  /** the reviewer Junior suggests for a repo; null until it has learned one */
-  reviewerFor(repo: string): Promise<string | null>
+  /**
+   * the reviewer Junior suggests for a PR: yours, else the repo's .junior/
+   * reviewers for the paths it changed, else learned; null until there's one
+   */
+  reviewerFor(repo: string, pr?: { number: number }): Promise<string | null>
+  /** the repo's .junior/junior.md contract, from its project folder; null when there's none */
+  contractFor?(repo: string): Promise<Pick<RepoContract, 'flaky'> | null>
   /** minutes a fix waits after your push (core/babysit/grace.ts); absent = no wait */
   graceMinutes?(): Promise<number>
   /** a task was added: wake the runner; `stuck` = a cap was hit, tell the user */
@@ -179,7 +185,7 @@ async function actOn(
   let held = false
   // new review-bot threads arrive as one triage task, not a fix task each (core/babysit/watch.ts)
   for (const ev of batchBotThreads(babysitEvents(pr), w)) {
-    if (ev.kind === 'green') ctx.reviewer = await d.reviewerFor(pr.repo).catch(() => null)
+    if (ev.kind === 'green') ctx.reviewer = await d.reviewerFor(pr.repo, { number: pr.number }).catch(() => null)
     let dec = decide(ev, w, ctx)
     if (ev.kind === 'checks_failed' && dec.do === 'task' && dec.stuck) stuck.push(ev.check.name)
     // Known already: no main read, no log fetched, nothing added.
@@ -197,7 +203,9 @@ async function actOn(
       if (sort.verdict !== 'main-red' && ((dec.do === 'task' && !dec.stuck) || waitLog) && ev.check.runId !== null) {
         log = await d.source.failedLog(pr.repo, ev.check).catch(() => '')
         // the PR's changed files aren't in the search yet: a flaky line that names one still reads as flaky
-        sort = classify(ev.check, runs, log, [])
+        // the repo's own flaky patterns (.junior/junior.md) are read before the built-in test
+        const contract = d.contractFor ? await d.contractFor(pr.repo).catch(() => null) : null
+        sort = classify(ev.check, runs, log, [], contract)
         if (waitLog) w = { ...w, graceLogs: [...(w.graceLogs ?? []), at].slice(-50) }
       }
       dec = decide(ev, w, { ...ctx, log, sort })

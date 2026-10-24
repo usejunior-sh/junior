@@ -43,6 +43,8 @@ import { BABYSIT_WATCH_KEY, pollBabysitSoon, type BabysitWatchState } from '../b
 import { REVIEW_WATCH_KEY, type ReviewWatchState } from '../review/watch.js'
 import { createArtifactOp } from '../artifacts-ops.js'
 import { readLocalChecks } from '../babysit/ci-steps.js'
+import { readRepoContract } from '../repo-contract.js'
+import { repoNotes } from '../../core/work/contract-apply.js'
 import { babysitSettings, ghBabysitSource } from '../babysit/glue.js'
 import { onBabysitTick, onTaskAdded } from '../babysit/hooks.js'
 import { pExecFile, VERSION } from '../config.js'
@@ -238,12 +240,15 @@ async function startTask(rt: WorkspaceRuntime, t: ItemTask, s: BabysitSettings):
   const { co: checkout, sha } = await taskCheckout(rt, project, item.id, pr, review)
   const ctx: TaskCtx = {}
   const rctx = review ? await reviewCtx(pr) : null
+  // the repo's .junior/junior.md as the PR's branch has it: its rules in the prompt, its checks runnable
+  const contract = await readRepoContract(checkout.path).catch(() => null)
+  if (contract?.found) ctx.repoNotes = repoNotes(contract.contract)
   if (t.step === 'fix-ci') {
     const runId = typeof t.input?.runId === 'number' ? t.input.runId : null
     const check = { name: String(t.input?.check ?? ''), status: 'failure' as const, id: '', runId, url: null, conclusion: null }
     ctx.log = await ghBabysitSource.failedLog(pr.repo, check).catch(() => '')
     ctx.diff = await pExecFile('gh', ['pr', 'diff', String(pr.number), '-R', pr.repo], { maxBuffer: 16 * 1024 * 1024 }).then((r) => r.stdout, () => '')
-    ctx.local = await readLocalChecks(checkout.path, check.name).catch((err) => ({ job: null, why: `the workflow files couldn't be read (${errText(err)})` }))
+    ctx.local = await readLocalChecks(checkout.path, check.name, contract?.contract.checks ?? []).catch((err) => ({ job: null, why: `the workflow files couldn't be read (${errText(err)})` }))
   }
   if (triage) ctx.diff = await ghOut(['pr', 'diff', String(pr.number), '-R', pr.repo])
 

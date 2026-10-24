@@ -307,6 +307,8 @@ export type BriefPromptInput = {
   iteration: boolean
   /** screenshots attached to the item, carried as image blocks on this message */
   imageCount?: number
+  /** the repo's .junior/ rules (core/work/contract-apply.ts repoNotes), starting "From the repo's .junior/:" */
+  repoNotes?: readonly string[]
 }
 
 /** The first user message of a brief run: the variable material, in one message. */
@@ -338,6 +340,7 @@ export function composeBriefPrompt(input: BriefPromptInput): string {
   }
   parts.push(`# Work item\n\n${itemLines.join('\n')}`)
   if (item.description) parts.push(`# Description (the user's own words)\n\n${item.description.trim()}`)
+  if (input.repoNotes?.length) parts.push(`# The repo's rules\n\n${input.repoNotes.join('\n')}\n\nMention the ones that matter for this item in the brief.`)
   if (input.imageCount)
     parts.push(
       `# Screenshots\n\n${input.imageCount} image${input.imageCount === 1 ? ' is' : 's are'} attached to this message — the user put ${input.imageCount === 1 ? 'it' : 'them'} on the work item as context. Read ${input.imageCount === 1 ? 'it' : 'them'} before you start.`,

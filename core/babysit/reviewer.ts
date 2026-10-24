@@ -1,8 +1,11 @@
 /**
  * Who Junior suggests as the reviewer: whoever reviewed most of your last
  * merged PRs in that repo, the most recent breaking a tie. A reviewer you
- * pick yourself wins from then on. Pure: the query text, the pick, the
- * commands the request runs.
+ * pick yourself wins from then on. Between the two sit the repo's own
+ * reviewers (`reviewers:` in `.junior/junior.md`, by the paths the PR
+ * changed): what a teammate wrote down beats what Junior guessed, never
+ * what you picked. Pure: the query text, the pick, the commands the
+ * request runs.
  */
 
 export const REVIEWERS_QUERY = `query($q: String!) {
@@ -45,6 +48,17 @@ export function pickReviewer(data: unknown, me: string): string | null {
 export function learnedFresh(l: LearnedReviewer | undefined, now: number): string | null {
   if (!l) return null
   return l.by === 'you' || now - l.at < REVIEWER_TTL_MS ? l.login : null
+}
+
+/**
+ * The reviewer to suggest before learning one: yours when you picked one,
+ * else the first of the repo's reviewers for this PR's paths that isn't you
+ * (core/work/contract.ts reviewersFor). null = fall back to learning.
+ */
+export function chosenReviewer(stored: LearnedReviewer | undefined, fromRepo: readonly string[], me: string): string | null {
+  if (stored?.by === 'you') return stored.login
+  const self = me.trim().toLowerCase()
+  return fromRepo.find((l) => l.toLowerCase() !== self && isReviewerLogin(l)) ?? null
 }
 
 const LOGIN_RE = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$|^[A-Za-z0-9-]+\/[A-Za-z0-9_.-]+$/

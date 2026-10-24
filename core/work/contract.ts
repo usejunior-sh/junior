@@ -355,7 +355,7 @@ export const FLAKY_LOG_TAIL = 64_000
 const checkName = (pattern: string) => new RegExp(`^${pattern.replace(/[.+?^$()|[\]{}\\]/g, '\\$&').replace(/\*/g, '.*')}$`, 'i')
 
 /** The contract's flaky entry that matches this failing check and its log, or null. */
-export function flakyMatch(c: RepoContract, check: string, log: string): ContractFlaky | null {
+export function flakyMatch(c: Pick<RepoContract, 'flaky'>, check: string, log: string): ContractFlaky | null {
   const tail = log.length > FLAKY_LOG_TAIL ? log.slice(-FLAKY_LOG_TAIL) : log
   return c.flaky.find((f) => checkName(f.check).test(check.trim()) && new RegExp(f.log, 'i').test(tail)) ?? null
 }

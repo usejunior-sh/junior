@@ -22,6 +22,8 @@ import { coveringApproval, useApproval } from '../approvals-ops.js'
 import { describeApproval } from '../../core/approvals/approvals.js'
 import { invalidateInbox } from '../ws/send.js'
 import { deliverSendBack, dispatchAction } from './actions-send.js'
+import { protectedEdit, protectedReason } from '../../core/work/contract-apply.js'
+import { readRepoContract } from '../repo-contract.js'
 
 // Queued actions (core/actions/queue.ts). One policy (core/actions/policy.ts):
 // in a chat, a job run, a team's sessions or a task run, a call that sorts as
@@ -116,7 +118,10 @@ export function sessionVeto(rt: WorkspaceRuntime, row: StoredSession, own: Reado
  * It fails closed: a call it can't sort is held, not let through.
  */
 export async function holdIfAction(rt: WorkspaceRuntime, row: StoredSession, toolName: string, input: unknown, ctx: HoldContext): Promise<VetoDecision> {
-  if (!holdable(toolName) || !holdsActions(rt, row)) return { allow: true }
+  if (!holdsActions(rt, row)) return { allow: true }
+  const guarded = await protectedPathVeto(rt, row, toolName, input)
+  if (guarded) return guarded
+  if (!holdable(toolName)) return { allow: true }
   const args = isArgsObject(input) ? input : {}
   // A babysit task's shell (core/babysit/policy.ts): pushes to its PR's branch and
   // its bot thread's reply and resolve run; force and other branches are refused;
@@ -203,6 +208,31 @@ export async function holdIfAction(rt: WorkspaceRuntime, row: StoredSession, too
     })
     .catch((err) => log('warn', 'actions', `could not hold an action: ${errText(err)}`, { session: row.id, workspace: rt.meta.id }))
   return { allow: false, reason: queuedMessage(id) }
+}
+
+/** The tools whose calls can change a file: only these are checked against the repo's protected paths. */
+const MAY_EDIT = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit', 'Bash'])
+
+/**
+ * The repo contract's protected paths (core/work/contract.ts): an edit to one
+ * asks in a chat and is refused in a job or task run, where nobody is there to
+ * answer. The contract is read from the repo the session's folder sits in.
+ * A contract that can't be read protects nothing: the edit is left to the
+ * other checks, as it was before the repo had a contract.
+ */
+export async function protectedPathVeto(rt: WorkspaceRuntime, row: StoredSession, toolName: string, input: unknown): Promise<VetoDecision | null> {
+  if (!MAY_EDIT.has(toolName) || !row.cwd) return null
+  const ask = row.kind === 'chat' && !rt.taskRuns.has(row.id)
+  try {
+    const { root, contract } = await readRepoContract(row.cwd)
+    const hit = protectedEdit(contract, root, row.cwd, toolName, input)
+    if (!hit) return null
+    log('info', 'contract', `${ask ? 'asked about' : 'refused'} an edit to protected ${hit.path} (${hit.glob})`, { session: row.id, tool: toolName, workspace: rt.meta.id })
+    return { allow: false, reason: protectedReason(hit, ask), ...(ask ? { ask: true } : {}) }
+  } catch (err) {
+    log('warn', 'contract', `could not check an edit against the repo contract: ${errText(err)}`, { session: row.id, workspace: rt.meta.id })
+    return null
+  }
 }
 
 /** Run `fn` on the workspace's action chain, after every write queued before it, before any after. */

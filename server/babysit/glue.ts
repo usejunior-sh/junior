@@ -8,7 +8,7 @@ import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { BABYSIT_QUERY } from '../../core/babysit/pr.js'
 import { mainRunsFrom } from '../../core/babysit/ci-sort.js'
-import { learnedFresh, pickReviewer, REVIEWERS_KEY, REVIEWERS_QUERY, reviewersSearch, type LearnedReviewer } from '../../core/babysit/reviewer.js'
+import { chosenReviewer, learnedFresh, pickReviewer, REVIEWERS_KEY, REVIEWERS_QUERY, reviewersSearch, type LearnedReviewer } from '../../core/babysit/reviewer.js'
 import { BABYSIT_SETTINGS_KEY, babysitSettingsFrom, type BabysitSettings } from '../../core/babysit/settings.js'
 import { ghLogin } from '../../core/sources/github.js'
 import { reasonOf } from '../../core/work/fields.js'
@@ -19,6 +19,8 @@ import { upsertItem, watchesOn } from '../settings-ops.js'
 import type { WorkspaceRuntime } from '../workspace/runtime.js'
 import { invalidateInbox } from '../ws/send.js'
 import { babysitTickOp, type BabysitDeps, type BabysitSource } from './watch.js'
+import { reviewersFor, type RepoContract } from '../../core/work/contract.js'
+import { readRepoContract } from '../repo-contract.js'
 import { runTickHooks, taskAdded } from './hooks.js'
 
 const pExec = promisify(execFile)
@@ -49,9 +51,42 @@ export async function babysitSettings(rt: WorkspaceRuntime): Promise<BabysitSett
   return babysitSettingsFrom(await rt.store.config.get(BABYSIT_SETTINGS_KEY))
 }
 
-/** The reviewer Junior suggests for a repo: yours if you picked one, else learned from your merged PRs (a day's cache). */
-export async function reviewerFor(rt: WorkspaceRuntime, repo: string, now = Date.now()): Promise<string | null> {
+/**
+ * The repo's .junior/junior.md contract, read from the project folder that
+ * holds it (the user's checkout: what's on its branch now). null when no
+ * project holds the repo or the file isn't there.
+ */
+export async function contractForRepo(rt: WorkspaceRuntime, repo: string): Promise<RepoContract | null> {
+  const project = (await rt.store.projects.list()).find((p) => p.repo === repo)
+  if (!project) return null
+  const loaded = await readRepoContract(project.path)
+  return loaded.found ? loaded.contract : null
+}
+
+/** The paths a PR changes, by `gh pr view`. [] when it can't be read. */
+async function prPaths(repo: string, number: number): Promise<string[]> {
+  try {
+    const v = JSON.parse(await gh(['pr', 'view', String(number), '-R', repo, '--json', 'files'])) as { files?: { path?: unknown }[] }
+    return (v.files ?? []).map((f) => (typeof f.path === 'string' ? f.path : '')).filter(Boolean)
+  } catch {
+    return []
+  }
+}
+
+/**
+ * The reviewer Junior suggests for a PR: yours if you picked one, else the
+ * repo's .junior/ reviewers for the paths it changed, else learned from your
+ * merged PRs (a day's cache).
+ */
+export async function reviewerFor(rt: WorkspaceRuntime, repo: string, pr?: { number: number }, now = Date.now()): Promise<string | null> {
   const all = (await rt.store.config.get<Record<string, LearnedReviewer>>(REVIEWERS_KEY)) ?? {}
+  if (all[repo]?.by === 'you') return all[repo].login
+  const contract = pr ? await contractForRepo(rt, repo).catch(() => null) : null
+  if (pr && contract?.reviewers.length) {
+    const me = await ghLogin()
+    const picked = chosenReviewer(all[repo], reviewersFor(contract, await prPaths(repo, pr.number)), me)
+    if (picked) return picked
+  }
   const fresh = learnedFresh(all[repo], now)
   if (fresh) return fresh
   const me = await ghLogin()
@@ -75,7 +110,8 @@ export function babysitDeps(rt: WorkspaceRuntime): BabysitDeps {
     source: ghBabysitSource,
     repos: () => connectedRepos(rt),
     upsertItem: async (item) => void (await upsertItem(rt, item)),
-    reviewerFor: (repo) => reviewerFor(rt, repo),
+    reviewerFor: (repo, pr) => reviewerFor(rt, repo, pr),
+    contractFor: (repo) => contractForRepo(rt, repo),
     graceMinutes: async () => (await babysitSettings(rt)).graceMinutes,
     added: (task, stuck) => taskAdded(rt, task, stuck),
     log: (level, message, fields) => log(level, 'babysit', message, { ...fields, workspace: rt.meta.id }),

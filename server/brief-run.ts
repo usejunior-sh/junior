@@ -25,6 +25,8 @@ import { ANY_ITEM_ID_RE } from './validate.js'
 import { createSession, getOrRevive } from './session/sessions.js'
 import { BRIEF_TIMEOUT_MS, linkSessionToItem, projectFor, readSettings } from './settings-ops.js'
 import { itemFilesForSession } from './items-ops.js'
+import { readRepoContract } from './repo-contract.js'
+import { repoNotes } from '../core/work/contract-apply.js'
 import { ITEM_SYSTEM_APPEND, makeTaskMcp, REVIEW_SYSTEM_APPEND, TASK_SYSTEM_APPEND, TRIAGE_SYSTEM_APPEND } from './tasks/runner.js'
 import { READ_ONLY_STEPS } from '../core/playbooks/item.js'
 import { REVIEW_STEP } from '../core/review/watch.js'
@@ -384,6 +386,9 @@ async function startBriefRun(rt: WorkspaceRuntime, job: BriefJob): Promise<void>
   const images = await itemImageAttachments(rt.attachmentsDir, item.id, item.images)
   // Files of any type go in as paths the session can Read.
   const { files, note: missingNote } = await itemFilesForSession(rt, row.id, item)
+  // The repo's .junior/junior.md: the brief notes what it says ("From the repo's .junior/: …").
+  const contract = row.cwd ? await readRepoContract(row.cwd).catch(() => null) : null
+  const notes = contract?.found ? repoNotes(contract.contract) : []
   const briefPrompt = composeBriefPrompt({
       item,
       reason: scored?.rankWhy,
@@ -393,6 +398,7 @@ async function startBriefRun(rt: WorkspaceRuntime, job: BriefJob): Promise<void>
       existing: existing?.body ?? null,
       iteration,
       imageCount: images?.length ?? 0,
+      ...(notes.length ? { repoNotes: notes } : {}),
     })
   await live.sendUserMessage(missingNote ? `${briefPrompt}\n\n${missingNote}` : briefPrompt, images, undefined, files.length ? { files } : {})
   log('info', 'briefs', `run started: ${item.title}${iteration ? ' (iteration)' : ''}`, {

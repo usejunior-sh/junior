@@ -20,8 +20,12 @@ const tail = (s: string, n: number) => (s.length > n ? `…(earlier output cut)\
 const head = (s: string, n: number) => (s.length > n ? `${s.slice(0, n)}\n…(rest cut: run \`gh pr diff\`)` : s)
 const str = (v: unknown) => (typeof v === 'string' ? v : '')
 
-/** What a fix-ci session reads before it starts: the failed log, the PR diff, the CI job's steps sorted. */
-export type TaskCtx = { log?: string; diff?: string; local?: LocalChecks }
+/**
+ * What a task session reads before it starts: the failed log, the PR diff,
+ * the CI job's steps sorted (fix-ci), and the repo's .junior/ rules
+ * (core/work/contract-apply.ts repoNotes).
+ */
+export type TaskCtx = { log?: string; diff?: string; local?: LocalChecks; repoNotes?: readonly string[] }
 
 /** The line a fix-ci hand-in starts with when the job's checks passed here. */
 export const CHECKED_LOCALLY = "Checked locally with the CI job's steps"
@@ -134,6 +138,7 @@ export function taskPrompt(t: ItemTask, pr: TaskPr, memory: ItemMemory | undefin
     `- Push with \`git push origin HEAD:${pr.headRef}\` (after a rebase: \`git push --force-with-lease origin HEAD:${pr.headRef}\`). Those run without asking. Plain --force, other branches and implicit pushes are refused.`,
     "- Anything else that reaches a person (a PR comment, a reviewer request, marking ready, a merge) is held for the user's OK. Don't try those here.",
     '- Keep the change to what the task needs. One commit with a plain message is best.',
+    ...(ctx.repoNotes?.length ? ['', ...ctx.repoNotes] : []),
     ...(mem ? ['', mem] : []),
     '',
     '## The task',
