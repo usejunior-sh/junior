@@ -3,13 +3,16 @@
  * them): `<workspace>/context.md` for the whole workspace and
  * `<project>/.junior/context.md` for one project. Either may be missing; a
  * missing one adds nothing. Every session kind gets them (chats, briefs,
- * tasks, team workers, job runs), so the user says a thing once.
+ * tasks, team workers, job runs), so the user says a thing once. The kept
+ * learnings for the session's scope follow the files (server/learnings-ops.ts),
+ * each re-checked against its receipts first.
  */
 import path from 'node:path'
 import { open } from 'node:fs/promises'
 import type { StoredSession } from '../core/store/types.js'
 import type { SessionContextFiles } from '../shared/protocol.js'
-import { composeContextFiles, CONTEXT_FILE_CAP, type ContextFileInput, type ContextLoad } from '../shared/juniorContext.js'
+import { composeContextFiles, CONTEXT_FILE_CAP, withLearnings, type ContextFileInput, type ContextLoad } from '../shared/juniorContext.js'
+import { learningsForSession } from './learnings-ops.js'
 import { workspaceDir } from './workspaces.js'
 import { log } from './log.js'
 import { errText } from './errors.js'
@@ -65,7 +68,7 @@ export async function loadContextFiles(workspaceRoot: string, project: { name: s
 }
 
 /** What the session summary shows: the cost, without the text. */
-export const contextCost = (load: ContextLoad): SessionContextFiles => ({ tokens: load.tokens, files: load.files })
+export const contextCost = (load: ContextLoad): SessionContextFiles => ({ tokens: load.tokens, files: load.files, ...(load.learnings ? { learnings: load.learnings } : {}) })
 
 /**
  * Load the context for a session about to spawn, in the project it runs in
@@ -77,7 +80,8 @@ export const contextCost = (load: ContextLoad): SessionContextFiles => ({ tokens
 export async function contextForSession(rt: WorkspaceRuntime, row: Pick<StoredSession, 'id' | 'projectId'>): Promise<ContextLoad> {
   try {
     const project = row.projectId ? ((await rt.store.projects.list()).find((p) => p.id === row.projectId) ?? null) : null
-    const load = await loadContextFiles(workspaceDir(rt.meta.id), project)
+    const files = await loadContextFiles(workspaceDir(rt.meta.id), project)
+    const load = withLearnings(files, await learningsForSession(rt, project, { sessionId: row.id }))
     noteSessionContext(rt, row.id, load)
     return load
   } catch (err) {
@@ -86,9 +90,24 @@ export async function contextForSession(rt: WorkspaceRuntime, row: Pick<StoredSe
   }
 }
 
+/**
+ * A trial run's context: the same files and learnings a real run in this
+ * project would load, but nothing is marked used or stale (a dry run records
+ * nothing). Never throws.
+ */
+export async function contextForTrial(rt: WorkspaceRuntime, project: { name: string; path: string; repo?: string }): Promise<ContextLoad> {
+  try {
+    const files = await loadContextFiles(workspaceDir(rt.meta.id), project)
+    return withLearnings(files, await learningsForSession(rt, project, { dry: true }))
+  } catch (err) {
+    log('warn', 'context', `could not load context for a trial run: ${errText(err)}`, { workspace: rt.meta.id })
+    return { append: '', tokens: 0, files: [] }
+  }
+}
+
 /** Record what a session loaded (or that it loaded nothing), and say so in the log when a file was cut or cleaned. */
 export function noteSessionContext(rt: WorkspaceRuntime, sessionId: string, load: ContextLoad): void {
-  if (load.files.length) rt.sessionContext.set(sessionId, contextCost(load))
+  if (load.files.length || load.learnings) rt.sessionContext.set(sessionId, contextCost(load))
   else rt.sessionContext.delete(sessionId)
   for (const f of load.files) {
     if (f.truncated) log('info', 'context', `${f.path} is longer than Junior loads; only its start went in`, { session: sessionId, workspace: rt.meta.id })

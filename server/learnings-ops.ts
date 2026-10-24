@@ -10,10 +10,18 @@
  * as broken, never rewritten, and never used.
  */
 import { randomUUID } from 'node:crypto'
-import { mkdir, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
+import { mkdir, open, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import {
+  citationOf,
+  citeOf,
   edit,
+  forScope,
+  LOAD_MAX,
+  loadVerdict,
+  markStale,
+  USED_WRITE_EVERY_MS,
+  vouched,
   isLearningId,
   keep,
   learningId,
@@ -29,7 +37,10 @@ import {
   type LearningScope,
   type Sighting,
   type Sweep,
+  type Citation,
+  type CitationCheck,
 } from '../core/junior/learnings.js'
+import { composeLearnings, type LearningsLoad } from '../shared/juniorContext.js'
 import { workspaceDir } from './workspaces.js'
 import { broadcast } from './ws/send.js'
 import { log } from './log.js'
@@ -193,7 +204,7 @@ const idOf = (raw: unknown): string => {
 export type LearningsList = LearningsRead & { path: string }
 
 /**
- * What Junior's notebook lists: proposed and kept learnings, newest first,
+ * What Junior's notebook lists: proposed, kept and stale learnings, newest first,
  * and the files that didn't parse. Candidates are Junior's quiet notes and
  * stay out unless `all` is asked for.
  */
@@ -287,5 +298,167 @@ export async function sweepLearningsTick(rt: WorkspaceRuntime, now = Date.now())
     if (s.expired.some((l) => l.status !== 'candidate')) changed(rt)
   } catch (err) {
     log('warn', 'learnings', `expiry sweep failed: ${errText(err)}`, { workspace: rt.meta.id })
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Loading into a chat or run
+
+/** What the local re-check needs: the project folder (null: none) and lookups in the store. */
+export type CitationEnv = {
+  /** the session's project folder; relative file receipts resolve here */
+  projectPath: string | null
+  itemExists: (id: string) => Promise<boolean>
+  sessionExists: (id: string) => Promise<boolean>
+}
+
+/** Past this size a cited file only has to exist: its lines aren't counted. */
+const LINE_COUNT_MAX_BYTES = 4 * 1024 * 1024
+
+/** Newlines in a file, read in chunks, plus one when it doesn't end in one. */
+async function lineCount(file: string, size: number): Promise<number> {
+  const fh = await open(file, 'r')
+  try {
+    const buf = Buffer.alloc(64 * 1024)
+    let lines = 0
+    let pos = 0
+    let last = 10
+    while (pos < size) {
+      const { bytesRead } = await fh.read(buf, 0, buf.length, pos)
+      if (!bytesRead) break
+      for (let i = 0; i < bytesRead; i++) if (buf[i] === 10) lines++
+      last = buf[bytesRead - 1]
+      pos += bytesRead
+    }
+    return size > 0 && last !== 10 ? lines + 1 : lines
+  } finally {
+    await fh.close().catch(() => {})
+  }
+}
+
+/**
+ * Is a cited file still there, at that line? A relative path resolves in the
+ * project, and only for a learning that holds in this repo: a global learning
+ * learned in another repo cites that repo's files, so here it can't be
+ * checked. A path that climbs out of the project isn't checked either.
+ */
+async function checkFile(c: Extract<Citation, { kind: 'file' }>, root: string | null): Promise<CitationCheck> {
+  let file: string
+  if (path.isAbsolute(c.path)) file = c.path
+  else {
+    if (!root) return 'unchecked'
+    file = path.resolve(root, c.path)
+    const rel = path.relative(root, file)
+    if (rel.startsWith('..') || path.isAbsolute(rel)) return 'unchecked'
+  }
+  try {
+    const st = await stat(file)
+    if (!st.isFile()) return 'gone'
+    if (c.line === undefined || st.size > LINE_COUNT_MAX_BYTES) return 'ok'
+    return (await lineCount(file, st.size)) >= c.line ? 'ok' : 'gone'
+  } catch {
+    return 'gone'
+  }
+}
+
+/** Re-check one learning's receipts on this machine. No network: PR and thread refs pass as they are. */
+export async function checkCitations(l: Learning, env: CitationEnv): Promise<CitationCheck[]> {
+  const root = l.scope === 'global' ? null : env.projectPath
+  return Promise.all(
+    l.sources.map(async (s): Promise<CitationCheck> => {
+      const c = citationOf(s.ref)
+      try {
+        if (c.kind === 'file') return await checkFile(c, root)
+        if (c.kind === 'item') return (await env.itemExists(c.id)) ? 'ok' : 'gone'
+        if (c.kind === 'session') return (await env.sessionExists(c.id)) ? 'ok' : 'gone'
+        return c.kind === 'remote' ? 'ok' : 'unchecked'
+      } catch {
+        // A lookup that failed says nothing about the receipt.
+        return 'unchecked'
+      }
+    }),
+  )
+}
+
+export type LoadedLearnings = LearningsLoad & {
+  /** learnings that went stale on this load: every receipt gone */
+  stale: Learning[]
+  /** files written (stale marks and lastUsedAt); 0 on a dry load */
+  wrote: number
+}
+
+/**
+ * The kept learnings for one session, composed for its system prompt: global
+ * ones and the session's repo's, each with a receipt, at most LOAD_MAX and
+ * LEARNINGS_CAP characters. Each one's receipts are re-checked first; one
+ * whose receipts are all gone is skipped and marked `stale`. The ones loaded
+ * get lastUsedAt = now. `dry` (a trial run) changes nothing on disk.
+ */
+export async function loadLearnings(
+  folder: LearningsFolder,
+  repo: string | null,
+  env: CitationEnv,
+  now: number,
+  opts: { dry?: boolean } = {},
+): Promise<LoadedLearnings> {
+  const work = async ({ learnings }: LearningsRead): Promise<LoadedLearnings> => {
+    const stale: Learning[] = []
+    const pick: { l: Learning; checks?: CitationCheck[] }[] = []
+    for (const l of forScope(learnings, repo)) {
+      if (pick.length >= LOAD_MAX) break
+      if (vouched(l)) {
+        pick.push({ l })
+        continue
+      }
+      const checks = await checkCitations(l, env)
+      if (loadVerdict(checks) === 'stale') stale.push(markStale(l, now))
+      else pick.push({ l, checks })
+    }
+    const composed = composeLearnings(pick.map(({ l, checks }) => ({ id: l.id, text: l.text, scope: l.scope, cite: citeOf(l, checks) })))
+    let wrote = 0
+    if (!opts.dry) {
+      for (const l of stale) {
+        await folder.write(l)
+        wrote++
+      }
+      const used = new Set(composed.ids)
+      for (const { l } of pick) {
+        if (!used.has(l.id) || (l.lastUsedAt !== undefined && now - l.lastUsedAt < USED_WRITE_EVERY_MS)) continue
+        await folder.write({ ...l, lastUsedAt: now })
+        wrote++
+      }
+    }
+    return { ...composed, stale, wrote }
+  }
+  return opts.dry ? work(await folder.read()) : folder.update(work)
+}
+
+const NO_LEARNINGS: LoadedLearnings = { append: '', tokens: 0, ids: [], stale: [], wrote: 0 }
+
+/**
+ * The learnings block for a session about to spawn in `project` (null: no
+ * project, so global learnings only and no file checks). Never throws: a
+ * learning that can't be read must not stop a session from starting.
+ */
+export async function learningsForSession(
+  rt: WorkspaceRuntime,
+  project: { path: string; repo?: string } | null,
+  opts: { dry?: boolean; now?: number; sessionId?: string } = {},
+): Promise<LoadedLearnings> {
+  try {
+    const env: CitationEnv = {
+      projectPath: project?.path ?? null,
+      itemExists: async (id) => (await rt.store.items.get(id)) != null,
+      sessionExists: async (id) => (await rt.store.sessions.get(id)) != null,
+    }
+    const r = await loadLearnings(learningsFolder(rt), project?.repo?.trim() || null, env, opts.now ?? Date.now(), { dry: opts.dry })
+    for (const l of r.stale) {
+      log('info', 'learnings', `stale, every receipt is gone: ${l.text.slice(0, 80)}`, { learning: l.id, workspace: rt.meta.id, ...(opts.sessionId ? { session: opts.sessionId } : {}) })
+    }
+    if (r.wrote) changed(rt)
+    return r
+  } catch (err) {
+    log('warn', 'learnings', `could not load learnings: ${errText(err)}`, { workspace: rt.meta.id })
+    return NO_LEARNINGS
   }
 }

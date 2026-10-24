@@ -151,6 +151,8 @@ export type SessionContextFiles = {
   /** estimated tokens of the whole block in the system prompt */
   tokens: number
   files: SessionContextFile[]
+  /** kept learnings loaded after the files (their receipts re-checked first); absent when none were */
+  learnings?: { count: number; tokens: number }
 }
 
 export type SessionContextFile = {

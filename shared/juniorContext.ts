@@ -120,6 +120,8 @@ export type ContextLoad = {
   /** estimated tokens of the whole block */
   tokens: number
   files: ContextFileCost[]
+  /** kept learnings loaded after the files (`withLearnings`); absent when none were */
+  learnings?: { count: number; tokens: number }
 }
 
 /** Characters loaded from one file. About 2,000 tokens. */
@@ -212,6 +214,67 @@ export function composeContextFiles(
   if (!sections.length) return { append: '', tokens: 0, files: [] }
   const append = `${CONTEXT_HEAD}\n\n${sections.join('\n\n')}`
   return { append, tokens: estimateTokens(append), files }
+}
+
+/*
+ * Kept learnings (core/junior/learnings.ts): what Junior learned about how
+ * the user works and they said keep. Loaded after the context files, each
+ * with the receipt that taught it, so the model can tell where a rule came
+ * from and the user can trace it. Only kept learnings whose receipts were
+ * re-checked at load get here (server/learnings-ops.ts); this only writes
+ * the block. Learning files are hand-editable, so the same stripping applies.
+ */
+
+/** One learning as the prompt shows it: its words, where it holds, and one receipt. */
+export type LearningForPrompt = { id: string; text: string; scope: string; cite: { ref: string; day: string } }
+
+/** Characters of learnings loaded into one session. About 1,000 tokens. */
+export const LEARNINGS_CAP = 4_000
+
+const LEARNINGS_HEAD = `
+
+## What you learned about how the user works
+The user kept these. Each was learned from their own edits, rejections or corrections, and its receipt follows it.
+Follow them as their standing preferences. When the user says otherwise in this conversation, the conversation wins.`
+
+export type LearningsLoad = {
+  /** the system-prompt block; '' when there was nothing to load */
+  append: string
+  tokens: number
+  /** the learnings that made it into the block, in order: only these count as used */
+  ids: string[]
+}
+
+/** Compose the learnings block, in the order given, until `cap` characters. Nothing to load adds nothing. */
+export function composeLearnings(list: readonly LearningForPrompt[], cap = LEARNINGS_CAP): LearningsLoad {
+  const lines: string[] = []
+  const ids: string[] = []
+  let left = cap
+  for (const l of list) {
+    const text = stripInvisible(l.text.replace(/\s+/g, ' ')).text.trim()
+    if (!text) continue
+    const where = l.scope === 'global' ? 'everywhere' : l.scope.replace(/^repo:/, '')
+    const ref = stripInvisible(l.cite.ref).text.trim()
+    const line = `- ${text} (${where}; learned from ${ref}, ${l.cite.day})`
+    if (line.length > left) break
+    left -= line.length + 1
+    lines.push(line)
+    ids.push(l.id)
+  }
+  if (!lines.length) return { append: '', tokens: 0, ids: [] }
+  const append = `${LEARNINGS_HEAD}\n${lines.join('\n')}`
+  return { append, tokens: estimateTokens(append), ids }
+}
+
+/** The context files' load with the learnings block after it. */
+export function withLearnings(files: ContextLoad, learned: LearningsLoad): ContextLoad {
+  if (!learned.append) return files
+  return {
+    append: `${files.append}${learned.append}`,
+    tokens: files.tokens + learned.tokens,
+    files: files.files,
+    learnings: { count: learned.ids.length, tokens: learned.tokens },
+  }
 }
 
 const sectionTitle = (f: ContextFileInput) =>

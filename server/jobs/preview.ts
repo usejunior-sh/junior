@@ -13,8 +13,7 @@ import { WORKSPACE_PLUGIN } from '../library.js'
 import { fenceDecision, fenceFor } from '../../core/job/fence.js'
 import { personaAppend } from '../../core/junior/persona.js'
 import type { ContextLoad } from '../../shared/juniorContext.js'
-import { loadContextFiles } from '../context-files.js'
-import { workspaceDir } from '../workspaces.js'
+import { contextForTrial } from '../context-files.js'
 import { safeWhen } from '../../core/sources/slack.js'
 import { dryRunDecision, isArgsObject } from '../../core/actions/queue.js'
 import { log } from '../log.js'
@@ -188,7 +187,7 @@ export async function jobQuery(
     const missing = checkLibrary({ skills, agents }, await jobLibrary(rt))
     if (missing.length) throw new Error(missing.join('; '))
   }
-  const context = extra.context ?? (await loadContextFiles(workspaceDir(rt.meta.id), spec.project))
+  const context = extra.context ?? (await contextForTrial(rt, spec.project))
   const extraTools = [...(skills.length ? ['Skill'] : []), ...(agents.length ? ['Agent'] : [])]
   const fromLibrary = [...skills, ...agents].some((n) => n.startsWith(`${WORKSPACE_PLUGIN}:`))
   const fence = fenceFor(spec.tools, spec.output, spec.project.path, { skills, agents }, browser ? { browser: true, readRoots: [downloadDirFor(browser.tab)] } : {})

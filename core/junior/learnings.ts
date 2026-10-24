@@ -22,8 +22,11 @@
  *   Run pnpm test:unit, not pnpm test, in acme/web.
  *
  * Statuses: `candidate` (seen once, never shown, never loaded), `proposed`
- * (seen on two different days, waiting on you), `kept` (you said keep).
- * Only `kept` learnings ever go into a prompt (`loadable`). At most
+ * (seen on two different days, waiting on you), `kept` (you said keep),
+ * `stale` (kept, but every receipt it cites is gone: a file that was deleted,
+ * an item or session no longer in the store; waits on you to keep or forget).
+ * Only `kept` learnings ever go into a prompt (`loadable`), and only after
+ * their citations are re-checked at load (`citationOf`, `loadVerdict`). At most
  * PROPOSALS_PER_DAY new proposals a day: past that, a second sighting stays
  * a candidate and is proposed on a later day.
  *
@@ -36,7 +39,7 @@
 import { parseYaml, YamlError, type YamlValue } from '../teams/recipe.js'
 import { dayKey } from './today.js'
 
-export const LEARNING_STATUSES = ['candidate', 'proposed', 'kept'] as const
+export const LEARNING_STATUSES = ['candidate', 'proposed', 'kept', 'stale'] as const
 export type LearningStatus = (typeof LEARNING_STATUSES)[number]
 
 /** `global`, or one repo: `repo:<owner>/<repo>` (lowercase). */
@@ -61,9 +64,15 @@ export type Learning = {
   keptAt?: number
   /** ms; when it last went into a chat or run, absent until it does */
   lastUsedAt?: number
+  /**
+   * ms; when a load found every receipt it cites gone and marked it `stale`.
+   * Stays after you keep it again: `keptAt` later than this means you vouched
+   * for it, and the load no longer re-checks it.
+   */
+  staleAt?: number
 }
 
-export const LEARNING_FILE_KEYS = ['scope', 'status', 'createdAt', 'proposedAt', 'keptAt', 'lastUsedAt', 'sources'] as const
+export const LEARNING_FILE_KEYS = ['scope', 'status', 'createdAt', 'proposedAt', 'keptAt', 'lastUsedAt', 'staleAt', 'sources'] as const
 
 /** Unused this long, a learning goes. */
 export const EXPIRE_DAYS = 28
@@ -209,6 +218,7 @@ export function parseLearning(id: string, text: string): ParsedLearning {
   const proposedAt = timeOf('proposedAt', doc.proposedAt, errors, false)
   const keptAt = timeOf('keptAt', doc.keptAt, errors, false)
   const lastUsedAt = timeOf('lastUsedAt', doc.lastUsedAt, errors, false)
+  const staleAt = timeOf('staleAt', doc.staleAt, errors, false)
   const sources = sourcesOf(doc.sources, errors)
   const body = parts.body.trim()
   const bad = textProblem(body)
@@ -219,6 +229,7 @@ export function parseLearning(id: string, text: string): ParsedLearning {
   if (proposedAt !== undefined) learning.proposedAt = proposedAt
   if (keptAt !== undefined) learning.keptAt = keptAt
   if (lastUsedAt !== undefined) learning.lastUsedAt = lastUsedAt
+  if (staleAt !== undefined) learning.staleAt = staleAt
   return { learning, errors: [] }
 }
 
@@ -231,6 +242,7 @@ export function serializeLearning(l: Learning): string {
   if (l.proposedAt !== undefined) lines.push(`proposedAt: ${iso(l.proposedAt)}`)
   if (l.keptAt !== undefined) lines.push(`keptAt: ${iso(l.keptAt)}`)
   if (l.lastUsedAt !== undefined) lines.push(`lastUsedAt: ${iso(l.lastUsedAt)}`)
+  if (l.staleAt !== undefined) lines.push(`staleAt: ${iso(l.staleAt)}`)
   lines.push('sources:')
   for (const s of l.sources) lines.push(`  - { ref: ${quoted(s.ref)}, day: ${s.day} }`)
   lines.push('---')
@@ -331,7 +343,8 @@ export function proposeLearningResult(s: Sighting): ProposeLearningResult {
     return { ...base, note: 'Seen on two different days: shown to the user as a card. Nothing is kept until they press Keep. Carry on.' }
   }
   if (s.kind === 'known') {
-    return { ...base, note: `Already ${s.learning.status === 'kept' ? 'kept' : 'proposed'}; the receipt is added. Nothing else changes.` }
+    const was = s.learning.status === 'stale' ? 'waiting on the user (its old receipts are gone)' : s.learning.status === 'kept' ? 'kept' : 'proposed'
+    return { ...base, note: `Already ${was}; the receipt is added. Nothing else changes.` }
   }
   if (s.held) {
     return { ...base, held: true, note: `Seen again, but ${PROPOSALS_PER_DAY} learnings were already proposed today. It stays a quiet note; the next sighting on a later day proposes it.` }
@@ -452,7 +465,7 @@ export function withinBudget(list: readonly Learning[], max = KEPT_PER_SCOPE): L
 
 export type Move = { ok: true; learning: Learning } | { ok: false; error: string }
 
-/** You said keep. The only way anything becomes `kept`. */
+/** You said keep. The only way anything becomes `kept` (a stale one too: keeping it vouches for it). */
 export function keep(list: readonly Learning[], id: string, now: number, max = KEPT_PER_SCOPE): Move {
   const l = list.find((x) => x.id === id)
   if (!l) return { ok: false, error: 'no such learning' }
@@ -507,4 +520,97 @@ export const loadable = (list: readonly Learning[]): Learning[] => list.filter((
 export function markUsed(list: readonly Learning[], ids: readonly string[], now: number): Learning[] {
   const want = new Set(ids)
   return list.filter((l) => want.has(l.id) && l.status === 'kept').map((l) => ({ ...l, lastUsedAt: now }))
+}
+
+// ---------------------------------------------------------------------------
+// Loading: which kept learnings go into a session, and are their receipts still there
+
+/** Learnings loaded into one session, at most. The composer's character cap may stop it sooner. */
+export const LOAD_MAX = 12
+/** A loaded learning's lastUsedAt is written again only when it is older than this (a revive storm writes nothing). */
+export const USED_WRITE_EVERY_MS = 10 * 60_000
+
+/**
+ * What a receipt points at, for the local re-check at load:
+ * - `file`: a path in the project, with the line it cited when it had one
+ *   (`src/a.ts:42`, `src/a.ts:42-50`, `file:src/a.ts`, `package.json`);
+ * - `item`: a work item that must still be in the store (`item:<id>`, `manual:<uuid>`);
+ * - `session`: a session that must still be in the store (`session:<id>`);
+ * - `remote`: a PR, issue, thread or link (`pr:`, `github:`, `slack:`,
+ *   `linear:`, `thread:`, `issue:`, `http(s)://`), which passes without a call;
+ * - `unknown`: anything else, which can't be checked and so never fails.
+ */
+export type Citation =
+  | { kind: 'file'; path: string; line?: number }
+  | { kind: 'item'; id: string }
+  | { kind: 'session'; id: string }
+  | { kind: 'remote' }
+  | { kind: 'unknown' }
+
+const REMOTE_PREFIXES = ['pr', 'github', 'slack', 'linear', 'thread', 'issue', 'http', 'https', 'mailto']
+const FILE_LINE_RE = /^(.*[^\s:]):(\d+)(?:[-:]\d+)?$/
+const PATHISH_RE = /^[\w.@~/+-]+$/
+
+export function citationOf(rawRef: string): Citation {
+  const ref = rawRef.trim()
+  const scheme = /^([a-z][a-z0-9+-]*):(.*)$/i.exec(ref)
+  if (scheme) {
+    const [, rawPrefix, rest] = scheme
+    const prefix = rawPrefix.toLowerCase()
+    if (prefix === 'session') return rest.trim() ? { kind: 'session', id: rest.trim() } : { kind: 'unknown' }
+    if (prefix === 'item') return rest.trim() ? { kind: 'item', id: rest.trim() } : { kind: 'unknown' }
+    if (prefix === 'manual') return rest.trim() ? { kind: 'item', id: ref } : { kind: 'unknown' }
+    if (REMOTE_PREFIXES.includes(prefix)) return { kind: 'remote' }
+    if (prefix === 'file') return fileCitation(rest.trim()) ?? { kind: 'unknown' }
+    // `src:12` reads as a file named src at line 12; any other `word:` is a kind we don't know.
+    if (!/^\d+(?:[-:]\d+)?$/.test(rest)) return { kind: 'unknown' }
+  }
+  return fileCitation(ref) ?? { kind: 'unknown' }
+}
+
+function fileCitation(ref: string): Citation | null {
+  const m = FILE_LINE_RE.exec(ref)
+  const file = m ? m[1] : ref
+  if (!file || !PATHISH_RE.test(file)) return null
+  // Without a line, a bare word ("ci", "review") is not a file; it needs a slash or an extension.
+  if (!m && !file.includes('/') && !/\.[a-z0-9]{1,10}$/i.test(file)) return null
+  const line = m ? Number(m[2]) : undefined
+  return line !== undefined && line > 0 ? { kind: 'file', path: file, line } : { kind: 'file', path: file }
+}
+
+/** One receipt at load: still there, gone, or nothing to check it against here. */
+export type CitationCheck = 'ok' | 'gone' | 'unchecked'
+
+/** The user kept it again after it went stale: they vouched for it, so its receipts aren't re-checked. */
+export const vouched = (l: Learning): boolean => l.staleAt !== undefined && l.keptAt !== undefined && l.keptAt > l.staleAt
+
+/**
+ * A kept learning's receipts, re-checked: `load` it, or it is `stale` because
+ * every receipt it cites is gone. One receipt still there, or one that can't
+ * be checked here, is enough to load it.
+ */
+export function loadVerdict(checks: readonly CitationCheck[]): 'load' | 'stale' {
+  return checks.length > 0 && checks.every((c) => c === 'gone') ? 'stale' : 'load'
+}
+
+/** Every receipt gone: the learning waits on you to keep or forget. */
+export const markStale = (l: Learning, now: number): Learning => ({ ...l, status: 'stale', staleAt: now })
+
+/**
+ * The kept learnings a session in `repo` may load (null: no repo, so only
+ * global ones), within the per-scope budget, the repo's own first, then the
+ * most recently active. Capped at `max`; the caller drops stale ones before
+ * it caps.
+ */
+export function forScope(list: readonly Learning[], repo: string | null): Learning[] {
+  const repoScope = repo ? scopeFrom(repo) : null
+  const mine = withinBudget(loadable(list)).filter((l) => l.scope === 'global' || (repoScope !== null && repoScope !== 'global' && l.scope === repoScope))
+  return mine.sort((a, b) => Number(b.scope !== 'global') - Number(a.scope !== 'global') || lastActive(b) - lastActive(a) || a.id.localeCompare(b.id))
+}
+
+/** The receipt a prompt shows: the newest one still there (or not checkable), else the newest. */
+export function citeOf(l: Learning, checks?: readonly CitationCheck[]): LearningSource {
+  const order = l.sources.map((s, i) => ({ s, i })).sort((a, b) => b.s.day.localeCompare(a.s.day) || b.i - a.i)
+  const live = checks ? order.find(({ i }) => checks[i] !== 'gone') : order[0]
+  return (live ?? order[0]).s
 }
