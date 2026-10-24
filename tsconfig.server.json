@@ -29,6 +29,7 @@
     "web/src/shortcuts.ts",
     "web/src/itemRef.ts",
     "web/src/itemVerbs.ts",
+    "web/src/paletteSearch.ts",
     "web/src/selection.ts",
     "web/src/learnings-view.ts",
     "web/src/components/browser/steps.ts",
