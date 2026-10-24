@@ -647,6 +647,14 @@ a.rdyChip:focus-visible { outline: 1px solid var(--hair-bright); outline-offset:
 .ntoLink { padding: 0; border: 0; background: none; font: inherit; color: var(--blue); cursor: pointer; }
 .ntoLink:hover { text-decoration: underline; text-underline-offset: 3px; }
 .ntoErr { flex-basis: 100%; margin: 0 0 8px; }
+/* My PRs' Close? group (core/work/close.ts): a group label that opens, neutrals only, never orange */
+.jhGrp.close { width: 100%; margin: 0; border: 0; border-radius: var(--r); background: none; font: inherit; font-size: 0.9615rem; text-align: left; align-items: center; cursor: pointer; }
+.jhGrp.close:hover b { color: var(--ink); }
+.jhGrp.close:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.jhGrp.close .chev { flex: none; color: var(--ash); transition: transform 120ms ease; }
+.jhGrp.close[data-state="open"] .chev { transform: rotate(90deg); }
+.jhCloseHint { margin: 0; padding: 0 12px 8px; font-size: 0.9615rem; color: var(--ash); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.jhList > .jhEmpty.only { margin: 20px 0 0; }
 .jhMore { display: block; margin: 8px 12px 0; padding: 0; border: 0; background: none; font: inherit; font-size: 0.9615rem; color: var(--ash); cursor: pointer; }
 .jhMore:hover { color: var(--ink); }
 .jhEmpty { display: flex; gap: 10px; align-items: center; justify-content: center; margin: 28px 0 0; color: var(--mute); font-size: 1.038rem; }
@@ -655,6 +663,7 @@ a.rdyChip:focus-visible { outline: 1px solid var(--hair-bright); outline-offset:
 @media (prefers-reduced-motion: reduce) {
   .jhHalo::before, .jhHalo .sat, .jhHalo .bob, .jhTicker .pulse::after, .jhXp { animation: none; }
   .jhGone, .hoRows .hoGone { transition: none; }
+  .jhGrp.close .chev { transition: none; }
 }
 
 /* ---------- phone ---------- */
@@ -705,6 +714,8 @@ a.rdyChip:focus-visible { outline: 1px solid var(--hair-bright); outline-offset:
   .ndgActs .btn { height: 36px; }
   .ndgActs .cap { flex-basis: 100%; margin-left: 0; order: 9; }
   .ndg .jhKbd { display: none; }
+  .jhGrp.close { min-height: 44px; }
+  .jhCloseHint { white-space: normal; }
   /* the reason chip: full width, a real tap target; the popover's corrections stack at 44px */
   .rsnChip { width: 100%; min-height: 36px; }
   /* junior.css loads after phone-touch.css, so the full-width popover is restated here */

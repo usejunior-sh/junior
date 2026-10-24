@@ -129,5 +129,24 @@ export async function undoNotUseful(item: ScoredItem, marking?: Promise<string |
   return postNotUseful(item.id, true)
 }
 
+/**
+ * "Keep" on a Close? row (core/work/close.ts): the PR goes back to My PRs at
+ * once, and Junior doesn't ask again for 30 days. Null when it went through;
+ * else the error, as a sentence, and the refetch puts the row back.
+ */
+export async function keepOpen(item: ScoredItem): Promise<string | null> {
+  inboxStore.patch((items) => items.map((i) => (i.id === item.id ? { ...i, keptOpen: Date.now(), close: undefined } : i)))
+  try {
+    const r = await fetch('/api/items/keep-open', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: item.id }) })
+    const b = (await r.json().catch(() => ({ ok: false, error: `HTTP ${r.status}` }))) as ItemStateResponse
+    if (b.ok) return null
+    void inboxStore.refresh()
+    return sentence(b.error)
+  } catch (err) {
+    void inboxStore.refresh()
+    return sentence(err instanceof Error ? err.message : String(err))
+  }
+}
+
 /** The verb on a suggestion's button (itemVerbs.ts, store-free). */
 export { VERB } from './itemVerbs.js'

@@ -16,6 +16,8 @@ import { overdueJobs } from '../jobs/scheduler.js'
 import { inboxAlerts, withFlows } from './flow.js'
 import { recordSurfaced } from '../attention-ops.js'
 import { errText } from '../errors.js'
+import { closeCandidate, SUPERSEDE_LOOKBACK_DAYS, supersededBy } from '../../core/work/close.js'
+import type { ScoredItem, WorkItem } from '../../core/work/types.js'
 
 // Inbox: ranked work items from deterministic sources (core/work). No cron:
 // the server IS the long-running process. Sync happens when the page is
@@ -144,6 +146,8 @@ export function syncInbox(rt: WorkspaceRuntime): Promise<InboxSnapshot> {
         }
       }
       const { items: ranked } = buildInbox({ items, notices, now, weights: await readScoreWeights(rt) })
+      // your PRs that look dead go to My PRs' Close? group (core/work/close.ts); never fails the sync
+      await withCloseCandidates(rt, ranked, now).catch((err) => log('warn', 'inbox', `could not read close candidates: ${errText(err)}`, { workspace: rt.meta.id }))
       await withFlows(rt, ranked, true)
       const tasks = await rt.store.tasks.forItems(ranked.map((i) => i.id))
       for (const i of ranked) {
@@ -171,6 +175,25 @@ export function syncInbox(rt: WorkspaceRuntime): Promise<InboxSnapshot> {
     }
   })()
   return rt.inboxInFlight
+}
+
+/**
+ * Mark your PRs that look dead (core/work/close.ts): quiet 30 days, or
+ * replaced by a PR merged in the last SUPERSEDE_LOOKBACK_DAYS that names them
+ * (its refs or its title). Merged = auto-done by the GitHub reconcile with
+ * "PR merged". Read-only: it sets `close` on the snapshot, nothing else.
+ */
+async function withCloseCandidates(rt: WorkspaceRuntime, ranked: ScoredItem[], now: number): Promise<void> {
+  const own = ranked.filter((i) => i.reason === 'your-pr' && i.kind !== 'own-pr-approved' && i.handoff !== 'on')
+  if (!own.length) return
+  const events = await rt.store.items.eventsBetween(now - SUPERSEDE_LOOKBACK_DAYS * 86_400_000, now + 1)
+  const mergedIds = [...new Set(events.filter((e) => e.event === 'done' && e.detail?.reason === 'PR merged').map((e) => e.itemId))]
+  const merged = (await Promise.all(mergedIds.map((id) => rt.store.items.get(id)))).filter((m): m is WorkItem => !!m && m.status === 'done')
+  const by = supersededBy(own, merged)
+  for (const i of own) {
+    const c = closeCandidate(i, now, by.get(i.id))
+    if (c) i.close = c
+  }
 }
 
 /**

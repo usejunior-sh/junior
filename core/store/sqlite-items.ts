@@ -487,7 +487,7 @@ export class SqliteWorkItems implements WorkItemStore {
 
   async setFields(id: string, patch: ItemFieldsPatch): Promise<void> {
     this.patchPayload(id, (next) => {
-      for (const k of ['reason', 'label', 'parent', 'playbook', 'handoff', 'notNow', 'notNowReason', 'notUseful', 'changesSeenAt'] as const) {
+      for (const k of ['reason', 'label', 'parent', 'playbook', 'handoff', 'notNow', 'notNowReason', 'notUseful', 'changesSeenAt', 'keptOpen'] as const) {
         if (!(k in patch)) continue
         const v = patch[k]
         if (v == null) delete next[k]

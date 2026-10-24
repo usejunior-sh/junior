@@ -18,9 +18,15 @@
  * the draft, a Nudge row opens with the text in a box, and only ⌘↩ in the box
  * sends it (NudgeEditor.tsx).
  *
+ * Your PRs that look dead (core/work/close.ts) leave the list for a collapsed
+ * "Close?" group at its bottom. On an open row there, ⏎ keeps it open and C
+ * opens a chat draft to close it with a note: nothing is drafted until then,
+ * and the close is a held send.
+ *
  * Which rows a tab shows and the words on them are core/junior/ledger.ts.
  * Every verb here is local or a hand-off; sends stay held for approval.
  */
+import * as Collapsible from '@radix-ui/react-collapsible'
 import { ChevronRight, ExternalLink, X } from 'lucide-react'
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { DepBatchView, HandoffReadiness, NeedsRow, NudgeMark, RowMove, ScoredItem, WatchId } from '../../../shared/protocol.js'
@@ -34,10 +40,12 @@ import { needsMoveText } from '../../../core/junior/needs.js'
 import { briefLines, type BriefLine, type BriefLineId } from '../../../core/junior/brief.js'
 import { isMainRed, MAIN_RED_SAYS, mainRedEvidence } from '../../../core/junior/main-red.js'
 import { handBackLine, handBackSays } from '../../../core/babysit/ready.js'
-import { ageHot, cantWatchOf, juniorState, onNeeds, readyOf, LEDGER_GROUP_TITLE, ledgerGroup, ledgerProgress, ledgerRows, NOT_USEFUL_HOLD_MAX_MS, NOT_USEFUL_NOTICE_MS, watchOffOf, type LedgerGroup, type LedgerTab } from '../../../core/junior/ledger.js'
+import { ageHot, cantWatchOf, closeRows, juniorState, onNeeds, readyOf, LEDGER_GROUP_TITLE, ledgerGroup, ledgerProgress, ledgerRows, NOT_USEFUL_HOLD_MAX_MS, NOT_USEFUL_NOTICE_MS, watchOffOf, type LedgerGroup, type LedgerTab } from '../../../core/junior/ledger.js'
 import { TURN_ON_LABEL, WATCH_CANT_SAYS, WATCH_OFF_SAYS, WATCH_STILL_OFF, withAnswer } from '../../../core/junior/watch-off.js'
 import { itemHash } from '../hooks.js'
-import { doneItem, markNotUseful, sendHandoff, snoozeItem, turnOnWatch, undoNotUseful, VERB, type HandoffVerb } from '../handoff.js'
+import { CLOSE_HINT, CLOSE_ONLY_EMPTY, CLOSE_SHOWN, CLOSE_TITLE, closeGroupLabel, closeMoreLabel, closeOrder, closeSays, KEEP_TITLE, keptSaid } from '../../../core/work/close.js'
+import { closeWithNote } from '../closeDraft.js'
+import { doneItem, keepOpen, markNotUseful, sendHandoff, snoozeItem, turnOnWatch, undoNotUseful, VERB, type HandoffVerb } from '../handoff.js'
 import { anyDialogOpen, isGoSequence, isTypingTarget } from '../keys.js'
 import { kindIcon, shortAge } from '../itemUi.js'
 import { playbookOf, refOf } from '../refs.js'
@@ -314,9 +322,11 @@ type Props = Nav & {
   onNudged?: () => void
   /** Needs you only: green dependency PRs as one suggested row, last; their own rows step aside */
   depBatch?: DepBatchView | null
+  /** what the list says when every row is in the Close? group; My PRs' line when absent */
+  onlyClose?: ReactNode
 }
 
-export function JuniorLedger({ tab, items, rows, needs, me, empty, moves, nudges, onNudged, depBatch, onNavigate }: Props) {
+export function JuniorLedger({ tab, items, rows, needs, me, empty, moves, nudges, onNudged, depBatch, onlyClose, onNavigate }: Props) {
   const listRef = useRef<HTMLDivElement>(null)
   // the Turn on button leaves once its row is ready: give focus to the row itself, unless it went elsewhere
   const focusRow = (id: string) =>
@@ -336,21 +346,34 @@ export function JuniorLedger({ tab, items, rows, needs, me, empty, moves, nudges
   const [batchHidden, setBatchHidden] = useState<string | null>(null)
   const batch = tab === 'needs' && depBatch && depBatch.key !== batchHidden ? depBatch : null
   const batchEnter = useRef<(() => void) | null>(null)
-  const lines = useMemo<Line[]>(() => {
+  // the main rows, and your PRs that look dead (core/work/close.ts) for the Close? group under them
+  const { lines, closeLines } = useMemo(() => {
     const out: Line[] = tab === 'needs' ? needs.map((n) => ({ key: `need:${n.key}`, group: 'waiting' as const, need: n })) : []
     const now = Date.now()
     // six PR rows become one: a PR in the batch shows only inside it
     const inBatch = new Set(batch?.prs.map((p) => p.url) ?? [])
-    const picked = (rows ? rows.filter((i) => i.id !== hiding).map((i) => withAnswer(i, answered)) : ledgerRows(items.map((i) => withAnswer(i, answered)), tab)).filter((i) => !inBatch.has(i.url))
+    const all = (rows ? rows.filter((i) => i.id !== hiding).map((i) => withAnswer(i, answered)) : ledgerRows(items.map((i) => withAnswer(i, answered)), tab)).filter((i) => !inBatch.has(i.url))
+    const picked = rows ? all.filter((i) => !i.close) : all
+    const dead = rows ? all.filter((i) => i.close).sort(closeOrder) : tab === 'prs' ? closeRows(items) : []
     for (const i of picked) out.push({ key: i.id, group: ledgerGroup(i), item: i, move: rowMove(i, moves?.[i.id], now) })
     if (batch) out.push({ key: `deps:${batch.key}`, group: 'waiting', batch })
-    return out
+    const closeOut: Line[] = dead.map((i) => ({ key: i.id, group: 'fyi' as const, item: i, move: rowMove(i, moves?.[i.id], now) }))
+    return { lines: out, closeLines: closeOut }
   }, [items, rows, hiding, needs, tab, answered, moves, batch])
   // Up next folds its long FYI tail into a link to the inbox.
   const fyiAll = tab === 'up' ? lines.filter((l) => l.group === 'fyi').length : 0
   const firstFyi = lines.findIndex((l) => l.group === 'fyi')
-  const shown = fyiAll > FYI_SHOWN ? lines.filter((l, n) => l.group !== 'fyi' || n - firstFyi < FYI_SHOWN) : lines
+  const mainShown = fyiAll > FYI_SHOWN ? lines.filter((l, n) => l.group !== 'fyi' || n - firstFyi < FYI_SHOWN) : lines
   const fyi = Math.max(0, fyiAll - FYI_SHOWN)
+  // the Close? group: collapsed every visit, nothing stored; its rows join J/K only while open
+  const [closeOpen, setCloseOpen] = useState(false)
+  const [closeAll, setCloseAll] = useState(false)
+  const [keepError, setKeepError] = useState<string | null>(null)
+  const closeHead = useRef<HTMLButtonElement>(null)
+  const closeShown = closeAll ? closeLines : closeLines.slice(0, CLOSE_SHOWN)
+  const closeMore = closeLines.length - closeShown.length
+  const mainCount = mainShown.length
+  const shown = closeOpen ? [...mainShown, ...closeShown] : mainShown
 
   // the keyboard cursor: none until you press J or K, or click a row
   const [sel, setSel] = useState<number | null>(null)
@@ -537,16 +560,46 @@ export function JuniorLedger({ tab, items, rows, needs, me, empty, moves, nudges
 
   const goNeed = (n: NeedsRow) => onNavigate(n.target.kind === 'session' ? n.target.id : '/junior/log')
 
+  /**
+   * "Keep" on a Close? row: it moves up into the list at once. The cursor and
+   * focus go to the next candidate, else the one before, else the kept row.
+   */
+  const keep = (item: ScoredItem) => {
+    const k = closeShown.findIndex((l) => l.key === item.id)
+    const next = closeShown[k + 1]?.key ?? closeShown[k - 1]?.key ?? item.id
+    setOpen((o) => {
+      const n = new Set(o)
+      n.delete(item.id)
+      return n
+    })
+    setKeepError(null)
+    setSaid(keptSaid(item.title))
+    restoring.current = next
+    void keepOpen(item).then((err) => err && setKeepError(`Couldn’t keep it open. ${err}`))
+  }
+  const closeNote = (item: ScoredItem) => closeWithNote(item, onNavigate)
+  // closing the group with the cursor inside: the cursor goes to the last main row, focus to the header
+  const toggleClose = (o: boolean) => {
+    setCloseOpen(o)
+    if (o || at === null || at < mainCount) return
+    setSel(mainCount ? mainCount - 1 : null)
+    requestAnimationFrame(() => closeHead.current?.focus())
+  }
+  const showAllClose = () => {
+    setCloseAll(true)
+    requestAnimationFrame(() => listRef.current?.querySelectorAll<HTMLElement>('.jhItem > .jhRow')[mainCount + CLOSE_SHOWN]?.focus())
+  }
+
   // the notice shows only while its row is off the list (a refetch can bring the row back early)
   const notice = gone && !lines.some((l) => l.key === gone.item.id) ? gone : null
 
   // The keys: only while nothing else wants them (a text box, a menu, a `g` sequence).
-  const live = useRef({ shown, at, open, act, turnOn, onNavigate, tab, notice, markGone, undoGone, nudgeRow, focusNudge })
-  live.current = { shown, at, open, act, turnOn, onNavigate, tab, notice, markGone, undoGone, nudgeRow, focusNudge }
+  const live = useRef({ shown, at, open, act, turnOn, onNavigate, tab, notice, markGone, undoGone, nudgeRow, focusNudge, keep, closeNote })
+  live.current = { shown, at, open, act, turnOn, onNavigate, tab, notice, markGone, undoGone, nudgeRow, focusNudge, keep, closeNote }
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey || isTypingTarget(e) || isGoSequence(e) || anyDialogOpen()) return
-      const { shown, at, open, act, turnOn, onNavigate, nudgeRow, focusNudge } = live.current
+      const { shown, at, open, act, turnOn, onNavigate, nudgeRow, focusNudge, keep, closeNote } = live.current
       const line = at === null ? undefined : shown[at]
       // a focused button or link answers Space and Enter itself
       if ((e.key === ' ' || e.key === 'Enter') && (e.target as HTMLElement | null)?.closest?.('button, a, [role="menuitem"]')) return
@@ -577,6 +630,8 @@ export function JuniorLedger({ tab, items, rows, needs, me, empty, moves, nudges
         e.preventDefault()
         if (line.need) return goNeed(line.need)
         if (line.batch) return batchEnter.current?.()
+        // a Close? row: ⏎ keeps it open, the one safe verb there
+        if (line.item.close) return keep(line.item)
         // a due nudge: ⏎ drafts it (never sends); with the draft open, ⏎ goes to its box
         const nr = nudgeRow(line.item)
         if (nr?.ui?.phase === 'open') return focusNudge(line.item.id)
@@ -586,6 +641,12 @@ export function JuniorLedger({ tab, items, rows, needs, me, empty, moves, nudges
       }
       if (!line.item) return
       if (e.key === 'o') return openItem(line.item.id)
+      // a Close? row only: a chat draft to close it with a note, nothing drafted until you send it
+      if (e.key === 'c') {
+        if (!line.item.close) return
+        e.preventDefault()
+        return closeNote(line.item)
+      }
       if (e.key === 's') {
         e.preventDefault()
         return setSnoozing(line.key)
@@ -648,7 +709,7 @@ export function JuniorLedger({ tab, items, rows, needs, me, empty, moves, nudges
   const whyAt = !why ? -1 : whyRow >= 0 ? whyRow + 1 : Math.min(why.at, shown.length)
   const whyLine = why && <NotThisOneWhy key={`why:${why.item.id}`} item={why.item} how={why.how} variant="jh" onDone={() => setWhy(null)} />
 
-  if (lines.length === 0 && !notice && !why)
+  if (lines.length === 0 && closeLines.length === 0 && !notice && !why)
     return (
       <p className="jhEmpty" ref={emptyRef} tabIndex={-1}>
         <JuniorFace mood="hello" size={18} motion="still" decorative /> {empty}
@@ -656,90 +717,120 @@ export function JuniorLedger({ tab, items, rows, needs, me, empty, moves, nudges
     )
 
   let lastGroup: LedgerGroup | null = null
+  const renderLine = (line: Line, n: number) => {
+    const head =
+      tab === 'up' && line.group !== lastGroup ? (
+        <div className="jhGrp">
+          <b>{LEDGER_GROUP_TITLE[line.group]}</b>
+          <span className="n">{lines.filter((l) => l.group === line.group).length}</span>
+        </div>
+      ) : null
+    lastGroup = line.group
+    const isOpen = open.has(line.key)
+    const focus = n === at
+    const click = () => {
+      follow.current = null
+      setSel(n)
+      toggle(line.key)
+    }
+    return (
+      <Fragment key={line.key}>
+        {n === noticeAt && n < mainCount && goneLine}
+        {n === whyAt && whyLine}
+        {head}
+        {line.batch ? (
+          <DepBatchLine
+            className={`jhItem jdbItem${isOpen ? ' open' : ''}${focus ? ' focus' : ''}`}
+            dataKey={line.key}
+            batch={line.batch}
+            open={isOpen}
+            onToggle={click}
+            onHide={() => {
+              setBatchHidden(line.batch.key)
+              setSaid('Hidden for a day, or until a new update joins.')
+            }}
+            enterRef={batchEnter}
+          />
+        ) : (
+          <div className={`jhItem${isOpen ? ' open' : ''}${focus ? ' focus' : ''}`} data-key={line.key}>
+            {line.need ? (
+              <NeedLine need={line.need} open={isOpen} onClick={click} onGo={() => goNeed(line.need)} />
+            ) : (
+              <ItemLine
+                item={line.item}
+                move={line.move}
+                me={me}
+                open={isOpen}
+                busy={busy === line.item.id}
+                turning={turning}
+                turnOn={turnOn}
+                snoozing={snoozing === line.key}
+                onSnoozing={(o) => setSnoozing(o ? line.key : null)}
+                whyOpen={whyOpen === line.key}
+                onWhy={(o) => setWhyOpen(o ? line.key : null)}
+                onSaved={(line2) => {
+                  setSaid(line2)
+                  follow.current = { id: line.item.id, until: Date.now() + 5000 }
+                }}
+                onClick={click}
+                act={act}
+                onOpen={() => openItem(line.item.id)}
+                onNotUseful={tab === 'needs' ? () => markGone(line.item, n, 'click') : undefined}
+                onKeep={line.item.close ? () => keep(line.item) : undefined}
+                onCloseNote={line.item.close ? () => closeNote(line.item) : undefined}
+                supervised={tab === 'with'}
+                nudge={nudgeRow(line.item)}
+                onNotNow={() => {
+                  act('not-now', line.item.id)
+                  setWhy({ item: line.item, at: n, how: 'click' })
+                }}
+              />
+            )}
+          </div>
+        )}
+      </Fragment>
+    )
+  }
   return (
     <div className="jhList" ref={listRef}>
-      {shown.map((line, n) => {
-        const head =
-          tab === 'up' && line.group !== lastGroup ? (
-            <div className="jhGrp">
-              <b>{LEDGER_GROUP_TITLE[line.group]}</b>
-              <span className="n">{lines.filter((l) => l.group === line.group).length}</span>
-            </div>
-          ) : null
-        lastGroup = line.group
-        const isOpen = open.has(line.key)
-        const focus = n === at
-        const click = () => {
-          follow.current = null
-          setSel(n)
-          toggle(line.key)
-        }
-        return (
-          <Fragment key={line.key}>
-            {n === noticeAt && goneLine}
-            {n === whyAt && whyLine}
-            {head}
-            {line.batch ? (
-              <DepBatchLine
-                className={`jhItem jdbItem${isOpen ? ' open' : ''}${focus ? ' focus' : ''}`}
-                dataKey={line.key}
-                batch={line.batch}
-                open={isOpen}
-                onToggle={click}
-                onHide={() => {
-                  setBatchHidden(line.batch.key)
-                  setSaid('Hidden for a day, or until a new update joins.')
-                }}
-                enterRef={batchEnter}
-              />
-            ) : (
-            <div className={`jhItem${isOpen ? ' open' : ''}${focus ? ' focus' : ''}`} data-key={line.key}>
-              {line.need ? (
-                <NeedLine need={line.need} open={isOpen} onClick={click} onGo={() => goNeed(line.need)} />
-              ) : (
-                <ItemLine
-                  item={line.item}
-                  move={line.move}
-                  me={me}
-                  open={isOpen}
-                  busy={busy === line.item.id}
-                  turning={turning}
-                  turnOn={turnOn}
-                  snoozing={snoozing === line.key}
-                  onSnoozing={(o) => setSnoozing(o ? line.key : null)}
-                  whyOpen={whyOpen === line.key}
-                  onWhy={(o) => setWhyOpen(o ? line.key : null)}
-                  onSaved={(line2) => {
-                    setSaid(line2)
-                    follow.current = { id: line.item.id, until: Date.now() + 5000 }
-                  }}
-                  onClick={click}
-                  act={act}
-                  onOpen={() => openItem(line.item.id)}
-                  onNotUseful={tab === 'needs' ? () => markGone(line.item, n, 'click') : undefined}
-                  supervised={tab === 'with'}
-                  nudge={nudgeRow(line.item)}
-                  onNotNow={() => {
-                    act('not-now', line.item.id)
-                    setWhy({ item: line.item, at: n, how: 'click' })
-                  }}
-                />
-              )}
-            </div>
-            )}
-          </Fragment>
-        )
-      })}
-      {noticeAt === shown.length && goneLine}
-      {whyAt === shown.length && whyLine}
+      {lines.length === 0 && closeLines.length > 0 && !notice && !why && (
+        <p className="jhEmpty only" ref={emptyRef} tabIndex={-1}>
+          <JuniorFace mood="hello" size={18} motion="still" decorative /> {onlyClose ?? (tab === 'prs' ? CLOSE_ONLY_EMPTY : empty)}
+        </p>
+      )}
+      {mainShown.map((line, n) => renderLine(line, n))}
+      {noticeAt === mainCount && goneLine}
+      {whyAt === mainCount && whyLine}
       {fyi > 0 && (
         <button type="button" className="jhMore" onClick={() => onNavigate('/inbox')}>
           {fyi} more for your info in the inbox
         </button>
       )}
-      {(nuError ?? error) && (
+      {closeLines.length > 0 && (
+        <Collapsible.Root open={closeOpen} onOpenChange={toggleClose}>
+          <Collapsible.Trigger asChild>
+            <button type="button" className="jhGrp close" ref={closeHead} aria-label={closeGroupLabel(closeLines.length)}>
+              <ChevronRight className="chev" size={14} aria-hidden="true" />
+              <b>Close?</b>
+              <span className="n">{closeLines.length}</span>
+            </button>
+          </Collapsible.Trigger>
+          <Collapsible.Content>
+            <p className="jhCloseHint" title={CLOSE_HINT}>
+              {CLOSE_HINT}
+            </p>
+            {closeShown.map((line, k) => renderLine(line, mainCount + k))}
+            {closeMore > 0 && (
+              <button type="button" className="jhMore" onClick={showAllClose}>
+                {closeMoreLabel(closeMore)}
+              </button>
+            )}
+          </Collapsible.Content>
+        </Collapsible.Root>
+      )}
+      {(nuError ?? keepError ?? error) && (
         <p className="jrErr" role="alert">
-          {nuError ?? error}
+          {nuError ?? keepError ?? error}
         </p>
       )}
       <p className="sr-only" role="status" aria-live="polite">
@@ -783,6 +874,8 @@ function ItemLine({
   act,
   onOpen,
   onNotUseful,
+  onKeep,
+  onCloseNote,
   supervised = false,
   nudge,
   onNotNow,
@@ -808,6 +901,10 @@ function ItemLine({
   onOpen: () => void
   /** Needs you only: "not useful", it shouldn't have reached you */
   onNotUseful?: () => void
+  /** a Close? row only (core/work/close.ts): keep it open, the primary */
+  onKeep?: () => void
+  /** a Close? row only: a chat draft to close it with a note */
+  onCloseNote?: () => void
   /** With Junior only: the supervision line under the title, when there's something unseen */
   supervised?: boolean
   /** a due nudge, or one you drafted */
@@ -953,7 +1050,7 @@ function ItemLine({
             </>
           )}
           <span className="lbl jr">Junior</span>
-          <span className="said">{mark ? nudgeSays(mark) : juniorSays(i)}</span>
+          <span className="said">{i.close ? closeSays(i.close) : mark ? nudgeSays(mark) : juniorSays(i)}</span>
           {nui?.phase === 'open' && (
             <>
               <span className="lbl">Nudge</span>
@@ -991,7 +1088,19 @@ function ItemLine({
             </div>
           )}
           <div className="acts">
-            {offer ? (
+            {onKeep ? (
+              <>
+                <button type="button" className="btn sm primary" title={KEEP_TITLE} onClick={onKeep}>
+                  Keep <Kbd>⏎</Kbd>
+                </button>
+                <button type="button" className="btn sm" aria-keyshortcuts="c" title={CLOSE_TITLE} onClick={onCloseNote}>
+                  Close with a note <Kbd>C</Kbd>
+                </button>
+                <button type="button" className="btn sm" onClick={onOpen}>
+                  Open <Kbd>O</Kbd>
+                </button>
+              </>
+            ) : offer ? (
               <button type="button" className="btn sm primary" disabled={nui?.phase === 'drafting'} aria-busy={nui?.phase === 'drafting'} onClick={nudge?.draft}>
                 {nui?.phase === 'drafting' ? (
                   'Drafting…'
@@ -1016,12 +1125,12 @@ function ItemLine({
                 {primary.label} <Kbd>⏎</Kbd>
               </button>
             )}
-            {showOpen && (
+            {!onKeep && showOpen && (
               <button type="button" className="btn sm" onClick={onOpen}>
                 Open <Kbd>O</Kbd>
               </button>
             )}
-            {i.suggestion && (
+            {i.suggestion && !onKeep && (
               <button type="button" className="btn sm ghost" disabled={busy} title="Not this one" onClick={onNotNow}>
                 <X size={13} aria-hidden="true" /> Not this one
               </button>

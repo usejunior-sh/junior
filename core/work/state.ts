@@ -41,6 +41,8 @@ export type ItemEventKind =
   // supervision (core/work/supervision.ts): you opened the item's list of
   // files Junior changed; files touched before it no longer count
   | 'changes-seen'
+  // close candidates (core/work/close.ts): you said keep this quiet PR open
+  | 'kept-open'
 
 /**
  * Who caused a transition. `user` = a click in the web UI; `agent:<sessionId>`
@@ -111,7 +113,7 @@ export function withLifecycle(
 }
 
 /** Events that record something about an item without moving its status. */
-export type ItemNoteKind = 'surfaced' | 'not-useful' | 'changes-seen'
+export type ItemNoteKind = 'surfaced' | 'not-useful' | 'changes-seen' | 'kept-open'
 
 /** The status an event leaves the item in; null = it doesn't move the status. */
 export function statusAfter(event: ItemEventKind, before: ItemStatus | null): ItemStatus | null {

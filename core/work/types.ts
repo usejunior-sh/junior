@@ -147,6 +147,11 @@ export interface WorkItem {
    * files Junior touched after this count as not reviewed by you. Never touched by ingestion.
    */
   changesSeenAt?: number
+  /**
+   * "Keep" on a Close? row (core/work/close.ts): when you said keep it open.
+   * Junior doesn't ask about closing it again for 30 days. Never touched by ingestion.
+   */
+  keptOpen?: number
 }
 
 /** One term of an item's score. `weight` names the weight you set (weights.ts) when it is one. */
@@ -192,4 +197,9 @@ export interface ScoredItem extends WorkItem {
    * your OK. Absent when both are zero; only on items with Junior.
    */
   supervision?: { files: number; sends: number }
+  /**
+   * your PR looks dead (core/work/close.ts): quiet 30 days, or replaced by a
+   * merged PR. It sits in My PRs' collapsed Close? group. Absent otherwise.
+   */
+  close?: import('./close.js').CloseWhy
 }

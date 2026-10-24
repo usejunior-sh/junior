@@ -464,7 +464,7 @@ export interface WorkItemStore {
   /** Give every item without a project the one `assign` picks; returns how many were set. */
   backfillProjects(assign: (item: WorkItem) => string | null): Promise<number>
   /**
-   * Set or clear (null) reason · label · parent · playbook · handoff · notNow · notNowReason · notUseful · changesSeenAt (core/work/fields.ts).
+   * Set or clear (null) reason · label · parent · playbook · handoff · notNow · notNowReason · notUseful · changesSeenAt · keptOpen (core/work/fields.ts).
    * Absent keys are left alone. Never touched by ingestion.
    */
   setFields(id: string, patch: ItemFieldsPatch): Promise<void>
@@ -484,6 +484,7 @@ export type ItemFieldsPatch = {
   notNowReason?: import('../junior/suggest.js').NotNowMark | null
   notUseful?: string | null
   changesSeenAt?: number | null
+  keptOpen?: number | null
 }
 
 /**

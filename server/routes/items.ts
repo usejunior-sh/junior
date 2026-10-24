@@ -12,7 +12,7 @@ import { readJsonBody } from './http-util.js'
 import { ANY_ITEM_ID_RE, ITEM_STATUSES } from '../validate.js'
 import { invalidateInbox } from '../ws/send.js'
 import { listItemsByStatus } from '../inbox/sync.js'
-import { itemDetailOp, markNotUsefulOp, sessionContextOp, undoNotUsefulOp } from '../items-ops.js'
+import { itemDetailOp, keepOpenOp, markNotUsefulOp, sessionContextOp, undoNotUsefulOp } from '../items-ops.js'
 import { errText } from '../errors.js'
 import { changesSeenOp } from '../supervision-ops.js'
 import { jobFileReference, jobSpecFrom, saveJobText } from '../jobs/ops.js'
@@ -54,6 +54,18 @@ export async function itemRoutes({ req, url, json, rt }: ScopedCtx): Promise<boo
       body = { ok: true }
     } catch (err) {
       body = { ok: false, error: err instanceof Error ? err.message : String(err) }
+    }
+    json(body.ok ? 200 : 400, body)
+    return true
+  }
+  // "Keep" on a Close? row on the Junior page: your own answer, HTTP only (not on the MCP surface).
+  if (url.pathname === '/api/items/keep-open' && req.method === 'POST') {
+    let body: ItemStateResponse
+    try {
+      await keepOpenOp(rt, await readJsonBody(req))
+      body = { ok: true }
+    } catch (err) {
+      body = { ok: false, error: errText(err) }
     }
     json(body.ok ? 200 : 400, body)
     return true

@@ -12,7 +12,8 @@
  *             groups (core/work/score.ts): someone waiting · stuck · this
  *             cycle · FYI
  *   reviews   PRs asking for your review
- *   prs       your open PRs
+ *   prs       your open PRs, less the ones that look dead: those sit in a
+ *             collapsed Close? group under them (closeRows, core/work/close.ts)
  *   with      everything handed to Junior
  *   waiting   you are waiting on someone else
  *
@@ -22,6 +23,7 @@ import type { Group, ScoredItem } from '../work/types.js'
 import { watchFor, type WatchId } from '../work/handoff.js'
 import { WATCH_CANT_CHIP, WATCH_OFF_CHIP } from './watch-off.js'
 import { readyLine, type Readiness } from '../babysit/ready.js'
+import { closeOrder, closeState } from '../work/close.js'
 
 export type LedgerTab = 'needs' | 'up' | 'reviews' | 'prs' | 'with' | 'waiting'
 export type LedgerGroup = 'waiting' | 'stuck' | 'cycle' | 'fyi'
@@ -39,7 +41,7 @@ const OF_GROUP: Record<Group, LedgerGroup> = { blocking: 'waiting', 'blocked-sta
 
 type Item = Pick<
   ScoredItem,
-  'id' | 'kind' | 'reason' | 'group' | 'score' | 'handoff' | 'junior' | 'tasks' | 'suggestion' | 'flow' | 'peopleWaiting' | 'updatedAt' | 'notUseful' | 'seen'
+  'id' | 'kind' | 'reason' | 'group' | 'score' | 'handoff' | 'junior' | 'tasks' | 'suggestion' | 'flow' | 'peopleWaiting' | 'updatedAt' | 'notUseful' | 'seen' | 'close'
 >
 
 /** Where an item sits in Up next: the scorer's group. */
@@ -86,20 +88,25 @@ export function ledgerRows<T extends Item>(items: readonly T[], tab: LedgerTab):
       return items.filter(onNeeds).sort(byScore)
     case 'up': {
       const at = (i: T) => LEDGER_GROUPS.indexOf(ledgerGroup(i))
-      // a quieted item is moved here, not hidden
-      return items.filter((i) => i.kind !== 'digest' && !onNeeds(i)).sort((a, b) => at(a) - at(b) || byScore(a, b))
+      // a quieted item is moved here, not hidden; a dead PR moves to My PRs' Close? group
+      return items.filter((i) => i.kind !== 'digest' && !onNeeds(i) && !i.close).sort((a, b) => at(a) - at(b) || byScore(a, b))
     }
     case 'reviews':
       return items.filter((i) => i.reason === 'review-requested').sort((a, b) => Number(b.tasks?.review?.state === 'ready') - Number(a.tasks?.review?.state === 'ready') || byScore(a, b))
     case 'prs':
-      return items.filter((i) => i.reason === 'your-pr').sort((a, b) => Number(b.junior?.stage === 'needs-you') - Number(a.junior?.stage === 'needs-you') || byScore(a, b))
+      return items.filter((i) => i.reason === 'your-pr' && !i.close).sort((a, b) => Number(b.junior?.stage === 'needs-you') - Number(a.junior?.stage === 'needs-you') || byScore(a, b))
     case 'with': {
       const order = ['needs-you', 'working', 'watching', 'paused', 'handed-in']
       return items.filter((i) => i.junior).sort((a, b) => order.indexOf(a.junior!.stage) - order.indexOf(b.junior!.stage) || byScore(a, b))
     }
     case 'waiting':
-      return items.filter(isWaitingOnOthers).sort(byScore)
+      return items.filter((i) => isWaitingOnOthers(i) && !i.close).sort(byScore)
   }
+}
+
+/** My PRs' Close? group: your PRs that look dead, replaced ones first, then the longest quiet. */
+export function closeRows<T extends Pick<Item, 'close'>>(items: readonly T[]): T[] {
+  return items.filter((i) => i.close).sort(closeOrder)
 }
 
 /**
@@ -116,7 +123,7 @@ export function ledgerCount(items: readonly Item[], tab: LedgerTab): { n: number
 export const personWaits = (i: Item): boolean => i.group === 'blocking' && i.junior?.stage !== 'needs-you'
 
 /** The row's age reads orange: a person waits, it's in their group, and you haven't marked it not useful. */
-export const ageHot = (i: Item): boolean => personWaits(i) && ledgerGroup(i) === 'waiting' && !quieted(i)
+export const ageHot = (i: Item): boolean => !i.close && personWaits(i) && ledgerGroup(i) === 'waiting' && !quieted(i)
 
 /**
  * The handed-off PR waits on a switched-off watch: nothing will run on it
@@ -157,6 +164,8 @@ export const readyOf = (i: Pick<Item, 'reason' | 'seen'>): Readiness | null => (
  */
 export function juniorState(i: Item): { text: string; quiet: boolean; ready?: Readiness } {
   const say = (text: string, quiet = false) => ({ text, quiet })
+  // a dead PR: why it's in Close?, in grey. Nothing here needs you
+  if (i.close) return say(closeState(i.close), true)
   if (i.handoff === 'paused' || i.junior?.stage === 'paused') return say('Paused', true)
   if (i.junior?.stage === 'needs-you') return say('Paused on you')
   // a switched-off watch, never "Babysitting": nothing will run until you turn it on

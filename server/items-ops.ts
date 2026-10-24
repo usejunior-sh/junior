@@ -339,3 +339,18 @@ export async function undoNotUsefulOp(rt: WorkspaceRuntime, raw: unknown, now = 
   invalidateInbox(rt)
   log('info', 'inbox', `not useful, undone: ${item.id} (by user)`, { id: item.id, workspace: rt.meta.id })
 }
+
+/**
+ * "Keep" on a Close? row (core/work/close.ts): the PR stays open and goes back
+ * to My PRs. One `kept-open` event by you, and the stamp `keptOpen`: Junior
+ * doesn't ask about closing it for KEEP_OPEN_DAYS. Your own answer: HTTP only,
+ * never on the MCP surface. Returns the stamp.
+ */
+export async function keepOpenOp(rt: WorkspaceRuntime, raw: unknown, now = Date.now()): Promise<number> {
+  const item = await itemForNote(rt, raw)
+  await rt.store.items.note(item.id, 'kept-open', 'user', now)
+  await rt.store.items.setFields(item.id, { keptOpen: now })
+  invalidateInbox(rt)
+  log('info', 'inbox', `kept open: ${item.id} (by user)`, { id: item.id, workspace: rt.meta.id })
+  return now
+}

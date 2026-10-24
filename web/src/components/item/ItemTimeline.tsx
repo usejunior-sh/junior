@@ -15,6 +15,7 @@ const EVENT_LABEL: Record<string, string> = {
   surfaced: 'reached Needs you',
   'not-useful': 'marked not useful',
   'changes-seen': 'looked at Junior’s changes',
+  'kept-open': 'kept open',
 }
 
 /** A stage/turn event's one line: "Ready · My turn", "Waiting on others, Niraj", "back to automatic". */

@@ -16,7 +16,7 @@
  *
  *   up-next   today's Up next: open, not a digest, Junior isn't waiting on you
  *   reviews   a PR asking for your review
- *   my-prs    your own PR
+ *   my-prs    your own PR (a dead one shows in the ledger's Close? group)
  *
  * An item you marked "not useful" stays in Needs you if it is your turn (it
  * is attention, not turn), but sorts last and never counts toward the tab's
@@ -53,7 +53,7 @@ export const TURN_FILTER_TITLE: Record<TurnFilter, string> = {
 }
 
 /** What the mapping reads off an item: what turnOf reads, plus what the filters read. */
-export type TurnTabItem = TurnItem & Pick<ScoredItem, 'reason' | 'updatedAt'> & Partial<Pick<ScoredItem, 'notUseful'>>
+export type TurnTabItem = TurnItem & Pick<ScoredItem, 'reason' | 'updatedAt'> & Partial<Pick<ScoredItem, 'notUseful' | 'close'>>
 
 export interface TabOf extends TurnOf {
   tab: TurnTab
@@ -68,7 +68,8 @@ export function tabOf(item: TurnTabItem, ctx: TurnContext = {}): TabOf {
 /** Which filters apply to an item, in TURN_FILTERS order. Independent of its tab. */
 export function filtersOf(item: TurnTabItem): TurnFilter[] {
   const out: TurnFilter[] = []
-  if (item.kind !== 'digest' && !onNeeds(item)) out.push('up-next')
+  // a dead PR (core/work/close.ts) leaves Up next; My PRs keeps it, in its Close? group
+  if (item.kind !== 'digest' && !onNeeds(item) && !item.close) out.push('up-next')
   if (item.reason === 'review-requested') out.push('reviews')
   if (item.reason === 'your-pr') out.push('my-prs')
   return out
@@ -129,7 +130,8 @@ export const LEDGER_TAB_ROUTE: Record<LedgerTab, { tab: TurnTab; filter?: TurnFi
 /** How many of a tab's rows each filter keeps: the pills' counts. */
 export function filterCounts<T extends TurnTabItem>(rows: readonly T[]): Record<TurnFilter, number> {
   const out: Record<TurnFilter, number> = { 'up-next': 0, reviews: 0, 'my-prs': 0 }
-  for (const i of rows) for (const f of filtersOf(i)) out[f]++
+  // the My PRs pill counts active PRs only: the Close? group never adds to it
+  for (const i of rows) for (const f of filtersOf(i)) if (!(f === 'my-prs' && i.close)) out[f]++
   return out
 }
 

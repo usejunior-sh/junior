@@ -37,6 +37,7 @@ export function shortcutsFor(mod: string): ReadonlyArray<[keys: string, what: st
     ['h', 'Junior: hand off the open row'],
     ['p', 'Junior: pause or resume the open row'],
     ['s', 'Junior: snooze the open row'],
+    ['c', 'Junior: close with a note (on a Close? row)'],
     ['r', 'Inbox: refresh'],
     ['?', 'Keyboard shortcuts'],
     ['Esc', 'Close dialogs'],

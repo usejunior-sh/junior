@@ -22,6 +22,7 @@ import type { CreateStep, FocusEndResponse, JuniorDay, JuniorFocus, ScoredItem }
 import { headline } from '../../../core/junior/greeting.js'
 import { ledgerCount, ledgerRows, type LedgerTab } from '../../../core/junior/ledger.js'
 import { focusFilter, focusWords } from '../../../core/work/focus.js'
+import { CLOSE_ONLY_EMPTY } from '../../../core/work/close.js'
 import { overdueCount } from '../../../core/junior/morning.js'
 import { canDoCards, tryShortcuts } from '../../../core/junior/offers.js'
 import { pageMood, type Mood } from '../../../core/junior/mood.js'
@@ -383,6 +384,7 @@ export function JuniorPage({ onNavigate, onDispatch, onCreate, createError, crea
                         // a suggestion, not a held send: hidden under a filter and in focus, like the held rows
                         depBatch={filter || focus ? null : day?.depBatch}
                         me={me}
+                        onlyClose={filter === 'my-prs' ? CLOSE_ONLY_EMPTY : undefined}
                         empty={
                           filter ? (
                             <>
