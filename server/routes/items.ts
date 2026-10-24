@@ -15,6 +15,7 @@ import { listItemsByStatus } from '../inbox/sync.js'
 import { itemDetailOp, keepOpenOp, markNotUsefulOp, sessionContextOp, undoNotUsefulOp } from '../items-ops.js'
 import { errText } from '../errors.js'
 import { changesSeenOp } from '../supervision-ops.js'
+import { notAPromiseOp } from '../inbox/promises.js'
 import { jobFileReference, jobSpecFrom, saveJobText } from '../jobs/ops.js'
 import { jobLibrary } from '../session/changes.js'
 import { enqueueJob } from '../jobs/queue.js'
@@ -64,6 +65,19 @@ export async function itemRoutes({ req, url, json, rt }: ScopedCtx): Promise<boo
     let body: ItemStateResponse
     try {
       await keepOpenOp(rt, await readJsonBody(req))
+      body = { ok: true }
+    } catch (err) {
+      body = { ok: false, error: errText(err) }
+    }
+    json(body.ok ? 200 : 400, body)
+    return true
+  }
+  // "Not a promise" on a promise item: archived, and its thread files no more promises.
+  // Your own signal, HTTP only: Junior can't decide its own find wasn't one.
+  if (url.pathname === '/api/items/not-a-promise' && req.method === 'POST') {
+    let body: ItemStateResponse
+    try {
+      await notAPromiseOp(rt, await readJsonBody(req))
       body = { ok: true }
     } catch (err) {
       body = { ok: false, error: errText(err) }

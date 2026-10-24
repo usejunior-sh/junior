@@ -17,6 +17,8 @@ export const BASE: Record<ItemKind, number> = {
   'ticket-assigned': 50,
   // a to-do the user chose to add. It sits in YOUR CYCLE and leans on priority
   manual: 45,
+  // you said you would: someone is counting on it, below a person waiting on a review
+  promise: 60,
   'own-pr-stale': 40,
   // deliberately modest: mentions and reviews must outrank topical matches
   'job-hit': 40,
@@ -37,6 +39,7 @@ const GROUP: Record<ItemKind, Group> = {
   'own-pr-stale': 'blocked-stale',
   'ticket-assigned': 'cycle',
   manual: 'cycle',
+  promise: 'blocking',
   'job-hit': 'fyi',
   digest: 'fyi',
   'own-pr-open': 'fyi',
@@ -161,6 +164,8 @@ function reasonFor(item: WorkItem, waitDays: number): string {
         item.priority === 1 ? 'urgent · ' : item.priority === 2 ? 'high · ' : item.priority === 4 ? 'low · ' : ''
       return `${pri}added by you (${age(waitDays)})`
     }
+    case 'promise':
+      return item.promise?.owedTo ? `you told ${item.promise.owedTo} you would (${age(waitDays)})` : `you said you would (${age(waitDays)})`
     case 'fyi':
       return `updated ${age(waitDays)}${ci}`
   }

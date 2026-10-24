@@ -23,6 +23,7 @@ export type ItemKind =
   | 'job-hit' // a user-defined job matched this thread
   | 'digest' // a job's rolling report: one item per job, rewritten each run (see .docs/jobs.md)
   | 'manual' // a to-do the user added by hand, in the inbox
+  | 'promise' // something you said you would do, in your own words (promise-items.ts)
   | 'fyi'
 
 export type Group = 'blocking' | 'blocked-stale' | 'cycle' | 'fyi'
@@ -152,6 +153,26 @@ export interface WorkItem {
    * Junior doesn't ask about closing it again for 30 days. Never touched by ingestion.
    */
   keptOpen?: number
+  /**
+   * A promise item (kind `promise`, core/work/promise-items.ts): your own
+   * words, the thread they were said in, and who they are owed to. Set by
+   * ingestion when the item is filed; the quote is part of the id.
+   */
+  promise?: PromiseFacts
+}
+
+/** What a promise item holds: the quote, its thread, who's owed. */
+export interface PromiseFacts {
+  /** your sentence, exactly as written */
+  quote: string
+  /** the thread's own item id ("slack:C1/p2", "github:o/r#3", "web:…") */
+  thread: string
+  /** who it is owed to, when the text says: a name, a handle, a Slack user id */
+  owedTo?: string
+  /** when it is due, epoch ms, when the text says ("tomorrow", "by EOD") */
+  dueAt?: number
+  /** when you said it, epoch ms */
+  saidAt: number
 }
 
 /** One term of an item's score. `weight` names the weight you set (weights.ts) when it is one. */

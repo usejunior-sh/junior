@@ -22,7 +22,7 @@ const VALID_KINDS = new Set(Object.keys(BASE))
 const VALID_SOURCES = new Set(['github', 'slack', 'linear', 'web'])
 // upsert accepts only scanner sources; state/resolve accept manual items too.
 const ITEM_ID_RE = /^(github|slack|linear|web):\S+$/
-export const ANY_ITEM_ID_RE = /^(github|slack|linear|web|manual):\S+$/
+export const ANY_ITEM_ID_RE = /^(github|slack|linear|web|manual|promise):\S+$/
 /** Item saves carry images inline: the per-image cap, base64-inflated, times the per-item cap. */
 export const MAX_ITEM_BODY_BYTES = Math.ceil(MAX_IMAGES_PER_ITEM * MAX_IMAGE_BYTES * 1.4) + 100_000
 export const MAX_URLS_PER_ITEM = 20

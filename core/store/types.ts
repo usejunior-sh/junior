@@ -448,6 +448,8 @@ export interface WorkItemStore {
    * within seconds. False = nothing that new to take back.
    */
   unnote(id: string, event: ItemNoteKind, actor: ItemActor, since: number): Promise<boolean>
+  /** Every note of this kind on any item, oldest first, each with its item's id ("not a promise" → suppressed threads). */
+  notesOf(event: ItemNoteKind): Promise<ItemWindowEvent[]>
   /** Every item event with `at` in [since, until), oldest first, each with its item's id. */
   eventsBetween(since: number, until: number): Promise<ItemWindowEvent[]>
   /** Set (or clear, with null) the human's description on any item. Never touched by ingestion. */

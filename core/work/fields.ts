@@ -66,6 +66,8 @@ const KIND_TO_REASON: Record<ItemKind, Reason> = {
   'slack-mention': 'mentioned',
   fyi: 'mentioned',
   manual: 'you-added',
+  // you said it; Junior filed it: the work is yours to do
+  promise: 'assigned',
   'job-hit': 'found',
   digest: 'found',
 }

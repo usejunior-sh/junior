@@ -120,6 +120,7 @@ ${askGuide()}
   Pick review, reply or decide only when a person is waiting on the user. When unsure, pick read.
 - due: only when the content states a deadline for the user ("by EOD", "before Friday's release", a ticket due date): that day as YYYY-MM-DD. Omit otherwise; never guess one
 - refs: any other GitHub PR/issue URLs or Linear keys visible in the content (omit if none)
+- yours: the user's own messages in the thread, verbatim, each with its ISO 8601 time (at most 10, newest last). Only messages the user wrote; never anyone else's. Omit when the user wrote none. Junior reads them for things the user said they would do
 ${filingPrompt(w.filing)}`,
           `The tool tells you when something is already filed. An "already filed and open" reply means the user has it: do not count it as new, move on to the next candidate.`,
           `Call upsert_work_item at most ${MAX_ROWS_PER_RUN} times. It is the ONLY junior write tool you may use. If nothing matches, do not call it — just finish with a one-line summary of what you looked at. If you cannot access any of the integration tools at all, reply with exactly no-connector-tools and stop.`,

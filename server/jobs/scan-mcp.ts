@@ -21,6 +21,8 @@ import { DEFAULT_FILING, filedSource, labelsOf, type JobFiling } from '../../cor
 import { isItemLabel, isReason, type ItemLabel, type Reason } from '../../core/work/fields.js'
 import { isTier, type Tier } from '../../core/rules/rules.js'
 import { applyRules } from '../rules-ops.js'
+import { promiseThreadOf } from '../../core/work/promise-items.js'
+import { filePromisesOp } from '../inbox/promises.js'
 
 /**
  * Identity for a filed item, derived from the link the scanner saw, never from
@@ -67,6 +69,17 @@ const UPSERT_SHAPE = {
   ask: z.enum(ASK_ORDER as [Ask, ...Ask[]]).describe('what it asks of the user: review, reply, decide, do, follow-up or read'),
   due: z.string().optional().describe('only when the content states a deadline for the user: the day, ISO 8601 (e.g. 2026-10-12)'),
   refs: z.array(z.string()).optional().describe('other GitHub PR/issue URLs or Linear keys in the content'),
+  yours: z
+    .array(
+      z.object({
+        text: z.string().describe('the message, verbatim'),
+        at: z.string().describe('ISO 8601 timestamp it was sent'),
+        replyTo: z.string().optional().describe('who the message replies to, when it is a reply'),
+      }),
+    )
+    .max(10)
+    .optional()
+    .describe("the user's own messages in this thread, verbatim, newest last: only ones the user wrote. Omit when the user wrote none"),
 }
 /**
  * The upsert tool's arguments for one job: the base shape, plus the label
@@ -157,6 +170,12 @@ export function makeScanMcp(rt: WorkspaceRuntime, job: Job, runId: string, onUps
             if (job.brief && (outcome === 'inserted' || reopened)) briefFiledItem(rt, job, item.id, runId)
             // The rules decide what Junior does with it (core/rules).
             if (outcome === 'inserted' || reopened) void applyRules(rt, item.id, filed.tier)
+            // Your own words in the thread: what you said you would do becomes a promise item.
+            if (args.yours?.length) {
+              await filePromisesOp(rt, promiseThreadOf(item, args.yours, now, job.id), { jobId: job.id, runId, at: now }).catch((err: unknown) =>
+                log('warn', 'job', `could not file promises from ${item.id}: ${err instanceof Error ? err.message : String(err)}`, { jobId: job.id, runId, workspace: rt.meta.id }),
+              )
+            }
             log('info', 'job', `filed (${outcome}): ${item.title}`, {
               id: item.id,
               jobId: job.id,

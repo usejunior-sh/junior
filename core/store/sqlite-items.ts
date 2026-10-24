@@ -187,6 +187,7 @@ export class SqliteWorkItems implements WorkItemStore {
           refs: item.refs ?? base.refs,
           why: provenance?.why ?? item.why ?? base.why,
           ask: item.ask ?? base.ask,
+          ...(item.promise ?? base.promise ? { promise: item.promise ?? base.promise } : {}),
           ...fieldsFill(base, item),
           foundBy,
         }
@@ -462,6 +463,13 @@ export class SqliteWorkItems implements WorkItemStore {
     if (!last || last.at < since) return false
     this.db.prepare('DELETE FROM item_events WHERE item_id = ? AND seq = ?').run(id, last.seq)
     return true
+  }
+
+  async notesOf(event: ItemNoteKind): Promise<ItemWindowEvent[]> {
+    const rows = this.db
+      .prepare('SELECT item_id, seq, at, actor, event, detail FROM item_events WHERE event = ? ORDER BY at, item_id, seq')
+      .all(event) as (EventRow & { item_id: string })[]
+    return rows.map((r) => ({ itemId: r.item_id, ...toEvent(r) }))
   }
 
   async eventsBetween(since: number, until: number): Promise<ItemWindowEvent[]> {

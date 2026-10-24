@@ -15,6 +15,7 @@
 import { canonicalizeRefs } from '../work/link.js'
 import type { WorkItem } from '../work/types.js'
 import type { JobDraft } from '../job/types.js'
+import { saidFrom, type PromiseThread } from '../work/promise-items.js'
 
 /** the legacy Slack-only preview row (the live preview lives in server/index.ts now) */
 interface JobPreviewRow {
@@ -54,7 +55,8 @@ Judge each candidate on its title and first ~200 characters; only read a full th
 const BUILTIN_SECTION = `SECTION builtins — across the workspace, from the last 3 days:
 1. Messages that mention/tag the user (the authenticated Slack account).
 2. Threads the user participated in where the LATEST message is a question or request directed at the user that they have not answered yet (a reply is pending from them).
-Rules: deduplicate threads (one row per thread, prefer kind reply-pending); if the user already answered, exclude it. Rows from this section carry "kind": "mention" or "reply-pending" (no jobId), and "refs": an array of any GitHub PR/issue URLs or Linear issue keys visible in the thread (empty array if none).`
+3. Threads where one of the user's own messages says they will do something ("I'll look tomorrow", "will fix in a follow-up", "on it").
+Rules: deduplicate threads (one row per thread, prefer kind reply-pending, then mention); if the user already answered, a thread is not reply-pending. Rows from this section carry "kind": "mention", "reply-pending" or "yours" (no jobId), "refs": an array of any GitHub PR/issue URLs or Linear issue keys visible in the thread (empty array if none), and "yours": the user's own messages in the thread from the window, verbatim, as [{"text": "...", "at": "<ISO 8601>"}], at most 10, newest last (empty array if none; never anyone else's).`
 
 function jobSection(w: JobScanSpec): string {
   const window = w.cursor
@@ -65,7 +67,7 @@ Rules: one row per thread; at most ${MAX_ROWS_PER_JOB} rows; skip anything outsi
 }
 
 const OUTPUT_CONTRACT = `Output ONLY one JSON array combining all sections' rows — no prose, no code fence. Each row:
-{"title": "<one-line summary>", "permalink": "<slack message permalink>", "channel": "#<channel name>", "from": "<display name of the author/asker>", "lastActivity": "<ISO 8601 timestamp of the newest message in the thread>", "kind": "mention" | "reply-pending" (builtins only), "jobId": "<id>" (job sections only), "why": "<one line>" (job sections only), "refs": ["..."]}
+{"title": "<one-line summary>", "permalink": "<slack message permalink>", "channel": "#<channel name>", "from": "<display name of the author/asker>", "lastActivity": "<ISO 8601 timestamp of the newest message in the thread>", "kind": "mention" | "reply-pending" | "yours" (builtins only), "yours": [{"text": "...", "at": "..."}] (builtins only), "jobId": "<id>" (job sections only), "why": "<one line>" (job sections only), "refs": ["..."]}
 If nothing qualifies anywhere, output [].
 If you cannot access any Slack tools at all, output exactly: {"error": "no-slack-tools"}`
 
@@ -114,9 +116,12 @@ export interface RawBuiltinRow {
   channel: string
   from: string
   lastActivity: string
-  kind: 'mention' | 'reply-pending'
+  /** `yours`: a thread only for the user's own messages in it (promises), filed as no thread item */
+  kind: 'mention' | 'reply-pending' | 'yours'
   /** PR/issue URLs or Linear keys in the thread: a review ask folds into its PR's row */
   refs?: string[]
+  /** the user's own messages in the thread, verbatim: read for promises (core/work/promise-items.ts) */
+  yours?: unknown
 }
 
 export interface RawJobRow {
@@ -161,7 +166,7 @@ export function parseScanRows(
     if (typeof row !== 'object' || row === null) continue
     const r = row as Record<string, unknown>
     if (!validBase(r)) continue
-    if (r.kind === 'mention' || r.kind === 'reply-pending') {
+    if (r.kind === 'mention' || r.kind === 'reply-pending' || r.kind === 'yours') {
       builtins.push(r as unknown as RawBuiltinRow)
     } else if (typeof r.jobId === 'string' && knownJobIds.has(r.jobId) && typeof r.why === 'string' && r.why.length > 0) {
       const n = perJob.get(r.jobId) ?? 0
@@ -186,7 +191,8 @@ export function safeWhen(iso: string, now: number): string {
 }
 
 export function normalizeBuiltinRows(rows: RawBuiltinRow[], now = Date.now()): WorkItem[] {
-  return rows.map((row) => {
+  // a "yours" row is only there for its promises: no thread item of its own
+  return rows.filter((row) => row.kind !== 'yours').map((row) => {
     const when = safeWhen(row.lastActivity, now)
     const refs = canonicalizeRefs(row.refs)
     return {
@@ -202,6 +208,18 @@ export function normalizeBuiltinRows(rows: RawBuiltinRow[], now = Date.now()): W
       createdAt: when,
       updatedAt: when,
     }
+  })
+}
+
+/**
+ * The built-in rows' threads with the user's own messages in them, for
+ * promise filing (server/inbox/promises.ts). Rows without any are left out.
+ */
+export function builtinPromiseThreads(rows: RawBuiltinRow[], now = Date.now()): PromiseThread[] {
+  return rows.flatMap((row) => {
+    const messages = saidFrom(row.yours, now)
+    if (!messages.length) return []
+    return [{ thread: permalinkId(row.permalink), source: 'slack', url: row.permalink, place: row.channel, messages }]
   })
 }
 
@@ -234,6 +252,8 @@ export function normalizeJobRows(
 
 export interface SlackScanOutcome {
   builtinItems: WorkItem[]
+  /** built-in threads with the user's own messages, for promise filing */
+  promiseThreads: PromiseThread[]
   jobItems: WorkItem[]
   matchesByJob: Map<string, number>
   /** total tokens the scan consumed (0 when the SDK reports none) */
@@ -320,6 +340,7 @@ export async function runSlackScan(
   }
   return {
     builtinItems: normalizeBuiltinRows(rows.builtins, now),
+    promiseThreads: builtinPromiseThreads(rows.builtins, now),
     jobItems: normalizeJobRows(rows.jobs, specs, now),
     matchesByJob,
     tokens,

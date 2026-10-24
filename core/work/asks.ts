@@ -86,6 +86,7 @@ export const KIND_TO_ASK: Record<ItemKind, Ask> = {
   'reply-needed': 'reply',
   'slack-reply-pending': 'reply',
   manual: 'do',
+  promise: 'do',
   'ticket-assigned': 'do',
   'own-pr-conflicting': 'do',
   'own-pr-approved': 'do',

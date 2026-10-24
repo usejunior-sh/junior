@@ -57,6 +57,7 @@ const KINDS: Record<ItemKind, true> = {
   'job-hit': true,
   digest: true,
   manual: true,
+  promise: true,
   fyi: true,
 }
 

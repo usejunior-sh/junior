@@ -43,6 +43,10 @@ export type ItemEventKind =
   | 'changes-seen'
   // close candidates (core/work/close.ts): you said keep this quiet PR open
   | 'kept-open'
+  // promises (core/work/promise-items.ts): you said a promise item isn't
+  // one; its thread files no more promises. Doesn't move the status (the
+  // op archives the item separately).
+  | 'not-a-promise'
 
 /**
  * Who caused a transition. `user` = a click in the web UI; `agent:<sessionId>`
@@ -113,7 +117,7 @@ export function withLifecycle(
 }
 
 /** Events that record something about an item without moving its status. */
-export type ItemNoteKind = 'surfaced' | 'not-useful' | 'changes-seen' | 'kept-open'
+export type ItemNoteKind = 'surfaced' | 'not-useful' | 'changes-seen' | 'kept-open' | 'not-a-promise'
 
 /** The status an event leaves the item in; null = it doesn't move the status. */
 export function statusAfter(event: ItemEventKind, before: ItemStatus | null): ItemStatus | null {
