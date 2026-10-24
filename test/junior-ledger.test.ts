@@ -4,7 +4,7 @@
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { ageHot, cantWatchOf, juniorState, ledgerCount, ledgerProgress, ledgerRows, personWaits, quieted, quietKey, watchOffOf } from '../core/junior/ledger.js'
+import { ageHot, cantWatchOf, juniorState, ledgerCount, ledgerProgress, ledgerRows, NOT_USEFUL_HOLD_MAX_MS, NOT_USEFUL_NOTICE_MS, NOT_USEFUL_UNDO_MS, personWaits, quieted, quietKey, watchOffOf } from '../core/junior/ledger.js'
 import { capText, capsFrom, markWatchOn, turnOnTitle, usd, withAnswer } from '../core/junior/watch-off.js'
 import type { HandoffReadiness, WorkStage } from '../core/work/handoff.js'
 import type { ScoredItem } from '../core/work/types.js'
@@ -205,4 +205,12 @@ test('not useful: the row comes back when Junior waits on you for a different ta
   // a first pass that became ready is new too
   const ready = item('r', { kind: 'review-requested', reason: 'review-requested', group: 'blocking', tasks: { ...readyTasks, review: { ...readyTasks.review, state: 'reviewing' as const } } })
   assert.equal(quieted({ ...ready, notUseful: quietKey(ready), tasks: readyTasks }), false)
+})
+
+test('not useful: an Undo on screen is always one the server takes', () => {
+  // the notice shows 5 s untouched, and hover or focus never holds it past the cap
+  assert.equal(NOT_USEFUL_NOTICE_MS, 5_000)
+  assert.ok(NOT_USEFUL_HOLD_MAX_MS >= NOT_USEFUL_NOTICE_MS)
+  // the cap ends well inside the server's window: slack for the round trip and a slow clock
+  assert.ok(NOT_USEFUL_UNDO_MS - NOT_USEFUL_HOLD_MAX_MS >= 5_000)
 })

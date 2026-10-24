@@ -8,7 +8,7 @@ import type { UpsertOutcome } from '../core/store/types.js'
 import { dueInput } from '../core/work/due.js'
 import { reasonOf } from '../core/work/fields.js'
 import { taskSummary } from '../core/work/tasks.js'
-import { quietKey, waitKeyOf } from '../core/junior/ledger.js'
+import { NOT_USEFUL_UNDO_MS, quietKey, waitKeyOf } from '../core/junior/ledger.js'
 import { ANY_ITEM_ID_RE, ITEM_STATUSES, manualItemFrom, MAX_URLS_PER_ITEM, workItemFrom } from './validate.js'
 import { BASE64, base64Bytes } from './ws/parse.js'
 import { WorkspaceRuntime } from './workspace/runtime.js'
@@ -300,8 +300,8 @@ export async function editManualOp(rt: WorkspaceRuntime, id: string, raw: unknow
   invalidateInbox(rt)
 }
 
-/** How long after a "not useful" mark its undo is taken: the 5 s the notice shows, plus slack. */
-export const NOT_USEFUL_UNDO_MS = 10_000
+/** How long after a "not useful" mark its undo is taken (core/junior/ledger.ts: the longest hold of the notice, plus slack). */
+export { NOT_USEFUL_UNDO_MS }
 
 async function itemForNote(rt: WorkspaceRuntime, raw: unknown): Promise<WorkItem> {
   const id = typeof (raw as { id?: unknown } | null)?.id === 'string' ? (raw as { id: string }).id.trim() : ''

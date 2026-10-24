@@ -20,7 +20,7 @@ import { openSqliteStore } from '../core/store/sqlite.js'
 import { markNotUsefulOp, NOT_USEFUL_UNDO_MS, undoNotUsefulOp } from '../server/items-ops.js'
 import type { WorkspaceRuntime } from '../server/workspace/runtime.js'
 import type { WorkItem } from '../core/work/types.js'
-import { quieted } from '../core/junior/ledger.js'
+import { NOT_USEFUL_HOLD_MAX_MS, quieted } from '../core/junior/ledger.js'
 import { taskSummary } from '../core/work/tasks.js'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -735,12 +735,13 @@ test('not useful: a scan keeps the stamp, and new source activity un-quiets it',
 test('not useful: undo within the window takes the event back and clears the stamp', () =>
   withNotUseful(async (rt, item) => {
     await markNotUsefulOp(rt, { id: item.id }, NOW)
-    await undoNotUsefulOp(rt, { id: item.id }, NOW + 5_000)
+    // held on screen by hover or focus for as long as the client allows: still taken
+    await undoNotUsefulOp(rt, { id: item.id }, NOW + NOT_USEFUL_HOLD_MAX_MS + 1_000)
     assert.equal((await notUsefulEvents(rt, item.id)).length, 0)
     assert.equal((await rt.store.items.get(item.id))!.notUseful, undefined)
     assert.ok((await rt.store.items.events(item.id)).some((e) => e.event === 'created'), 'the rest of the log stays')
     // nothing left to undo
-    await assert.rejects(undoNotUsefulOp(rt, { id: item.id }, NOW + 6_000), /the undo window has passed/)
+    await assert.rejects(undoNotUsefulOp(rt, { id: item.id }, NOW + NOT_USEFUL_HOLD_MAX_MS + 2_000), /the undo window has passed/)
   }))
 
 test('not useful: undo after the window is refused and the mark stands', () =>

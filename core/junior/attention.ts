@@ -26,7 +26,7 @@ import { inboxTabOf } from '../work/inbox-tabs.js'
 import { itemCycles, type ItemCycle, type ItemEvent } from '../work/state.js'
 import type { TaskOwner, TaskState } from '../work/tasks.js'
 import type { ScoredItem } from '../work/types.js'
-import { juniorWaits } from './ledger.js'
+import { onNeeds } from './ledger.js'
 
 export type AttentionBucket = 'never-reached' | 'one-look' | 'your-work' | 'missed'
 export const ATTENTION_BUCKETS: readonly AttentionBucket[] = ['never-reached', 'one-look', 'your-work', 'missed']
@@ -113,10 +113,16 @@ export type AttentionSplit = {
   interruptPrecision: InterruptPrecision
 }
 
-/** What put an item on Needs you: Junior waits on you (the Junior page), or the inbox's Needs you now tab. */
+/**
+ * What put an item on Needs you: Junior waits on you (the Junior page), or the
+ * inbox's Needs you now tab. An item you marked not useful isn't on the Junior
+ * page's Needs you until something new happens on it (core/junior/ledger.ts
+ * onNeeds), so it doesn't count as `junior` meanwhile. When it comes back it
+ * is the same open cycle: markSurfaced keeps that cycle's one `surfaced`.
+ */
 export function needsYouVia(item: ScoredItem, now: number): 'junior' | 'inbox' | null {
   if (item.status && item.status !== 'open') return null
-  if (juniorWaits(item)) return 'junior'
+  if (onNeeds(item)) return 'junior'
   return inboxTabOf(item, now) === 'needs' ? 'inbox' : null
 }
 

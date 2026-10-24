@@ -28,6 +28,7 @@ import { ITEM_EVENTS_AT_INDEX, MIGRATIONS } from '../core/store/sqlite-migration
 import type { Store } from '../core/store/types.js'
 import type { ScoredItem, WorkItem } from '../core/work/types.js'
 import { readAttentionSplit, recordSurfaced, waitingSinceOf } from '../server/attention-ops.js'
+import { quietKey } from '../core/junior/ledger.js'
 
 const HOUR = 3_600_000
 const DAY = 24 * HOUR
@@ -465,4 +466,14 @@ test('the item_events time index migration exists and is idempotent', async () =
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }
+})
+
+test('a Needs you item marked not useful is off Needs you for the split until something new lands', () => {
+  const p = pr({ id: 'github:acme/api#4' })
+  const waits = scored(p, { handoff: 'on', junior: { stage: 'needs-you' } as ScoredItem['junior'] })
+  const marked = { ...waits, notUseful: quietKey(waits) }
+  assert.equal(needsYouVia(waits, at(19, 10)), 'junior')
+  assert.notEqual(needsYouVia(marked, at(19, 10)), 'junior')
+  // a new comment: back on Needs you (the same open cycle, so markSurfaced keeps its one `surfaced`)
+  assert.equal(needsYouVia({ ...marked, updatedAt: '2026-10-19T12:00:00Z' }, at(19, 12)), 'junior')
 })

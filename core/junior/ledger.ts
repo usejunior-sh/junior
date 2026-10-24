@@ -61,6 +61,16 @@ export const quietKey = (i: Pick<Item, 'updatedAt' | 'tasks'>): string => `${i.u
 /** You marked it not useful, and nothing new has happened on it since. */
 export const quieted = (i: Pick<Item, 'updatedAt' | 'tasks' | 'notUseful'>): boolean => !!i.notUseful && i.notUseful === quietKey(i)
 
+/** How long "Marked not useful · Undo" holds the row's slot when you don't touch it. */
+export const NOT_USEFUL_NOTICE_MS = 5_000
+/**
+ * Hover or focus holds the notice (WCAG 2.2.1), but never past this many ms
+ * after the mark: an Undo on screen must still be one the server takes.
+ */
+export const NOT_USEFUL_HOLD_MAX_MS = 50_000
+/** How long after a mark the server takes its undo: the longest hold, plus slack for the round trip. */
+export const NOT_USEFUL_UNDO_MS = 60_000
+
 /** On Needs you: Junior waits on you, and you haven't marked it not useful since the last new thing. */
 export const onNeeds = (i: Item): boolean => juniorWaits(i) && !quieted(i)
 
