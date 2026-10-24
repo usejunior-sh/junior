@@ -19,6 +19,7 @@ import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from '
 import type { HandoffReadiness, NeedsRow, RowMove, ScoredItem, WatchId } from '../../../shared/protocol.js'
 import { enterVerb, rowLabel, rowMove, type RowLine } from '../../../core/junior/row-move.js'
 import { needsMoveText } from '../../../core/junior/needs.js'
+import { briefLines, type BriefLine, type BriefLineId } from '../../../core/junior/brief.js'
 import { isMainRed, MAIN_RED_SAYS, mainRedEvidence } from '../../../core/junior/main-red.js'
 import { handBackLine, handBackSays } from '../../../core/babysit/ready.js'
 import { ageHot, cantWatchOf, juniorState, onNeeds, readyOf, LEDGER_GROUP_TITLE, ledgerGroup, ledgerProgress, ledgerRows, NOT_USEFUL_HOLD_MAX_MS, NOT_USEFUL_NOTICE_MS, watchOffOf, type LedgerGroup, type LedgerTab } from '../../../core/junior/ledger.js'
@@ -140,6 +141,52 @@ function MainRedLine({ i }: { i: ScoredItem }) {
       )}
     </span>
   )
+}
+
+const BRIEF_LABEL: Record<BriefLineId, string> = { waiting: 'Waiting', last: 'Last time', now: 'Now' }
+
+/**
+ * The cited brief on an open Needs you card (core/junior/brief.ts briefLines):
+ * one label and line per fact, each ending in its links. Plain links like
+ * MainRedLine; the row's key handler stands aside for `a`.
+ */
+function BriefLines({ lines }: { lines: BriefLine[] }) {
+  return (
+    <>
+      {lines.map((l) => (
+        <Fragment key={l.id}>
+          <span className="lbl">{BRIEF_LABEL[l.id]}</span>
+          <span className="ctx brf" title={l.full}>
+            {l.text}
+            <span className="cites">
+              {l.cites.map((c) =>
+                c.external ? (
+                  <a key={c.href + c.label} href={c.href} target="_blank" rel="noreferrer" aria-label={c.aria}>
+                    <span className="cl">{c.label}</span>
+                    <ExternalLink size={12} aria-hidden="true" />
+                  </a>
+                ) : (
+                  <a key={c.href + c.label} href={c.href} aria-label={c.aria}>
+                    <span className="cl">{c.label}</span>
+                  </a>
+                ),
+              )}
+            </span>
+          </span>
+        </Fragment>
+      ))}
+    </>
+  )
+}
+
+/** What the source said, kept above the brief: a Slack message's words, else your note. Null = nothing human to keep. */
+function keptLead(i: ScoredItem): { label: string; text: string } | null {
+  if (i.source === 'slack') {
+    const text = i.description?.trim() || i.why?.trim() || i.rankWhy
+    return text ? { label: 'Message', text } : null
+  }
+  const note = i.description?.trim()
+  return note ? { label: 'Your note', text: note } : null
 }
 
 /** What Junior says about it, in a sentence. */
@@ -587,6 +634,9 @@ function ItemLine({
   const capId = `jhCap-${i.id}`
   const ref = refOf(i)
   const title = i.title?.trim()
+  // the cited brief replaces the Context line on Needs you; an open card is the only cost
+  const brief = open && onNeeds(i) ? briefLines(i, me, Date.now()) : []
+  const lead = brief.length ? keptLead(i) : null
   return (
     <>
       <button
@@ -643,11 +693,25 @@ function ItemLine({
       </button>
       {open && (
         <div className="jhXp">
-          <span className="lbl">{i.source === 'slack' ? 'Message' : 'Context'}</span>
-          <span className="ctx">
-            {contextOf(i)}
-            <MainRedLine i={i} />
-          </span>
+          {brief.length ? (
+            <>
+              {lead && (
+                <>
+                  <span className="lbl">{lead.label}</span>
+                  <span className="ctx">{lead.text}</span>
+                </>
+              )}
+              <BriefLines lines={brief} />
+            </>
+          ) : (
+            <>
+              <span className="lbl">{i.source === 'slack' ? 'Message' : 'Context'}</span>
+              <span className="ctx">
+                {contextOf(i)}
+                <MainRedLine i={i} />
+              </span>
+            </>
+          )}
           {ready && (
             <>
               <span className="lbl">Ready</span>

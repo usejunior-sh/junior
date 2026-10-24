@@ -504,6 +504,13 @@ button.jlTitle:hover { text-decoration: underline; text-decoration-color: var(--
 .jhXp .ev .mono { font-family: var(--mono); font-size: 0.9231rem; color: var(--ash); }
 .jhXp .ev a { display: inline-flex; align-items: center; gap: 4px; color: var(--blue); }
 .jhXp .ev a:hover { text-decoration: underline; }
+/* the cited brief (core/junior/brief.ts briefLines): prose in Geist, its links trail in mono sky and wrap whole */
+.jhXp .brf { color: var(--charcoal); }
+.jhXp .cites { display: inline-flex; flex-wrap: wrap; gap: 10px; margin-left: 10px; vertical-align: baseline; }
+.jhXp .cites a { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; font-family: var(--mono); font-size: 0.9231rem; color: var(--blue); text-decoration: none; }
+.jhXp .cites .cl { max-width: 16ch; overflow: hidden; text-overflow: ellipsis; }
+.jhXp .cites a:hover { text-decoration: underline; }
+.jhXp .cites a:focus-visible { outline: 1px solid var(--hair-bright); outline-offset: 1px; }
 /* "Ready because…" (ReadyChips.tsx): four hairline pills in mono, each a link to its evidence; orange only on t-needs */
 .rdyWrap { display: block; min-width: 0; }
 .rdy { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
@@ -587,6 +594,9 @@ a.rdyChip:focus-visible { outline: 1px solid var(--hair-bright); outline-offset:
   /* main's run drops to its own line, with a full tap target */
   .jhXp .ev { display: block; }
   .jhXp .ev a { display: flex; min-height: 36px; width: fit-content; }
+  /* the brief's links drop under the line as hairline pills, full tap targets */
+  .jhXp .cites { display: flex; margin: 6px 0 0; gap: 8px; }
+  .jhXp .cites a { min-height: 36px; padding: 0 10px; border: 1px solid var(--hair); border-radius: var(--r-full); }
   /* readiness chips: whole pills wrap, each a full tap target */
   .rdy { gap: 8px; }
   .rdy .rdyChip { height: auto; min-height: 32px; padding: 0 10px; }

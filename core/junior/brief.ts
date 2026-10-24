@@ -9,6 +9,10 @@
  */
 import { cap, numberWord, waitedWords } from './greeting.js'
 import type { Voice } from './persona.js'
+import { quieted, readyOf } from './ledger.js'
+import { checksPhrase, mainRedEvidence } from './main-red.js'
+import { sourceOf } from '../../shared/sources.js'
+import type { ScoredItem } from '../work/types.js'
 
 /** What a reference in the brief opens. */
 export type BriefTarget =
@@ -198,4 +202,172 @@ function shortAge(since: number, now: number): string {
 /** The brief as plain text, for tests and for a session's context. */
 export function briefText(segs: Segment[]): string {
   return segs.map((s) => (typeof s === 'string' ? s : s.label)).join('')
+}
+
+/* ------------------------------------------------------------------------ *
+ * The cited brief (plan item `cited-brief`): three short lines on an open
+ * Needs you card, each ending in a link to where the fact came from.
+ *
+ *   Waiting     Priya asked for your review. Dev asked in Slack too.   #412 ↗  Slack ↗
+ *   Last time   You marked it done. New activity brought it back.      #412 ↗
+ *   Now         CI is failing on this PR.                              checks ↗
+ *
+ * Built only from facts the item already carries: no model call, and no
+ * Junior-written text (its decisions and summaries are skipped). A line with
+ * no valid link is dropped. Pure and browser-safe; time is an argument.
+ * ------------------------------------------------------------------------ */
+
+export type BriefLineId = 'waiting' | 'last' | 'now'
+
+/** A link at the end of a brief line: an `https://` page, or an item page in the app (`#/item/…`). */
+export type Cite = { label: string; href: string; external: boolean; aria: string }
+
+/** One brief line: 1 or 2 cites, never 0. `full` is the uncut text, for a title. */
+export type BriefLine = { id: BriefLineId; text: string; full: string; cites: Cite[] }
+
+export type BriefItem = Pick<
+  ScoredItem,
+  'id' | 'source' | 'reason' | 'author' | 'url' | 'peopleWaiting' | 'linked' | 'seen' | 'tasks' | 'memory' | 'returned' | 'notUseful' | 'updatedAt' | 'ciFailing' | 'repo'
+>
+
+const HTTPS = /^https:\/\/\S+$/
+const GITHUB_PR = /^https:\/\/github\.com\/[^/\s]+\/[^/\s]+\/pull\/\d+$/
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+/** The item's own page in the app: the same route as web/src/hooks.ts itemHash. */
+export const itemPageHref = (id: string): string => `#/item/${encodeURIComponent(id)}`
+
+const nameOf = (author: string | undefined): string => (author ?? '').trim().replace(/^@/, '')
+const samePerson = (a: string, b: string) => a.toLowerCase() === b.toLowerCase()
+
+/** The first `n` words, with "…" when cut. */
+function words(s: string, n: number): { text: string; cut: boolean } {
+  const w = s.trim().split(/\s+/).filter(Boolean)
+  return w.length > n ? { text: `${w.slice(0, n).join(' ')}…`, cut: true } : { text: w.join(' '), cut: false }
+}
+
+/** Ends a sentence once: "keep it" → "keep it.", "keep it!" stays, "keep it…" stays. */
+const sentence = (s: string) => (/[.!?…]$/.test(s) ? s : `${s.replace(/[,;:]+$/, '')}.`)
+
+/** The link to the item at its source: "#412" on GitHub, "Slack", or the source's name. Null on a bad url. */
+function sourceCite(i: Pick<BriefItem, 'id' | 'source' | 'repo' | 'url'>): Cite | null {
+  if (!HTTPS.test(i.url ?? '')) return null
+  const d = sourceOf(i.source)
+  if (d.id === 'github') {
+    const ref = d.ref({ id: i.id, source: i.source, repo: i.repo, url: i.url })
+    return ref ? { label: ref, href: i.url, external: true, aria: `Open ${ref} on GitHub` } : { label: 'GitHub', href: i.url, external: true, aria: 'Open in GitHub' }
+  }
+  if (d.id === 'slack') return slackCite(i.url)
+  return { label: d.label, href: i.url, external: true, aria: `Open in ${d.label}` }
+}
+
+const slackCite = (url: string): Cite | null => (HTTPS.test(url) ? { label: 'Slack', href: url, external: true, aria: 'Open the Slack thread' } : null)
+
+const internalCite = (id: string, what: 'notes' | 'tasks'): Cite => ({ label: what, href: itemPageHref(id), external: false, aria: `Open its ${what} in Junior` })
+
+/** A part of a line: a sentence and the cite that backs it. */
+type Part = { text: string; cite: Cite }
+
+function line(id: BriefLineId, parts: Part[], tail = '', full?: string): BriefLine {
+  const text = [...parts.map((p) => p.text), tail].filter(Boolean).join(' ')
+  const cites: Cite[] = []
+  for (const p of parts) if (!cites.some((c) => c.href === p.cite.href && c.label === p.cite.label)) cites.push(p.cite)
+  return { id, text, full: full ?? text, cites }
+}
+
+/** Who waits on you, and why. Omitted on your own PR, a job's find and your own to-do. */
+function waitingLine(i: BriefItem, me: string | null): BriefLine | null {
+  if (i.reason === 'your-pr' || i.reason === 'found' || i.reason === 'you-added') return null
+  const author = nameOf(i.author)
+  const mine = !!me && !!author && samePerson(author, nameOf(me))
+  const own = sourceCite(i)
+
+  let primary: Part | null = null
+  if (author && !mine && own) {
+    const d = sourceOf(i.source)
+    if (i.reason === 'review-requested') primary = { text: `${author} asked for your review.`, cite: own }
+    else if (i.reason === 'asked' && d.id === 'slack') {
+      const where = d.ref({ id: i.id, source: i.source, repo: i.repo, url: i.url }) ?? 'Slack'
+      primary = { text: `${author} asked you in ${where}.`, cite: own }
+    } else if (i.reason === 'asked') primary = { text: `${author} is waiting on you.`, cite: own }
+    else if (i.reason === 'mentioned') primary = { text: `${author} mentioned you here.`, cite: own }
+    else if (i.reason === 'assigned') primary = { text: `${author} opened it. It's assigned to you.`, cite: own }
+  }
+
+  // Slack askers on linked items, not the person already named, each with a working link
+  const askers: { name: string; cite: Cite }[] = []
+  for (const l of i.linked ?? []) {
+    if (l.source !== 'slack') continue
+    const name = nameOf(l.author)
+    const cite = slackCite(l.url)
+    if (!name || !cite || (me && samePerson(name, nameOf(me)))) continue
+    if ((primary && samePerson(name, author)) || askers.some((a) => samePerson(a.name, name))) continue
+    askers.push({ name, cite })
+  }
+
+  const parts: Part[] = []
+  if (primary) parts.push(primary)
+  const slack = askers[0]
+  if (slack) parts.push({ text: primary ? `${slack.name} asked in Slack too.` : `${slack.name} asked about this in Slack.`, cite: slack.cite })
+  if (!parts.length) return null
+
+  const more = Math.max(0, (i.peopleWaiting ?? 0) - parts.length)
+  return line('waiting', parts, more === 0 ? '' : more === 1 ? '1 more waits too.' : `${more} more wait too.`)
+}
+
+/** "Oct 20", or "Oct 20, 2025" when it isn't this year. */
+function dayOf(at: number, now: number): string {
+  const d = new Date(at)
+  const s = `${MONTHS[d.getMonth()]} ${d.getDate()}`
+  return d.getFullYear() === new Date(now).getFullYear() ? s : `${s}, ${d.getFullYear()}`
+}
+
+/** What happened last time: you closed it, you quieted it, you decided something, or Junior finished a step. */
+function lastLine(i: BriefItem, now: number): BriefLine | null {
+  const own = sourceCite(i)
+  if (i.returned && own) return line('last', [{ text: 'You marked it done. New activity brought it back.', cite: own }])
+  if (i.notUseful && !quieted(i) && own) return line('last', [{ text: 'You marked it not useful. Something new happened since.', cite: own }])
+
+  // yours only: Junior's decisions are model-written, and this brief carries none
+  const mine = (i.memory?.decisions ?? []).filter((d) => d.by === 'you' && d.text?.trim() && Number.isFinite(d.at))
+  const newest = mine.reduce<(typeof mine)[number] | null>((a, d) => (!a || d.at >= a.at ? d : a), null)
+  if (newest) {
+    const cut = words(newest.text, 10)
+    const lead = `${dayOf(newest.at, now)}, you decided: `
+    return line('last', [{ text: lead + (cut.cut ? cut.text : sentence(cut.text)), cite: internalCite(i.id, 'notes') }], '', lead + sentence(newest.text.trim()))
+  }
+
+  // the task's title only: what follows " ✓" is the run's own summary
+  const done = i.tasks?.lastDone?.split(' ✓')[0]?.trim()
+  if (done) {
+    const cut = words(done, 8)
+    const text = `Last finished: ${cut.cut ? cut.text : sentence(cut.text)}`
+    return line('last', [{ text, cite: internalCite(i.id, 'tasks') }], '', `Last finished: ${sentence(done)}`)
+  }
+  return null
+}
+
+/** What matters now: main red too, red checks, CI failing, or a conflict. Never repeats the Ready line. */
+function nowLine(i: BriefItem, now: number): BriefLine | null {
+  const ev = mainRedEvidence(i.seen, now)
+  if (ev?.url) return line('now', [{ text: ev.text, cite: { label: "main's run", href: ev.url, external: true, aria: ev.linkLabel } }])
+  // the Ready chips already say what's left on your PR
+  if (readyOf(i)) return null
+  const url = i.url ?? ''
+  const checks: Cite | null = GITHUB_PR.test(url) ? { label: 'checks', href: `${url}/checks`, external: true, aria: 'Open the checks on GitHub' } : null
+  const red = (i.seen?.red ?? []).filter((c) => c.trim())
+  if (checks && red.length) return line('now', [{ text: red.length === 1 ? `${checksPhrase(red)} is red on this PR.` : `${red.length} checks are red on this PR.`, cite: checks }])
+  if (checks && i.ciFailing) return line('now', [{ text: 'CI is failing on this PR.', cite: checks }])
+  const own = sourceCite(i)
+  if (i.seen?.rebase === 'conflict' && own) return line('now', [{ text: 'It has merge conflicts with its base.', cite: own }])
+  return null
+}
+
+/**
+ * The open card's cited brief: Waiting, Last time, Now, in that order, each
+ * omitted when nothing backs it with a link. `me` is your login, so your own
+ * asks and PRs name nobody. 0–3 lines.
+ */
+export function briefLines(i: BriefItem, me: string | null, now: number): BriefLine[] {
+  return [waitingLine(i, me), lastLine(i, now), nowLine(i, now)].filter((l): l is BriefLine => !!l && l.cites.length > 0)
 }
