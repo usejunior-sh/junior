@@ -36,6 +36,8 @@ import { teamRunOf } from '../team-run/state.js'
 import { noteActionEvent } from './actions-record.js'
 import { endedTask, owedProgress, type ProgressPending, snapshotAgentIds, throttleProgress, WorkflowTurns } from './workflow-tasks.js'
 import { costStep, lastResultMark, type CostMark } from '../../core/usage/turn-cost.js'
+import { STALL_TICK_MS, stallNotice, TurnWatch } from '../../core/sessions/stall.js'
+import { sleepWatch } from '../power.js'
 
 /** The browser pane's tools (core/browser/policy.ts). */
 const BROWSER_PREFIX = `mcp__${BROWSER_SERVER}__`
@@ -112,6 +114,9 @@ export class LiveSession {
   private libraryTouched = false
   /** The agent this session runs on: its own, not the workspace's. */
   readonly provider: Provider
+  /** The stall watchdog's view of the open turn (core/sessions/stall.ts). It only ever speaks, never stops anything. */
+  private readonly turnWatch = new TurnWatch()
+  private stallTimer: NodeJS.Timeout | null = null
 
   constructor(
     readonly rt: WorkspaceRuntime,
@@ -258,6 +263,8 @@ export class LiveSession {
   private async pump() {
     try {
       for await (const ev of this.q) {
+        // Anything from the agent, a stream delta included, says the turn is alive.
+        this.turnWatch.heard(Date.now(), ev.kind === 'message' ? { toolCalls: ev.toolCalls, record: ev.record } : undefined)
         // init and result messages carry what fast mode is really doing,
         // including why it is not serving, which is the only way the user
         // learns their toggle was overruled (wrong model, wrong plan, …).
@@ -284,6 +291,12 @@ export class LiveSession {
         if (ev.kind === 'commands') noteCommands(this.rt, this.row.cwd, ev.commands.map(toCommandInfo))
         if (ev.kind === 'message') {
           this.setStatus('running')
+          // A turn the main agent opened itself (a Workflow run's wake-up) is watched too.
+          // A background subagent's own messages, after the turn ended, aren't a turn.
+          if (!this.turnWatch.open && !ev.record.parent_tool_use_id) {
+            this.watchTurn()
+            this.turnWatch.heard(Date.now(), { toolCalls: ev.toolCalls, record: ev.record })
+          }
           if (ev.role === 'assistant') {
             this.noteToolPaths(ev.toolCalls)
             if (ev.toolCalls.some(writesLibrary)) this.libraryTouched = true
@@ -296,6 +309,7 @@ export class LiveSession {
         if (this.workflowTurns.note(ev.record)) broadcastSessionList(this.rt)
         if (ev.kind === 'result') {
           this.setStatus('idle')
+          this.unwatchTurn()
           // A Workflow run outlives the turn that launched it and goes on editing
           // files, so the turn stays open while one is going, and through the
           // turn it ended in. The SDK's own wake-up turn after it closes it, or
@@ -347,6 +361,7 @@ export class LiveSession {
       this.emit({ kind: 'error', message: String(err) }, true)
       this.setStatus('error')
     } finally {
+      this.unwatchTurn()
       // The subprocess is gone; any unanswered prompt can never be answered.
       this.expirePendingPermissions()
       // Its runs went with it: keep where they got to, and close the turn they held open.
@@ -472,6 +487,7 @@ export class LiveSession {
     const sender = opts.fromSession ? this.rt.rows.get(opts.fromSession) : undefined
     const modelText = sender && text ? frameSessionMessage(sender, text) : opts.from && text ? frameTeamMessage(opts.from, text) : opts.mode === 'goal' ? `${GOAL_MODE_MARK}${text}` : text
     this.setStatus('running')
+    this.watchTurn()
     void this.rt.store.sessions.touch(this.row.id)
     // Images lead: the model reads them as context for the text that follows.
     // Attachments trail it, each in its own block, so the ask stays readable.
@@ -642,6 +658,8 @@ export class LiveSession {
     const pending = this.pendingPermissions.get(id)
     if (!pending) return
     this.pendingPermissions.delete(id)
+    // The ball is back with the agent: the quiet clock starts from the answer.
+    this.turnWatch.heard(Date.now())
     if (this.pendingPermissions.size === 0) broadcastSessionList(this.rt)
     if (pending.toolName === 'ExitPlanMode') {
       if (behavior === 'deny') pending.resolve({ behavior: 'deny', message: 'The user wants to keep planning. Wait for what they say should change, then revise the plan.' })
@@ -783,8 +801,40 @@ export class LiveSession {
     await this.beginTurn()
     this.emit({ kind: 'local_user', text, relay }, true)
     this.setStatus('running')
+    this.watchTurn()
     void this.rt.store.sessions.touch(this.row.id)
     this.input.push({ content: [{ type: 'text', text: frameAgentRelay(relay, text) }] })
+  }
+
+  /**
+   * Watch the open turn for a stall: a check every STALL_TICK_MS while it is
+   * open, cleared when it ends. A stalled turn gets one notice in its
+   * transcript and a log line. Nothing is stopped: that is the user's call.
+   */
+  private watchTurn() {
+    this.turnWatch.begin(Date.now())
+    if (this.stallTimer) return
+    this.stallTimer = setInterval(() => this.checkStall(), STALL_TICK_MS)
+    this.stallTimer.unref()
+  }
+
+  private unwatchTurn() {
+    this.turnWatch.end()
+    if (this.stallTimer) clearInterval(this.stallTimer)
+    this.stallTimer = null
+  }
+
+  private checkStall() {
+    if (!this.turnWatch.open) return this.unwatchTurn()
+    const now = Date.now()
+    const { verdict, notify } = this.turnWatch.check(now, { waitingOnUser: this.waiting, sleptMs: sleepWatch.sleptBetween(this.turnWatch.lastHeardAt, now) })
+    if (!notify) return
+    log('warn', 'session', `turn stalled: quiet ${Math.round(verdict.quietMs / 1000)}s, bound ${Math.round(verdict.boundMs / 1000)}s`, {
+      session: this.row.id,
+      workspace: this.rt.meta.id,
+      ...(verdict.tool ? { tool: verdict.tool } : {}),
+    })
+    this.notice(stallNotice(verdict))
   }
 
   private setStatus(status: SessionStatus) {
