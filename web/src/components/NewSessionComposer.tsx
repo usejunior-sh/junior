@@ -10,6 +10,7 @@ import { sessionAsk } from '../../../core/junior/greeting.js'
 import { usePersona, useYouName } from '../junior.js'
 import { ChatComposer, type ComposerTop } from './ChatComposer.js'
 import { JuniorHalo } from './JuniorHalo.js'
+import { splitTyped } from '../typed.js'
 
 export type { NewSession } from './ChatComposer.js'
 
@@ -52,6 +53,8 @@ function Greeting({ s }: { s: ComposerTop }) {
   const { greet, ask } = useMemo(() => sessionAsk(Date.now(), persona.voice, you), [persona.voice, you])
   const question = s.job ? 'Tell me about the job.' : s.goal ? 'Tell me about the goal.' : s.dispatched ? 'Anything I should know before I start?' : ask
   const said = useTyped(s.handoff ? 'On it.' : `${greet} ${question}`)
+  // The whole line is always there, the untyped tail hidden, so the heading never grows or re-wraps while it types.
+  const [[g, gRest], [q, qRest]] = splitTyped(s.handoff ? ['On it.', ''] : [greet, ` ${question}`], said.length)
   return (
     <>
       <div className={`glow ${s.onClaude ? 'junior' : 'blue'}`} aria-hidden="true" />
@@ -64,11 +67,18 @@ function Greeting({ s }: { s: ComposerTop }) {
           <h2 className="nsLine" aria-label={s.handoff ? 'On it.' : `${greet} ${question}`}>
             <span aria-hidden="true">
               {s.handoff ? (
-                said
+                <>
+                  {g}
+                  <span className="nsRest">{gRest}</span>
+                </>
               ) : (
                 <>
-                  <span className="g">{said.slice(0, greet.length)}</span>
-                  {said.slice(greet.length)}
+                  <span className="g">
+                    {g}
+                    <span className="nsRest">{gRest}</span>
+                  </span>
+                  {q}
+                  <span className="nsRest">{qRest}</span>
                 </>
               )}
             </span>

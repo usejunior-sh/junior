@@ -294,6 +294,8 @@ button.chip:hover:not(:disabled), .chip[data-state="open"] { color: var(--ink); 
   color: var(--ink); text-align: center; text-wrap: balance; min-height: 1.05em;
 }
 #newSessionHome .nsLine .g { color: var(--mute); }
+/* The untyped tail of the line: laid out but unseen, so the line keeps its final size while it types. */
+#newSessionHome .nsLine .nsRest { visibility: hidden; }
 #newSessionHome .nsWho.handoff .nsFace { animation: nsNod 0.5s ease-in-out; }
 @keyframes nsNod {
   0%, 100% { transform: none; }

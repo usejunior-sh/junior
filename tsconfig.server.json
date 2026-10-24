@@ -22,6 +22,7 @@
     "web/src/diff.ts",
     "web/src/transcript.ts",
     "web/src/browserUrl.ts",
+    "web/src/typed.ts",
     "web/src/components/browser/steps.ts",
     "vite.config.ts"
   ]
