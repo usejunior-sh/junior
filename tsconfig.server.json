@@ -28,6 +28,8 @@
     "web/src/friction.ts",
     "web/src/shortcuts.ts",
     "web/src/itemRef.ts",
+    "web/src/itemVerbs.ts",
+    "web/src/selection.ts",
     "web/src/components/browser/steps.ts",
     "vite.config.ts"
   ]

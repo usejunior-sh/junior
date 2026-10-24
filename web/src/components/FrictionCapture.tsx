@@ -10,7 +10,7 @@ import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import type { ManualItemResponse, SessionSummary } from '../../../shared/protocol.js'
 import { FRICTION_MAX, frictionContext, frictionDescription, frictionError, frictionTitle, shortId, type FrictionWhere } from '../friction.js'
 import type { Route } from '../hooks.js'
-import { selectedItem } from '../selection.js'
+import { focusedItemId } from '../selection.js'
 
 /** How long "✓ Noted for later" holds before the popover closes (Quick capture's). */
 const DONE_HOLD_MS = 500
@@ -19,9 +19,7 @@ type Status = { phase: 'idle' } | { phase: 'saving' } | { phase: 'done' } | { ph
 
 /** Where you are: the page, the raw hash, and the item in focus. */
 function whereNow(route: Route, sessions: readonly SessionSummary[]): FrictionWhere {
-  const selected =
-    route.page === 'item' ? route.id : route.page === 'session' ? (sessions.find((s) => s.id === route.id)?.itemId ?? null) : selectedItem()
-  return { page: route.page, hash: location.hash, selected }
+  return { page: route.page, hash: location.hash, selected: focusedItemId(route, sessions) }
 }
 
 export function FrictionCapture({

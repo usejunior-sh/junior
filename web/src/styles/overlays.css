@@ -128,18 +128,39 @@ dialog p { color: var(--body); font-size: 1rem; line-height: 1.55; }
 #deleteSession p { margin: 0; }
 #deleteSession p strong { color: var(--ink); font-weight: 500; }
 
-/* command palette */
-dialog#palette { width: 580px; padding: 0; margin-top: 12vh; overflow: hidden; }
+/* command palette (CommandPalette.tsx): Radix Dialog content around cmdk, over .projOverlay (z 90) */
+#palette {
+  position: fixed; z-index: 91; top: 12vh; left: 50%; transform: translateX(-50%);
+  width: 580px; max-width: calc(100vw - 32px); padding: 0; overflow: hidden;
+  display: flex; flex-direction: column;
+  background: var(--card); color: var(--ink); border: 1px solid var(--hair-strong); border-radius: var(--r-lg);
+}
+#palette:focus, #palette:focus-visible { outline: none; }
+#palette [cmdk-root] { display: flex; flex-direction: column; min-height: 0; }
 #palette .palHead { display: flex; align-items: center; border-bottom: 1px solid var(--hair); }
 #palette input { flex: 1; min-width: 0; background: transparent; border: none; border-radius: 0; color: var(--ink); padding: 15px 17px; font-size: 1.1154rem; outline: none; }
+#palette .palBack { flex: none; display: grid; place-items: center; width: 32px; height: 32px; margin-left: 8px; margin-right: -10px; padding: 0; border: 0; border-radius: var(--r-sm); background: transparent; color: var(--ash); cursor: pointer; }
+#palette .palBack:hover { background: var(--elev); color: var(--ink); }
 #palette .palCancel { display: none; flex: none; height: 44px; padding: 0 14px; border: 0; background: transparent; color: var(--body); font-size: 1rem; }
 #palette .palList { max-height: 380px; overflow-y: auto; padding: 6px; }
-.palSection { padding: 9px 10px 4px; font-size: 0.7692rem; letter-spacing: 0.07em; color: var(--stone); text-transform: uppercase; font-weight: 500; }
-.palRow { display: flex; align-items: baseline; gap: 12px; padding: 8px 10px; border-radius: var(--r-sm); cursor: pointer; }
-.palRow.sel { background: var(--elev); }
-.palLabel { flex: none; max-width: 70%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 1.0385rem; color: var(--ink); }
-.palHint { margin-left: auto; color: var(--ash); font-size: 0.8462rem; font-family: var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.palSection, #palette [cmdk-group-heading] { padding: 9px 10px 4px; font-size: 0.7692rem; letter-spacing: 0.07em; color: var(--stone); text-transform: uppercase; font-weight: 500; }
+#palette [cmdk-group-heading] { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+#palette .palFocus { display: flex; align-items: baseline; gap: 6px; min-width: 0; text-transform: none; letter-spacing: normal; font-weight: 400; font-size: 0.8462rem; }
+#palette .palRef { flex: none; font-family: var(--mono); color: var(--ash); }
+#palette .palFocusTitle { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--body); }
+.palRow { display: flex; align-items: center; gap: 12px; padding: 8px 10px; border-radius: var(--r-sm); cursor: pointer; }
+.palRow[data-selected="true"] { background: var(--elev); }
+.palLabel { flex: none; max-width: 70%; margin-right: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 1.0385rem; color: var(--ink); }
+.palHint { color: var(--ash); font-size: 0.8462rem; font-family: var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.palDo { flex: none; color: var(--ash); font-size: 0.8462rem; font-family: var(--mono); white-space: nowrap; }
+.palRow .kbd { flex: none; }
+.palRow .palHandoff { display: none; flex: none; }
 .palEmpty { padding: 18px 12px; color: var(--ash); font-size: 1rem; }
+.palMore, .palNote { padding: 6px 10px 8px; color: var(--ash); font-size: 0.8462rem; cursor: default; }
+.palFoot { display: flex; align-items: center; gap: 12px; padding: 8px 12px; border-top: 1px solid var(--hair); }
+.palStatus { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--charcoal); font-size: 0.8462rem; }
+.palStatus.err { color: var(--red); }
+.palKeep { flex: none; display: flex; align-items: center; gap: 8px; color: var(--body); font-size: 0.8462rem; cursor: pointer; }
 
 /* help */
 dialog#helpOverlay { width: 400px; }

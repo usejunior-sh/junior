@@ -241,18 +241,27 @@ html.kbOpen .shell.mobile .panel { bottom: 0; }
 
 /* ---------- phone: dialogs: full width, pinned near the top so a keyboard never covers them ---------- */
 @media (max-width: 767px), (pointer: coarse) and (max-height: 500px) {
-  dialog, dialog.itemComposer, dialog#palette, dialog#helpOverlay, dialog.repoDialog, dialog.sheet {
+  dialog, dialog.itemComposer, #palette, dialog#helpOverlay, dialog.repoDialog, dialog.sheet {
     width: calc(100vw - 16px); max-width: none;
     margin: calc(env(safe-area-inset-top) + 8px) 8px auto;
     max-height: calc(var(--vvh, 100dvh) - env(safe-area-inset-top) - 16px); overflow-y: auto;
   }
   dialog { padding: 18px 16px; }
   dialog .row button, dialog button.go, dialog button.cancel, dialog button.danger { height: 44px; padding: 0 16px; }
-  #palette .palList { max-height: none; }
+  /* the palette is Radix content, not a <dialog>: pinned near the top, footer sticky inside --vvh */
+  #palette { top: 0; left: 0; transform: none; }
+  #palette [cmdk-root] { flex: 1; }
+  #palette .palList { max-height: none; flex: 1; }
   #palette .palCancel { display: block; }
-  .palRow { padding: 12px 10px; }
-  .palHint { display: none; }
+  #palette .palBack { width: 44px; height: 44px; }
+  .palRow { min-height: 44px; padding: 6px 10px; }
+  .palHint, .palDo, .palRow .kbd { display: none; }
   .palLabel { max-width: 100%; }
+  .palRow .palHandoff { display: inline-flex; min-height: 44px; }
+  .palFoot { position: sticky; bottom: 0; background: var(--card); flex-wrap: wrap; padding: 8px 12px calc(8px + env(safe-area-inset-bottom)); }
+  .palStatus { flex-basis: 100%; white-space: normal; }
+  .palStatus:empty { display: none; }
+  .palKeep { width: 100%; justify-content: space-between; min-height: 44px; }
 
   .itemComposer .titleInput { font-size: 1.6rem !important; padding: 6px 16px 2px !important; }
   .itemComposer .descInput { min-height: 120px; padding: 4px 16px 8px !important; }

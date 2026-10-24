@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect, useRef, useCallback, type CSSProperties }
 import { useLogUnread } from './juniorLog.js'
 import type { TerminalSummary, WorkflowAgent, WorkflowRun } from '../../shared/protocol.js'
 import { CommandPalette } from './components/CommandPalette.js'
+import { focusedItemId } from './selection.js'
 import { useSessionChanges } from './useSessionChanges.js'
 import { ChangePage } from './components/ChangePage.js'
 import { useChanges, changesStore } from './changesStore.js'
@@ -830,6 +831,8 @@ export function App() {
         open={paletteOpen}
         sessions={chatSessions}
         terminals={terminals}
+        focusedItemId={paletteOpen ? focusedItemId(route, sessions) : null}
+        onJuniorPage={route.page === 'junior'}
         onClose={() => setPaletteOpen(false)}
         onNavigate={navigate}
         onNewSession={newSession}

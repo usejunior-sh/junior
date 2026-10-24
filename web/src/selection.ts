@@ -13,3 +13,18 @@ export function setSelectedItem(id: string | null): void {
 export function selectedItem(): string | null {
   return current
 }
+
+/**
+ * The item in focus, for anything that wants to say "this one": the item
+ * page's item, else the open chat's item, else the keyboard cursor's. Used by
+ * the friction capture (⌘⇧.) and the palette's "This item" group (⌘K).
+ */
+export function focusedItemId(
+  route: { page: string; id?: string | null },
+  sessions: readonly { id: string; itemId?: string | null }[],
+  cursor: string | null = selectedItem(),
+): string | null {
+  if (route.page === 'item') return route.id ?? null
+  if (route.page === 'session') return sessions.find((s) => s.id === route.id)?.itemId ?? null
+  return cursor
+}

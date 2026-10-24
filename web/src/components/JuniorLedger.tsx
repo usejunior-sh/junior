@@ -8,7 +8,8 @@
  * Context, what Junior says and the actions aligned to the row's columns.
  * Many can be open; Esc closes all. J/K move, ⏎ acts on an open row only,
  * S snoozes, D marks done, O opens the item, W opens the reason chip (the
- * score as a sum, and corrections: ReasonChip.tsx). On Needs you, N marks an open
+ * score as a sum, and corrections: ReasonChip.tsx), H hands off, P pauses or
+ * resumes, X says not this one (the ⌘K palette's verbs, itemVerbs.ts). On Needs you, N marks an open
  * item row "not useful": it leaves until something new happens on it, and a
  * one-line notice holds its slot for 5 s with Undo (U).
  *
@@ -38,6 +39,7 @@ import { ReasonChip } from './ReasonChip.js'
 import { isAdjusted } from '../../../core/work/corrections.js'
 import { TurnOnButton, WatchCap } from './WatchOff.js'
 import { setSelectedItem } from '../selection.js'
+import { handOffOf, pauseOf } from '../itemVerbs.js'
 
 type Nav = { onNavigate: (hash: string) => void }
 
@@ -503,6 +505,21 @@ export function JuniorLedger({ tab, items, rows, needs, me, empty, moves, onNavi
       if (e.key === 'w' && line.item.rankParts?.length) {
         e.preventDefault()
         return setWhyOpen(line.key)
+      }
+      // the palette's verbs, as keys (itemVerbs.ts): a key whose verb doesn't apply does nothing
+      if (e.key === 'h') {
+        const h = handOffOf(line.item)
+        if (h) act('start', line.item.id, h.playbook)
+        return
+      }
+      if (e.key === 'p') {
+        const p = pauseOf(line.item)
+        if (p) act(p, line.item.id)
+        return
+      }
+      if (e.key === 'x') {
+        if (line.item.suggestion) act('not-now', line.item.id)
+        return
       }
     }
     document.addEventListener('keydown', onKey)

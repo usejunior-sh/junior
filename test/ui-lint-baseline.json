@@ -1,9 +1,6 @@
 {
   "_note": "Per-file counts from test/ui-lint.test.ts. They may only go down; never raise one to make a test pass.",
   "files": {
-    "web/src/components/CommandPalette.tsx": {
-      "nativeDialogs": 1
-    },
     "web/src/components/ContextPanel.tsx": {
       "nativeDialogs": 1
     },

@@ -129,5 +129,5 @@ export async function undoNotUseful(item: ScoredItem, marking?: Promise<string |
   return postNotUseful(item.id, true)
 }
 
-/** The verb on a suggestion's button. */
-export const VERB: Record<string, string> = { babysit: 'Babysit', review: 'First pass', answer: 'Hand off', 'debug-fix': 'Hand off', investigate: 'Hand off' }
+/** The verb on a suggestion's button (itemVerbs.ts, store-free). */
+export { VERB } from './itemVerbs.js'
