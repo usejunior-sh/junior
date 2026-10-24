@@ -1,7 +1,14 @@
 import path from 'node:path'
 import { type ClientMessage, type EffortLevel, type ImageAttachment, isEffortLevel, isImageMediaType, isMentionKind, isProviderId, isSessionMode, MAX_IMAGE_BYTES, MAX_IMAGES_PER_MESSAGE, MAX_MENTIONS_PER_MESSAGE, type Mention, type QuestionAnswers } from '../../shared/protocol.js'
+import { clampPageLimit } from '../../core/store/event-page.js'
 
 const effort = (v: unknown): EffortLevel | undefined => (isEffortLevel(v) ? v : undefined)
+
+/** A page size off the socket: a finite number, clamped to 1..MAX_PAGE_LIMIT; anything else is the store's default. */
+const pageLimit = (v: unknown): number | undefined => (typeof v === 'number' && Number.isFinite(v) ? clampPageLimit(v) : undefined)
+
+/** A seq to page back from: a whole number, at least 1 (the log's first seq). */
+const seqCursor = (v: unknown): number | undefined => (typeof v === 'number' && Number.isSafeInteger(v) && v >= 1 ? v : undefined)
 
 
 /**
@@ -129,8 +136,19 @@ export function parseClientMessage(raw: unknown): ClientMessage | null {
         : null
     case 'delete_session':
       return typeof m.sessionId === 'string' ? { type: 'delete_session', sessionId: m.sessionId } : null
-    case 'subscribe':
-      return typeof m.sessionId === 'string' ? { type: 'subscribe', sessionId: m.sessionId } : null
+    case 'subscribe': {
+      if (typeof m.sessionId !== 'string') return null
+      // Only an exact true pages: a junk flag gets the whole log, as before.
+      if (m.paged !== true) return { type: 'subscribe', sessionId: m.sessionId }
+      const limit = pageLimit(m.limit)
+      return { type: 'subscribe', sessionId: m.sessionId, paged: true, ...(limit !== undefined ? { limit } : {}) }
+    }
+    case 'session_events_before': {
+      const beforeSeq = seqCursor(m.beforeSeq)
+      if (typeof m.sessionId !== 'string' || beforeSeq === undefined) return null
+      const limit = pageLimit(m.limit)
+      return { type: 'session_events_before', sessionId: m.sessionId, beforeSeq, ...(limit !== undefined ? { limit } : {}) }
+    }
     case 'user_message':
       return typeof m.sessionId === 'string'
         ? {

@@ -18,6 +18,7 @@ import { wireWorkspaces } from '../workspace/wiring.js'
 import { registry } from '../workspace/runtime.js'
 import { checkoutList, mainCheckout, makeWorktree } from '../session/checkouts.js'
 import { parseClientMessage } from './parse.js'
+import { replaySession } from './history.js'
 import { renameCommand } from '../../core/sessions/names.js'
 import { setSessionNameOp } from '../session/spawn-ops.js'
 import { createSession, defaultProject, deleteSession, getOrRevive, projectForSession } from '../session/sessions.js'
@@ -212,20 +213,9 @@ export function handleConnection(ws: WebSocket, req: http.IncomingMessage): void
           await deleteSession(rt, msg.sessionId)
           break
         }
-        case 'subscribe': {
-          if (!rt.rows.has(msg.sessionId)) {
-            // a dry run streams under an ephemeral id; its transcript lives in memory
-            const pv = rt.previews.get(msg.sessionId)
-            if (pv) send(ws, { type: 'history', sessionId: msg.sessionId, events: pv.events })
-            break
-          }
-          const events = await rt.store.events.read(msg.sessionId)
-          send(ws, {
-            type: 'history',
-            sessionId: msg.sessionId,
-            events: events.map((e) => e.event),
-            times: events.map((e) => e.createdAt),
-          })
+        case 'subscribe':
+        case 'session_events_before': {
+          await replaySession(rt, ws, msg)
           break
         }
         case 'user_message': {

@@ -177,7 +177,14 @@ export type ClientMessage =
   | { type: 'set_pinned'; sessionId: string; pinned: boolean }
   /** Delete a session and its transcript. Irreversible: the UI confirms. */
   | { type: 'delete_session'; sessionId: string }
-  | { type: 'subscribe'; sessionId: string }
+  /**
+   * Replay a session's log, then stream. `paged`: send only the newest page
+   * (`limit` events at most, cut on a turn) with `hasEarlier`; older pages come
+   * from session_events_before. Without it the whole log is sent, as before.
+   */
+  | { type: 'subscribe'; sessionId: string; paged?: boolean; limit?: number }
+  /** The page of a session's log just before `beforeSeq`: answered by session_events_page. */
+  | { type: 'session_events_before'; sessionId: string; beforeSeq: number; limit?: number }
   | { type: 'user_message'; sessionId: string; text: string; images?: ImageAttachment[]; files?: string[]; mentions?: Mention[]; mode?: 'goal' }
   | {
       type: 'permission_response'
@@ -229,7 +236,32 @@ export type ServerMessage =
    * `times[i]` is when `events[i]` was stored (ms epoch), so the transcript can
    * say how long a run of tool calls took. Absent for an in-memory dry run.
    */
-  | { type: 'history'; sessionId: string; events: SessionEvent[]; times?: number[] }
+  | {
+      type: 'history'
+      sessionId: string
+      events: SessionEvent[]
+      times?: number[]
+      /**
+       * Set only for a paged subscribe. `hasEarlier`: older events exist;
+       * `firstSeq`: the seq of `events[0]`, the `beforeSeq` that asks for them.
+       */
+      hasEarlier?: boolean
+      firstSeq?: number
+    }
+  /**
+   * One older page of a session's log, oldest first, answering
+   * session_events_before. `beforeSeq` echoes the request, so a stale answer
+   * can be told apart. An unknown session gets an empty page.
+   */
+  | {
+      type: 'session_events_page'
+      sessionId: string
+      beforeSeq: number
+      events: SessionEvent[]
+      times: number[]
+      hasEarlier: boolean
+      firstSeq?: number
+    }
   /** `at` is when the server saw the event (ms epoch). */
   | { type: 'session_event'; sessionId: string; event: SessionEvent; at?: number }
   | { type: 'terminals'; terminals: TerminalSummary[] }
