@@ -23,6 +23,17 @@ import type { MainRedCheck } from '../../core/work/handoff.js'
 export const BABYSIT_WATCH_KEY = 'babysit.watch'
 export type BabysitWatchState = { nextPollAt: number; prs: Record<string, BabysitWatch> }
 
+/**
+ * Junior handed in a babysit task (it pushed): read the PR on the next minute
+ * tick, not up to 5 minutes later, so the hand-back gate (core/babysit/ready.ts)
+ * is about the new head soon. A tick writing at the same moment wins; the
+ * next one is at most 5 minutes off, as before.
+ */
+export async function pollBabysitSoon(store: Store): Promise<void> {
+  const state = await store.config.get<BabysitWatchState>(BABYSIT_WATCH_KEY)
+  if (state && state.nextPollAt > 0) await store.config.set(BABYSIT_WATCH_KEY, { ...state, nextPollAt: 0 } satisfies BabysitWatchState)
+}
+
 /** The reads and the one write, through `gh`. Injected so tests run without GitHub. */
 export interface BabysitSource {
   login(): Promise<string>
@@ -83,7 +94,11 @@ export async function babysitTickOp(d: BabysitDeps, now: number, force = false):
   }
 
   const busy = (await d.store.tasks.inState(['queued', 'running'])).length > 0
-  await d.store.config.set(BABYSIT_WATCH_KEY, { nextPollAt: now + (pollSoon(found.map((f) => f.pr), busy) ? BABYSIT_FAST_MS : BABYSIT_SLOW_MS), prs } satisfies BabysitWatchState)
+  const moved = found.some(({ item, pr }) => {
+    const was = state.prs[item.id]?.headSha
+    return !!was && was !== pr.headSha
+  })
+  await d.store.config.set(BABYSIT_WATCH_KEY, { nextPollAt: now + (pollSoon(found.map((f) => f.pr), busy, moved) ? BABYSIT_FAST_MS : BABYSIT_SLOW_MS), prs } satisfies BabysitWatchState)
   if (out.added || out.reruns || out.stopped) d.log('info', `babysit: ${out.polled} PRs, ${out.added} tasks added, ${out.reruns} reruns, ${out.stopped} stopped`)
   return out
 }

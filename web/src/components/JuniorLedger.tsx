@@ -20,6 +20,7 @@ import type { HandoffReadiness, NeedsRow, RowMove, ScoredItem, WatchId } from '.
 import { enterVerb, rowLabel, rowMove, type RowLine } from '../../../core/junior/row-move.js'
 import { needsMoveText } from '../../../core/junior/needs.js'
 import { isMainRed, MAIN_RED_SAYS, mainRedEvidence } from '../../../core/junior/main-red.js'
+import { handBackLine } from '../../../core/babysit/ready.js'
 import { ageHot, cantWatchOf, juniorState, LEDGER_GROUP_TITLE, ledgerGroup, ledgerProgress, ledgerRows, NOT_USEFUL_HOLD_MAX_MS, NOT_USEFUL_NOTICE_MS, watchOffOf, type LedgerGroup, type LedgerTab } from '../../../core/junior/ledger.js'
 import { TURN_ON_LABEL, WATCH_CANT_SAYS, WATCH_OFF_SAYS, WATCH_STILL_OFF, withAnswer } from '../../../core/junior/watch-off.js'
 import { itemHash } from '../hooks.js'
@@ -163,6 +164,9 @@ function juniorSays(i: ScoredItem): string {
   if (r?.state === 'queued') return 'Queued for a first pass.'
   if (r?.state === 'failed') return 'I got stuck on the first pass. Open it to see why.'
   if (r?.line) return r.line
+  // nothing under way: ready only when the gate passes, else what's left (core/babysit/ready.ts)
+  const back = handBackLine(i)
+  if (back) return `${back}.`
   if (i.tasks?.line) return i.tasks.line
   if (i.junior?.stage === 'watching') return i.reason === 'your-pr' ? 'Babysitting. Nothing to do right now.' : 'Watching for changes.'
   if (i.junior?.stage === 'handed-in') return i.tasks?.lastDone ?? 'Done for now.'

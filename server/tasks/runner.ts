@@ -39,7 +39,7 @@ import {
   SEND_REPLY_STEP,
 } from '../../core/playbooks/item.js'
 import type { Checkout, Project } from '../../shared/protocol.js'
-import { BABYSIT_WATCH_KEY, type BabysitWatchState } from '../babysit/watch.js'
+import { BABYSIT_WATCH_KEY, pollBabysitSoon, type BabysitWatchState } from '../babysit/watch.js'
 import { REVIEW_WATCH_KEY, type ReviewWatchState } from '../review/watch.js'
 import { createArtifactOp } from '../artifacts-ops.js'
 import { babysitSettings, ghBabysitSource, onBabysitTick, onTaskAdded } from '../babysit/glue.js'
@@ -460,6 +460,9 @@ async function addDecisions(rt: WorkspaceRuntime, itemId: string, taskId: string
   for (const text of decisions ?? []) await rt.store.items.addDecision(itemId, { at, by: 'junior', text, taskId })
 }
 
+/** The babysit playbook's steps that push to the PR. */
+const BABYSIT_STEPS: ReadonlySet<string> = new Set(['fix-ci', 'fix-thread', 'rebase'])
+
 /** Babysit's tasks and the fix: done (what changed, the commit) or blocked (the question). */
 function submitTaskTool(rt: WorkspaceRuntime, sessionId: string) {
   return tool(
@@ -476,8 +479,12 @@ function submitTaskTool(rt: WorkspaceRuntime, sessionId: string) {
       if ('error' in got) return errResult(got.error)
       const { run, t } = got
       await addDecisions(rt, run.itemId, t.id, a.decisions)
-      if (a.outcome === 'done') await finish(rt, t.id, 'done', { output: { summary: a.summary, ...(a.sha ? { sha: a.sha } : {}) } })
-      else await finish(rt, t.id, 'waiting', { error: a.summary })
+      if (a.outcome === 'done') {
+        await finish(rt, t.id, 'done', { output: { summary: a.summary, ...(a.sha ? { sha: a.sha } : {}) } })
+        // A babysit fix pushed: the PR is handed back as ready only once the gate passes on
+        // the new head (core/babysit/ready.ts), so read it again soon. Until then it stays with Junior.
+        if (t.step && BABYSIT_STEPS.has(t.step)) fireAndLog(rt, 'tasks', pollBabysitSoon(rt.store))
+      } else await finish(rt, t.id, 'waiting', { error: a.summary })
       return okResult('Handed in. End your turn now.')
     },
   )

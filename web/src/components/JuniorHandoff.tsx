@@ -22,6 +22,7 @@ import type { Verdict } from '../../../core/review/brief.js'
 import { bySuggestion, STARTS, SUGGEST_SHOWN, type Suggestion } from '../../../core/junior/suggest.js'
 import { sectionOf } from '../../../core/junior/sections.js'
 import { watchOffOf } from '../../../core/junior/ledger.js'
+import { handBackLine } from '../../../core/babysit/ready.js'
 import { PIPELINE_STEPS, type Pipeline } from '../../../core/work/handoff.js'
 import { itemHash } from '../hooks.js'
 import { sendHandoff, snoozeItem, VERB, type HandoffVerb } from '../handoff.js'
@@ -503,7 +504,7 @@ function watchLine(i: ScoredItem): string {
   const off = watchOffOf(i)
   if (off) return off === 'babysit' ? 'Babysitting is off' : 'Reviews are off'
   const w = i.junior!
-  return i.tasks?.line ?? (w.stage === 'watching' ? (i.reason === 'your-pr' ? 'Babysitting · nothing to do' : 'Waiting on a request') : '—')
+  return handBackLine(i) ?? i.tasks?.line ?? (w.stage === 'watching' ? (i.reason === 'your-pr' ? 'Babysitting · nothing to do' : 'Waiting on a request') : '—')
 }
 
 const PLAYBOOK_WORD: Record<string, string> = { babysit: 'babysitting', review: 'first pass', answer: 'drafting a reply', 'debug-fix': 'debug and fix', investigate: 'investigating' }
