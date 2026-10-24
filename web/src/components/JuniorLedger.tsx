@@ -23,7 +23,7 @@
  */
 import { ChevronRight, ExternalLink, X } from 'lucide-react'
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import type { HandoffReadiness, NeedsRow, NudgeMark, RowMove, ScoredItem, WatchId } from '../../../shared/protocol.js'
+import type { DepBatchView, HandoffReadiness, NeedsRow, NudgeMark, RowMove, ScoredItem, WatchId } from '../../../shared/protocol.js'
 import type { ItemTask } from '../../../core/work/tasks.js'
 import { nudgeInputOf } from '../../../core/work/nudge-suggest.js'
 import { NUDGE_ASK, nudgeDone, nudgeDraftFailed, nudgeSays, nudgeWaited, nudgeWay, type NudgeWay } from '../../../core/work/nudge-view.js'
@@ -51,6 +51,7 @@ import { filesPart, filesShort, sendsPart, sendsShort, supervisionLine } from '.
 import { TurnOnButton, WatchCap } from './WatchOff.js'
 import { setSelectedItem } from '../selection.js'
 import { handOffOf, pauseOf } from '../itemVerbs.js'
+import { DepBatchLine } from './DepBatchLine.js'
 
 type Nav = { onNavigate: (hash: string) => void }
 
@@ -67,8 +68,15 @@ const GONE_OUT_MS = 120
  */
 type Gone = { item: ScoredItem; at: number; wasOpen: boolean; leaving: boolean; markedAt: number; marking: Promise<string | null> }
 
-/** One line of the ledger: an inbox item, or something Junior is held on (a blocked session, a plan, sends). */
-type Line = { key: string; group: LedgerGroup; item: ScoredItem; move: RowLine | null; need?: undefined } | { key: string; group: LedgerGroup; need: NeedsRow; item?: undefined; move?: undefined }
+/**
+ * One line of the ledger: an inbox item, something Junior is held on (a
+ * blocked session, a plan, sends), or the dependency batch (DepBatchLine,
+ * last on Needs you: a suggestion, nothing queued until you press Merge).
+ */
+type Line =
+  | { key: string; group: LedgerGroup; item: ScoredItem; move: RowLine | null; need?: undefined; batch?: undefined }
+  | { key: string; group: LedgerGroup; need: NeedsRow; item?: undefined; move?: undefined; batch?: undefined }
+  | { key: string; group: LedgerGroup; batch: DepBatchView; item?: undefined; move?: undefined; need?: undefined }
 
 const initials = (name: string) =>
   name
@@ -303,9 +311,11 @@ type Props = Nav & {
   nudges?: Readonly<Record<string, NudgeMark>>
   /** a nudge went out: reload the day, so its mark leaves */
   onNudged?: () => void
+  /** Needs you only: green dependency PRs as one suggested row, last; their own rows step aside */
+  depBatch?: DepBatchView | null
 }
 
-export function JuniorLedger({ tab, items, rows, needs, me, empty, moves, nudges, onNudged, onNavigate }: Props) {
+export function JuniorLedger({ tab, items, rows, needs, me, empty, moves, nudges, onNudged, depBatch, onNavigate }: Props) {
   const listRef = useRef<HTMLDivElement>(null)
   // the Turn on button leaves once its row is ready: give focus to the row itself, unless it went elsewhere
   const focusRow = (id: string) =>
@@ -319,13 +329,20 @@ export function JuniorLedger({ tab, items, rows, needs, me, empty, moves, nudges
   const [gone, setGone] = useState<Gone | null>(null)
   // the three tabs keep a quieted row on Needs you (last): it stays off the list while its notice shows
   const hiding = rows && gone ? gone.item.id : null
+  // "Not now" on the dependency batch: gone at once, the server keeps it hidden from the next reload
+  const [batchHidden, setBatchHidden] = useState<string | null>(null)
+  const batch = tab === 'needs' && depBatch && depBatch.key !== batchHidden ? depBatch : null
+  const batchEnter = useRef<(() => void) | null>(null)
   const lines = useMemo<Line[]>(() => {
     const out: Line[] = tab === 'needs' ? needs.map((n) => ({ key: `need:${n.key}`, group: 'waiting' as const, need: n })) : []
     const now = Date.now()
-    const picked = rows ? rows.filter((i) => i.id !== hiding).map((i) => withAnswer(i, answered)) : ledgerRows(items.map((i) => withAnswer(i, answered)), tab)
+    // six PR rows become one: a PR in the batch shows only inside it
+    const inBatch = new Set(batch?.prs.map((p) => p.url) ?? [])
+    const picked = (rows ? rows.filter((i) => i.id !== hiding).map((i) => withAnswer(i, answered)) : ledgerRows(items.map((i) => withAnswer(i, answered)), tab)).filter((i) => !inBatch.has(i.url))
     for (const i of picked) out.push({ key: i.id, group: ledgerGroup(i), item: i, move: rowMove(i, moves?.[i.id], now) })
+    if (batch) out.push({ key: `deps:${batch.key}`, group: 'waiting', batch })
     return out
-  }, [items, rows, hiding, needs, tab, answered, moves])
+  }, [items, rows, hiding, needs, tab, answered, moves, batch])
   // Up next folds its long FYI tail into a link to the inbox.
   const fyiAll = tab === 'up' ? lines.filter((l) => l.group === 'fyi').length : 0
   const firstFyi = lines.findIndex((l) => l.group === 'fyi')
@@ -556,6 +573,7 @@ export function JuniorLedger({ tab, items, rows, needs, me, empty, moves, nudges
       if (e.key === 'Enter') {
         e.preventDefault()
         if (line.need) return goNeed(line.need)
+        if (line.batch) return batchEnter.current?.()
         // a due nudge: ⏎ drafts it (never sends); with the draft open, ⏎ goes to its box
         const nr = nudgeRow(line.item)
         if (nr?.ui?.phase === 'open') return focusNudge(line.item.id)
@@ -650,6 +668,20 @@ export function JuniorLedger({ tab, items, rows, needs, me, empty, moves, nudges
           <Fragment key={line.key}>
             {n === noticeAt && goneLine}
             {head}
+            {line.batch ? (
+              <DepBatchLine
+                className={`jhItem jdbItem${isOpen ? ' open' : ''}${focus ? ' focus' : ''}`}
+                dataKey={line.key}
+                batch={line.batch}
+                open={isOpen}
+                onToggle={click}
+                onHide={() => {
+                  setBatchHidden(line.batch.key)
+                  setSaid('Hidden for a day, or until a new update joins.')
+                }}
+                enterRef={batchEnter}
+              />
+            ) : (
             <div className={`jhItem${isOpen ? ' open' : ''}${focus ? ' focus' : ''}`} data-key={line.key}>
               {line.need ? (
                 <NeedLine need={line.need} open={isOpen} onClick={click} onGo={() => goNeed(line.need)} />
@@ -679,6 +711,7 @@ export function JuniorLedger({ tab, items, rows, needs, me, empty, moves, nudges
                 />
               )}
             </div>
+            )}
           </Fragment>
         )
       })}

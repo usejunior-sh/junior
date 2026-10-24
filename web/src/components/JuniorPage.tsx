@@ -380,6 +380,8 @@ export function JuniorPage({ onNavigate, onDispatch, onCreate, createError, crea
                         moves={day?.moves}
                         nudges={day?.nudges}
                         onNudged={reload}
+                        // a suggestion, not a held send: hidden under a filter and in focus, like the held rows
+                        depBatch={filter || focus ? null : day?.depBatch}
                         me={me}
                         empty={
                           filter ? (
@@ -412,6 +414,7 @@ export function JuniorPage({ onNavigate, onDispatch, onCreate, createError, crea
                         moves={day?.moves}
                         nudges={day?.nudges}
                         onNudged={reload}
+                        depBatch={focus ? null : day?.depBatch}
                         me={me}
                         empty={id === 'needs' && focus ? focusWords(focus.until, held).empty : EMPTY[id as LedgerTab]}
                         onNavigate={onNavigate}
