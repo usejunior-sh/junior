@@ -11,6 +11,7 @@ import { broadcast, broadcastSessionList } from '../ws/send.js'
 import { expandHome } from '../folders.js'
 import { checkoutById, mainCheckout, syncCheckouts } from './checkouts.js'
 import { LiveSession } from './live-session.js'
+import { chatPermissionMode } from '../../core/actions/policy.js'
 import { extrasFor } from '../brief-run.js'
 
 export async function deleteSession(rt: WorkspaceRuntime, sessionId: string): Promise<void> {
@@ -129,7 +130,7 @@ export async function getOrRevive(rt: WorkspaceRuntime, sessionId: string): Prom
   const fresh = rt.freshNext.delete(sessionId)
   const existing = rt.live.get(sessionId)
   if (existing && !fresh) return existing
-  const row = rt.rows.get(sessionId)
+  let row = rt.rows.get(sessionId)
   if (!row) return null
   // A worktree removed under a session leaves it no folder to start in. Say so in its
   // transcript rather than let the agent fail to launch with an error about something else.
@@ -146,6 +147,7 @@ export async function getOrRevive(rt: WorkspaceRuntime, sessionId: string): Prom
     return null
   }
   if (existing) existing.stop()
+  row = await chatAfterTask(rt, row)
   // A session on a closed run boot left as a summary: load the run, so its role fence and tools come back with it.
   await ensureSessionTeamRun(rt, row.id)
   const lastSeq = await rt.store.events.lastSeq(row.id)
@@ -164,6 +166,22 @@ export async function getOrRevive(rt: WorkspaceRuntime, sessionId: string): Prom
  * Boot: load stored sessions, and expire permission prompts orphaned by the
  * previous process (their subprocess died with it, Allow can never apply).
  */
+/**
+ * A task session whose task is over (handed in, failed, stopped, or the daemon
+ * restarted under it) is a chat now: the user talks to it, so it runs at the
+ * chat's mode, not the headless 'gated' it was made with, where every local
+ * edit would ask.
+ */
+export async function chatAfterTask(rt: WorkspaceRuntime, row: StoredSession): Promise<StoredSession> {
+  if (row.kind !== 'task' || rt.taskRuns.has(row.id) || row.permissionMode !== 'gated') return row
+  const mode = chatPermissionMode(row.provider)
+  if (mode === 'gated') return row
+  await rt.store.sessions.setPermissionMode(row.id, mode)
+  const next = { ...row, permissionMode: mode }
+  rt.rows.set(row.id, next)
+  return next
+}
+
 export async function loadSessions(rt: WorkspaceRuntime) {
   for (const row of await rt.store.sessions.list()) {
     rt.rows.set(row.id, row)
