@@ -6,7 +6,8 @@
 export type { Persona, Voice } from '../../core/junior/persona.js'
 export type { Mood } from '../../core/junior/mood.js'
 export type { Blocking, BriefFacts, BriefRef, BriefTarget, Finished, Segment } from '../../core/junior/brief.js'
-export type { NeedsRow, NeedsTarget } from '../../core/junior/needs.js'
+export type { NeedsMove, NeedsRow, NeedsTarget } from '../../core/junior/needs.js'
+export type { RowMove } from '../../core/junior/row-move.js'
 export type { AddedBy, Owner, PlanRow, PlanStatus, PlanView, TodayEntry } from '../../core/junior/today.js'
 export type { CanDoFill, Offer } from '../../core/junior/offers.js'
 export type { MorningBrief, MorningRow } from '../../core/junior/morning.js'
@@ -61,6 +62,12 @@ export type JuniorDay = {
   firstOpen: boolean
   now: JuniorNow
   needs: import('../../core/junior/needs.js').NeedsRow[]
+  /**
+   * The next move on each open item, by id (core/junior/row-move.ts): what the
+   * Ledger row leads with. Made with what only the server knows (a chat on a
+   * prompt, sends held for the item); a row whose item moved on makes its own.
+   */
+  moves: Record<string, import('../../core/junior/row-move.js').RowMove>
   facts: import('../../core/junior/brief.js').BriefFacts
   plan: import('../../core/junior/today.js').PlanView
   /** what Junior can see on this Mac: the sidebar's "Can see", and the first open's list */

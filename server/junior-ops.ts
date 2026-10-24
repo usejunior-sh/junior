@@ -6,6 +6,7 @@ import { type AddedBy, carryOver, dayKey, draftPlan, isOwner, matchItem, type Ow
 import { type NowCandidate, pickNow, todoProgress, type TodoProgress } from '../core/junior/now.js'
 import { startOfDay } from '../core/work/due.js'
 import { needsRows, type SendsSource, type TeamSource } from '../core/junior/needs.js'
+import { servedMoves } from '../core/junior/row-move.js'
 import { briefFacts, type FactRun } from '../core/junior/facts.js'
 import { canDoFill, firstOffers, type OfferItem } from '../core/junior/offers.js'
 import { RESERVED_SERVER } from '../core/job/tools.js'
@@ -296,8 +297,10 @@ export async function juniorDayOp(rt: WorkspaceRuntime, q: { since: number; away
     })
   }
   const sends = new Map<string, SendsSource>()
+  const heldFor = new Map<string, number>()
   for (const v of await actionViews(rt, await rt.store.actions.list({ status: ['needs_you'], limit: 500 }))) {
     if (v.hidden) continue
+    if (v.itemId) heldFor.set(v.itemId, (heldFor.get(v.itemId) ?? 0) + 1)
     const at = v.queue?.queuedAt ?? v.attemptedAt
     const s = sends.get(v.sessionId) ?? { sessionId: v.sessionId, origin: sendOrigin(v), titles: [], at }
     s.titles.push(v.title)
@@ -305,6 +308,11 @@ export async function juniorDayOp(rt: WorkspaceRuntime, q: { since: number; away
     sends.set(v.sessionId, s)
   }
   const needs = needsRows({ blocked, teams, sends: [...sends.values()] }, now)
+
+  // Each row's next move, with what the item can't say itself: a chat on a prompt, sends held for it.
+  const blockedFor = new Set<string>()
+  for (const [sessionId, itemId] of rt.sessionItem) if (rt.live.get(sessionId)?.waiting) blockedFor.add(itemId)
+  const moves = servedMoves(items, (id) => (blockedFor.has(id) || heldFor.has(id) ? { blocked: blockedFor.has(id), heldSends: heldFor.get(id) ?? 0 } : undefined), now)
 
   // The brief's facts.
   const runs: FactRun[] = rows
@@ -371,6 +379,7 @@ export async function juniorDayOp(rt: WorkspaceRuntime, q: { since: number; away
     firstOpen,
     now: pickNow(running),
     needs,
+    moves,
     facts,
     plan,
     seen,
