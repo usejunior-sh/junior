@@ -23,6 +23,25 @@ export type PrSeen = {
   people: number
   rebase: 'conflict' | 'behind' | null
   draft: boolean
+  /**
+   * Red checks that failed on the default branch too (core/babysit/ci-sort.ts),
+   * as the last poll sorted them: Junior adds no fix for these. Set only on a
+   * PR you handed off, and rebuilt every poll, so it can't outlive main going green.
+   */
+  mainRed?: MainRedCheck[]
+}
+
+/** One check red on main too, and where main's run is. */
+export type MainRedCheck = { check: string; url: string | null; sha: string | null; at: string | null }
+
+/**
+ * Every red check on the PR is red on main too: nothing here is the PR's to
+ * fix. One main-red check beside a real failure isn't: Junior fixes the real one.
+ */
+export function mainRedOnly(seen: Pick<PrSeen, 'red' | 'mainRed'> | undefined): boolean {
+  if (!seen || seen.red.length === 0 || !seen.mainRed?.length) return false
+  const onMain = new Set(seen.mainRed.map((m) => m.check))
+  return seen.red.every((c) => onMain.has(c))
 }
 
 /** Steps a PR's watch adds for Junior: they run only on a PR you handed off. */

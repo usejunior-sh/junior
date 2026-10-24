@@ -16,6 +16,8 @@ import type { ItemTask } from '../../core/work/tasks.js'
 import type { PrCheck } from '../../core/goals/shepherd.js'
 import { babysitSearch, BABYSIT_QUERY, parseBabysit, type BabysitPr } from '../../core/babysit/pr.js'
 import { afterDecision, BABYSIT_FAST_MS, BABYSIT_SLOW_MS, babysitEvents, decide, newBabysitWatch, pollSoon, seenOf, type BabysitWatch } from '../../core/babysit/watch.js'
+import { classify, type MainRun } from '../../core/babysit/ci-sort.js'
+import type { MainRedCheck } from '../../core/work/handoff.js'
 
 /** The watch's memory, one JSON blob in config: the next poll and each PR's watch, by item id. */
 export const BABYSIT_WATCH_KEY = 'babysit.watch'
@@ -27,6 +29,8 @@ export interface BabysitSource {
   /** BABYSIT_QUERY's raw answer */
   search(q: string, first: number): Promise<unknown>
   failedLog(repo: string, check: PrCheck): Promise<string>
+  /** the check runs on the head of `branch` (the repo's default branch), for "red on main too" */
+  mainRuns(repo: string, branch: string): Promise<MainRun[]>
   rerun(repo: string, check: PrCheck): Promise<void>
 }
 
@@ -56,6 +60,7 @@ export async function babysitTickOp(d: BabysitDeps, now: number, force = false):
   const found = parseBabysit(await d.source.search(q, clientFilter ? 50 : 30), repos, now)
   const out = { polled: found.length, added: 0, reruns: 0, stopped: 0 }
   const prs: Record<string, BabysitWatch> = {}
+  const main = mainRunsCache(d)
 
   for (const { item, pr } of found) {
     await d.upsertItem(item)
@@ -63,7 +68,7 @@ export async function babysitTickOp(d: BabysitDeps, now: number, force = false):
     if (stored && !stored.playbook) await d.store.items.setFields(item.id, { playbook: 'babysit' })
     let w: BabysitWatch = { ...(state.prs[item.id] ?? newBabysitWatch()), headSha: pr.headSha, headRef: pr.headRef, baseRef: pr.baseRef, seen: seenOf(pr) }
     // Read, not worked: only a PR you handed off gets tasks.
-    if (stored?.handoff === 'on') w = await actOn(d, item.id, pr, w, out, now)
+    if (stored?.handoff === 'on') w = await actOn(d, item.id, pr, w, out, now, main, state.prs[item.id]?.seen?.mainRed)
     prs[item.id] = w
   }
 
@@ -83,18 +88,70 @@ export async function babysitTickOp(d: BabysitDeps, now: number, force = false):
   return out
 }
 
-/** One PR's events → tasks (or a rerun). Returns the watch with the caps counted. */
-async function actOn(d: BabysitDeps, itemId: string, pr: BabysitPr, w: BabysitWatch, out: NonNullable<BabysitTickResult>, now: number): Promise<BabysitWatch> {
+/** Main's check runs for a repo, read once per tick: null when they couldn't be read. */
+type MainRuns = (repo: string, branch: string | null) => Promise<MainRun[] | null>
+
+/**
+ * One read of a repo's default branch per tick, however many of its PRs are
+ * red. A failed read is kept as null, so it's tried once, logged once, and
+ * every check in that repo sorts as if main were unknown (never main-red).
+ */
+function mainRunsCache(d: BabysitDeps): MainRuns {
+  const cache = new Map<string, Promise<MainRun[] | null>>()
+  return (repo, branch) => {
+    if (!branch) return Promise.resolve(null)
+    const key = `${repo}@${branch}`
+    let p = cache.get(key)
+    if (!p) {
+      p = d.source.mainRuns(repo, branch).catch((err: unknown) => {
+        d.log('error', `babysit: couldn't read main's checks on ${repo}: ${err instanceof Error ? err.message : String(err)}`)
+        return null
+      })
+      cache.set(key, p)
+    }
+    return p
+  }
+}
+
+/**
+ * One PR's events → tasks (or a rerun). Returns the watch with the caps
+ * counted, and `seen.mainRed` set to the checks red on main too.
+ */
+async function actOn(
+  d: BabysitDeps,
+  itemId: string,
+  pr: BabysitPr,
+  w: BabysitWatch,
+  out: NonNullable<BabysitTickResult>,
+  now: number,
+  mainRuns: MainRuns,
+  wasMainRed: readonly MainRedCheck[] = [],
+): Promise<BabysitWatch> {
   const ctx = { base: pr.baseRef, isDraft: pr.isDraft, reviewer: null as string | null }
+  const mainRed: MainRedCheck[] = []
   for (const ev of babysitEvents(pr)) {
     if (ev.kind === 'green') ctx.reviewer = await d.reviewerFor(pr.repo).catch(() => null)
     let dec = decide(ev, w, ctx)
-    // Known already: no log fetched, nothing added.
+    // Known already: no main read, no log fetched, nothing added.
     if (dec.do === 'task' && (await d.store.tasks.byKey(itemId, dec.task.key))) continue
-    // A new failure may be a flake: read its log and decide again.
-    if (ev.kind === 'checks_failed' && dec.do === 'task' && !dec.stuck && ev.check.runId !== null) {
-      const log = await d.source.failedLog(pr.repo, ev.check).catch(() => '')
-      dec = decide(ev, w, { ...ctx, log })
+    // A new failure: sort it before spending anything on it. Red on main too is
+    // settled without its log; else the log says whether it's a flake.
+    if (ev.kind === 'checks_failed' && dec.do !== 'none') {
+      const runs = await mainRuns(pr.repo, pr.defaultBranch)
+      let sort = classify(ev.check, runs, '', [])
+      let log = ''
+      // the log only where it can change the answer, as before: a fresh fix, on an Actions run
+      if (sort.verdict !== 'main-red' && dec.do === 'task' && !dec.stuck && ev.check.runId !== null) {
+        log = await d.source.failedLog(pr.repo, ev.check).catch(() => '')
+        // the PR's changed files aren't in the search yet: a flaky line that names one still reads as flaky
+        sort = classify(ev.check, runs, log, [])
+      }
+      dec = decide(ev, w, { ...ctx, log, sort })
+      if (sort.verdict === 'main-red') {
+        const e = sort.evidence
+        mainRed.push({ check: ev.check.name, url: e.url, sha: e.sha, at: e.completedAt })
+        if (!wasMainRed.some((m) => m.check === ev.check.name)) d.log('info', `babysit: ${ev.check.name} on ${pr.repo}#${pr.number} is red on main too, no task`)
+      }
     }
     if (dec.do === 'rerun') {
       try {
@@ -113,5 +170,5 @@ async function actOn(d: BabysitDeps, itemId: string, pr: BabysitPr, w: BabysitWa
     w = afterDecision(w, ev, dec)
     d.added(task, !!dec.stuck)
   }
-  return w
+  return mainRed.length && w.seen ? { ...w, seen: { ...w.seen, mainRed } } : w
 }

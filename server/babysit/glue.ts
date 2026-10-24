@@ -7,6 +7,7 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { BABYSIT_QUERY } from '../../core/babysit/pr.js'
+import { mainRunsFrom } from '../../core/babysit/ci-sort.js'
 import { learnedFresh, pickReviewer, REVIEWERS_KEY, REVIEWERS_QUERY, reviewersSearch, type LearnedReviewer } from '../../core/babysit/reviewer.js'
 import { BABYSIT_SETTINGS_KEY, babysitSettingsFrom, type BabysitSettings } from '../../core/babysit/settings.js'
 import { ghLogin } from '../../core/sources/github.js'
@@ -37,6 +38,8 @@ export const ghBabysitSource: BabysitSource = {
   login: ghLogin,
   search: async (q, first) => JSON.parse(await gh(['api', 'graphql', '-f', `query=${BABYSIT_QUERY(first)}`, '-f', `q=${q}`])),
   failedLog: async (repo, check) => (check.runId === null ? '' : gh(['run', 'view', String(check.runId), '-R', repo, '--log-failed'])),
+  // one page of 100 is enough: the sort only reads each check's latest completed run
+  mainRuns: async (repo, branch) => mainRunsFrom(JSON.parse(await gh(['api', `repos/${repo}/commits/${encodeURIComponent(branch)}/check-runs?per_page=100`]))),
   rerun: async (repo, check) => {
     if (check.runId === null) throw new Error(`${check.name} isn't an Actions run`)
     await gh(['run', 'rerun', String(check.runId), '-R', repo, '--failed'])

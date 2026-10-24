@@ -116,3 +116,21 @@ export function classify(check: Pick<PrCheck, 'name' | 'conclusion'>, defaultBra
   const why = touched.length > 0 ? `Fails in ${touched[0]}, changed in this PR` : up(main?.conclusion) === 'SUCCESS' ? 'Passes on main, fails here' : 'Fails on this PR'
   return { verdict: 'fix', why, evidence: { touched } }
 }
+
+/**
+ * `gh api repos/<repo>/commits/<branch>/check-runs` → the runs `classify`
+ * reads. Anything that isn't a named run is dropped; a shape it doesn't know
+ * gives no runs, which is "no main data", never main-red.
+ */
+export function mainRunsFrom(data: unknown): MainRun[] {
+  const runs = (data as { check_runs?: unknown } | null)?.check_runs
+  if (!Array.isArray(runs)) return []
+  const str = (v: unknown) => (typeof v === 'string' && v ? v : null)
+  const out: MainRun[] = []
+  for (const r of runs as Record<string, unknown>[]) {
+    const name = str(r?.name)
+    if (!name) continue
+    out.push({ name, status: str(r.status), conclusion: str(r.conclusion), url: str(r.html_url), sha: str(r.head_sha), completedAt: str(r.completed_at) })
+  }
+  return out
+}

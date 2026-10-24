@@ -2,7 +2,8 @@
  * The babysit playbook's watch: what's new on one of your PRs, and the task
  * it becomes (plan artifact f39a3a5e, "Babysit playbook").
  *
- *   CI red             → "Fix lint" (Junior); a check that looks flaky is rerun once first
+ *   CI red             → "Fix lint" (Junior); a check that looks flaky is rerun once first,
+ *                        and one red on main too adds nothing (ci-sort.ts: "not yours")
  *   bot thread         → "Fix Bugbot comment on api.ts" (Junior: fix, push, reply, resolve)
  *   person's thread    → "Answer Anirudha" (you)
  *   conflict / behind  → "Rebase on main" (Junior)
@@ -20,6 +21,7 @@ import { fingerprint, looksFlaky, type PrCheck, type PrThread } from '../goals/s
 import type { NewTask } from '../work/tasks.js'
 import type { PrSeen } from '../work/handoff.js'
 import type { BabysitPr } from './pr.js'
+import type { CiSort } from './ci-sort.js'
 
 export { MAX_FIX_ATTEMPTS }
 
@@ -121,6 +123,11 @@ export type DecideContext = {
   reviewer: string | null
   /** the failing check's log, for the flake test */
   log?: string
+  /**
+   * The failing check, sorted (ci-sort.ts): main-red adds nothing, flaky is
+   * rerun once, fix is fixed. Absent = not sorted, and the log's flake test decides.
+   */
+  sort?: CiSort
 }
 
 /** What one event becomes, with the caps applied. */
@@ -128,7 +135,9 @@ export function decide(ev: BabysitEvent, w: BabysitWatch, ctx: DecideContext): B
   switch (ev.kind) {
     case 'checks_failed': {
       const name = ev.check.name
-      const flaky = looksFlaky(ctx.log ?? '') || /^(TIMED_OUT|CANCELLED|STARTUP_FAILURE)$/.test(ev.check.conclusion ?? '')
+      // red on main too: not this PR's, so no fix, no rerun, nothing counted
+      if (ctx.sort?.verdict === 'main-red') return { do: 'none' }
+      const flaky = ctx.sort ? ctx.sort.verdict === 'flaky' : looksFlaky(ctx.log ?? '') || /^(TIMED_OUT|CANCELLED|STARTUP_FAILURE)$/.test(ev.check.conclusion ?? '')
       if (ev.check.runId !== null && flaky && !w.reruns.includes(`${name}@${ev.sha}`)) return { do: 'rerun', check: ev.check }
       const tries = w.fixes[name] ?? 0
       if (tries >= MAX_FIX_ATTEMPTS)

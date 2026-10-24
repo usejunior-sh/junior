@@ -3,7 +3,8 @@
  * one GraphQL search: the fields the inbox files the item with (core/sources/
  * github.ts toItem) plus what the watch needs, which is the head, checks on
  * it, review threads, mergeability, and whether a review was asked for. One
- * query a minute for all PRs, not one per PR.
+ * query a minute for all PRs, not one per PR. The repo's default branch
+ * rides along, so a red check can be compared with main's (ci-sort).
  *
  * Pure: the query text and the parse. The server runs `gh`.
  */
@@ -19,12 +20,14 @@ export type BabysitPr = PrSnapshot & {
   /** a review was asked for or given already: logins and team slugs */
   reviewers: string[]
   reviewed: boolean
+  /** the repo's default branch ("main"): CI red there too isn't this PR's (ci-sort); null when GitHub didn't say */
+  defaultBranch: string | null
 }
 
 export const BABYSIT_QUERY = (first: number) => `query($q: String!) {
   prs: search(query: $q, type: ISSUE, first: ${first}) { nodes { ... on PullRequest {
     __typename number title url isDraft createdAt updatedAt state
-    repository { nameWithOwner }
+    repository { nameWithOwner defaultBranchRef { name } }
     author { login }
     headRefOid headRefName baseRefName mergeable mergeStateStatus reviewDecision
     reviewRequests(first: 10) { nodes { requestedReviewer { __typename ... on User { login } ... on Team { slug } } } }
@@ -62,9 +65,17 @@ export function parseBabysit(data: unknown, repos: readonly string[], now: numbe
     const reviewers = ((n.reviewRequests?.nodes ?? []) as J[])
       .map((r) => r?.requestedReviewer?.login ?? r?.requestedReviewer?.slug)
       .filter((x): x is string => typeof x === 'string')
+    const main = n.repository.defaultBranchRef?.name
     out.push({
       item,
-      pr: { ...snap, isDraft: !!n.isDraft, behind: n.mergeStateStatus === 'BEHIND', reviewers, reviewed: (n.reviews?.totalCount ?? 0) > 0 },
+      pr: {
+        ...snap,
+        isDraft: !!n.isDraft,
+        behind: n.mergeStateStatus === 'BEHIND',
+        reviewers,
+        reviewed: (n.reviews?.totalCount ?? 0) > 0,
+        defaultBranch: typeof main === 'string' && main ? main : null,
+      },
     })
   }
   return out

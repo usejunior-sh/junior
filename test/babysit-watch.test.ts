@@ -7,6 +7,8 @@ import assert from 'node:assert/strict'
 import { babysitSearch, parseBabysit, type BabysitPr } from '../core/babysit/pr.js'
 import { afterDecision, babysitEvents, botName, decide, isStale, MAX_FIX_ATTEMPTS, newBabysitWatch, pollSoon, readyForReview, type BabysitEvent } from '../core/babysit/watch.js'
 import type { PrCheck, PrThread } from '../core/goals/shepherd.js'
+import { classify, mainRunsFrom, type MainRun } from '../core/babysit/ci-sort.js'
+import { mainRedOnly } from '../core/work/handoff.js'
 
 const NOW = Date.parse('2026-10-21T12:00:00Z')
 
@@ -19,7 +21,7 @@ const node = (over: Record<string, unknown> = {}) => ({
   createdAt: '2026-10-21T10:00:00Z',
   updatedAt: '2026-10-21T11:00:00Z',
   state: 'OPEN',
-  repository: { nameWithOwner: 'acme/api' },
+  repository: { nameWithOwner: 'acme/api', defaultBranchRef: { name: 'main' } },
   author: { login: 'samar' },
   headRefOid: 'abc1234',
   headRefName: 'feat/retries',
@@ -64,18 +66,21 @@ test('the parse gives the item to file and the PR to watch', () => {
   assert.equal(one.item.id, 'github:acme/api#12')
   assert.equal(one.item.kind, 'own-pr-open')
   assert.equal(one.item.ciFailing, true)
-  assert.deepEqual([one.pr.headSha, one.pr.headRef, one.pr.baseRef, one.pr.behind, one.pr.isDraft], ['abc1234', 'feat/retries', 'main', false, false])
+  assert.deepEqual([one.pr.headSha, one.pr.headRef, one.pr.baseRef, one.pr.behind, one.pr.isDraft, one.pr.defaultBranch], ['abc1234', 'feat/retries', 'main', false, false, 'main'])
   assert.deepEqual(one.pr.checks.map((c) => [c.name, c.status]), [['lint', 'failure'], ['test', 'success']])
   assert.deepEqual(one.pr.threads.map((t) => [t.author, t.isBot]), [['cursor', true]])
   const [asked] = parseBabysit({ data: { prs: { nodes: [node({ reviewRequests: { nodes: [{ requestedReviewer: { __typename: 'User', login: 'anirudha' } }] }, mergeStateStatus: 'BEHIND' })] } } }, [], NOW)
   assert.deepEqual([asked.pr.reviewers, asked.pr.behind], [['anirudha'], true])
+  // a repo GitHub didn't name a default branch for: no main to compare with
+  const [bare] = parseBabysit({ data: { prs: { nodes: [node({ repository: { nameWithOwner: 'acme/api' } })] } } }, [], NOW)
+  assert.equal(bare.pr.defaultBranch, null)
 })
 
 const check = (name: string, over: Partial<PrCheck> = {}): PrCheck => ({ name, status: 'failure', id: `${name}-1`, runId: 77, url: null, conclusion: 'FAILURE', ...over })
 const thread = (over: Partial<PrThread> = {}): PrThread => ({ id: 'T1', author: 'cursor[bot]', isBot: true, resolved: false, path: 'src/api.ts', body: 'Unused variable', url: null, ...over })
 const pr = (over: Partial<BabysitPr> = {}): BabysitPr => ({
   repo: 'acme/api', number: 12, url: '', state: 'OPEN', headSha: 'abc', baseRef: 'main', headRef: 'feat/x', mergeable: 'MERGEABLE', reviewDecision: 'REVIEW_REQUIRED',
-  checks: [], threads: [], closedBy: null, isDraft: false, behind: false, reviewers: [], reviewed: false, ...over,
+  checks: [], threads: [], closedBy: null, isDraft: false, behind: false, reviewers: [], reviewed: false, defaultBranch: 'main', ...over,
 })
 const ctx = { base: 'main', isDraft: false, reviewer: 'anirudha' }
 
@@ -167,4 +172,74 @@ test('bot names, stale tasks, poll pace', () => {
   assert.ok(pollSoon([pr({ checks: [check('ci', { status: 'pending' })] })], false))
   assert.ok(pollSoon([], true))
   assert.ok(!pollSoon([pr()], false))
+})
+
+// ---- sorted before a fix is spent (ci-sort-glue) ----
+
+const mainRun = (name: string, conclusion: string, over: Partial<MainRun> = {}): MainRun => ({ name, status: 'completed', conclusion, url: `https://github.com/acme/api/runs/${name}`, sha: 'a1b2c3d4e5', completedAt: '2026-10-21T11:20:00Z', ...over })
+const failing: BabysitEvent = { kind: 'checks_failed', sha: 'abc', check: check('lint') }
+
+test('red on main too: no task, no rerun, nothing counted', () => {
+  const sort = classify(check('lint'), [mainRun('lint', 'failure')], '', [])
+  assert.equal(sort.verdict, 'main-red')
+  const w = newBabysitWatch()
+  const d = decide(failing, w, { ...ctx, sort })
+  assert.deepEqual(d, { do: 'none' })
+  assert.equal(afterDecision(w, failing, d), w)
+  // even a flaky-looking log or a timed-out conclusion: main-red wins, no rerun
+  const timedOut: BabysitEvent = { kind: 'checks_failed', sha: 'abc', check: check('lint', { conclusion: 'TIMED_OUT' }) }
+  assert.deepEqual(decide(timedOut, w, { ...ctx, log: 'ETIMEDOUT', sort }), { do: 'none' })
+})
+
+test(`red on main too after ${MAX_FIX_ATTEMPTS} fixes: still nothing, never a stuck task on you`, () => {
+  const w = { ...newBabysitWatch(), fixes: { lint: MAX_FIX_ATTEMPTS } }
+  assert.ok(decide(failing, w, ctx).do === 'task', 'unsorted, the cap sends it to you')
+  assert.deepEqual(decide(failing, w, { ...ctx, sort: classify(check('lint'), [mainRun('lint', 'failure')], '', []) }), { do: 'none' })
+})
+
+test('sorted flaky: one rerun per head, then a fix; sorted fix: a fix even when the log looks flaky', () => {
+  const ev: BabysitEvent = { kind: 'checks_failed', sha: 'abc', check: check('test') }
+  const flaky = classify(check('test'), [], 'Error: read ECONNRESET', [])
+  assert.equal(flaky.verdict, 'flaky')
+  const w = newBabysitWatch()
+  const d = decide(ev, w, { ...ctx, sort: flaky })
+  assert.equal(d.do, 'rerun')
+  const after = decide(ev, afterDecision(w, ev, d), { ...ctx, sort: flaky })
+  assert.ok(after.do === 'task' && after.task.title === 'Fix test')
+  // a status context has no run to rerun: a fix
+  assert.equal(decide({ ...ev, check: check('test', { runId: null }) }, w, { ...ctx, sort: flaky }).do, 'task')
+  // the sort said fix: no rerun, whatever the raw log reads like
+  const fix = classify(check('test'), [mainRun('test', 'success')], 'src/a.ts:1 error', [])
+  assert.equal(fix.verdict, 'fix')
+  const f = decide(ev, w, { ...ctx, log: 'ETIMEDOUT', sort: fix })
+  assert.ok(f.do === 'task' && f.task.key === 'ci:abc:test' && f.task.owner === 'junior')
+})
+
+test("main's check runs parse off the REST answer; anything else is no main data", () => {
+  const runs = mainRunsFrom({
+    total_count: 3,
+    check_runs: [
+      { name: 'lint', status: 'completed', conclusion: 'failure', html_url: 'https://github.com/acme/api/runs/9', head_sha: 'a1b2c3d', completed_at: '2026-10-21T11:00:00Z' },
+      { name: 'test', status: 'in_progress', conclusion: null, html_url: null, head_sha: 'a1b2c3d', completed_at: null },
+      { status: 'completed' },
+    ],
+  })
+  assert.deepEqual(runs, [
+    { name: 'lint', status: 'completed', conclusion: 'failure', url: 'https://github.com/acme/api/runs/9', sha: 'a1b2c3d', completedAt: '2026-10-21T11:00:00Z' },
+    { name: 'test', status: 'in_progress', conclusion: null, url: null, sha: 'a1b2c3d', completedAt: null },
+  ])
+  assert.equal(classify(check('lint'), runs, '', []).verdict, 'main-red')
+  assert.equal(classify(check('test'), runs, '', []).verdict, 'fix', 'main still running is not main-red')
+  for (const junk of [null, {}, { check_runs: 'x' }, 'nope']) assert.deepEqual(mainRunsFrom(junk), [])
+})
+
+test('main-red only when every red check is red on main too', () => {
+  const m = (check: string) => ({ check, url: null, sha: null, at: null })
+  assert.ok(mainRedOnly({ red: ['lint'], mainRed: [m('lint')] }))
+  assert.ok(mainRedOnly({ red: ['lint', 'test'], mainRed: [m('test'), m('lint')] }))
+  assert.ok(!mainRedOnly({ red: ['lint', 'test'], mainRed: [m('lint')] }), 'a real failure beside it is Junior’s to fix')
+  assert.ok(!mainRedOnly({ red: [], mainRed: [m('lint')] }), 'nothing red now')
+  assert.ok(!mainRedOnly({ red: ['lint'] }))
+  assert.ok(!mainRedOnly({ red: ['lint'], mainRed: [] }))
+  assert.ok(!mainRedOnly(undefined))
 })
