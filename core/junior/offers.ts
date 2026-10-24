@@ -7,6 +7,7 @@
  */
 import { shortRef } from './today.js'
 import { sourceOf } from '../../shared/sources.js'
+import { usd } from './watch-off.js'
 
 /** What an offer reads of an open, ranked item. */
 export type OfferItem = {
@@ -292,3 +293,266 @@ export function tryShortcuts(f: CanDoFill): TryShortcut[] {
   if (take && !fix?.includes(take)) out.push({ label: `Take ${bare(take)}`, say: say('take') })
   return out
 }
+
+// First run: what Junior offers on day one, for every source it can see
+
+/** What firstRunOffers reads of one probed MCP server (a Connector from GET /api/connectors). */
+export type FirstRunConnector = {
+  /** display name, "claude.ai " already stripped: "Sentry", "PagerDuty" */
+  name: string
+  /** the server name grants key on: "claude.ai Sentry" */
+  server: string
+  /** only "connected" ones get an offer */
+  status: string
+  /** `openWorld: false` on every tool = it stays on this Mac (a browser, an editor): not a source */
+  tools?: ReadonlyArray<{ openWorld?: boolean }>
+}
+
+/** What firstRunOffers reads of one suggested project (a ProjectSuggestion from core/junior/project-rank.ts). */
+export type FirstRunProject = { path: string; name: string; repo: string; why: string }
+
+/** Everything Junior has detected on this Mac. The offers depend on this and nothing else. */
+export type FirstRunState = {
+  /** who `gh` is signed in as; null = not signed in, so no PR watch can run */
+  ghLogin: string | null
+  /** what the connector probe found */
+  connectors: readonly FirstRunConnector[]
+  /** suggested projects, best first (rankProjects drops the ones already added) */
+  suggestions: readonly FirstRunProject[]
+  /** the two PR watches' switches (Settings → Automations) */
+  watches: { babysit: boolean; review: boolean }
+  /** the spend limits the watch offers name (BabysitSettings.budget) */
+  caps: { perDayUsd: number; perReviewUsd: number }
+  /** the workspace's jobs: whether each is on, and the MCP servers it reads */
+  jobs: ReadonlyArray<{ enabled: boolean; servers: readonly string[] }>
+}
+
+/** A job an offer would set up: the seeded library's file to turn on, or a starter to draft in a job chat. */
+export type JobStarter = {
+  /** the template's id: a seeded library file ("slack"), a known starter ("sentry"), or "generic" */
+  id: string
+  /** a seeded job file in jobs/ to turn on, when the template is one */
+  library?: string
+  title: string
+  /** cron, as a job file takes it */
+  schedule: string
+  /** what the job looks for, as the job file's body would say it */
+  instruction: string
+}
+
+type OfferBase = {
+  /** stable per offer: "projects", "babysit", "review", "job:<server>" */
+  id: string
+  /** what Junior offers, in one line of 15 words or fewer */
+  line: string
+  /** pre-ticked: the suggested answer */
+  default: boolean
+}
+
+export type FirstRunOffer =
+  | (OfferBase & { kind: 'projects'; projects: Array<FirstRunProject & { default: boolean }> })
+  | (OfferBase & { kind: 'watch'; watch: 'babysit' | 'review'; capText: string })
+  | (OfferBase & {
+      kind: 'job'
+      server: string
+      /** the source's name, as a chip: "Sentry" */
+      name: string
+      template: JobStarter
+      /** the first message of the "New job:" chat that drafts it (saved off) */
+      say: string
+    })
+
+/** Suggested projects pre-ticked on day one. */
+export const FIRST_RUN_PROJECTS_TICKED = 3
+
+/** Junior's own MCP servers: never offered as a source. */
+const OWN_SERVERS = new Set(['junior', 'junior-dev', 'browser', 'team', 'triage', 'triage-dev'])
+
+/** A known source's starter: matched on the connector's name, pre-ticked. */
+type KnownStarter = { match: RegExp; id: string; library?: string; title: string; schedule: string; line: string; instruction: string; when: string }
+
+const WORKDAY_15 = '*/15 8-18 * * 1-5'
+const WORKDAY_HOURLY = '0 8-18 * * 1-5'
+const WORKDAY_9 = '0 9 * * 1-5'
+
+/**
+ * The starters Junior knows by source. Slack's is the seeded library's job
+ * (server/jobs/ops.ts SLACK_TEMPLATE, file `jobs/slack.md`); the rest are drafted
+ * in a job chat and saved off, like any new job.
+ */
+const KNOWN_STARTERS: readonly KnownStarter[] = [
+  {
+    match: /^slack$/i,
+    id: 'slack',
+    library: 'slack',
+    title: 'Slack',
+    schedule: WORKDAY_15,
+    when: 'every 15 minutes in working hours',
+    line: 'Catch Slack questions you haven’t answered. Replies wait for your OK.',
+    instruction: 'Find the Slack messages that need me: questions I have not answered, and mentions. One item per thread.',
+  },
+  {
+    match: /^linear$/i,
+    id: 'linear',
+    title: 'Linear',
+    schedule: WORKDAY_HOURLY,
+    when: 'every hour in working hours',
+    line: 'Bring Linear issues assigned to you into one list.',
+    instruction: 'Find Linear issues assigned to me that changed since the last run, and new comments that ask me something. One item per issue.',
+  },
+  {
+    match: /^(jira|atlassian)/i,
+    id: 'jira',
+    title: 'Jira',
+    schedule: WORKDAY_HOURLY,
+    when: 'every hour in working hours',
+    line: 'Bring Jira issues assigned to you into one list.',
+    instruction: 'Find Jira issues assigned to me that changed since the last run, and new comments that ask me something. One item per issue.',
+  },
+  {
+    match: /^pager\s*duty$/i,
+    id: 'pagerduty',
+    title: 'PagerDuty',
+    schedule: WORKDAY_15,
+    when: 'every 15 minutes in working hours',
+    line: 'Put PagerDuty incidents on you at the top of your list.',
+    instruction: 'Find open PagerDuty incidents assigned to me or my escalation policy. One item per incident, with its service and urgency.',
+  },
+  {
+    match: /^sentry$/i,
+    id: 'sentry',
+    title: 'Sentry',
+    schedule: WORKDAY_9,
+    when: 'every weekday at 9',
+    line: 'Flag new Sentry errors in your projects each morning.',
+    instruction: 'Find Sentry issues first seen since the last run, or regressed, in the projects I work on. One item per issue, busiest first.',
+  },
+  {
+    match: /^rollbar$/i,
+    id: 'rollbar',
+    title: 'Rollbar',
+    schedule: WORKDAY_9,
+    when: 'every weekday at 9',
+    line: 'Flag new Rollbar errors in your projects each morning.',
+    instruction: 'Find Rollbar items first seen since the last run, or reactivated, in the projects I work on. One item per error.',
+  },
+  {
+    match: /^notion$/i,
+    id: 'notion',
+    title: 'Notion',
+    schedule: '0 9,14 * * 1-5',
+    when: 'at 9 and 2 on weekdays',
+    line: 'Catch Notion comments and mentions waiting on you.',
+    instruction: 'Find Notion comments and mentions that ask me something I have not answered. One item per page.',
+  },
+  {
+    match: /^gmail$/i,
+    id: 'gmail',
+    title: 'Gmail',
+    schedule: WORKDAY_HOURLY,
+    when: 'every hour in working hours',
+    line: 'Catch email that asks something of you. Replies wait for your OK.',
+    instruction: 'Find emails from people (not newsletters or alerts) that ask me something I have not answered. One item per thread.',
+  },
+]
+
+/** Words in a line, as the 15-word rule counts them. */
+export const wordCount = (s: string): number => s.split(/\s+/).filter(Boolean).length
+
+/** A source's name, at most three words, so the generic line stays short. */
+const shortName = (name: string): string => name.split(/\s+/).filter(Boolean).slice(0, 3).join(' ')
+
+/** The starter for one connector: a known one by name, else the generic "watch this source". */
+export function starterFor(name: string): { template: JobStarter; line: string; known: boolean; when: string } {
+  const known = KNOWN_STARTERS.find((k) => k.match.test(name.trim()))
+  if (known) {
+    const { match: _m, line, when, ...template } = known
+    return { template, line, known: true, when }
+  }
+  const n = shortName(name)
+  return {
+    template: {
+      id: 'generic',
+      title: n,
+      schedule: WORKDAY_9,
+      instruction: `Find anything in ${n} that waits on me or changed for me since the last run. One item per thing, with a link.`,
+    },
+    line: `Watch ${n} for anything that needs you.`,
+    known: false,
+    when: 'every weekday at 9',
+  }
+}
+
+/** Whether a connector is a source worth a job: connected, not Junior's own, not local-only. */
+function isSource(c: FirstRunConnector, ghLogin: string | null): boolean {
+  if (c.status !== 'connected') return false
+  if (OWN_SERVERS.has(c.server.toLowerCase()) || OWN_SERVERS.has(c.name.toLowerCase())) return false
+  // gh is GitHub's built-in scanner; a GitHub MCP server is a source only when gh isn't signed in
+  if (ghLogin && /^github$/i.test(c.name.trim())) return false
+  const tools = c.tools ?? []
+  if (tools.length && tools.every((t) => t.openWorld === false)) return false
+  return true
+}
+
+/**
+ * The first message's offers, from what Junior detected and nothing else:
+ * add these projects; turn on babysitting with its budget; turn on review
+ * first pass; then one job per connected source no job reads yet (known
+ * sources first, in KNOWN_STARTERS order, then the rest by name). Each has a
+ * pre-ticked default: projects (top three), the watches, and known sources
+ * on; a source Junior has no starter for off. Nothing here applies anything.
+ */
+export function firstRunOffers(state: FirstRunState): FirstRunOffer[] {
+  const out: FirstRunOffer[] = []
+  if (state.suggestions.length) {
+    const projects = state.suggestions.map((p, i) => ({ ...p, default: i < FIRST_RUN_PROJECTS_TICKED }))
+    const n = Math.min(state.suggestions.length, FIRST_RUN_PROJECTS_TICKED)
+    out.push({
+      kind: 'projects',
+      id: 'projects',
+      line: n === 1 ? 'Add the repo where you run Claude Code most.' : `Add the ${n} repos where you run Claude Code most.`,
+      default: true,
+      projects,
+    })
+  }
+  // both watches read PRs through gh: without a login there's nothing to turn on
+  if (state.ghLogin && !state.watches.babysit) {
+    const cap = `Up to ${usd(state.caps.perDayUsd)} a day`
+    out.push({ kind: 'watch', id: 'babysit', watch: 'babysit', line: `Babysit PRs you hand me: CI, retries, nits. ${cap}.`, default: true, capText: cap })
+  }
+  if (state.ghLogin && !state.watches.review) {
+    const cap = `Up to ${usd(state.caps.perReviewUsd)} a review`
+    out.push({ kind: 'watch', id: 'review', watch: 'review', line: `Draft first-pass reviews of PRs you hand me. ${cap}.`, default: true, capText: cap })
+  }
+  const covered = new Set(state.jobs.filter((j) => j.enabled).flatMap((j) => j.servers))
+  const seen = new Set<string>()
+  const jobs: Array<{ offer: FirstRunOffer; rank: number }> = []
+  for (const c of state.connectors) {
+    if (!isSource(c, state.ghLogin) || covered.has(c.server)) continue
+    const key = c.name.trim().toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    const { template, line, known, when } = starterFor(c.name)
+    const rank = known ? KNOWN_STARTERS.findIndex((k) => k.id === template.id) : KNOWN_STARTERS.length
+    jobs.push({
+      rank,
+      offer: {
+        kind: 'job',
+        id: `job:${c.server}`,
+        server: c.server,
+        name: c.name,
+        line,
+        default: known,
+        template,
+        say: template.library
+          ? `Turn on the ${template.title} job: ${when}, ${lowerFirst(template.instruction)}`
+          : `New job: ${when}, check ${c.name} (${c.server}). ${template.instruction} Save it off so I can try a run first.`,
+      },
+    })
+  }
+  jobs.sort((a, b) => a.rank - b.rank || (a.offer.kind === 'job' && b.offer.kind === 'job' ? a.offer.name.localeCompare(b.offer.name) : 0))
+  for (const j of jobs) out.push(j.offer)
+  return out
+}
+
+const lowerFirst = (s: string): string => s.charAt(0).toLowerCase() + s.slice(1)
