@@ -4,16 +4,17 @@ import { readJsonBody } from './http-util.js'
 import { postReviewOp, reviewAgainOp, reviewHeadOp } from '../review/post.js'
 import { approvePlanOp, changePlanOp, sendReplyOp } from '../playbooks/ops.js'
 import { sendBotRepliesOp } from '../tasks/bot-replies.js'
+import { draftNudgeOp, sendNudgeOp } from '../tasks/nudge.js'
 import { startPlaybookOp } from '../rules-ops.js'
 import { handoffOp, isHandoffVerb } from '../handoff-ops.js'
 import type { ScopedCtx } from './ctx.js'
-import type { HandoffResponse } from '../../shared/protocol.js'
+import type { HandoffResponse, NudgeTaskResponse } from '../../shared/protocol.js'
 
 /**
  * Tasks on items (POST /api/tasks/<verb> {id, …}), first-pass reviews
  * (post-review, review-again, the head the watch last read), the item playbooks
  * (start one, send its reply, approve or send back its plan), a bot triage's
- * replies (send-bot-replies), hand-offs
+ * replies (send-bot-replies), nudges (draft one, send it), hand-offs
  * (start, pause, resume, not this one) and babysitting's
  * settings (GET/POST /api/babysit/settings). Every answer is { ok, … }.
  */
@@ -77,6 +78,25 @@ export async function taskRoutes({ req, url, json, rt }: ScopedCtx): Promise<boo
       const body = ((await readJsonBody(req)) ?? {}) as { id?: unknown }
       if (typeof body.id !== 'string' || !body.id) throw new Error('id required')
       json(200, { ok: true, task: await sendBotRepliesOp(rt, body.id, body) })
+    } catch (err) {
+      json(400, { ok: false, error: errText(err) })
+    }
+    return true
+  }
+  // Nudges (server/tasks/nudge.ts): draft one when you pick it on a Waiting row; send it, as edited, or mark it sent by hand.
+  if (url.pathname === '/api/nudge/draft' && req.method === 'POST') {
+    try {
+      json(200, { ok: true, task: await draftNudgeOp(rt, (await readJsonBody(req)) ?? {}) } satisfies NudgeTaskResponse)
+    } catch (err) {
+      json(400, { ok: false, error: errText(err) })
+    }
+    return true
+  }
+  if (url.pathname === '/api/tasks/send-nudge' && req.method === 'POST') {
+    try {
+      const body = ((await readJsonBody(req)) ?? {}) as { id?: unknown }
+      if (typeof body.id !== 'string' || !body.id) throw new Error('id required')
+      json(200, { ok: true, task: await sendNudgeOp(rt, body.id, body) } satisfies NudgeTaskResponse)
     } catch (err) {
       json(400, { ok: false, error: errText(err) })
     }

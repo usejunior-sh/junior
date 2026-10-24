@@ -24,6 +24,7 @@ import { actionViews } from './session/actions-record.js'
 import { libraryRootsFor } from './session/changes.js'
 import { inboxAlerts } from './inbox/flow.js'
 import { getFocusHoursOp, type FocusView } from './settings-ops.js'
+import { nudgeMarksOp } from './tasks/nudge.js'
 
 // Junior (.docs/junior-goals-teams): the persona, the Junior page's day, and
 // today's plan. The rules are pure and tested in core/junior/; everything
@@ -313,7 +314,17 @@ export async function juniorDayOp(rt: WorkspaceRuntime, q: { since: number; away
   // Each row's next move, with what the item can't say itself: a chat on a prompt, sends held for it.
   const blockedFor = new Set<string>()
   for (const [sessionId, itemId] of rt.sessionItem) if (rt.live.get(sessionId)?.waiting) blockedFor.add(itemId)
-  const moves = servedMoves(items, (id) => (blockedFor.has(id) || heldFor.has(id) ? { blocked: blockedFor.has(id), heldSends: heldFor.get(id) ?? 0 } : undefined), now)
+  const ctxOf = (id: string) => (blockedFor.has(id) || heldFor.has(id) ? { blocked: blockedFor.has(id), heldSends: heldFor.get(id) ?? 0 } : undefined)
+  const moves = servedMoves(items, ctxOf, now)
+
+  // Waiting rows with a due nudge: a suggestion only, nothing is drafted here.
+  const github = await ghLogin().catch(() => null)
+  let nudges: JuniorDay['nudges'] = {}
+  try {
+    nudges = await nudgeMarksOp(rt, items, { now, me: github, ctxOf })
+  } catch (err) {
+    log('warn', 'junior', `could not read due nudges: ${errText(err)}`, { workspace: rt.meta.id })
+  }
 
   // The brief's facts.
   const runs: FactRun[] = rows
@@ -358,7 +369,7 @@ export async function juniorDayOp(rt: WorkspaceRuntime, q: { since: number; away
       conns.set(name, (conns.get(name) ?? false) || c.status === 'connected')
     }
     seen = {
-      github: await ghLogin().catch(() => null),
+      github,
       sources: [...conns].map(([name, connected]) => ({ name, connected })).sort((a, b) => Number(b.connected) - Number(a.connected) || a.name.localeCompare(b.name)),
       projects: projects.map((p) => p.name),
     }
@@ -391,6 +402,7 @@ export async function juniorDayOp(rt: WorkspaceRuntime, q: { since: number; away
     morning: morningBrief({ items, facts, now }),
     jobsOn: jobs.filter((j) => j.enabled).length,
     focus: juniorFocus(await getFocusHoursOp(rt, now)),
+    nudges,
   }
 }
 

@@ -45,7 +45,16 @@ export type PrSeen = {
   graceUntil?: number
   /** fixes Junior spent on the checks red now, the most on any one; set only on a PR you handed off */
   fixes?: number
+  /**
+   * The reviewers asked and not yet heard from, each since the first poll
+   * that saw the request (core/work/nudge-suggest.ts requestedSince): who a
+   * due nudge names. Kept on every PR, handed off or not; it only reads.
+   */
+  reviewers?: RequestedReviewer[]
 }
+
+/** A reviewer a PR asked (a login or a team slug), and since when (epoch ms). */
+export type RequestedReviewer = { login: string; since: number }
 
 /** One check red on main too, and where main's run is. */
 export type MainRedCheck = { check: string; url: string | null; sha: string | null; at: string | null }

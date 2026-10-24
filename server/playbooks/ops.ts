@@ -80,8 +80,8 @@ const firstLine = (s: string) => {
   return l.length > 120 ? `${l.slice(0, 119)}…` : l
 }
 
-/** The one-call run. `called` = the approved call passed the veto. */
-async function runSend(rt: WorkspaceRuntime, want: ApprovedSend): Promise<{ called: boolean; link: string | null; error: string | null; costUsd?: number }> {
+/** The one-call run. `called` = the approved call passed the veto. Nudges (server/tasks/nudge.ts) send through it too. */
+export async function runSend(rt: WorkspaceRuntime, want: ApprovedSend): Promise<{ called: boolean; link: string | null; error: string | null; costUsd?: number }> {
   let called = false
   let text = ''
   let costUsd: number | undefined

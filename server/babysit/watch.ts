@@ -20,6 +20,7 @@ import { classify, type MainRun } from '../../core/babysit/ci-sort.js'
 import type { MainRedCheck, PrSeen } from '../../core/work/handoff.js'
 import type { RepoContract } from '../../core/work/contract.js'
 import { fixesShown, graceFor, inGrace, juniorPushed, PUSH_SLACK_MS } from '../../core/babysit/grace.js'
+import { requestedSince } from '../../core/work/nudge-suggest.js'
 
 /** The watch's memory, one JSON blob in config: the next poll and each PR's watch, by item id. */
 export const BABYSIT_WATCH_KEY = 'babysit.watch'
@@ -95,7 +96,10 @@ export async function babysitTickOp(d: BabysitDeps, now: number, force = false):
     const ask = handed && (fresh ? !!prev?.headSha : inGrace(prev, now))
     const seenAt = fresh ? now : (prev.headSeenAt ?? now)
     const grace = graceFor(prev, pr.headSha, now, graceMinutes, ask ? await pushedByJunior(d, item.id, pr.headSha, seenAt) : false)
-    let w: BabysitWatch = { ...(prev ?? newBabysitWatch()), headSha: pr.headSha, headRef: pr.headRef, baseRef: pr.baseRef, seen: seenOf(pr), ...grace }
+    // who was asked to review, since when: what a due nudge names (core/work/nudge-suggest.ts); read only
+    const reviewers = requestedSince(prev?.seen?.reviewers, pr.reviewers, now)
+    const seen: PrSeen = { ...seenOf(pr), ...(reviewers.length ? { reviewers } : {}) }
+    let w: BabysitWatch = { ...(prev ?? newBabysitWatch()), headSha: pr.headSha, headRef: pr.headRef, baseRef: pr.baseRef, seen, ...grace }
     if (fresh) delete w.graceLogs
     // Read, not worked: only a PR you handed off gets tasks.
     if (handed) w = await actOn(d, item.id, pr, w, out, now, main, prev?.seen?.mainRed)

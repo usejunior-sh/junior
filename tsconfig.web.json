@@ -52,6 +52,8 @@
     "core/work/flow.ts",
     "core/work/turn.ts",
     "core/work/turn-tabs.ts",
+    "core/work/nudge.ts",
+    "core/work/nudge-suggest.ts",
     "core/work/status.ts",
     "core/work/next.ts",
     "core/work/inbox-tabs.ts",

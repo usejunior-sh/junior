@@ -99,8 +99,23 @@ export type JuniorDay = {
   routines: { name: string; kind: 'skill' | 'agent'; path: string }[]
   /** in a focus window right now (core/work/focus.ts); null = not in focus */
   focus: JuniorFocus | null
+  /**
+   * Waiting items with a due nudge, by item id (core/work/nudge-suggest.ts):
+   * who, since when, and whether Junior can send it or you copy it. A
+   * suggestion only: no draft exists until you pick Draft nudge.
+   */
+  nudges: Record<string, import('../../core/work/nudge-suggest.js').NudgeMark>
 }
 export type JuniorDayResponse = { ok: true; day: JuniorDay } | { ok: false; error: string }
+
+export type { NudgeMark, NudgeRoute } from '../../core/work/nudge-suggest.js'
+
+/**
+ * POST /api/nudge/draft {itemId, person?}: the nudge task on you, holding the
+ * drafted text (done already when an approval you wrote sent it).
+ * POST /api/tasks/send-nudge {id, text?, byHand?}: the task after the send.
+ */
+export type NudgeTaskResponse = { ok: true; task: import('../../core/work/tasks.js').ItemTask } | { ok: false; error: string }
 
 /** GET /api/today, POST /api/today/open|add|remove, today's plan. */
 export type TodayResponse = { ok: true; plan: import('../../core/junior/today.js').PlanView } | { ok: false; error: string }
