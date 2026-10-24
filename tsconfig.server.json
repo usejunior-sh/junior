@@ -30,6 +30,7 @@
     "web/src/itemRef.ts",
     "web/src/itemVerbs.ts",
     "web/src/selection.ts",
+    "web/src/learnings-view.ts",
     "web/src/components/browser/steps.ts",
     "vite.config.ts"
   ]

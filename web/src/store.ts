@@ -422,6 +422,8 @@ export class Store {
   /** Who follows outbound actions (the Actions page, an item, a transcript's action lines). */
   readonly #actionsListeners = new Set<(sessionId: string | undefined) => void>()
   readonly #approvalsListeners = new Set<() => void>()
+  /** Who follows learnings (Junior's notebook, a chat's "Learned: …" lines). */
+  readonly #learningsListeners = new Set<() => void>()
   /** Who follows today's plan (the Junior page). */
   readonly #todayListeners = new Set<() => void>()
   /** Who follows the browser: the profile list, a tab's remembered state, its downloads (browser.ts). */
@@ -552,6 +554,9 @@ export class Store {
       case 'approvals_changed':
         for (const fn of this.#approvalsListeners) fn()
         break
+      case 'learnings_changed':
+        for (const fn of this.#learningsListeners) fn()
+        break
       case 'browser_profiles':
       case 'browser_tab':
       case 'browser_download':
@@ -629,6 +634,14 @@ export class Store {
     this.#approvalsListeners.add(fn)
     return () => {
       this.#approvalsListeners.delete(fn)
+    }
+  }
+
+  /** Fires when a learning was proposed, kept, edited, forgotten or expired. */
+  onLearningsChanged(fn: () => void): () => void {
+    this.#learningsListeners.add(fn)
+    return () => {
+      this.#learningsListeners.delete(fn)
     }
   }
 

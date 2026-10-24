@@ -40,6 +40,7 @@ import { FileChip } from './AttachmentStrip.js'
 import { ToolGroup } from './ToolGroup.js'
 import { ActionNotes } from './ActionCard.js'
 import { RuleCards } from './RuleCard.js'
+import { LearnedLines } from './LearnedLine.js'
 import { useActions } from '../actions.js'
 import type { ActionView } from '../../../shared/protocol.js'
 
@@ -659,6 +660,7 @@ const Item = memo(function Item({
           <ActionNotes tools={[item]} byCall={actionByCall} onNavigate={onRef} />
           <DraftJobLinks tools={[item]} onRef={onRef} />
           <RuleCards sessionId={sessionId} tools={[item]} />
+          <LearnedLines tools={[item]} />
           <BrowserShots sessionId={sessionId} tools={[item]} />
         </>
       )
@@ -669,6 +671,7 @@ const Item = memo(function Item({
           <ActionNotes tools={item.members} byCall={actionByCall} onNavigate={onRef} />
           <DraftJobLinks tools={item.members} onRef={onRef} />
           <RuleCards sessionId={sessionId} tools={item.members} />
+          <LearnedLines tools={item.members} />
           <BrowserShots sessionId={sessionId} tools={item.members} />
         </>
       )

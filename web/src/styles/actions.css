@@ -239,3 +239,45 @@
 .apGroupHead { display: flex; align-items: baseline; gap: 8px; margin-top: 12px; }
 .apGroupHead b { font-weight: 500; color: var(--ink); }
 .apGroupHead small { font-size: 0.8462rem; color: var(--ash); }
+.apTitle { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 8px; min-width: 0; }
+.apTitle .pill { padding: 0 8px; background: transparent; font-family: var(--mono); font-size: 0.8077rem; }
+.apMain small .mono { font-size: 0.8077rem; }
+.apMain small .llSrc { color: var(--charcoal); }
+.apActs { display: flex; flex: none; gap: 6px; }
+
+/* The chat's "Learned: … · Keep · Edit · Undo" (LearnedLine.tsx): one quiet line at
+   Junior's propose_learning call. No card, no fill: the blue dot is Junior's, the
+   orange of "needs you" stays off it because keeping is optional. */
+.learnedLine { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; max-width: 760px; margin: 4px 0 12px; font-size: 13px; color: var(--charcoal); }
+.learnedLine .llDot { flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--blue); }
+.learnedLine.st-undone .llDot, .learnedLine.st-kept .llDot { background: var(--ash); }
+.learnedLine .llText { flex: 0 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.learnedLine .llKicker { color: var(--ash); }
+.learnedLine .llWords { color: var(--body); }
+.learnedLine.st-undone .llText { color: var(--ash); }
+.learnedLine .pill { padding: 0 8px; background: transparent; font-family: var(--mono); font-size: 0.8077rem; vertical-align: baseline; }
+.learnedLine .linkBtn { font-size: inherit; }
+.learnedLine .llActions .btn { font-weight: 400; }
+.llSrc { color: var(--blue); text-decoration: none; }
+a.llSrc:hover { color: var(--link-hover); text-decoration: underline; }
+span.llSrc { color: var(--charcoal); }
+.llSrc.mono { font-family: var(--mono); font-size: 0.9em; }
+.llActions { display: inline-flex; flex: none; align-items: center; gap: 4px; }
+.learnedLine .msg.error, .llEdit .msg.error { flex-basis: 100%; margin: 0; }
+.llEdit { display: flex; flex: 1 1 auto; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; }
+.llInput {
+  flex: 1 1 260px; min-width: 0; height: 28px; padding: 0 8px;
+  border: 1px solid var(--hair-strong); border-radius: var(--r); background: transparent;
+  color: var(--ink); font: inherit; font-size: 13px; outline: none;
+}
+.llInput:focus { border-color: var(--edge-blue); }
+.llHint { flex-basis: 100%; font-size: 0.8462rem; color: var(--ash); }
+@media (max-width: 767px), (pointer: coarse) and (max-height: 500px) {
+  .learnedLine .llText { flex-basis: calc(100% - 14px); }
+  .learnedLine > .llActions, .llEdit .llActions { flex-basis: 100%; padding-left: 14px; gap: 8px; }
+  .llEdit .llActions { padding-left: 0; }
+  .llActions .btn.sm, .apActs .btn.sm { height: 36px; }
+  .llInput { height: 36px; flex-basis: 100%; }
+  .apRow:has(.apActs) { flex-wrap: wrap; }
+  .apRow .apActs { flex-basis: 100%; }
+}
