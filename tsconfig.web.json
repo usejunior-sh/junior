@@ -55,6 +55,7 @@
     "core/work/inbox-views.ts",
     "core/work/link.ts",
     "core/work/weights.ts",
+    "core/work/corrections.ts",
     "core/job/types.ts",
     "core/job/filing.ts",
     "core/playbooks/item.ts",

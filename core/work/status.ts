@@ -111,6 +111,9 @@ const at = (reason: StatusReason): StatusOf => ({ status: STATUS_REASONS[reason]
 /** Logins that read as bots: `dependabot[bot]`, `renovate-bot`, `ci-bot`. */
 const BOT_LOGIN = /\[bot\]$|(^|[-_])bot$/i
 
+/** A login that reads as a bot (`dependabot[bot]`, `ci-bot`). */
+export const isBotLogin = (login: string): boolean => BOT_LOGIN.test(login.trim().replace(/^@/, ''))
+
 /**
  * Lines and spans that aren't the author asking anything now: quoted replies
  * (`> …`), fenced and inline code, links (Slack `<https://…|label>` keeps its
