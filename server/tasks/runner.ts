@@ -5,7 +5,7 @@
  * budgets (Settings → Automations). A session is one turn: it hands in with
  * submit_task, and its result ends the run (like a goal worker's).
  *
- * Junior runs the babysit playbook's tasks (fix-ci, fix-thread, rebase) and
+ * Junior runs the babysit playbook's tasks (fix-ci, triage-bot, fix-thread, rebase) and
  * the review playbook's first pass (review: read-only, hands in with
  * submit_review). The pure rules are core/babysit, core/review and
  * core/work/tasks.ts.
@@ -13,13 +13,13 @@
 import { existsSync } from 'node:fs'
 import { createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk'
 import { z } from 'zod'
-import { taskPrompt, type TaskCtx, type TaskPr } from '../../core/babysit/brief.js'
+import { taskPrompt, triagePrompt, type TaskCtx, type TaskPr } from '../../core/babysit/brief.js'
 import type { TaskRunScope } from '../../core/babysit/policy.js'
 import { capFor, modelFor, type BabysitSettings } from '../../core/babysit/settings.js'
 import { heldBy, watchOf } from '../../core/work/handoff.js'
 import { MAX_COMMENTS, passLine, passMarkdown, reviewPrompt, VERDICT_LABEL, type FirstPass, type ReviewCtx } from '../../core/review/brief.js'
 import { POST_REVIEW_STEP, REVIEW_STEP } from '../../core/review/watch.js'
-import { isStale } from '../../core/babysit/watch.js'
+import { isStale, MAX_TRIAGE_THREADS, TRIAGE_BOT_STEP, triageResult, triageThreadsOf } from '../../core/babysit/watch.js'
 import type { ItemTask } from '../../core/work/tasks.js'
 import type { WorkItem } from '../../core/work/types.js'
 import {
@@ -225,6 +225,7 @@ async function startTask(rt: WorkspaceRuntime, t: ItemTask, s: BabysitSettings):
   if (isItemStep(t.step)) return startItemTask(rt, t, s, item)
   const ref = prOfItem(item.id)
   const review = t.step === REVIEW_STEP
+  const triage = t.step === TRIAGE_BOT_STEP
   const watch = await watchedPr(rt, item.id, t.step)
   if (!ref || !watch?.headRef || !watch.baseRef) throw new Error(review ? 'this review needs a PR that asks for your review' : 'this task needs a PR the babysitter is watching')
   if (isStale(t, watch.headSha)) return void (await finish(rt, t.id, 'skipped', { error: 'the PR moved on since: a fresh task comes if it still needs one' }))
@@ -242,6 +243,7 @@ async function startTask(rt: WorkspaceRuntime, t: ItemTask, s: BabysitSettings):
     ctx.diff = await pExecFile('gh', ['pr', 'diff', String(pr.number), '-R', pr.repo], { maxBuffer: 16 * 1024 * 1024 }).then((r) => r.stdout, () => '')
     ctx.local = await readLocalChecks(checkout.path, check.name).catch((err) => ({ job: null, why: `the workflow files couldn't be read (${errText(err)})` }))
   }
+  if (triage) ctx.diff = await ghOut(['pr', 'diff', String(pr.number), '-R', pr.repo])
 
   const model = modelFor(t.step, s)
   const row = await createSession(rt, `${t.title} · ${pr.repo}#${pr.number}`, checkout.path, model, null, false, 'gated', {
@@ -260,7 +262,8 @@ async function startTask(rt: WorkspaceRuntime, t: ItemTask, s: BabysitSettings):
       headRef: pr.headRef,
       defaultBranch: (await defaultBranch(project.path).catch(() => null)) ?? pr.baseRef,
       threadId: t.step === 'fix-thread' ? String(t.input?.threadId ?? '') || null : null,
-      ...(review ? { readOnly: true } : {}),
+      // a first pass and a bot triage read: nothing is sent from either
+      ...(review || triage ? { readOnly: true } : {}),
     },
     perTaskUsd: capFor(t.step, s),
     // The Mac stays awake while a task runs: a sleeping Mac hangs a headless run.
@@ -281,7 +284,7 @@ async function startTask(rt: WorkspaceRuntime, t: ItemTask, s: BabysitSettings):
     await linkSessionToItem(rt, row.id, item.id, 'dispatch')
     const live = await getOrRevive(rt, row.id)
     if (!live) throw new Error('could not start the session')
-    await live.sendUserMessage(rctx ? reviewPrompt(moved, pr, item.memory, rctx) : taskPrompt(moved, pr, item.memory, ctx))
+    await live.sendUserMessage(rctx ? reviewPrompt(moved, pr, item.memory, rctx) : triage ? triagePrompt(moved, pr, item.memory, ctx) : taskPrompt(moved, pr, item.memory, ctx))
     log('info', 'tasks', `started "${t.title}" on ${pr.repo}#${pr.number} (${model})`, { task: t.id, session: row.id, workspace: rt.meta.id })
   } catch (err) {
     await endTaskSession(rt, row.id, errText(err))
@@ -438,6 +441,7 @@ export function makeTaskMcp(rt: WorkspaceRuntime, sessionId: string) {
   const step = rt.taskRuns.get(sessionId)?.step
   const handIn =
     step === REVIEW_STEP ? submitReviewTool(rt, sessionId)
+    : step === TRIAGE_BOT_STEP ? submitTriageTool(rt, sessionId)
     : step === ANSWER_STEP ? submitReplyTool(rt, sessionId)
     : step === INVESTIGATE_STEP ? submitBriefTool(rt, sessionId)
     : step === DEBUG_PLAN_STEP ? submitPlanTool(rt, sessionId)
@@ -488,6 +492,46 @@ function submitTaskTool(rt: WorkspaceRuntime, sessionId: string) {
         // the new head (core/babysit/ready.ts), so read it again soon. Until then it stays with Junior.
         if (t.step && BABYSIT_STEPS.has(t.step)) fireAndLog(rt, 'tasks', pollBabysitSoon(rt.store))
       } else await finish(rt, t.id, 'waiting', { error: a.summary })
+      return okResult('Handed in. End your turn now.')
+    },
+  )
+}
+
+/**
+ * A bot triage's hand-in: a verdict per thread. Fields are loose on purpose:
+ * an unknown verdict, an unsure one, or a reply verdict without a reply is a
+ * fix (core/babysit/bot-triage.ts), never a schema error Junior has to argue
+ * with. Fix verdicts become fix-thread tasks; every verdict stays on the
+ * task's output, where the drafted replies wait for the user. Nothing is sent.
+ */
+function submitTriageTool(rt: WorkspaceRuntime, sessionId: string) {
+  return tool(
+    'submit_triage',
+    "Hand in your verdict on each bot comment, once, at the end: fix, wont-fix or incorrect, with a drafted reply for wont-fix and incorrect. Unsure is fix. Nothing is sent: fixes become tasks, replies wait for the user. Then end your turn.",
+    {
+      verdicts: z
+        .array(
+          z.object({
+            threadId: z.string().max(200).describe('the threadId from the task'),
+            verdict: z.string().max(40).describe('fix | wont-fix | incorrect (unsure = fix)'),
+            reply: z.string().max(4000).optional().describe('wont-fix and incorrect: the reply to the bot, as the user would post it'),
+            why: z.string().max(500).optional().describe('one line: why this verdict'),
+          }),
+        )
+        .max(MAX_TRIAGE_THREADS * 2),
+      decisions: DECISIONS,
+    },
+    async (a) => {
+      const got = await runningTask(rt, sessionId)
+      if ('error' in got) return errResult(got.error)
+      const { run, t } = got
+      const r = triageResult(triageThreadsOf(t.input), a.verdicts)
+      await addDecisions(rt, run.itemId, t.id, a.decisions)
+      const done = await finish(rt, t.id, 'done', { output: { summary: r.summary, verdicts: r.verdicts } })
+      if (!done) return errResult('This task moved on before the hand-in landed.')
+      const now = Date.now()
+      for (const fix of r.fixes) await rt.store.tasks.add({ ...fix, itemId: run.itemId }, now)
+      tasksChanged(rt)
       return okResult('Handed in. End your turn now.')
     },
   )
@@ -702,6 +746,10 @@ This is a headless task session: nobody reads this chat while it runs. Do the on
 /** A playbook task on an item that reads (answer, investigate, the plan): read-only, its own hand-in tool. */
 export const ITEM_SYSTEM_APPEND = `
 This is a headless task session: nobody reads this chat while it runs. Do the one task in the first message: read, change nothing, send nothing. Then call your submit tool once and stop. Don't ask questions in chat: put what you are unsure of in what you hand in.`
+
+/** A bot triage: read-only, and it hands in with submit_triage. */
+export const TRIAGE_SYSTEM_APPEND = `
+This is a headless triage session: nobody reads this chat while it runs. Read the bot comments in the first message and the code they point at, change nothing, then call submit_triage once and stop. Don't ask questions in chat: when unsure, the verdict is fix.`
 
 /** The same for a first-pass review: read-only, and it hands in with submit_review. */
 export const REVIEW_SYSTEM_APPEND = `

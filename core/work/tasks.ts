@@ -8,6 +8,7 @@
  * Pure: types, the state rules and the row's progress line. The store is
  * core/store (ItemTaskStore), the runner server/tasks.
  */
+import type { Verdict } from '../babysit/bot-triage.js'
 
 export type TaskOwner = 'you' | 'junior'
 export type TaskState = 'queued' | 'running' | 'waiting' | 'done' | 'failed' | 'skipped' | 'stopped'
@@ -23,6 +24,8 @@ export interface TaskOutput {
   sha?: string
   /** a first-pass review's verdict (core/review/brief.ts) */
   verdict?: 'approve' | 'comment' | 'request_changes'
+  /** a bot triage's verdicts, one per thread (core/babysit/bot-triage.ts): the non-fix ones carry the reply to send */
+  verdicts?: Verdict[]
 }
 
 export interface ItemTask {

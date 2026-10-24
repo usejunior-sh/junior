@@ -8,7 +8,7 @@
 import { memoryBlock, type ItemMemory } from '../work/fields.js'
 import type { ItemTask } from '../work/tasks.js'
 import type { CiStep, LocalChecks } from './ci-steps.js'
-import { MAX_FIX_ATTEMPTS } from './watch.js'
+import { MAX_FIX_ATTEMPTS, triageThreadsOf } from './watch.js'
 
 export type TaskPr = { repo: string; number: number; url: string; headRef: string; baseRef: string }
 
@@ -105,6 +105,7 @@ function taskSection(t: ItemTask, pr: TaskPr, ctx: TaskCtx): string[] {
         ...str(input.body).trim().split('\n').map((l) => `> ${l}`),
         '',
         'Decide whether the finding is right.',
+        ...(str(input.triage) ? [`Your triage of this comment said fix: ${str(input.triage)}`, ''] : []),
         `- Right: fix it, commit, push, then reply on the thread with "Fixed in <short sha>" and one line on what changed, and resolve it:`,
         `  \`${reply}\``,
         `  \`${resolve}\``,
@@ -143,6 +144,54 @@ export function taskPrompt(t: ItemTask, pr: TaskPr, memory: ItemMemory | undefin
     '- `done`, with one line on what you changed ("removed the unused import in api.ts") and the commit you pushed, or',
     '- `blocked`, with the question the user has to answer.',
     'Add `decisions` for anything the next task on this PR should know.',
+  ]
+    .filter((l, i, a) => l !== '' || a[i - 1] !== '')
+    .join('\n')
+}
+
+/**
+ * The first message of a bot triage session (core/babysit/watch.ts,
+ * TRIAGE_BOT_STEP): the PR, the new bot comments, a verdict per thread, and
+ * the typed hand-in. It reads only: no push, no reply, no resolve. Fix
+ * verdicts become fix tasks; the drafted replies wait for the user.
+ */
+export function triagePrompt(t: ItemTask, pr: TaskPr, memory: ItemMemory | undefined, ctx: Pick<TaskCtx, 'diff'> = {}): string {
+  const mem = memoryBlock(memory)
+  const threads = triageThreadsOf(t.input)
+  return [
+    `You are Junior, babysitting the user's PR ${pr.repo}#${pr.number} (${pr.url}). One task this session: **${t.title}**.`,
+    '',
+    '## How you work here',
+    `- This folder is your own worktree at the PR's head (origin/${pr.headRef}). Read anything here. Change nothing.`,
+    '- Nothing is pushed, posted, replied to or resolved from this session. The replies you draft wait for the user.',
+    ...(mem ? ['', mem] : []),
+    '',
+    '## The comments',
+    ...threads.flatMap((th, i) => [
+      `### ${i + 1}. ${th.bot ?? th.author}${th.path ? ` on ${th.path}` : ''}${th.rule && th.rule !== 'general' ? ` (${th.rule})` : ''}`,
+      `threadId: \`${th.id}\``,
+      ...(th.url ? [th.url] : []),
+      '',
+      ...th.body.trim().split('\n').map((l) => `> ${l}`),
+      '',
+    ]),
+    '## Pick one verdict per comment',
+    'Check each claim against the code before you decide.',
+    '- `fix`: the finding is right and worth changing in this PR. A separate task fixes it.',
+    "- `wont-fix`: it may be right, but it isn't worth changing here. Draft a short reply to the bot that says why.",
+    '- `incorrect`: the finding is wrong. Draft a short reply that says why, pointing at the code.',
+    'Unsure? Pick `fix`. A wrong fix costs one task; a wrong "won\'t fix" can drop a real bug.',
+    'A reply is plain and polite, a sentence or two, as the user would write it. The user reads it before it goes out.',
+    '',
+    '### The PR diff',
+    '```diff',
+    head((ctx.diff ?? '').trim(), DIFF_CHARS) || `(no diff came back: run \`gh pr diff ${pr.number} -R ${pr.repo}\`)`,
+    '```',
+    '',
+    '## When you finish',
+    'Call `submit_triage` once, with one entry per threadId above: `verdict`, a `reply` for wont-fix and incorrect, and `why` in one line.',
+    'A comment you leave out, or a wont-fix or incorrect without a reply, is fixed.',
+    'Add `decisions` for anything the next task on this PR should know. Then end your turn.',
   ]
     .filter((l, i, a) => l !== '' || a[i - 1] !== '')
     .join('\n')

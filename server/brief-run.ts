@@ -25,9 +25,10 @@ import { ANY_ITEM_ID_RE } from './validate.js'
 import { createSession, getOrRevive } from './session/sessions.js'
 import { BRIEF_TIMEOUT_MS, linkSessionToItem, projectFor, readSettings } from './settings-ops.js'
 import { itemFilesForSession } from './items-ops.js'
-import { ITEM_SYSTEM_APPEND, makeTaskMcp, REVIEW_SYSTEM_APPEND, TASK_SYSTEM_APPEND } from './tasks/runner.js'
+import { ITEM_SYSTEM_APPEND, makeTaskMcp, REVIEW_SYSTEM_APPEND, TASK_SYSTEM_APPEND, TRIAGE_SYSTEM_APPEND } from './tasks/runner.js'
 import { READ_ONLY_STEPS } from '../core/playbooks/item.js'
 import { REVIEW_STEP } from '../core/review/watch.js'
+import { TRIAGE_BOT_STEP } from '../core/babysit/watch.js'
 
 /** The artifact linked to an item as its brief, with the body on disk. */
 export async function currentBrief(rt: WorkspaceRuntime, itemId: string): Promise<{ artifact: Artifact; body: string } | null> {
@@ -118,6 +119,7 @@ export async function extrasFor(rt: WorkspaceRuntime, row: StoredSession): Promi
   // Strict: none of ~/.claude's connectors and plugins, whose schemas would ride every call.
   if (taskRun) {
     const review = taskRun.step === REVIEW_STEP
+    const triage = taskRun.step === TRIAGE_BOT_STEP
     // A playbook task on an item that reads (answer, investigate, the plan) needs
     // the source's connector to read the thread or the issue: your connectors
     // load, and every send through them is refused (holdIfAction, read-only).
@@ -130,12 +132,12 @@ export async function extrasFor(rt: WorkspaceRuntime, row: StoredSession): Promi
       }
     }
     return {
-      systemAppend: `${identity}\n${review ? REVIEW_SYSTEM_APPEND : TASK_SYSTEM_APPEND}`,
+      systemAppend: `${identity}\n${review ? REVIEW_SYSTEM_APPEND : triage ? TRIAGE_SYSTEM_APPEND : TASK_SYSTEM_APPEND}`,
       mcp: { task: makeTaskMcp(rt, row.id) },
       strictMcpConfig: true,
       maxBudgetUsd: taskRun.perTaskUsd,
-      // A first pass reads; it never edits.
-      ...(review ? { disallowedTools: [...EDIT_TOOLS] } : {}),
+      // A first pass and a bot triage read; they never edit.
+      ...(review || triage ? { disallowedTools: [...EDIT_TOOLS] } : {}),
     }
   }
   if (row.kind !== 'brief') return { systemAppend: identity }

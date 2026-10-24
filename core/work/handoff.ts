@@ -61,7 +61,7 @@ export function mainRedOnly(seen: Pick<PrSeen, 'red' | 'mainRed'> | undefined): 
 }
 
 /** Steps a PR's watch adds for Junior: they run only on a PR you handed off. */
-export const WATCH_STEPS: ReadonlySet<string> = new Set(['fix-ci', 'fix-thread', 'rebase', 'review'])
+export const WATCH_STEPS: ReadonlySet<string> = new Set(['fix-ci', 'fix-thread', 'triage-bot', 'rebase', 'review'])
 
 /** Why Junior may not run a task with this step on an item now; null = it may. */
 export function heldBy(step: string | undefined, handoff: Handoff | undefined): string | null {

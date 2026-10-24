@@ -15,7 +15,7 @@ import type { WorkItem } from '../../core/work/types.js'
 import type { ItemTask } from '../../core/work/tasks.js'
 import type { PrCheck } from '../../core/babysit/ci.js'
 import { babysitSearch, BABYSIT_QUERY, parseBabysit, type BabysitPr } from '../../core/babysit/pr.js'
-import { afterDecision, BABYSIT_FAST_MS, BABYSIT_SLOW_MS, babysitEvents, decide, newBabysitWatch, pollSoon, seenOf, type BabysitWatch } from '../../core/babysit/watch.js'
+import { afterDecision, BABYSIT_FAST_MS, BABYSIT_SLOW_MS, babysitEvents, batchBotThreads, decide, newBabysitWatch, pollSoon, seenOf, type BabysitWatch } from '../../core/babysit/watch.js'
 import { classify, type MainRun } from '../../core/babysit/ci-sort.js'
 import type { MainRedCheck, PrSeen } from '../../core/work/handoff.js'
 import { fixesShown, graceFor, inGrace, juniorPushed, PUSH_SLACK_MS } from '../../core/babysit/grace.js'
@@ -177,7 +177,8 @@ async function actOn(
   const mainRed: MainRedCheck[] = []
   const stuck: string[] = []
   let held = false
-  for (const ev of babysitEvents(pr)) {
+  // new review-bot threads arrive as one triage task, not a fix task each (core/babysit/watch.ts)
+  for (const ev of batchBotThreads(babysitEvents(pr), w)) {
     if (ev.kind === 'green') ctx.reviewer = await d.reviewerFor(pr.repo).catch(() => null)
     let dec = decide(ev, w, ctx)
     if (ev.kind === 'checks_failed' && dec.do === 'task' && dec.stuck) stuck.push(ev.check.name)

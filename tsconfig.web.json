@@ -44,6 +44,7 @@
     "core/babysit/ready.ts",
     "core/babysit/ci.ts",
     "core/babysit/grace.ts",
+    "core/babysit/bot-triage.ts",
     "core/review/brief.ts",
     "core/work/due.ts",
     "core/work/fade.ts",

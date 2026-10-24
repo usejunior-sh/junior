@@ -5,7 +5,11 @@
  *   CI red             → "Fix lint" (Junior); a check that looks flaky is rerun once first,
  *                        one red on main too adds nothing (ci-sort.ts: "not yours"), and
  *                        right after your push the fix waits out a grace window (grace.ts)
- *   bot thread         → "Fix Bugbot comment on api.ts" (Junior: fix, push, reply, resolve)
+ *   bot threads        → "Triage 3 bot comments" (Junior: a verdict per thread, sends
+ *                        nothing); its fix verdicts become "Fix Bugbot comment on api.ts"
+ *                        (Junior: fix, push, reply, resolve). New threads from the five
+ *                        review bots (bot-triage.ts) are grouped into one triage task per
+ *                        poll; any other bot's thread is a fix task straight away
  *   person's thread    → "Answer Anirudha" (you)
  *   conflict / behind  → "Rebase on main" (Junior)
  *   green, no reviewer → "Request Anirudha" (you: the request is held for your OK)
@@ -23,6 +27,7 @@ import type { PrSeen } from '../work/handoff.js'
 import type { BabysitPr } from './pr.js'
 import type { CiSort } from './ci-sort.js'
 import { readiness, readyLine, type Readiness } from './ready.js'
+import { findingOf, verdictsFor, type Bot, type Verdict } from './bot-triage.js'
 
 export { MAX_FIX_ATTEMPTS }
 
@@ -69,6 +74,8 @@ const MAX_KEPT = 200
 export type BabysitEvent =
   | { kind: 'checks_failed'; sha: string; check: PrCheck }
   | { kind: 'bot_thread'; thread: PrThread }
+  /** new threads from the five review bots, grouped by batchBotThreads: one triage task */
+  | { kind: 'bot_triage'; threads: PrThread[] }
   | { kind: 'human_thread'; thread: PrThread }
   | { kind: 'rebase'; sha: string; why: 'conflict' | 'behind' }
   /** `ready`: the gate it passed (ready.ts), for the hand-back's line */
@@ -178,7 +185,7 @@ export function decide(ev: BabysitEvent, w: BabysitWatch, ctx: DecideContext): B
       const t = ev.thread
       const who = botName(t.author)
       const file = fileOf(t.path)
-      const input = { threadId: t.id, author: t.author, path: t.path, body: clip(t.body, 4_000), url: t.url }
+      const input = threadInput(t)
       // Still open while Junior works on it, or after it handed in blocked: its task already says so.
       if (w.botThreads?.includes(t.id)) return { do: 'none' }
       if (w.botPrints.includes(fingerprint(t)))
@@ -187,10 +194,12 @@ export function decide(ev: BabysitEvent, w: BabysitWatch, ctx: DecideContext): B
           stuck: true,
           task: { title: `${who} raised the same comment again${file ? ` on ${file}` : ''}`, owner: 'you', state: 'waiting', why: 'event', whyDetail: `${who} comment came back`, step: 'stuck', key: `stuck:thread:${t.id}`, input },
         }
-      return {
-        do: 'task',
-        task: { title: `Fix ${who} comment${file ? ` on ${file}` : ''}`, owner: 'junior', why: 'event', whyDetail: `${who} comment`, step: 'fix-thread', key: `thread:${t.id}`, input },
-      }
+      return { do: 'task', task: fixThreadTask(t) }
+    }
+    case 'bot_triage': {
+      const threads = ev.threads.filter((t) => !w.botThreads?.includes(t.id))
+      if (!threads.length) return { do: 'none' }
+      return { do: 'task', task: triageTask(threads) }
     }
     case 'human_thread': {
       const t = ev.thread
@@ -248,13 +257,155 @@ export function afterDecision(w: BabysitWatch, ev: BabysitEvent, d: BabysitDecis
   if (d.do === 'rerun' && ev.kind === 'checks_failed') return { ...w, reruns: [...w.reruns, `${ev.check.name}@${ev.sha}`].slice(-MAX_KEPT) }
   if (d.do !== 'task' || d.stuck) return w
   if (ev.kind === 'checks_failed') return { ...w, fixes: { ...w.fixes, [ev.check.name]: (w.fixes[ev.check.name] ?? 0) + 1 } }
-  if (ev.kind === 'bot_thread')
+  if (ev.kind === 'bot_thread' || ev.kind === 'bot_triage') {
+    const threads = ev.kind === 'bot_thread' ? [ev.thread] : ev.threads
     return {
       ...w,
-      botPrints: [...w.botPrints, fingerprint(ev.thread)].slice(-MAX_KEPT),
-      botThreads: [...(w.botThreads ?? []), ev.thread.id].slice(-MAX_KEPT),
+      botPrints: [...w.botPrints, ...threads.map(fingerprint)].slice(-MAX_KEPT),
+      botThreads: [...(w.botThreads ?? []), ...threads.map((t) => t.id)].slice(-MAX_KEPT),
     }
+  }
   return w
+}
+
+// ---------------------------------------------------------------------------
+// Bot triage (plan item bot-triage-task): new bot threads → one triage task →
+// a verdict per thread (bot-triage.ts) → fix tasks for the fixes, the rest
+// kept on the task for the replies the user sends (bot-triage-send).
+
+/** The step of the task that sorts a PR's new bot threads. It reads; it never sends. */
+export const TRIAGE_BOT_STEP = 'triage-bot'
+
+/** Threads one triage task takes; the rest wait for the next poll. */
+export const MAX_TRIAGE_THREADS = 20
+
+/** One bot thread as a task carries it. */
+function threadInput(t: PrThread): Record<string, unknown> {
+  return { threadId: t.id, author: t.author, path: t.path, body: clip(t.body, 4_000), url: t.url }
+}
+
+/** "Fix Bugbot comment on api.ts": Junior fixes, pushes, replies and resolves. `why` = triage's reason, when it ran. */
+export function fixThreadTask(t: PrThread, why?: string): TaskSpec {
+  const who = botName(t.author)
+  const file = fileOf(t.path)
+  return {
+    title: `Fix ${who} comment${file ? ` on ${file}` : ''}`,
+    owner: 'junior',
+    why: 'event',
+    whyDetail: `${who} comment`,
+    step: 'fix-thread',
+    key: `thread:${t.id}`,
+    input: { ...threadInput(t), ...(why ? { triage: why } : {}) },
+  }
+}
+
+/** A thread the triage task can take: open, from one of the five review bots, and new to the watch. */
+function triageable(t: PrThread, w: BabysitWatch): boolean {
+  return !!findingOf(t) && !w.botThreads?.includes(t.id) && !w.botPrints.includes(fingerprint(t))
+}
+
+/**
+ * The PR's events with its new review-bot threads grouped into one
+ * `bot_triage` event, where the first of them stood. A thread that came back
+ * after a fix stays a `bot_thread` (it goes to you, as before); so does any
+ * other bot's thread (a fix task straight away). Past MAX_TRIAGE_THREADS the
+ * rest are left out: the next poll takes them.
+ */
+export function batchBotThreads(evs: readonly BabysitEvent[], w: BabysitWatch): BabysitEvent[] {
+  const out: BabysitEvent[] = []
+  const fresh: PrThread[] = []
+  let at = -1
+  for (const ev of evs) {
+    if (ev.kind === 'bot_thread' && triageable(ev.thread, w)) {
+      if (fresh.length >= MAX_TRIAGE_THREADS) continue
+      if (at < 0) at = out.length
+      fresh.push(ev.thread)
+      continue
+    }
+    out.push(ev)
+  }
+  if (fresh.length) out.splice(at, 0, { kind: 'bot_triage', threads: fresh })
+  return out
+}
+
+/** FNV-1a, base 36: a short stable key for a set of thread ids. */
+function shortHash(s: string): string {
+  let h = 0x811c9dc5
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i)
+    h = Math.imul(h, 0x01000193) >>> 0
+  }
+  return h.toString(36)
+}
+
+/** "Triage 3 bot comments" / "Triage Bugbot comment on api.ts": one task for the batch. */
+export function triageTask(threads: readonly PrThread[]): TaskSpec {
+  const bots = [...new Set(threads.map((t) => botName(t.author)))]
+  const one = threads.length === 1 ? threads[0]! : null
+  const file = one ? fileOf(one.path) : null
+  const ids = threads.map((t) => t.id).sort()
+  return {
+    title: one ? `Triage ${bots[0]} comment${file ? ` on ${file}` : ''}` : `Triage ${threads.length} bot comments`,
+    owner: 'junior',
+    why: 'event',
+    whyDetail: `${threads.length} new ${threads.length === 1 ? 'comment' : 'comments'} from ${bots.join(', ')}`,
+    step: TRIAGE_BOT_STEP,
+    key: `triage:${ids.length}:${shortHash(ids.join(','))}`,
+    input: {
+      threads: threads.map((t) => {
+        const f = findingOf(t)
+        return { ...threadInput(t), ...(f ? { bot: f.bot, rule: f.rule, message: f.message } : {}) }
+      }),
+    },
+  }
+}
+
+/** One thread as a triage task carries it: enough to judge it, and to fix it after. */
+export type TriageThread = PrThread & { bot?: Bot; rule?: string; message?: string }
+
+/** A triage task's threads, read back from its input. Anything malformed is dropped. */
+export function triageThreadsOf(input: Record<string, unknown> | undefined): TriageThread[] {
+  const raw = Array.isArray(input?.threads) ? (input.threads as unknown[]) : []
+  const str = (v: unknown) => (typeof v === 'string' ? v : null)
+  const out: TriageThread[] = []
+  for (const r of raw) {
+    if (!r || typeof r !== 'object') continue
+    const o = r as Record<string, unknown>
+    const id = str(o.threadId)
+    if (!id) continue
+    out.push({
+      id,
+      author: str(o.author) ?? '',
+      isBot: true,
+      resolved: false,
+      path: str(o.path),
+      body: str(o.body) ?? '',
+      url: str(o.url),
+      ...(str(o.bot) ? { bot: o.bot as Bot } : {}),
+      ...(str(o.rule) ? { rule: o.rule as string } : {}),
+      ...(str(o.message) ? { message: o.message as string } : {}),
+    })
+  }
+  return out
+}
+
+export type TriageResult = {
+  /** one per thread, in the task's order: unsure, malformed or missing is a fix */
+  verdicts: Verdict[]
+  /** a fix-thread task per fix verdict */
+  fixes: TaskSpec[]
+  /** the task's line: "2 to fix, 1 won't fix, 1 incorrect" */
+  summary: string
+}
+
+/** What Junior handed in for a triage task → the verdicts, the fix tasks and the line. */
+export function triageResult(threads: readonly TriageThread[], raw: readonly unknown[]): TriageResult {
+  const verdicts = verdictsFor(threads.map((t) => ({ threadId: t.id })), raw)
+  const byId = new Map(threads.map((t) => [t.id, t]))
+  const fixes = verdicts.flatMap((v) => (v.verdict === 'fix' && byId.has(v.threadId) ? [fixThreadTask(byId.get(v.threadId)!, v.why)] : []))
+  const n = (k: Verdict['verdict']) => verdicts.filter((v) => v.verdict === k).length
+  const parts = [n('fix') ? `${n('fix')} to fix` : '', n('wont-fix') ? `${n('wont-fix')} won't fix` : '', n('incorrect') ? `${n('incorrect')} incorrect` : ''].filter(Boolean)
+  return { verdicts, fixes, summary: parts.join(', ') || 'no comments to sort' }
 }
 
 /**

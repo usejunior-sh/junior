@@ -153,7 +153,7 @@ export function verdictFrom(raw: unknown): Verdict | null {
  * verdict for (or gave a malformed one) is a fix; verdicts for threads that
  * aren't findings are dropped; the first verdict for a thread wins.
  */
-export function verdictsFor(findings: readonly Finding[], raw: readonly unknown[]): Verdict[] {
+export function verdictsFor(findings: readonly Pick<Finding, 'threadId'>[], raw: readonly unknown[]): Verdict[] {
   const given = new Map<string, Verdict>()
   for (const r of raw) {
     const v = verdictFrom(r)
