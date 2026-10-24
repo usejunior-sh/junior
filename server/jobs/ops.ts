@@ -1,17 +1,20 @@
-import { rmdir } from 'node:fs/promises'
+import { readFile, rmdir } from 'node:fs/promises'
+import { homedir } from 'node:os'
 import { randomUUID } from 'node:crypto'
 import { type Job, JOB_OUTPUTS, type JobBrief, type JobBrowser, type JobOutput } from '../../core/job/types.js'
 import type { JobFiling } from '../../core/job/filing.js'
 import { type JobToolGrant, presetGrant, RESERVED_SERVER } from '../../core/job/tools.js'
 import { log } from '../log.js'
-import { checkBrowserProfile, checkGrants, checkLibrary, grantsFromLines, type JobFileSpec, type JobLibrary, parseJobFile, serializeJobFile, withKey } from '../job-files.js'
+import { checkBrowserProfile, checkGrants, checkLibrary, grantsFromLines, JOB_SCHEMA, type JobFileSpec, type JobLibrary, parseJobFile, serializeJobFile, withKey } from '../job-files.js'
+import { fromRecipe, toRecipe, type RecipeExport } from '../../core/job/recipe.js'
+import { recipeInFirstMessage, recipeNote, NEW_JOB_PREFIX } from '../../core/job/recipe-copy.js'
 import { scheduleOf } from '../../core/job/schedule.js'
 import type { JobFileReference, Project } from '../../shared/protocol.js'
 import { vetoRefusal } from '../providers/capabilities.js'
 import { isValidCron } from '../../core/job/cron.js'
 import { readbackOf, readbackText, type Readback } from '../../core/job/readback.js'
 import { listPlaybooks } from '../briefs.js'
-import { type ConnectorProbe, WorkspaceRuntime } from '../workspace/runtime.js'
+import { type ConnectorProbe, registry, WorkspaceRuntime } from '../workspace/runtime.js'
 import { jobLibrary } from '../session/changes.js'
 import { defaultProject } from '../session/sessions.js'
 import { type JobPreview, runJobPreview } from './preview.js'
@@ -478,6 +481,42 @@ export async function tryJobOp(rt: WorkspaceRuntime, raw: unknown): Promise<stri
     ...(res.wouldQueue?.length ? ['A real run would hold these for the user’s approval first:', ...res.wouldQueue.map((q) => `- ${q.tool}: ${q.summary}`)] : []),
     `The job is ${job.enabled ? 'on' : 'still OFF'}. Show the user what it found; if it looks right they turn it on at #/jobs/${job.id}, else change the job with them and draft it again.`,
   ].join('\n')
+}
+
+/**
+ * "Copy as recipe" on the job page (job-recipe-ui): the job's file as it
+ * stands on disk, through toRecipe with what this machine knows: its
+ * projects' folders and ids, every workspace id, and the home folder. null
+ * for an unknown job. A recipe with `errors` is never put on the clipboard.
+ */
+export async function jobRecipeOp(rt: WorkspaceRuntime, id: string): Promise<RecipeExport | null> {
+  const w = id ? await rt.store.jobs.get(id) : null
+  if (!w) return null
+  const text = w.file ? await readFile(rt.jobFiles.pathOf(w.file), 'utf8').catch(() => serializeJobFile(jobSpecFrom(w))) : serializeJobFile(jobSpecFrom(w))
+  const projects = await rt.store.projects.list()
+  return toRecipe(text, JOB_SCHEMA, {
+    projects: projects.map((p) => ({ id: p.id, path: p.path })),
+    workspaceIds: registry.workspaces.map((m) => m.id),
+    home: homedir(),
+  })
+}
+
+/**
+ * A new chat's first message that carries a pasted recipe ("New job:" plus
+ * the recipe, ChatComposer) → the same message with the pasted body swapped
+ * for a framed note (core/job/recipe-copy.ts `recipeNote`): fromRecipe has
+ * cleaned it and the setup questions come with suggested answers, so the
+ * model never parses or obeys the raw paste. Any other message → null.
+ */
+export async function recipeFirstMessage(rt: WorkspaceRuntime, message: string): Promise<string | null> {
+  const recipe = recipeInFirstMessage(message)
+  if (recipe === null) return null
+  const projects = await rt.store.projects.list()
+  const fallback = await defaultProject(rt)
+  const imp = fromRecipe(recipe, JOB_SCHEMA, {
+    projects: projects.map((p) => ({ id: p.id, name: p.name, isDefault: p.id === fallback?.id })),
+  })
+  return `${NEW_JOB_PREFIX} ${recipeNote(imp, projects)}`
 }
 
 /**

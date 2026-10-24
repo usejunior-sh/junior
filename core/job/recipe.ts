@@ -255,7 +255,9 @@ export function toRecipe<S extends RecipeJobSpec>(jobText: string, schema: JobSc
 /** True when a pasted text looks like a recipe or a job file: frontmatter with a schedule and a body. */
 export function looksLikeRecipe(text: string): boolean {
   const t = stripInvisible(text).text.trimStart()
-  return t.startsWith(RECIPE_MARK) || (/^---\r?\n/.test(t) && /^schedule\s*:/m.test(t) && /^tools\s*:/m.test(t))
+  // toRecipe writes the mark right after the opening `---`
+  if (t.startsWith(RECIPE_MARK) || t.replace(/^---\r?\n/, '').startsWith(RECIPE_MARK)) return true
+  return /^---\r?\n/.test(t) && /^schedule\s*:/m.test(t) && /^tools\s*:/m.test(t)
 }
 
 /**

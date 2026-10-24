@@ -16,7 +16,8 @@ import { store } from '../store.js'
 import { Transcript } from './Transcript.js'
 import { BrowserPane } from './BrowserPane.js'
 import { hasBrowser } from '../browser.js'
-import { Menu, MenuContent, MenuItem, MenuTrigger } from '../ui/Menu.js'
+import { Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from '../ui/Menu.js'
+import { RecipeFallbackDialog, useJobRecipe } from './JobRecipe.js'
 import { humanSpan, lookbackMs, parseCatchUp } from '../../../core/job/schedule.js'
 import { TRIGGER_LABEL, cronText, grantIcon, grantLabel, runStatusText } from '../jobUi.js'
 import { ago, nextRunText, runDotClass } from './JobsPage.js'
@@ -126,6 +127,8 @@ export function JobPage({ id, onNavigate }: { id: string; onNavigate: (hash: str
   }, [])
 
   const rows = useMemo(() => runRows(ledger, runs), [ledger, runs])
+  // "Copy as recipe" in the ⋯ menu: prefetched when the menu opens.
+  const recipe = useJobRecipe(id, () => void load())
 
   // The health strip, all derived: runs this week, what they filed and cost,
   // and how many of the filed items the user kept (anything not archived).
@@ -158,6 +161,7 @@ export function JobPage({ id, onNavigate }: { id: string; onNavigate: (hash: str
 
   async function toggle(on: boolean) {
     if (!job) return
+    recipe.clear()
     await fetch(`/api/jobs?id=${encodeURIComponent(job.id)}`, {
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
@@ -168,6 +172,7 @@ export function JobPage({ id, onNavigate }: { id: string; onNavigate: (hash: str
 
   async function runNow() {
     if (!job) return
+    recipe.clear()
     setRunning(true)
     try {
       const res = await fetch(`/api/jobs/run?id=${encodeURIComponent(job.id)}`, { method: 'POST' })
@@ -308,14 +313,16 @@ export function JobPage({ id, onNavigate }: { id: string; onNavigate: (hash: str
             <button type="button" className="btn" onClick={edit}>
               <Pencil size={13} aria-hidden="true" /> Edit
             </button>
-            <Menu>
+            <Menu onOpenChange={(open) => open && recipe.prefetch()}>
               <MenuTrigger asChild>
                 <button type="button" className="btn ghost" aria-label="More actions">
                   <Ellipsis size={13} aria-hidden="true" />
                 </button>
               </MenuTrigger>
               <MenuContent align="end">
+                <MenuItem onSelect={() => void recipe.copy()}>Copy as recipe</MenuItem>
                 <MenuItem onSelect={() => void toggle(!job.enabled)}>{job.enabled ? 'Pause' : 'Resume'}</MenuItem>
+                <MenuSeparator />
                 <MenuItem className="danger" onSelect={() => void remove()}>
                   Delete…
                 </MenuItem>
@@ -324,6 +331,20 @@ export function JobPage({ id, onNavigate }: { id: string; onNavigate: (hash: str
           </div>
         </div>
 
+        {recipe.status && (
+          <div className={`msg${recipe.status.kind === 'error' ? ' error' : ''}`} role="status">
+            {recipe.status.text}
+            {recipe.status.edit && (
+              <>
+                {' '}
+                <button type="button" className="tlink" onClick={edit}>
+                  Edit the job
+                </button>
+              </>
+            )}
+          </div>
+        )}
+        <RecipeFallbackDialog text={recipe.fallback} onClose={recipe.closeFallback} />
         {error && <div className="msg error">{error}</div>}
         {job.browser && skipsForApp && <div className="msg">This job needs the browser. Keep Junior.app open, or it skips.</div>}
         {job.draft && !job.enabled && (

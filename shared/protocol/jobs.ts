@@ -32,6 +32,15 @@ export type JobFileResponse =
   | { ok: true; id: string }
   | { ok: false; error: string; errors?: string[] }
 
+/**
+ * GET /api/jobs/recipe?id=: the job as a recipe (core/job/recipe.ts
+ * `toRecipe`): no id, no project, off, paths, ids and secrets taken out.
+ * `errors` non-empty = it won't import cleanly, so the page copies nothing.
+ */
+export type JobRecipeResponse =
+  | { ok: true; text: string; errors: string[]; scrubbed: { paths: number; ids: number; secrets: number } }
+  | { ok: false; error: string }
+
 /** GET /api/jobs/runs?id=: the slot ledger for one job, newest slot first. */
 export type JobRunsResponse =
   | { ok: true; runs: import('../../core/job/types.js').JobSlotRun[] }

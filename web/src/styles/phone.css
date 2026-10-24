@@ -77,6 +77,13 @@
 
   /* Pointer-only chrome that means nothing under a thumb. */
   .kbdHint, kbd.hint { display: none; }
+
+  /* A pasted recipe: the row wraps, the title ellipsizes, the button is a thumb target. */
+  .chatComposer .nsRecipe { flex-wrap: wrap; }
+  .chatComposer .nsRecipeT { flex: 1 1 0; }
+  .chatComposer .nsRecipe .btn { min-height: 44px; min-width: 44px; }
+  dialog.recipeDialog { width: 100vw; max-width: 100vw; height: var(--vvh, 100dvh); max-height: none; border-radius: 0; display: flex; flex-direction: column; }
+  dialog.recipeDialog textarea { flex: 1; min-height: 0; }
 }
 @keyframes sheetIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
 /* No hover on a touch screen: anything revealed on hover is always shown. */

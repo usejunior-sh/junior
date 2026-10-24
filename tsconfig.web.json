@@ -78,6 +78,8 @@
     "core/job/schedule.ts",
     "core/job/run-rows.ts",
     "core/job/readback-text.ts",
+    "core/job/recipe.ts",
+    "core/job/recipe-copy.ts",
     "core/actions/types.ts",
     "core/actions/own.ts",
     "core/actions/bash.ts",

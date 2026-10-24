@@ -203,6 +203,7 @@ export function JobsPage({
                 {all.length === 0 ? (
                   <>
                     <span>No jobs yet. Tell Junior what to keep doing for you — it asks what it needs and drafts the job.</span>
+                    <span className="wtblEmptySub">Got a recipe from a teammate? Paste it into the new job chat.</span>
                     <button type="button" className="btn" onClick={onAddJob}>
                       <Plus size={13} aria-hidden="true" /> Add your first job
                     </button>

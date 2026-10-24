@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import type { JobDraftResponse, JobPreviewStartResponse, JobPreviewStatusResponse, JobsResponse } from '../../shared/protocol.js'
+import type { JobDraftResponse, JobPreviewStartResponse, JobPreviewStatusResponse, JobRecipeResponse, JobsResponse } from '../../shared/protocol.js'
 import { cronFromCadence } from '../../core/job/cron.js'
 import type { JobFileSpec } from '../job-files.js'
 import { log } from '../log.js'
@@ -8,7 +8,7 @@ import type { Job } from '../../core/job/types.js'
 import { draftJob } from '../../core/sources/slack.js'
 import { jobPatchFrom } from '../validate.js'
 import { readJsonBody } from './http-util.js'
-import { deleteJob, draftJobOp, draftJobText, jobSpecFrom, syncJobFiles } from '../jobs/ops.js'
+import { deleteJob, draftJobOp, draftJobText, jobRecipeOp, jobSpecFrom, syncJobFiles } from '../jobs/ops.js'
 import { startJobPreview } from '../jobs/preview.js'
 import { errText } from '../errors.js'
 import type { ScopedCtx } from './ctx.js'
@@ -138,6 +138,24 @@ export async function jobRoutes({ req, url, json, rt }: ScopedCtx): Promise<bool
       body = { ok: false, error: errText(err) }
     }
     json(body.ok ? 200 : 400, body)
+    return true
+  }
+  // "Copy as recipe" on the job page: the job's file through toRecipe. Read only; nothing leaves the machine.
+  if (url.pathname === '/api/jobs/recipe' && req.method === 'GET') {
+    let body: JobRecipeResponse
+    let status = 200
+    try {
+      const r = await jobRecipeOp(rt, url.searchParams.get('id') ?? '')
+      if (!r) {
+        status = 404
+        throw new Error('unknown job id')
+      }
+      body = { ok: true, text: r.text, errors: r.errors, scrubbed: r.scrubbed }
+    } catch (err) {
+      if (status === 200) status = 500
+      body = { ok: false, error: errText(err) }
+    }
+    json(status, body)
     return true
   }
   if (url.pathname === '/api/jobs/draft' && req.method === 'POST') {

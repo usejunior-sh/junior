@@ -29,6 +29,7 @@ import { sessionNotice } from '../team-run/state.js'
 import { errText } from '../errors.js'
 import { checkModelChoice } from '../workspace/probes.js'
 import { rewindFilesOp } from '../session/rewind-ops.js'
+import { recipeFirstMessage } from '../jobs/ops.js'
 
 export function handleConnection(ws: WebSocket, req: http.IncomingMessage): void {
   const url = new URL(req.url ?? '/ws', `http://localhost:${PORT}`)
@@ -122,7 +123,10 @@ export function handleConnection(ws: WebSocket, req: http.IncomingMessage): void
             await sessionNotice(rt, row.id, `Not sent: ${errText(err)}`)
             break
           }
-          const firstMessage = [msg.firstMessage?.trim(), itemFiles.note].filter(Boolean).join('\n\n')
+          // A pasted job recipe reaches the model cleaned and framed, never raw (job-recipe-ui).
+          const typed = msg.firstMessage?.trim()
+          const opener = typed ? ((await recipeFirstMessage(rt, typed).catch(() => null)) ?? typed) : typed
+          const firstMessage = [opener, itemFiles.note].filter(Boolean).join('\n\n')
           if (firstMessage || images.length || files.length || msg.mentions?.length)
             void rt.live
               .get(row.id)

@@ -345,6 +345,15 @@ button.chip:hover:not(:disabled), .chip[data-state="open"] { color: var(--ink); 
 .chatComposer .nsPull .chip .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chatComposer .nsPull .chip button { display: inline-grid; place-items: center; width: 18px; height: 18px; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--ash); cursor: pointer; }
 .chatComposer .nsPull .chip button:hover { background: var(--wash-2); color: var(--ink); }
+/* A pasted job recipe (job-recipe-ui): what it is, and that it stays off. No orange, nothing waits on you. */
+.chatComposer .nsRecipe { gap: 8px; flex-wrap: nowrap; min-width: 0; }
+.chatComposer .nsRecipeLb { flex: none; font-family: var(--mono); font-size: 0.8462rem; color: var(--ash); }
+.chatComposer .nsRecipeT { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--body); }
+.chatComposer .nsRecipeOff { flex: none; color: var(--ash); }
+.chatComposer .nsRecipe .btn { flex: none; margin-left: auto; }
+/* the clipboard fallback: the recipe to select by hand */
+dialog.recipeDialog { width: 560px; background: var(--elevated); border-color: var(--hair-strong); box-shadow: none; }
+dialog.recipeDialog textarea { min-height: 260px; resize: vertical; font-family: var(--mono); font-size: 0.8846rem; line-height: 1.55; background: var(--deep); border-radius: var(--r); white-space: pre; }
 @media (prefers-reduced-motion: reduce) { #newSessionHome .nsWho.handoff .nsFace { animation: none; } }
 /* Phones: a smaller halo and line. */
 @media (max-width: 767px) {

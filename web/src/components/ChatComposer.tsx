@@ -28,6 +28,8 @@ import { inboxStore, useInbox } from '../inboxStore.js'
 import type { Mood } from '../../../core/junior/mood.js'
 import { matchItem, refsIn, shortRef } from '../../../core/junior/today.js'
 import { offerFor } from '../../../core/junior/offers.js'
+import { looksLikeRecipe } from '../../../core/job/recipe.js'
+import { recipeTitleOf } from '../../../core/job/recipe-copy.js'
 
 const reducedMotion = () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
 
@@ -257,6 +259,20 @@ export function ChatComposer({ draft, onChange, onCreate, error, step, top, plac
   const onClaude = provider === 'claude'
   const persona = usePersona()
 
+  // A pasted job recipe turns the box into a job chat (job-recipe-ui); the server frames it before the model reads it.
+  // "Not a recipe" sends this draft as a plain message instead, until the box is emptied.
+  const [notRecipe, setNotRecipe] = useState(false)
+  const recipe = onClaude && !draft.itemId && !notRecipe && looksLikeRecipe(draft.text)
+  useEffect(() => {
+    if (!draft.text.trim()) setNotRecipe(false)
+  }, [draft.text])
+  useEffect(() => {
+    if (!recipe) return
+    setJob(true)
+    setMode('normal')
+  }, [recipe])
+  const recipeTitle = recipe ? recipeTitleOf(draft.text) : ''
+
   // Sent: "On it." for a moment, then the session opens.
   const [handoff, setHandoff] = useState(false)
   useEffect(() => {
@@ -436,7 +452,7 @@ export function ChatComposer({ draft, onChange, onCreate, error, step, top, plac
           const go = () => {
             if (isNew && !existing) setMaking(newBranch)
             onCreate({
-              title: prefix ? `${prefix}${titleFrom(text, mentions)}` : goal ? `Goal: ${draft.label ?? titleFrom(text, mentions)}` : (draft.label ?? titleFrom(text, mentions)),
+              title: prefix ? `${prefix}${recipe ? recipeTitle || 'Untitled job' : titleFrom(text, mentions)}` : goal ? `Goal: ${draft.label ?? titleFrom(text, mentions)}` : (draft.label ?? titleFrom(text, mentions)),
               cwd: draft.cwd ?? fallback?.path ?? '',
               firstMessage: `${prefix}${text}`,
               model,
@@ -485,7 +501,27 @@ export function ChatComposer({ draft, onChange, onCreate, error, step, top, plac
         }}
         {...(job ? {} : { mode, onModeChange: setMode })}
       />
-      {onClaude && !draft.itemId && !making && (
+      {recipe && job && !making && (
+        <div className="nsPull nsRecipe" role="note" aria-label="Recipe detected">
+          <span className="nsRecipeLb">Recipe</span>
+          <span className="nsRecipeT" title={recipeTitle || 'Untitled job'}>
+            {recipeTitle || 'Untitled job'}
+          </span>
+          <span className="nsRecipeOff">stays off until you turn it on</span>
+          <button
+            type="button"
+            className="btn sm ghost"
+            aria-label="Send as a plain message"
+            onClick={() => {
+              setNotRecipe(true)
+              setJob(false)
+            }}
+          >
+            <X size={12} aria-hidden="true" /> Not a recipe
+          </button>
+        </div>
+      )}
+      {onClaude && !draft.itemId && !making && !(recipe && job) && (
         // Starters, not modes: each only sets up the box (a job chat) or fills it in.
         // Any session can still become any of these from what you say. Once you type
         // they hide but keep their room, so the page doesn't jump.

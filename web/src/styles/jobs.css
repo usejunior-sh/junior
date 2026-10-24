@@ -24,6 +24,7 @@
 .wtbl td.acts { width: 100px; padding-right: 8px; }
 .wtbl .actRow { display: flex; gap: 2px; justify-content: flex-end; }
 .wtblEmpty { padding: 40px 0; text-align: center; color: var(--ash); display: flex; flex-direction: column; align-items: center; gap: 14px; }
+.wtblEmpty .wtblEmptySub { margin-top: -8px; font-size: 0.9231rem; color: var(--stone); }
 .wtblFoot { display: flex; gap: 16px; margin-top: 14px; font-size: 0.9231rem; color: var(--stone); align-items: center; }
 .uses { display: inline-flex; gap: 4px; align-items: center; }
 .uses .u { width: 20px; height: 20px; border-radius: var(--r-sm); border: 1px solid var(--hair-strong); background: var(--elev); display: inline-flex; align-items: center; justify-content: center; color: var(--mute); }
