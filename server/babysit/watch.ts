@@ -17,7 +17,8 @@ import type { PrCheck } from '../../core/babysit/ci.js'
 import { babysitSearch, BABYSIT_QUERY, parseBabysit, type BabysitPr } from '../../core/babysit/pr.js'
 import { afterDecision, BABYSIT_FAST_MS, BABYSIT_SLOW_MS, babysitEvents, decide, newBabysitWatch, pollSoon, seenOf, type BabysitWatch } from '../../core/babysit/watch.js'
 import { classify, type MainRun } from '../../core/babysit/ci-sort.js'
-import type { MainRedCheck } from '../../core/work/handoff.js'
+import type { MainRedCheck, PrSeen } from '../../core/work/handoff.js'
+import { fixesShown, graceFor, inGrace, juniorPushed, PUSH_SLACK_MS } from '../../core/babysit/grace.js'
 
 /** The watch's memory, one JSON blob in config: the next poll and each PR's watch, by item id. */
 export const BABYSIT_WATCH_KEY = 'babysit.watch'
@@ -53,6 +54,8 @@ export interface BabysitDeps {
   upsertItem(item: WorkItem): Promise<void>
   /** the reviewer Junior suggests for a repo; null until it has learned one */
   reviewerFor(repo: string): Promise<string | null>
+  /** minutes a fix waits after your push (core/babysit/grace.ts); absent = no wait */
+  graceMinutes?(): Promise<number>
   /** a task was added: wake the runner; `stuck` = a cap was hit, tell the user */
   added(task: ItemTask, stuck: boolean): void
   log(level: 'info' | 'error', message: string, fields?: Record<string, unknown>): void
@@ -72,14 +75,25 @@ export async function babysitTickOp(d: BabysitDeps, now: number, force = false):
   const out = { polled: found.length, added: 0, reruns: 0, stopped: 0 }
   const prs: Record<string, BabysitWatch> = {}
   const main = mainRunsCache(d)
+  const graceMinutes = d.graceMinutes ? await d.graceMinutes().catch(() => 0) : 0
+  let waiting = false
 
   for (const { item, pr } of found) {
     await d.upsertItem(item)
     const stored = await d.store.items.get(item.id)
     if (stored && !stored.playbook) await d.store.items.setFields(item.id, { playbook: 'babysit' })
-    let w: BabysitWatch = { ...(state.prs[item.id] ?? newBabysitWatch()), headSha: pr.headSha, headRef: pr.headRef, baseRef: pr.baseRef, seen: seenOf(pr) }
+    const prev = state.prs[item.id]
+    const handed = stored?.handoff === 'on'
+    // whose push made this head matters only where a window could open or is open
+    const fresh = !prev || prev.headSha !== pr.headSha
+    const ask = handed && (fresh ? !!prev?.headSha : inGrace(prev, now))
+    const seenAt = fresh ? now : (prev.headSeenAt ?? now)
+    const grace = graceFor(prev, pr.headSha, now, graceMinutes, ask ? await pushedByJunior(d, item.id, pr.headSha, seenAt) : false)
+    let w: BabysitWatch = { ...(prev ?? newBabysitWatch()), headSha: pr.headSha, headRef: pr.headRef, baseRef: pr.baseRef, seen: seenOf(pr), ...grace }
+    if (fresh) delete w.graceLogs
     // Read, not worked: only a PR you handed off gets tasks.
-    if (stored?.handoff === 'on') w = await actOn(d, item.id, pr, w, out, now, main, state.prs[item.id]?.seen?.mainRed)
+    if (handed) w = await actOn(d, item.id, pr, w, out, now, main, prev?.seen?.mainRed)
+    if (w.seen?.graceUntil) waiting = true
     prs[item.id] = w
   }
 
@@ -98,9 +112,24 @@ export async function babysitTickOp(d: BabysitDeps, now: number, force = false):
     const was = state.prs[item.id]?.headSha
     return !!was && was !== pr.headSha
   })
-  await d.store.config.set(BABYSIT_WATCH_KEY, { nextPollAt: now + (pollSoon(found.map((f) => f.pr), busy, moved) ? BABYSIT_FAST_MS : BABYSIT_SLOW_MS), prs } satisfies BabysitWatchState)
+  await d.store.config.set(BABYSIT_WATCH_KEY, { nextPollAt: now + (pollSoon(found.map((f) => f.pr), busy, moved, waiting) ? BABYSIT_FAST_MS : BABYSIT_SLOW_MS), prs } satisfies BabysitWatchState)
   if (out.added || out.reruns || out.stopped) d.log('info', `babysit: ${out.polled} PRs, ${out.added} tasks added, ${out.reruns} reruns, ${out.stopped} stopped`)
   return out
+}
+
+/**
+ * Junior made this head (core/babysit/grace.ts): a task on the item reported
+ * it, one is mid-run, or the action log has a push on the item since just
+ * before the head was first seen. A read that fails counts as Junior's: no
+ * window, so a fix is never held on a guess.
+ */
+async function pushedByJunior(d: BabysitDeps, itemId: string, headSha: string, headSeenAt: number): Promise<boolean> {
+  try {
+    const [tasks, pushes] = await Promise.all([d.store.tasks.list(itemId), d.store.actions.list({ kind: 'push', itemId, since: headSeenAt - PUSH_SLACK_MS })])
+    return juniorPushed(headSha, { tasks, pushes, headSeenAt })
+  } catch {
+    return true
+  }
 }
 
 /** Main's check runs for a repo, read once per tick: null when they couldn't be read. */
@@ -130,7 +159,9 @@ function mainRunsCache(d: BabysitDeps): MainRuns {
 
 /**
  * One PR's events → tasks (or a rerun). Returns the watch with the caps
- * counted, and `seen.mainRed` set to the checks red on main too.
+ * counted, and `seen.mainRed` set to the checks red on main too. A fix held
+ * by your push's grace window sets `seen.graceUntil`; else, once Junior has
+ * tried, `seen.fixes` says how many fixes the reddest check has had.
  */
 async function actOn(
   d: BabysitDeps,
@@ -142,11 +173,14 @@ async function actOn(
   mainRuns: MainRuns,
   wasMainRed: readonly MainRedCheck[] = [],
 ): Promise<BabysitWatch> {
-  const ctx = { base: pr.baseRef, isDraft: pr.isDraft, reviewer: null as string | null }
+  const ctx = { base: pr.baseRef, isDraft: pr.isDraft, reviewer: null as string | null, graceUntil: w.graceUntil ?? null, now }
   const mainRed: MainRedCheck[] = []
+  const stuck: string[] = []
+  let held = false
   for (const ev of babysitEvents(pr)) {
     if (ev.kind === 'green') ctx.reviewer = await d.reviewerFor(pr.repo).catch(() => null)
     let dec = decide(ev, w, ctx)
+    if (ev.kind === 'checks_failed' && dec.do === 'task' && dec.stuck) stuck.push(ev.check.name)
     // Known already: no main read, no log fetched, nothing added.
     if (dec.do === 'task' && (await d.store.tasks.byKey(itemId, dec.task.key))) continue
     // A new failure: sort it before spending anything on it. Red on main too is
@@ -155,11 +189,15 @@ async function actOn(
       const runs = await mainRuns(pr.repo, pr.defaultBranch)
       let sort = classify(ev.check, runs, '', [])
       let log = ''
-      // the log only where it can change the answer, as before: a fresh fix, on an Actions run
-      if (sort.verdict !== 'main-red' && dec.do === 'task' && !dec.stuck && ev.check.runId !== null) {
+      // the log only where it can change the answer, as before: a fresh fix, on an Actions run;
+      // in a grace window, once per check and head, so a flake is still rerun while the fix waits
+      const at = `${ev.check.name}@${ev.sha}`
+      const waitLog = dec.do === 'wait' && !w.reruns.includes(at) && !w.graceLogs?.includes(at)
+      if (sort.verdict !== 'main-red' && ((dec.do === 'task' && !dec.stuck) || waitLog) && ev.check.runId !== null) {
         log = await d.source.failedLog(pr.repo, ev.check).catch(() => '')
         // the PR's changed files aren't in the search yet: a flaky line that names one still reads as flaky
         sort = classify(ev.check, runs, log, [])
+        if (waitLog) w = { ...w, graceLogs: [...(w.graceLogs ?? []), at].slice(-50) }
       }
       dec = decide(ev, w, { ...ctx, log, sort })
       if (sort.verdict === 'main-red') {
@@ -178,6 +216,10 @@ async function actOn(
       }
       continue
     }
+    if (dec.do === 'wait') {
+      held = true
+      continue
+    }
     if (dec.do !== 'task') continue
     const task = await d.store.tasks.add({ ...dec.task, itemId }, now)
     if (!task) continue
@@ -185,5 +227,15 @@ async function actOn(
     w = afterDecision(w, ev, dec)
     d.added(task, !!dec.stuck)
   }
-  return mainRed.length && w.seen ? { ...w, seen: { ...w.seen, mainRed } } : w
+  if (!w.seen) return w
+  const extra: Partial<PrSeen> = {}
+  if (mainRed.length) extra.mainRed = mainRed
+  // grace and the fraction never show together
+  if (held && typeof w.graceUntil === 'number') extra.graceUntil = w.graceUntil
+  else {
+    const onMain = new Set(mainRed.map((m) => m.check))
+    const n = fixesShown(w.fixes, w.seen.red.filter((c) => !onMain.has(c)), stuck)
+    if (n) extra.fixes = n
+  }
+  return Object.keys(extra).length ? { ...w, seen: { ...w.seen, ...extra } } : w
 }

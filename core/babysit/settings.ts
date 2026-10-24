@@ -27,6 +27,8 @@ export type BabysitSettings = {
   }
   /** tasks running at once, across PRs */
   maxRunning: number
+  /** minutes Junior waits after your push before its first fix on that head (grace.ts); 0 = no wait */
+  graceMinutes: number
 }
 
 export const BABYSIT_SETTINGS_KEY = 'babysit.settings'
@@ -35,9 +37,11 @@ export const DEFAULT_BABYSIT: BabysitSettings = {
   models: { fix: 'opus', rebase: 'sonnet', review: 'sonnet' },
   budget: { perTaskUsd: 3, perDayUsd: 20, perReviewUsd: 1 },
   maxRunning: 2,
+  graceMinutes: DEFAULT_GRACE_MINUTES,
 }
 
 import { isItemStep, ITEM_STEP_RUN } from '../playbooks/item.js'
+import { DEFAULT_GRACE_MINUTES, MAX_GRACE_MINUTES } from './grace.js'
 
 const MODEL_RE = /^[\w.\-[\]]{1,80}$/
 
@@ -57,6 +61,7 @@ export function babysitSettingsFrom(raw: unknown): BabysitSettings {
     models: { fix: model(m.fix, d.models.fix), rebase: model(m.rebase, d.models.rebase), review: model(m.review, d.models.review) },
     budget: { perTaskUsd: usd(b.perTaskUsd, d.budget.perTaskUsd), perDayUsd: usd(b.perDayUsd, d.budget.perDayUsd), perReviewUsd: usd(b.perReviewUsd, d.budget.perReviewUsd) },
     maxRunning: running,
+    graceMinutes: typeof r.graceMinutes === 'number' && Number.isInteger(r.graceMinutes) && r.graceMinutes >= 0 && r.graceMinutes <= MAX_GRACE_MINUTES ? r.graceMinutes : d.graceMinutes,
   }
 }
 

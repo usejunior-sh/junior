@@ -3,7 +3,8 @@
  * it becomes (plan artifact f39a3a5e, "Babysit playbook").
  *
  *   CI red             → "Fix lint" (Junior); a check that looks flaky is rerun once first,
- *                        and one red on main too adds nothing (ci-sort.ts: "not yours")
+ *                        one red on main too adds nothing (ci-sort.ts: "not yours"), and
+ *                        right after your push the fix waits out a grace window (grace.ts)
  *   bot thread         → "Fix Bugbot comment on api.ts" (Junior: fix, push, reply, resolve)
  *   person's thread    → "Answer Anirudha" (you)
  *   conflict / behind  → "Rebase on main" (Junior)
@@ -41,6 +42,12 @@ export type BabysitWatch = {
   botThreads?: string[]
   /** what the last poll saw, for a PR's suggestion; kept whether or not you handed it off */
   seen?: PrSeen
+  /** when `headSha` was first seen: stands in for the push time (grace.ts) */
+  headSeenAt?: number
+  /** you pushed `headSha`: Junior's first fix on it waits until then; null = no window */
+  graceUntil?: number | null
+  /** `check@sha` logs read during a window, for the flake test: once each */
+  graceLogs?: string[]
 }
 
 export function seenOf(pr: BabysitPr): PrSeen {
@@ -106,6 +113,8 @@ export type TaskSpec = Omit<NewTask, 'itemId'> & { key: string; step: string }
 export type BabysitDecision =
   | { do: 'task'; task: TaskSpec; stuck?: true }
   | { do: 'rerun'; check: PrCheck }
+  /** you just pushed: the fix waits until `until` (grace.ts) */
+  | { do: 'wait'; until: number }
   | { do: 'none' }
 
 export type DecideContext = {
@@ -120,6 +129,9 @@ export type DecideContext = {
    * rerun once, fix is fixed. Absent = not sorted, and the log's flake test decides.
    */
   sort?: CiSort
+  /** you pushed this head: a fix waits until then (grace.ts); needs `now` */
+  graceUntil?: number | null
+  now?: number
 }
 
 /** What one event becomes, with the caps applied. */
@@ -132,6 +144,8 @@ export function decide(ev: BabysitEvent, w: BabysitWatch, ctx: DecideContext): B
       const flaky = ctx.sort ? ctx.sort.verdict === 'flaky' : looksFlaky(ctx.log ?? '') || /^(TIMED_OUT|CANCELLED|STARTUP_FAILURE)$/.test(ev.check.conclusion ?? '')
       if (ev.check.runId !== null && flaky && !w.reruns.includes(`${name}@${ev.sha}`)) return { do: 'rerun', check: ev.check }
       const tries = w.fixes[name] ?? 0
+      // you just pushed: give your fix a chance before Junior starts one (a rerun above still runs)
+      if (typeof ctx.graceUntil === 'number' && ctx.now !== undefined && ctx.now < ctx.graceUntil) return { do: 'wait', until: ctx.graceUntil }
       if (tries >= MAX_FIX_ATTEMPTS)
         return {
           do: 'task',
@@ -259,9 +273,10 @@ export const BABYSIT_SLOW_MS = 5 * 60_000
 
 /**
  * Something is moving: a check is still running, Junior has work queued or
- * running, or a head moved since the last poll (a push whose checks haven't
- * reported yet, so the hand-back gate is read again soon, not in 5 minutes).
+ * running, a head moved since the last poll (a push whose checks haven't
+ * reported yet, so the hand-back gate is read again soon, not in 5 minutes),
+ * or a fix waits out your push's grace window (`waiting`), so it starts on time.
  */
-export function pollSoon(prs: readonly BabysitPr[], busy: boolean, moved = false): boolean {
-  return busy || moved || prs.some((p) => p.checks.some((c) => c.status === 'pending'))
+export function pollSoon(prs: readonly BabysitPr[], busy: boolean, moved = false, waiting = false): boolean {
+  return busy || moved || waiting || prs.some((p) => p.checks.some((c) => c.status === 'pending'))
 }

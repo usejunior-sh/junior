@@ -76,6 +76,7 @@ export function babysitDeps(rt: WorkspaceRuntime): BabysitDeps {
     repos: () => connectedRepos(rt),
     upsertItem: async (item) => void (await upsertItem(rt, item)),
     reviewerFor: (repo) => reviewerFor(rt, repo),
+    graceMinutes: async () => (await babysitSettings(rt)).graceMinutes,
     added: (task, stuck) => taskAdded(rt, task, stuck),
     log: (level, message, fields) => log(level, 'babysit', message, { ...fields, workspace: rt.meta.id }),
   }

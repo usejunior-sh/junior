@@ -47,7 +47,7 @@ test('settings: defaults, then whatever is valid of what was saved', () => {
   assert.deepEqual(DEFAULT_BABYSIT.budget, { perTaskUsd: 3, perDayUsd: 20, perReviewUsd: 1 })
   // the old on/off switches are gone: a stored one is ignored
   const s = babysitSettingsFrom({ enabled: true, reviews: true, models: { fix: 'claude-opus-5-5', rebase: 'bad model!' }, budget: { perTaskUsd: 5, perDayUsd: -1 }, maxRunning: 9 })
-  assert.deepEqual(s, { models: { fix: 'claude-opus-5-5', rebase: 'sonnet', review: 'sonnet' }, budget: { perTaskUsd: 5, perDayUsd: 20, perReviewUsd: 1 }, maxRunning: 2 })
+  assert.deepEqual(s, { models: { fix: 'claude-opus-5-5', rebase: 'sonnet', review: 'sonnet' }, budget: { perTaskUsd: 5, perDayUsd: 20, perReviewUsd: 1 }, maxRunning: 2, graceMinutes: 10 })
   assert.equal(modelFor('rebase', s), 'sonnet')
   assert.equal(modelFor('fix-ci', s), 'claude-opus-5-5')
   assert.equal(modelFor('fix-thread', s), 'claude-opus-5-5')

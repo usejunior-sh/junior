@@ -43,6 +43,7 @@
     "core/babysit/settings.ts",
     "core/babysit/ready.ts",
     "core/babysit/ci.ts",
+    "core/babysit/grace.ts",
     "core/review/brief.ts",
     "core/work/due.ts",
     "core/work/fade.ts",

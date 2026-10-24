@@ -37,6 +37,14 @@ export type PrSeen = {
    * saved before the gate existed.
    */
   ready?: Readiness
+  /**
+   * You just pushed and CI is red: Junior holds its first fix until then
+   * (core/babysit/grace.ts). Set only on a PR you handed off, and only on the
+   * poll that held a fix; the row shows it only while it is still ahead.
+   */
+  graceUntil?: number
+  /** fixes Junior spent on the checks red now, the most on any one; set only on a PR you handed off */
+  fixes?: number
 }
 
 /** One check red on main too, and where main's run is. */
