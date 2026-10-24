@@ -3,8 +3,9 @@
  * pause it, resume it, or "not this one" to its suggestion. The row moves at
  * once; the inbox refetch the server's broadcast brings settles it.
  */
-import type { HandoffReadiness, HandoffResponse, ScoredItem, SettingsResponse, WatchId } from '../../shared/protocol.js'
+import type { HandoffReadiness, HandoffResponse, ItemStateResponse, ScoredItem, SettingsResponse, WatchId } from '../../shared/protocol.js'
 import { markWatchOn } from '../../core/junior/watch-off.js'
+import { quietKey } from '../../core/junior/ledger.js'
 import type { Handoff } from '../../core/work/fields.js'
 import { inboxStore } from './inboxStore.js'
 import { signalIds } from './components/inbox/rowHelpers.js'
@@ -84,6 +85,43 @@ export async function doneItem(item: ScoredItem): Promise<void> {
       fetch('/api/items/state', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id, status: 'done' }) }).catch(() => {}),
     ),
   )
+}
+
+/** The server's error line, first letter up: "no such item" → "No such item." */
+const sentence = (s: string) => {
+  const t = s.charAt(0).toUpperCase() + s.slice(1)
+  return /[.!?]$/.test(t) ? t : `${t}.`
+}
+
+async function postNotUseful(id: string, undo: boolean): Promise<string | null> {
+  try {
+    const r = await fetch('/api/items/not-useful', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id, ...(undo ? { undo: true } : {}) }) })
+    const b = (await r.json().catch(() => ({ ok: false, error: `HTTP ${r.status}` }))) as ItemStateResponse
+    if (b.ok) return null
+    void inboxStore.refresh()
+    return sentence(b.error)
+  } catch (err) {
+    void inboxStore.refresh()
+    return sentence(err instanceof Error ? err.message : String(err))
+  }
+}
+
+/**
+ * "Not useful" from a Needs you row: it leaves at once, until something new
+ * happens on it (core/junior/ledger.ts quieted). One item, one event: unlike
+ * snooze and done, it doesn't fan out to linked signals. Null when it went
+ * through; else the error, as a sentence.
+ */
+export function markNotUseful(item: ScoredItem): Promise<string | null> {
+  const stamp = quietKey(item)
+  inboxStore.patch((items) => items.map((i) => (i.id === item.id ? { ...i, notUseful: stamp } : i)))
+  return postNotUseful(item.id, false)
+}
+
+/** Undo a "not useful" within seconds: the row is back at once. */
+export function undoNotUseful(item: ScoredItem): Promise<string | null> {
+  inboxStore.patch((items) => items.map((i) => (i.id === item.id ? { ...i, notUseful: undefined } : i)))
+  return postNotUseful(item.id, true)
 }
 
 /** The verb on a suggestion's button. */

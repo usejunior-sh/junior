@@ -474,6 +474,19 @@ button.jlTitle:hover { text-decoration: underline; text-decoration-color: var(--
 .jhKey:hover, .jhKey[data-state="open"] { color: var(--ink); background: var(--hair-soft); }
 .jhKeys { margin-top: 18px; display: flex; gap: 18px; justify-content: center; font-size: 0.9231rem; color: var(--ash); }
 .jhKeys span { display: inline-flex; gap: 6px; align-items: center; }
+/* "not useful": the phone's way in (the key strip is hidden there), and the notice that holds the row's slot for 5 s */
+.jhXp .acts .nuPhone { display: none; }
+.jhGone {
+  display: flex; align-items: center; gap: 6px; height: 44px; padding: 0 12px; border-top: 1px solid transparent; border-radius: var(--r);
+  font-size: 0.9615rem; color: var(--charcoal); overflow: hidden; transition: height 0.12s ease, opacity 0.12s ease;
+}
+.jhItem + .jhGone, .jhGone + .jhItem:not(.open) > .jhRow { border-top-color: var(--hair-soft); }
+.jhGone .w { flex: none; white-space: nowrap; }
+.jhGone .sep { flex: none; color: var(--stone); }
+.jhGone .undo { flex: none; }
+.jhGone .tt { min-width: 0; flex: 1; margin-left: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--stone); }
+.jhGone.out { height: 0; opacity: 0; }
+.jhEmpty:focus { outline: none; }
 .jhMore { display: block; margin: 8px 12px 0; padding: 0; border: 0; background: none; font: inherit; font-size: 0.9615rem; color: var(--ash); cursor: pointer; }
 .jhMore:hover { color: var(--ink); }
 .jhEmpty { display: flex; gap: 10px; align-items: center; justify-content: center; margin: 28px 0 0; color: var(--mute); font-size: 1.038rem; }
@@ -481,6 +494,7 @@ button.jlTitle:hover { text-decoration: underline; text-decoration-color: var(--
 
 @media (prefers-reduced-motion: reduce) {
   .jhHalo::before, .jhHalo .sat, .jhHalo .bob, .jhTicker .pulse::after, .jhXp { animation: none; }
+  .jhGone { transition: none; }
 }
 
 /* ---------- phone ---------- */
@@ -506,4 +520,11 @@ button.jlTitle:hover { text-decoration: underline; text-decoration-color: var(--
   .jhXp .acts .btn { height: 36px; }
   .jhXp .acts .cap { flex-basis: 100%; order: 9; }
   .jhXp .keys, .jhKeys, .jhKbd { display: none; }
+  .jhXp .acts .nuPhone { display: inline-flex; }
+  .jhGone { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 12px; row-gap: 2px; height: auto; min-height: 52px; padding: 8px 10px; }
+  .jhGone .w { grid-column: 1; grid-row: 1; }
+  .jhGone .sep { display: none; }
+  .jhGone .undo { grid-column: 2; grid-row: 1 / 3; height: 36px; padding: 0 12px; border: 1px solid var(--hair-strong); border-radius: var(--r); background: var(--elev); font-weight: 500; color: var(--ink); }
+  .jhGone .tt { grid-column: 1; grid-row: 2; margin-left: 0; color: var(--ash); }
+  .jhGone.out { min-height: 0; height: 0; padding-block: 0; }
 }

@@ -5,7 +5,9 @@
  * closed; a click or Space opens one as a bordered card, its Message or
  * Context, what Junior says and the actions aligned to the row's columns.
  * Many can be open; Esc closes all. J/K move, ⏎ acts on an open row only,
- * S snoozes, D marks done, O opens the item.
+ * S snoozes, D marks done, O opens the item. On Needs you, N marks an open
+ * item row "not useful": it leaves until something new happens on it, and a
+ * one-line notice holds its slot for 5 s with Undo (U).
  *
  * Which rows a tab shows and the words on them are core/junior/ledger.ts.
  * Every verb here is local or a hand-off; sends stay held for approval.
@@ -13,12 +15,13 @@
 import { ChevronRight, X } from 'lucide-react'
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { HandoffReadiness, NeedsRow, ScoredItem, WatchId } from '../../../shared/protocol.js'
-import { cantWatchOf, juniorState, LEDGER_GROUP_TITLE, ledgerGroup, ledgerProgress, ledgerRows, personWaits, watchOffOf, type LedgerGroup, type LedgerTab } from '../../../core/junior/ledger.js'
+import { ageHot, cantWatchOf, juniorState, LEDGER_GROUP_TITLE, ledgerGroup, ledgerProgress, ledgerRows, watchOffOf, type LedgerGroup, type LedgerTab } from '../../../core/junior/ledger.js'
 import { TURN_ON_LABEL, WATCH_CANT_SAYS, WATCH_OFF_SAYS, WATCH_STILL_OFF, withAnswer } from '../../../core/junior/watch-off.js'
 import { itemHash } from '../hooks.js'
-import { doneItem, sendHandoff, snoozeItem, turnOnWatch, VERB, type HandoffVerb } from '../handoff.js'
+import { doneItem, markNotUseful, sendHandoff, snoozeItem, turnOnWatch, undoNotUseful, VERB, type HandoffVerb } from '../handoff.js'
 import { anyDialogOpen, isGoSequence, isTypingTarget } from '../keys.js'
 import { kindIcon, shortAge } from '../itemUi.js'
+import { isMobile } from '../useMobile.js'
 import { JuniorFace } from './JuniorFace.js'
 import { SnoozeMenu } from './SnoozeMenu.js'
 import { TurnOnButton, WatchCap } from './WatchOff.js'
@@ -27,6 +30,14 @@ type Nav = { onNavigate: (hash: string) => void }
 
 /** FYI rows shown on Up next before "more in your inbox". */
 const FYI_SHOWN = 6
+
+/** How long "Marked not useful · Undo" holds the row's slot; the server takes an undo for a little longer. */
+const GONE_MS = 5000
+/** The notice's collapse, matched by `.jhGone.out` in junior.css. */
+const GONE_OUT_MS = 120
+
+/** A row just marked not useful: the notice in its slot (`at`, its index in the list), and how to put it back. */
+type Gone = { item: ScoredItem; at: number; wasOpen: boolean; leaving: boolean }
 
 /** One line of the ledger: an inbox item, or something Junior is held on (a blocked session, a plan, sends). */
 type Line = { key: string; group: LedgerGroup; item: ScoredItem; need?: undefined } | { key: string; group: LedgerGroup; need: NeedsRow; item?: undefined }
@@ -187,6 +198,102 @@ export function JuniorLedger({ tab, items, needs, me, empty, onNavigate }: Props
   const [snoozing, setSnoozing] = useState<string | null>(null)
   const at = sel === null ? null : Math.min(sel, Math.max(0, shown.length - 1))
 
+  // "Not useful": one notice at a time, in the marked row's slot
+  const [gone, setGone] = useState<Gone | null>(null)
+  const [held, setHeld] = useState({ hover: false, focus: false })
+  const [nuError, setNuError] = useState<string | null>(null)
+  const [said, setSaid] = useState('')
+  const emptyRef = useRef<HTMLParagraphElement>(null)
+  /** the row Undo brought back: the cursor and focus go to it once it renders */
+  const restoring = useRef<string | null>(null)
+  /** the notice expired holding focus: give it to the row now in its slot */
+  const refocusAt = useRef<number | null>(null)
+  /** our own move of focus to Undo after a click doesn't hold the timer; a person's does */
+  const autoFocused = useRef(false)
+  const rowEl = (key: string) => [...(listRef.current?.querySelectorAll<HTMLElement>('.jhItem') ?? [])].find((el) => el.dataset.key === key)
+
+  const markGone = (item: ScoredItem, index: number, how: 'key' | 'click') => {
+    const focusInside = !!rowEl(item.id)?.contains(document.activeElement)
+    setGone({ item, at: index, wasOpen: open.has(item.id), leaving: false })
+    setHeld({ hover: false, focus: false })
+    setNuError(null)
+    setOpen((o) => {
+      const n = new Set(o)
+      n.delete(item.id)
+      return n
+    })
+    setSaid(`Marked not useful: ${item.title}. ${isMobile() ? 'Tap Undo within 5 seconds.' : 'Press U or Undo within 5 seconds.'}`)
+    // the clicked button is gone: focus goes to Undo, never to body. A key press leaves focus alone.
+    if (how === 'click' || focusInside)
+      requestAnimationFrame(() => {
+        const undo = listRef.current?.querySelector<HTMLElement>('.jhGone .undo')
+        if (!undo) return
+        autoFocused.current = true
+        undo.focus()
+      })
+    void markNotUseful(item).then((err) => {
+      if (!err) return
+      setGone((g) => (g?.item.id === item.id ? null : g))
+      setNuError(`Couldn’t mark it not useful. ${err}`)
+    })
+  }
+
+  const undoGone = () => {
+    const g = live.current.gone
+    if (!g) return
+    setGone(null)
+    if (g.wasOpen) setOpen((o) => new Set(o).add(g.item.id))
+    restoring.current = g.item.id
+    setSaid(`Back on Needs you: ${g.item.title}.`)
+    void undoNotUseful(g.item).then((err) => {
+      if (!err) return
+      // the row leaves again: a later return mustn't pull the cursor or focus to it
+      if (restoring.current === g.item.id) restoring.current = null
+      setNuError(`Couldn’t undo. ${err}`)
+    })
+  }
+
+  const hold = (what: 'hover' | 'focus', on: boolean) => {
+    if (what === 'focus' && on && autoFocused.current) {
+      autoFocused.current = false
+      return
+    }
+    setHeld((h) => (h[what] === on ? h : { ...h, [what]: on }))
+  }
+
+  // 5 s, paused while hovered or focused (WCAG 2.2.1); leaving restarts the full 5 s
+  useEffect(() => {
+    if (!gone || gone.leaving || held.hover || held.focus) return
+    const t = setTimeout(() => setGone((g) => g && { ...g, leaving: true }), GONE_MS)
+    return () => clearTimeout(t)
+  }, [gone, held])
+  useEffect(() => {
+    if (!gone?.leaving) return
+    const t = setTimeout(() => {
+      if (listRef.current?.querySelector('.jhGone')?.contains(document.activeElement)) refocusAt.current = gone.at
+      setGone(null)
+    }, GONE_OUT_MS)
+    return () => clearTimeout(t)
+  }, [gone])
+  // after Undo: the cursor and focus on the restored row; after expiry: focus on the row in the slot
+  useEffect(() => {
+    const id = restoring.current
+    if (id) {
+      const n = shown.findIndex((l) => l.key === id)
+      if (n >= 0) {
+        restoring.current = null
+        setSel(n)
+        requestAnimationFrame(() => rowEl(id)?.querySelector<HTMLElement>('.jhRow')?.focus())
+      }
+    }
+    if (refocusAt.current !== null && !gone) {
+      const rows = listRef.current?.querySelectorAll<HTMLElement>('.jhItem > .jhRow')
+      const n = refocusAt.current
+      refocusAt.current = null
+      ;(rows?.length ? rows[Math.min(n, rows.length - 1)] : emptyRef.current)?.focus()
+    }
+  })
+
   const toggle = (key: string) =>
     setOpen((o) => {
       const n = new Set(o)
@@ -199,8 +306,8 @@ export function JuniorLedger({ tab, items, needs, me, empty, onNavigate }: Props
   const goNeed = (n: NeedsRow) => onNavigate(n.target.kind === 'session' ? n.target.id : '/junior/log')
 
   // The keys: only while nothing else wants them (a text box, a menu, a `g` sequence).
-  const live = useRef({ shown, at, open, act, turnOn, onNavigate })
-  live.current = { shown, at, open, act, turnOn, onNavigate }
+  const live = useRef({ shown, at, open, act, turnOn, onNavigate, tab, gone, markGone, undoGone })
+  live.current = { shown, at, open, act, turnOn, onNavigate, tab, gone, markGone, undoGone }
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey || isTypingTarget(e) || isGoSequence(e) || anyDialogOpen()) return
@@ -248,9 +355,35 @@ export function JuniorLedger({ tab, items, needs, me, empty, onNavigate }: Props
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  if (lines.length === 0)
+  // N and U in the capture phase: N must win over the app's "n" (new chat), which stands aside on
+  // a prevented event. N only marks an open item row on Needs you; anywhere else "n" is a new chat.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'n' && e.key !== 'u') return
+      if (e.metaKey || e.ctrlKey || e.altKey || isTypingTarget(e) || isGoSequence(e) || anyDialogOpen()) return
+      const { shown, at, open, tab, gone, markGone, undoGone } = live.current
+      if (e.key === 'u') {
+        if (!gone) return
+        e.preventDefault()
+        return undoGone()
+      }
+      const line = at === null ? undefined : shown[at]
+      if (tab !== 'needs' || !line?.item || !open.has(line.key)) return
+      e.preventDefault()
+      markGone(line.item, at!, 'key')
+    }
+    document.addEventListener('keydown', onKey, true)
+    return () => document.removeEventListener('keydown', onKey, true)
+  }, [])
+
+  // the notice shows only while its row is off the list (a refetch can bring the row back early)
+  const notice = gone && !lines.some((l) => l.key === gone.item.id) ? gone : null
+  const goneLine = notice && <GoneLine key={`gone:${notice.item.id}`} title={notice.item.title} leaving={notice.leaving} onUndo={undoGone} onHold={hold} />
+  const noticeAt = notice ? Math.min(notice.at, shown.length) : -1
+
+  if (lines.length === 0 && !notice)
     return (
-      <p className="jhEmpty">
+      <p className="jhEmpty" ref={emptyRef} tabIndex={-1}>
         <JuniorFace mood="hello" size={18} motion="still" decorative /> {empty}
       </p>
     )
@@ -275,6 +408,7 @@ export function JuniorLedger({ tab, items, needs, me, empty, onNavigate }: Props
         }
         return (
           <Fragment key={line.key}>
+            {n === noticeAt && goneLine}
             {head}
             <div className={`jhItem${isOpen ? ' open' : ''}${focus ? ' focus' : ''}`} data-key={line.key}>
               {line.need ? (
@@ -292,22 +426,27 @@ export function JuniorLedger({ tab, items, needs, me, empty, onNavigate }: Props
                   onClick={click}
                   act={act}
                   onOpen={() => openItem(line.item.id)}
+                  onNotUseful={tab === 'needs' ? () => markGone(line.item, n, 'click') : undefined}
                 />
               )}
             </div>
           </Fragment>
         )
       })}
+      {noticeAt === shown.length && goneLine}
       {fyi > 0 && (
         <button type="button" className="jhMore" onClick={() => onNavigate('/inbox')}>
           {fyi} more for your info in the inbox
         </button>
       )}
-      {error && (
+      {(nuError ?? error) && (
         <p className="jrErr" role="alert">
-          {error}
+          {nuError ?? error}
         </p>
       )}
+      <p className="sr-only" role="status" aria-live="polite">
+        {said}
+      </p>
       <div className="jhKeys" aria-hidden="true">
         <span>
           <Kbd>J</Kbd>
@@ -341,6 +480,7 @@ function ItemLine({
   onClick,
   act,
   onOpen,
+  onNotUseful,
 }: {
   item: ScoredItem
   me: string | null
@@ -354,12 +494,14 @@ function ItemLine({
   onClick: () => void
   act: Act
   onOpen: () => void
+  /** Needs you only: "not useful", it shouldn't have reached you */
+  onNotUseful?: () => void
 }) {
   const who = whoOf(i, me)
   const Icon = kindIcon(i)
   const st = juniorState(i)
   const p = ledgerProgress(i)
-  const hot = personWaits(i) && ledgerGroup(i) === 'waiting'
+  const hot = ageHot(i)
   const primary = primaryOf(i, act, onOpen, turnOn)
   const capId = `jhCap-${i.id}`
   return (
@@ -420,6 +562,12 @@ function ItemLine({
                 <X size={13} aria-hidden="true" /> Not this one
               </button>
             )}
+            {onNotUseful && (
+              // the key strip is hidden on a phone: there this is the way in
+              <button type="button" className="btn sm ghost nuPhone" aria-label="Not useful: this didn’t need you" onClick={onNotUseful}>
+                Not useful
+              </button>
+            )}
             <span className="keys">
               <SnoozeMenu open={snoozing} onOpenChange={onSnoozing} onSnooze={(until) => void snoozeItem(i, until)}>
                 <button type="button" className="jhKey">
@@ -429,11 +577,43 @@ function ItemLine({
               <button type="button" className="jhKey" onClick={() => void doneItem(i)}>
                 <Kbd>D</Kbd>done
               </button>
+              {onNotUseful && (
+                <button type="button" className="jhKey" aria-keyshortcuts="n" title="This didn’t need you. It leaves Needs you until something new happens." onClick={onNotUseful}>
+                  <Kbd>N</Kbd>not useful
+                </button>
+              )}
             </span>
           </div>
         </div>
       )}
     </>
+  )
+}
+
+/**
+ * "Marked not useful · Undo", in the marked row's slot for 5 s. A ledger line,
+ * quieter than a row: no card, no colour. Hover or focus holds it.
+ */
+function GoneLine({ title, leaving, onUndo, onHold }: { title: string; leaving: boolean; onUndo: () => void; onHold: (what: 'hover' | 'focus', on: boolean) => void }) {
+  return (
+    <div
+      className={`jhGone${leaving ? ' out' : ''}`}
+      onMouseEnter={() => onHold('hover', true)}
+      onMouseLeave={() => onHold('hover', false)}
+      onFocus={() => onHold('focus', true)}
+      onBlur={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) onHold('focus', false)
+      }}
+    >
+      <span className="w">Marked not useful</span>
+      <span className="sep" aria-hidden="true">
+        ·
+      </span>
+      <button type="button" className="jhKey undo" aria-keyshortcuts="u" onClick={onUndo}>
+        Undo <Kbd>U</Kbd>
+      </button>
+      <span className="tt">{title}</span>
+    </div>
   )
 }
 

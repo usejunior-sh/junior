@@ -75,6 +75,8 @@ export function useGlobalHotkeys({ route, navigate, newSession, newTerminal, ter
         return
       }
       if (e.key === 'n') {
+        // a page used it first (the Junior page's N marks a Needs you row not useful)
+        if (e.defaultPrevented) return
         e.preventDefault()
         // In the inbox, `n` is "new work item"; among terminals, a new shell;
         // everywhere else, a new session.
