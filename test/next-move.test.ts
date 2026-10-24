@@ -245,6 +245,10 @@ test('owner labels', () => {
 test('no model in the path: next.ts imports only the pure work core', () => {
   const src = readFileSync(new URL('../core/work/next.ts', import.meta.url), 'utf8')
   const imports = [...src.matchAll(/from '([^']+)'/g)].map((m) => m[1])
-  // the source registry is pure too: a table of descriptors, no I/O
-  for (const i of imports) assert.match(i!, /^(\.\/(asks|flow|turn|types)|\.\.\/\.\.\/shared\/sources)\.js$/, i)
+  // the source registry is pure too: a table of descriptors, no I/O. So are the
+  // babysit grace helpers (grace → ci: constants and arithmetic) and the promise
+  // view (promise-view → due → asks: dates passed in, never read from the clock)
+  for (const i of imports) {
+    assert.match(i!, /^(\.\/(asks|flow|turn|types|promise-view)|\.\.\/\.\.\/shared\/sources|\.\.\/babysit\/grace)\.js$/, i)
+  }
 })
