@@ -6,7 +6,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { babysitSearch, parseBabysit, type BabysitPr } from '../core/babysit/pr.js'
 import { afterDecision, babysitEvents, botName, decide, isStale, MAX_FIX_ATTEMPTS, newBabysitWatch, pollSoon, readyForReview, type BabysitEvent } from '../core/babysit/watch.js'
-import type { PrCheck, PrThread } from '../core/goals/shepherd.js'
+import type { PrCheck, PrThread } from '../core/babysit/ci.js'
 import { classify, mainRunsFrom, type MainRun } from '../core/babysit/ci-sort.js'
 import { mainRedOnly } from '../core/work/handoff.js'
 

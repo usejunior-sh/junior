@@ -1,9 +1,8 @@
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import type { StoredSession } from '../../core/store/types.js'
-import { type RoleFence, roleFenceDecision } from '../../core/goals/fence.js'
-import { roleWrites } from '../../core/goals/run.js'
-import { goalDir } from '../../core/goals/types.js'
+import { type RoleFence, roleFenceDecision } from '../../core/teams/fence.js'
+import { roleWrites } from '../../core/teams/writes.js'
 import type { ToolVeto, VetoDecision } from '../providers/types.js'
 import { log } from '../log.js'
 import { type ActionMove, canonJson, heldEntry, heldRecord, holdable, isArgsObject, move, queuedMessage, sendDelay } from '../../core/actions/queue.js'
@@ -58,7 +57,7 @@ async function branchScope(cwd: string): Promise<BranchScope> {
 }
 
 /**
- * The role fence a session runs under (core/goals/fence.ts), or null: a team
+ * The role fence a session runs under (core/teams/fence.ts), or null: a team
  * worker on a step that isn't the change step is read-only, and so is a brief.
  */
 function roleFenceOf(rt: WorkspaceRuntime, row: StoredSession): RoleFence | null {
@@ -69,7 +68,7 @@ function roleFenceOf(rt: WorkspaceRuntime, row: StoredSession): RoleFence | null
       write: roleWrites(goalRun.role),
       role: goalRun.role,
       // Reviewer independence: not the builders' handoff, log or transcripts.
-      ...(goalRun.role === 'reviewer' ? { hidden: [path.join(rt.goalLedger.root, goalDir(goalRun.goalId)), `${path.sep}.claude${path.sep}projects${path.sep}`] } : {}),
+      ...(goalRun.role === 'reviewer' ? { hidden: [rt.goalLedger.goalPath(goalRun.goalId), `${path.sep}.claude${path.sep}projects${path.sep}`] } : {}),
     }
   if (row.kind === 'goal') return { write: false, role: 'lead' }
   const run = teamRunOf(rt, row.id)

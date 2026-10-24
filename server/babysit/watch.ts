@@ -13,7 +13,7 @@
 import type { Store } from '../../core/store/types.js'
 import type { WorkItem } from '../../core/work/types.js'
 import type { ItemTask } from '../../core/work/tasks.js'
-import type { PrCheck } from '../../core/goals/shepherd.js'
+import type { PrCheck } from '../../core/babysit/ci.js'
 import { babysitSearch, BABYSIT_QUERY, parseBabysit, type BabysitPr } from '../../core/babysit/pr.js'
 import { afterDecision, BABYSIT_FAST_MS, BABYSIT_SLOW_MS, babysitEvents, decide, newBabysitWatch, pollSoon, seenOf, type BabysitWatch } from '../../core/babysit/watch.js'
 import { classify, type MainRun } from '../../core/babysit/ci-sort.js'

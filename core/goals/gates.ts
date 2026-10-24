@@ -7,7 +7,7 @@
  */
 import { defaultToolsFor, mcpToolName, type ProbedTool } from '../job/tools.js'
 import { parseDuration } from './machine.js'
-import type { FenceDecision } from './fence.js'
+import type { FenceDecision } from '../teams/fence.js'
 import { GATE_CHECK_SCHEDULE_MIN, GATE_CHECK_TAIL_MIN, GATE_VERDICT_KINDS, type Gate, type GateVerdict, type GateVerdictKind } from './types.js'
 
 const MIN = 60_000

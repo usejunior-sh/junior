@@ -8,11 +8,11 @@
  *
  * Pure: the query text and the parse. The server runs `gh`.
  */
-import { snapshotFrom, type PrSnapshot } from '../goals/shepherd.js'
+import { snapshotFrom, type PrSnapshot } from './snapshot.js'
 import { classifyOwnPr, toItem, type RawNode } from '../sources/github.js'
 import type { WorkItem } from '../work/types.js'
 
-/** A PR as the babysitter sees it: the shepherd's snapshot and a few more facts. */
+/** A PR as the babysitter sees it: the PR snapshot (snapshot.ts) and a few more facts. */
 export type BabysitPr = PrSnapshot & {
   isDraft: boolean
   /** GitHub's merge state says the branch is behind its base (repos that require up to date) */

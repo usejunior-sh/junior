@@ -198,8 +198,8 @@ export type GoalStepState = {
   updatedAt: number
 }
 
-/** 3 fix attempts per failing check, then the user; same cap as recipes' MAX_FIX_ROUNDS. */
-export const MAX_FIX_ATTEMPTS = 3
+// Moved to core/babysit/ci.ts (move-goal-helpers); re-exported for one commit.
+export { MAX_FIX_ATTEMPTS } from '../babysit/ci.js'
 
 /** open = waiting; met / expired / cancelled = settled. needs_user = handed to the Inbox as an approval. */
 export type GateStatus = 'open' | 'met' | 'needs_user' | 'expired' | 'cancelled'

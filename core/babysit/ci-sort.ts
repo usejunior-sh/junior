@@ -18,9 +18,9 @@
  *      (a test it touched timed out), so it's a fix, not a rerun.
  *
  * Pure: no I/O, no clock. The server fetches the default branch's check runs
- * (`ci-sort-glue`). The flake test is the shepherd's, so there is one regex.
+ * (`ci-sort-glue`). The flake test is ci.ts's, so there is one regex.
  */
-import { looksFlaky, type PrCheck } from '../goals/shepherd.js'
+import { looksFlaky, type PrCheck } from './ci.js'
 
 /** One check run on the default branch's head, as the GitHub API reports it (any case). */
 export type MainRun = {

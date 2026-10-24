@@ -447,5 +447,5 @@ export function workerPrompt(
 /** Role → the workspace agent file whose body is that role's prompt (mapping note, "Worker session"). */
 export const ROLE_AGENT: Record<StepRole, string | null> = { lead: null, builder: 'implementer', reviewer: 'reviewer', tester: 'validator' }
 
-/** Only builders change files; reviewers and testers are fenced read-only. */
-export const roleWrites = (role: StepRole) => role === 'builder'
+// Moved to core/teams/writes.ts (move-goal-helpers); re-exported for one commit.
+export { roleWrites } from '../teams/writes.js'

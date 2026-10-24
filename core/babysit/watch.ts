@@ -14,10 +14,9 @@
  * until you answer. Tasks dedupe on their key in the store, so an event read
  * twice adds one task; the watch keeps only what keys can't (counts, reruns).
  *
- * Pure: no I/O, no clock. Reuses the shepherd's flake test and fingerprints.
+ * Pure: no I/O, no clock. The flake test and fingerprints are ci.ts's.
  */
-import { MAX_FIX_ATTEMPTS } from '../goals/types.js'
-import { fingerprint, looksFlaky, type PrCheck, type PrThread } from '../goals/shepherd.js'
+import { fingerprint, looksFlaky, MAX_FIX_ATTEMPTS, type PrCheck, type PrThread } from './ci.js'
 import type { NewTask } from '../work/tasks.js'
 import type { PrSeen } from '../work/handoff.js'
 import type { BabysitPr } from './pr.js'

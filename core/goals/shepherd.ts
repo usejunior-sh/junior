@@ -15,45 +15,15 @@
  * Pure: no I/O, no clock. The server fetches (server/goals.ts ghPrSource)
  * and carries the decisions out (goalWatchPrsOp).
  */
-import { MAX_FIX_ATTEMPTS, type GateSpec } from './types.js'
+import type { GateSpec } from './types.js'
+import { fingerprint, looksFlaky, MAX_FIX_ATTEMPTS, type PrCheck, type PrThread } from '../babysit/ci.js'
+import type { PrRef, PrSnapshot } from '../babysit/snapshot.js'
+
+// Moved to core/babysit (move-goal-helpers); re-exported for one commit.
+export { fingerprint, looksFlaky, type PrCheck, type PrThread } from '../babysit/ci.js'
+export { snapshotFrom, type PrRef, type PrSnapshot } from '../babysit/snapshot.js'
 
 // What the watcher reads
-
-/** A PR: `owner/repo` and its number. */
-export type PrRef = { repo: string; number: number }
-
-/** One check on the head commit, folded from a check run or a status context. */
-export type PrCheck = {
-  name: string
-  status: 'pending' | 'success' | 'failure' | 'neutral'
-  /** changes when the check runs again (a check run's id), so a rerun's failure is new */
-  id: string
-  /** the Actions run behind it, for `gh run view --log-failed` and a rerun; null for a status context */
-  runId: number | null
-  url: string | null
-  /** GitHub's own word for how it ended (TIMED_OUT, CANCELLED, …), for the flake test */
-  conclusion: string | null
-}
-
-/** One review thread: who opened it, and whether it is resolved. */
-export type PrThread = { id: string; author: string; isBot: boolean; resolved: boolean; path: string | null; body: string; url: string | null }
-
-export type PrSnapshot = {
-  repo: string
-  number: number
-  url: string
-  state: 'OPEN' | 'CLOSED' | 'MERGED'
-  headSha: string
-  baseRef: string
-  headRef: string
-  mergeable: 'MERGEABLE' | 'CONFLICTING' | 'UNKNOWN'
-  /** null = the repo requires no review */
-  reviewDecision: 'APPROVED' | 'CHANGES_REQUESTED' | 'REVIEW_REQUIRED' | null
-  checks: PrCheck[]
-  threads: PrThread[]
-  /** who closed it, when it is closed */
-  closedBy: string | null
-}
 
 /** One poll's read of a PR: state, head, mergeability, review, checks on the head commit, review threads. */
 export const PR_QUERY = `query($owner: String!, $name: String!, $number: Int!) {
@@ -70,55 +40,6 @@ export const PR_QUERY = `query($owner: String!, $name: String!, $number: Int!) {
     }
   }
 }`
-
-type J = Record<string, any> // eslint-disable-line @typescript-eslint/no-explicit-any
-
-const FAILED = new Set(['FAILURE', 'TIMED_OUT', 'CANCELLED', 'STARTUP_FAILURE', 'ACTION_REQUIRED', 'STALE', 'ERROR'])
-
-function checkFrom(n: J): PrCheck | null {
-  if (n?.__typename === 'CheckRun') {
-    const done = n.status === 'COMPLETED'
-    const c = String(n.conclusion ?? '')
-    const status: PrCheck['status'] = !done ? 'pending' : c === 'SUCCESS' ? 'success' : c === 'NEUTRAL' || c === 'SKIPPED' ? 'neutral' : 'failure'
-    return { name: String(n.name), status, id: String(n.databaseId), runId: n.checkSuite?.workflowRun?.databaseId ?? null, url: n.detailsUrl ?? null, conclusion: c || null }
-  }
-  if (n?.__typename === 'StatusContext') {
-    const st = String(n.state)
-    const status: PrCheck['status'] = st === 'SUCCESS' ? 'success' : FAILED.has(st) ? 'failure' : 'pending'
-    return { name: String(n.context), status, id: `${n.id}:${n.createdAt}`, runId: null, url: n.targetUrl ?? null, conclusion: st }
-  }
-  return null
-}
-
-/** PR_QUERY's answer → a snapshot. Throws when the PR isn't there. */
-export function snapshotFrom(pr: PrRef, data: J): PrSnapshot {
-  const p = data?.data?.repository?.pullRequest
-  if (!p) throw new Error(`PR ${pr.repo}#${pr.number} not found`)
-  const rollup = p.commits?.nodes?.[0]?.commit?.statusCheckRollup
-  const checks = ((rollup?.contexts?.nodes ?? []) as J[]).map(checkFrom).filter((c): c is PrCheck => c !== null)
-  const threads: PrThread[] = ((p.reviewThreads?.nodes ?? []) as J[]).map((t) => {
-    const c = t.comments?.nodes?.[0] ?? {}
-    const login = String(c.author?.login ?? 'ghost')
-    return { id: String(t.id), author: login, isBot: c.author?.__typename === 'Bot' || login.endsWith('[bot]'), resolved: !!t.isResolved, path: t.path ?? null, body: String(c.body ?? ''), url: c.url ?? null }
-  })
-  const state = p.state === 'MERGED' || p.state === 'CLOSED' ? p.state : 'OPEN'
-  const mergeable = p.mergeable === 'MERGEABLE' || p.mergeable === 'CONFLICTING' ? p.mergeable : 'UNKNOWN'
-  const review = ['APPROVED', 'CHANGES_REQUESTED', 'REVIEW_REQUIRED'].includes(p.reviewDecision) ? p.reviewDecision : null
-  return {
-    repo: pr.repo,
-    number: pr.number,
-    url: String(p.url ?? ''),
-    state,
-    headSha: String(p.headRefOid ?? ''),
-    baseRef: String(p.baseRefName ?? ''),
-    headRef: String(p.headRefName ?? ''),
-    mergeable,
-    reviewDecision: review,
-    checks,
-    threads,
-    closedBy: p.timelineItems?.nodes?.[0]?.actor?.login ?? null,
-  }
-}
 
 /** A PR reference out of a gate's refs: a PR URL, `owner/repo#12`, `github:owner/repo#12`, or `#12` in `repo`. */
 export function prRefFrom(refs: readonly string[], repo: string | null): PrRef | null {
@@ -263,23 +184,6 @@ export function assess(s: PrSnapshot, w: Pick<PrWatch, 'seen' | 'headSha'>): Wat
   if (isReady(s) && fresh(`ready:${sha}`)) out.push({ kind: 'ready', key: `ready:${sha}`, sha })
   return out
 }
-
-/** A bot comment, minus what changes between runs (numbers, hashes, spacing): the same finding prints the same. */
-export function fingerprint(t: Pick<PrThread, 'author' | 'path' | 'body'>): string {
-  const body = t.body
-    .toLowerCase()
-    .replace(/[0-9a-f]{7,40}/g, '#')
-    .replace(/\d+/g, '#')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, 300)
-  return `${t.author.toLowerCase()}|${t.path ?? ''}|${body}`
-}
-
-/** A failure that a rerun may clear: a timeout, a dropped connection, a runner that went away. */
-const FLAKY = /\b(timed? ?out|timeout|ETIMEDOUT|ECONNRESET|ECONNREFUSED|EAI_AGAIN|socket hang up|rate limit(ed)?|50[234]\b|service unavailable|runner (has received a shutdown|lost communication)|network (error|unreachable)|flak(y|e))\b/i
-
-export const looksFlaky = (log: string): boolean => FLAKY.test(log)
 
 export type ShepherdStep = 'fix_ci' | 'fix_thread' | 'rebase' | 'merge'
 

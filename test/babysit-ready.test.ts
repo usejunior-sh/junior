@@ -12,7 +12,7 @@ import path from 'node:path'
 import { chipHref, chipTone, handBackLine, handBackSays, readiness, readyAt, readyLine, readySummary, READY_CHECK_IDS, showsEvidence, type ChipTone, type ReadyCheckId, type ReadyPr } from '../core/babysit/ready.js'
 import { babysitEvents, decide, newBabysitWatch, seenOf } from '../core/babysit/watch.js'
 import type { BabysitPr } from '../core/babysit/pr.js'
-import type { PrCheck, PrThread } from '../core/goals/shepherd.js'
+import type { PrCheck, PrThread } from '../core/babysit/ci.js'
 import { openSqliteStore } from '../core/store/sqlite.js'
 import { BABYSIT_WATCH_KEY, babysitTickOp, pollBabysitSoon, type BabysitDeps, type BabysitWatchState } from '../server/babysit/watch.js'
 

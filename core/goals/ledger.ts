@@ -100,6 +100,11 @@ export class GoalLedger {
     private readonly now: () => number = Date.now,
   ) {}
 
+  /** Where a goal's ledger folder sits, unchecked: for the reviewer fence's hidden paths. */
+  goalPath(goalId: string): string {
+    return path.join(this.root, goalDir(goalId))
+  }
+
   private dir(goalId: string): string {
     if (!isLedgerId(goalId)) throw new Error(`invalid goal id "${goalId}"`)
     return path.join(this.root, ...goalDir(goalId).split('/'))

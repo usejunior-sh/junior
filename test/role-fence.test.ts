@@ -1,11 +1,14 @@
 /**
- * The role fence (core/goals/fence.ts): a read-only session is refused file
+ * The role fence (core/teams/fence.ts): a read-only session is refused file
  * tools and any Bash that writes, whatever the user's allow rules say — the
  * hook runs before them. A writer passes everything to the Actions hold.
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { bashWrites, redirectTargets, roleFenceDecision, type RoleFence } from '../core/goals/fence.js'
+import { bashWrites, redirectTargets, roleFenceDecision, type RoleFence } from '../core/teams/fence.js'
+import { roleWrites } from '../core/teams/writes.js'
+import * as goalsFence from '../core/goals/fence.js'
+import { roleWrites as goalsRoleWrites } from '../core/goals/run.js'
 
 const reviewer: RoleFence = { write: false, role: 'reviewer' }
 const builder: RoleFence = { write: true, role: 'implementer' }
@@ -141,4 +144,16 @@ test('an independent reviewer may not read the goal ledger or session transcript
   }
   assert.deepEqual(roleFenceDecision(f, 'Read', { file_path: '/repo/src/parser.ts' }), { allow: true })
   assert.deepEqual(roleFenceDecision(f, 'Bash', { command: 'git diff main...HEAD' }), { allow: true })
+})
+
+test('roleWrites: only a builder changes files', () => {
+  assert.equal(roleWrites('builder'), true)
+  for (const r of ['lead', 'reviewer', 'tester'] as const) assert.equal(roleWrites(r), false, r)
+})
+
+test('core/goals re-exports the moved fence and roleWrites unchanged, for one commit', () => {
+  assert.equal(goalsFence.roleFenceDecision, roleFenceDecision)
+  assert.equal(goalsFence.bashWrites, bashWrites)
+  assert.equal(goalsFence.redirectTargets, redirectTargets)
+  assert.equal(goalsRoleWrites, roleWrites)
 })
