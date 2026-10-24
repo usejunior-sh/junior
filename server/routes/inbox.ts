@@ -1,5 +1,5 @@
 import path from 'node:path'
-import type { InboxResponse, PickFolderResponse, Project, ProjectsResponse, ReposResponse } from '../../shared/protocol.js'
+import type { InboxResponse, PickFolderResponse, Project, ProjectSuggestionsResponse, ProjectsResponse, ReposResponse } from '../../shared/protocol.js'
 import { log } from '../log.js'
 import { affiliatedRepos, connectedRepos, getInbox, REPOS_KEY } from '../inbox/sync.js'
 import { readJsonBody } from './http-util.js'
@@ -9,6 +9,7 @@ import { addProject } from '../session/sessions.js'
 import { checkoutList } from '../session/checkouts.js'
 import { jobsEnabled } from '../settings-ops.js'
 import { seedJobTemplates } from '../jobs/ops.js'
+import { projectSuggestionsOp } from '../project-suggestions.js'
 import type { ScopedCtx } from './ctx.js'
 
 export async function inboxRoutes({ req, url, json, access, rt }: ScopedCtx): Promise<boolean> {
@@ -39,6 +40,17 @@ export async function inboxRoutes({ req, url, json, access, rt }: ScopedCtx): Pr
       body = { ok: false, error: String(err) }
     }
     json(body.ok ? 200 : 502, body)
+    return true
+  }
+  if (url.pathname === '/api/projects/suggestions' && req.method === 'GET') {
+    let body: ProjectSuggestionsResponse
+    try {
+      const n = Number(url.searchParams.get('limit'))
+      body = { ok: true, suggestions: await projectSuggestionsOp(rt, Number.isInteger(n) && n > 0 ? Math.min(n, 50) : undefined) }
+    } catch (err) {
+      body = { ok: false, error: err instanceof Error ? err.message : String(err) }
+    }
+    json(body.ok ? 200 : 500, body)
     return true
   }
   if (url.pathname === '/api/projects') {

@@ -1,4 +1,5 @@
-
+import type { ProjectSuggestion } from '../../core/junior/project-rank.js'
+export type { ProjectSuggestion } from '../../core/junior/project-rank.js'
 
 // Connected repos (GET /api/repos, PUT /api/repos)
 //
@@ -104,6 +105,15 @@ export type RemoveCheckoutResponse = { ok: true } | { ok: false; error: string; 
 
 export type ProjectsResponse =
   | { ok: true; projects: Project[] }
+  | { ok: false; error: string }
+
+/**
+ * GET /api/projects/suggestions[?limit=n]: git repos where Claude Code already
+ * runs, ranked by sessions and recency, minus folders already added
+ * (server/project-suggestions.ts). Read-only.
+ */
+export type ProjectSuggestionsResponse =
+  | { ok: true; suggestions: ProjectSuggestion[] }
   | { ok: false; error: string }
 
 // GET /api/git/branch?cwd=…: the checked-out branch of a folder, for the
