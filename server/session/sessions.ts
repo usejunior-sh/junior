@@ -6,7 +6,7 @@ import type { EffortLevel, PermissionMode, Project, SessionKind } from '../../sh
 import type { ProviderId } from '../providers/types.js'
 import type { StoredSession } from '../../core/store/types.js'
 import { browserHub, WorkspaceRuntime } from '../workspace/runtime.js'
-import { saveTeamRuns, teamRunOf } from '../team-run/state.js'
+import { ensureSessionTeamRun, removeTeamRun, saveTeamRun } from '../team-run/state.js'
 import { broadcast, broadcastSessionList } from '../ws/send.js'
 import { expandHome } from '../folders.js'
 import { checkoutById, mainCheckout, syncCheckouts } from './checkouts.js'
@@ -14,6 +14,8 @@ import { LiveSession } from './live-session.js'
 import { extrasFor } from '../brief-run.js'
 
 export async function deleteSession(rt: WorkspaceRuntime, sessionId: string): Promise<void> {
+  // Its run whole, before its row goes: a closed run is only a summary until loaded.
+  const run = await ensureSessionTeamRun(rt, sessionId)
   rt.live.get(sessionId)?.stop()
   // Files attached to its messages go with it.
   await removeSessionFiles(rt.attachmentsDir, sessionId)
@@ -25,15 +27,16 @@ export async function deleteSession(rt: WorkspaceRuntime, sessionId: string): Pr
   await rt.store.browserTabs.remove(sessionId)
   rt.live.delete(sessionId)
   rt.rows.delete(sessionId)
-  const run = teamRunOf(rt, sessionId)
+  rt.sessionTeam.delete(sessionId)
   if (run) {
-    rt.sessionTeam.delete(sessionId)
     // The lead gone, the run goes with it; a worker gone respawns on its next step.
     if (run.leadSessionId === sessionId) {
-      for (const w of run.workers) if (w.sessionId && w.sessionId !== sessionId) rt.sessionTeam.delete(w.sessionId)
-      rt.teamRuns.delete(run.id)
-    } else for (const w of run.workers) if (w.sessionId === sessionId) w.sessionId = null
-    await saveTeamRuns(rt)
+      for (const w of run.workers) if (w.sessionId && w.sessionId !== sessionId && rt.sessionTeam.get(w.sessionId) === run.id) rt.sessionTeam.delete(w.sessionId)
+      await removeTeamRun(rt, run)
+    } else {
+      for (const w of run.workers) if (w.sessionId === sessionId) w.sessionId = null
+      await saveTeamRun(rt, run)
+    }
   }
   await rt.store.sessions.remove(sessionId)
   broadcast(rt, { type: 'session_deleted', sessionId })
@@ -142,6 +145,8 @@ export async function getOrRevive(rt: WorkspaceRuntime, sessionId: string): Prom
     return null
   }
   if (existing) existing.stop()
+  // A session on a closed run boot left as a summary: load the run, so its role fence and tools come back with it.
+  await ensureSessionTeamRun(rt, row.id)
   const lastSeq = await rt.store.events.lastSeq(row.id)
   const extras = await extrasFor(rt, row)
   // Two messages racing to revive the same session: the first one's subprocess wins.

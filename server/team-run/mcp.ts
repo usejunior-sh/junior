@@ -8,7 +8,7 @@ import { readDispatchTemplate, renderTemplate } from '../briefs.js'
 import { branchFromTitle } from '../../shared/branch.js'
 import { WorkspaceRuntime } from '../workspace/runtime.js'
 import { VERSION } from '../config.js'
-import { applyTeamActions, teamRunChanged, teamRunOf, usd, withTeamRun } from './state.js'
+import { applyTeamActions, RECENT_TEAM_RUNS, recentTeamRuns, teamRunChanged, teamRunOf, usd, withTeamRun } from './state.js'
 import { errResult, okResult } from '../junior-mcp.js'
 import { errText } from '../errors.js'
 import { listTeamsOp, proposeTeamOp, teamRunFrom } from './ops.js'
@@ -304,7 +304,7 @@ export function teamLeadTools(rt: WorkspaceRuntime) {
 
 /** Your answers on a goal: a question, accepting the result, "not done yet", waking a wait early. */
 export async function goalActionOp(rt: WorkspaceRuntime, verb: 'answer' | 'accept' | 'reopen' | 'wake', raw: unknown): Promise<void> {
-  const run = teamRunFrom(rt, raw)
+  const run = await teamRunFrom(rt, raw)
   const r = (raw ?? {}) as Record<string, unknown>
   await withTeamRun(rt, run, async () => {
     const now = Date.now()
@@ -319,10 +319,10 @@ export async function goalActionOp(rt: WorkspaceRuntime, verb: 'answer' | 'accep
   invalidateInbox(rt)
 }
 
-/** The Goals tab: every team run that is a goal, newest first. */
-export function teamGoalsOp(rt: WorkspaceRuntime): TeamGoalSummary[] {
+/** The Goals tab: the team runs that are goals, newest first (every open one, and the latest closed ones). */
+export async function teamGoalsOp(rt: WorkspaceRuntime): Promise<TeamGoalSummary[]> {
   const now = Date.now()
-  return [...rt.teamRuns.values()]
+  return (await recentTeamRuns(rt, RECENT_TEAM_RUNS, { goal: true }))
     .filter((run) => run.goal && run.state !== 'proposed')
     .map((run) => {
       const g = run.goal!

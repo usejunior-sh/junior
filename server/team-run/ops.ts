@@ -11,7 +11,7 @@ import { requireVeto } from '../providers/capabilities.js'
 import { itemImageAttachments } from '../itemImages.js'
 import { pExec } from '../config.js'
 import { WorkspaceRuntime } from '../workspace/runtime.js'
-import { applyTeamActions, indexTeamRun, leadPlanning, runDirOf, saveTeamRuns, schedulePlanSync, sessionNotice, teamRunChanged, teamRunDir, teamRunOf, usd, withTeamRun } from './state.js'
+import { applyTeamActions, ensureSessionTeamRun, ensureTeamRun, indexTeamRun, leadPlanning, RECENT_TEAM_RUNS, recentTeamRuns, removeTeamRun, runDirOf, schedulePlanSync, sessionNotice, teamRunChanged, teamRunDir, teamRunOf, usd, withTeamRun } from './state.js'
 import { errText } from '../errors.js'
 import { createManualOp, itemFilesForSession } from '../items-ops.js'
 import { linkSessionToItem, projectFor } from '../settings-ops.js'
@@ -106,9 +106,10 @@ export async function pauseTeamRunNow(rt: WorkspaceRuntime, run: TeamRun, reason
   log('info', 'teams', `run paused: ${reason}`, { teamId: run.id, workspace: rt.meta.id })
 }
 
-export function teamRunFrom(rt: WorkspaceRuntime, raw: unknown): TeamRun {
+/** The run a request names, loaded whole if boot left it as a summary. */
+export async function teamRunFrom(rt: WorkspaceRuntime, raw: unknown): Promise<TeamRun> {
   const id = (raw as { runId?: unknown })?.runId
-  const run = typeof id === 'string' ? rt.teamRuns.get(id) : undefined
+  const run = typeof id === 'string' ? await ensureTeamRun(rt, id) : undefined
   if (!run) throw new Error('no such team run')
   return run
 }
@@ -205,7 +206,7 @@ export async function proposeTeamOp(rt: WorkspaceRuntime, sessionId: string, raw
   const lead = rt.rows.get(sessionId)
   if (!lead) throw new Error('no such session')
   requireVeto(rt.provider, 'team')
-  const existing = teamRunOf(rt, sessionId)
+  const existing = await ensureSessionTeamRun(rt, sessionId)
   if (existing && existing.leadSessionId !== sessionId) throw new Error('this session is a worker on a team — only a lead proposes one')
   if (existing && existing.state !== 'proposed' && existing.state !== 'done' && existing.state !== 'stopped') {
     throw new Error(`this session already leads a ${existing.state} team run — stop it before proposing another`)
@@ -278,7 +279,8 @@ export async function proposeTeamOp(rt: WorkspaceRuntime, sessionId: string, raw
   }
   // What the lead spent getting here is the run's too. The turn it's in now books itself when it ends.
   bookPlanning(run, await leadPlanning(rt, sessionId))
-  if (existing && existing.id !== run.id) rt.teamRuns.delete(existing.id)
+  // The lead's last run, done or stopped, makes way: a session leads one run.
+  if (existing && existing.id !== run.id) await removeTeamRun(rt, existing)
   rt.teamRuns.set(run.id, run)
   indexTeamRun(rt, run)
   await teamRunChanged(rt, run)
@@ -295,7 +297,7 @@ function goalEdit(run: TeamRun, raw: unknown): void {
 
 /** Your edit to a proposed card (before approving). */
 export async function editTeamCardOp(rt: WorkspaceRuntime, raw: unknown): Promise<void> {
-  const run = teamRunFrom(rt, raw)
+  const run = await teamRunFrom(rt, raw)
   if (run.state !== 'proposed') throw new Error('only a proposed card can be edited')
   if ((raw as { card?: unknown }).card) run.card = cardFrom((raw as { card?: unknown }).card, run.recipe, run.card)
   goalEdit(run, raw)
@@ -309,7 +311,7 @@ export async function editTeamCardOp(rt: WorkspaceRuntime, raw: unknown): Promis
  * decisions. Tasks land between tasks: the loop reads the list fresh each time.
  */
 export async function editPlanOp(rt: WorkspaceRuntime, raw: unknown): Promise<void> {
-  const run = teamRunFrom(rt, raw)
+  const run = await teamRunFrom(rt, raw)
   const r = raw as { tasks?: unknown; decisions?: unknown }
   await withTeamRun(rt, run, async () => {
     if (run.state === 'done' || run.state === 'stopped') throw new Error(`the run is ${run.state}`)
@@ -326,7 +328,7 @@ export async function editPlanOp(rt: WorkspaceRuntime, raw: unknown): Promise<vo
 }
 
 export async function settleRevisionOp(rt: WorkspaceRuntime, raw: unknown): Promise<void> {
-  const run = teamRunFrom(rt, raw)
+  const run = await teamRunFrom(rt, raw)
   await withTeamRun(rt, run, () => applyTeamActions(rt, run, settleRevision(run, (raw as { accept?: unknown }).accept === true)))
 }
 
@@ -335,7 +337,7 @@ export async function settleRevisionOp(rt: WorkspaceRuntime, raw: unknown): Prom
  * come, and every worker session already running switches now.
  */
 export async function setTeamFastOp(rt: WorkspaceRuntime, raw: unknown): Promise<void> {
-  const run = teamRunFrom(rt, raw)
+  const run = await teamRunFrom(rt, raw)
   const fast = (raw as { fast?: unknown }).fast === true
   await withTeamRun(rt, run, async () => {
     if (run.state === 'done' || run.state === 'stopped') throw new Error(`the run is ${run.state}`)
@@ -354,7 +356,7 @@ export async function setTeamFastOp(rt: WorkspaceRuntime, raw: unknown): Promise
 }
 
 export async function approveTeamOp(rt: WorkspaceRuntime, raw: unknown): Promise<void> {
-  const run = teamRunFrom(rt, raw)
+  const run = await teamRunFrom(rt, raw)
   await withTeamRun(rt, run, async () => {
     requireVeto(rt.provider, 'team')
     const card = (raw as { card?: unknown }).card ? cardFrom((raw as { card?: unknown }).card, run.recipe, run.card) : run.card
@@ -372,20 +374,19 @@ export async function approveTeamOp(rt: WorkspaceRuntime, raw: unknown): Promise
 }
 
 export async function discardTeamOp(rt: WorkspaceRuntime, raw: unknown): Promise<void> {
-  const run = teamRunFrom(rt, raw)
+  const run = await teamRunFrom(rt, raw)
   if (run.state !== 'proposed') throw new Error('only a proposed run can be discarded — stop a running one')
-  rt.teamRuns.delete(run.id)
   rt.sessionTeam.delete(run.leadSessionId)
   if (run.planArtifactId) await rt.artifacts.remove(run.planArtifactId).catch(() => {})
   // A card never approved leaves nothing behind: its folder only ever held the proposed plan.
   await rm(runDirOf(rt, run), { recursive: true, force: true }).catch(() => {})
-  await saveTeamRuns(rt)
+  await removeTeamRun(rt, run)
   broadcastSessionList(rt)
   await sessionNotice(rt, run.leadSessionId, 'Team card discarded.')
 }
 
 export async function resumeTeamOp(rt: WorkspaceRuntime, raw: unknown): Promise<void> {
-  const run = teamRunFrom(rt, raw)
+  const run = await teamRunFrom(rt, raw)
   await withTeamRun(rt, run, async () => {
     requireVeto(rt.provider, 'team')
     if (run.state === 'gate') return applyTeamActions(rt, run, continueGate(run, Date.now()))
@@ -416,7 +417,7 @@ export async function resumeTeamOp(rt: WorkspaceRuntime, raw: unknown): Promise<
 }
 
 export async function stopTeamOp(rt: WorkspaceRuntime, raw: unknown): Promise<void> {
-  const run = teamRunFrom(rt, raw)
+  const run = await teamRunFrom(rt, raw)
   await withTeamRun(rt, run, async () => {
     if (run.state === 'done' || run.state === 'stopped') return
     for (const w of run.workers) {
@@ -438,7 +439,7 @@ export async function stopTeamOp(rt: WorkspaceRuntime, raw: unknown): Promise<vo
 
 /** Save as team: the run's recipe, with your card's models and widths, as a new team file. */
 export async function saveRunAsTeamOp(rt: WorkspaceRuntime, raw: unknown): Promise<string> {
-  const run = teamRunFrom(rt, raw)
+  const run = await teamRunFrom(rt, raw)
   const label = String((raw as { label?: unknown }).label ?? '').trim().slice(0, 60)
   if (!label) throw new Error('the team needs a name')
   const name = await rt.teamLibrary.freeName('team', label)
@@ -481,7 +482,7 @@ export async function teamPickerOp(rt: WorkspaceRuntime, kind: string): Promise<
   const { teams } = await rt.teamLibrary.list()
   const usable = teams.filter((t) => t.recipe && !t.missing.length)
   const costs = new Map<string, number[]>()
-  for (const run of rt.teamRuns.values()) {
+  for (const run of await recentTeamRuns(rt, RECENT_TEAM_RUNS)) {
     if (run.state !== 'done' || !run.team) continue
     costs.set(run.team, [...(costs.get(run.team) ?? []), runSpent(run)])
   }

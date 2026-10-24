@@ -17,7 +17,7 @@ import { WorkspaceRuntime } from './workspace/runtime.js'
 import { broadcast } from './ws/send.js'
 import { pExecFile } from './config.js'
 import { getInbox, slackConnected } from './inbox/sync.js'
-import { teamRunOf } from './team-run/state.js'
+import { inTeamRun } from './team-run/state.js'
 import { createManualOp } from './items-ops.js'
 import { errText } from './errors.js'
 import { actionViews } from './session/actions-record.js'
@@ -137,7 +137,7 @@ export async function todayView(rt: WorkspaceRuntime, date: string): Promise<Pla
   }
   const sessions: PlanSession[] = []
   for (const [sessionId, itemId] of rt.sessionItem) {
-    if (!items.has(itemId) || teamRunOf(rt, sessionId)) continue
+    if (!items.has(itemId) || inTeamRun(rt, sessionId)) continue
     const row = rt.rows.get(sessionId)
     const l = rt.live.get(sessionId)
     if (!row || row.kind !== 'chat') continue
@@ -336,7 +336,7 @@ export async function juniorDayOp(rt: WorkspaceRuntime, q: { since: number; away
     })
   }
   for (const r of rows) {
-    if (r.kind !== 'chat' || !isRunning(rt.live.get(r.id)?.status) || teamRunOf(rt, r.id)) continue
+    if (r.kind !== 'chat' || !isRunning(rt.live.get(r.id)?.status) || inTeamRun(rt, r.id)) continue
     const itemId = rt.sessionItem.get(r.id)
     running.push({ target: { kind: 'session', id: r.id }, title: r.title, updatedAt: r.updatedAt, onPlan: !!itemId && onPlan.has(itemId), todo: await sessionProgress(rt, r.id), team: null })
   }

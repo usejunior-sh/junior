@@ -9,7 +9,7 @@ import { actionTitle, countedText } from '../../core/actions/describe.js'
 import { shortActionId } from '../../core/actions/view.js'
 import { planCard } from '../../core/cards/spec.js'
 import { WorkspaceRuntime } from '../workspace/runtime.js'
-import { teamRunOf } from '../team-run/state.js'
+import { teamRunLabel, teamRunOf } from '../team-run/state.js'
 import { errText } from '../errors.js'
 import { fireAndLog } from '../supervise.js'
 import { broadcast } from '../ws/send.js'
@@ -160,7 +160,7 @@ export async function actionViews(rt: WorkspaceRuntime, records: ActionRecord[])
   const rules = rt.actionsFile.current().rules
   const specs = rt.cardSpecs.current().specs
   return records.map((a) => {
-    const run = a.teamRunId ? rt.teamRuns.get(a.teamRunId) : undefined
+    const teamLabel = a.teamRunId ? teamRunLabel(rt, a.teamRunId) : undefined
     const itemId = itemOf(a)
     const row = rt.rows.get(a.sessionId)
     return {
@@ -172,7 +172,7 @@ export async function actionViews(rt: WorkspaceRuntime, records: ActionRecord[])
       ...(history.has(a.id) ? { history: history.get(a.id) } : {}),
       ...(row ? { sessionTitle: row.title } : {}),
       ...(a.jobId && jobTitles.has(a.jobId) ? { jobTitle: jobTitles.get(a.jobId) } : {}),
-      ...(run ? { teamLabel: run.recipe.label } : {}),
+      ...(teamLabel !== undefined ? { teamLabel } : {}),
       ...(itemId && itemTitles.has(itemId) ? { itemTitle: itemTitles.get(itemId) } : {}),
       ...(overriddenOff(a, rules) ? { hidden: true } : {}),
       // An MCP tool's send reads by its card spec; Bash keeps its command view.

@@ -379,7 +379,7 @@ test('Save as team keeps the card\'s models and widths', () => {
   assert.equal(r.steps[1].model, 'sonnet', 'a step the card left alone keeps the recipe\'s model')
 })
 
-test('M6: a run stored before goals (no tasks, notes or revision) reads back from the config store and still renders', async () => {
+test('M6: a run stored before goals (no tasks, notes or revision) reads back from the team-run store and still renders', async () => {
   const { mkdtempSync, rmSync } = await import('node:fs')
   const { tmpdir } = await import('node:os')
   const path = await import('node:path')
@@ -394,8 +394,8 @@ test('M6: a run stored before goals (no tasks, notes or revision) reads back fro
     delete old.tasks, delete old.notes, delete old.revision, delete old.task
     for (const s of old.recipe!.steps) delete (s as Partial<typeof s>).forEach
     const store = openSqliteStore(path.join(dir, 'junior.db'))
-    await store.config.set('team_runs', [old])
-    const [back] = (await store.config.get<TeamRun[]>('team_runs'))!
+    await store.teamRuns.upsert(old as TeamRun, 1)
+    const back = await store.teamRuns.get(old.id!)
     const md = renderPlan(normalizeRun(back!))
     assert.match(md, /^# Plan · Cart totals\n\nBuild team · done/)
     assert.match(md, /## Outcome/)

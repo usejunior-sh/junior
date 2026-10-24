@@ -78,22 +78,22 @@ export async function libraryRoutes({ req, url, json, rt }: ScopedCtx): Promise<
         await lib.reset(b.kind, b.name)
         json(200, await teamLibraryOp(rt))
       } else if (route === 'GET /api/teams/run') {
-        const body: TeamRunResponse = { ok: true, run: teamRunView(teamRunFrom(rt, { runId: url.searchParams.get('runId') })) }
+        const body: TeamRunResponse = { ok: true, run: teamRunView(await teamRunFrom(rt, { runId: url.searchParams.get('runId') })) }
         json(200, body)
       } else if (route === 'GET /api/teams/file') {
-        const run = teamRunFrom(rt, { runId: url.searchParams.get('runId') })
+        const run = await teamRunFrom(rt, { runId: url.searchParams.get('runId') })
         await syncRunFolder(rt, run)
         const file = runFileOf(rt, run, url.searchParams.get('path') ?? '')
         if (!file) throw new Error('not a file in this run’s folder')
         const body: TeamRunFileResponse = { ok: true, text: (await readFile(file, 'utf8')).slice(0, 400_000) }
         json(200, body)
       } else if (route === 'GET /api/teams/folder') {
-        const run = teamRunFrom(rt, { runId: url.searchParams.get('runId') })
+        const run = await teamRunFrom(rt, { runId: url.searchParams.get('runId') })
         await syncRunFolder(rt, run)
         const body: TeamRunFolderResponse = { ok: true, title: run.title, team: run.recipe.label, state: run.state, leadSessionId: run.leadSessionId, dir: runDirOf(rt, run), files: runFolderList(rt, run) }
         json(200, body)
       } else if (route === 'GET /api/teams/files') {
-        const body: TeamRunFilesResponse = { ok: true, files: await teamRunFilesOp(rt, teamRunFrom(rt, { runId: url.searchParams.get('runId') })) }
+        const body: TeamRunFilesResponse = { ok: true, files: await teamRunFilesOp(rt, await teamRunFrom(rt, { runId: url.searchParams.get('runId') })) }
         json(200, body)
       } else if (route === 'PUT /api/teams/card') {
         await editTeamCardOp(rt, await readJsonBody(req))
@@ -114,14 +114,14 @@ export async function libraryRoutes({ req, url, json, rt }: ScopedCtx): Promise<
         await discardTeamOp(rt, await readJsonBody(req))
         json(200, { ok: true })
       } else if (route === 'POST /api/teams/pause') {
-        const run = teamRunFrom(rt, await readJsonBody(req))
+        const run = await teamRunFrom(rt, await readJsonBody(req))
         await withTeamRun(rt, run, async () => {
           if (run.state !== 'running' && run.state !== 'gate' && run.state !== 'waiting') throw new Error(`the run is ${run.state}`)
           await pauseTeamRunNow(rt, run, 'paused by you')
         })
         json(200, { ok: true })
       } else if (route === 'GET /api/teams/goals') {
-        const body: TeamGoalsResponse = { ok: true, goals: teamGoalsOp(rt) }
+        const body: TeamGoalsResponse = { ok: true, goals: await teamGoalsOp(rt) }
         json(200, body)
       } else if (route === 'POST /api/teams/goal/answer' || route === 'POST /api/teams/goal/accept' || route === 'POST /api/teams/goal/reopen' || route === 'POST /api/teams/goal/wake') {
         await goalActionOp(rt, url.pathname.split('/').pop() as 'answer' | 'accept' | 'reopen' | 'wake', await readJsonBody(req))

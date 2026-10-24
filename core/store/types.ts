@@ -46,6 +46,7 @@ import type { ColorScheme, Viewport } from '../browser/wire.js'
 import type { Decision, Handoff, ItemLabel, Playbook, Reason } from '../work/fields.js'
 import type { ItemTask, NewTask, TaskState } from '../work/tasks.js'
 import type { TeamRun } from '../teams/engine-types.js'
+import type { TeamRunSummary } from '../teams/summary.js'
 
 export type StoredSession = {
   id: string
@@ -760,6 +761,14 @@ export interface TeamRunStore {
   listOpen(): Promise<TeamRun[]>
   /** The latest-touched runs, newest first. `goal` keeps only goals (true) or only plain team runs (false). */
   listRecent(limit: number, opts?: { goal?: boolean }): Promise<TeamRun[]>
+  /**
+   * Every done or stopped run as a summary (core/teams/summary.ts), oldest
+   * first, read out of the stored JSON without loading the runs: what boot
+   * needs for the session list and the inbox flow.
+   */
+  closedSummaries(): Promise<TeamRunSummary[]>
+  /** Delete the run and its log (a discarded card, a lead session deleted). */
+  remove(id: string): Promise<void>
   /** Append to the run's log; returns the line with its seq. */
   appendEvent<T>(runId: string, data: T, at: number): Promise<TeamRunEvent<T>>
   /** The run's log, oldest first. */

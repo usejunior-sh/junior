@@ -3,9 +3,10 @@ import { statSync } from 'node:fs'
 import { mkdir, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import { backfillRuns, bookPlanning, checksDone, normalizeRun, runSpent, sessionSpend, stampRun, STEP_MESSAGE, type Action as TeamAction, type TeamRun, type Worker, workerById } from '../../core/teams/engine.js'
+import type { RunState } from '../../core/teams/engine-types.js'
+import { runLinkOf, summarizeRun, type TeamRunSummary } from '../../core/teams/summary.js'
 import { log } from '../log.js'
 import type { AgentCan, EffortLevel, SessionEvent, SessionTeamRun, TeamRunFolderFile, TeamRunView } from '../../shared/protocol.js'
-import { LEAD } from '../../core/teams/recipe.js'
 import { workspaceDir } from '../workspaces.js'
 import { runFiles } from '../../core/teams/files.js'
 import { snapshotTree } from '../git.js'
@@ -19,36 +20,139 @@ import { handoffDiff } from './files.js'
 // Teams v2 (server/teams.ts, core/teams/engine.ts): a recipe run by Junior. The
 // lead is the chat session that proposed it; workers are sessions junior spawns
 // per step. The engine decides; this section carries its actions out.
-const TEAM_RUNS_KEY = 'team_runs'
+//
+// Runs live in the team-run store (core/store/sqlite-team-runs.ts), one row
+// each. A save writes the one run that changed, and a change of state is a
+// line in its log. Boot loads the open runs whole; a closed one comes in as a
+// summary (core/teams/summary.ts) and is loaded whole only when something asks
+// for it (ensureTeamRun). The old `team_runs` config array is read only by the
+// store's one-time copy.
 
-export async function saveTeamRuns(rt: WorkspaceRuntime): Promise<void> {
-  await rt.store.config.set(TEAM_RUNS_KEY, [...rt.teamRuns.values()])
+/** The state each run was last saved in, so a save knows when to log a move. */
+const savedState = new WeakMap<TeamRun, RunState>()
+
+/**
+ * Persist one run: its row, and a line in its log when its state moved. Only a
+ * run in memory is saved: one already removed (its lead deleted mid-turn, a
+ * card discarded) stays removed when a late change lands.
+ */
+export async function saveTeamRun(rt: WorkspaceRuntime, run: TeamRun, at = Date.now()): Promise<void> {
+  if (rt.teamRuns.get(run.id) !== run) return
+  await rt.store.teamRuns.upsert(run, at)
+  const from = savedState.get(run) ?? null
+  if (from !== run.state) {
+    await rt.store.teamRuns.appendEvent(run.id, { kind: 'state', from, to: run.state, rev: run.rev, ...(run.reason ? { reason: run.reason } : {}) }, at)
+    savedState.set(run, run.state)
+  }
 }
 
-/** Boot: mirror stored runs into memory. Runs from before recipes (no `recipe`) are dropped. */
-export async function loadTeamRuns(rt: WorkspaceRuntime): Promise<void> {
-  let backfilled = false
-  for (const run of (await rt.store.config.get<TeamRun[]>(TEAM_RUNS_KEY)) ?? []) {
-    if (!run || !(run as Partial<TeamRun>).recipe || !rt.rows.has(run.leadSessionId)) continue
-    for (const w of run.workers) if (w.sessionId && !rt.rows.has(w.sessionId)) w.sessionId = null
-    const unrecorded = !(run as Partial<TeamRun>).workerRuns
-    rt.teamRuns.set(run.id, normalizeRun(run))
-    indexTeamRun(rt, run)
-    if (unrecorded && run.outputs.length) {
-      await backfillTeamRuns(rt, run).catch((err) => log('warn', 'teams', `could not backfill runs: ${err}`, { teamId: run.id, workspace: rt.meta.id }))
-      backfilled = true
-    }
-    // A run proposed before planning was booked. Only once it's over, so a live
-    // run's budget doesn't move under it.
-    if (run.planningUsd === undefined && (run.state === 'done' || run.state === 'stopped')) {
-      await leadPlanning(rt, run.leadSessionId, run.createdAt).then(
-        (usd) => bookPlanning(run, usd),
-        (err) => log('warn', 'teams', `could not book planning: ${err}`, { teamId: run.id, workspace: rt.meta.id }),
-      )
-      backfilled = true
-    }
+/** A run gone for good (a discarded card, its lead deleted): out of memory and the store. */
+export async function removeTeamRun(rt: WorkspaceRuntime, run: TeamRun): Promise<void> {
+  rt.teamRuns.delete(run.id)
+  rt.teamRunSummaries.delete(run.id)
+  await rt.store.teamRuns.remove(run.id)
+}
+
+/** A stored run the server can still carry: runs from before recipes (no `recipe`), or whose lead is gone, are skipped. */
+const usable = (rt: WorkspaceRuntime, run: TeamRun | null | undefined): run is TeamRun =>
+  !!run && !!(run as Partial<TeamRun>).recipe && rt.rows.has(run.leadSessionId)
+
+/**
+ * Take a stored run into memory: drop worker sessions that are gone, index it,
+ * and fill in what runs from older releases lack. Saves it when it filled
+ * anything in.
+ */
+async function adoptTeamRun(rt: WorkspaceRuntime, stored: TeamRun): Promise<TeamRun> {
+  for (const w of stored.workers) if (w.sessionId && !rt.rows.has(w.sessionId)) w.sessionId = null
+  const unrecorded = !(stored as Partial<TeamRun>).workerRuns
+  const run = normalizeRun(stored)
+  savedState.set(run, run.state)
+  rt.teamRuns.set(run.id, run)
+  rt.teamRunSummaries.delete(run.id)
+  indexTeamRun(rt, run)
+  let filled = false
+  if (unrecorded && run.outputs.length) {
+    await backfillTeamRuns(rt, run).catch((err) => log('warn', 'teams', `could not backfill runs: ${err}`, { teamId: run.id, workspace: rt.meta.id }))
+    filled = true
   }
-  if (backfilled) await saveTeamRuns(rt)
+  // A run proposed before planning was booked. Only once it's over, so a live
+  // run's budget doesn't move under it.
+  if (run.planningUsd === undefined && (run.state === 'done' || run.state === 'stopped')) {
+    await leadPlanning(rt, run.leadSessionId, run.createdAt).then(
+      (usd) => bookPlanning(run, usd),
+      (err) => log('warn', 'teams', `could not book planning: ${err}`, { teamId: run.id, workspace: rt.meta.id }),
+    )
+    filled = true
+  }
+  if (filled) await saveTeamRun(rt, run)
+  return run
+}
+
+/** Boot: the open runs into memory; the closed ones only as summaries, enough to link their sessions. */
+export async function loadTeamRuns(rt: WorkspaceRuntime): Promise<void> {
+  for (const s of await rt.store.teamRuns.closedSummaries()) {
+    if (!rt.rows.has(s.leadSessionId)) continue
+    const summary = { ...s, workers: s.workers.filter((w) => rt.rows.has(w.sessionId)) }
+    rt.teamRunSummaries.set(s.id, summary)
+    indexTeamRun(rt, summary)
+  }
+  // Open after closed: a lead that went on to a new run links to the new one.
+  for (const run of await rt.store.teamRuns.listOpen()) if (usable(rt, run)) await adoptTeamRun(rt, run)
+}
+
+/**
+ * A run by id: from memory, else loaded whole from the store (a closed run boot
+ * left as a summary). Undefined when there is no such run, or the server can't
+ * carry it (see `usable`).
+ */
+export function ensureTeamRun(rt: WorkspaceRuntime, id: string): Promise<TeamRun | undefined> {
+  const have = rt.teamRuns.get(id)
+  if (have) return Promise.resolve(have)
+  const inFlight = rt.teamRunLoads.get(id)
+  if (inFlight) return inFlight
+  const load = (async () => {
+    const stored = await rt.store.teamRuns.get(id)
+    // Raced with a save of the same run (a proposal reusing it): memory wins.
+    const raced = rt.teamRuns.get(id)
+    if (raced) return raced
+    return usable(rt, stored) ? adoptTeamRun(rt, stored) : undefined
+  })().finally(() => rt.teamRunLoads.delete(id))
+  rt.teamRunLoads.set(id, load)
+  return load
+}
+
+/** The run a session leads or works on, loaded whole: before anything that needs the full run for a session. */
+export async function ensureSessionTeamRun(rt: WorkspaceRuntime, sessionId: string): Promise<TeamRun | undefined> {
+  const id = rt.sessionTeam.get(sessionId)
+  return id ? ensureTeamRun(rt, id) : undefined
+}
+
+/**
+ * Runs for a list (the Goals tab, the picker's costs): the store's newest
+ * `limit`, plus every run in memory, with the in-memory object where there is
+ * one. Runs the server can't carry are left out, as boot leaves them out.
+ */
+export async function recentTeamRuns(rt: WorkspaceRuntime, limit: number, opts: { goal?: boolean } = {}): Promise<TeamRun[]> {
+  const out = new Map<string, TeamRun>()
+  for (const run of rt.teamRuns.values()) if (opts.goal === undefined || !!run.goal === opts.goal) out.set(run.id, run)
+  for (const stored of await rt.store.teamRuns.listRecent(limit, opts)) {
+    if (out.has(stored.id) || !usable(rt, stored)) continue
+    out.set(stored.id, normalizeRun(stored))
+  }
+  return [...out.values()]
+}
+
+/** How many stored runs a list reads at most. */
+export const RECENT_TEAM_RUNS = 200
+
+/** Every run the server knows, as summaries: the ones in memory and the closed ones boot left out. */
+export function teamRunSummaries(rt: WorkspaceRuntime): TeamRunSummary[] {
+  return [...[...rt.teamRuns.values()].map(summarizeRun), ...rt.teamRunSummaries.values()]
+}
+
+/** A run's recipe label by id, whether it is in memory or only summarised. */
+export function teamRunLabel(rt: WorkspaceRuntime, id: string): string | undefined {
+  return rt.teamRuns.get(id)?.recipe.label ?? rt.teamRunSummaries.get(id)?.label
 }
 
 /** A run this session led before ended here, and booked what the session spent up to it. */
@@ -83,10 +187,20 @@ async function backfillTeamRuns(rt: WorkspaceRuntime, run: TeamRun): Promise<voi
   backfillRuns(run, starts)
 }
 
-/** session id → run id, for the lead and every worker session. */
-export function indexTeamRun(rt: WorkspaceRuntime, run: TeamRun): void {
-  rt.sessionTeam.set(run.leadSessionId, run.id)
-  for (const w of run.workers) if (w.sessionId) rt.sessionTeam.set(w.sessionId, run.id)
+/**
+ * session id → run id, for the lead and every worker session. A session already
+ * on a newer run stays there: a lead that went on to propose again links to its
+ * latest run, whatever order runs are loaded in.
+ */
+export function indexTeamRun(rt: WorkspaceRuntime, run: { id: string; createdAt: number; leadSessionId: string; workers: readonly { sessionId: string | null }[] }): void {
+  const claim = (sid: string) => {
+    const was = rt.sessionTeam.get(sid)
+    const other = was && was !== run.id ? rt.teamRuns.get(was) ?? rt.teamRunSummaries.get(was) : undefined
+    if (other && other.createdAt > run.createdAt) return
+    rt.sessionTeam.set(sid, run.id)
+  }
+  claim(run.leadSessionId)
+  for (const w of run.workers) if (w.sessionId) claim(w.sessionId)
 }
 
 export const teamRunOf = (rt: WorkspaceRuntime, sessionId: string): TeamRun | undefined => {
@@ -96,12 +210,13 @@ export const teamRunOf = (rt: WorkspaceRuntime, sessionId: string): TeamRun | un
 
 /** A session's place on a run, as the wire carries it. */
 export function teamRunLink(rt: WorkspaceRuntime, sessionId: string): SessionTeamRun | undefined {
-  const run = teamRunOf(rt, sessionId)
-  if (!run) return undefined
-  const lead = run.leadSessionId === sessionId
-  const w = [...run.workers].reverse().find((x) => x.sessionId === sessionId && x.agent !== LEAD)
-  return { id: run.id, role: lead ? 'lead' : 'worker', label: lead ? 'Lead' : w?.label ?? 'Worker', state: run.state, rev: run.rev, ...(run.goal ? { goal: true } : {}) }
+  const id = rt.sessionTeam.get(sessionId)
+  const run = id ? rt.teamRuns.get(id) ?? rt.teamRunSummaries.get(id) : undefined
+  return run ? runLinkOf(run, sessionId) : undefined
 }
+
+/** The session leads or works on a run, open or closed, loaded or not. */
+export const inTeamRun = (rt: WorkspaceRuntime, sessionId: string): boolean => rt.sessionTeam.has(sessionId)
 
 /** The run as the client reads it: everything but the server's own bookkeeping. */
 export function teamRunView(run: TeamRun): TeamRunView {
@@ -133,7 +248,7 @@ export function withTeamRun<T>(rt: WorkspaceRuntime, run: TeamRun, fn: () => Pro
 }
 
 export async function teamRunChanged(rt: WorkspaceRuntime, run: TeamRun): Promise<void> {
-  await saveTeamRuns(rt)
+  await saveTeamRun(rt, run)
   broadcastSessionList(rt)
   schedulePlanSync(rt, run)
 }

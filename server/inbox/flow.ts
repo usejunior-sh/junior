@@ -6,6 +6,7 @@ import { WorkspaceRuntime } from '../workspace/runtime.js'
 import { ANY_ITEM_ID_RE } from '../validate.js'
 import { invalidateInbox } from '../ws/send.js'
 import { jobsEnabled } from '../settings-ops.js'
+import { teamRunSummaries } from '../team-run/state.js'
 
 // Stage and turn (core/work/flow.ts): read the signals around every item, its
 // newest brief, its newest dispatched session, its team run, the user's
@@ -38,12 +39,12 @@ async function flowSignals(rt: WorkspaceRuntime): Promise<Map<string, FlowSignal
     const s = of(l.toId)
     if (!s.session || sig.at > s.session.at) s.session = sig
   }
-  for (const run of rt.teamRuns.values()) {
+  // Every run, closed ones boot left as summaries included: a done run still puts its result on your turn.
+  for (const run of teamRunSummaries(rt)) {
     const lead = rt.rows.get(run.leadSessionId)
     const at = Math.max(run.createdAt, lead?.updatedAt ?? 0)
     const s = of(run.itemId)
-    const asks = run.goal?.questions.filter((q) => q.answer === null).length ?? 0
-    if (!s.team || at > s.team.at) s.team = { state: run.state, at, ...(asks ? { asks } : {}), ...(run.goal && run.state === 'done' && !run.goal.acceptedAt ? { toAccept: true } : {}) }
+    if (!s.team || at > s.team.at) s.team = { state: run.state, at, ...(run.asks ? { asks: run.asks } : {}), ...(run.toAccept ? { toAccept: true } : {}) }
   }
   for (const [id, f] of stored) if (f.override) of(id).override = f.override
   // Queued actions waiting on you: the item is on your turn until they're answered.

@@ -17,9 +17,11 @@ import {
   LEGACY_TEAM_RUNS_COPIED_KEY,
   LEGACY_TEAM_RUNS_COPY_VERSION,
   LEGACY_TEAM_RUNS_KEY,
+  LEGACY_TEAM_RUNS_LIVE_UNTIL,
   SqliteTeamRuns,
 } from '../core/store/sqlite-team-runs.js'
 import type { RunGoal, RunState, TeamRun } from '../core/teams/engine-types.js'
+import { summarizeRun } from '../core/teams/summary.js'
 
 /** Just enough of a run for the store: it keeps the rest as JSON, untouched. */
 const run = (id: string, state: RunState, createdAt: number, extra: Partial<TeamRun> = {}): TeamRun =>
@@ -130,16 +132,69 @@ test('migration: the legacy array is copied in once, and the config key stays', 
   db.close()
 })
 
-test('migration: a newer copy version adds only runs that are missing, never overwrites', async () => {
+test('migration: a copy after the store took over adds only runs that are missing, never overwrites', async () => {
   const db = freshDb()
   setConfig(db, LEGACY_TEAM_RUNS_KEY, [run('kept', 'running', 1), run('missing', 'running', 2)])
   const t = new SqliteTeamRuns(db)
   await t.upsert(run('kept', 'done', 1), 50)
-  setConfig(db, LEGACY_TEAM_RUNS_COPIED_KEY, { version: LEGACY_TEAM_RUNS_COPY_VERSION - 1 })
-  assert.equal(copyLegacyTeamRuns(db, 60), 1)
+  // A future bump (3) over a DB whose last copy was at or past the switch-over.
+  setConfig(db, LEGACY_TEAM_RUNS_COPIED_KEY, { version: LEGACY_TEAM_RUNS_LIVE_UNTIL })
+  assert.equal(copyLegacyTeamRuns(db, 60, LEGACY_TEAM_RUNS_LIVE_UNTIL + 1), 1)
   assert.equal((await t.get('kept'))?.state, 'done')
   assert.equal((await t.get('missing'))?.state, 'running')
   db.close()
+})
+
+test('migration: a DB copied while the array was still live gets its rows refreshed from it', async () => {
+  const db = freshDb()
+  // Copied at version 1, then the server went on saving to the array: 'a' finished, 'b' was proposed.
+  setConfig(db, LEGACY_TEAM_RUNS_KEY, [run('a', 'running', 1)])
+  copyLegacyTeamRuns(db, 10, 1)
+  setConfig(db, LEGACY_TEAM_RUNS_KEY, [run('a', 'done', 1), run('b', 'proposed', 2)])
+  assert.equal(copyLegacyTeamRuns(db, 20), 2)
+  const t = new SqliteTeamRuns(db)
+  assert.equal((await t.get('a'))?.state, 'done')
+  assert.deepEqual((await t.listOpen()).map((r) => r.id), ['b'])
+  assert.deepEqual(getConfig(db, LEGACY_TEAM_RUNS_COPIED_KEY), { version: LEGACY_TEAM_RUNS_COPY_VERSION, at: 20, copied: 2 })
+  assert.equal(copyLegacyTeamRuns(db, 30), 0)
+  db.close()
+})
+
+test('closedSummaries reads done and stopped runs out of the JSON, the same as summarizeRun; remove drops a run and its log', async () => {
+  const store = openSqliteStore(':memory:')
+  const t = store.teamRuns
+  const recipe = { label: 'Build', steps: [] }
+  const workers = [
+    { id: 'lead:1', stepId: 'plan', agent: 'lead', label: 'Lead', sessionId: 'lead-g' },
+    { id: 'build:1', stepId: 'build', agent: 'implementer', label: 'Implementer', sessionId: 'w1' },
+    { id: 'review:1', stepId: 'review', agent: 'reviewer', label: 'Reviewer', sessionId: null },
+  ]
+  const questions = [
+    { id: 'q1', text: 'which branch?', answer: null },
+    { id: 'q2', text: 'ok?', answer: 'yes' },
+  ]
+  const done = run('g', 'done', 3, { recipe, workers, rev: 7, goal: { ...goal, questions, acceptedAt: null } } as unknown as Partial<TeamRun>)
+  const stopped = run('s', 'stopped', 1, { recipe, workers: [], goal: null } as unknown as Partial<TeamRun>)
+  await t.upsert(done, 30)
+  await t.upsert(stopped, 10)
+  await t.upsert(run('open', 'running', 2, { recipe } as unknown as Partial<TeamRun>), 20)
+  await t.upsert(run('no-recipe', 'done', 4), 40)
+
+  const got = await t.closedSummaries()
+  assert.deepEqual(got.map((x) => x.id), ['s', 'g'])
+  assert.deepEqual(got, [summarizeRun(stopped), summarizeRun(done)])
+  assert.deepEqual(got[1], {
+    id: 'g', itemId: 'manual:g', state: 'done', rev: 7, createdAt: 3, goal: true, leadSessionId: 'lead-g', label: 'Build',
+    workers: [{ sessionId: 'lead-g', agent: 'lead', label: 'Lead' }, { sessionId: 'w1', agent: 'implementer', label: 'Implementer' }],
+    asks: 1, toAccept: true,
+  })
+
+  await t.appendEvent('g', { kind: 'state' }, 31)
+  await t.remove('g')
+  assert.equal(await t.get('g'), null)
+  assert.deepEqual(await t.events('g'), [])
+  assert.deepEqual((await t.closedSummaries()).map((x) => x.id), ['s'])
+  await store.close()
 })
 
 test('migration: no legacy value still sets the marker; a broken one is skipped', () => {

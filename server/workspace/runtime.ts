@@ -14,6 +14,7 @@ import { BrowserHub, browserGate, makeBrowserMcp, ShotStore, type BrowserGate } 
 import { TeamLibrary } from '../teams.js'
 import { JobFiles, renameLegacyFolders } from '../job-files.js'
 import type { Action as TeamAction, TeamRun } from '../../core/teams/engine.js'
+import type { TeamRunSummary } from '../../core/teams/summary.js'
 import { ActionsFile } from '../actions-file.js'
 import { CardSpecs } from '../card-specs.js'
 import { ActionTracker } from '../../core/actions/track.js'
@@ -135,7 +136,7 @@ export class WorkspaceRuntime {
   /** session id → the work item it was dispatched for or briefs (mirrors `links`) */
   readonly sessionItem = new Map<string, string>()
 
-  // Teams (server/teams.ts): agents and recipes are files; runs persist under `team_runs`.
+  // Teams (server/teams.ts): agents and recipes are files; runs persist in the team-run store (core/store/sqlite-team-runs.ts).
   readonly teamLibrary: TeamLibrary
   /** the workspace's own skills and agents: a local plugin every chat session loads (server/library.ts) */
   readonly libraryDir: string
@@ -145,8 +146,13 @@ export class WorkspaceRuntime {
   jobSyncSig = ''
   /** syncs run one at a time: the tick and an API call can't interleave */
   jobSync: Promise<void> = Promise.resolve()
+  /** runs in memory: every open one (loaded at boot), plus any closed one something asked for since */
   readonly teamRuns = new Map<string, TeamRun>()
-  /** session id → the run it leads or works on, mirrored from `teamRuns` */
+  /** closed runs boot didn't load, as summaries: what the session list, inbox flow and action log read */
+  readonly teamRunSummaries = new Map<string, TeamRunSummary>()
+  /** run id → its load from the store in flight (ensureTeamRun), so two callers get one object */
+  readonly teamRunLoads = new Map<string, Promise<TeamRun | undefined>>()
+  /** session id → the run it leads or works on, from `teamRuns` and `teamRunSummaries` */
   readonly sessionTeam = new Map<string, string>()
   /** run id → the tail of its action chain (withTeamRun) */
   readonly teamLocks = new Map<string, Promise<unknown>>()
