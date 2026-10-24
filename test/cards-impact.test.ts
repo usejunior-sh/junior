@@ -15,13 +15,13 @@ const SLACK = 'mcp__claude_ai_Slack__slack_send_message'
 
 const ROWS: Row[] = [
   // Push
-  { name: 'push a named branch', action: bash('git push origin feat/x'), line: 'Push feat/x to origin · as you · undo needs a force-push' },
-  { name: 'push HEAD, current branch known', action: bash('git push -u origin HEAD'), facts: { currentBranch: 'feat/y' }, line: 'Push feat/y to origin · as you · undo needs a force-push' },
-  { name: 'push the current branch by substitution', action: bash('git push -u origin "$(git branch --show-current)"'), facts: { currentBranch: 'feat/z' }, line: 'Push feat/z to origin · as you · undo needs a force-push' },
-  { name: 'push with no refspec, branch from the group key', action: bash('git push', { groupKey: 'push:s1:feat/k' }), line: 'Push feat/k · as you · undo needs a force-push' },
-  { name: 'push a variable: never shown as a value', action: bash('git push origin $B'), line: 'Push a branch to origin · as you · undo needs a force-push' },
+  { name: 'push a named branch', action: bash('git push origin feat/x'), line: 'Push feat/x to origin · as you · undo needs a force-push or a branch delete' },
+  { name: 'push HEAD, current branch known', action: bash('git push -u origin HEAD'), facts: { currentBranch: 'feat/y' }, line: 'Push feat/y to origin · as you · undo needs a force-push or a branch delete' },
+  { name: 'push the current branch by substitution', action: bash('git push -u origin "$(git branch --show-current)"'), facts: { currentBranch: 'feat/z' }, line: 'Push feat/z to origin · as you · undo needs a force-push or a branch delete' },
+  { name: 'push with no refspec, branch from the group key', action: bash('git push', { groupKey: 'push:s1:feat/k' }), line: 'Push feat/k · as you · undo needs a force-push or a branch delete' },
+  { name: 'push a variable: never shown as a value', action: bash('git push origin $B'), line: 'Push a branch to origin · as you · undo needs a force-push or a branch delete' },
   { name: 'force-push', action: bash('git push --force-with-lease origin HEAD:feat/x'), line: 'Force-push feat/x to origin · as you · overwrites the remote branch' },
-  { name: 'push two named branches', action: bash('git push origin feat/a feat/b'), line: 'Push feat/a, feat/b to origin · as you · undo needs a force-push' },
+  { name: 'push two named branches', action: bash('git push origin feat/a feat/b'), line: 'Push feat/a, feat/b to origin · as you · undo needs a force-push or a branch delete' },
   { name: 'push --delete: a remote branch goes away', action: bash('git push origin --delete feat/x'), line: 'Delete remote branch feat/x on origin · as you · may not be undoable' },
   { name: 'push -d with the remote after it', action: bash('git push -d origin feat/x'), line: 'Delete remote branch feat/x on origin · as you · may not be undoable' },
   { name: 'push :branch deletes it too', action: bash('git push origin :feat/x'), line: 'Delete remote branch feat/x on origin · as you · may not be undoable' },
@@ -29,11 +29,23 @@ const ROWS: Row[] = [
   { name: 'delete a variable branch: never shown as a value', action: bash('git push origin --delete "$B"'), line: 'Delete a remote branch on origin · as you · may not be undoable' },
   { name: 'push one and delete another', action: bash('git push origin feat/new :feat/old'), line: 'Delete remote branch feat/old and push feat/new on origin · as you · may not be undoable' },
   { name: 'push --mirror', action: bash('git push --mirror origin'), facts: { currentBranch: 'feat/y' }, line: 'Mirror every branch and tag to origin · as you · overwrites and deletes remote branches' },
-  { name: 'push --all', action: bash('git push --all origin'), facts: { currentBranch: 'feat/y' }, line: 'Push all branches to origin · as you · undo needs a force-push' },
+  { name: 'push --all', action: bash('git push --all origin'), facts: { currentBranch: 'feat/y' }, line: 'Push all branches to origin · as you · undo needs a force-push or a branch delete' },
   { name: 'push --all --prune', action: bash('git push --all --prune origin'), line: 'Push all branches to origin · as you · deletes remote branches not here' },
   { name: 'push --tags', action: bash('git push --tags origin'), facts: { currentBranch: 'feat/y' }, line: 'Push all tags to origin · as you · undo needs deleting the tags' },
   { name: 'push a branch and the tags', action: bash('git push origin main --tags'), line: 'Push main and all tags to origin · as you · undo needs deleting the tags' },
-  { name: 'push to the default branch says so', action: bash('git push origin main'), facts: { defaultBranch: 'main' }, line: 'Push main to origin · the default branch · as you · undo needs a force-push' },
+  { name: 'push a new branch: can just delete it', action: bash('git push -u origin feat/x'), facts: { newBranch: true }, line: 'Push feat/x to origin · as you · can delete the new branch' },
+  { name: 'push to a branch already there', action: bash('git push origin feat/x'), facts: { newBranch: false }, line: 'Push feat/x to origin · as you · undo needs a force-push' },
+  { name: 'push on its own line, then a PR: two sends, not one', action: bash('git push origin feat/x\ngh pr create -t x'), line: 'Open a PR · +1 more send · as you · can close, not delete', derived: [1] },
+  { name: 'a heredoc body is never read as commands', action: bash("gh pr comment 3 -R acme/api --body-file - <<'EOF'\ngit push origin main\nEOF"), line: 'Comment on acme/api#3 · as you · can edit or delete, not unsend' },
+  { name: 'a commit whose message says push is not a push', action: bash('git commit -m push && gh pr comment 3 -b x'), line: 'Comment on PR #3 · as you · can edit or delete, not unsend' },
+  { name: 'git -C dir push is a push', action: bash('git -C ../api push origin feat/x'), line: 'Push feat/x to origin · as you · undo needs a force-push or a branch delete' },
+  { name: 'git push --dry-run sends nothing', action: bash('git push --dry-run origin feat/x'), line: 'Run `git push --dry-run` · as you' },
+  { name: 'a -n that is a value is not a dry run', action: bash('git push -o -n origin feat/x'), line: 'Push feat/x to origin · as you · undo needs a force-push or a branch delete' },
+  { name: 'GitHub MCP push_files', action: { tool: 'mcp__github__push_files', args: { owner: 'acme', repo: 'api', branch: 'main', files: [], message: 'x' } }, facts: { defaultBranch: 'main' }, line: 'Push a commit to main in acme/api · the default branch · as you · undo needs a force-push or a branch delete' },
+  { name: 'GitHub MCP create_or_update_file', action: { tool: 'mcp__github__create_or_update_file', args: { owner: 'acme', repo: 'api', branch: 'feat/x', path: 'a.md', content: 'x', message: 'x' } }, line: 'Push a commit to feat/x in acme/api · as you · undo needs a force-push or a branch delete' },
+  { name: 'GitHub MCP close a PR', action: { tool: 'mcp__github__update_pull_request', args: { owner: 'acme', repo: 'api', pull_number: 9, state: 'closed' } }, line: 'Close acme/api#9 · as you · can reopen' },
+  { name: 'GitHub MCP edit a PR', action: { tool: 'mcp__github__update_pull_request', args: { owner: 'acme', repo: 'api', pull_number: 9, title: 'y' } }, line: 'Edit acme/api#9 · as you · can change back' },
+  { name: 'push to the default branch says so', action: bash('git push origin main'), facts: { defaultBranch: 'main' }, line: 'Push main to origin · the default branch · as you · undo needs a force-push or a branch delete' },
 
   // PR
   { name: 'gh pr create, reviewers named in the command', action: bash('gh pr create --title "Fix it" -B main -r alice,bob --reviewer carol', { kind: 'pr' }), facts: { repo: 'acme/api' }, line: 'Open a PR in acme/api into main · asks 3 reviewers · as you · can close, not delete', derived: [3] },
@@ -53,7 +65,8 @@ const ROWS: Row[] = [
   // Review
   { name: 'gh pr review --approve', action: bash('gh pr review 3235 --approve -R acme/api'), line: "Approve acme/api#3235 · as you · can't be deleted, only dismissed" },
   { name: 'gh pr review -r (request changes)', action: bash('gh pr review 7 -r -b "see notes"'), facts: { repo: 'acme/api' }, line: "Request changes on acme/api#7 · as you · can't be deleted, only dismissed" },
-  { name: 'GitHub MCP review, comment event', action: { tool: 'mcp__github__create_pull_request_review', args: { owner: 'acme', repo: 'api', pull_number: 9, event: 'COMMENT', body: 'x' } }, line: "Review acme/api#9 · as you · can't be deleted, only dismissed" },
+  { name: 'GitHub MCP review, comment event', action: { tool: 'mcp__github__create_pull_request_review', args: { owner: 'acme', repo: 'api', pull_number: 9, event: 'COMMENT', body: 'x' } }, line: 'Review acme/api#9 · as you · can edit, not unsend' },
+  { name: 'gh pr review --comment: only its note can change', action: bash('gh pr review 9 --comment -b x -R acme/api'), line: 'Review acme/api#9 · as you · can edit, not unsend' },
 
   // Slack post / DM
   { name: 'Slack post, channel name known, members known', action: { tool: SLACK, args: { channel_id: 'C0123ABCD', message: 'hi' } }, facts: { channelName: 'payments', members: { n: 41 } }, line: 'Post in #payments · 41 members · as you · can edit or delete, not unsend' },

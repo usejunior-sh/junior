@@ -38,6 +38,8 @@ export type ImpactFacts = {
   reviewers?: Count
   /** who it goes out as, when it isn't you: "as the deploy bot" */
   as?: string
+  /** whether a one-branch push creates the branch on the remote (true) or moves one already there (false) */
+  newBranch?: boolean
 }
 
 /** The send, as much of a record or a planned card as the line needs. */
@@ -71,7 +73,10 @@ const UNDO = {
   change: 'can change back',
   reopen: 'can reopen',
   review: "can't be deleted, only dismissed",
-  push: 'undo needs a force-push',
+  note: 'can edit, not unsend',
+  push: 'undo needs a force-push or a branch delete',
+  pushOld: 'undo needs a force-push',
+  pushNew: 'can delete the new branch',
   force: 'overwrites the remote branch',
   merge: 'undo needs a revert',
   release: 'hard to take back',
@@ -187,7 +192,8 @@ function githubMcpImpact(tool: string, args: Record<string, unknown>, facts: Imp
   if (leaf.includes('review')) {
     const ev = (str(args.event) ?? '').toUpperCase()
     const verb = ev === 'APPROVE' ? 'Approve' : ev === 'REQUEST_CHANGES' ? 'Request changes on' : 'Review'
-    return { what: `${verb} ${ref ?? 'a PR'}`, reach: null, undo: UNDO.review }
+    // Only an approval or a change request can be dismissed; a plain review's note can be edited.
+    return { what: `${verb} ${ref ?? 'a PR'}`, reach: null, undo: verb === 'Review' ? UNDO.note : UNDO.review }
   }
   if (leaf.includes('comment') || leaf.includes('reply')) return { what: `Comment on ${ref ?? 'GitHub'}`, reach: null, undo: UNDO.unsend }
   if (leaf.includes('merge')) {
@@ -202,6 +208,17 @@ function githubMcpImpact(tool: string, args: Record<string, unknown>, facts: Imp
       reach: countText(facts.reviewers, 'reviewer', 'reviewers'),
       undo: UNDO.pr,
     }
+  }
+  if ((leaf.includes('pull') || leaf.includes('pr')) && leaf.includes('update')) {
+    if (str(args.state) === 'closed') return { what: `Close ${ref ?? 'a PR'}`, reach: null, undo: UNDO.reopen }
+    return { what: `Edit ${ref ?? 'a PR'}`, reach: null, undo: UNDO.change }
+  }
+  // push_files and create_or_update_file both land a commit on a branch.
+  if (leaf.includes('push') || (leaf.includes('file') && (leaf.includes('create') || leaf.includes('update')))) {
+    const branch = str(args.branch)
+    const where = [branch ? ` to ${branch}` : '', repo ? ` in ${repo}` : ''].join('')
+    const isDefault = !!branch && !!facts.defaultBranch && branch === facts.defaultBranch
+    return { what: `Push a commit${where}`, reach: isDefault ? 'the default branch' : null, undo: pushUndo(facts, 1) }
   }
   if (leaf.includes('issue') && leaf.includes('create')) return { what: `New issue in ${repo ?? 'GitHub'}`, reach: null, undo: UNDO.ticket }
   if (leaf.includes('issue') && leaf.includes('update')) {
@@ -340,7 +357,7 @@ function ghImpact(w: CommandPart, facts: ImpactFacts, link: string | null | unde
   if (verb === 'comment') return { kind: 'comment', what: `Comment on ${thing}`, reach: null, undo: UNDO.unsend }
   if (noun === 'pr' && verb === 'review') {
     const v = bools.has('-a') || bools.has('--approve') ? 'Approve' : bools.has('-r') || bools.has('--request-changes') ? 'Request changes on' : 'Review'
-    return { kind: 'comment', what: `${v} ${thing}`, reach: null, undo: UNDO.review }
+    return { kind: 'comment', what: `${v} ${thing}`, reach: null, undo: v === 'Review' ? UNDO.note : UNDO.review }
   }
   if (noun === 'pr' && verb === 'merge') {
     // --auto merges later, once checks pass; --disable-auto turns that off.
@@ -359,9 +376,26 @@ function ghImpact(w: CommandPart, facts: ImpactFacts, link: string | null | unde
   return null
 }
 
+/** git's own flags that take the next word as their value: `git -C dir push`, `git -c k=v push`. */
+const GIT_VALUE = new Set(['-C', '-c', '--git-dir', '--work-tree', '--namespace', '--exec-path', '--super-prefix', '--config-env'])
+
+/** Where a git command's subcommand sits: the first word after git's own flags. -1 when there is none. */
+function gitVerbAt(w: CommandPart): number {
+  for (let i = 1; i < w.length; i++) {
+    const t = w[i]
+    if (GIT_VALUE.has(t)) {
+      i++
+      continue
+    }
+    if (t.startsWith('-')) continue
+    return i
+  }
+  return -1
+}
+
 /** A `git push`'s words: its flags, the remote and the refspecs, up to a redirection. */
 function pushArgs(w: CommandPart): { flags: string[]; remote: string | null; specs: string[] } {
-  const at = w.indexOf('push')
+  const at = gitVerbAt(w)
   const VALUE = new Set(['-o', '--push-option', '--repo', '--receive-pack', '--exec'])
   const flags: string[] = []
   const pos: string[] = []
@@ -392,6 +426,17 @@ function specBranch(spec: string, current: string | null): string | null {
 
 const listOf = (names: string[]): string => clip(names.join(', '), 60)
 
+/** A push's undo: a new branch can just be deleted; one already there needs a force-push; unknown says both. */
+const pushUndo = (facts: ImpactFacts, branches: number): string =>
+  branches !== 1 || facts.newBranch === undefined ? UNDO.push : facts.newBranch ? UNDO.pushNew : UNDO.pushOld
+
+/** A real `git push`, not a dry run: the subcommand is `push` and its own flags don't say `-n`/`--dry-run`. */
+function isPush(w: CommandPart): boolean {
+  if (w[0] !== 'git') return false
+  const at = gitVerbAt(w)
+  return at > 0 && w[at] === 'push' && !hasFlag(pushArgs(w).flags, 'n', '--dry-run')
+}
+
 function gitPushImpact(part: CommandPart, facts: ImpactFacts, groupKey: string | null | undefined): Omit<Impact, 'as'> & { kind: ActionKind } {
   const w = unwrap(part)
   const { flags, remote, specs } = pushArgs(w)
@@ -406,7 +451,7 @@ function gitPushImpact(part: CommandPart, facts: ImpactFacts, groupKey: string |
   // Whole-remote pushes first: they reach past any one branch.
   if (hasFlag(flags, null, '--mirror')) return { kind: 'push', what: `Mirror every branch and tag${to}`, reach: null, undo: UNDO.mirror }
   const prune = hasFlag(flags, null, '--prune')
-  if (hasFlag(flags, null, '--all', '--branches')) return { kind: 'push', what: `Push all branches${to}`, reach: null, undo: prune ? UNDO.prune : UNDO.push }
+  if (hasFlag(flags, null, '--all', '--branches')) return { kind: 'push', what: `Push all branches${to}`, reach: null, undo: prune ? UNDO.prune : pushUndo(facts, 0) }
   const tags = hasFlag(flags, null, '--tags')
 
   // `--delete x` and `:x` both delete the remote branch.
@@ -422,11 +467,12 @@ function gitPushImpact(part: CommandPart, facts: ImpactFacts, groupKey: string |
   }
 
   const force = flags.some((t) => t.startsWith('--force') || hasFlag([t], 'f')) || specs.some((s) => s.startsWith('+'))
-  const undo = prune ? UNDO.prune : force ? UNDO.force : tags ? UNDO.tags : UNDO.push
   const verb = force ? 'Force-push' : 'Push'
-  if (tags && !specs.length) return { kind: 'push', what: `${verb} all tags${to}`, reach: null, undo }
   // A command run per input (`xargs git push`) pushes whatever it's fed.
-  const branches = wrappersOf(part).includes('xargs') ? [null] : specs.length ? specs.map((s) => specBranch(s, current)) : [current]
+  const xargs = wrappersOf(part).includes('xargs')
+  const branches = xargs ? [null] : specs.length ? specs.map((s) => specBranch(s, current)) : [current]
+  const undo = prune ? UNDO.prune : force ? UNDO.force : tags ? UNDO.tags : pushUndo(facts, xargs ? 0 : branches.length)
+  if (tags && !specs.length) return { kind: 'push', what: `${verb} all tags${to}`, reach: null, undo }
   const named = branches.every((b): b is string => !!b) ? listOf(branches as string[]) : branches.length > 1 ? 'several branches' : 'a branch'
   return done(`${verb} ${named}${tags ? ' and all tags' : ''}${to}`, branches, undo)
 }
@@ -435,14 +481,15 @@ function gitPushImpact(part: CommandPart, facts: ImpactFacts, groupKey: string |
 const RANK: ActionKind[] = ['pr', 'ticket', 'comment', 'merge', 'release', 'post', 'message', 'email', 'update', 'push', 'other']
 
 function bashImpact(a: ImpactInput, facts: ImpactFacts): Omit<Impact, 'as'> {
-  const cmd = str(a.args?.command) ?? ''
+  // Raw, newlines kept: they separate commands. Only the text shown is collapsed (clip).
+  const cmd = typeof a.args?.command === 'string' ? a.args.command : ''
   const hits: Array<Omit<Impact, 'as'> & { kind: ActionKind }> = []
   for (const part of splitCommand(cmd)) {
     const w = unwrap(part)
     if (w[0] === 'gh') {
       const g = ghImpact(w, facts, a.link)
       if (g) hits.push(g)
-    } else if (w[0] === 'git' && w.includes('push') && !w.includes('--dry-run') && !w.includes('-n')) {
+    } else if (isPush(w)) {
       hits.push(gitPushImpact(part, facts, a.groupKey))
     }
   }
