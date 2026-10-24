@@ -226,3 +226,17 @@ test('a tool run around a card is split into a group before and one after', () =
     ['toolGroup', 'artifact', 'toolGroup'],
   )
 })
+
+test("a task's hand-in that saved a brief is an artifact card too", () => {
+  const brief = pub({ id: 'art-9', title: 'Inbox tab', format: 'md', hint: 'Handed in: the brief is attached.' })
+  const items = buildTranscript([you('investigate'), call('b1', 'mcp__task__submit_brief', { title: 'Inbox tab', body: '# The ask', summary: 'Add it' }), result('b1', brief), say('The brief is attached.')])
+  const [card] = cards(items)
+  assert.equal(card.pub?.id, 'art-9')
+  assert.equal(card.created, true)
+  assert.equal(card.body, '# The ask')
+})
+
+test("an old hand-in's plain text stays a tool card", () => {
+  const items = buildTranscript([you('investigate'), call('b1', 'mcp__task__submit_brief', { title: 'x', body: 'y' }), answer('b1', 'Handed in. End your turn now.')])
+  assert.equal(cards(items).length, 0)
+})

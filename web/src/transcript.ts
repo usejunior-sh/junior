@@ -57,6 +57,8 @@ export type ThinkingItem = { key: string; kind: 'thinking'; text: string }
 
 /** The in-process junior MCP's two publishing tools: a session declares an artifact by calling one. */
 export const ARTIFACT_TOOL_NAMES: ReadonlySet<string> = new Set(ARTIFACT_TOOLS.map((leaf) => `mcp__junior__${leaf}`))
+/** A task's hand-ins that save an artifact on the item answer with the same envelope, so they fold into a card too. */
+const HAND_IN_ARTIFACT_TOOLS: ReadonlySet<string> = new Set(['submit_brief', 'submit_plan', 'submit_review'].map((leaf) => `mcp__task__${leaf}`))
 
 /** How much of a body the card keeps for its preview. */
 export const ARTIFACT_BODY_KEEP = 4000
@@ -437,11 +439,11 @@ function foldArtifacts(items: TranscriptItem[]): TranscriptItem[] {
   let epoch = 0
   for (const it of items) {
     if (it.kind === 'assistant' || it.kind === 'user' || it.kind === 'relay' || (it.kind === 'meta' && it.turn)) epoch += 1
-    if (it.kind !== 'tool' || !ARTIFACT_TOOL_NAMES.has(it.name)) {
+    if (it.kind !== 'tool' || !(ARTIFACT_TOOL_NAMES.has(it.name) || HAND_IN_ARTIFACT_TOOLS.has(it.name))) {
       out.push(it)
       continue
     }
-    const created = it.name.endsWith('write_artifact')
+    const created = !it.name.endsWith('update_artifact')
     const sent = typeof it.input.body === 'string' ? it.input.body : undefined
     const body = sent === undefined ? undefined : sent.slice(0, ARTIFACT_BODY_KEEP)
     if (!it.result) {
