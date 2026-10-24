@@ -557,6 +557,29 @@ a.rdyChip:focus-visible { outline: 1px solid var(--hair-bright); outline-offset:
 .jhKeys span { display: inline-flex; gap: 6px; align-items: center; }
 /* "not useful": the phone's way in (the key strip is hidden there), and the notice that holds the row's slot for 5 s */
 .jhXp .acts .nuPhone { display: none; }
+/* "Draft nudge?" on a Waiting row (NudgeEditor.tsx): the wait in ash, the ask in sky, never orange (you wait on them) */
+.jhRow .jrc.ndgCell .w { color: var(--ash); }
+.jhRow .jrc.ndgCell .sep { color: var(--stone); white-space: pre; }
+.jhRow .jrc.ndgCell .ask { color: var(--blue); }
+.ndgPh { display: none; font-family: var(--mono); font-size: 0.9231rem; color: var(--blue); }
+.ndg { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.ndg .aimpact { font-family: var(--mono); font-size: 0.9231rem; line-height: 1.5; color: var(--mute); }
+.ndg .aimpact .apart { display: inline-block; max-width: 100%; overflow-wrap: anywhere; vertical-align: top; }
+.ndg .aimpact .asep { color: var(--stone); }
+.ndg textarea {
+  display: block; width: 100%; box-sizing: border-box; padding: 8px 10px; resize: vertical;
+  background: var(--deep); border: 1px solid var(--hair-strong); border-radius: var(--r); outline: none;
+  font-family: var(--sans); font-size: 1rem; line-height: 1.5; color: var(--ink);
+}
+.ndg textarea:focus { border-color: var(--ink); }
+.ndg textarea:disabled { opacity: 0.7; }
+.ndgActs { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.ndgActs .btn { gap: 6px; }
+.ndgActs .cap { margin-left: auto; font-family: var(--mono); font-size: 0.8462rem; color: var(--ash); }
+.ndg .notice, .jhXp .ndgErr { margin: 0; }
+.jhXp .ndgErr { grid-column: 2; }
+.jhXp .said a { color: var(--blue); }
+.ndgSaid { margin-bottom: 10px; font-family: var(--mono); font-size: 0.9231rem; color: var(--body); }
 /* the reason chip (ReasonChip.tsx): the score as a sum in a hairline pill, the total never cut; no orange, no green/red for signs */
 .rsnPlain { color: var(--charcoal); overflow-wrap: anywhere; }
 .rsnChip {
@@ -659,6 +682,12 @@ a.rdyChip:focus-visible { outline: 1px solid var(--hair-bright); outline-offset:
   .jhXp .acts .cap { flex-basis: 100%; order: 9; }
   .jhXp .keys, .jhKeys, .jhKbd { display: none; }
   .jhXp .acts .nuPhone { display: inline-flex; }
+  /* the nudge: the ask under the title, the box full width, 36px buttons, no key hints */
+  .jhRow .tc .ndgPh, .jhRow > .tt .ndgPh { display: block; }
+  .jhXp .ndgErr { grid-column: 1; }
+  .ndgActs .btn { height: 36px; }
+  .ndgActs .cap { flex-basis: 100%; margin-left: 0; order: 9; }
+  .ndg .jhKbd { display: none; }
   /* the reason chip: full width, a real tap target; the popover's corrections stack at 44px */
   .rsnChip { width: 100%; min-height: 36px; }
   /* junior.css loads after phone-touch.css, so the full-width popover is restated here */

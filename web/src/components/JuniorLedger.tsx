@@ -13,12 +13,22 @@
  * item row "not useful": it leaves until something new happens on it, and a
  * one-line notice holds its slot for 5 s with Undo (U).
  *
+ * A Waiting row with a due nudge (day.nudges) reads "Waiting 3d · Draft
+ * nudge?". Opening it drafts nothing: ⏎ (or the button) asks the server for
+ * the draft, a Nudge row opens with the text in a box, and only ⌘↩ in the box
+ * sends it (NudgeEditor.tsx).
+ *
  * Which rows a tab shows and the words on them are core/junior/ledger.ts.
  * Every verb here is local or a hand-off; sends stay held for approval.
  */
 import { ChevronRight, ExternalLink, X } from 'lucide-react'
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import type { HandoffReadiness, NeedsRow, RowMove, ScoredItem, WatchId } from '../../../shared/protocol.js'
+import type { HandoffReadiness, NeedsRow, NudgeMark, RowMove, ScoredItem, WatchId } from '../../../shared/protocol.js'
+import type { ItemTask } from '../../../core/work/tasks.js'
+import { nudgeInputOf } from '../../../core/work/nudge-suggest.js'
+import { NUDGE_ASK, nudgeDone, nudgeDraftFailed, nudgeSays, nudgeWaited, nudgeWay, type NudgeWay } from '../../../core/work/nudge-view.js'
+import { draftNudge } from '../nudge.js'
+import { NudgeEditor } from './NudgeEditor.js'
 import { enterVerb, rowLabel, rowMove, type RowLine } from '../../../core/junior/row-move.js'
 import { needsMoveText } from '../../../core/junior/needs.js'
 import { briefLines, type BriefLine, type BriefLineId } from '../../../core/junior/brief.js'
@@ -258,6 +268,20 @@ function useAct(onTurnedOn: (id: string) => void) {
 
 const Kbd = ({ children }: { children: ReactNode }) => <kbd className="jhKbd">{children}</kbd>
 
+/**
+ * A row's nudge, once you picked Draft nudge: asking, the draft open in its
+ * box (your edits kept here, so closing the row loses nothing), or the line
+ * after it went out. No entry = only the suggestion, nothing drafted.
+ */
+type NudgeUi =
+  | { phase: 'drafting' }
+  | { phase: 'failed'; error: string }
+  | { phase: 'open'; task: ItemTask; person: string; way: NudgeWay; text: string }
+  | { phase: 'done'; said: string; rule: boolean }
+
+/** What a row needs to offer, draft and show its nudge. */
+type NudgeRow = { mark: NudgeMark | undefined; ui: NudgeUi | undefined; draft: () => void; set: (ui: NudgeUi | null) => void; onNudged: () => void }
+
 type Props = Nav & {
   tab: LedgerTab
   items: ScoredItem[]
@@ -275,9 +299,13 @@ type Props = Nav & {
   rows?: readonly ScoredItem[]
   /** the server's next move per item (the day's); a row makes its own when missing or stale */
   moves?: Readonly<Record<string, RowMove>>
+  /** Waiting rows with a due nudge, by item id (the day's): a suggestion only */
+  nudges?: Readonly<Record<string, NudgeMark>>
+  /** a nudge went out: reload the day, so its mark leaves */
+  onNudged?: () => void
 }
 
-export function JuniorLedger({ tab, items, rows, needs, me, empty, moves, onNavigate }: Props) {
+export function JuniorLedger({ tab, items, rows, needs, me, empty, moves, nudges, onNudged, onNavigate }: Props) {
   const listRef = useRef<HTMLDivElement>(null)
   // the Turn on button leaves once its row is ready: give focus to the row itself, unless it went elsewhere
   const focusRow = (id: string) =>
@@ -453,18 +481,52 @@ export function JuniorLedger({ tab, items, rows, needs, me, empty, moves, onNavi
     })
 
   const openItem = (id: string) => onNavigate(itemHash(id))
+
+  // Nudges: nothing is drafted until you pick Draft nudge on the row.
+  const [nudge, setNudge] = useState<Readonly<Record<string, NudgeUi>>>({})
+  const setNudgeFor = (id: string, ui: NudgeUi | null) =>
+    setNudge((n) => {
+      const next = { ...n }
+      if (ui) next[id] = ui
+      else delete next[id]
+      return next
+    })
+  const focusNudge = (id: string) => requestAnimationFrame(() => rowEl(id)?.querySelector<HTMLTextAreaElement>('.ndg textarea')?.focus())
+  const draft = (item: ScoredItem, mark: NudgeMark) => {
+    setNudgeFor(item.id, { phase: 'drafting' })
+    void draftNudge(item.id, mark.person).then((r) => {
+      if (r.error !== undefined) return setNudgeFor(item.id, { phase: 'failed', error: nudgeDraftFailed(r.error) })
+      const input = nudgeInputOf(r.task.input)
+      const person = input?.person ?? mark.person
+      if (r.task.state === 'done') {
+        // an advance approval you wrote sent it as drafted
+        setNudgeFor(item.id, { phase: 'done', said: nudgeDone('rule', person), rule: true })
+        onNudged?.()
+        return
+      }
+      setNudgeFor(item.id, { phase: 'open', task: r.task, person, way: nudgeWay(input ? input.route : mark.route), text: input?.text ?? '' })
+      focusNudge(item.id)
+    })
+  }
+  const nudgeRow = (item: ScoredItem): NudgeRow | undefined => {
+    const mark = nudges?.[item.id]
+    const ui = nudge[item.id]
+    if (!mark && !ui) return undefined
+    return { mark, ui, draft: () => mark && draft(item, mark), set: (u) => setNudgeFor(item.id, u), onNudged: () => onNudged?.() }
+  }
+
   const goNeed = (n: NeedsRow) => onNavigate(n.target.kind === 'session' ? n.target.id : '/junior/log')
 
   // the notice shows only while its row is off the list (a refetch can bring the row back early)
   const notice = gone && !lines.some((l) => l.key === gone.item.id) ? gone : null
 
   // The keys: only while nothing else wants them (a text box, a menu, a `g` sequence).
-  const live = useRef({ shown, at, open, act, turnOn, onNavigate, tab, notice, markGone, undoGone })
-  live.current = { shown, at, open, act, turnOn, onNavigate, tab, notice, markGone, undoGone }
+  const live = useRef({ shown, at, open, act, turnOn, onNavigate, tab, notice, markGone, undoGone, nudgeRow, focusNudge })
+  live.current = { shown, at, open, act, turnOn, onNavigate, tab, notice, markGone, undoGone, nudgeRow, focusNudge }
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey || isTypingTarget(e) || isGoSequence(e) || anyDialogOpen()) return
-      const { shown, at, open, act, turnOn, onNavigate } = live.current
+      const { shown, at, open, act, turnOn, onNavigate, nudgeRow, focusNudge } = live.current
       const line = at === null ? undefined : shown[at]
       // a focused button or link answers Space and Enter itself
       if ((e.key === ' ' || e.key === 'Enter') && (e.target as HTMLElement | null)?.closest?.('button, a, [role="menuitem"]')) return
@@ -494,6 +556,11 @@ export function JuniorLedger({ tab, items, rows, needs, me, empty, moves, onNavi
       if (e.key === 'Enter') {
         e.preventDefault()
         if (line.need) return goNeed(line.need)
+        // a due nudge: ⏎ drafts it (never sends); with the draft open, ⏎ goes to its box
+        const nr = nudgeRow(line.item)
+        if (nr?.ui?.phase === 'open') return focusNudge(line.item.id)
+        if (nr?.ui?.phase === 'drafting') return
+        if (nr?.mark && nr.ui?.phase !== 'done') return nr.draft()
         return primaryOf(line.item, line.move, act, () => openItem(line.item.id), turnOn).run()
       }
       if (!line.item) return
@@ -608,6 +675,7 @@ export function JuniorLedger({ tab, items, rows, needs, me, empty, moves, onNavi
                   onOpen={() => openItem(line.item.id)}
                   onNotUseful={tab === 'needs' ? () => markGone(line.item, n, 'click') : undefined}
                   supervised={tab === 'with'}
+                  nudge={nudgeRow(line.item)}
                 />
               )}
             </div>
@@ -667,6 +735,7 @@ function ItemLine({
   onOpen,
   onNotUseful,
   supervised = false,
+  nudge,
 }: {
   item: ScoredItem
   /** line 1, the next move; null falls back to the title-first row */
@@ -691,6 +760,8 @@ function ItemLine({
   onNotUseful?: () => void
   /** With Junior only: the supervision line under the title, when there's something unseen */
   supervised?: boolean
+  /** a due nudge, or one you drafted */
+  nudge?: NudgeRow
 }) {
   const who = whoOf(i, me)
   const Icon = kindIcon(i)
@@ -712,6 +783,13 @@ function ItemLine({
   const why = !!i.rankParts?.length
   const sv = supervised && i.supervision ? i.supervision : null
   const svLine = sv ? supervisionLine(sv.files, sv.sends).line : null
+  // the nudge: offered while the mark stands and nothing went out yet
+  const mark = nudge?.ui?.phase === 'done' ? undefined : nudge?.mark
+  const nui = nudge?.ui
+  const offer = !!mark && (!nui || nui.phase === 'drafting' || nui.phase === 'failed')
+  const waited = mark ? nudgeWaited(shortAge(mark.since)) : ''
+  const stateText = mark ? (nui?.phase === 'open' ? waited : `${waited} · ${NUDGE_ASK}`) : st.text
+  const showOpen = offer || nui?.phase === 'open' || primary.run !== onOpen
   return (
     <>
       <button
@@ -719,7 +797,7 @@ function ItemLine({
         className={`jhRow${move ? ' two' : ''}`}
         aria-expanded={open}
         // the age sits apart from the line on screen: the name reads the full line, age included
-        aria-label={move ? rowLabel([move.text, adjusted ? 'you set this' : null, title || ref, p !== null ? 'Junior is working' : st.text, title ? ref : null, svLine]) : undefined}
+        aria-label={move ? rowLabel([move.text, adjusted ? 'you set this' : null, title || ref, p !== null ? 'Junior is working' : stateText, title ? ref : null, svLine]) : undefined}
         onClick={onClick}
       >
         <span className={`wc${who === 'You' ? ' you' : ''}`}>
@@ -737,16 +815,37 @@ function ItemLine({
               ref && <span className="tt ref">{ref}</span>
             )}
             {sv && svLine && <SupervisionText files={sv.files} sends={sv.sends} line={svLine} />}
+            {/* the state column is hidden on a phone: the ask rides under the title there */}
+            {offer && (
+              <span className="ndgPh" aria-hidden="true">
+                {NUDGE_ASK}
+              </span>
+            )}
           </span>
         ) : (
           <span className="tt">
             {i.title}
             {adjusted && <span className="rsMark"> · you set this</span>}
+            {offer && (
+              <span className="ndgPh" aria-hidden="true">
+                {NUDGE_ASK}
+              </span>
+            )}
           </span>
         )}
         {p !== null ? (
           <span className="prog" role="progressbar" aria-label="How far Junior is" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(p * 100)}>
             <i style={{ width: `${Math.round(p * 100)}%` }} />
+          </span>
+        ) : mark ? (
+          <span className="jrc ndgCell" title={stateText}>
+            <span className="w">{waited}</span>
+            {nui?.phase !== 'open' && (
+              <>
+                <span className="sep">{' · '}</span>
+                <span className="ask">{NUDGE_ASK}</span>
+              </>
+            )}
           </span>
         ) : (
           st.ready ? (
@@ -802,9 +901,55 @@ function ItemLine({
             </>
           )}
           <span className="lbl jr">Junior</span>
-          <span className="said">{juniorSays(i)}</span>
+          <span className="said">{mark ? nudgeSays(mark) : juniorSays(i)}</span>
+          {nui?.phase === 'open' && (
+            <>
+              <span className="lbl">Nudge</span>
+              <NudgeEditor
+                task={nui.task}
+                person={nui.person}
+                way={nui.way}
+                text={nui.text}
+                onText={(text) => nudge?.set({ ...nui, text })}
+                onDone={(how) => {
+                  nudge?.set({ phase: 'done', said: nudgeDone(how, nui.person), rule: false })
+                  nudge?.onNudged()
+                }}
+                onSkipped={() => nudge?.set(null)}
+              />
+            </>
+          )}
+          {nui?.phase === 'done' && (
+            <>
+              <span className="lbl">Nudge</span>
+              <span className="said" role="status">
+                {nui.rule ? (
+                  <>
+                    Sent under a rule you wrote. See it in the <a href="#/junior/log">Log</a>.
+                  </>
+                ) : (
+                  nui.said
+                )}
+              </span>
+            </>
+          )}
+          {nui?.phase === 'failed' && mark && (
+            <div className="notice ndgErr" role="alert">
+              {nui.error}
+            </div>
+          )}
           <div className="acts">
-            {primary.watch ? (
+            {offer ? (
+              <button type="button" className="btn sm primary" disabled={nui?.phase === 'drafting'} aria-busy={nui?.phase === 'drafting'} onClick={nudge?.draft}>
+                {nui?.phase === 'drafting' ? (
+                  'Drafting…'
+                ) : (
+                  <>
+                    Draft nudge <Kbd>⏎</Kbd>
+                  </>
+                )}
+              </button>
+            ) : nui?.phase === 'open' ? null : primary.watch ? (
               <>
                 <TurnOnButton watch={primary.watch} busy={turning === primary.watch} onClick={primary.run} className="btn sm primary" capId={capId}>
                   {primary.label} <Kbd>⏎</Kbd>
@@ -819,7 +964,7 @@ function ItemLine({
                 {primary.label} <Kbd>⏎</Kbd>
               </button>
             )}
-            {primary.run !== onOpen && (
+            {showOpen && (
               <button type="button" className="btn sm" onClick={onOpen}>
                 Open <Kbd>O</Kbd>
               </button>

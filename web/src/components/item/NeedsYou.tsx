@@ -8,6 +8,10 @@ import { botRepliesOf, plainClaim, SEND_BOT_REPLIES_STEP } from '../../../../cor
 import { ItemActions } from '../ActionCard.js'
 import { BotTriageCard } from './BotTriageCard.js'
 import { PostReview } from './PostReview.js'
+import { NudgeEditor } from '../NudgeEditor.js'
+import { nudgeInputOf } from '../../../../core/work/nudge-suggest.js'
+import { nudgeDone, nudgeWay } from '../../../../core/work/nudge-view.js'
+import { shortAge } from '../../itemUi.js'
 import { taskVerb, type TaskVerb } from './useItemTasks.js'
 
 const prOf = (itemId: string) => {
@@ -40,6 +44,8 @@ export function NeedsYou({ item, verdict, tasks, held, onChanged, onNavigate, on
 }) {
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // the line after a nudge went out: its card leaves with the task, the line stays
+  const [said, setSaid] = useState<string | null>(null)
   const waiting = tasks.filter((t) => t.state === 'waiting').sort((a, b) => a.createdAt - b.createdAt)
   const fixing = new Set(tasks.filter((t) => t.step === 'fix-thread').map((t) => str(t.input?.threadId)).filter(Boolean))
   const ownAsk = !verdict.handedOff && verdict.turn === 'you' && waiting.length === 0 && held.length === 0
@@ -53,15 +59,24 @@ export function NeedsYou({ item, verdict, tasks, held, onChanged, onNavigate, on
     onChanged()
   }
 
+  const saidLine = said && (
+    <div className="ndgSaid" role="status">
+      {said}
+    </div>
+  )
+
   if (!ownAsk && waiting.length === 0 && held.length === 0)
     return (
-      <div className="emptyLine">
-        {verdict.turn === 'junior'
-          ? 'Nothing needs you. Junior will ask here if it needs you.'
-          : verdict.turn === 'you'
-            ? 'Nothing waits on a card here. The line above says what’s next.'
-            : 'Nothing needs you on this item.'}
-      </div>
+      <>
+        {saidLine}
+        <div className="emptyLine">
+          {verdict.turn === 'junior'
+            ? 'Nothing needs you. Junior will ask here if it needs you.'
+            : verdict.turn === 'you'
+              ? 'Nothing waits on a card here. The line above says what’s next.'
+              : 'Nothing needs you on this item.'}
+        </div>
+      </>
     )
 
   return (
@@ -88,10 +103,26 @@ export function NeedsYou({ item, verdict, tasks, held, onChanged, onNavigate, on
           }
           case 'approve-plan':
             return <PlanCard key={t.id} {...props} onNavigate={onNavigate} />
+          case 'nudge':
+            // a draft it can't read falls back to the plain card, Skip still works
+            return !nudgeInputOf(t.input) ? (
+              <TaskCard key={t.id} {...props} onNavigate={onNavigate} />
+            ) : (
+              <NudgeCard
+                key={t.id}
+                t={t}
+                onDone={(line) => {
+                  setSaid(line)
+                  onChanged()
+                }}
+                onChanged={onChanged}
+              />
+            )
           default:
             return <TaskCard key={t.id} {...props} onNavigate={onNavigate} />
         }
       })}
+      {saidLine}
       {held.length > 0 && <ItemActions actions={held} onNavigate={onNavigate} />}
       {error && <div className="notice">{error}</div>}
     </div>
@@ -204,6 +235,32 @@ function ReplyCard({ t, busy, act, slack }: { t: ItemTask; busy: boolean; act: A
         </button>
         <span className="nFine">{slack ? 'one send · as you · Slack' : 'copy it and send it yourself'}</span>
       </div>
+    </div>
+  )
+}
+
+/** A nudge you drafted on the Junior page (or here): the same box, still holding the draft. */
+function NudgeCard({ t, onDone, onChanged }: { t: ItemTask; onDone: (said: string) => void; onChanged: () => void }) {
+  const input = nudgeInputOf(t.input)!
+  // seeded once from the draft: what goes out is the box, never the stored text
+  const [text, setText] = useState(input.text)
+  return (
+    <div className="needCard">
+      <div className="nTop">
+        <span className="jrMark" aria-hidden="true">J</span>
+        <span className="nTitle">{t.title}</span>
+        <span className="nMeta">waiting {shortAge(input.since)}</span>
+      </div>
+      {t.error && <div className="nRead">{t.error}</div>}
+      <NudgeEditor
+        task={t}
+        person={input.person}
+        way={nudgeWay(input.route)}
+        text={text}
+        onText={setText}
+        onDone={(how) => onDone(nudgeDone(how, input.person))}
+        onSkipped={onChanged}
+      />
     </div>
   )
 }

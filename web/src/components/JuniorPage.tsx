@@ -378,6 +378,8 @@ export function JuniorPage({ onNavigate, onDispatch, onCreate, createError, crea
                         // held chats, plans, gates and sends carry no filter: they show under All only
                         needs={filter ? [] : dayNeeds}
                         moves={day?.moves}
+                        nudges={day?.nudges}
+                        onNudged={reload}
                         me={me}
                         empty={
                           filter ? (
@@ -408,6 +410,8 @@ export function JuniorPage({ onNavigate, onDispatch, onCreate, createError, crea
                         rows={id === 'needs' && split ? split.through : undefined}
                         needs={dayNeeds}
                         moves={day?.moves}
+                        nudges={day?.nudges}
+                        onNudged={reload}
                         me={me}
                         empty={id === 'needs' && focus ? focusWords(focus.until, held).empty : EMPTY[id as LedgerTab]}
                         onNavigate={onNavigate}
