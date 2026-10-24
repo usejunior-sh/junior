@@ -49,6 +49,7 @@ import type { Decision, Handoff, ItemLabel, Playbook, Reason } from '../work/fie
 import type { ItemTask, NewTask, TaskState } from '../work/tasks.js'
 import type { TeamRun } from '../teams/engine-types.js'
 import type { TeamRunSummary } from '../teams/summary.js'
+import type { PageBoundary } from './event-page.js'
 
 export type StoredSession = {
   id: string
@@ -137,6 +138,18 @@ export type StoredEvent = {
   createdAt: number
 }
 
+/**
+ * One page of a session's log, oldest first. Chain pages by passing the first
+ * event's seq as the next `beforeSeq`. `boundary` says how the page was cut
+ * (core/store/event-page.ts); only a `hard` cut splits a tool call from its
+ * result, though older pages inside that same call may not say `hard`.
+ */
+export type EventPage = {
+  events: StoredEvent[]
+  hasEarlier: boolean
+  boundary: PageBoundary
+}
+
 /** A Claude spawn's `system`/`init` as the event log kept it: which login it started on. */
 export type SdkInit = { sessionId: string; at: number; apiKeySource: string }
 
@@ -222,6 +235,12 @@ export interface EventStore {
   append(sessionId: string, seq: number, event: SessionEvent): Promise<void>
   /** Events after `afterSeq` (exclusive), in order. Omit for the full log. */
   read(sessionId: string, afterSeq?: number): Promise<StoredEvent[]>
+  /**
+   * The newest events before `beforeSeq` (omit for the log's end): at most
+   * `limit`, cut so the page starts on a turn and never splits a tool call
+   * from its result, unless one call spans the whole page.
+   */
+  readPage(sessionId: string, opts?: { beforeSeq?: number; limit?: number }): Promise<EventPage>
   /** The highest seq for a session, or 0 if none. */
   lastSeq(sessionId: string): Promise<number>
   /**

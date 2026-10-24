@@ -1,7 +1,8 @@
 import { DatabaseSync } from 'node:sqlite'
 import { type EffortLevel, type PermissionMode, type ProviderId, isProviderId, type SessionEvent, type InboxSnapshot } from '../../shared/protocol.js'
-import type { StoredSession, SessionStore, NewSession, SessionKind, JobRunRecord, StoredTurn, TurnStore, EventStore, StoredEvent, SdkInit, InboxStore, ConfigStore } from './types.js'
+import type { StoredSession, SessionStore, NewSession, SessionKind, JobRunRecord, StoredTurn, TurnStore, EventStore, EventPage, StoredEvent, SdkInit, InboxStore, ConfigStore } from './types.js'
 import { toRunStatus, toTrigger } from './sqlite-jobs.js'
+import { clampPageLimit, cutPage } from './event-page.js'
 
 type SessionRow = {
   id: string
@@ -329,6 +330,22 @@ export class SqliteEvents implements EventStore {
       .prepare('SELECT seq, payload, created_at FROM session_events WHERE session_id = ? AND seq > ? ORDER BY seq')
       .all(sessionId, afterSeq) as { seq: number; payload: string; created_at: number }[]
     return rows.map((r) => ({ seq: r.seq, event: JSON.parse(r.payload) as SessionEvent, createdAt: r.created_at }))
+  }
+
+  async readPage(sessionId: string, opts: { beforeSeq?: number; limit?: number } = {}): Promise<EventPage> {
+    const limit = clampPageLimit(opts.limit)
+    const before = opts.beforeSeq ?? Number.MAX_SAFE_INTEGER
+    // One row past the limit says whether the window reaches the log's start,
+    // its payload is never parsed. Newest first, so the primary key index
+    // walks back from `before` and stops.
+    const rows = this.db
+      .prepare('SELECT seq, payload, created_at FROM session_events WHERE session_id = ? AND seq < ? ORDER BY seq DESC LIMIT ?')
+      .all(sessionId, before, limit + 1) as { seq: number; payload: string; created_at: number }[]
+    const reachesStart = rows.length <= limit
+    const window = rows.slice(0, limit).reverse()
+    const events = window.map((r) => ({ seq: r.seq, event: JSON.parse(r.payload) as SessionEvent, createdAt: r.created_at }))
+    const { start, boundary } = cutPage(events.map((e) => e.event), reachesStart)
+    return { events: events.slice(start), hasEarlier: !reachesStart, boundary }
   }
 
   async lastSeq(sessionId: string): Promise<number> {
