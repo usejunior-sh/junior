@@ -13,8 +13,8 @@
 import { splitCommand, unwrap, wrappersOf } from '../actions/bash.js'
 
 /** The kinds of send an approval can cover. */
-export type ApprovalWhat = 'slack-dm' | 'slack-post' | 'request-review'
-export const APPROVAL_WHATS: readonly ApprovalWhat[] = ['slack-dm', 'slack-post', 'request-review']
+export type ApprovalWhat = 'slack-dm' | 'slack-post' | 'request-review' | 'bot-reply'
+export const APPROVAL_WHATS: readonly ApprovalWhat[] = ['slack-dm', 'slack-post', 'request-review', 'bot-reply']
 export const isApprovalWhat = (v: unknown): v is ApprovalWhat => APPROVAL_WHATS.includes(v as ApprovalWhat)
 
 /** Who it reaches. The kind follows from the what. */
@@ -23,6 +23,8 @@ export const WHO_KIND: Record<ApprovalWhat, ApprovalWhoKind> = {
   'slack-dm': 'slack-user',
   'slack-post': 'slack-channel',
   'request-review': 'github-user',
+  // the review bot whose comments get the reply: its login, like `coderabbitai`
+  'bot-reply': 'github-user',
 }
 
 export type ApprovalWho = {
@@ -62,12 +64,16 @@ export const WHAT_LABEL: Record<ApprovalWhat, string> = {
   'slack-dm': 'DM on Slack',
   'slack-post': 'post in a Slack channel',
   'request-review': 'request a review on GitHub',
+  'bot-reply': "reply to a review bot's comments on GitHub",
 }
 
 /** One line: "DM Anirudha on Slack", "request a review from anirudha-k". */
 export function describeApproval(a: Pick<AdvanceApproval, 'who' | 'what' | 'when'>): string {
   const base =
-    a.what === 'slack-dm' ? `DM ${a.who.name} on Slack` : a.what === 'slack-post' ? `post in ${a.who.name} on Slack` : `request a review from ${a.who.name}`
+    a.what === 'slack-dm' ? `DM ${a.who.name} on Slack`
+    : a.what === 'slack-post' ? `post in ${a.who.name} on Slack`
+    : a.what === 'bot-reply' ? `reply to ${a.who.name} on your PRs`
+    : `request a review from ${a.who.name}`
   return a.when.kind === 'playbook' ? `${base}, in ${a.when.playbook} (${a.when.step})` : base
 }
 
@@ -95,10 +101,26 @@ const isSlackSend = (tool: string): boolean => {
 }
 
 /**
+ * A reply to a review bot's thread, as babysit's send path asks about it
+ * (server/tasks/bot-replies.ts): not a tool an agent can call, a name the
+ * server's own send matches approvals on. Args: `{ bot: <login> }`. The bot
+ * can't be read off the GraphQL call (it names only the thread), so the send
+ * path names it here from the thread it replies to.
+ */
+export const BOT_REPLY_TOOL = 'junior:bot-reply'
+
+/** `coderabbitai[bot]` → `coderabbitai`: how a bot's login reads in an approval. */
+export const botLogin = (login: string): string => login.trim().replace(/\[bot\]$/i, '')
+
+/**
  * The recipient a call reaches, as an approval would name it, or null when
  * no approval kind can cover it.
  */
 export function callTarget(tool: string, args: Record<string, unknown>): { what: ApprovalWhat; id: string } | null {
+  if (tool === BOT_REPLY_TOOL) {
+    const login = typeof args.bot === 'string' ? botLogin(args.bot) : ''
+    return GITHUB_LOGIN_RE.test(login) ? { what: 'bot-reply', id: login } : null
+  }
   if (isSlackSend(tool)) {
     const ch = typeof args.channel_id === 'string' ? args.channel_id.trim() : ''
     if (SLACK_USER_RE.test(ch)) return { what: 'slack-dm', id: ch }
@@ -170,7 +192,7 @@ export function approvalFrom(
   const w = (r.who && typeof r.who === 'object' ? r.who : {}) as Record<string, unknown>
   const who: ApprovalWho = {
     kind: WHO_KIND[r.what],
-    id: typeof w.id === 'string' ? w.id.trim() : '',
+    id: typeof w.id === 'string' ? (r.what === 'bot-reply' ? botLogin(w.id) : w.id.trim()) : '',
     name: typeof w.name === 'string' ? w.name.trim().slice(0, 80) : '',
   }
   const bad = whoProblem(r.what, who)

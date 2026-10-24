@@ -213,6 +213,7 @@ function decideVerb(x: Facts): string {
       if (t?.error) return "Check Junior's failed task"
       if (t?.step === 'request-review') return 'Pick a reviewer'
       if (t?.step === 'send-reply') return "Send Junior's draft reply"
+      if (t?.step === 'send-bot-replies') return "Send Junior's replies to the bots"
       return 'Answer Junior on a task'
     }
     case 'junior-asks':

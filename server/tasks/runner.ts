@@ -59,6 +59,8 @@ import type { WorkspaceRuntime } from '../workspace/runtime.js'
 import { broadcastSessionList, invalidateInbox } from '../ws/send.js'
 import { taskNeedsYou } from './notify.js'
 import { requestUnderApproval } from './ops.js'
+import { botRepliesUnderApproval } from './bot-replies.js'
+import { repliesTask } from '../../core/babysit/bot-replies.js'
 
 /** A task session gives up after this: a hung run never holds a slot all day. */
 export const TASK_SESSION_TIMEOUT_MS = 30 * 60_000
@@ -531,6 +533,17 @@ function submitTriageTool(rt: WorkspaceRuntime, sessionId: string) {
       if (!done) return errResult('This task moved on before the hand-in landed.')
       const now = Date.now()
       for (const fix of r.fixes) await rt.store.tasks.add({ ...fix, itemId: run.itemId }, now)
+      // The won't fix and incorrect replies: one task on you. A rule you wrote may send some alone; the rest wait.
+      const spec = repliesTask(t.id, triageThreadsOf(t.input), r.verdicts)
+      const send = spec ? await rt.store.tasks.add({ ...spec, itemId: run.itemId }, now) : null
+      if (send)
+        fireAndLog(
+          rt,
+          'tasks',
+          botRepliesUnderApproval(rt, send).then((settled) => {
+            if (!settled) taskNeedsYou(rt, { kind: 'bot-replies', task: send })
+          }),
+        )
       tasksChanged(rt)
       return okResult('Handed in. End your turn now.')
     },

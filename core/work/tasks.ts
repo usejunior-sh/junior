@@ -26,6 +26,8 @@ export interface TaskOutput {
   verdict?: 'approve' | 'comment' | 'request_changes'
   /** a bot triage's verdicts, one per thread (core/babysit/bot-triage.ts): the non-fix ones carry the reply to send */
   verdicts?: Verdict[]
+  /** bot replies (core/babysit/bot-replies.ts): the threads already replied to or turned into a fix, so a second Send skips them */
+  handled?: string[]
 }
 
 export interface ItemTask {

@@ -3,6 +3,7 @@ import { approveTaskOp, babysitSettingsOp, retryTaskOp, skipTaskOp, stopTaskOp }
 import { readJsonBody } from './http-util.js'
 import { postReviewOp, reviewAgainOp, reviewHeadOp } from '../review/post.js'
 import { approvePlanOp, changePlanOp, sendReplyOp } from '../playbooks/ops.js'
+import { sendBotRepliesOp } from '../tasks/bot-replies.js'
 import { startPlaybookOp } from '../rules-ops.js'
 import { handoffOp, isHandoffVerb } from '../handoff-ops.js'
 import type { ScopedCtx } from './ctx.js'
@@ -11,7 +12,8 @@ import type { HandoffResponse } from '../../shared/protocol.js'
 /**
  * Tasks on items (POST /api/tasks/<verb> {id, …}), first-pass reviews
  * (post-review, review-again, the head the watch last read), the item playbooks
- * (start one, send its reply, approve or send back its plan), hand-offs
+ * (start one, send its reply, approve or send back its plan), a bot triage's
+ * replies (send-bot-replies), hand-offs
  * (start, pause, resume, not this one) and babysitting's
  * settings (GET/POST /api/babysit/settings). Every answer is { ok, … }.
  */
@@ -64,6 +66,17 @@ export async function taskRoutes({ req, url, json, rt }: ScopedCtx): Promise<boo
   if (url.pathname === '/api/playbooks/start' && req.method === 'POST') {
     try {
       json(200, { ok: true, task: await startPlaybookOp(rt, (await readJsonBody(req)) ?? {}) })
+    } catch (err) {
+      json(400, { ok: false, error: errText(err) })
+    }
+    return true
+  }
+  // A bot triage's drafted replies (server/tasks/bot-replies.ts): send them, as edited on the card.
+  if (url.pathname === '/api/tasks/send-bot-replies' && req.method === 'POST') {
+    try {
+      const body = ((await readJsonBody(req)) ?? {}) as { id?: unknown }
+      if (typeof body.id !== 'string' || !body.id) throw new Error('id required')
+      json(200, { ok: true, task: await sendBotRepliesOp(rt, body.id, body) })
     } catch (err) {
       json(400, { ok: false, error: errText(err) })
     }

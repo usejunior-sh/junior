@@ -456,7 +456,7 @@ export function makeJuniorMcp(rt: WorkspaceRuntime, sessionId?: string) {
         'propose_approval',
         'Propose an advance approval: one recipient + one kind of send + when, which the user may add so those sends go out without a card. It shows as a card in this chat; nothing is approved until the user presses Add. Use it when the user says to always let you send something ("you can always DM Anirudha when a PR is ready"), or after they approved the same kind of send several times. Keep it narrow: one person or channel. Look up the Slack user id (slack_search_users) or channel id (slack_search_channels) first. A send you make before they add it still shows its own card.',
         {
-          what: z.enum(APPROVAL_WHATS as unknown as [string, ...string[]]).describe('slack-dm: DM one person · slack-post: post in one channel · request-review: ask one GitHub user to review'),
+          what: z.enum(APPROVAL_WHATS as unknown as [string, ...string[]]).describe('slack-dm: DM one person · slack-post: post in one channel · request-review: ask one GitHub user to review · bot-reply: send the drafted replies to one review bot (who = its login, e.g. coderabbitai)'),
           who: z.object({
             id: z.string().describe('Slack user id (U…), Slack channel id (C…), or GitHub login'),
             name: z.string().describe('what the user reads: "Anirudha", "#eng-reviews"'),

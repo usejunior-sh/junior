@@ -19,6 +19,7 @@ export type NeedsYou =
   | { kind: 'stuck'; task: ItemTask }
   | { kind: 'post-review'; task: ItemTask; verdict: Verdict }
   | { kind: 'reply'; task: ItemTask }
+  | { kind: 'bot-replies'; task: ItemTask }
   | { kind: 'plan'; task: ItemTask }
   | { kind: 'budget'; spent: number; limit: number; waiting: number }
 
@@ -32,6 +33,8 @@ export function needsYouText(n: NeedsYou, pr: string | null): { title: string; b
     case 'reply':
       // someone is waiting on you: People waiting pings (cb50520f "Notifications")
       return { title: 'Reply drafted', body: `${n.task.title}: Junior's draft waits for you. Nothing is sent until you send it.` }
+    case 'bot-replies':
+      return { title: `Bot replies ready${pr ? ` on ${pr}` : ''}`, body: `${n.task.title}: Junior drafted them. Nothing is sent until you send it.` }
     case 'plan':
       return { title: 'Plan ready', body: 'Junior found the cause and wrote the fix plan. Nothing changes until you approve it.' }
     case 'stuck':
