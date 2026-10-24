@@ -4,7 +4,7 @@
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { fenceDecision, fenceFor } from '../core/job/fence.js'
+import { fenceDecision, fenceFor, gitOutputTargets } from '../core/job/fence.js'
 import {
   builtinGrant,
   defaultToolsFor,
@@ -55,6 +55,50 @@ test('fence: bash only for granted prefixes, never chained', () => {
   assert.ok(!allow('Bash', { command: 'gh pr view $(whoami)' }))
   assert.ok(!allow('Bash', { command: 'gh prlist' }))
   assert.ok(!allow('Bash', { command: 'rm -rf /' }))
+})
+
+test('fence: git may write its output only inside the project folder', () => {
+  // outside the folder: absolute, parent, home, glob, empty, and every spelling of the flag
+  for (const command of [
+    'git diff --output=/tmp/x',
+    'git log --output=../x',
+    'git log -p --output ../x',
+    'git show HEAD --output /tmp/x',
+    'git diff "--output=/tmp/x"',
+    "git diff '--outp''ut=/tmp/x'",
+    'git diff --outpu=/tmp/x',
+    'git diff --output=~/x',
+    'git diff --output=./*/../../x',
+    'git diff --output=',
+    'git diff --output',
+    `git diff --output=${ROOT}-evil/x`,
+    'git log -o /tmp/x',
+    'git log -o/tmp/x',
+    'git log --output-directory=/tmp',
+    'git diff -- --output=/tmp/x',
+  ]) {
+    const d = fenceDecision(fence, 'Bash', { command })
+    assert.equal(d.allow, false, command)
+    assert.match(!d.allow ? d.reason : '', /inside this job's folder/, command)
+  }
+  // inside the folder
+  assert.ok(allow('Bash', { command: 'git diff --output=./out.patch' }))
+  assert.ok(allow('Bash', { command: 'git diff --output=out.patch' }))
+  assert.ok(allow('Bash', { command: `git log -p --output ${ROOT}/notes/log.txt` }))
+  assert.ok(allow('Bash', { command: 'git show --output=sub/../show.txt HEAD' }))
+  // look-alikes that write nothing
+  assert.ok(allow('Bash', { command: 'git diff --output-indicator-new=+ HEAD' }))
+  assert.ok(allow('Bash', { command: 'git log --oneline -5' }))
+  assert.ok(allow('Bash', { command: 'git status -uno' }))
+  assert.ok(allow('Bash', { command: 'gh pr view 12 -o x' }))
+})
+
+test('gitOutputTargets: finds each output path a git command names', () => {
+  assert.deepEqual(gitOutputTargets(['git', 'diff', '--output=a', '--output', 'b']), ['a', 'b'])
+  assert.deepEqual(gitOutputTargets(['git', 'format-patch', '-o', 'out', '-odir', '--output-dir=x']), ['out', 'dir', 'x'])
+  assert.deepEqual(gitOutputTargets(['git', 'diff', '--output']), [''])
+  assert.deepEqual(gitOutputTargets(['git', 'log', '--oneline', '--output-indicator-old=-']), [])
+  assert.deepEqual(gitOutputTargets(['gh', 'pr', 'view', '-o', 'x']), [])
 })
 
 test('fence: file tools stay inside the project folder', () => {

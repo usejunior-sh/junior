@@ -6,6 +6,7 @@
  * Server-only (node:path).
  */
 import path from 'node:path'
+import { splitCommand } from '../actions/bash.js'
 import { hasBuiltin, runAllowedTools, type RunOutput, type JobToolGrant } from './tools.js'
 
 export type Fence = {
@@ -61,6 +62,37 @@ const inside = (root: string, p: string): boolean => {
 }
 
 /**
+ * Where a git command would write a file, from its words: `--output=<path>`,
+ * `--output <path>` (diff, log, show), and `-o`/`--output-directory`
+ * (format-patch). A long option git might take abbreviated (`--outp=`) counts
+ * too. Every word is checked, not just those before `--`: a pathspec that
+ * looks like an output flag is not worth the doubt.
+ */
+export function gitOutputTargets(words: string[]): string[] {
+  if (words[0] !== 'git') return []
+  const out: string[] = []
+  for (let k = 1; k < words.length; k++) {
+    const w = words[k]
+    const long = /^--([a-z-]+)(?:=(.*))?$/s.exec(w)
+    if (long && long[1].length >= 2 && 'output-directory'.startsWith(long[1])) {
+      out.push(long[2] ?? words[++k] ?? '')
+    } else if (w === '-o') {
+      out.push(words[++k] ?? '')
+    } else if (w.startsWith('-o') && !w.startsWith('--')) {
+      out.push(w.slice(2))
+    }
+  }
+  return out
+}
+
+/**
+ * An output path stays in the project when it resolves inside the root. A `~`
+ * (the shell may expand it, even after `=`) or a glob (it expands to who knows
+ * what) is refused rather than guessed at.
+ */
+const outputInside = (root: string, p: string): boolean => p !== '' && !/[~*?[]/.test(p) && inside(root, p)
+
+/**
  * Decide one tool call. Deny anything outside the grants; fence file paths to
  * the project folder; allow Bash only for a granted command prefix with no
  * shell metacharacters (no chaining, redirects, or substitution).
@@ -74,7 +106,14 @@ export function fenceDecision(f: Fence, toolName: string, input: unknown): Fence
     if (!cmd) return { allow: false, reason: 'empty command' }
     if (SHELL_META.test(cmd)) return { allow: false, reason: 'job runs may not chain, redirect, or substitute shell commands' }
     const ok = f.bash.some((p) => cmd === p || cmd.startsWith(p + ' '))
-    return ok ? { allow: true } : { allow: false, reason: `this job may only run: ${f.bash.join(', ') || 'no shell commands'}` }
+    if (!ok) return { allow: false, reason: `this job may only run: ${f.bash.join(', ') || 'no shell commands'}` }
+    // `git diff --output=/tmp/x` has no metacharacter but still writes a file: keep it in the project.
+    for (const words of splitCommand(cmd)) {
+      if (gitOutputTargets(words).some((t) => !outputInside(f.root, t))) {
+        return { allow: false, reason: `job runs may write git output only inside this job's folder (${f.root})` }
+      }
+    }
+    return { allow: true }
   }
 
   if (toolName === 'Read' || toolName === 'Grep' || toolName === 'Glob' || toolName === 'Write' || toolName === 'Edit') {
