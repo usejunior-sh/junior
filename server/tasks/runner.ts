@@ -13,7 +13,7 @@
 import { existsSync } from 'node:fs'
 import { createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk'
 import { z } from 'zod'
-import { taskPrompt, type TaskPr } from '../../core/babysit/brief.js'
+import { taskPrompt, type TaskCtx, type TaskPr } from '../../core/babysit/brief.js'
 import type { TaskRunScope } from '../../core/babysit/policy.js'
 import { capFor, modelFor, type BabysitSettings } from '../../core/babysit/settings.js'
 import { heldBy, watchOf } from '../../core/work/handoff.js'
@@ -42,6 +42,7 @@ import type { Checkout, Project } from '../../shared/protocol.js'
 import { BABYSIT_WATCH_KEY, pollBabysitSoon, type BabysitWatchState } from '../babysit/watch.js'
 import { REVIEW_WATCH_KEY, type ReviewWatchState } from '../review/watch.js'
 import { createArtifactOp } from '../artifacts-ops.js'
+import { readLocalChecks } from '../babysit/ci-steps.js'
 import { babysitSettings, ghBabysitSource } from '../babysit/glue.js'
 import { onBabysitTick, onTaskAdded } from '../babysit/hooks.js'
 import { pExecFile, VERSION } from '../config.js'
@@ -232,13 +233,14 @@ async function startTask(rt: WorkspaceRuntime, t: ItemTask, s: BabysitSettings):
 
   const pr: TaskPr = { ...ref, url: item.url, headRef: watch.headRef, baseRef: watch.baseRef }
   const { co: checkout, sha } = await taskCheckout(rt, project, item.id, pr, review)
-  const ctx: { log?: string; diff?: string } = {}
+  const ctx: TaskCtx = {}
   const rctx = review ? await reviewCtx(pr) : null
   if (t.step === 'fix-ci') {
     const runId = typeof t.input?.runId === 'number' ? t.input.runId : null
     const check = { name: String(t.input?.check ?? ''), status: 'failure' as const, id: '', runId, url: null, conclusion: null }
     ctx.log = await ghBabysitSource.failedLog(pr.repo, check).catch(() => '')
     ctx.diff = await pExecFile('gh', ['pr', 'diff', String(pr.number), '-R', pr.repo], { maxBuffer: 16 * 1024 * 1024 }).then((r) => r.stdout, () => '')
+    ctx.local = await readLocalChecks(checkout.path, check.name).catch((err) => ({ job: null, why: `the workflow files couldn't be read (${errText(err)})` }))
   }
 
   const model = modelFor(t.step, s)

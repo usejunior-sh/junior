@@ -7,6 +7,7 @@
  */
 import { memoryBlock, type ItemMemory } from '../work/fields.js'
 import type { ItemTask } from '../work/tasks.js'
+import type { CiStep, LocalChecks } from './ci-steps.js'
 import { MAX_FIX_ATTEMPTS } from './watch.js'
 
 export type TaskPr = { repo: string; number: number; url: string; headRef: string; baseRef: string }
@@ -19,8 +20,58 @@ const tail = (s: string, n: number) => (s.length > n ? `…(earlier output cut)\
 const head = (s: string, n: number) => (s.length > n ? `${s.slice(0, n)}\n…(rest cut: run \`gh pr diff\`)` : s)
 const str = (v: unknown) => (typeof v === 'string' ? v : '')
 
+/** What a fix-ci session reads before it starts: the failed log, the PR diff, the CI job's steps sorted. */
+export type TaskCtx = { log?: string; diff?: string; local?: LocalChecks }
+
+/** The line a fix-ci hand-in starts with when the job's checks passed here. */
+export const CHECKED_LOCALLY = "Checked locally with the CI job's steps"
+
+const where = (s: CiStep) => (s.cwd ? ` (in ${s.cwd})` : '')
+const MAX_SKIPPED = 12
+
+/**
+ * The fix-ci section on checking locally: the CI job's runnable steps to run
+ * here before pushing, the rest listed as skipped, and the line to hand in.
+ * Only steps ci-steps.ts sorted as plain checks are named: CI's other steps
+ * are arbitrary shell (deploys, releases, secrets) and never run here.
+ */
+export function localChecksSection(local: LocalChecks): string[] {
+  if (!local.job)
+    return [
+      '### Check locally before you push',
+      `The CI job behind this check wasn't found: ${local.why}. Don't run CI's own steps by hand. If package.json has a test or lint script, run it here before you push.`,
+      `In your done line, say "${CHECKED_LOCALLY}" only if you ran them; otherwise say "Not checked locally" and why.`,
+    ]
+  const { job } = local
+  const run = job.steps.filter((s) => s.runnable)
+  const skipped = job.steps.filter((s) => !s.runnable && !s.setup)
+  const setup = job.steps.find((s) => s.setup)
+  const matrix = job.matrix ? ` with ${Object.entries(job.matrix).map(([k, v]) => `${k} ${v}`).join(', ')}` : ''
+  const skippedLines = [
+    ...skipped.slice(0, MAX_SKIPPED).map((s) => `- ${s.label}${s.command && s.command !== s.label ? `: \`${s.command}\`` : ''} (${s.why ?? 'not a check'})`),
+    ...(skipped.length > MAX_SKIPPED ? [`- and ${skipped.length - MAX_SKIPPED} more`] : []),
+  ]
+  const head = [`### Check locally before you push`, `The check is the job \`${job.jobId}\` in ${job.file}${matrix}.`]
+  if (!run.length)
+    return [
+      ...head,
+      "None of its steps is a plain check you may run on this Mac, so don't run them. Push your fix and let CI check it.",
+      ...(skippedLines.length ? ['', "Skipped, not a check:", ...skippedLines] : []),
+      '',
+      `In your done line, say "Not checked locally: the CI job has no plain check steps".`,
+    ]
+  return [
+    ...head,
+    `Run these steps here, in order, before you push. Push only once they pass. If this worktree has no dependencies yet, install them first${setup?.command ? ` the way CI does (\`${setup.command}\`${where(setup)})` : ''}.`,
+    ...run.map((s, i) => `${i + 1}. \`${s.command}\`${where(s)}`),
+    ...(skippedLines.length ? ['', "Skipped, not a check (don't run these: they may deploy, publish or need CI's secrets):", ...skippedLines] : []),
+    '',
+    `In your done line, say "${CHECKED_LOCALLY}" when they pass. If one can't run here (it needs a service or a tool CI has), push anyway and say "Not checked locally" and why.`,
+  ]
+}
+
 /** The task's own section. */
-function taskSection(t: ItemTask, pr: TaskPr, ctx: { log?: string; diff?: string }): string[] {
+function taskSection(t: ItemTask, pr: TaskPr, ctx: TaskCtx): string[] {
   const input = t.input ?? {}
   switch (t.step) {
     case 'fix-ci':
@@ -28,8 +79,11 @@ function taskSection(t: ItemTask, pr: TaskPr, ctx: { log?: string; diff?: string
         `CI check "${str(input.check)}" fails on the PR's head (${str(input.sha).slice(0, 7)}). Fix it. This is fix ${Number(input.attempt) || 1} of ${MAX_FIX_ATTEMPTS}; after that the user is asked.`,
         input.url ? `Check: ${str(input.url)}` : '',
         '',
-        "Find the cause in the log, fix it here, run the check locally if you can, commit, and push. Fix the cause, not the test: don't skip, weaken or delete a test to make it pass. If the failure isn't caused by this PR, don't change anything: hand in blocked and say why.",
+        ctx.local
+          ? "Find the cause in the log, fix it here, check it locally (below), commit, and push. Fix the cause, not the test: don't skip, weaken or delete a test to make it pass. If the failure isn't caused by this PR, don't change anything: hand in blocked and say why."
+          : "Find the cause in the log, fix it here, run the check locally if you can, commit, and push. Fix the cause, not the test: don't skip, weaken or delete a test to make it pass. If the failure isn't caused by this PR, don't change anything: hand in blocked and say why.",
         '',
+        ...(ctx.local ? [...localChecksSection(ctx.local), ''] : []),
         '### Failing log',
         '```',
         tail((ctx.log ?? '').trim(), LOG_CHARS) || '(no log came back: open the check link, or run `gh run view --log-failed`)',
@@ -69,7 +123,7 @@ function taskSection(t: ItemTask, pr: TaskPr, ctx: { log?: string; diff?: string
   }
 }
 
-export function taskPrompt(t: ItemTask, pr: TaskPr, memory: ItemMemory | undefined, ctx: { log?: string; diff?: string } = {}): string {
+export function taskPrompt(t: ItemTask, pr: TaskPr, memory: ItemMemory | undefined, ctx: TaskCtx = {}): string {
   const mem = memoryBlock(memory)
   return [
     `You are Junior, babysitting the user's PR ${pr.repo}#${pr.number} (${pr.url}) until it's ready for review. One task this session: **${t.title}**.`,
