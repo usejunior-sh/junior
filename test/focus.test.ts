@@ -10,6 +10,7 @@ import {
   endFocus,
   focusFilter,
   focusFrom,
+  focusWords,
   getsThrough,
   inFocus,
   inWindow,
@@ -140,4 +141,19 @@ test('readFocus keeps good windows and drops the rest', () => {
     waitMinutes: 60,
     endedUntil: 5,
   })
+})
+
+test('focusWords: the halo line, the foot line and the empty state', () => {
+  const until = local(MON, 12)
+  const three = focusWords(until, 3)
+  assert.equal(three.clock, '12:00')
+  assert.equal(three.waiting, '3 waiting')
+  assert.equal(three.foot, 'Quiet until 12:00. 3 wait for you then.')
+  assert.equal(three.empty, 'Nothing needs you before 12:00.')
+  assert.equal(three.ended, 'Focus ended. 3 back on Needs you.')
+  assert.equal(focusWords(until, 1).foot, 'Quiet until 12:00. 1 waits for you then.')
+  const none = focusWords(local(MON, 9, 30), 0)
+  assert.equal(none.clock, '9:30')
+  assert.equal(none.waiting, 'nothing waiting')
+  assert.equal(none.foot, null)
 })

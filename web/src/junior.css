@@ -394,6 +394,15 @@ button.jlTitle:hover { text-decoration: underline; text-decoration-color: var(--
 .jhTicker .jobs { color: var(--ash); }
 .jhTicker .pulse { position: relative; width: 7px; height: 7px; flex: none; border-radius: 50%; background: var(--blue); }
 .jhTicker .pulse::after { content: ""; position: absolute; inset: -4px; border-radius: 50%; border: 1px solid var(--blue); animation: jhPing 2s infinite; }
+/* focus hours: the line in place of the ticker, still and never orange (held items don't need you yet) */
+.jhTicker.focus .ring { width: 7px; height: 7px; flex: none; border-radius: 50%; border: 1px solid var(--mute); }
+.jhTicker.focus .txt { cursor: default; }
+.jhTicker.focus .txt:hover { color: inherit; }
+.jhTicker.focus b { color: var(--ink); }
+.jhTicker.focus .sep { color: var(--stone); }
+.jhTicker.focus .held { color: var(--ash); }
+.jhTicker.focus .end { flex: none; background: transparent; border-color: var(--hair-strong); box-shadow: none; }
+.jhFocusFoot { margin: 0; padding: 12px 10px 0; border-top: 1px solid var(--hair-soft); color: var(--ash); }
 @keyframes jhPing { 0% { transform: scale(0.6); opacity: 0.9; } 100% { transform: scale(1.8); opacity: 0; } }
 
 /* the box: the shared ChatComposer, the same one a new tab has */
@@ -613,6 +622,7 @@ a.rdyChip:focus-visible { outline: 1px solid var(--hair-bright); outline-offset:
   .jhHello { font-size: 2.3rem; }
   .jhTicker { font-size: 1rem; text-align: center; flex-wrap: wrap; white-space: normal; }
   .jhTicker .jobs { display: none; }
+  .jhTicker.focus .end { flex-basis: 100%; max-width: 160px; height: 40px; margin: 4px auto 0; }
   .jhTabWrap { top: -24px; width: calc(100% + 32px); margin: 22px -16px 0; padding: 10px 8px 8px; }
   .jhPills { align-self: stretch; max-width: none; padding: 0 2px; }
   .jhPill { height: 40px; }

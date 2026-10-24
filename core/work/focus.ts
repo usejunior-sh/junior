@@ -265,3 +265,31 @@ export function describeFocus(focus: FocusHours | null): string {
   const wait = focus.waitMinutes === 0 ? 'anyone waiting on you' : `people waiting ${formatWait(focus.waitMinutes)} or more`
   return `Focus ${when}. During focus, only ${wait} and prod-red items reach Needs you.`
 }
+
+// ── The halo line (the Junior page during focus) ────────────────────────
+
+/** An epoch ms as the Mac's 24h clock: "12:00", "9:30". */
+export const clockAt = (ms: number): string => formatClock(minuteOfDay(new Date(ms)))
+
+/** Every string the Junior page shows during focus, for `held` items waiting until `until`. */
+export function focusWords(until: number, held: number): {
+  /** "12:00" */
+  clock: string
+  /** after "Focus until 12:00 · ": "3 waiting" or "nothing waiting" */
+  waiting: string
+  /** under the Needs you list, only when something is held */
+  foot: string | null
+  /** Needs you with nothing let through */
+  empty: string
+  /** said to a screen reader once End focus worked */
+  ended: string
+} {
+  const clock = clockAt(until)
+  return {
+    clock,
+    waiting: held > 0 ? `${held} waiting` : 'nothing waiting',
+    foot: held > 0 ? `Quiet until ${clock}. ${held} ${held === 1 ? 'waits' : 'wait'} for you then.` : null,
+    empty: `Nothing needs you before ${clock}.`,
+    ended: `Focus ended. ${held} back on Needs you.`,
+  }
+}

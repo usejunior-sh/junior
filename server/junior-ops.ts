@@ -1,7 +1,7 @@
 import os from 'node:os'
 import { type Persona, personaAppend, personaFrom } from '../core/junior/persona.js'
 import { log } from './log.js'
-import type { ActionView, JuniorDay, JuniorSeen, ScoredItem, SessionStatus } from '../shared/protocol.js'
+import type { ActionView, JuniorDay, JuniorFocus, JuniorSeen, ScoredItem, SessionStatus } from '../shared/protocol.js'
 import { type AddedBy, carryOver, dayKey, draftPlan, isOwner, matchItem, type Owner, type PlanItem, type PlanRow, planRows, type PlanSession, type PlanView, shortRef } from '../core/junior/today.js'
 import { type NowCandidate, pickNow, todoProgress, type TodoProgress } from '../core/junior/now.js'
 import { startOfDay } from '../core/work/due.js'
@@ -23,6 +23,7 @@ import { errText } from './errors.js'
 import { actionViews } from './session/actions-record.js'
 import { libraryRootsFor } from './session/changes.js'
 import { inboxAlerts } from './inbox/flow.js'
+import { getFocusHoursOp, type FocusView } from './settings-ops.js'
 
 // Junior (.docs/junior-goals-teams): the persona, the Junior page's day, and
 // today's plan. The rules are pure and tested in core/junior/; everything
@@ -389,5 +390,9 @@ export async function juniorDayOp(rt: WorkspaceRuntime, q: { since: number; away
     routines,
     morning: morningBrief({ items, facts, now }),
     jobsOn: jobs.filter((j) => j.enabled).length,
+    focus: juniorFocus(await getFocusHoursOp(rt, now)),
   }
 }
+
+/** The day's focus: on now, until when, and the setting in words. */
+export const juniorFocus = (v: FocusView): JuniorFocus | null => (v.now && v.focus ? { until: v.now.until, waitMinutes: v.focus.waitMinutes, text: v.text } : null)

@@ -18,9 +18,10 @@ import * as RadioGroup from '@radix-ui/react-radio-group'
 import * as Tabs from '@radix-ui/react-tabs'
 import { Check, MoreHorizontal, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
-import type { CreateStep, JuniorDay, ScoredItem } from '../../../shared/protocol.js'
+import type { CreateStep, FocusEndResponse, JuniorDay, JuniorFocus, ScoredItem } from '../../../shared/protocol.js'
 import { headline } from '../../../core/junior/greeting.js'
-import { ledgerCount, type LedgerTab } from '../../../core/junior/ledger.js'
+import { ledgerCount, ledgerRows, type LedgerTab } from '../../../core/junior/ledger.js'
+import { focusFilter, focusWords } from '../../../core/work/focus.js'
 import { overdueCount } from '../../../core/junior/morning.js'
 import { canDoCards, tryShortcuts } from '../../../core/junior/offers.js'
 import { pageMood, type Mood } from '../../../core/junior/mood.js'
@@ -160,6 +161,32 @@ export function JuniorPage({ onNavigate, onDispatch, onCreate, createError, crea
   // No projects yet: Junior's first message, until it sets some up or you skip it.
   const onboard = !!day?.seen && day.seen.projects.length === 0 && !skipped
 
+  // Focus hours (core/work/focus.ts): during a window Needs you shows only what gets through; the rest is held and counted.
+  const pageRef = useRef<HTMLDivElement>(null)
+  const [endedUntil, setEndedUntil] = useState<number | null>(null)
+  const [focusSaid, setFocusSaid] = useState('')
+  const focus: JuniorFocus | null = day?.focus && day.focus.until !== endedUntil ? day.focus : null
+  // the Needs you rows before focus: the three tabs' turn, else the ledger's own pick
+  const needsAll = useMemo(() => (three ? turn.tabs.needs : ledgerRows(items, 'needs')), [three, turn, items])
+  const split = useMemo(() => (focus ? focusFilter(needsAll, { waitMinutes: focus.waitMinutes, now }) : null), [focus, needsAll, now])
+  // Junior's own held rows (questions, plans, sends) wait too
+  const held = split ? split.held.length + (day?.needs.length ?? 0) : 0
+  const dayNeeds = focus ? [] : (day?.needs ?? [])
+  // the window ends while the page is open: read the day again, the held rows come back
+  useEffect(() => {
+    if (!day?.focus) return
+    const t = setTimeout(reload, Math.min(Math.max(day.focus.until - Date.now(), 0) + 500, 24 * 3_600_000))
+    return () => clearTimeout(t)
+  }, [day?.focus, reload])
+  const onFocusEnded = (until: number, back: number) => {
+    setEndedUntil(until)
+    setFocusSaid(focusWords(until, back).ended)
+    reload()
+    void inboxStore.refresh()
+    if (tab !== 'needs') pickTab('needs')
+    requestAnimationFrame(() => pageRef.current?.querySelector<HTMLElement>('.jhTab[data-tab="needs"]')?.focus())
+  }
+
   // A link to a hidden tab still opens it. Three tabs: the turns always show, Up next, Reviews and My PRs never do.
   const visible = three
     ? TABS.map((t) => t.id).filter((id) => TURN_SET.has(id) || (!FILTER_TABS.has(id) && (shown.includes(id) || id === tab)))
@@ -182,21 +209,21 @@ export function JuniorPage({ onNavigate, onDispatch, onCreate, createError, crea
             name: persona.name,
             you: day.you.name,
             firstOpen: day.firstOpen || onboard,
-            needs: day.needs.length,
+            needs: dayNeeds.length,
             people: day.morning.people.length,
             overdue: overdueCount(day.morning),
             plan: { done: day.plan.done, total: day.plan.total },
           })
         : null,
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [day, persona.voice, persona.name, onboard],
+    [day, persona.voice, persona.name, onboard, focus],
   )
 
   const working = (!!day && !day.now.idle) || items.some((i) => i.junior?.stage === 'working')
   const mood: Mood = listening
     ? 'listen'
     : day
-      ? pageMood({ needs: day.needs.length, stuck: day.stuck, working, firstOpen: day.firstOpen, planDone: day.plan.done, planTotal: day.plan.total })
+      ? pageMood({ needs: dayNeeds.length, stuck: day.stuck, working, firstOpen: day.firstOpen, planDone: day.plan.done, planTotal: day.plan.total })
       : 'hello'
   const spin = working && !listening
   // Skip for now on a workspace with no projects: the old first-open block, for this session
@@ -206,13 +233,14 @@ export function JuniorPage({ onNavigate, onDispatch, onCreate, createError, crea
   const count = (id: PageTab) => {
     // three tabs: one count, Needs you's, orange above zero; the turns' other tabs none
     if (three && TURN_SET.has(id)) {
-      const n = id === 'needs' ? turn.needsCount + (day?.needs.length ?? 0) : 0
+      const n = id === 'needs' ? (split ? split.through.length : turn.needsCount + dayNeeds.length) : 0
       return { n, hot: n }
     }
     if ((LEDGER as readonly string[]).includes(id)) {
+      if (id === 'needs' && split) return { n: split.through.length, hot: split.through.length }
       const c = ledgerCount(items, id as LedgerTab)
       // sessions, plans, gates and sends held on you count on Needs you and With Junior
-      const held = id === 'needs' || id === 'with' ? (day?.needs.length ?? 0) : 0
+      const held = id === 'needs' || id === 'with' ? dayNeeds.length : 0
       return { n: c.n + (id === 'needs' ? held : 0), hot: c.hot + held }
     }
     if (id === 'suggested') return { n: handoffCounts.suggested, hot: 0 }
@@ -222,7 +250,7 @@ export function JuniorPage({ onNavigate, onDispatch, onCreate, createError, crea
   }
 
   return (
-    <div className="jhPage" style={{ '--junior': persona.colour } as CSSProperties}>
+    <div className="jhPage" ref={pageRef} style={{ '--junior': persona.colour } as CSSProperties}>
       <div className="jhGlow" aria-hidden="true" />
       <header className="jhTop">
         <Menu>
@@ -246,9 +274,14 @@ export function JuniorPage({ onNavigate, onDispatch, onCreate, createError, crea
               Try again
             </button>
           </p>
+        ) : focus ? (
+          <FocusLine focus={focus} held={held} onEnded={onFocusEnded} />
         ) : (
           <Ticker day={day} items={items} onNavigate={onNavigate} />
         )}
+        <p className="sr-only" role="status" aria-live="polite">
+          {focusSaid}
+        </p>
         <HomeComposer
           onCreate={onCreate}
           createError={createError}
@@ -296,7 +329,7 @@ export function JuniorPage({ onNavigate, onDispatch, onCreate, createError, crea
                 {TABS.filter((t) => visible.includes(t.id)).map((t) => {
                   const c = count(t.id)
                   return (
-                    <Tabs.Trigger key={t.id} className="jhTab" value={t.id}>
+                    <Tabs.Trigger key={t.id} className="jhTab" value={t.id} data-tab={t.id}>
                       {t.name}
                       {t.id === 'log' ? unread && <span className="dot" aria-label="new" /> : t.id === 'plan' ? day && day.plan.total > 0 && <span className="n">{`${day.plan.done}/${day.plan.total}`}</span> : c.hot > 0 ? <span className="n hot">{c.hot}</span> : c.n > 0 && <span className="n">{c.n}</span>}
                     </Tabs.Trigger>
@@ -340,9 +373,9 @@ export function JuniorPage({ onNavigate, onDispatch, onCreate, createError, crea
                       <JuniorLedger
                         tab={id}
                         items={items}
-                        rows={filterRows(turn.tabs[id], filter)}
+                        rows={filterRows(id === 'needs' && split ? split.through : turn.tabs[id], filter)}
                         // held chats, plans, gates and sends carry no filter: they show under All only
-                        needs={filter ? [] : (day?.needs ?? [])}
+                        needs={filter ? [] : dayNeeds}
                         moves={day?.moves}
                         me={me}
                         empty={
@@ -353,6 +386,8 @@ export function JuniorPage({ onNavigate, onDispatch, onCreate, createError, crea
                                 Show all
                               </button>
                             </>
+                          ) : id === 'needs' && focus ? (
+                            focusWords(focus.until, held).empty
                           ) : (
                             TURN_EMPTY[id]
                           )
@@ -360,11 +395,24 @@ export function JuniorPage({ onNavigate, onDispatch, onCreate, createError, crea
                         onNavigate={onNavigate}
                       />
                     )}
+                    {tab === id && id === 'needs' && focus && <FocusFoot focus={focus} held={held} />}
                   </Tabs.Content>
                 ))
               : (LEDGER as readonly PageTab[]).map((id) => (
                   <Tabs.Content key={id} value={id} className="jrPane">
-                    {tab === id && <JuniorLedger tab={id as LedgerTab} items={items} needs={day?.needs ?? []} moves={day?.moves} me={me} empty={EMPTY[id as LedgerTab]} onNavigate={onNavigate} />}
+                    {tab === id && (
+                      <JuniorLedger
+                        tab={id as LedgerTab}
+                        items={items}
+                        rows={id === 'needs' && split ? split.through : undefined}
+                        needs={dayNeeds}
+                        moves={day?.moves}
+                        me={me}
+                        empty={id === 'needs' && focus ? focusWords(focus.until, held).empty : EMPTY[id as LedgerTab]}
+                        onNavigate={onNavigate}
+                      />
+                    )}
+                    {tab === id && id === 'needs' && focus && <FocusFoot focus={focus} held={held} />}
                   </Tabs.Content>
                 ))}
             <Tabs.Content value="suggested" className="jrPane">
@@ -444,6 +492,56 @@ function TurnPills({ rows, value, onChange }: { rows: readonly ScoredItem[]; val
       ))}
     </RadioGroup.Root>
   )
+}
+
+/**
+ * During a focus window the halo line says so, in place of the ticker:
+ * "Focus until 12:00 · 3 waiting" and End focus. No orange: what is held
+ * doesn't need you yet. A failed end keeps the line; the button is the retry.
+ */
+function FocusLine({ focus, held, onEnded }: { focus: JuniorFocus; held: number; onEnded: (until: number, back: number) => void }) {
+  const [ending, setEnding] = useState(false)
+  const [failed, setFailed] = useState<string | null>(null)
+  const words = focusWords(focus.until, held)
+  const end = async () => {
+    setEnding(true)
+    setFailed(null)
+    try {
+      const body = (await (await fetch('/api/focus/end', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })).json()) as FocusEndResponse
+      if (!body.ok) throw new Error(body.error)
+      onEnded(focus.until, held)
+    } catch (err) {
+      setFailed(err instanceof Error ? err.message : String(err))
+    } finally {
+      setEnding(false)
+    }
+  }
+  return (
+    <>
+      <p className="jhTicker focus" title={focus.text}>
+        <span className="ring" aria-hidden="true" />
+        <span className="txt">
+          Focus until <b>{words.clock}</b>
+          <span className="sep"> · </span>
+          <span className="held">{words.waiting}</span>
+        </span>
+        <button type="button" className="btn sm outline end" disabled={ending} aria-busy={ending} title="Show everything now. Focus starts again next time." onClick={() => void end()}>
+          {ending ? 'Ending…' : 'End focus'}
+        </button>
+      </p>
+      {failed && (
+        <p className="jhTicker err" role="alert">
+          Couldn't end focus. {failed}
+        </p>
+      )}
+    </>
+  )
+}
+
+/** Under Needs you during focus, only when something is held: when it comes back. */
+function FocusFoot({ focus, held }: { focus: JuniorFocus; held: number }) {
+  const foot = focusWords(focus.until, held).foot
+  return foot ? <p className="jrBrief jhFocusFoot">{foot}</p> : null
 }
 
 const capital = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)

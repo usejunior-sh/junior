@@ -1,14 +1,14 @@
 import os from 'node:os'
-import { type CommandsResponse, type ConnectorsResponse, isProviderId, type JuniorDayResponse, type ModelsResponse, type PersonaResponse, type PlaybookResponse, type PlaybooksResponse, type ScoreWeightsResponse, type SettingsResponse, type TodayMatchResponse, type TodayResponse } from '../../shared/protocol.js'
+import { type CommandsResponse, type ConnectorsResponse, type FocusEndResponse, isProviderId, type JuniorDayResponse, type ModelsResponse, type PersonaResponse, type PlaybookResponse, type PlaybooksResponse, type ScoreWeightsResponse, type SettingsResponse, type TodayMatchResponse, type TodayResponse } from '../../shared/protocol.js'
 import { RESERVED_SERVER } from '../../core/job/tools.js'
 import { isPlaybookName, listPlaybooks, readDispatchTemplate, readPlaybook, writeDispatchTemplate, writePlaybook } from '../briefs.js'
 import { FOLDER_PROBE_TTL_MS, probeCommands, probeConnectors, probeModels, usableCommands } from '../workspace/probes.js'
 import { expandHome } from '../folders.js'
 import { localServersElsewhere } from '../jobs/preview.js'
-import { addToTodayOp, ensureToday, juniorDayOp, matchTodayOp, openTodayOp, removeFromTodayOp, savePersonaOp, todayView, userFirstName } from '../junior-ops.js'
+import { addToTodayOp, ensureToday, juniorDayOp, juniorFocus, matchTodayOp, openTodayOp, removeFromTodayOp, savePersonaOp, todayView, userFirstName } from '../junior-ops.js'
 import { readJsonBody } from './http-util.js'
 import { errText } from '../errors.js'
-import { clearScoreWeightOp, listScoreWeightsOp, readSettings, setScoreWeightOp, touchesWatches, writeSettings } from '../settings-ops.js'
+import { clearScoreWeightOp, endFocusOp, listScoreWeightsOp, readSettings, setScoreWeightOp, touchesWatches, writeSettings } from '../settings-ops.js'
 import { invalidateInbox } from '../ws/send.js'
 import type { ScopedCtx } from './ctx.js'
 
@@ -108,6 +108,17 @@ export async function settingsRoutes({ req, url, json, rt }: ScopedCtx): Promise
       body = { ok: false, error: errText(err) }
     }
     json(body.ok ? 200 : 502, body)
+    return true
+  }
+  if (url.pathname === '/api/focus/end' && req.method === 'POST') {
+    // "End focus" on the Junior page; chat has the junior MCP's end_focus
+    let body: FocusEndResponse
+    try {
+      body = { ok: true, focus: juniorFocus(await endFocusOp(rt)) }
+    } catch (err) {
+      body = { ok: false, error: errText(err) }
+    }
+    json(body.ok ? 200 : 500, body)
     return true
   }
   if (url.pathname === '/api/today/match' && req.method === 'GET') {

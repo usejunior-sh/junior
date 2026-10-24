@@ -54,6 +54,19 @@ export type JuniorSeen = {
   projects: string[]
 }
 
+/** A focus window that is on now: Needs you shows only what gets through until it ends. */
+export type JuniorFocus = {
+  /** epoch ms the window ends */
+  until: number
+  /** a person waiting this long gets through */
+  waitMinutes: number
+  /** the setting in words (describeFocus), for the line's tooltip */
+  text: string
+}
+
+/** POST /api/focus/end: the rest of this window is skipped; `focus` is what is on after (null when ended). */
+export type FocusEndResponse = { ok: true; focus: JuniorFocus | null } | { ok: false; error: string }
+
 /** GET /api/junior?since=&away=: everything the Junior page shows, in one read. */
 export type JuniorDay = {
   /** what the user is called: a first name for the greeting, an initial for the "You" chip */
@@ -84,6 +97,8 @@ export type JuniorDay = {
   stuck: boolean
   /** the workspace library's skills and agents: routines you taught Junior */
   routines: { name: string; kind: 'skill' | 'agent'; path: string }[]
+  /** in a focus window right now (core/work/focus.ts); null = not in focus */
+  focus: JuniorFocus | null
 }
 export type JuniorDayResponse = { ok: true; day: JuniorDay } | { ok: false; error: string }
 
