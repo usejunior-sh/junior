@@ -42,3 +42,14 @@ export function snippetParts(snippet: string): { text: string; hit: boolean }[] 
   flush()
   return out
 }
+
+/**
+ * GET /api/search?q=&limit= (server/search-ops.ts), for the ⌘K palette. Item
+ * hits carry their state and repo, so a done item says so without a second
+ * request. An empty or symbol-only query answers no hits, never an error.
+ */
+export type SearchResultHit = SearchHit & {
+  status?: 'open' | 'snoozed' | 'done' | 'archived'
+  repo?: string
+}
+export type SearchResponse = { ok: true; hits: SearchResultHit[] } | { ok: false; error: string }

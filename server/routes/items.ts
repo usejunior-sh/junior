@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises'
-import { type ActivityResponse, type ChangesSeenResponse, type ItemDetailResponse, type ItemEventsResponse, type ItemListResponse, type ItemStateResponse, type JobFileResponse, type JobRunsResponse, type LogLevel, type LogsResponse, type SessionContextResponse, type SystemResponse, USAGE_WINDOWS, type UsageResponse } from '../../shared/protocol.js'
+import { type ActivityResponse, type ChangesSeenResponse, type ItemDetailResponse, type ItemEventsResponse, type ItemListResponse, type ItemStateResponse, type JobFileResponse, type JobRunsResponse, type LogLevel, type LogsResponse, type SearchResponse, type SessionContextResponse, type SystemResponse, USAGE_WINDOWS, type UsageResponse } from '../../shared/protocol.js'
 import type { ItemStatus } from '../../core/work/state.js'
 import { log, logSubsystems, recentLogs } from '../log.js'
 import { linkByRefs } from '../../core/work/link.js'
@@ -20,6 +20,7 @@ import { jobLibrary } from '../session/changes.js'
 import { enqueueJob } from '../jobs/queue.js'
 import { systemStatus } from '../jobs/scheduler.js'
 import { claudeProjectRoots, usageByLogin } from '../usage/logins.js'
+import { searchOp } from '../search-ops.js'
 import type { ScopedCtx } from './ctx.js'
 
 export async function itemRoutes({ req, url, json, rt }: ScopedCtx): Promise<boolean> {
@@ -80,6 +81,17 @@ export async function itemRoutes({ req, url, json, rt }: ScopedCtx): Promise<boo
       body = { ok: false, error: errText(err) }
     }
     json(body.ok ? 200 : 400, body)
+    return true
+  }
+  // ⌘K search over this workspace's local index: items, chats, artifacts.
+  if (url.pathname === '/api/search' && req.method === 'GET') {
+    let body: SearchResponse
+    try {
+      body = { ok: true, hits: await searchOp(rt, url.searchParams.get('q'), url.searchParams.get('limit')) }
+    } catch (err) {
+      body = { ok: false, error: errText(err) }
+    }
+    json(body.ok ? 200 : 500, body)
     return true
   }
   // Ranked items in a status tab other than the open inbox (done/snoozed/archived).

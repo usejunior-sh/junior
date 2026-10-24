@@ -152,6 +152,9 @@ dialog p { color: var(--body); font-size: 1rem; line-height: 1.55; }
 .palRow[data-selected="true"] { background: var(--elev); }
 .palLabel { flex: none; max-width: 70%; margin-right: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 1.0385rem; color: var(--ink); }
 .palHint { color: var(--ash); font-size: 0.8462rem; font-family: var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* ⌘K search: the matched words in a snippet, ink weight, no fill, no orange */
+.palSnip { min-width: 0; }
+.palHit { color: var(--ink); font-weight: 500; background: none; }
 .palDo { flex: none; color: var(--ash); font-size: 0.8462rem; font-family: var(--mono); white-space: nowrap; }
 .palRow .kbd { flex: none; }
 .palRow .palHandoff { display: none; flex: none; }

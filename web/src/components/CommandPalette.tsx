@@ -6,24 +6,29 @@
  * work item to Junior; with Keep open on, the palette stays for the next one.
  * Nothing here sends: a hand-off is local work, and Approve send… opens the
  * chat where the held card is, so the words are approved on the card.
- * Design note: .docs/overnight-2026-10-24/designs/palette-cmdk.md.
+ * At 2+ characters it also asks the workspace's local search (paletteSearch.ts):
+ * item bodies, closed items, chats and artifacts land in their kind's group.
+ * Design notes: .docs/overnight-2026-10-24/designs/palette-cmdk.md, palette-search.md.
  */
 import * as Dialog from '@radix-ui/react-dialog'
 import * as Switch from '@radix-ui/react-switch'
 import { Command as K } from 'cmdk'
 import { ChevronLeft } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import type {
   ActionsResponse,
   InboxResponse,
   Project,
   ProjectsResponse,
   ScoredItem,
+  SearchResponse,
+  SearchResultHit,
   SessionSummary,
   TerminalSummary,
   Job,
   JobsResponse,
 } from '../../../shared/protocol.js'
+import { snippetParts } from '../../../shared/protocol.js'
 import { SNOOZE_CHOICES, snoozeClock, snoozeUntil } from '../../../core/work/snooze.js'
 import { MOD_LABEL } from '../keys.js'
 import { frictionKeyLabel } from '../shortcuts.js'
@@ -33,12 +38,28 @@ import { doneItem, sendHandoff, snoozeItem, type HandoffVerb } from '../handoff.
 import { filterCommands, handedOffLine, handOffOf, heldSends, moreLine, sectionsOf, verbErrorLine, verbsOf, type ItemVerb } from '../itemVerbs.js'
 import { refOf } from '../itemRef.js'
 import { useIsMobile } from '../useMobile.js'
+import { itemHash } from '../hooks.js'
+import {
+  bodyMatch,
+  hitsStillFit,
+  mergeHits,
+  SEARCH_DEBOUNCE_MS,
+  SEARCH_FAILED_LINE,
+  SEARCH_LIMIT,
+  SEARCHING_LINE,
+  stateWord,
+  wantsSearch,
+} from '../paletteSearch.js'
 
 export type Command = {
   id: string
-  section: 'This item' | 'Actions' | 'Pages' | 'Settings' | 'Projects' | 'Chats' | 'Terminals' | 'Jobs' | 'Work items'
+  section: 'This item' | 'Actions' | 'Pages' | 'Settings' | 'Projects' | 'Chats' | 'Terminals' | 'Jobs' | 'Work items' | 'Artifacts'
   label: string
   hint?: string
+  /** a search hit's body match, with markers (snippetParts); shown in place of the hint */
+  snippet?: string
+  /** words before the snippet: a closed item's state ("done · ") */
+  lead?: string
   run: () => void
   /** the Junior page key that does the same (This item verbs, shown on the Junior page only) */
   key?: string
@@ -70,6 +91,11 @@ type Props = {
 }
 
 const SECTION_ORDER: Command['section'][] = ['This item', 'Actions', 'Pages', 'Settings', 'Projects', 'Chats', 'Terminals', 'Jobs', 'Work items']
+/** With a query, what you were looking for comes right after the verbs. */
+const QUERY_ORDER: Command['section'][] = ['This item', 'Actions', 'Pages', 'Settings', 'Work items', 'Chats', 'Artifacts', 'Projects', 'Terminals', 'Jobs']
+
+type Search = { state: 'idle' | 'searching' | 'ok' | 'failed'; query: string; hits: SearchResultHit[] }
+const NO_SEARCH: Search = { state: 'idle', query: '', hits: [] }
 
 const KEEP_OPEN_KEY = 'junior.palette.keepOpen'
 
@@ -120,6 +146,7 @@ export function CommandPalette({
   const [keepOpen, setKeepOpen] = useState(readKeepOpen)
   /** handed off with Keep open on: gone from Work items */
   const [handedOff, setHandedOff] = useState<ReadonlySet<string>>(() => new Set())
+  const [search, setSearch] = useState<Search>(NO_SEARCH)
   const busy = useRef(false)
   /** a command ran: it may move focus itself (a composer), so the close doesn't restore it */
   const ran = useRef(false)
@@ -133,6 +160,7 @@ export function CommandPalette({
     setPage('root')
     setStatus(null)
     setHandedOff(new Set())
+    setSearch(NO_SEARCH)
     setHeld(null)
     setFocusId(focusedItemId)
     setLoad({ items: 'loading', projects: 'loading', jobs: 'loading' })
@@ -184,6 +212,34 @@ export function CommandPalette({
     // The item in focus is read once, as the palette opens.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
+
+  // Local rows filter at once; the index is asked 150ms after the typing stops.
+  // The one before is aborted, so a slow answer never lands over a newer one.
+  useEffect(() => {
+    if (!open || page !== 'root' || !wantsSearch(query)) {
+      setSearch(NO_SEARCH)
+      return
+    }
+    const q = query.trim()
+    setSearch((s) => ({ ...s, state: 'searching' }))
+    const ctl = new AbortController()
+    const t = setTimeout(() => {
+      fetch(`/api/search?q=${encodeURIComponent(q)}&limit=${SEARCH_LIMIT}`, { signal: ctl.signal })
+        .then((r) => r.json() as Promise<SearchResponse>)
+        .then((b) => {
+          if (ctl.signal.aborted) return
+          if (!b.ok) throw new Error(b.error)
+          setSearch({ state: 'ok', query: q, hits: b.hits })
+        })
+        .catch(() => {
+          if (!ctl.signal.aborted) setSearch({ state: 'failed', query: q, hits: [] })
+        })
+    }, SEARCH_DEBOUNCE_MS)
+    return () => {
+      clearTimeout(t)
+      ctl.abort()
+    }
+  }, [open, page, query])
 
   const focusItem = focusId ? (items.find((i) => i.id === focusId) ?? null) : null
 
@@ -334,10 +390,42 @@ export function CommandPalette({
     [focusItem, held, sessions, terminals, items, handedOff, projects, jobs, onNavigate, onNewSession, onNewTerminal, onOpenItem, onNewSessionIn, onSyncInbox, onAddJob, onOpenSettings, onHelp, onNoteFriction],
   )
 
-  const shown = useMemo(() => filterCommands(commands, query, SECTION_ORDER), [commands, query])
+  const hits = useMemo(() => (hitsStillFit(search.query, query) ? search.hits : []), [search, query])
+
+  /** A hit the palette has no row for: opens its page. Items handed off with Keep open stay gone. */
+  const hitRow = useCallback(
+    (h: SearchResultHit): Command | null => {
+      const state = stateWord(h)
+      const snippet = bodyMatch(h) ? h.snippet : undefined
+      if (h.kind === 'item') {
+        if (handedOff.has(h.ref)) return null
+        const where = state ? `${state} · ${h.repo ?? ''}`.replace(/ · $/, '') : h.repo
+        return {
+          id: `w:${h.ref}`,
+          section: 'Work items',
+          label: h.title || h.ref,
+          hint: where,
+          snippet,
+          lead: snippet && state ? `${state} · ` : undefined,
+          run: () => onNavigate(itemHash(h.ref)),
+        }
+      }
+      if (h.kind === 'session') return { id: `s:${h.ref}`, section: 'Chats', label: h.title || 'Chat', snippet, run: () => onNavigate(h.ref) }
+      return { id: `a:${h.ref}`, section: 'Artifacts', label: h.title || 'Artifact', snippet, run: () => onNavigate(`/artifact/${h.ref}`) }
+    },
+    [handedOff, onNavigate],
+  )
+
+  const shown = useMemo(() => {
+    const order = query.trim() ? QUERY_ORDER : SECTION_ORDER
+    const local = filterCommands(commands, query, order)
+    return hits.length ? mergeHits(local, commands, hits, hitRow, order) : local
+  }, [commands, query, hits, hitRow])
   const sections = useMemo(() => sectionsOf(shown), [shown])
   const byId = useMemo(() => new Map(shown.map((c) => [c.id, c])), [shown])
   const loading = load.items === 'loading' || load.projects === 'loading' || load.jobs === 'loading'
+  const searching = search.state === 'searching'
+  const footText = status?.text ?? (search.state === 'failed' ? SEARCH_FAILED_LINE : '')
 
   function select(cmd: Command) {
     if (cmd.verb) {
@@ -453,7 +541,22 @@ export function CommandPalette({
                       {g.rows.map((c) => (
                         <K.Item key={c.id} value={c.id} className="palRow" title={c.label} onSelect={() => select(c)} aria-keyshortcuts={showKeys && c.key ? c.key : undefined}>
                           <span className="palLabel">{c.label}</span>
-                          {c.hint && <span className="palHint">{c.hint}</span>}
+                          {c.snippet ? (
+                            <span className="palHint palSnip">
+                              {c.lead}
+                              {snippetParts(c.snippet).map((p, i) =>
+                                p.hit ? (
+                                  <mark key={i} className="palHit">
+                                    {p.text}
+                                  </mark>
+                                ) : (
+                                  <span key={i}>{p.text}</span>
+                                ),
+                              )}
+                            </span>
+                          ) : (
+                            c.hint && <span className="palHint">{c.hint}</span>
+                          )}
                           {c.item && value === c.id && !phone && handOffOf(c.item) && (
                             <span className="palDo" aria-hidden="true">
                               {MOD_LABEL}⏎ hand off
@@ -482,14 +585,19 @@ export function CommandPalette({
                       {g.more > 0 && <div className="palMore">{moreLine(g.more)}</div>}
                     </K.Group>
                   ))}
-                  <K.Empty className="palEmpty">{loading ? 'Looking…' : 'Nothing matches.'}</K.Empty>
+                  {searching && shown.length > 0 && (
+                    <div className="palMore" aria-hidden="true">
+                      {SEARCHING_LINE}
+                    </div>
+                  )}
+                  <K.Empty className="palEmpty">{loading || searching ? 'Looking…' : 'Nothing matches.'}</K.Empty>
                 </>
               )}
             </K.List>
           </K>
           <div className="palFoot">
             <span role="status" aria-live="polite" className={`palStatus${status?.error ? ' err' : ''}`}>
-              {status?.text ?? ''}
+              {footText}
             </span>
             <label className="palKeep" title="Stay open after a hand-off, to hand off several in a row.">
               <span>Keep open</span>
