@@ -1,0 +1,36 @@
+# Typecheck and unit tests on every push and pull request.
+#
+# macOS only: node-pty builds natively and some tests assume a Mac (launchd,
+# ~/Library paths). package-lock.json is the lockfile CI installs from;
+# pnpm-lock.yaml is not used here. Release builds live in desktop.yml.
+name: ci
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Typecheck and test
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
