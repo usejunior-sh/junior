@@ -51,6 +51,16 @@
 .msg.thinking { color: var(--mute); font-style: italic; font-size: 1rem; white-space: pre-wrap; padding-left: 12px; border-left: 1px solid var(--hair-strong); }
 .meta { display: flex; align-items: center; gap: 12px; color: var(--stone); font-size: 0.8462rem; font-family: var(--mono); white-space: nowrap; }
 .meta::before, .meta::after { content: ""; flex: 1; border-top: 1px solid var(--hair); }
+/* Earlier messages: the quiet row above a paged transcript. A separator like .meta, in UI text, no colour. */
+.earlier { display: flex; align-items: center; gap: 12px; min-height: 32px; color: var(--ash); font-size: 0.8462rem; white-space: nowrap; }
+.earlier::before, .earlier::after { content: ""; flex: 1; border-top: 1px solid var(--hair); }
+.earlierBtn { background: none; border: 0; padding: 4px 6px; border-radius: var(--r); font: inherit; color: var(--ash); cursor: pointer; }
+.earlierBtn:hover, .earlierBtn:focus-visible { color: var(--ink); }
+.earlier.loading .earlierBtn { cursor: default; animation: pulse 1.6s ease-in-out infinite; }
+.earlier.loading .earlierBtn:hover { color: var(--ash); }
+.earlierNote { color: var(--mute); }
+.earlierNote .short { display: none; }
+@media (prefers-reduced-motion: reduce) { .earlier.loading .earlierBtn { animation: none; } }
 
 /* tool / init / permission cards */
 .tool { background: var(--card); border: 1px solid var(--hair-strong); border-radius: var(--r); padding: 10px 14px; font-size: 1rem; }

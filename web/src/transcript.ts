@@ -155,26 +155,41 @@ export type TranscriptScope = {
   agents?: readonly AgentRun[]
   /** The session's shells (buildShells); folded from `events` when not given. */
   shells?: readonly ShellRun[]
+  /**
+   * How many events come before `events[0]` (a paged log's `firstSeq - 1`).
+   * Keys count from here, so prepending an older page keeps every item's key.
+   */
+  base?: number
+  /**
+   * `events` starts partway through the log (older pages not loaded yet).
+   * Whatever the fold works out from the start is left off: the opening init
+   * card, the first turn's cost (costs are cumulative) and which changeset a
+   * turn closes (counted from the session's first message).
+   */
+  midway?: boolean
 }
 
-/** The event an item was folded from: every key carries its event's index (`u12`, `a12.0`, `ga12.0`). */
+/** The event an item was folded from: every key carries its event's index in the whole log (`u12`, `a12.0`, `ga12.0`). */
 export const eventIndexOf = (item: TranscriptItem): number => Number(/\d+/.exec(item.key)?.[0] ?? 0)
 
 export function buildTranscript(
   events: readonly SessionEvent[],
   timeOf: (ev: SessionEvent) => number | undefined = () => undefined,
-  { scope = null, agents = [], shells }: TranscriptScope = {},
+  { scope = null, agents = [], shells, base = 0, midway = false }: TranscriptScope = {},
 ): TranscriptItem[] {
   const items: TranscriptItem[] = []
   // The SDK sends init at the start of every turn, so only the first one is
   // drawn. A revival is marked by Junior's own `subprocess` event instead, and
   // the init that follows it names the model the new process runs.
-  let initSeen = false
+  let initSeen = midway
   let resumed = false
   // A result's total_cost_usd is cumulative, so a turn's own cost is the step
   // from the last one. A revival may carry the counters on or start them over:
   // costStep tells which, and a subprocess marked fresh surely starts over.
   let costSeen: CostMark | null = null
+  // Midway, the first result's cumulative cost would read as one turn's: no
+  // figure until a step can be taken (or a fresh subprocess starts the count).
+  let costBlind = midway
   let turnSeq = 0
   // Changesets are counted the way the server counts them (live-session.ts):
   // your message opens one unless one is open, and a result closes it, unless
@@ -204,7 +219,8 @@ export function buildTranscript(
   // recipient, whatever view is being built (the call itself is main's).
   const relays: Array<{ agentId: string; text: string; mark: (d: RelayDelivery, sent: string) => void }> = []
 
-  events.forEach((ev, i) => {
+  events.forEach((ev, at) => {
+    const i = base + at
     switch (ev.kind) {
       case 'local_user': {
         if (!changeOpen) {
@@ -236,7 +252,10 @@ export function buildTranscript(
         break
       case 'subprocess':
         resumed = true
-        if (ev.fresh) costSeen = null
+        if (ev.fresh) {
+          costSeen = null
+          costBlind = false
+        }
         // The old subprocess took its runs with it, and closed the changeset they held.
         wfTurns.clear()
         if (changeHeld) changeOpen = changeHeld = false
@@ -354,9 +373,10 @@ export function buildTranscript(
             item.endedAt = timeOf(ev)
           }
         } else if (m.type === 'result') {
+          const blind = costBlind && costSeen === null
           const step = costStep(m, costSeen)
           costSeen = step.seen
-          const cost = typeof m.total_cost_usd === 'number' ? ` · $${step.delta.toFixed(4)}` : ''
+          const cost = typeof m.total_cost_usd === 'number' && !blind ? ` · $${step.delta.toFixed(4)}` : ''
           const secs = ((m.duration_ms ?? 0) / 1000).toFixed(1)
           turnSeq += 1
           const hold = wfTurns.holdAtResult()
@@ -372,7 +392,7 @@ export function buildTranscript(
             stats,
             ms: m.duration_ms ?? undefined,
             ...(wfSpent || wfTurns.running.size > 0 ? { workflowSpend: true } : {}),
-            ...(closes ? { changes: changeSeq } : {}),
+            ...(closes && !midway ? { changes: changeSeq } : {}),
           })
           wfSpent = false
         }

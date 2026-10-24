@@ -28,6 +28,7 @@ import { adoptWorkspace, boundWorkspace, gotoWorkspace } from './workspaceUrl.js
 import { DEFAULT_PERSONA } from '../../core/junior/persona.js'
 import { buildChanged, buildKey, isBuild, loadedFrom, parseReloadMark, shouldAutoReload, uiEntryOfSrc } from './reloadOnBuild.js'
 import { reloadBlockers } from './reloadGuard.js'
+import { joinNewest, prependOlder, type LoadedRange, type SessionPaging } from './paging.js'
 
 /** The bundle this page runs: its own module script's hashed file name, null in dev (Vite serves /src/main.tsx). */
 const PAGE_UI: string | null = (() => {
@@ -63,6 +64,19 @@ export type ConnState = 'connecting' | 'connected' | 'disconnected'
 export type BrowserFrame = Extract<ServerMessage, { type: 'browser_profiles' | 'browser_tab' | 'browser_download' }>
 
 const NO_EVENTS: readonly SessionEvent[] = []
+
+/** How long an older page may take before the row says it couldn't load. */
+const PAGE_TIMEOUT_MS = 10_000
+
+/** A paged session: what is held, and the older-page request, if one is out. */
+type Paging = LoadedRange & {
+  /** the `beforeSeq` of the request in flight; an answer to any other is stale */
+  inFlight: number | null
+  failed: boolean
+  timer?: ReturnType<typeof setTimeout>
+  /** the last view handed out, replaced only on change (useSyncExternalStore) */
+  view: SessionPaging
+}
 
 export class Store {
   #structuralListeners = new Set<() => void>()
@@ -116,6 +130,10 @@ export class Store {
 
   #ws: WebSocket | null = null
   #subscribedTo: string | null = null
+  /** The current subscription asked for the newest page only; a reconnect asks the same way. */
+  #subscribedPaged = false
+  /** Sessions held as pages (a paged subscribe); absent = held whole, or not at all. */
+  #paging = new Map<string, Paging>()
   #reconnectTimer: ReturnType<typeof setTimeout> | undefined
 
   // reads
@@ -123,6 +141,8 @@ export class Store {
   getConn = (): ConnState => this.#conn
   getSessions = (): readonly SessionSummary[] => this.#sessions
   getEvents = (sessionId: string): readonly SessionEvent[] => this.#events.get(sessionId) ?? NO_EVENTS
+  /** Where a paged session's held log starts and whether older pages are loading; null when held whole. */
+  getPaging = (sessionId: string): SessionPaging | null => this.#paging.get(sessionId)?.view ?? null
   eventTime = (ev: SessionEvent): number | undefined => this.#times.get(ev)
   getLive = (sessionId: string): string => this.#liveText.get(sessionId) ?? ''
   getWorkspaceId = (): string => this.#workspaceId
@@ -170,7 +190,9 @@ export class Store {
       this.#conn = 'connected'
       // A reconnect leaves the UI holding a stale transcript; re-subscribing
       // replays the session log from the server.
-      if (this.#subscribedTo) this.send({ type: 'subscribe', sessionId: this.#subscribedTo })
+      if (this.#subscribedTo) this.#sendSubscribe(this.#subscribedTo)
+      // A request lost with the old socket may be asked again.
+      for (const [id, p] of this.#paging) if (p.failed) this.#setPaging(id, { ...p, failed: false })
       for (const id of this.#subscribedTerminals) this.send({ type: 'terminal_subscribe', terminalId: id })
       this.#notify()
     }
@@ -178,6 +200,8 @@ export class Store {
       if (this.#ws !== ws) return
       this.#ws = null
       this.#conn = 'disconnected'
+      // Nothing will answer an older-page request sent on that socket.
+      for (const [id, p] of this.#paging) if (p.inFlight !== null) this.#failPage(id)
       this.#notify()
       // A paired phone whose access was switched off or whose code was reset:
       // reload onto the server's pairing page rather than retrying forever.
@@ -261,10 +285,63 @@ export class Store {
     if (this.#ws?.readyState === WebSocket.OPEN) this.#ws.send(JSON.stringify(msg))
   }
 
-  /** Ask the server to replay a session's log, and remember it across reconnects. */
-  subscribeSession(sessionId: string) {
+  /**
+   * Ask the server to replay a session's log, and remember it across reconnects.
+   * `paged`: only the newest page comes now; loadEarlier asks for the rest.
+   */
+  subscribeSession(sessionId: string, opts: { paged?: boolean } = {}) {
     this.#subscribedTo = sessionId
-    this.send({ type: 'subscribe', sessionId })
+    this.#subscribedPaged = opts.paged === true
+    this.#sendSubscribe(sessionId)
+  }
+
+  #sendSubscribe(sessionId: string) {
+    this.send({ type: 'subscribe', sessionId, ...(this.#subscribedPaged ? { paged: true } : {}) })
+  }
+
+  /**
+   * Ask for the page before the oldest one held. One request per session at
+   * a time; nothing while offline, at the start, or after a failure (until
+   * retryEarlier or a reconnect), so a broken link never loops.
+   */
+  loadEarlier = (sessionId: string) => {
+    const p = this.#paging.get(sessionId)
+    if (!p || !p.hasEarlier || p.inFlight !== null || p.failed || this.#ws?.readyState !== WebSocket.OPEN) return
+    const timer = setTimeout(() => this.#failPage(sessionId), PAGE_TIMEOUT_MS)
+    this.#setPaging(sessionId, { ...p, inFlight: p.firstSeq, timer })
+    this.send({ type: 'session_events_before', sessionId, beforeSeq: p.firstSeq })
+    this.#notify()
+  }
+
+  /** The row's Try again. */
+  retryEarlier = (sessionId: string) => {
+    const p = this.#paging.get(sessionId)
+    if (!p) return
+    this.#setPaging(sessionId, { ...p, failed: false })
+    this.loadEarlier(sessionId)
+    this.#notify()
+  }
+
+  #failPage(sessionId: string) {
+    const p = this.#paging.get(sessionId)
+    if (!p || p.inFlight === null) return
+    clearTimeout(p.timer)
+    this.#setPaging(sessionId, { ...p, inFlight: null, failed: true, timer: undefined })
+    this.#notify()
+  }
+
+  /** Store a session's paging, handing out a new view only when what it shows changed. */
+  #setPaging(sessionId: string, next: Omit<Paging, 'view'> & { view?: SessionPaging }) {
+    const old = this.#paging.get(sessionId)?.view
+    const base = next.firstSeq - 1
+    const state: SessionPaging['state'] = next.inFlight !== null ? 'loading' : next.failed ? 'failed' : 'idle'
+    const view = old && old.base === base && old.hasEarlier === next.hasEarlier && old.state === state ? old : { base, hasEarlier: next.hasEarlier, state }
+    this.#paging.set(sessionId, { ...next, view })
+  }
+
+  #dropPaging(sessionId: string) {
+    clearTimeout(this.#paging.get(sessionId)?.timer)
+    this.#paging.delete(sessionId)
   }
 
   // terminals
@@ -393,16 +470,20 @@ export class Store {
       case 'session_deleted':
         this.#sessions = this.#sessions.filter((s) => s.id !== msg.sessionId)
         this.#events.delete(msg.sessionId)
+        this.#dropPaging(msg.sessionId)
         this.#clearLive(msg.sessionId)
         if (this.#subscribedTo === msg.sessionId) this.#subscribedTo = null
         this.#notify()
         break
       case 'history':
         msg.times?.forEach((t, i) => this.#times.set(msg.events[i], t))
-        this.#events.set(msg.sessionId, msg.events)
+        this.#receiveHistory(msg)
         this.#clearLive(msg.sessionId)
         this.#notify()
         this.#notifyLive()
+        break
+      case 'session_events_page':
+        this.#receivePage(msg)
         break
       case 'session_event':
         if (msg.at !== undefined) this.#times.set(msg.event, msg.at)
@@ -579,6 +660,45 @@ export class Store {
     return () => {
       this.#changesListeners.delete(fn)
     }
+  }
+
+  /**
+   * A whole log (plain subscribe) replaces what is held. A newest page joins
+   * the older pages already held when it can (paging.ts), so a reconnect or a
+   * revisit keeps what you scrolled through.
+   */
+  #receiveHistory(msg: Extract<ServerMessage, { type: 'history' }>) {
+    const id = msg.sessionId
+    const hasEarlier = msg.hasEarlier
+    if (hasEarlier === undefined) {
+      this.#dropPaging(id)
+      this.#events.set(id, msg.events)
+      return
+    }
+    const old = this.#paging.get(id)
+    const { events, range } = joinNewest(this.#events.get(id), old, { events: msg.events, hasEarlier, firstSeq: msg.firstSeq })
+    this.#events.set(id, events)
+    if (!range) return this.#dropPaging(id)
+    // Kept on the same start, an older-page request still out stays good.
+    const keep = old && old.firstSeq === range.firstSeq
+    if (!keep) clearTimeout(old?.timer)
+    this.#setPaging(id, {
+      ...range,
+      inFlight: keep ? old.inFlight : null,
+      failed: keep ? old.failed : false,
+      timer: keep ? old.timer : undefined,
+    })
+  }
+
+  #receivePage(msg: Extract<ServerMessage, { type: 'session_events_page' }>) {
+    const p = this.#paging.get(msg.sessionId)
+    if (!p || p.inFlight !== msg.beforeSeq) return
+    clearTimeout(p.timer)
+    msg.times.forEach((t, i) => this.#times.set(msg.events[i], t))
+    const { events, range } = prependOlder(this.getEvents(msg.sessionId), p, msg)
+    this.#events.set(msg.sessionId, events)
+    this.#setPaging(msg.sessionId, { ...range, inFlight: null, failed: false, timer: undefined })
+    this.#notify()
   }
 
   #applyEvent(sessionId: string, ev: SessionEvent) {

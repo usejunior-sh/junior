@@ -47,6 +47,12 @@ export function useEvents(sessionId: string | null) {
   return useSyncExternalStore(store.subscribeStructural, get)
 }
 
+/** A paged session's loaded range and older-page state (store.getPaging); null when held whole. */
+export function usePaging(sessionId: string | null) {
+  const get = useCallback(() => (sessionId ? store.getPaging(sessionId) : null), [sessionId])
+  return useSyncExternalStore(store.subscribeStructural, get)
+}
+
 /**
  * The in-flight assistant line. Backed by the live channel, so a burst of token
  * deltas re-renders this one node once per frame and nothing else.

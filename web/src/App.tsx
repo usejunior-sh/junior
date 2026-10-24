@@ -46,7 +46,7 @@ import { usePendingActions } from './actions.js'
 import { ArtifactPage } from './components/ArtifactPage.js'
 import { DefaultProjectGate } from './components/DefaultProjectGate.js'
 import { type WorkspaceModalMode, WorkspaceModal } from './components/WorkspaceModal.js'
-import { useConn, useSessions, useTerminals, useCheckouts, useHashRoute, useEvents, useWorkspaces, useBuild, useUpdatePending, useWorkspaceId, useOnboarded } from './hooks.js'
+import { useConn, useSessions, useTerminals, useCheckouts, useHashRoute, useEvents, usePaging, useWorkspaces, useBuild, useUpdatePending, useWorkspaceId, useOnboarded } from './hooks.js'
 import { useInbox, inboxStore } from './inboxStore.js'
 import { useArtifacts, artifactStore } from './artifactStore.js'
 import { useModels, findModel } from './models.js'
@@ -86,6 +86,7 @@ export function App() {
   const currentTerminalId = route.page === 'terminal' ? route.id : null
   const currentDraftId = route.page === 'draft' ? route.id : null
   const events = useEvents(currentId)
+  const paging = usePaging(currentId)
   const [paletteOpen, setPaletteOpen] = useState(false)
   // Fetched once per session for the transcript's turn markers.
   const sessionChanges = useSessionChanges(currentId)
@@ -260,7 +261,8 @@ export function App() {
   const lastSession = useRef<string | null>(null)
   useEffect(() => {
     if (!currentId) return
-    store.subscribeSession(currentId)
+    // The newest page only: a long session opens at once, older pages load as you scroll up.
+    store.subscribeSession(currentId, { paged: true })
     const from = lastSession.current
     lastSession.current = currentId
     const runOf = (id: string) => sessions.find((s) => s.id === id)?.teamRun?.id
@@ -747,6 +749,9 @@ export function App() {
                   speaker={!openAgent && (current.provider ?? 'claude') === 'claude' ? { status: current.status } : undefined}
                   workflows={workflows}
                   onOpenWorkflow={onOpenWorkflow}
+                  paging={paging}
+                  onLoadEarlier={store.loadEarlier}
+                  onRetryEarlier={store.retryEarlier}
                 />
                 {!openAgent && <AgentDock agents={agents} onOpen={showAgent} onStop={stopAgent} />}
                 {!openAgent && <ShellDock sessionId={current.id} shells={shells} onStop={stopShell} />}

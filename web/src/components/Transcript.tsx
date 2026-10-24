@@ -1,5 +1,5 @@
 import { KeyRound } from 'lucide-react'
-import { Fragment, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, type ReactNode } from 'react'
+import { Fragment, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
   mentionToken,
   type PermissionBehavior,
@@ -13,7 +13,8 @@ import {
 } from '../../../shared/protocol.js'
 import type { Mood } from '../../../core/junior/mood.js'
 import { parseQuestions } from '../askQuestions.js'
-import { useLiveText } from '../hooks.js'
+import { useConn, useLiveText } from '../hooks.js'
+import type { SessionPaging } from '../paging.js'
 import { openSettings } from '../settings.js'
 import { store } from '../store.js'
 import { artifactStore, useArtifacts } from '../artifactStore.js'
@@ -73,6 +74,11 @@ type Props = {
   timeOf?: (ev: SessionEvent) => number | undefined
   /** Leave out the streaming line: the events aren't the session's main stream (a workflow agent's). */
   noLive?: boolean
+  /** A paged log (store.getPaging): where `events` starts in the whole log, and the older-page state. Unset = whole. */
+  paging?: SessionPaging | null
+  /** Ask for the page before the oldest one held, and again after a failure. */
+  onLoadEarlier?: (sessionId: string) => void
+  onRetryEarlier?: (sessionId: string) => void
 }
 
 export type TranscriptMark = { at: number; key: string; node: ReactNode }
@@ -250,8 +256,15 @@ export function Transcript({
   onOpenWorkflow,
   timeOf = store.eventTime,
   noLive,
+  paging = null,
+  onLoadEarlier,
+  onRetryEarlier,
 }: Props) {
-  const items = useMemo(() => buildTranscript(events, timeOf, { scope, agents, shells }), [events, timeOf, scope, agents, shells])
+  // A paged log counts from where the held part starts, so keys survive a prepend;
+  // `midway` leaves off what only the start of the log can tell.
+  const base = paging?.base ?? 0
+  const midway = paging?.hasEarlier ?? false
+  const items = useMemo(() => buildTranscript(events, timeOf, { scope, agents, shells, base, midway }), [events, timeOf, scope, agents, shells, base, midway])
   const byCall = useMemo(() => new Map(agents.map((a) => [a.toolUseId, a])), [agents])
   const byAgentId = useMemo(() => new Map(agents.filter((a) => a.agentId).map((a) => [a.agentId!, a])), [agents])
   const openAgent = useCallback((id: string | null) => onOpenAgent?.(id), [onOpenAgent])
@@ -279,7 +292,7 @@ export function Transcript({
     for (const a of actions) for (const c of a.calls) m.set(c, a)
     return m
   }, [actions])
-  const { ref, scrollToBottom } = useStickToBottom(`${sessionId}:${scope ?? ''}`)
+  const { ref, scrollToBottom } = useStickToBottom(`${sessionId}:${scope ?? ''}`, base, midway)
   const refs = useRefIndex()
   // Reference chips resolve against the artifacts index, which isn't otherwise
   // loaded while a chat is in front, pull it once so names appear.
@@ -296,7 +309,7 @@ export function Transcript({
   const runningCalls = useMemo(() => new Set(workflows.filter((r) => r.state === 'running').map((r) => r.toolUseId)), [workflows])
   const moods = useMemo(() => (speaker ? speakerTurns(items, live, turns, runningCalls) : null), [items, live, turns, runningCalls, !!speaker])
   const timeAt = (item: TranscriptItem) => {
-    const ev = events[eventIndexOf(item)]
+    const ev = events[eventIndexOf(item) - base]
     return ev ? timeOf(ev) : undefined
   }
 
@@ -305,16 +318,27 @@ export function Transcript({
     const m = new Map<string, TranscriptMark[]>()
     const tailMarks: TranscriptMark[] = []
     for (const mark of [...marks].sort((x, y) => x.at - y.at)) {
+      // A divider whose event is on a page not loaded yet would land at the top, in the wrong place.
+      if (midway && mark.at < base) continue
       const item = items.find((it) => eventIndexOf(it) >= mark.at)
       if (!item) tailMarks.push(mark)
       else m.set(item.key, [...(m.get(item.key) ?? []), mark])
     }
     return { m, tailMarks }
-  }, [items, marks])
+  }, [items, marks, midway, base])
 
   return (
     <div id="transcript" ref={ref}>
       <div className="inner">
+        {!scope && paging?.hasEarlier && (
+          <EarlierRow
+            state={paging.state}
+            base={paging.base}
+            onLoad={() => onLoadEarlier?.(sessionId)}
+            onRetry={() => onRetryEarlier?.(sessionId)}
+          />
+        )}
+        {!scope && paging && <PagingStatus paging={paging} />}
         {lead}
         {items.map((item) => (
           <Fragment key={item.key}>
@@ -717,40 +741,206 @@ function LiveLine({ sessionId, onGrow }: { sessionId: string; onGrow: () => void
   )
 }
 
-/** Where the reader left each transcript they scrolled up in, so coming back lands there. */
+/**
+ * The quiet row above a paged transcript's first item: older messages load by
+ * themselves when it comes within a screen of view, and its button does the
+ * same for a keyboard, a screen reader, or a slow link. Nothing here needs
+ * you, so it's ink and hairlines, no colour.
+ */
+function EarlierRow({ state, base, onLoad, onRetry }: { state: SessionPaging['state']; base: number; onLoad: () => void; onRetry: () => void }) {
+  const self = useRef<HTMLDivElement>(null)
+  const conn = useConn()
+  const latest = useRef({ state, onLoad })
+  latest.current = { state, onLoad }
+
+  // Within one screen above the visible part, measured now: an observer's
+  // answer lags a commit, and right after a page lands the row has just
+  // moved up out of range (the reader's place is kept), so a stale "in view"
+  // would chain-load the whole log.
+  const near = useCallback(() => {
+    const row = self.current
+    const root = row?.closest('#transcript')
+    if (!row || !root) return false
+    const r = root.getBoundingClientRect()
+    if (r.height === 0) return false
+    const b = row.getBoundingClientRect()
+    return b.bottom >= r.top - r.height && b.top <= r.bottom
+  }, [])
+
+  // Scrolling it into range: the observer only says when to look.
+  useEffect(() => {
+    const row = self.current
+    const root = row?.closest('#transcript')
+    if (!row || !root || typeof IntersectionObserver === 'undefined') return
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting) && latest.current.state === 'idle' && near()) latest.current.onLoad()
+      },
+      { root, rootMargin: '100% 0px 0px 0px' },
+    )
+    io.observe(row)
+    return () => io.disconnect()
+  }, [near])
+
+  // After each page (and on a reconnect), still in range: the next page. A
+  // short page on a tall screen chains one page at a time this way.
+  useEffect(() => {
+    if (state === 'idle' && conn === 'connected' && near()) onLoad()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state, base, conn, near])
+
+  // Failing swaps the button for Try again, and retrying swaps it back: keep
+  // focus in the row when it was there, rather than dropping it on the page.
+  const focused = useRef(false)
+  useLayoutEffect(() => {
+    const row = self.current
+    if (!row || !focused.current || row.contains(document.activeElement)) return
+    row.querySelector<HTMLButtonElement>('button')?.focus()
+  }, [state])
+
+  const loading = state === 'loading'
+  return (
+    <div
+      ref={self}
+      className={`earlier ${state}`}
+      aria-busy={loading || undefined}
+      onFocus={() => (focused.current = true)}
+      onBlur={(e) => {
+        const row = e.currentTarget
+        if (e.relatedTarget) focused.current = row.contains(e.relatedTarget as Node)
+        // No next target: a click on nothing, or the focused button being swapped
+        // out. Decide after the swap's layout effect has had its chance.
+        else requestAnimationFrame(() => (focused.current = row.contains(document.activeElement)))
+      }}
+    >
+      {state === 'failed' ? (
+        <>
+          <span className="earlierNote">
+            <span className="long">Couldn't load earlier messages.</span>
+            <span className="short">Couldn't load.</span>
+          </span>
+          <button type="button" className="btn xs" onClick={onRetry}>
+            Try again
+          </button>
+        </>
+      ) : (
+        <button
+          type="button"
+          className="earlierBtn"
+          aria-label={loading ? undefined : 'Load earlier messages'}
+          aria-disabled={loading || undefined}
+          onClick={() => !loading && onLoad()}
+        >
+          {loading ? 'Loading earlier messages…' : 'Earlier messages'}
+        </button>
+      )}
+    </div>
+  )
+}
+
+/**
+ * Screen readers hear each page land, and the start. Outlives the row, which
+ * goes away once the start is loaded.
+ */
+function PagingStatus({ paging }: { paging: SessionPaging }) {
+  const [say, setSay] = useState('')
+  const seen = useRef(paging)
+  useEffect(() => {
+    const was = seen.current
+    seen.current = paging
+    if (paging.base >= was.base) return
+    setSay(paging.hasEarlier ? 'Earlier messages loaded.' : 'This is the start of the chat.')
+  }, [paging])
+  return (
+    <div className="sr-only" role="status" aria-live="polite">
+      {say}
+    </div>
+  )
+}
+
+/**
+ * Where the reader left each transcript they scrolled up in, so coming back
+ * lands there: as distance from the bottom, which an older page landing on
+ * top doesn't change.
+ */
 const scrolledTo = new Map<string, number>()
 
-/** Follows new output, unless the reader has scrolled up to look at something. */
-function useStickToBottom(memo: string) {
+/**
+ * Follows new output, unless the reader has scrolled up to look at something.
+ * And keeps the reader's place when an older page lands above (`base` drops):
+ * the distance from the bottom is recorded on every scroll, resize and
+ * commit, and put back before paint. `#transcript` has `overflow-anchor:
+ * none`, so the browser's own anchoring never adds a second correction, and
+ * iOS Safari, which has none, behaves the same.
+ */
+function useStickToBottom(memo: string, base: number, moreAbove: boolean) {
   const ref = useRef<HTMLDivElement>(null)
   const restore = useRef(scrolledTo.get(memo) ?? null)
   const stuck = useRef(restore.current === null)
+  /** scrollHeight − scrollTop as of the last scroll, resize or commit */
+  const fromBottom = useRef<number | null>(null)
+  const lastBase = useRef(base)
+  const more = useRef(moreAbove)
+  more.current = moreAbove
+
+  const record = useCallback(() => {
+    const el = ref.current
+    if (el) fromBottom.current = el.scrollHeight - el.scrollTop
+  }, [])
 
   useEffect(() => {
     const el = ref.current
     if (!el) return
     const onScroll = () => {
       restore.current = null
+      record()
       stuck.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80
       if (stuck.current) scrolledTo.delete(memo)
-      else scrolledTo.set(memo, el.scrollTop)
+      else scrolledTo.set(memo, el.scrollHeight - el.scrollTop)
     }
     el.addEventListener('scroll', onScroll, { passive: true })
-    return () => el.removeEventListener('scroll', onScroll)
-  }, [memo])
+    // Content that grows without a scroll (a card opening, an image loading)
+    // moves the bottom: keep the record current, or a prepend lands off by it.
+    const inner = el.firstElementChild
+    const ro = typeof ResizeObserver === 'undefined' || !inner ? null : new ResizeObserver(record)
+    if (ro && inner) ro.observe(inner)
+    return () => {
+      el.removeEventListener('scroll', onScroll)
+      ro?.disconnect()
+    }
+  }, [memo, record])
+
+  // An older page landed on top: put the reader back where they were, before paint.
+  useLayoutEffect(() => {
+    const el = ref.current
+    const dropped = base < lastBase.current
+    lastBase.current = base
+    // Still waiting to land on a saved spot: stay at the top, where the row
+    // keeps loading pages until there is room for it (scrollToBottom below).
+    if (!el || !dropped || fromBottom.current === null || stuck.current || restore.current !== null) return
+    el.scrollTop = el.scrollHeight - fromBottom.current
+  }, [base])
 
   const scrollToBottom = useCallback(() => {
     const el = ref.current
     if (!el) return
     if (restore.current !== null) {
-      // The events may still be loading: hold the spot until there is room for it.
-      if (el.scrollHeight - el.clientHeight < restore.current) return
-      el.scrollTop = restore.current
+      const top = el.scrollHeight - restore.current
+      // The events may still be loading (or older pages still coming): hold
+      // the spot until there is room for it. At the start with no room, stay put.
+      if (top < 0) {
+        if (!more.current && el.scrollHeight > el.clientHeight) restore.current = null
+        record()
+        return
+      }
+      el.scrollTop = top
       restore.current = null
+      record()
       return
     }
     if (stuck.current) el.scrollTop = el.scrollHeight
-  }, [])
+    record()
+  }, [record])
 
   return { ref, scrollToBottom }
 }

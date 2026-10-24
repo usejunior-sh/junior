@@ -175,6 +175,13 @@ html.kbOpen .shell.mobile .panel { bottom: 0; }
 
   #transcript { padding: 12px 14px 0; }
   #transcript .inner { gap: 14px; }
+  /* Earlier messages: a 44px tap row; failed keeps the short line and gives Try again the right edge. */
+  .earlier { min-height: 44px; font-size: 0.8667rem; }
+  .earlierBtn { min-height: 44px; }
+  .earlier.failed::after { display: none; }
+  .earlier.failed .btn.xs { min-height: 36px; }
+  .earlierNote .long { display: none; }
+  .earlierNote .short { display: inline; }
 
   #composer { padding: 6px 8px 8px; }
   #composer .frame { min-width: 0; gap: 6px; padding: 8px 8px 6px 12px; }
