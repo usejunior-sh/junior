@@ -7,8 +7,14 @@
  * Needs you · Up next · Reviews · My PRs · With Junior · Waiting, and ⋯ to pick which
  * tabs show (Suggested, People, My work, Today's plan and Log are there too).
  * "What I can do" and the persona open in a sheet from ⋯.
+ *
+ * Settings → Appearance → "Try three tabs" swaps the six ledger tabs for the
+ * three turns (core/work/turn-tabs.ts): Needs you · With Junior · Waiting,
+ * with Up next, Reviews and My PRs as filter pills inside them. Off, the page
+ * is as it was.
  */
 import * as Dialog from '@radix-ui/react-dialog'
+import * as RadioGroup from '@radix-ui/react-radio-group'
 import * as Tabs from '@radix-ui/react-tabs'
 import { Check, MoreHorizontal, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
@@ -18,6 +24,8 @@ import { ledgerCount, type LedgerTab } from '../../../core/junior/ledger.js'
 import { overdueCount } from '../../../core/junior/morning.js'
 import { canDoCards, tryShortcuts } from '../../../core/junior/offers.js'
 import { pageMood, type Mood } from '../../../core/junior/mood.js'
+import { filterCounts, filterRows, LEDGER_TAB_ROUTE, openTurnTab, TURN_FILTER_TITLE, TURN_FILTERS, TURN_TAB_TITLE, TURN_TABS, turnTabs, type TurnFilter, type TurnTab } from '../../../core/work/turn-tabs.js'
+import { useAppearance } from '../appearance.js'
 import { draftStore, useHomeDraft } from '../drafts.js'
 import { itemHash, useWorkspaceId, type JuniorTab } from '../hooks.js'
 import { inboxStore, useInbox } from '../inboxStore.js'
@@ -63,6 +71,15 @@ const EMPTY: Record<LedgerTab, string> = {
   waiting: 'You aren’t waiting on anyone.',
 }
 
+/** The three-tab layout: the turns, always shown, then the tabs ⋯ can add. Up next, Reviews and My PRs are filters there. */
+const TURN_SET: ReadonlySet<PageTab> = new Set<PageTab>(TURN_TABS)
+const FILTER_TABS: ReadonlySet<PageTab> = new Set<PageTab>(['up', 'reviews', 'prs'])
+const TURN_EMPTY: Record<TurnTab, string> = {
+  needs: EMPTY.needs,
+  with: EMPTY.with,
+  waiting: 'Nothing is waiting on someone else.',
+}
+
 // Which tabs show: per browser. Needs you always does.
 const TABS_KEY = 'junior.home.tabs'
 function readShown(): PageTab[] {
@@ -97,12 +114,12 @@ type Props = {
 }
 
 /** The inbox snapshot, loaded once the page opens. */
-function useItems(): ScoredItem[] {
+function useItems(): { items: ScoredItem[]; loaded: boolean } {
   const snap = useInbox()
   useEffect(() => {
     if (!snap.loaded && !snap.loading) void inboxStore.refresh()
   }, [snap.loaded, snap.loading])
-  return snap.items as ScoredItem[]
+  return { items: snap.items as ScoredItem[], loaded: snap.loaded }
 }
 
 export function JuniorPage({ onNavigate, onDispatch, onCreate, createError, createStep, initialTab }: Props) {
@@ -110,22 +127,46 @@ export function JuniorPage({ onNavigate, onDispatch, onCreate, createError, crea
   const persona = usePersona()
   const win = useAwayWindow(workspaceId)
   const { day, error, reload } = useJuniorDay(win)
-  const items = useItems()
+  const { items, loaded } = useItems()
+  const three = useAppearance().threeTabs
   const [shown, setShown] = useState(readShown)
-  const [tab, setTab] = useState<PageTab>(initialTab ?? 'needs')
+  // three tabs: an old Up next, Reviews or My PRs link opens a filter on Needs you
+  const routed = three && initialTab && FILTER_TABS.has(initialTab) ? LEDGER_TAB_ROUTE[initialTab as LedgerTab] : null
+  const [rawTab, setTab] = useState<PageTab>(routed?.tab ?? initialTab ?? 'needs')
+  const [filter, setFilter] = useState<TurnFilter | null>(routed?.filter ?? null)
+  // the switch can flip while the page is open: a filter tab then reads as Needs you
+  const tab: PageTab = three && FILTER_TABS.has(rawTab) ? 'needs' : rawTab
+  const turn = useMemo(() => turnTabs(items.filter((i) => !i.status || i.status === 'open')), [items])
+  // once the list lands, a filter that keeps nothing on Needs you opens where it keeps something
+  const landed = useRef(false)
+  useEffect(() => {
+    if (!routed || !loaded || landed.current) return
+    landed.current = true
+    const to = openTurnTab(initialTab as LedgerTab, turn.tabs)
+    setTab(to.tab)
+    setFilter(to.filter)
+  }, [routed, loaded, initialTab, turn])
+  const pickTab = (id: PageTab) => {
+    setTab(id)
+    setFilter(null)
+  }
   const handoffCounts = useHandoffCounts(day)
   const [sheet, setSheet] = useState<JuniorView | null>(null)
   const unread = useLogUnread()
   const [listening, setListening] = useState(false)
   const now = Date.now()
 
-  // A link to a hidden tab still opens it.
-  const visible = shown.includes(tab) ? shown : TABS.map((t) => t.id).filter((id) => shown.includes(id) || id === tab)
+  // A link to a hidden tab still opens it. Three tabs: the turns always show, Up next, Reviews and My PRs never do.
+  const visible = three
+    ? TABS.map((t) => t.id).filter((id) => TURN_SET.has(id) || (!FILTER_TABS.has(id) && (shown.includes(id) || id === tab)))
+    : shown.includes(tab)
+      ? shown
+      : TABS.map((t) => t.id).filter((id) => shown.includes(id) || id === tab)
   const pick = (id: PageTab) => {
     const next = shown.includes(id) ? shown.filter((x) => x !== id) : TABS.map((t) => t.id).filter((x) => x === id || shown.includes(x))
     setShown(next)
     writeShown(next)
-    if (!next.includes(tab)) setTab('needs')
+    if (!next.includes(tab) && !(three && TURN_SET.has(tab))) pickTab('needs')
   }
 
   const head = useMemo(
@@ -158,6 +199,11 @@ export function JuniorPage({ onNavigate, onDispatch, onCreate, createError, crea
   const me = day?.seen?.github ?? null
 
   const count = (id: PageTab) => {
+    // three tabs: one count, Needs you's, orange above zero; the turns' other tabs none
+    if (three && TURN_SET.has(id)) {
+      const n = id === 'needs' ? turn.needsCount + (day?.needs.length ?? 0) : 0
+      return { n, hot: n }
+    }
     if ((LEDGER as readonly string[]).includes(id)) {
       const c = ledgerCount(items, id as LedgerTab)
       // sessions, plans, gates and sends held on you count on Needs you and With Junior
@@ -228,8 +274,8 @@ export function JuniorPage({ onNavigate, onDispatch, onCreate, createError, crea
           <JuniorFirstOpen day={day} />
         </div>
       ) : (
-        <Tabs.Root className="jhTabsRoot" value={tab} onValueChange={(v) => setTab(v as PageTab)}>
-          <div className="jhTabWrap">
+        <Tabs.Root className="jhTabsRoot" value={tab} onValueChange={(v) => pickTab(v as PageTab)}>
+          <div className={`jhTabWrap${three ? ' pills' : ''}`}>
             <div className="jhTabs">
               <Tabs.List className="jhTabList" aria-label={persona.name}>
                 {TABS.filter((t) => visible.includes(t.id)).map((t) => {
@@ -250,16 +296,16 @@ export function JuniorPage({ onNavigate, onDispatch, onCreate, createError, crea
                 </MenuTrigger>
                 <MenuContent align="end" className="jhTabMenu">
                   <div className="uiMenuCap">Tabs</div>
-                  {TABS.map((t) => (
+                  {TABS.filter((t) => !three || !FILTER_TABS.has(t.id)).map((t) => (
                     <MenuItem
                       key={t.id}
-                      disabled={t.id === 'needs'}
+                      disabled={t.id === 'needs' || (three && TURN_SET.has(t.id))}
                       onSelect={(e) => {
                         e.preventDefault()
                         pick(t.id)
                       }}
                     >
-                      <span className="ck">{shown.includes(t.id) && <Check size={13} aria-hidden="true" />}</span>
+                      <span className="ck">{(shown.includes(t.id) || (three && TURN_SET.has(t.id))) && <Check size={13} aria-hidden="true" />}</span>
                       {t.name}
                     </MenuItem>
                   ))}
@@ -269,13 +315,43 @@ export function JuniorPage({ onNavigate, onDispatch, onCreate, createError, crea
                 </MenuContent>
               </Menu>
             </div>
+            {three && TURN_SET.has(tab) && <TurnPills rows={turn.tabs[tab as TurnTab]} value={filter} onChange={setFilter} />}
           </div>
           <div className="jhBody">
-            {(LEDGER as readonly PageTab[]).map((id) => (
-              <Tabs.Content key={id} value={id} className="jrPane">
-                {tab === id && <JuniorLedger tab={id as LedgerTab} items={items} needs={day?.needs ?? []} moves={day?.moves} me={me} empty={EMPTY[id as LedgerTab]} onNavigate={onNavigate} />}
-              </Tabs.Content>
-            ))}
+            {three
+              ? TURN_TABS.map((id) => (
+                  <Tabs.Content key={id} value={id} className="jrPane">
+                    {tab === id && (
+                      <JuniorLedger
+                        tab={id}
+                        items={items}
+                        rows={filterRows(turn.tabs[id], filter)}
+                        // held chats, plans, gates and sends carry no filter: they show under All only
+                        needs={filter ? [] : (day?.needs ?? [])}
+                        moves={day?.moves}
+                        me={me}
+                        empty={
+                          filter ? (
+                            <>
+                              No {TURN_FILTER_TITLE[filter]} rows on {TURN_TAB_TITLE[id]}.{' '}
+                              <button type="button" className="jrRef" onClick={() => setFilter(null)}>
+                                Show all
+                              </button>
+                            </>
+                          ) : (
+                            TURN_EMPTY[id]
+                          )
+                        }
+                        onNavigate={onNavigate}
+                      />
+                    )}
+                  </Tabs.Content>
+                ))
+              : (LEDGER as readonly PageTab[]).map((id) => (
+                  <Tabs.Content key={id} value={id} className="jrPane">
+                    {tab === id && <JuniorLedger tab={id as LedgerTab} items={items} needs={day?.needs ?? []} moves={day?.moves} me={me} empty={EMPTY[id as LedgerTab]} onNavigate={onNavigate} />}
+                  </Tabs.Content>
+                ))}
             <Tabs.Content value="suggested" className="jrPane">
               <JuniorSuggested day={day} onNavigate={onNavigate} />
             </Tabs.Content>
@@ -330,6 +406,28 @@ export function JuniorPage({ onNavigate, onDispatch, onCreate, createError, crea
         </Dialog.Portal>
       </Dialog.Root>
     </div>
+  )
+}
+
+/**
+ * The filter pills under the three tabs: All · Up next · Reviews · My PRs,
+ * one value, arrow keys move (Radix RadioGroup). Each counts the tab's rows
+ * it keeps, in mono stone, never orange. A pill at 0 still answers.
+ */
+function TurnPills({ rows, value, onChange }: { rows: readonly ScoredItem[]; value: TurnFilter | null; onChange: (f: TurnFilter | null) => void }) {
+  const counts = useMemo(() => filterCounts(rows), [rows])
+  return (
+    <RadioGroup.Root className="jhPills" aria-label="Filter rows" orientation="horizontal" value={value ?? 'all'} onValueChange={(v) => onChange(v === 'all' ? null : (v as TurnFilter))}>
+      <RadioGroup.Item className="jhPill" value="all">
+        All
+      </RadioGroup.Item>
+      {TURN_FILTERS.map((f) => (
+        <RadioGroup.Item key={f} className="jhPill" value={f}>
+          {TURN_FILTER_TITLE[f]}
+          <span className="n">{counts[f]}</span>
+        </RadioGroup.Item>
+      ))}
+    </RadioGroup.Root>
   )
 }
 

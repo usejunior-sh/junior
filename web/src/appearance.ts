@@ -1,5 +1,6 @@
 /**
- * How this browser renders the app: colour theme and base text size. A per-browser, per-device preference, it lives in localStorage and is
+ * How this browser renders the app: colour theme, base text size, and the
+ * Junior page's tab layout. A per-browser, per-device preference, it lives in localStorage and is
  * applied to the document root, not the session store. The Appearance and
  * Themes settings tabs edit it; `initAppearance()` (called before the first
  * paint) applies the saved values and keeps "System" in step with the OS colour scheme.
@@ -24,6 +25,8 @@ export type Appearance = {
   lightTheme: string
   /** Base reading-text size, in px. */
   fontSize: number
+  /** The Junior page's three tabs (Needs you · With Junior · Waiting) instead of today's six. Off by default. */
+  threeTabs: boolean
 }
 
 // The mode keeps the key it had when it was the whole theme choice, so a saved
@@ -32,6 +35,7 @@ const MODE_KEY = 'junior.appearance.theme'
 const DARK_KEY = 'junior.appearance.darkTheme'
 const LIGHT_KEY = 'junior.appearance.lightTheme'
 const FONT_KEY = 'junior.appearance.fontSize'
+const THREE_TABS_KEY = 'junior.appearance.threeTabs'
 
 export const FONT_MIN = 12
 export const FONT_MAX = 18
@@ -48,6 +52,7 @@ export const APPEARANCE_DEFAULTS: Appearance = {
   darkTheme: DEFAULT_THEME.dark,
   lightTheme: DEFAULT_THEME.light,
   fontSize: FONT_DEFAULT,
+  threeTabs: false,
 }
 
 const clampNum = (n: number, lo: number, hi: number, dflt: number) =>
@@ -78,6 +83,7 @@ export function readAppearance(): Appearance {
     darkTheme: themeFor('dark', readRaw(DARK_KEY)).id,
     lightTheme: themeFor('light', readRaw(LIGHT_KEY)).id,
     fontSize: clampNum(Number(readRaw(FONT_KEY)), FONT_MIN, FONT_MAX, FONT_DEFAULT),
+    threeTabs: readRaw(THREE_TABS_KEY) === '1',
   }
 }
 
@@ -138,6 +144,7 @@ export function writeAppearance(patch: Partial<Appearance>) {
   if (patch.darkTheme !== undefined) writeRaw(DARK_KEY, patch.darkTheme)
   if (patch.lightTheme !== undefined) writeRaw(LIGHT_KEY, patch.lightTheme)
   if (patch.fontSize !== undefined) writeRaw(FONT_KEY, String(patch.fontSize))
+  if (patch.threeTabs !== undefined) writeRaw(THREE_TABS_KEY, patch.threeTabs ? '1' : '0')
   refresh()
 }
 

@@ -1,5 +1,6 @@
 import * as RadioGroup from '@radix-ui/react-radio-group'
 import * as Slider from '@radix-ui/react-slider'
+import * as Switch from '@radix-ui/react-switch'
 import { Check } from 'lucide-react'
 import { type ThemeMode, useAppearance, resolveTheme, FONT_DEFAULT, FONT_MIN, FONT_MAX, writeAppearance, APPEARANCE_DEFAULTS, chooseTheme } from '../../appearance.js'
 import { type ThemeScheme, type Theme, findTheme, THEMES } from '../../themes.js'
@@ -48,8 +49,20 @@ export function AppearanceTab() {
           </div>
         </Row>
       </Section>
+      <Section title="Junior page">
+        <Row label="Try three tabs" hint="Needs you, With Junior and Waiting. Up next, Reviews and My PRs become filters.">
+          <Switch.Root
+            className="uiSwitch"
+            checked={a.threeTabs}
+            onCheckedChange={(threeTabs) => writeAppearance({ threeTabs })}
+            aria-label="Try three tabs"
+          >
+            <Switch.Thumb className="uiSwitchThumb" />
+          </Switch.Root>
+        </Row>
+      </Section>
       <Section title="Reset">
-        <Row label="Back to defaults" hint="Junior Dark, default text size.">
+        <Row label="Back to defaults" hint="Junior Dark, default text size, today's tabs.">
           <button type="button" className="btn" onClick={() => writeAppearance(APPEARANCE_DEFAULTS)}>
             Reset
           </button>

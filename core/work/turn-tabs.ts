@@ -125,3 +125,25 @@ export const LEDGER_TAB_ROUTE: Record<LedgerTab, { tab: TurnTab; filter?: TurnFi
   with: { tab: 'with' },
   waiting: { tab: 'waiting' },
 }
+
+/** How many of a tab's rows each filter keeps: the pills' counts. */
+export function filterCounts<T extends TurnTabItem>(rows: readonly T[]): Record<TurnFilter, number> {
+  const out: Record<TurnFilter, number> = { 'up-next': 0, reviews: 0, 'my-prs': 0 }
+  for (const i of rows) for (const f of filtersOf(i)) out[f]++
+  return out
+}
+
+/**
+ * Where an old ledger tab's link lands, given today's rows. Up next, Reviews
+ * and My PRs open on Needs you with that filter (LEDGER_TAB_ROUTE); when the
+ * filter keeps nothing there, the first tab, in order, where it keeps
+ * something. Nowhere: Needs you, filter on, its empty line.
+ */
+export function openTurnTab<T extends TurnTabItem>(from: LedgerTab, tabs: Readonly<Record<TurnTab, readonly T[]>>): { tab: TurnTab; filter: TurnFilter | null } {
+  const r = LEDGER_TAB_ROUTE[from]
+  const filter = r.filter ?? null
+  if (!filter) return { tab: r.tab, filter }
+  const has = (t: TurnTab) => tabs[t].some((i) => hasFilter(i, filter))
+  if (has(r.tab)) return { tab: r.tab, filter }
+  return { tab: TURN_TABS.find(has) ?? r.tab, filter }
+}

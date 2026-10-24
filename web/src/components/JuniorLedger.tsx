@@ -210,12 +210,18 @@ type Props = Nav & {
   /** your gh login: your own items read "You" */
   me: string | null
   /** what the tab says when it has nothing */
-  empty: string
+  empty: ReactNode
+  /**
+   * The rows to show, already picked and ordered (the three-tab layout,
+   * core/work/turn-tabs.ts). `tab` then only says which tab's keys apply:
+   * held rows and N on Needs you. Without it, `tab` picks the rows.
+   */
+  rows?: readonly ScoredItem[]
   /** the server's next move per item (the day's); a row makes its own when missing or stale */
   moves?: Readonly<Record<string, RowMove>>
 }
 
-export function JuniorLedger({ tab, items, needs, me, empty, moves, onNavigate }: Props) {
+export function JuniorLedger({ tab, items, rows, needs, me, empty, moves, onNavigate }: Props) {
   const listRef = useRef<HTMLDivElement>(null)
   // the Turn on button leaves once its row is ready: give focus to the row itself, unless it went elsewhere
   const focusRow = (id: string) =>
@@ -225,12 +231,17 @@ export function JuniorLedger({ tab, items, needs, me, empty, moves, onNavigate }
       if (!a || a === document.body || row?.contains(a)) row?.querySelector<HTMLElement>('.jhRow')?.focus()
     })
   const { busy, error, act, answered, turning, turnOn } = useAct(focusRow)
+  // "Not useful": one notice at a time, in the marked row's slot
+  const [gone, setGone] = useState<Gone | null>(null)
+  // the three tabs keep a quieted row on Needs you (last): it stays off the list while its notice shows
+  const hiding = rows && gone ? gone.item.id : null
   const lines = useMemo<Line[]>(() => {
     const out: Line[] = tab === 'needs' ? needs.map((n) => ({ key: `need:${n.key}`, group: 'waiting' as const, need: n })) : []
     const now = Date.now()
-    for (const i of ledgerRows(items.map((i) => withAnswer(i, answered)), tab)) out.push({ key: i.id, group: ledgerGroup(i), item: i, move: rowMove(i, moves?.[i.id], now) })
+    const picked = rows ? rows.filter((i) => i.id !== hiding).map((i) => withAnswer(i, answered)) : ledgerRows(items.map((i) => withAnswer(i, answered)), tab)
+    for (const i of picked) out.push({ key: i.id, group: ledgerGroup(i), item: i, move: rowMove(i, moves?.[i.id], now) })
     return out
-  }, [items, needs, tab, answered, moves])
+  }, [items, rows, hiding, needs, tab, answered, moves])
   // Up next folds its long FYI tail into a link to the inbox.
   const fyiAll = tab === 'up' ? lines.filter((l) => l.group === 'fyi').length : 0
   const firstFyi = lines.findIndex((l) => l.group === 'fyi')
@@ -247,8 +258,6 @@ export function JuniorLedger({ tab, items, needs, me, empty, moves, onNavigate }
   useEffect(() => setSelectedItem(cursorId), [cursorId])
   useEffect(() => () => setSelectedItem(null), [])
 
-  // "Not useful": one notice at a time, in the marked row's slot
-  const [gone, setGone] = useState<Gone | null>(null)
   const [held, setHeld] = useState({ hover: false, focus: false })
   const [nuError, setNuError] = useState<string | null>(null)
   const [said, setSaid] = useState('')
