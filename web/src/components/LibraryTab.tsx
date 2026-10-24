@@ -21,6 +21,7 @@ import { type TeamLibrary, loadTeamLibrary, AGENT_HEX, canSummary } from '../tea
 import { EntryEditor, TeamAgentEditor } from './library/EntryEditor.js'
 import { type Filter, SOURCE_HINT, SOURCE_LABEL } from './library/fields.js'
 import { NewForm } from './library/NewForm.js'
+import { ConfirmDialog } from '../ui/ConfirmDialog.js'
 
 /** What the list's left column holds: a library file or a team agent. */
 type Row = { key: string; group: string; source: LibrarySource | 'team'; name: string; description: string; meta: ReactNode; entry?: LibraryEntry; team?: AgentEntry }
@@ -38,6 +39,8 @@ export function LibraryTab({ kind, refreshNonce }: { kind: LibraryKind; refreshN
   const [selected, setSelected] = useState<Selection>(null)
   // The editor reports unsaved edits up, so leaving it can ask first.
   const dirtyRef = useRef(false)
+  // Where the user asked to go while the editor had unsaved edits; set = the discard confirm is up.
+  const [pending, setPending] = useState<{ to: Selection } | null>(null)
 
   // Team agents are not listed while the teams UI is hidden (the engine and its files stay).
   const loadTeams = useCallback(() => {
@@ -97,9 +100,17 @@ export function LibraryTab({ kind, refreshNonce }: { kind: LibraryKind; refreshN
 
   const select = (s: Selection) => {
     if (s === selected) return
-    if (dirtyRef.current && !confirm('Discard unsaved changes?')) return
+    if (dirtyRef.current) {
+      setPending({ to: s })
+      return
+    }
     dirtyRef.current = false
     setSelected(s)
+  }
+  const discardAndGo = () => {
+    if (!pending) return
+    dirtyRef.current = false
+    setSelected(pending.to)
   }
 
   const current = selected && selected !== 'new' && selected !== 'new-team' ? rows.find((r) => r.key === selected) : undefined
@@ -218,6 +229,15 @@ export function LibraryTab({ kind, refreshNonce }: { kind: LibraryKind; refreshN
           <Empty kind={kind} counts={counts} onNew={() => select('new')} />
         )}
       </section>
+      <ConfirmDialog
+        open={pending !== null}
+        title="Discard unsaved changes?"
+        body="Your edits aren't saved."
+        confirm="Discard"
+        danger
+        onConfirm={discardAndGo}
+        onClose={() => setPending(null)}
+      />
     </div>
   )
 }

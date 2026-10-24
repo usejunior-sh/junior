@@ -1,6 +1,7 @@
 import * as Dialog from '@radix-ui/react-dialog'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { JobRecipeResponse } from '../../../shared/protocol.js'
+import { useReturnFocus } from '../ui/returnFocus.js'
 import { copiedText, wontParseText } from '../../../core/job/recipe-copy.js'
 
 /** "Copying…" shows only once the fetch has taken this long. */
@@ -74,34 +75,34 @@ export function useJobRecipe(jobId: string, onGone: () => void) {
 /** The clipboard said no: the recipe, preselected in a read-only box, to copy by hand. */
 export function RecipeFallbackDialog({ text, onClose }: { text: string | null; onClose: () => void }) {
   const box = useRef<HTMLTextAreaElement>(null)
+  const returnFocus = useReturnFocus(text !== null)
   return (
     <Dialog.Root open={text !== null} onOpenChange={(o) => !o && onClose()}>
       <Dialog.Portal>
         <Dialog.Overlay className="projOverlay" />
         <Dialog.Content
-          asChild
+          className="uiDialog projModal projAddDialog recipeDialog"
           onOpenAutoFocus={(e) => {
             e.preventDefault()
             box.current?.focus()
             box.current?.select()
           }}
+          onCloseAutoFocus={returnFocus}
         >
-          <dialog open className="projModal projAddDialog recipeDialog">
-            <Dialog.Title asChild>
-              <h3>Copy this recipe</h3>
-            </Dialog.Title>
-            <Dialog.Description asChild>
-              <p className="wsIntro">Junior couldn't reach the clipboard. Select the text and copy it.</p>
-            </Dialog.Description>
-            <textarea ref={box} readOnly value={text ?? ''} aria-label="Job recipe" spellCheck={false} onFocus={(e) => e.currentTarget.select()} />
-            <div className="row">
-              <Dialog.Close asChild>
-                <button type="button" className="go">
-                  Done
-                </button>
-              </Dialog.Close>
-            </div>
-          </dialog>
+          <Dialog.Title asChild>
+            <h3>Copy this recipe</h3>
+          </Dialog.Title>
+          <Dialog.Description asChild>
+            <p className="wsIntro">Junior couldn't reach the clipboard. Select the text and copy it.</p>
+          </Dialog.Description>
+          <textarea ref={box} readOnly value={text ?? ''} aria-label="Job recipe" spellCheck={false} onFocus={(e) => e.currentTarget.select()} />
+          <div className="row">
+            <Dialog.Close asChild>
+              <button type="button" className="go">
+                Done
+              </button>
+            </Dialog.Close>
+          </div>
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

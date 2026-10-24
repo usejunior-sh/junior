@@ -8,6 +8,7 @@ import { AGENT_HEX, type TeamLibrary, teamsCall } from '../../teams.js'
 import { Select, SelectItem } from '../../ui/Select.js'
 import { type AgentDraft, draftFromEntry, blankDraft, agentProblem, agentBody, AgentForm } from '../AgentForm.js'
 import { Markdown } from '../Markdown.js'
+import { ConfirmDialog } from '../../ui/ConfirmDialog.js'
 import { BackToList, Field } from './fields.js'
 
 // One skill or agent file
@@ -28,6 +29,8 @@ export function EntryEditor({
 }) {
   const [file, setFile] = useState<LibraryFile | null>(null)
   const [path, setPath] = useState(entry.path)
+  // The file tab picked while this one had unsaved edits; set = the discard confirm is up.
+  const [pendingFile, setPendingFile] = useState<string | null>(null)
   const [text, setText] = useState('')
   const [mode, setMode] = useState<'form' | 'raw'>('form')
   const [preview, setPreview] = useState(false)
@@ -85,8 +88,8 @@ export function EntryEditor({
   const switchFile = (rel: string) => {
     const p = `${file!.dir}/${rel}`
     if (p === path) return
-    if (dirty && !confirm('Discard unsaved changes to this file?')) return
-    void open(p)
+    if (dirty) setPendingFile(p)
+    else void open(p)
   }
 
   async function remove(which: 'item' | 'file') {
@@ -107,175 +110,188 @@ export function EntryEditor({
   const noun = entry.kind === 'skill' ? 'skill' : 'agent'
 
   return (
-    <div className="lbEditor" onKeyDown={onKeyDown}>
-      <header className="lbHead">
-        <BackToList onBack={onBack} />
-        <div className="lbHeadT">
-          <div className="lbHeadName">
-            <span className="mono">{entry.kind === 'skill' ? `/${entry.name}` : entry.name}</span>
-            <span className={`lbSrc ${entry.source}`}>{entry.source === 'workspace' ? 'Workspace' : entry.source === 'personal' ? 'Personal' : entry.scope}</span>
-            {readOnly && file && !file.binary && (
-              <span className="lbSrc ro">
-                <Lock size={10} aria-hidden="true" /> read-only
-              </span>
-            )}
-          </div>
-          <button
-            type="button"
-            className="lbHeadPath mono"
-            title="Copy path"
-            onClick={() => {
-              void navigator.clipboard?.writeText(path)
-              setCopied(true)
-              setTimeout(() => setCopied(false), 1200)
-            }}
-          >
-            {path.replace(/^\/Users\/[^/]+/, '~')} {copied ? <Check size={11} aria-hidden="true" /> : <Copy size={11} aria-hidden="true" />}
-          </button>
-        </div>
-        <span className="lbHeadActs">
-          {entry.editable && (
-            <button type="button" className="btn sm ghost" title="Opens a new session asking Claude to change it" onClick={() => askClaude(`Improve ${entry.name}`, improvePrompt(entry))}>
-              <Sparkles size={12} aria-hidden="true" /> Improve with Claude
-            </button>
-          )}
-          <button type="button" className="iconBtn" title="Open folder" aria-label="Open folder" onClick={() => void openLibraryFolder(entry.path).catch((e) => setError(String(e)))}>
-            <FolderOpen size={13} aria-hidden="true" />
-          </button>
-          {entry.editable && (
-            <button type="button" className="iconBtn" title={`Delete ${noun}`} aria-label={`Delete ${noun}`} onClick={() => setConfirming('item')}>
-              <Trash2 size={13} aria-hidden="true" />
-            </button>
-          )}
-        </span>
-      </header>
-
-      {confirming && (
-        <div className="lbConfirm">
-          <span>
-            {confirming === 'item'
-              ? `Delete ${entry.name}${entry.kind === 'skill' ? ' and every file in its folder' : ''}? It moves to ~/.junior/trash, and open sessions stop seeing it.`
-              : `Delete ${rel}? It moves to ~/.junior/trash.`}
-          </span>
-          <span className="sp" />
-          <button type="button" className="btn sm danger" onClick={() => void remove(confirming)}>
-            Delete
-          </button>
-          <button type="button" className="btn sm ghost" onClick={() => setConfirming(null)}>
-            Cancel
-          </button>
-        </div>
-      )}
-
-      {file && file.files.length > 1 && (
-        <nav className="lbFiles" aria-label="Files in this skill">
-          {file.files.map((f) => (
-            <button key={f} type="button" className={`lbFile${f === rel ? ' on' : ''}`} onClick={() => switchFile(f)} title={f}>
-              <FileText size={11} aria-hidden="true" /> {f}
-            </button>
-          ))}
-        </nav>
-      )}
-
-      <div className="lbBody">
-        {!file && !error && <div className="pickerLoading">Loading…</div>}
-        {file?.binary && <div className="lbNone">Not a text file (or too big to edit here) — open the folder to work on it.</div>}
-        {file && !file.binary && isMain && mode === 'form' && (
-          <div className="lbFields">
-            <Field label="Name" hint={entry.kind === 'skill' ? 'What / calls it. Defaults to the folder name.' : 'The subagent type Claude spawns it by.'}>
-              <input className="teamInp wide" value={fields.name ?? ''} disabled={readOnly} onChange={(e) => setText(setField(text, 'name', e.target.value))} />
-            </Field>
-            <Field label="Description" hint={entry.kind === 'skill' ? 'Claude reads this to decide when to load the skill — say what it does and when.' : 'Claude reads this to decide when to hand work over — say when.'}>
-              <textarea
-                className="teamArea lbArea"
-                rows={Math.min(8, Math.max(3, Math.ceil((fields.description ?? '').length / 90)))}
-                value={fields.description ?? ''}
-                disabled={readOnly}
-                onChange={(e) => setText(setField(text, 'description', e.target.value))}
-              />
-            </Field>
-            {entry.kind === 'agent' && <AgentFields fields={fields} readOnly={readOnly} onSet={(k, v) => setText(setField(text, k, v))} />}
-            <div className="lbField col">
-              <span className="lbFieldK row">
-                {entry.kind === 'skill' ? 'Instructions' : 'System prompt'}
-                <span className="seg lbSeg">
-                  <button type="button" className={`segBtn${!preview ? ' active' : ''}`} onClick={() => setPreview(false)}>
-                    Edit
-                  </button>
-                  <button type="button" className={`segBtn${preview ? ' active' : ''}`} onClick={() => setPreview(true)}>
-                    Preview
-                  </button>
+    <>
+      <div className="lbEditor" onKeyDown={onKeyDown}>
+        <header className="lbHead">
+          <BackToList onBack={onBack} />
+          <div className="lbHeadT">
+            <div className="lbHeadName">
+              <span className="mono">{entry.kind === 'skill' ? `/${entry.name}` : entry.name}</span>
+              <span className={`lbSrc ${entry.source}`}>{entry.source === 'workspace' ? 'Workspace' : entry.source === 'personal' ? 'Personal' : entry.scope}</span>
+              {readOnly && file && !file.binary && (
+                <span className="lbSrc ro">
+                  <Lock size={10} aria-hidden="true" /> read-only
                 </span>
-              </span>
-              {preview ? (
-                <div className="lbPreview">
-                  <Markdown text={bodyOf(text)} />
-                </div>
-              ) : (
-                <textarea className="lbCode" spellCheck={false} value={bodyOf(text)} readOnly={readOnly} onChange={(e) => setText(setBody(text, e.target.value))} />
               )}
             </div>
+            <button
+              type="button"
+              className="lbHeadPath mono"
+              title="Copy path"
+              onClick={() => {
+                void navigator.clipboard?.writeText(path)
+                setCopied(true)
+                setTimeout(() => setCopied(false), 1200)
+              }}
+            >
+              {path.replace(/^\/Users\/[^/]+/, '~')} {copied ? <Check size={11} aria-hidden="true" /> : <Copy size={11} aria-hidden="true" />}
+            </button>
           </div>
-        )}
-        {file && !file.binary && (!isMain || mode === 'raw') && (
-          <div className="lbRaw">
-            {isMd && preview ? (
-              <div className="lbPreview">
-                <Markdown text={text} />
-              </div>
-            ) : (
-              <textarea className="lbCode fill" spellCheck={false} value={text} readOnly={readOnly} onChange={(e) => setText(e.target.value)} />
+          <span className="lbHeadActs">
+            {entry.editable && (
+              <button type="button" className="btn sm ghost" title="Opens a new session asking Claude to change it" onClick={() => askClaude(`Improve ${entry.name}`, improvePrompt(entry))}>
+                <Sparkles size={12} aria-hidden="true" /> Improve with Claude
+              </button>
             )}
-          </div>
-        )}
-      </div>
+            <button type="button" className="iconBtn" title="Open folder" aria-label="Open folder" onClick={() => void openLibraryFolder(entry.path).catch((e) => setError(String(e)))}>
+              <FolderOpen size={13} aria-hidden="true" />
+            </button>
+            {entry.editable && (
+              <button type="button" className="iconBtn" title={`Delete ${noun}`} aria-label={`Delete ${noun}`} onClick={() => setConfirming('item')}>
+                <Trash2 size={13} aria-hidden="true" />
+              </button>
+            )}
+          </span>
+        </header>
 
-      <footer className="lbFoot">
-        {file && !file.binary && (
-          <span className="seg">
-            {isMain ? (
-              <>
-                <button type="button" className={`segBtn${mode === 'form' ? ' active' : ''}`} onClick={() => setMode('form')}>
-                  Fields
-                </button>
-                <button type="button" className={`segBtn${mode === 'raw' ? ' active' : ''}`} onClick={() => setMode('raw')} title="The whole file, frontmatter included">
-                  Raw file
-                </button>
-              </>
-            ) : (
-              isMd && (
-                <button type="button" className={`segBtn${preview ? ' active' : ''}`} onClick={() => setPreview((p) => !p)}>
-                  Preview
-                </button>
-              )
-            )}
-          </span>
+        {confirming && (
+          <div className="lbConfirm">
+            <span>
+              {confirming === 'item'
+                ? `Delete ${entry.name}${entry.kind === 'skill' ? ' and every file in its folder' : ''}? It moves to ~/.junior/trash, and open sessions stop seeing it.`
+                : `Delete ${rel}? It moves to ~/.junior/trash.`}
+            </span>
+            <span className="sp" />
+            <button type="button" className="btn sm danger" onClick={() => void remove(confirming)}>
+              Delete
+            </button>
+            <button type="button" className="btn sm ghost" onClick={() => setConfirming(null)}>
+              Cancel
+            </button>
+          </div>
         )}
-        {!isMain && entry.editable && (
-          <button type="button" className="btn sm ghost" onClick={() => setConfirming('file')}>
-            Delete file
-          </button>
+
+        {file && file.files.length > 1 && (
+          <nav className="lbFiles" aria-label="Files in this skill">
+            {file.files.map((f) => (
+              <button key={f} type="button" className={`lbFile${f === rel ? ' on' : ''}`} onClick={() => switchFile(f)} title={f}>
+                <FileText size={11} aria-hidden="true" /> {f}
+              </button>
+            ))}
+          </nav>
         )}
-        {error && <span className="lbErr">{error}</span>}
-        <span className="sp" />
-        {saved && (
-          <span className="lbSaved">
-            <Check size={12} aria-hidden="true" /> Saved — live in open sessions
-          </span>
-        )}
-        {dirty && !saved && <span className="lbDirty">Unsaved</span>}
-        {dirty && (
-          <button type="button" className="btn ghost" onClick={() => setText(file!.text)}>
-            Revert
-          </button>
-        )}
-        {!readOnly && (
-          <button type="button" className="btn primary" disabled={!dirty || saving} onClick={() => void save()} title="⌘S">
-            {saving ? 'Saving…' : 'Save'}
-          </button>
-        )}
-      </footer>
-    </div>
+
+        <div className="lbBody">
+          {!file && !error && <div className="pickerLoading">Loading…</div>}
+          {file?.binary && <div className="lbNone">Not a text file (or too big to edit here) — open the folder to work on it.</div>}
+          {file && !file.binary && isMain && mode === 'form' && (
+            <div className="lbFields">
+              <Field label="Name" hint={entry.kind === 'skill' ? 'What / calls it. Defaults to the folder name.' : 'The subagent type Claude spawns it by.'}>
+                <input className="teamInp wide" value={fields.name ?? ''} disabled={readOnly} onChange={(e) => setText(setField(text, 'name', e.target.value))} />
+              </Field>
+              <Field label="Description" hint={entry.kind === 'skill' ? 'Claude reads this to decide when to load the skill — say what it does and when.' : 'Claude reads this to decide when to hand work over — say when.'}>
+                <textarea
+                  className="teamArea lbArea"
+                  rows={Math.min(8, Math.max(3, Math.ceil((fields.description ?? '').length / 90)))}
+                  value={fields.description ?? ''}
+                  disabled={readOnly}
+                  onChange={(e) => setText(setField(text, 'description', e.target.value))}
+                />
+              </Field>
+              {entry.kind === 'agent' && <AgentFields fields={fields} readOnly={readOnly} onSet={(k, v) => setText(setField(text, k, v))} />}
+              <div className="lbField col">
+                <span className="lbFieldK row">
+                  {entry.kind === 'skill' ? 'Instructions' : 'System prompt'}
+                  <span className="seg lbSeg">
+                    <button type="button" className={`segBtn${!preview ? ' active' : ''}`} onClick={() => setPreview(false)}>
+                      Edit
+                    </button>
+                    <button type="button" className={`segBtn${preview ? ' active' : ''}`} onClick={() => setPreview(true)}>
+                      Preview
+                    </button>
+                  </span>
+                </span>
+                {preview ? (
+                  <div className="lbPreview">
+                    <Markdown text={bodyOf(text)} />
+                  </div>
+                ) : (
+                  <textarea className="lbCode" spellCheck={false} value={bodyOf(text)} readOnly={readOnly} onChange={(e) => setText(setBody(text, e.target.value))} />
+                )}
+              </div>
+            </div>
+          )}
+          {file && !file.binary && (!isMain || mode === 'raw') && (
+            <div className="lbRaw">
+              {isMd && preview ? (
+                <div className="lbPreview">
+                  <Markdown text={text} />
+                </div>
+              ) : (
+                <textarea className="lbCode fill" spellCheck={false} value={text} readOnly={readOnly} onChange={(e) => setText(e.target.value)} />
+              )}
+            </div>
+          )}
+        </div>
+
+        <footer className="lbFoot">
+          {file && !file.binary && (
+            <span className="seg">
+              {isMain ? (
+                <>
+                  <button type="button" className={`segBtn${mode === 'form' ? ' active' : ''}`} onClick={() => setMode('form')}>
+                    Fields
+                  </button>
+                  <button type="button" className={`segBtn${mode === 'raw' ? ' active' : ''}`} onClick={() => setMode('raw')} title="The whole file, frontmatter included">
+                    Raw file
+                  </button>
+                </>
+              ) : (
+                isMd && (
+                  <button type="button" className={`segBtn${preview ? ' active' : ''}`} onClick={() => setPreview((p) => !p)}>
+                    Preview
+                  </button>
+                )
+              )}
+            </span>
+          )}
+          {!isMain && entry.editable && (
+            <button type="button" className="btn sm ghost" onClick={() => setConfirming('file')}>
+              Delete file
+            </button>
+          )}
+          {error && <span className="lbErr">{error}</span>}
+          <span className="sp" />
+          {saved && (
+            <span className="lbSaved">
+              <Check size={12} aria-hidden="true" /> Saved — live in open sessions
+            </span>
+          )}
+          {dirty && !saved && <span className="lbDirty">Unsaved</span>}
+          {dirty && (
+            <button type="button" className="btn ghost" onClick={() => setText(file!.text)}>
+              Revert
+            </button>
+          )}
+          {!readOnly && (
+            <button type="button" className="btn primary" disabled={!dirty || saving} onClick={() => void save()} title="⌘S">
+              {saving ? 'Saving…' : 'Save'}
+            </button>
+          )}
+        </footer>
+      </div>
+      <ConfirmDialog
+        open={pendingFile !== null}
+        title="Discard unsaved changes to this file?"
+        body="Your edits aren't saved."
+        confirm="Discard"
+        danger
+        onConfirm={() => {
+          if (pendingFile) void open(pendingFile)
+        }}
+        onClose={() => setPendingFile(null)}
+      />
+    </>
   )
 }
 

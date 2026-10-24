@@ -127,7 +127,7 @@ dialog .danger:hover:not(:disabled), .uiDialog .danger:hover:not(:disabled) { ba
 dialog .row button:disabled, .uiDialog .row button:disabled { opacity: 0.45; cursor: default; }
 dialog p, .uiDialog p { color: var(--body); font-size: 1rem; line-height: 1.55; }
 /* A Radix Dialog's content (`Dialog.Content`, a div): the same surface as a
-   native <dialog>, centred above its .projOverlay scrim (z 90). No ::backdrop;
+   native dialog element, centred above its .projOverlay scrim (z 90). No ::backdrop;
    the scrim is the Overlay. */
 .uiDialog {
   position: fixed; z-index: 91; top: 50%; left: 50%; margin: 0; transform: translate(-50%, -50%);
@@ -136,6 +136,9 @@ dialog p, .uiDialog p { color: var(--body); font-size: 1rem; line-height: 1.55; 
 /* the item title under "Due date": three lines at most, the full title on hover */
 .dueDialog .wsIntro { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden; overflow-wrap: anywhere; }
 #deleteSession { width: 420px; }
+/* ui/ConfirmDialog: the stand-in for the native confirm box. One class, so phone.css's .uiDialog width still wins at ≤767px. */
+.confirmDialog { width: 420px; }
+.confirmDialog p { margin: 0; }
 #deleteSession p { margin: 0; }
 #deleteSession p strong { color: var(--ink); font-weight: 500; }
 

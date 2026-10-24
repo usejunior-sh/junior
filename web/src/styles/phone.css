@@ -82,8 +82,8 @@
   .chatComposer .nsRecipe { flex-wrap: wrap; }
   .chatComposer .nsRecipeT { flex: 1 1 0; }
   .chatComposer .nsRecipe .btn { min-height: 44px; min-width: 44px; }
-  dialog.recipeDialog { width: 100vw; max-width: 100vw; height: var(--vvh, 100dvh); max-height: none; border-radius: 0; display: flex; flex-direction: column; }
-  dialog.recipeDialog textarea { flex: 1; min-height: 0; }
+  .uiDialog.recipeDialog { width: 100vw; max-width: 100vw; height: var(--vvh, 100dvh); max-height: none; border-radius: 0; display: flex; flex-direction: column; }
+  .uiDialog.recipeDialog textarea { flex: 1; min-height: 0; }
 }
 @keyframes sheetIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
 /* No hover on a touch screen: anything revealed on hover is always shown. */
@@ -263,7 +263,7 @@ html.kbOpen .shell.mobile .panel { bottom: 0; }
   }
   dialog { padding: 18px 16px; }
   dialog .row button, dialog button.go, dialog button.cancel, dialog button.danger { height: 44px; padding: 0 16px; }
-  /* the palette is Radix content, not a <dialog>: pinned near the top, footer sticky inside --vvh */
+  /* the palette is Radix content, not a dialog element: pinned near the top, footer sticky inside --vvh */
   #palette { top: 0; left: 0; transform: none; }
   .uiDialog { top: 0; left: 0; right: auto; transform: none; padding: 18px 16px; }
   /* the system sheet keeps its rail, edge to edge: no padding, and its desktop anchor (top 50px, right 88px) let go */

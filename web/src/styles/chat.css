@@ -352,8 +352,8 @@ button.chip:hover:not(:disabled), .chip[data-state="open"] { color: var(--ink); 
 .chatComposer .nsRecipeOff { flex: none; color: var(--ash); }
 .chatComposer .nsRecipe .btn { flex: none; margin-left: auto; }
 /* the clipboard fallback: the recipe to select by hand */
-dialog.recipeDialog { width: 560px; background: var(--elevated); border-color: var(--hair-strong); box-shadow: none; }
-dialog.recipeDialog textarea { min-height: 260px; resize: vertical; font-family: var(--mono); font-size: 0.8846rem; line-height: 1.55; background: var(--deep); border-radius: var(--r); white-space: pre; }
+.uiDialog.recipeDialog { width: 560px; background: var(--elevated); border-color: var(--hair-strong); box-shadow: none; }
+.uiDialog.recipeDialog textarea { min-height: 260px; resize: vertical; font-family: var(--mono); font-size: 0.8846rem; line-height: 1.55; background: var(--deep); border-radius: var(--r); white-space: pre; }
 @media (prefers-reduced-motion: reduce) { #newSessionHome .nsWho.handoff .nsFace { animation: none; } }
 /* Phones: a smaller halo and line. */
 @media (max-width: 767px) {

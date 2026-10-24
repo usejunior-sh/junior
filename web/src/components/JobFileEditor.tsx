@@ -9,6 +9,7 @@ import * as Collapsible from '@radix-ui/react-collapsible'
 import { Check, ChevronRight, Copy } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import type { JobFileReference, JobFileResponse } from '../../../shared/protocol.js'
+import { ConfirmDialog } from '../ui/ConfirmDialog.js'
 
 export function JobFileEditor({ id, onNavigate }: { id?: string; onNavigate: (hash: string) => void }) {
   const [text, setText] = useState<string | null>(null)
@@ -17,6 +18,8 @@ export function JobFileEditor({ id, onNavigate }: { id?: string; onNavigate: (ha
   const [errors, setErrors] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
   const [dirty, setDirty] = useState(false)
+  // Cancel with unsaved edits asks first (ConfirmDialog), Cancel / Discard.
+  const [confirmDiscard, setConfirmDiscard] = useState(false)
 
   useEffect(() => {
     const q = id ? `?id=${encodeURIComponent(id)}` : ''
@@ -71,10 +74,8 @@ export function JobFileEditor({ id, onNavigate }: { id?: string; onNavigate: (ha
     }
   }
 
-  const cancel = () => {
-    if (dirty && !confirm('Discard your changes to this file?')) return
-    onNavigate(id ? `/jobs/${encodeURIComponent(id)}` : '/jobs')
-  }
+  const leave = () => onNavigate(id ? `/jobs/${encodeURIComponent(id)}` : '/jobs')
+  const cancel = () => (dirty ? setConfirmDiscard(true) : leave())
 
   return (
     <div className="page" data-reload-guard={dirty ? 'edit' : undefined}>
@@ -136,6 +137,15 @@ export function JobFileEditor({ id, onNavigate }: { id?: string; onNavigate: (ha
           </div>
         )}
       </div>
+      <ConfirmDialog
+        open={confirmDiscard}
+        title="Discard your changes to this file?"
+        body="Your edits aren't saved."
+        confirm="Discard"
+        danger
+        onConfirm={leave}
+        onClose={() => setConfirmDiscard(false)}
+      />
     </div>
   )
 }

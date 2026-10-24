@@ -1,26 +1,11 @@
 {
   "_note": "Per-file counts from test/ui-lint.test.ts. They may only go down; never raise one to make a test pass.",
   "files": {
-    "web/src/components/JobFileEditor.tsx": {
-      "nativeDialogs": 1
-    },
-    "web/src/components/JobPage.tsx": {
-      "nativeDialogs": 1
-    },
-    "web/src/components/JobsPage.tsx": {
-      "nativeDialogs": 3
-    },
     "web/src/components/JuniorFace.tsx": {
       "colours": 7
     },
-    "web/src/components/LibraryTab.tsx": {
-      "nativeDialogs": 1
-    },
     "web/src/components/PhoneTab.tsx": {
       "colours": 2
-    },
-    "web/src/components/library/EntryEditor.tsx": {
-      "nativeDialogs": 1
     },
     "web/src/components/workspaceAuth.tsx": {
       "colours": 8

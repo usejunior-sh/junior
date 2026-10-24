@@ -12,6 +12,11 @@
  * commit, before any parent effect runs, and Radix skips `onOpenAutoFocus`
  * when focus is already inside. If the opener is gone or was <body>
  * (onboarding opens by itself), Radix's default stands and nothing is focused.
+ *
+ * Opened from a menu item ("Delete…"), the opener is the item, which is gone
+ * by the time the dialog closes. Then the menu's trigger (the "More" button)
+ * stands in: Radix links them by the trigger's `aria-controls`, which is still
+ * in the DOM during this render.
  */
 import { useCallback, useRef } from 'react'
 
@@ -20,7 +25,7 @@ export function useReturnFocus(open: boolean): (event: Event) => void {
   const opener = useRef<HTMLElement | null>(null)
   if (open && !wasOpen.current && typeof document !== 'undefined') {
     const el = document.activeElement
-    opener.current = el instanceof HTMLElement && el !== document.body ? el : null
+    opener.current = el instanceof HTMLElement && el !== document.body ? (menuTriggerOf(el) ?? el) : null
   }
   wasOpen.current = open
 
@@ -31,4 +36,12 @@ export function useReturnFocus(open: boolean): (event: Event) => void {
     event.preventDefault()
     el.focus({ preventScroll: true })
   }, [])
+}
+
+/** The button that opened the Radix menu `el` sits in, if it sits in one. */
+function menuTriggerOf(el: HTMLElement): HTMLElement | null {
+  const menu = el.closest('[role="menu"][id]')
+  if (!menu) return null
+  const trigger = document.querySelector(`[aria-controls="${CSS.escape(menu.id)}"]`)
+  return trigger instanceof HTMLElement ? trigger : null
 }

@@ -17,6 +17,7 @@ import { Transcript } from './Transcript.js'
 import { BrowserPane } from './BrowserPane.js'
 import { hasBrowser } from '../browser.js'
 import { Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from '../ui/Menu.js'
+import { ConfirmDialog } from '../ui/ConfirmDialog.js'
 import { RecipeFallbackDialog, useJobRecipe } from './JobRecipe.js'
 import { humanSpan, lookbackMs, parseCatchUp } from '../../../core/job/schedule.js'
 import { TRIGGER_LABEL, cronText, grantIcon, grantLabel, runStatusText } from '../jobUi.js'
@@ -90,6 +91,8 @@ export function JobPage({ id, onNavigate }: { id: string; onNavigate: (hash: str
   const [showAll, setShowAll] = useState(false)
   const [running, setRunning] = useState(false)
   const [error, setError] = useState('')
+  // Delete asks first (ConfirmDialog); open items move to Archived only after "Delete job".
+  const [confirmDelete, setConfirmDelete] = useState(false)
   const [openRun, setOpenRun] = useState<ActivityRun | null>(null)
   // Watch: the run's transcript with its browser beside it, while it runs.
   const [watch, setWatch] = useState(false)
@@ -187,8 +190,7 @@ export function JobPage({ id, onNavigate }: { id: string; onNavigate: (hash: str
 
   async function remove() {
     if (!job) return
-    if (!confirm(`Delete job “${job.title}”? Its open items move to Archived (nothing is deleted).`)) return
-    await fetch(`/api/jobs?id=${encodeURIComponent(job.id)}`, { method: 'DELETE' })
+    await fetch(`/api/jobs?id=${encodeURIComponent(job.id)}`, { method: 'DELETE' }).catch(() => {})
     onNavigate('/jobs')
   }
 
@@ -323,7 +325,7 @@ export function JobPage({ id, onNavigate }: { id: string; onNavigate: (hash: str
                 <MenuItem onSelect={() => void recipe.copy()}>Copy as recipe</MenuItem>
                 <MenuItem onSelect={() => void toggle(!job.enabled)}>{job.enabled ? 'Pause' : 'Resume'}</MenuItem>
                 <MenuSeparator />
-                <MenuItem className="danger" onSelect={() => void remove()}>
+                <MenuItem className="danger" onSelect={() => setConfirmDelete(true)}>
                   Delete…
                 </MenuItem>
               </MenuContent>
@@ -345,6 +347,15 @@ export function JobPage({ id, onNavigate }: { id: string; onNavigate: (hash: str
           </div>
         )}
         <RecipeFallbackDialog text={recipe.fallback} onClose={recipe.closeFallback} />
+        <ConfirmDialog
+          open={confirmDelete}
+          title={`Delete job “${job.title}”?`}
+          body="Its open items move to Archived (nothing is deleted)."
+          confirm="Delete job"
+          danger
+          onConfirm={remove}
+          onClose={() => setConfirmDelete(false)}
+        />
         {error && <div className="msg error">{error}</div>}
         {job.browser && skipsForApp && <div className="msg">This job needs the browser. Keep Junior.app open, or it skips.</div>}
         {job.draft && !job.enabled && (

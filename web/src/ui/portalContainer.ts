@@ -1,15 +1,15 @@
 /**
  * Where a portaled popup (menu, select) has to land so it is actually visible.
  *
- * Normally `<body>` is right. The exception is a native `<dialog>` opened with
+ * Normally `<body>` is right. The exception is a native dialog element opened with
  * `showModal()`: the browser paints those in the *top layer*, above the whole
  * normal stacking order, so a body-portaled popup opens behind the dialog and
  * no z-index can rescue it. For those we portal into the dialog itself.
  *
  * Two details this encodes, both learned the hard way:
  *
- * - **Modal only.** A plain `<dialog open>` is used elsewhere purely as a
- *   styling shell. It never enters the top layer, and it may carry a
+ * - **Modal only.** A non-modal dialog element (shown with the `open`
+ *   attribute) never enters the top layer, and it may carry a
  *   `transform`, which would make it the containing block for the popper's
  *   `position: fixed` and shift the popup by the dialog's own offset. Those
  *   stay on `<body>`.

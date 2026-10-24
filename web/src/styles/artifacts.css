@@ -70,6 +70,10 @@ dialog.artDialog textarea { min-height: 240px; font-family: var(--mono); font-si
 /* ---------- briefs (.docs/next-version.md, phase 2) ---------- */
 .notice.jobsOff { margin-bottom: 16px; }
 .notice.jobsOff b { color: var(--yellow); font-weight: 500; }
+/* Jobs → Run now didn't start: one dismissable line above the table, not a dialog */
+.msg.error.jobsRunError { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 16px; }
+.jobsRunError > span { flex: 1; min-width: 0; }
+.jobsRunError .iconBtn { flex: none; color: var(--red-ink); }
 .briefCard { padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; }
 .briefCard .briefHead { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .briefCard .briefHead .title { font-size: 1.0769rem; color: var(--ink); font-weight: 500; }

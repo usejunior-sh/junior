@@ -6,13 +6,14 @@
  * this page; the dots are the only history shown here.
  */
 import * as Switch from '@radix-ui/react-switch'
-import { Ellipsis, Pencil, Play, Plus } from 'lucide-react'
+import { Ellipsis, Pencil, Play, Plus, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ActivityResponse, ActivityRun, Project, ProjectsResponse, SettingsResponse, Job, JobsResponse } from '../../../shared/protocol.js'
 import { rowOpen } from '../tabs.js'
 import { nextScheduled } from '../../../core/job/cron.js'
 import { relTime } from '../itemUi.js'
 import { Menu, MenuContent, MenuItem, MenuTrigger } from '../ui/Menu.js'
+import { ConfirmDialog } from '../ui/ConfirmDialog.js'
 import { cronText, fmtUntil, grantIcon, grantLabel, runStatusText } from '../jobUi.js'
 
 /** "5m ago", "3d ago", or a plain date past two weeks, where "ago" would read wrong. */
@@ -70,6 +71,10 @@ export function JobsPage({
   // The global switch (Settings → Automations). Off = the scheduler never runs a job.
   const [enabled, setEnabled] = useState<boolean | null>(null)
   const [projects, setProjects] = useState<Project[]>([])
+  // Delete asks first; the job waits here until the user answers.
+  const [deleting, setDeleting] = useState<Job | null>(null)
+  // A Run now that didn't start: one line above the table until the next run or Dismiss.
+  const [runError, setRunError] = useState<string | null>(null)
 
   useEffect(() => {
     void fetch('/api/projects')
@@ -124,8 +129,7 @@ export function JobsPage({
   }
 
   async function remove(w: Job) {
-    if (!confirm(`Delete job “${w.title}”? Its open items move to Archived (nothing is deleted).`)) return
-    await fetch(`/api/jobs?id=${encodeURIComponent(w.id)}`, { method: 'DELETE' })
+    await fetch(`/api/jobs?id=${encodeURIComponent(w.id)}`, { method: 'DELETE' }).catch(() => {})
     void load()
   }
 
@@ -136,9 +140,9 @@ export function JobsPage({
     try {
       const res = await fetch(`/api/jobs/run?id=${encodeURIComponent(w.id)}`, { method: 'POST' })
       const body = (await res.json()) as { ok: boolean; error?: string }
-      if (!body.ok) alert(body.error ?? 'could not start the run')
+      setRunError(body.ok ? null : `Couldn't start “${w.title}”: ${body.error ?? "the server didn't say why."}`)
     } catch (err) {
-      alert(String(err))
+      setRunError(`Couldn't start “${w.title}”: ${String(err)}`)
     }
     for (const ms of [5000, 12000, 30000]) setTimeout(() => void load(), ms)
     setTimeout(
@@ -195,6 +199,14 @@ export function JobsPage({
           </div>
         )}
         {state.phase === 'error' && <div className="msg error">{state.message}</div>}
+        {runError && (
+          <div className="msg error jobsRunError" role="alert">
+            <span>{runError}</span>
+            <button type="button" className="iconBtn sm" title="Dismiss" aria-label="Dismiss" onClick={() => setRunError(null)}>
+              <X size={12} aria-hidden="true" />
+            </button>
+          </div>
+        )}
 
         {state.phase === 'ready' && (
           <div className="wtblWrap">
@@ -322,7 +334,7 @@ export function JobsPage({
                               <MenuContent align="end">
                                 {w.lastRunSessionId && <MenuItem onSelect={() => onNavigate(`/${w.lastRunSessionId}`)}>Open last run</MenuItem>}
                                 <MenuItem onSelect={() => void toggle(w, !w.enabled)}>{w.enabled ? 'Pause' : 'Resume'}</MenuItem>
-                                <MenuItem className="danger" onSelect={() => void remove(w)}>
+                                <MenuItem className="danger" onSelect={() => setDeleting(w)}>
                                   Delete…
                                 </MenuItem>
                               </MenuContent>
@@ -345,6 +357,15 @@ export function JobsPage({
           </div>
         )}
       </div>
+      <ConfirmDialog
+        open={deleting !== null}
+        title={`Delete job “${deleting?.title ?? ''}”?`}
+        body="Its open items move to Archived (nothing is deleted)."
+        confirm="Delete job"
+        danger
+        onConfirm={() => (deleting ? remove(deleting) : undefined)}
+        onClose={() => setDeleting(null)}
+      />
     </div>
   )
 }

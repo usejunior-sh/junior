@@ -11,7 +11,7 @@ export function isTypingTarget(e: KeyboardEvent): boolean {
 }
 
 /**
- * True while any <dialog> or popover menu is open, single-key hotkeys should
+ * True while any dialog element or popover menu is open, single-key hotkeys should
  * stay quiet, or "n" typed at an open menu starts a new session behind it.
  */
 export function anyDialogOpen(): boolean {
@@ -24,7 +24,7 @@ export function anyDialogOpen(): boolean {
 
 /**
  * True while a modal is up that isn't the palette or the `?` overlay (those
- * two close for a global key): a native modal `<dialog>`, or a Radix Dialog /
+ * two close for a global key): a native modal dialog element, or a Radix Dialog /
  * AlertDialog (the palette is `#palette`, the overlay `#helpOverlay`, both Radix). Popovers and menus don't count; they sit in a popper wrapper.
  */
 export function blockingModalOpen(): boolean {
