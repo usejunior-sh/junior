@@ -37,6 +37,7 @@ import { ReadyChips, ReadySummary } from './ReadyChips.js'
 import { SnoozeMenu } from './SnoozeMenu.js'
 import { ReasonChip } from './ReasonChip.js'
 import { isAdjusted } from '../../../core/work/corrections.js'
+import { filesPart, filesShort, sendsPart, sendsShort, supervisionLine } from '../../../core/work/supervision.js'
 import { TurnOnButton, WatchCap } from './WatchOff.js'
 import { setSelectedItem } from '../selection.js'
 import { handOffOf, pauseOf } from '../itemVerbs.js'
@@ -606,6 +607,7 @@ export function JuniorLedger({ tab, items, rows, needs, me, empty, moves, onNavi
                   act={act}
                   onOpen={() => openItem(line.item.id)}
                   onNotUseful={tab === 'needs' ? () => markGone(line.item, n, 'click') : undefined}
+                  supervised={tab === 'with'}
                 />
               )}
             </div>
@@ -664,6 +666,7 @@ function ItemLine({
   act,
   onOpen,
   onNotUseful,
+  supervised = false,
 }: {
   item: ScoredItem
   /** line 1, the next move; null falls back to the title-first row */
@@ -686,6 +689,8 @@ function ItemLine({
   onOpen: () => void
   /** Needs you only: "not useful", it shouldn't have reached you */
   onNotUseful?: () => void
+  /** With Junior only: the supervision line under the title, when there's something unseen */
+  supervised?: boolean
 }) {
   const who = whoOf(i, me)
   const Icon = kindIcon(i)
@@ -705,6 +710,8 @@ function ItemLine({
   const reasons = adjusted && move ? [...move.reasons, 'you set this'] : move?.reasons
   const context = contextOf(i)
   const why = !!i.rankParts?.length
+  const sv = supervised && i.supervision ? i.supervision : null
+  const svLine = sv ? supervisionLine(sv.files, sv.sends).line : null
   return (
     <>
       <button
@@ -712,7 +719,7 @@ function ItemLine({
         className={`jhRow${move ? ' two' : ''}`}
         aria-expanded={open}
         // the age sits apart from the line on screen: the name reads the full line, age included
-        aria-label={move ? rowLabel([move.text, adjusted ? 'you set this' : null, title || ref, p !== null ? 'Junior is working' : st.text, title ? ref : null]) : undefined}
+        aria-label={move ? rowLabel([move.text, adjusted ? 'you set this' : null, title || ref, p !== null ? 'Junior is working' : st.text, title ? ref : null, svLine]) : undefined}
         onClick={onClick}
       >
         <span className={`wc${who === 'You' ? ' you' : ''}`}>
@@ -729,6 +736,7 @@ function ItemLine({
             ) : (
               ref && <span className="tt ref">{ref}</span>
             )}
+            {sv && svLine && <SupervisionText files={sv.files} sends={sv.sends} line={svLine} />}
           </span>
         ) : (
           <span className="tt">
@@ -957,6 +965,33 @@ function NeedLine({ need, open, onClick, onGo }: { need: NeedsRow; open: boolean
  * stone. The reasons give way first; "with Junior" shows only on a phone,
  * where the state column that says it is hidden.
  */
+/**
+ * The supervision line on a With Junior row (core/work/supervision.ts): muted
+ * mono, one line, the full text in `title`. The phone row shows the short form.
+ * Text inside the row's button; the button's name already reads the full line.
+ */
+function SupervisionText({ files, sends, line }: { files: number; sends: number; line: string }) {
+  const parts = (a: string | null, b: string | null) =>
+    [a, b]
+      .filter((x): x is string => !!x)
+      .map((x, n) => (
+        <span key={n}>
+          {n > 0 && (
+            <i className="sep" aria-hidden="true">
+              {' · '}
+            </i>
+          )}
+          {x}
+        </span>
+      ))
+  return (
+    <span className="sv" title={line}>
+      <span className="full">{parts(filesPart(files), sendsPart(sends))}</span>
+      <span className="short">{parts(filesShort(files), sendsShort(sends))}</span>
+    </span>
+  )
+}
+
 function MoveText({ verb, reasons, withJunior }: { verb: string; reasons: readonly string[]; withJunior: boolean }) {
   const parts = withJunior ? [{ text: 'with Junior', wj: true }, ...reasons.map((text) => ({ text, wj: false }))] : reasons.map((text) => ({ text, wj: false }))
   const full = [verb, ...(withJunior ? ['with Junior'] : []), ...reasons].join(' · ')

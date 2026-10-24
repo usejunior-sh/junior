@@ -182,6 +182,31 @@
 .itemMeta .sep { color: var(--stone); }
 .itemMeta > svg { flex: none; }
 .chipRow { display: flex; gap: 6px; flex-wrap: wrap; }
+/* the supervision line (item/SupervisionLine.tsx): a quiet mono tally under the chips; never orange, no fill, no box */
+.supWrap { margin-top: -6px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.supLine { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; font-family: var(--mono); font-size: 0.9231rem; color: var(--ash); }
+.supPart { display: inline-flex; align-items: center; gap: 4px; padding: 0; background: none; border: 0; font: inherit; color: var(--ash); cursor: pointer; text-align: left; }
+.supPart:hover { color: var(--charcoal); }
+.supPart:focus-visible { outline: 1px solid var(--hair-strong); outline-offset: 2px; }
+.supPart svg { flex: none; }
+.supChev { transition: transform 120ms ease; }
+.supWrap[data-state='open'] .supChev { transform: rotate(180deg); }
+.supSep { color: var(--stone); }
+.supList { border-left: 1px solid var(--hair); padding-left: 12px; display: flex; flex-direction: column; min-width: 0; }
+.supList .secLabel { margin-bottom: 4px; }
+.supRow { display: grid; grid-template-columns: minmax(0, 1fr) 180px 40px; gap: 12px; align-items: center; min-height: 32px; border-top: 1px solid var(--hair-soft); font-size: 0.9231rem; }
+.supPath { display: flex; min-width: 0; font-family: var(--mono); white-space: nowrap; }
+.supPath .dir { min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--ash); }
+.supPath .nm { flex: none; color: var(--ink); }
+.supSess { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.supSess .linkBtn { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
+.supSess .gone { color: var(--ash); }
+.supAge { font-family: var(--mono); color: var(--ash); text-align: right; white-space: nowrap; }
+.supNote { padding-top: 8px; font-family: var(--mono); font-size: 0.9231rem; color: var(--ash); }
+.supErr { padding-top: 8px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: var(--red-ink); font-size: 0.9231rem; }
+@media (prefers-reduced-motion: reduce) {
+  .supChev { transition: none; }
+}
 .brief { padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; margin-top: 6px; }
 .brief .briefHead { display: flex; align-items: center; gap: 10px; }
 .brief .briefHead .title { font-size: 1.0769rem; color: var(--ink); font-weight: 500; }

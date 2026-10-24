@@ -473,6 +473,10 @@ button.jlTitle:hover { text-decoration: underline; text-decoration-color: var(--
 .jhRow .mv .wj { display: none; }
 .jhRow .tc .tt { font-size: 1rem; color: var(--charcoal); }
 .jhRow .tc .tt.ref { font-family: var(--mono); font-size: 0.9231rem; color: var(--ash); }
+/* the supervision line (With Junior only): a quiet tally, never orange */
+.jhRow .tc .sv { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); font-size: 0.9231rem; color: var(--ash); }
+.jhRow .tc .sv .sep { font-style: normal; color: var(--stone); white-space: pre; }
+.jhRow .tc .sv .short { display: none; }
 .jhRow .jrc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.9615rem; color: var(--blue); }
 .jhRow .jrc.quiet { color: var(--ash); }
 /* the closed row's readiness pill (ReadyChips.tsx ReadySummary): the pill ellipsizes before its +N does */
@@ -634,6 +638,8 @@ a.rdyChip:focus-visible { outline: 1px solid var(--hair-bright); outline-offset:
   .jhRow.two .wc { display: none; }
   .jhRow .tc { grid-column: 1; grid-row: 1 / 3; }
   .jhRow .mv .wj { display: inline; }
+  .jhRow .tc .sv .full { display: none; }
+  .jhRow .tc .sv .short { display: inline; }
   .jhRow .jrc, .jhRow .prog, .jhRow .wh { display: none; }
   .jhRow .ag { grid-column: 2; grid-row: 1 / 3; }
   .jhRow .chev { grid-column: 3; grid-row: 1 / 3; }

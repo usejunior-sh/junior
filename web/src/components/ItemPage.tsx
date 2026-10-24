@@ -36,6 +36,7 @@ import { ItemVerdict } from './item/ItemVerdict.js'
 import { NeedsYou } from './item/NeedsYou.js'
 import { ItemSessionsTab } from './item/ItemSessionsTab.js'
 import { ItemActivity, sendsOf } from './item/ItemActivity.js'
+import { SupervisionLine } from './item/SupervisionLine.js'
 
 type Props = {
   id: string
@@ -62,6 +63,7 @@ export function ItemPage({ id, onDispatch, onNavigate, onDirty }: Props) {
   const itemActions = useActions({ item: id })
   const { tasks: loadedTasks, reload: reloadTasks } = useItemTasks(id)
   const [tab, setTab] = useState<ItemTab | null>(pickedTab.get(id) ?? null)
+  const needsTrigger = useRef<HTMLButtonElement>(null)
   const [briefShown, setBriefShown] = useState(openedBrief.has(id))
   const [linksShown, setLinksShown] = useState(openedLinks.has(id))
   const [descMore, setDescMore] = useState(false)
@@ -516,6 +518,20 @@ export function ItemPage({ id, onDispatch, onNavigate, onDirty }: Props) {
           )}
         </div>
 
+        {/* What Junior did here that you haven't looked at: files it changed, sends that wait for your OK. */}
+        <SupervisionLine
+          key={item.id}
+          itemId={item.id}
+          files={item.supervision?.files ?? 0}
+          sends={held.length}
+          onSends={() => {
+            pickedTab.set(item.id, 'needs')
+            setTab('needs')
+            requestAnimationFrame(() => needsTrigger.current?.focus())
+          }}
+          onNavigate={onNavigate}
+        />
+
         {/* Description: the human's intent, in their words (and their
             screenshots). Never written by a run; both go to the brief. */}
         <div
@@ -715,7 +731,7 @@ export function ItemPage({ id, onDispatch, onNavigate, onDirty }: Props) {
           }}
         >
           <Tabs.List className="itemTabList" aria-label="This item">
-            <Tabs.Trigger className="itemTab" value="needs">
+            <Tabs.Trigger ref={needsTrigger} className="itemTab" value="needs">
               Needs you <span className={`n${verdict.needs > 0 ? ' hot' : ''}`}>{verdict.needs}</span>
             </Tabs.Trigger>
             <Tabs.Trigger className="itemTab" value="sessions">

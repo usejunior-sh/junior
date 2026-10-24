@@ -148,7 +148,15 @@ html.kbOpen .shell.mobile .panel { bottom: 0; }
   }
   .itemMain, .itemAside { display: contents; }
   .itemMain > * { order: 2; }
-  .itemMain > :nth-child(-n + 3) { order: 0; }
+  .itemMain > :nth-child(-n + 3), .itemMain > .supWrap { order: 0; }
+  /* the supervision line: its two parts stack, each a full-width 44px tap target; file rows stack too */
+  .supLine { flex-direction: column; align-items: stretch; gap: 0; }
+  .supLine .supSep { display: none; }
+  .supPart { width: 100%; min-height: 44px; }
+  .supRow { grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto auto; row-gap: 2px; padding-block: 6px; }
+  .supRow .supPath { grid-column: 1; grid-row: 1; }
+  .supRow .supAge { grid-column: 2; grid-row: 1; }
+  .supRow .supSess { grid-column: 1 / -1; grid-row: 2; }
   .itemAside > * { order: 3; }
   .itemAside > .asideActions { order: 1; margin: 4px 0 10px; }
   .itemAside > .secLabel { margin-top: 12px; }
