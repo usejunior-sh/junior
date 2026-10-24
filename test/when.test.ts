@@ -122,3 +122,43 @@ test('working-day helpers', () => {
   assert.equal(workingDaysBetween(WED, at(2026, 10, 27, 9)), 4)
   assert.equal(workingDaysBetween(FRI, WED), 0)
 })
+
+test('an eod next to a day is that day at 17:00, not two phrases', () => {
+  // From Wednesday 10:30.
+  assert.equal(when('by Friday EOD', WED), at(2026, 10, 23, 17))
+  assert.equal(when('eod friday', WED), at(2026, 10, 23, 17))
+  assert.equal(when('EOD on Friday', WED), at(2026, 10, 23, 17))
+  assert.equal(when('tomorrow EOD', WED), at(2026, 10, 22, 17))
+  assert.equal(parseWhen('will send it by Friday EOD, promise', WED)?.text, 'Friday EOD')
+  // From Friday 10:30.
+  assert.equal(when('end of day tomorrow'), at(2026, 10, 24, 17))
+  assert.equal(when('by Friday EOD'), at(2026, 10, 23, 17))
+  assert.equal(when('by Friday EOD', at(2026, 10, 23, 18)), at(2026, 10, 30, 17))
+  assert.equal(when('Monday cob'), at(2026, 10, 26, 17))
+  // A day elsewhere in the sentence does not pull the eod along.
+  assert.equal(when('eod, and the rest on Monday', WED), at(2026, 10, 21, 17))
+})
+
+test('ordinary prose is not read as a time', () => {
+  for (const text of ['it is a work day', 'an off day for CI', 'the 3rd time this failed', 'a business day of meetings']) {
+    assert.equal(parseWhen(text, FRI), null, JSON.stringify(text))
+  }
+  assert.equal(when('in a working day', WED), at(2026, 10, 22, 9))
+  assert.equal(when('2 work days', WED), at(2026, 10, 23, 9))
+})
+
+test('a day of month rolls to next month once it has passed', () => {
+  assert.equal(when('the 30th', WED), at(2026, 10, 30, 9))
+  assert.equal(when('on the 5th', WED), at(2026, 11, 5, 9))
+  assert.equal(when('on the 5th at 3pm', WED), at(2026, 11, 5, 15))
+  assert.equal(when('the 31st', at(2026, 11, 2, 10)), at(2026, 12, 31, 9))
+  assert.equal(when('the 30th of November', WED), at(2026, 11, 30, 9))
+})
+
+test('a bare hour from 1 to 7 is the afternoon', () => {
+  assert.equal(when('at 3'), at(2026, 10, 23, 15))
+  assert.equal(when('tomorrow at 7'), at(2026, 10, 24, 19))
+  assert.equal(when('at 3am'), at(2026, 10, 24, 3))
+  assert.equal(when('at 9'), at(2026, 10, 24, 9))
+  assert.equal(when('in 5 hours', at(2026, 10, 23, 22)), at(2026, 10, 24, 3))
+})
