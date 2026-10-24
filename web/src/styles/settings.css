@@ -21,19 +21,18 @@
 .wsKeyRow small { font-size: 0.8462rem; color: var(--ash); }
 .wsKeyRow code { font-size: 0.8077rem; font-family: var(--mono); }
 .wsVerify { margin-top: 12px; display: flex; flex-direction: column; gap: 12px; }
-.wsModal .probing { padding: 0; }
 .wsLogin { font-size: 0.9615rem; color: var(--body); }
 .wsLogin p { margin: 0 0 6px; }
 .wsLoginCmd { display: block; font-family: var(--mono); font-size: 0.8846rem; padding: 8px 10px; background: var(--deep); border: 1px solid var(--hair-strong); border-radius: var(--r); color: var(--ink); user-select: all; overflow-x: auto; white-space: nowrap; }
-.wsVerifyResults { display: flex; flex-direction: column; gap: 6px; }
-.wsVerifyRow { font-size: 1rem; }
-.wsVerifyRow.ok { color: var(--green); }
-.wsVerifyRow.bad { color: var(--red); font-family: var(--mono); font-size: 0.9231rem; }
-.wsVerifyRow.dim { color: var(--ash); }
-.wsVerifyDetail { display: block; font-size: 0.8846rem; color: var(--ash); margin: 2px 0 0 18px; }
-.wsRecheck { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px; border-radius: var(--r); font-size: 0.9231rem; background: transparent; color: var(--body); border: 1px solid var(--hair-strong); }
-.wsRecheck:hover:not(:disabled) { border-color: var(--hair-bright); color: var(--ink); }
-.wsRecheck:disabled { opacity: 0.45; cursor: default; }
+/* the check, said as Junior: the face and name over plain lines, no box */
+.wsVerifyMsg { margin-top: 4px; }
+.wsVerifyMsg .jbLine:first-child { margin-top: 6px; }
+.wsVerifyMsg .jbLine code { font-family: var(--mono); font-size: 0.9231rem; color: var(--ink); }
+.wsVerifyMsg .wsLoginCmd { margin-top: 8px; }
+.wsVerifyMeta { margin: 4px 0 0; font-family: var(--mono); font-size: 0.9231rem; color: var(--mute); overflow-wrap: anywhere; }
+.wsVerifyMeta.err { color: var(--red-ink); }
+.wsModal .row .jrRef { height: auto; padding: 0; border: 0; background: none; font-weight: 400; color: var(--body); }
+.wsModal .row .jrRef:hover { color: var(--ink); }
 .wsModal .row .danger { margin-right: auto; }
 
 
@@ -117,7 +116,6 @@
 .settings input:where(:not(.browserPane *))::placeholder { color: var(--stone); }
 .settings .wsKeyRow input { font-family: var(--mono); font-size: 0.9231rem; }
 .settings .msg.error { margin-top: 12px; }
-.settings .wsVerify { margin-top: 0; }
 .settings .repoScope .row { margin-top: 12px; display: flex; gap: 8px; justify-content: flex-end; }
 .setKv { display: flex; justify-content: space-between; gap: 16px; padding: 6px 0; border-top: 1px solid var(--hair); font-size: 0.9615rem; }
 .setKv:first-of-type { border-top: none; }
@@ -245,4 +243,8 @@
   .bpProfDraft { display: flex; flex-wrap: wrap; }
   .bpProfDraft > .bpProfInput { flex: 1 1 200px; }
   .bpProfDraft > .bpSwatches { flex-basis: 100%; padding-left: 26px; }
+  /* the workspace dialog's buttons: stacked, full width, thumb height (primary first) */
+  .wsModal .row { flex-direction: column-reverse; align-items: stretch; }
+  .wsModal .row button { width: 100%; height: 44px; }
+  .wsModal .row .jrRef { height: 44px; justify-content: center; }
 }

@@ -57,6 +57,7 @@
 .projPickPath.empty { color: var(--stone); font-family: inherit; font-style: italic; }
 .projEmpty { color: var(--ash); font-size: 1rem; padding: 4px 0 22px; }
 .projError { margin-top: 12px; color: var(--red); font-size: 0.9231rem; }
+.projGateHint { margin: 8px 0 0; color: var(--mute); font-size: 0.9231rem; }
 
 /* repo picker */
 dialog.repoDialog { width: 480px; }

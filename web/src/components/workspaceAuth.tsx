@@ -1,12 +1,15 @@
 /**
  * The workspace's identity and Claude-auth controls, shared by the create /
  * onboarding flow (WorkspaceModal) and the settings page's Workspace and
- * Providers tabs. One set of cards, one verify panel, so the two doors
+ * Providers tabs. One set of cards, one verify line, so the two doors
  * never drift apart.
  */
-import { Check, KeyRound, Laptop, RefreshCw, UserRound } from 'lucide-react'
+import { Check, KeyRound, Laptop, UserRound } from 'lucide-react'
 import type { ReactNode } from 'react'
 import type { ProviderId, Workspace, WorkspaceAuthBackend, WorkspaceVerifyResponse } from '../../../shared/protocol.js'
+import { BEFORE_CONFIG_DIR, verifyCopy } from '../../../core/junior/verify-copy.js'
+import { usePersona } from '../junior.js'
+import { JuniorFace } from './JuniorFace.js'
 
 export const WORKSPACE_COLORS = ['#7aa2f7', '#9ece6a', '#bb9af7', '#e0af68', '#f7768e', '#2ac3de', '#ff9e64', '#c0caf5']
 
@@ -154,73 +157,74 @@ export function verifyWorkspace(id: string): Promise<WorkspaceVerifyResponse> {
     .catch((e) => ({ ok: false as const, error: String(e) }))
 }
 
-export function VerifyPanel({
+/** `claude` in backticks becomes inline code; the rest stays plain words. */
+function withCode(text: string): ReactNode {
+  return text.split('`').map((part, i) => (i % 2 === 1 ? <code key={i}>{part}</code> : part))
+}
+
+/**
+ * The live login check, said as Junior: one line, why it failed and how to
+ * fix it, never a probe log. Words come from verifyCopy (core/junior/
+ * verify-copy.ts); the buttons for each state are the caller's `footer`.
+ */
+export function VerifyLine({
   workspace,
   state,
-  onRecheck,
   footer,
 }: {
   workspace: Workspace
   state: VerifyState
-  onRecheck: () => void
   footer?: ReactNode
 }) {
+  const persona = usePersona()
+  const copy = verifyCopy(state, workspace.authBackend)
+  const login = workspace.loginCommand ? <code className="wsLoginCmd">{workspace.loginCommand}</code> : null
+
+  if (copy.kind === 'idle') {
+    return (
+      <div className="wsVerify">
+        {workspace.authBackend === 'config-dir' && login && (
+          <div className="wsLogin">
+            <p>{BEFORE_CONFIG_DIR}</p>
+            {login}
+          </div>
+        )}
+        {footer}
+      </div>
+    )
+  }
+
   return (
     <div className="wsVerify">
-      {workspace.authBackend === 'config-dir' && (
-        <div className="wsLogin">
-          <p>One-time login for this workspace's own claude.ai account — run in a terminal:</p>
-          <code className="wsLoginCmd">{workspace.loginCommand}</code>
+      <section className="jbMsg wsVerifyMsg" aria-label={`${persona.name} checks Claude`}>
+        <div className="jbWho">
+          <JuniorFace mood={copy.mood} size={24} motion="still" decorative />
+          <b>{persona.name}</b>
         </div>
-      )}
-      {state === 'probing' || state === null ? (
-        <div className="probing">
-          <span className="pip" /> Probing with this workspace's auth — starts a Claude subprocess,
-          takes a few seconds…
-        </div>
-      ) : state.ok ? (
-        <div className="wsVerifyResults">
-          {state.authOk ? (
-            <div className="wsVerifyRow ok">
-              ✓ Auth working — {state.models.length} model{state.models.length === 1 ? '' : 's'}
-              {state.models.length > 0 && (
-                <span className="wsVerifyDetail">
-                  {state.models
-                    .slice(0, 3)
-                    .map((m) => m.name)
-                    .join(' · ')}
-                </span>
-              )}
+        <div className="jbBody">
+          {copy.kind === 'checking' && (
+            <div role="status" aria-live="polite">
+              <p className="jbLine">{copy.line}</p>
+              <p className="wsVerifyMeta">{copy.meta}</p>
             </div>
-          ) : (
-            <div className="wsVerifyRow bad">✗ Auth failed{state.authError ? ` — ${state.authError}` : ''}</div>
           )}
-          {(() => {
-            // Report what the probe actually saw, never assert from the backend
-            // choice alone. api-key workspaces normally have zero claude.ai
-            // connectors (those ride a claude.ai login), and the probe proves it.
-            const claudeAi = state.connectors.filter((c) => c.source === 'claude.ai' && c.status === 'connected')
-            if (state.slackConnected) return <div className="wsVerifyRow ok">✓ Slack connected</div>
-            if (claudeAi.length > 0)
-              return <div className="wsVerifyRow dim">— Slack not connected ({claudeAi.length} claude.ai connector{claudeAi.length === 1 ? '' : 's'} live)</div>
-            return (
-              <div className="wsVerifyRow dim">
-                — No claude.ai connectors{workspace.authBackend === 'api-key' ? ' (they ride a claude.ai login — expected for an API-key workspace; Slack jobs won’t run here)' : ''}
-              </div>
-            )
-          })()}
+          {copy.kind === 'ok' && (
+            <div role="status" aria-live="polite">
+              <p className="jbLine">{copy.line}</p>
+              <p className="wsVerifyMeta">{copy.meta}</p>
+              <p className="jbLine">{copy.connectors}</p>
+            </div>
+          )}
+          {copy.kind === 'error' && (
+            <div role="alert">
+              <p className="jbLine err">{copy.line}</p>
+              <p className="wsVerifyMeta err">{copy.reason}</p>
+              <p className="jbLine">{withCode(copy.fix)}</p>
+              {copy.showLoginCommand && login}
+            </div>
+          )}
         </div>
-      ) : (
-        <div className="wsVerifyRow bad">✗ {state.error}</div>
-      )}
-      <button
-        type="button"
-        className="wsRecheck"
-        disabled={state === 'probing'}
-        onClick={onRecheck}
-      >
-        <RefreshCw size={13} aria-hidden="true" /> Check again
-      </button>
+      </section>
       {footer}
     </div>
   )

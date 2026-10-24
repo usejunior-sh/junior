@@ -3,14 +3,15 @@
  * none, created from the CLI, or from before projects were required, gets
  * Junior's first message on the Junior page, which adds projects. This gate
  * defers to it: it asks for a folder only once that message was skipped this
- * session (web/src/onboarding.ts). "Later" puts it off for this page load;
- * the next open asks again.
+ * session (web/src/onboarding.ts). "Not now" is kept per workspace: once
+ * onboarding has run, it doesn't ask again on the next open.
  */
 import { useEffect, useState } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
 import type { ProjectsResponse } from '../../../shared/protocol.js'
 import { defaultProjectGateOpen } from '../../../core/junior/onboarding-gate.js'
 import { FolderField, folderName } from './ProjectsTab.js'
+import { useProjectGateDismissed } from '../onboarding.js'
 
 type Props = {
   workspaceId: string
@@ -22,7 +23,7 @@ type Props = {
 
 export function DefaultProjectGate({ workspaceId, suspended, onboardingSkipped }: Props) {
   const [missing, setMissing] = useState(false)
-  const [later, setLater] = useState(false)
+  const [dismissed, dismiss] = useProjectGateDismissed(workspaceId)
   const [folder, setFolder] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -62,10 +63,10 @@ export function DefaultProjectGate({ workspaceId, suspended, onboardingSkipped }
     }
   }
 
-  const open = defaultProjectGateOpen({ missing, later, suspended, onboardingSkipped })
+  const open = defaultProjectGateOpen({ missing, dismissed, suspended, onboardingSkipped })
 
   return (
-    <Dialog.Root open={open} onOpenChange={(o) => !o && setLater(true)}>
+    <Dialog.Root open={open} onOpenChange={(o) => !o && dismiss()}>
       <Dialog.Portal>
         <Dialog.Overlay className="projOverlay" />
         <Dialog.Content asChild>
@@ -82,12 +83,13 @@ export function DefaultProjectGate({ workspaceId, suspended, onboardingSkipped }
 
             <label>Folder</label>
             <FolderField value={folder} onChange={setFolder} onError={setError} autoFocus />
+            <p className="projGateHint">It won't ask again. Add one in Settings → Projects.</p>
             {error && <div className="projError">{error}</div>}
 
             <div className="row">
               <Dialog.Close asChild>
                 <button type="button" className="cancel">
-                  Later
+                  Not now
                 </button>
               </Dialog.Close>
               <button type="button" className="go" disabled={saving || !folder.trim()} onClick={() => void save()}>

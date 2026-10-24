@@ -6,7 +6,7 @@
  * (the gate) and JuniorPage (the message) agree without a reload.
  */
 import { useCallback, useEffect, useState } from 'react'
-import { onboardingSkipKey } from '../../core/junior/onboarding-gate.js'
+import { onboardingSkipKey, projectGateDismissedKey } from '../../core/junior/onboarding-gate.js'
 
 const EVENT = 'junior:onboarding-skipped'
 // storage blocked: this page load only, still shared between App and JuniorPage
@@ -46,4 +46,36 @@ export function useOnboardingSkipped(workspaceId: string): [boolean, (v: boolean
     [key],
   )
   return [skipped, set]
+}
+
+// storage blocked: this page load only
+const dismissedMemory = new Map<string, boolean>()
+
+function readDismissed(key: string): boolean {
+  try {
+    return localStorage.getItem(key) === '1'
+  } catch {
+    return dismissedMemory.get(key) ?? false
+  }
+}
+
+/**
+ * Not now on the "Pick a default project" gate: per workspace, kept across
+ * opens (localStorage). The gate opens only after onboarding has run, so
+ * the answer stands; a project comes from Settings → Projects or Junior's
+ * first message instead.
+ */
+export function useProjectGateDismissed(workspaceId: string): [boolean, () => void] {
+  const key = projectGateDismissedKey(workspaceId)
+  const [dismissed, setDismissed] = useState(() => readDismissed(key))
+  useEffect(() => setDismissed(readDismissed(key)), [key])
+  const dismiss = useCallback(() => {
+    try {
+      localStorage.setItem(key, '1')
+    } catch {
+      dismissedMemory.set(key, true)
+    }
+    setDismissed(true)
+  }, [key])
+  return [dismissed, dismiss]
 }
