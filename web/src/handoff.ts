@@ -118,9 +118,14 @@ export function markNotUseful(item: ScoredItem): Promise<string | null> {
   return postNotUseful(item.id, false)
 }
 
-/** Undo a "not useful" within seconds: the row is back at once. */
-export function undoNotUseful(item: ScoredItem): Promise<string | null> {
+/**
+ * Undo a "not useful" within seconds: the row is back at once. `marking` is
+ * the mark's own request: the undo is sent only once it has landed, so the
+ * two can't arrive out of order, and not at all if the mark never went through.
+ */
+export async function undoNotUseful(item: ScoredItem, marking?: Promise<string | null>): Promise<string | null> {
   inboxStore.patch((items) => items.map((i) => (i.id === item.id ? { ...i, notUseful: undefined } : i)))
+  if (marking && (await marking) !== null) return null
   return postNotUseful(item.id, true)
 }
 
