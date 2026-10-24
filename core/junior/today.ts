@@ -6,6 +6,7 @@
  * rows from the carry-overs and the top items on your turn. Pure and
  * browser-safe; time is always an argument.
  */
+import { sourceOf, sourceRef } from '../../shared/sources.js'
 
 export type Owner = 'you' | 'junior'
 export const isOwner = (v: unknown): v is Owner => v === 'you' || v === 'junior'
@@ -159,21 +160,23 @@ export type PlanView = {
 
 const HUMAN_ASKS = new Set(['review', 'reply', 'decide'])
 
-/** "#478", "NOV-140", "#api", or the item's home. */
+/**
+ * "#478", "NOV-140", "#api", or the item's home. The source's own parser
+ * first (shared/sources.ts), then a ref it carries, then a PR link; a to-do
+ * reads as its project, and a source Junior doesn't know as its home or name.
+ */
 export function shortRef(item: Pick<PlanItem, 'id' | 'source' | 'repo' | 'url' | 'refs'>, projectName?: string): string {
-  const gh = /^github:[^#]+#(\d+)$/.exec(item.id)
-  if (gh) return `#${gh[1]}`
-  const lin = /^linear:(.+)$/.exec(item.id)
-  if (lin) return lin[1]
-  if (item.source === 'slack') return item.repo ? (item.repo.startsWith('#') ? item.repo : `#${item.repo}`) : 'Slack'
+  const own = sourceRef(item)
+  if (own) return own
   for (const r of item.refs ?? []) {
     const m = /#(\d+)$/.exec(r) ?? /^linear:(.+)$/.exec(r)
     if (m) return m[1].includes('-') ? m[1] : `#${m[1]}`
   }
   const pr = /\/(?:pull|issues)\/(\d+)/.exec(item.url)
   if (pr) return `#${pr[1]}`
-  if (item.source === 'manual') return projectName ?? 'to-do'
-  return item.repo || item.source
+  const src = sourceOf(item.source)
+  if (src.yours) return projectName ?? 'to-do'
+  return item.repo || (src.known ? item.source : src.label)
 }
 
 /** The rows, in order, with a status each. Precedence: done, needs you, live, waiting on you, carried, to do. */
@@ -200,7 +203,7 @@ export function planRows(input: {
     if (item.status === 'done') status = { kind: 'done', at: item.statusAt ?? null }
     else if (waiting) status = { kind: 'needs', sessionId: waiting.id }
     else if (live) status = { kind: 'live', sessionId: live.id, step: live.step, activity: live.activity }
-    else if (e.owner === 'you' && item.source !== 'manual' && (item.peopleWaiting > 0 || HUMAN_ASKS.has(item.ask ?? ''))) {
+    else if (e.owner === 'you' && !sourceOf(item.source).yours && (item.peopleWaiting > 0 || HUMAN_ASKS.has(item.ask ?? ''))) {
       const since = item.flow?.turn === 'me' ? item.flow.since : Date.parse(item.createdAt) || 0
       status = { kind: 'waiting', since, who: item.author || null }
     } else if (e.carriedFrom) status = { kind: 'carried', from: e.carriedFrom }

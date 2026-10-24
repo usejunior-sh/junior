@@ -2,8 +2,12 @@
  * Work items, trimmed to what the web inbox renders. Kinds for sources
  * without a built-in scanner (linear) are kept: scoring is source-agnostic
  * and the ids/kinds are settled.
+ *
+ * A source is open: any string, with a descriptor for the known ones and a
+ * neutral one for the rest (shared/sources.ts).
  */
-export type WorkSource = 'github' | 'slack' | 'linear' | 'web' | 'job' | 'manual'
+import type { WorkSource } from '../../shared/sources.js'
+export type { KnownSource, WorkSource } from '../../shared/sources.js'
 
 export type ItemKind =
   | 'review-requested' // someone asked you to review their PR

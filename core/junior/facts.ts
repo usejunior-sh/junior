@@ -6,6 +6,7 @@
  */
 import type { Blocking, BriefFacts, Finished } from './brief.js'
 import { shortRef } from './today.js'
+import { sourceOf } from '../../shared/sources.js'
 
 /** What the facts read of an open, ranked item. */
 export type FactItem = {
@@ -28,7 +29,6 @@ export type FactItem = {
 /** A job run that ended, reduced. */
 export type FactRun = { jobId: string; ok: boolean; endedAt: number; filed: number }
 
-const SOURCE_LABEL: Record<string, string> = { github: 'GitHub', slack: 'Slack', linear: 'Linear', web: 'the web' }
 const ASKS = new Set(['review', 'reply', 'decide'])
 
 export function briefFacts(input: {
@@ -62,15 +62,16 @@ export function briefFacts(input: {
   // Came in: what arrived in the window, by where it came from. Your own to-dos didn't "come in".
   const bySource = new Map<string, number>()
   for (const i of items) {
-    if (i.source === 'manual' || (i.ingestedAt ?? Date.parse(i.createdAt)) < since) continue
-    const label = i.source === 'job' && i.jobId && input.jobTitles.has(i.jobId) ? `the ${input.jobTitles.get(i.jobId)} job` : SOURCE_LABEL[i.source] ?? i.source
+    const src = sourceOf(i.source)
+    if (src.yours || (i.ingestedAt ?? Date.parse(i.createdAt)) < since) continue
+    const label = i.source === 'job' && i.jobId && input.jobTitles.has(i.jobId) ? `the ${input.jobTitles.get(i.jobId)} job` : src.from
     bySource.set(label, (bySource.get(label) ?? 0) + 1)
   }
   const arrived = [...bySource].map(([label, count]) => ({ label, count })).sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))
 
   // Blocking: a person, not a to-do, waits on you.
   const blocking: Blocking[] = items
-    .filter((i) => i.source !== 'manual' && (i.flow?.turn ?? 'me') === 'me' && (ASKS.has(i.ask ?? '') || i.peopleWaiting > 0))
+    .filter((i) => !sourceOf(i.source).yours && (i.flow?.turn ?? 'me') === 'me' && (ASKS.has(i.ask ?? '') || i.peopleWaiting > 0))
     .map((i) => ({
       itemId: i.id,
       who: i.author || 'Someone',

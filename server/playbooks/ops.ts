@@ -8,6 +8,7 @@ import type { ActionRecord } from '../../core/actions/types.js'
 import { APPROVE_PLAN_STEP, DEBUG_FIX_STEP, DEBUG_PLAN_STEP, MAX_REPLY_CHARS, SEND_REPLY_STEP, slackThreadOf } from '../../core/playbooks/item.js'
 import { isApprovedSend, sendPrompt, sentLink, SLACK_SEND_TOOL, type ApprovedSend } from '../../core/playbooks/send.js'
 import type { ItemTask } from '../../core/work/tasks.js'
+import { sourceOf } from '../../shared/sources.js'
 import { errText } from '../errors.js'
 import { log } from '../log.js'
 import { requireVeto } from '../providers/capabilities.js'
@@ -46,7 +47,7 @@ export async function sendReplyOp(rt: WorkspaceRuntime, taskId: string, raw: unk
     tasksChanged(rt)
     return done!
   }
-  if (item.source !== 'slack') throw new Error('Junior sends replies to Slack threads only: copy it, send it, then mark it sent')
+  if (sourceOf(item.source).reply?.via !== 'slack-thread') throw new Error('Junior sends replies to Slack threads only: copy it, send it, then mark it sent')
   const thread = slackThreadOf(item.url)
   if (!thread) throw new Error('this item’s link is not a Slack message: copy the reply and send it yourself')
   requireVeto(rt.provider, 'job')

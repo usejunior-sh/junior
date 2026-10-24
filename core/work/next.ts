@@ -26,6 +26,7 @@
  * drop from the end; the verb phrase always stays.
  */
 import { askOf, type Ask } from './asks.js'
+import { sourceOf } from '../../shared/sources.js'
 import type { ItemFlow } from './flow.js'
 import { turnOf, type TurnContext, type TurnItem, type TurnOf, type TurnReason, type WhoseTurn } from './turn.js'
 import type { WorkItem } from './types.js'
@@ -141,17 +142,14 @@ export const NEXT_RULES: readonly { action: NextAction; when: (x: Facts) => bool
 
 /** "Priya Shah" → "Priya", "@niraj" → "niraj"; a to-do you wrote, or your own PR → null. */
 function personOf(item: NextItem): string | null {
-  if (item.source === 'manual' || item.kind.startsWith('own-pr-') || item.kind === 'reply-needed') return null
+  if (sourceOf(item.source).yours || item.kind.startsWith('own-pr-') || item.kind === 'reply-needed') return null
   const first = item.author.trim().replace(/^@/, '').split(/\s+/)[0]
   return first || null
 }
 
 /** What the thing is called where it lives. */
 function noun(item: NextItem): string {
-  if (item.source === 'github') return 'PR'
-  if (item.source === 'slack') return 'thread'
-  if (item.source === 'linear') return 'ticket'
-  return 'ask'
+  return sourceOf(item.source).noun
 }
 
 const nameOr = (x: Facts, withName: (n: string) => string, without: string) => (x.name ? withName(x.name) : without)

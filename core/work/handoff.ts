@@ -14,6 +14,7 @@ import type { Readiness } from '../babysit/ready.js'
 import type { Handoff, Reason } from './fields.js'
 import type { ItemTask } from './tasks.js'
 import type { WorkSource } from './types.js'
+import { sourceOf } from '../../shared/sources.js'
 
 /** A PR at a glance, as the babysit watch last read it: what Junior would take on if you handed it off. */
 export type PrSeen = {
@@ -88,7 +89,7 @@ export function handoffReadiness(item: { reason: Reason; source: WorkSource }, w
   const watch = watchFor(item.reason)
   if (!watch) return { state: 'ready' }
   // the watches read PRs through `gh`: a PR from anywhere else has none
-  if (item.source !== 'github') return { state: 'unsupported', why: watch === 'babysit' ? 'Junior babysits GitHub PRs only' : 'Junior reviews GitHub PRs only' }
+  if (!sourceOf(item.source).watches) return { state: 'unsupported', why: watch === 'babysit' ? 'Junior babysits GitHub PRs only' : 'Junior reviews GitHub PRs only' }
   return watches[watch] ? { state: 'ready' } : { state: 'watch-off', watch }
 }
 

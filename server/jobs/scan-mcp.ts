@@ -3,6 +3,7 @@ import { createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk'
 import type { WorkItem as CoreWorkItem, Provenance, WorkSource } from '../../core/work/types.js'
 import { permalinkId, safeWhen } from '../../core/sources/slack.js'
 import { canonicalizeRef, canonicalizeRefs } from '../../core/work/link.js'
+import { sourceOf } from '../../shared/sources.js'
 import { type Ask, ASK_ORDER } from '../../core/work/asks.js'
 import type { Job } from '../../core/job/types.js'
 import type { UpsertOutcome } from '../../core/store/types.js'
@@ -35,12 +36,12 @@ export function identityFromUrl(raw: string): { id: string; source: WorkSource; 
   if (ref.startsWith('github:')) {
     const m = /^github:([\w.-]+\/[\w.-]+)#(\d+)$/.exec(ref)
     if (!m) return null
-    const href = url.startsWith('http') ? url : `https://github.com/${m[1]}/issues/${m[2]}`
+    const href = url.startsWith('http') ? url : (sourceOf('github').link(ref) ?? url)
     return { id: ref, source: 'github', url: href, home: m[1] }
   }
   if (ref.startsWith('linear:')) {
     const key = ref.slice('linear:'.length)
-    const href = url.startsWith('http') ? url : `https://linear.app/issue/${key}`
+    const href = url.startsWith('http') ? url : (sourceOf('linear').link(ref) ?? url)
     return { id: ref, source: 'linear', url: href, home: key.slice(0, key.indexOf('-')) }
   }
   if (ref.startsWith('web:')) return { id: ref, source: 'web', url, home: webHost(url) }

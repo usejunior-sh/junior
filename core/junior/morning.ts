@@ -11,6 +11,7 @@ import type { Ask } from '../work/asks.js'
 import type { BriefFacts, Finished } from './brief.js'
 import { waitedWords } from './greeting.js'
 import { shortRef } from './today.js'
+import { sourceOf } from '../../shared/sources.js'
 
 /** What the brief reads of an open, ranked item. */
 export type MorningItem = {
@@ -96,7 +97,7 @@ export function morningBrief(input: { items: readonly MorningItem[]; facts: Brie
 
   // People waiting on you: a human asked something of you, a question, a decision. Oldest first.
   const people = open
-    .filter((i) => i.source !== 'manual' && myTurn(i) && i.ask !== 'review' && (PEOPLE_ASKS.has(i.ask ?? '') || i.peopleWaiting > 0))
+    .filter((i) => !sourceOf(i.source).yours && myTurn(i) && i.ask !== 'review' && (PEOPLE_ASKS.has(i.ask ?? '') || i.peopleWaiting > 0))
     .sort((a, b) => waitingSince(a) - waitingSince(b))
     .map((i) => row(i, { ask: i.ask === 'decide' ? 'decide' : 'reply' }))
   for (const r of people) taken.add(r.itemId)
@@ -122,7 +123,7 @@ export function morningBrief(input: { items: readonly MorningItem[]; facts: Brie
     .sort((a, b) => b.d.late - a.d.late || a.i.title.localeCompare(b.i.title))
     .map(({ i, d }) => row(i, { late: d.late }))
 
-  const skipped = open.filter((i) => i.source !== 'manual' && i.group === 'fyi' && arrivedAt(i) >= facts.since).length
+  const skipped = open.filter((i) => !sourceOf(i.source).yours && i.group === 'fyi' && arrivedAt(i) >= facts.since).length
   const jobs = facts.finished.filter((f): f is Extract<Finished, { kind: 'job' }> => f.kind === 'job')
 
   return {

@@ -6,6 +6,7 @@
  * you to send it. Pure and browser-safe.
  */
 import { shortRef } from './today.js'
+import { sourceOf } from '../../shared/sources.js'
 
 /** What an offer reads of an open, ranked item. */
 export type OfferItem = {
@@ -34,8 +35,11 @@ export type Offer = {
   intent?: 'job'
 }
 
-const SOURCE_WORD: Record<string, string> = { github: 'GitHub', slack: 'Slack', linear: 'Linear', manual: 'Your to-do', job: 'A job', web: 'The web' }
-export const sourceWord = (s: string) => SOURCE_WORD[s] ?? s
+/** The source, as an offer's "because": "GitHub", "The web", "Your to-do", "Sentry". */
+export const sourceWord = (s: string) => {
+  const from = sourceOf(s).from
+  return from.charAt(0).toUpperCase() + from.slice(1)
+}
 
 function waited(createdAt: string, now: number): string {
   const d = Math.floor((now - (Date.parse(createdAt) || now)) / 86_400_000)
@@ -46,12 +50,13 @@ const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1).trim
 
 /** How an offer names an item: its ref ("#479", "NOV-123"), or a to-do's own words, quoted. */
 export function offerRef(i: Pick<OfferItem, 'id' | 'source' | 'repo' | 'url' | 'refs' | 'title'>): string {
-  return i.source === 'manual' ? `“${clip(i.title.replace(/[.!?]+$/, ''), 40)}”` : shortRef(i)
+  return sourceOf(i.source).yours ? `“${clip(i.title.replace(/[.!?]+$/, ''), 40)}”` : shortRef(i)
 }
 
 /** One offer for one item, by what it asks of you. */
 export function offerFor(i: OfferItem, now: number): Offer {
   const ref = offerRef(i)
+  const src = sourceOf(i.source)
   const because = sourceWord(i.source)
   if (i.ciFailing || i.kind === 'own-pr-conflicting') {
     const what = i.ciFailing ? 'the red check' : 'the merge conflicts'
@@ -72,17 +77,20 @@ export function offerFor(i: OfferItem, now: number): Offer {
     }
   }
   if (i.ask === 'reply') {
-    const where = i.source === 'slack' ? ref : ref
+    // Where Junior can post the reply itself, it waits for your OK; elsewhere you copy it and send it.
+    const to = i.author ? ` to ${i.author}` : ''
     return {
-      title: `Draft a reply${i.author ? ` to ${i.author}` : ''} on ${where}`,
-      detail: `${clip(i.title, 60)}. I draft it; nothing is posted until you send it.`,
+      title: `Draft a reply${to} on ${ref}`,
+      detail: src.canReply ? `${clip(i.title, 60)}. I draft it; nothing is posted until you send it.` : `${clip(i.title, 60)}. I draft it; you copy it and send it.`,
       because,
-      say: `Draft a reply${i.author ? ` to ${i.author}` : ''} on ${where} (${i.url}) for me to edit. Nothing gets posted until I send it.`,
+      say: src.canReply
+        ? `Draft a reply${to} on ${ref} (${i.url}) for me to edit. Nothing gets posted until I send it.`
+        : `Draft a reply${to} on ${ref} (${i.url}) for me to edit. I'll copy it and send it myself.`,
     }
   }
   // A to-do is named by its own words, in full in the message, so Junior can find it; anything else
   // gets its title and link alongside the ref.
-  const mine = i.source === 'manual'
+  const mine = src.yours
   const about = mine ? '' : ` (${i.title}${i.url ? `, ${i.url}` : ''})`
   const said = mine ? `my to-do “${i.title}”` : ref
   if (i.ask === 'do' || i.ask === 'decide') {
@@ -162,15 +170,15 @@ export function canDoFill(items: readonly OfferItem[], projects: readonly string
         .filter((i) => i.ciFailing || i.kind === 'own-pr-conflicting' || i.ask === 'do')
         .map((i) => (i.ciFailing ? `the red check on ${ref(i)}` : i.kind === 'own-pr-conflicting' ? `the conflicts on ${ref(i)}` : `issue ${ref(i)}`)),
     ),
-    takes: uniq(ranked.filter((i) => i.ask === 'do' || i.ask === 'decide' || i.source === 'linear').map(ref)),
+    takes: uniq(ranked.filter((i) => i.ask === 'do' || i.ask === 'decide' || sourceOf(i.source).shape === 'ticket').map(ref)),
     drafts: uniq(
       ranked
         .filter((i) => i.ask === 'reply' || i.ask === 'review')
         .map((i) => (i.ask === 'review' ? `my review of ${ref(i)}` : `a reply${i.author ? ` to ${i.author}` : ''} on ${ref(i)}`)),
     ),
     reads: uniq(ranked.map(ref)),
-    plans: uniq(ranked.map((i) => (i.source === 'manual' ? clip(i.title.replace(/[.!?]+$/, ''), 40).toLowerCase() : ref(i)))),
-    repos: uniq(ranked.filter((i) => i.source === 'github' && i.repo).map((i) => i.repo), 2),
+    plans: uniq(ranked.map((i) => (sourceOf(i.source).yours ? clip(i.title.replace(/[.!?]+$/, ''), 40).toLowerCase() : ref(i)))),
+    repos: uniq(ranked.filter((i) => sourceOf(i.source).shape === 'pr' && i.repo).map((i) => i.repo), 2),
     slack,
   }
 }

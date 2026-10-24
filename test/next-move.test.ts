@@ -245,5 +245,6 @@ test('owner labels', () => {
 test('no model in the path: next.ts imports only the pure work core', () => {
   const src = readFileSync(new URL('../core/work/next.ts', import.meta.url), 'utf8')
   const imports = [...src.matchAll(/from '([^']+)'/g)].map((m) => m[1])
-  for (const i of imports) assert.match(i!, /^\.\/(asks|flow|turn|types)\.js$/, i)
+  // the source registry is pure too: a table of descriptors, no I/O
+  for (const i of imports) assert.match(i!, /^(\.\/(asks|flow|turn|types)|\.\.\/\.\.\/shared\/sources)\.js$/, i)
 })
