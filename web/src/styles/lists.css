@@ -44,11 +44,8 @@
 /* badge-pill: the one default project, named wherever projects are listed. */
 .projDefault { display: inline-flex; align-items: center; height: 18px; padding: 0 8px; margin-left: 6px; border-radius: var(--r-full); background: var(--elev); color: var(--body); font-size: 0.7692rem; letter-spacing: 0.01em; }
 .projModal { width: 460px; }
-/* Add-a-project is Radix-driven (it opens from the settings page), so it
-   centres itself rather than riding the browser's top layer, and sits above
-   the scrim's z-index 80. */
+/* The scrim under every Radix dialog (.uiDialog content sits at z 91). */
 .projOverlay { position: fixed; inset: 0; z-index: 90; background: var(--scrim); animation: fadeIn 0.14s ease; }
-.projAddDialog { position: fixed; z-index: 91; inset: 50% auto auto 50%; margin: 0; transform: translate(-50%, -50%); }
 .projPickRow { display: flex; align-items: center; gap: 10px; }
 .projPick { flex: none; display: inline-flex; align-items: center; gap: 7px; height: 30px; padding: 0 12px; border-radius: var(--r); font-size: 1rem; background: var(--elev); color: var(--ink); border: 1px solid var(--hair-strong); }
 .projPick:hover:not(:disabled) { border-color: var(--hair-bright); }
@@ -58,9 +55,12 @@
 .projEmpty { color: var(--ash); font-size: 1rem; padding: 4px 0 22px; }
 .projError { margin-top: 12px; color: var(--red); font-size: 0.9231rem; }
 .projGateHint { margin: 8px 0 0; color: var(--mute); font-size: 0.9231rem; }
+/* the jobs that pause when their project goes (Remove project) */
+.projJobs { margin: 0; padding-left: 18px; max-height: 200px; overflow-y: auto; color: var(--body); font-size: 0.9615rem; line-height: 1.6; }
 
 /* repo picker */
-dialog.repoDialog { width: 480px; }
+/* Radix Dialog content (.uiDialog); the width beats .uiDialog's 460px */
+.uiDialog.repoDialog { width: 480px; }
 .pickerSub { margin: 0 0 12px; color: var(--mute); font-size: 0.9615rem; line-height: 1.5; }
 .pickerFilter { margin-bottom: 8px; }
 .pickerList { max-height: 300px; overflow-y: auto; background: var(--canvas); border-radius: var(--r); }
@@ -73,7 +73,8 @@ dialog.repoDialog { width: 480px; }
 .clearSel { background: none; border: none; color: var(--blue); font: inherit; padding: 0; text-decoration: underline; }
 
 /* item composer (add / edit a manual item) */
-dialog.itemComposer { width: 800px; max-width: calc(100vw - 48px); padding: 0; overflow: hidden; }
+/* Radix Dialog content (.uiDialog): edge-to-edge head, inputs and foot, so no padding; scrolls inside .uiDialog's max-height */
+.uiDialog.itemComposer { width: 800px; max-width: calc(100vw - 48px); padding: 0; overflow-y: auto; }
 .itemComposer form { display: flex; flex-direction: column; }
 .composerHead { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 13px 16px 9px; }
 .composerHead .crumbs { display: flex; align-items: center; gap: 7px; font-size: 0.9615rem; min-width: 0; }
@@ -99,7 +100,7 @@ dialog.itemComposer { width: 800px; max-width: calc(100vw - 48px); padding: 0; o
 .itemComposer .dropHint { display: inline-flex; align-items: center; gap: 6px; padding: 0; border: none; background: transparent; color: var(--stone); font-size: 0.9231rem; }
 .itemComposer .dropHint:hover { color: var(--ash); }
 .pillRow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 18px 16px; }
-/* `dialog label` carries a vertical margin; without this the label pills and
+/* A dialog's `label` rule carries a vertical margin; without this the label pills and
    the button pills in the same row sit on two different baselines. */
 .pillRow .pill { cursor: pointer; height: 24px; padding: 0 10px; margin: 0; }
 /* Setters (priority, project) read as solid; "add a thing" reads as dashed. */

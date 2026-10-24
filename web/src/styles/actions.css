@@ -172,7 +172,7 @@
   .asplit .ali:active { background: var(--wash-2); }
   dialog.actSheet {
     display: flex; flex-direction: column; gap: 12px; padding: 12px;
-    /* Above its own overlay (.projOverlay is z 90), as .projAddDialog is. */
+    /* Above its own overlay (.projOverlay is z 90), as .uiDialog is. */
     position: fixed; z-index: 91; max-height: calc(var(--vvh, 100dvh) - 16px); overflow-y: auto;
   }
   .actSheet .astub.pinned { border: 0; background: transparent; }

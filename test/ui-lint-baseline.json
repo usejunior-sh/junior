@@ -19,12 +19,6 @@
     "web/src/components/PhoneTab.tsx": {
       "colours": 2
     },
-    "web/src/components/ProjectsTab.tsx": {
-      "nativeDialogs": 1
-    },
-    "web/src/components/inbox/ItemComposer.tsx": {
-      "nativeDialogs": 2
-    },
     "web/src/components/library/EntryEditor.tsx": {
       "nativeDialogs": 1
     },

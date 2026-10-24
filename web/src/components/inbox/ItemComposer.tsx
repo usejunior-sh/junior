@@ -1,3 +1,4 @@
+import * as Dialog from '@radix-ui/react-dialog'
 import { X, Link2, Paperclip, Flag, Folder } from 'lucide-react'
 import { useRef, useState, useEffect } from 'react'
 import { RepoScopeEditor } from '../RepoScope.js'
@@ -11,11 +12,18 @@ import { dayInput } from '../../dueDay.js'
 import { PRIORITY_VALUES, PRIORITY_LABEL } from '../../itemUi.js'
 import { Select, SelectItem } from '../../ui/Select.js'
 import { choosesProject, ProjectIdPicker, defaultProjectOf } from '../ProjectPicker.js'
+import { useReturnFocus } from '../../ui/returnFocus.js'
 
 // Item composer: add or edit a manual work item. Title, description, link,
 // project, priority, plus screenshots, which are the point: a brief or a
 // dispatched session reads the images the same way it reads the description,
 // so "here is what's broken" can be a paste rather than a paragraph.
+//
+// Both dialogs here are Radix Dialogs. Escape closes them; a click on the
+// scrim does nothing, as with the native showModal() they replaced: a stray
+// click must not drop a typed item or an unsaved repo scope.
+
+const keepOpen = (e: Event) => e.preventDefault()
 
 export function ItemComposer({
   open,
@@ -33,7 +41,6 @@ export function ItemComposer({
   /** Saved with "Add more" on: refresh the inbox, but keep the composer open. */
   onSavedMore: () => void
 }) {
-  const dialog = useRef<HTMLDialogElement>(null)
   const titleInput = useRef<HTMLInputElement>(null)
   const filePicker = useRef<HTMLInputElement>(null)
   const [title, setTitle] = useState('')
@@ -52,12 +59,12 @@ export function ItemComposer({
   const [saving, setSaving] = useState(false)
   const [addMore, setAddMore] = useState(false)
   const attach = useAttachments()
+  const returnFocus = useReturnFocus(open)
 
+  // Reseed the fields each time the composer opens (not while it stays open).
+  const wasOpen = useRef(false)
   useEffect(() => {
-    const el = dialog.current
-    if (!el) return
-    if (open && !el.open) {
-      el.showModal()
+    if (open && !wasOpen.current) {
       setTitle(editing?.title ?? '')
       setProjectId(editing?.projectId ?? '')
       setPriority(editing?.priority ?? 0)
@@ -70,7 +77,7 @@ export function ItemComposer({
       attach.clear()
       setError(null)
     }
-    if (!open && el.open) el.close()
+    wasOpen.current = open
   }, [open, editing])
 
   // One tray, two origins: what the item already holds and what is being
@@ -144,174 +151,190 @@ export function ItemComposer({
   }
 
   return (
-    <dialog ref={dialog} className="itemComposer" onClose={onClose}>
-      <form
-        className={dragging ? 'dragging' : undefined}
-        onSubmit={(e) => {
-          e.preventDefault()
-          void save()
-        }}
-        // ⌘↵ saves from any field: the description is where you live, and
-        // reaching for the button to save a two-line to-do is a tax.
-        onKeyDown={(e) => {
-          if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && title.trim() && !saving && !attach.uploading) {
+    <Dialog.Root open={open} onOpenChange={(o) => !o && onClose()}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="projOverlay" />
+        <Dialog.Content
+          className="uiDialog itemComposer"
+          aria-describedby={undefined}
+          onInteractOutside={keepOpen}
+          onOpenAutoFocus={(e) => {
+            // The default lands on the first tabbable, the X; the title is where you start.
             e.preventDefault()
-            void save()
-          }
-        }}
-        onPaste={attach.onPaste}
-        onDragOver={(e) => {
-          if (!e.dataTransfer.types.includes('Files')) return
-          e.preventDefault()
-          setDragging(true)
-        }}
-        onDragLeave={(e) => {
-          if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false)
-        }}
-        onDrop={(e) => {
-          if (!e.dataTransfer.types.includes('Files')) return
-          e.preventDefault()
-          setDragging(false)
-          void attach.add(e.dataTransfer.files)
-        }}
-      >
-        <div className="composerHead">
-          <div className="crumbs">
-            <span className="crumb">Inbox</span>
-            <span className="crumbSep">›</span>
-            <span className="crumb now">{editing ? 'Edit work item' : 'New work item'}</span>
-          </div>
-          <button type="button" className="composerClose" onClick={onClose} aria-label="Close">
-            <X size={16} aria-hidden="true" />
-          </button>
-        </div>
-
-        <input
-          ref={titleInput}
-          className="titleInput"
-          autoFocus
-          placeholder="What needs doing?"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-        />
-        <textarea
-          className="descInput"
-          rows={4}
-          placeholder="Context, acceptance criteria, or a pasted screenshot — the brief reads all of it."
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-        />
-
-        {linkOpen && (
-          <label className="linkRow">
-            <Link2 size={13} aria-hidden="true" />
-            <input
-              type="url"
-              placeholder="https://…"
-              value={url}
-              autoFocus={!editing?.url}
-              onChange={(e) => setUrl(e.target.value)}
-            />
-          </label>
-        )}
-
-        <div className="composerAttachments">
-          <AttachmentStrip images={thumbs} files={stripFiles} error={attach.error} onRemove={removeThumb} />
-          {attached === 0 && !attach.error && (
-            <button type="button" className="dropHint" onClick={() => filePicker.current?.click()}>
-              <Paperclip size={12} aria-hidden="true" />
-              Paste, drop, or click to attach a file or screenshot
-            </button>
-          )}
-        </div>
-
-        <input
-          ref={filePicker}
-          type="file"
-          multiple
-          hidden
-          onChange={(e) => {
-            if (e.target.files) void attach.add(e.target.files)
-            // Reset, so picking the same file twice in a row still fires.
-            e.target.value = ''
+            titleInput.current?.focus()
           }}
-        />
-
-        <div className="pillRow">
-          <Select
-            className={`pill prio${priority}`}
-            title="Priority"
-            aria-label="Priority"
-            icon={<Flag size={12} aria-hidden="true" />}
-            value={String(priority)}
-            onValueChange={(v) => setPriority(Number(v))}
+          onCloseAutoFocus={returnFocus}
+        >
+          <form
+            className={dragging ? 'dragging' : undefined}
+            onSubmit={(e) => {
+              e.preventDefault()
+              void save()
+            }}
+            // ⌘↵ saves from any field: the description is where you live, and
+            // reaching for the button to save a two-line to-do is a tax.
+            onKeyDown={(e) => {
+              if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && title.trim() && !saving && !attach.uploading) {
+                e.preventDefault()
+                void save()
+              }
+            }}
+            onPaste={attach.onPaste}
+            onDragOver={(e) => {
+              if (!e.dataTransfer.types.includes('Files')) return
+              e.preventDefault()
+              setDragging(true)
+            }}
+            onDragLeave={(e) => {
+              if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false)
+            }}
+            onDrop={(e) => {
+              if (!e.dataTransfer.types.includes('Files')) return
+              e.preventDefault()
+              setDragging(false)
+              void attach.add(e.dataTransfer.files)
+            }}
           >
-            {PRIORITY_VALUES.map((v) => (
-              <SelectItem key={v} value={String(v)}>
-                {v === 0 ? 'Priority' : PRIORITY_LABEL[v]}
-              </SelectItem>
-            ))}
-          </Select>
-          <DatePopover className="pill" value={due} onChange={setDue} />
-          {choosesProject(projects) && (
-          <ProjectIdPicker
-            projects={projects}
-            value={projectId || defaultProjectOf(projects)?.id || ''}
-            allowNone={false}
-            onChange={(id) => id && setProjectId(id)}
-          >
-            {(current) => (
-              <button type="button" className={`pill${current ? ' set' : ''}`} title="Project" aria-label="Project">
-                {current ? (
-                  <span className="pdot" style={{ background: projectColor(current.id) }} aria-hidden="true" />
-                ) : (
-                  <Folder size={12} aria-hidden="true" />
-                )}
-                {current?.name ?? 'Project'}
+            <div className="composerHead">
+              <div className="crumbs">
+                <span className="crumb">Inbox</span>
+                <span className="crumbSep">›</span>
+                <Dialog.Title asChild>
+                  <span className="crumb now">{editing ? 'Edit work item' : 'New work item'}</span>
+                </Dialog.Title>
+              </div>
+              <button type="button" className="composerClose" onClick={onClose} aria-label="Close">
+                <X size={16} aria-hidden="true" />
               </button>
+            </div>
+
+            <input
+              ref={titleInput}
+              className="titleInput"
+              placeholder="What needs doing?"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+            />
+            <textarea
+              className="descInput"
+              rows={4}
+              placeholder="Context, acceptance criteria, or a pasted screenshot — the brief reads all of it."
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+            />
+
+            {linkOpen && (
+              <label className="linkRow">
+                <Link2 size={13} aria-hidden="true" />
+                <input
+                  type="url"
+                  placeholder="https://…"
+                  value={url}
+                  autoFocus={!editing?.url}
+                  onChange={(e) => setUrl(e.target.value)}
+                />
+              </label>
             )}
-          </ProjectIdPicker>
-          )}
-          <button
-            type="button"
-            className={`pill add${attached ? ' set' : ''}`}
-            onClick={() => filePicker.current?.click()}
-            title="Attach a file or screenshot — or just paste or drop it"
-            aria-label="Attach file"
-          >
-            <Paperclip size={12} aria-hidden="true" />
-            {attached > 0 ? `${attached} file${attached === 1 ? '' : 's'}` : 'File'}
-          </button>
-          {!linkOpen && (
-            <button type="button" className="pill add" onClick={() => setLinkOpen(true)} title="Add a link">
-              <Link2 size={12} aria-hidden="true" />
-              Link
-            </button>
-          )}
-        </div>
 
-        {error && <div className="msg error">{error}</div>}
+            <div className="composerAttachments">
+              <AttachmentStrip images={thumbs} files={stripFiles} error={attach.error} onRemove={removeThumb} />
+              {attached === 0 && !attach.error && (
+                <button type="button" className="dropHint" onClick={() => filePicker.current?.click()}>
+                  <Paperclip size={12} aria-hidden="true" />
+                  Paste, drop, or click to attach a file or screenshot
+                </button>
+              )}
+            </div>
 
-        <div className="composerFoot">
-          {!editing && (
-            <label className="addMore" title="Keep this open to add another after saving">
-              <input type="checkbox" checked={addMore} onChange={(e) => setAddMore(e.target.checked)} />
-              <span className="switch" aria-hidden="true" />
-              Add more
-            </label>
-          )}
-          <div className="footActions">
-            <span className="hint">⌘↵</span>
-            <button type="button" className="cancel" onClick={onClose}>
-              Cancel
-            </button>
-            <button type="submit" className="go" disabled={saving || attach.uploading || !title.trim()}>
-              {saving ? 'Saving…' : attach.uploading ? 'Uploading…' : editing ? 'Save changes' : 'Add item'}
-            </button>
-          </div>
-        </div>
-      </form>
-    </dialog>
+            <input
+              ref={filePicker}
+              type="file"
+              multiple
+              hidden
+              onChange={(e) => {
+                if (e.target.files) void attach.add(e.target.files)
+                // Reset, so picking the same file twice in a row still fires.
+                e.target.value = ''
+              }}
+            />
+
+            <div className="pillRow">
+              <Select
+                className={`pill prio${priority}`}
+                title="Priority"
+                aria-label="Priority"
+                icon={<Flag size={12} aria-hidden="true" />}
+                value={String(priority)}
+                onValueChange={(v) => setPriority(Number(v))}
+              >
+                {PRIORITY_VALUES.map((v) => (
+                  <SelectItem key={v} value={String(v)}>
+                    {v === 0 ? 'Priority' : PRIORITY_LABEL[v]}
+                  </SelectItem>
+                ))}
+              </Select>
+              <DatePopover className="pill" value={due} onChange={setDue} />
+              {choosesProject(projects) && (
+              <ProjectIdPicker
+                projects={projects}
+                value={projectId || defaultProjectOf(projects)?.id || ''}
+                allowNone={false}
+                onChange={(id) => id && setProjectId(id)}
+              >
+                {(current) => (
+                  <button type="button" className={`pill${current ? ' set' : ''}`} title="Project" aria-label="Project">
+                    {current ? (
+                      <span className="pdot" style={{ background: projectColor(current.id) }} aria-hidden="true" />
+                    ) : (
+                      <Folder size={12} aria-hidden="true" />
+                    )}
+                    {current?.name ?? 'Project'}
+                  </button>
+                )}
+              </ProjectIdPicker>
+              )}
+              <button
+                type="button"
+                className={`pill add${attached ? ' set' : ''}`}
+                onClick={() => filePicker.current?.click()}
+                title="Attach a file or screenshot — or just paste or drop it"
+                aria-label="Attach file"
+              >
+                <Paperclip size={12} aria-hidden="true" />
+                {attached > 0 ? `${attached} file${attached === 1 ? '' : 's'}` : 'File'}
+              </button>
+              {!linkOpen && (
+                <button type="button" className="pill add" onClick={() => setLinkOpen(true)} title="Add a link">
+                  <Link2 size={12} aria-hidden="true" />
+                  Link
+                </button>
+              )}
+            </div>
+
+            {error && <div className="msg error">{error}</div>}
+
+            <div className="composerFoot">
+              {!editing && (
+                <label className="addMore" title="Keep this open to add another after saving">
+                  <input type="checkbox" checked={addMore} onChange={(e) => setAddMore(e.target.checked)} />
+                  <span className="switch" aria-hidden="true" />
+                  Add more
+                </label>
+              )}
+              <div className="footActions">
+                <span className="hint">⌘↵</span>
+                <button type="button" className="cancel" onClick={onClose}>
+                  Cancel
+                </button>
+                <button type="submit" className="go" disabled={saving || attach.uploading || !title.trim()}>
+                  {saving ? 'Saving…' : attach.uploading ? 'Uploading…' : editing ? 'Save changes' : 'Add item'}
+                </button>
+              </div>
+            </div>
+          </form>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   )
 }
 
@@ -327,23 +350,25 @@ export function RepoPicker({
   onClose: () => void
   onSaved: (count: number) => void
 }) {
-  const dialog = useRef<HTMLDialogElement>(null)
-
-  useEffect(() => {
-    const el = dialog.current
-    if (!el) return
-    if (open && !el.open) el.showModal()
-    if (!open && el.open) el.close()
-  }, [open])
+  const returnFocus = useReturnFocus(open)
 
   return (
-    <dialog ref={dialog} className="repoDialog" onClose={onClose}>
-      <h3>Connected repos</h3>
-      <p className="pickerSub">
-        The GitHub source only pulls from checked repos, and this scope is per workspace. Nothing
-        checked = no GitHub items here.
-      </p>
-      {open && <RepoScopeEditor onSaved={onSaved} onCancel={onClose} />}
-    </dialog>
+    <Dialog.Root open={open} onOpenChange={(o) => !o && onClose()}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="projOverlay" />
+        <Dialog.Content className="uiDialog repoDialog" onInteractOutside={keepOpen} onCloseAutoFocus={returnFocus}>
+          <Dialog.Title asChild>
+            <h3>Connected repos</h3>
+          </Dialog.Title>
+          <Dialog.Description asChild>
+            <p className="pickerSub">
+              The GitHub source only pulls from checked repos, and this scope is per workspace. Nothing
+              checked = no GitHub items here.
+            </p>
+          </Dialog.Description>
+          <RepoScopeEditor onSaved={onSaved} onCancel={onClose} />
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   )
 }

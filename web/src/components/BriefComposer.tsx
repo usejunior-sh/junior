@@ -6,6 +6,7 @@ import { briefStore } from '../briefStore.js'
 import { BRIEF_TYPE_LABEL, KIND_LABEL, playbookLabel } from '../itemUi.js'
 import { findModel, useModels, usePickableModels } from '../models.js'
 import { Select, SelectItem } from '../ui/Select.js'
+import { useReturnFocus } from '../ui/returnFocus.js'
 
 type DialogProps = {
   /** the item to brief; null = closed */
@@ -27,36 +28,42 @@ export function BriefComposerDialog({ item, latest, onClose }: DialogProps) {
   const picking = useRef(false)
   // The `/` picker renders inside the modal, not at the end of <body>: the modal blocks
   // scrolling and clicks outside its own element, and the list has to scroll.
-  const [frame, setFrame] = useState<HTMLDialogElement | null>(null)
+  const [frame, setFrame] = useState<HTMLDivElement | null>(null)
+  const returnFocus = useReturnFocus(item !== null)
   useEffect(() => setDirty(false), [item?.id])
   const guard = (e: Event) => (dirty || picking.current) && e.preventDefault()
   return (
     <Dialog.Root open={item !== null} onOpenChange={(o) => !o && onClose()}>
       <Dialog.Portal>
         <Dialog.Overlay className="projOverlay" />
-        <Dialog.Content asChild onEscapeKeyDown={guard} onInteractOutside={guard} onOpenAutoFocus={(e) => e.preventDefault()}>
-          <dialog open className="projModal projAddDialog briefModal" ref={setFrame}>
-            {item && (
-              <>
-                <Dialog.Title asChild>
-                  <h3>{latest?.status === 'ready' ? 'Re-brief' : 'Create a brief'}</h3>
-                </Dialog.Title>
-                <Dialog.Description asChild>
-                  <p className="bmItem" title={item.title}>
-                    <span className="k">{KIND_LABEL[item.kind] ?? item.kind}</span>
-                    {item.title}
-                  </p>
-                </Dialog.Description>
-                <BriefComposer key={item.id} item={item} latest={latest} focusSignal={1} portalTo={frame} onQueued={onClose} onCancel={onClose} onDirtyChange={setDirty} onPickingChange={(p) => {
-                    picking.current = p
-                  }} />
-                <p className="sub bmSub">
-                  Runs one at a time, in order, under the daily cap. The run reads only — it never posts, pushes or edits — and every
-                  run is a session you can open.
+        <Dialog.Content
+          className="uiDialog projModal briefModal"
+          ref={setFrame}
+          onEscapeKeyDown={guard}
+          onInteractOutside={guard}
+          onOpenAutoFocus={(e) => e.preventDefault()}
+          onCloseAutoFocus={returnFocus}
+        >
+          {item && (
+            <>
+              <Dialog.Title asChild>
+                <h3>{latest?.status === 'ready' ? 'Re-brief' : 'Create a brief'}</h3>
+              </Dialog.Title>
+              <Dialog.Description asChild>
+                <p className="bmItem" title={item.title}>
+                  <span className="k">{KIND_LABEL[item.kind] ?? item.kind}</span>
+                  {item.title}
                 </p>
-              </>
-            )}
-          </dialog>
+              </Dialog.Description>
+              <BriefComposer key={item.id} item={item} latest={latest} focusSignal={1} portalTo={frame} onQueued={onClose} onCancel={onClose} onDirtyChange={setDirty} onPickingChange={(p) => {
+                  picking.current = p
+                }} />
+              <p className="sub bmSub">
+                Runs one at a time, in order, under the daily cap. The run reads only — it never posts, pushes or edits — and every
+                run is a session you can open.
+              </p>
+            </>
+          )}
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

@@ -5,6 +5,7 @@ import type { PickFolderResponse, Project, ProjectsResponse, JobsResponse } from
 import { onThisMac } from '../device.js'
 import { projectColor } from '../tabs.js'
 import { Menu, MenuContent, MenuItem, MenuTrigger } from '../ui/Menu.js'
+import { useReturnFocus } from '../ui/returnFocus.js'
 
 type LoadState =
   | { phase: 'loading' }
@@ -26,6 +27,8 @@ export function ProjectsTab() {
   const [adding, setAdding] = useState(false)
   // A failed action keeps the list on screen and says why above it.
   const [actionError, setActionError] = useState<string | null>(null)
+  // Removing a project that jobs run in asks first: those jobs pause.
+  const [confirming, setConfirming] = useState<{ project: Project; jobs: string[] } | null>(null)
 
   const load = useCallback(async () => {
     try {
@@ -48,7 +51,11 @@ export function ProjectsTab() {
       .then((r) => r.json())
       .catch(() => null)) as JobsResponse | null
     const using = wb?.ok ? wb.jobs.filter((w) => w.projectId === p.id) : []
-    if (using.length && !confirm(`Remove “${p.name}”? ${using.length === 1 ? 'This job' : `These ${using.length} jobs`} will pause until you pick another project:\n\n${using.map((w) => `· ${w.title}`).join('\n')}`)) return
+    if (using.length) setConfirming({ project: p, jobs: using.map((w) => w.title) })
+    else await removeNow(p)
+  }
+
+  async function removeNow(p: Project) {
     const res = await fetch(`/api/projects?id=${encodeURIComponent(p.id)}`, { method: 'DELETE' })
     const body = (await res.json()) as ProjectsResponse
     setActionError(body.ok ? null : body.error)
@@ -121,7 +128,63 @@ export function ProjectsTab() {
         onClose={() => setAdding(false)}
         onAdded={(projects) => setState({ phase: 'ready', projects })}
       />
+      <RemoveProjectDialog
+        target={confirming}
+        onClose={() => setConfirming(null)}
+        onRemove={(p) => {
+          setConfirming(null)
+          void removeNow(p)
+        }}
+      />
     </section>
+  )
+}
+
+/** "Remove this project?" when jobs run in it: they pause until they get another project. */
+function RemoveProjectDialog({
+  target,
+  onClose,
+  onRemove,
+}: {
+  target: { project: Project; jobs: string[] } | null
+  onClose: () => void
+  onRemove: (p: Project) => void
+}) {
+  const returnFocus = useReturnFocus(target !== null)
+  const n = target?.jobs.length ?? 0
+  return (
+    <Dialog.Root open={target !== null} onOpenChange={(o) => !o && onClose()}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="projOverlay" />
+        <Dialog.Content className="uiDialog projModal" onCloseAutoFocus={returnFocus}>
+          {target && (
+            <>
+              <Dialog.Title asChild>
+                <h3>Remove “{target.project.name}”?</h3>
+              </Dialog.Title>
+              <Dialog.Description asChild>
+                <p>{n === 1 ? 'This job' : `These ${n} jobs`} will pause until you pick another project:</p>
+              </Dialog.Description>
+              <ul className="projJobs">
+                {target.jobs.map((title, i) => (
+                  <li key={i}>{title}</li>
+                ))}
+              </ul>
+              <div className="row">
+                <Dialog.Close asChild>
+                  <button type="button" className="cancel">
+                    Cancel
+                  </button>
+                </Dialog.Close>
+                <button type="button" className="danger" onClick={() => onRemove(target.project)}>
+                  Remove project
+                </button>
+              </div>
+            </>
+          )}
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   )
 }
 
@@ -139,6 +202,7 @@ function AddProjectModal({
   const [path, setPath] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const returnFocus = useReturnFocus(open)
 
   // Reseed each time the modal opens.
   useEffect(() => {
@@ -177,62 +241,55 @@ function AddProjectModal({
     <Dialog.Root open={open} onOpenChange={(o) => !o && onClose()}>
       <Dialog.Portal>
         <Dialog.Overlay className="projOverlay" />
-        {/*
-          A <dialog> element only for the styling. Every `dialog …` rule in
-          styles/*.css applies. Radix owns the behaviour, because this opens
-          *inside* the settings dialog and only its layer stack gets Esc and
-          the focus trap right for a nested modal.
-        */}
-        <Dialog.Content asChild aria-describedby={undefined}>
-          <dialog open className="projModal projAddDialog">
-            <Dialog.Title asChild>
-              <h3>Add a project</h3>
-            </Dialog.Title>
+        {/* Radix owns the behaviour: this opens inside the settings page, and its layer stack gets Esc and the focus trap right. */}
+        <Dialog.Content className="uiDialog projModal" aria-describedby={undefined} onCloseAutoFocus={returnFocus}>
+          <Dialog.Title asChild>
+            <h3>Add a project</h3>
+          </Dialog.Title>
 
-            <label>Name</label>
-            <input
-              autoFocus
-              placeholder="e.g. junior"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
+          <label>Name</label>
+          <input
+            autoFocus
+            placeholder="e.g. junior"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
 
-            <label>Repo (optional)</label>
-            <input
-              placeholder="owner/name"
-              value={repo}
-              onChange={(e) => setRepo(e.target.value)}
-            />
+          <label>Repo (optional)</label>
+          <input
+            placeholder="owner/name"
+            value={repo}
+            onChange={(e) => setRepo(e.target.value)}
+          />
 
-            <label>Folder</label>
-            <FolderField
-              value={path}
-              onChange={(p) => {
-                setPath(p)
-                // A folder with no name yet? Suggest the folder's basename.
-                setName((n) => n || folderName(p))
-              }}
-              onError={setError}
-            />
+          <label>Folder</label>
+          <FolderField
+            value={path}
+            onChange={(p) => {
+              setPath(p)
+              // A folder with no name yet? Suggest the folder's basename.
+              setName((n) => n || folderName(p))
+            }}
+            onError={setError}
+          />
 
-            {error && <div className="projError">{error}</div>}
+          {error && <div className="projError">{error}</div>}
 
-            <div className="row">
-              <Dialog.Close asChild>
-                <button type="button" className="cancel">
-                  Cancel
-                </button>
-              </Dialog.Close>
-              <button
-                type="button"
-                className="go"
-                disabled={saving || !name.trim() || !path.trim()}
-                onClick={() => void add()}
-              >
-                {saving ? 'Adding…' : 'Add project'}
+          <div className="row">
+            <Dialog.Close asChild>
+              <button type="button" className="cancel">
+                Cancel
               </button>
-            </div>
-          </dialog>
+            </Dialog.Close>
+            <button
+              type="button"
+              className="go"
+              disabled={saving || !name.trim() || !path.trim()}
+              onClick={() => void add()}
+            >
+              {saving ? 'Adding…' : 'Add project'}
+            </button>
+          </div>
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
