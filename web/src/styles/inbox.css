@@ -150,8 +150,27 @@
 .uiMenuCap { padding: 7px 9px 4px; font-family: var(--mono); font-size: 0.8077rem; color: var(--stone); }
 .uiMenuItem .k { margin-left: auto; padding-left: 14px; font-family: var(--mono); font-size: 0.7692rem; color: var(--stone); }
 /* the snooze menu: when each choice comes back, and the early-wake note */
-.snzMenu { min-width: 200px; }
-.snzFoot { max-width: 200px; padding: 5px 9px 6px; font-size: 0.8077rem; line-height: 1.4; color: var(--ash); }
+.snzMenu { min-width: 200px; width: 260px; }
+.snzFoot { max-width: 220px; padding: 5px 9px 6px; font-size: 0.8077rem; line-height: 1.4; color: var(--ash); }
+/* the typed time (SnoozeMenu): the field mirrors .flowNote; the read-back is data, so mono */
+.snzType { display: flex; flex-direction: column; gap: 6px; padding: 2px 6px 6px; }
+.snzIn {
+  width: 100%; background: var(--canvas); border: 1px solid var(--hair-strong); color: var(--ink);
+  border-radius: var(--r); padding: 6px 9px; font-family: var(--sans); font-size: 0.9615rem; outline: none; transition: border-color 0.12s;
+}
+.snzIn:focus { border-color: var(--ink); }
+.snzIn::placeholder { color: var(--stone); }
+.snzRow { display: flex; align-items: center; gap: 8px; min-height: 26px; }
+.snzBack { flex: 1; min-width: 0; font-size: 0.8462rem; line-height: 1.35; color: var(--ash); }
+.snzBack .snzAt { font-family: var(--mono); color: var(--ink); }
+.snzGo { flex: none; }
+.snzGo .kbd { color: inherit; border-color: currentColor; opacity: 0.6; line-height: 16px; }
+@media (max-width: 767px) {
+  .snzMenu { width: min(280px, 92vw); }
+  .snzIn { height: 44px; font-size: 16px; }
+  .snzGo { height: 36px; }
+  .snzGo .kbd { display: none; }
+}
 .uiMenuItem .dot.prio1 { background: var(--orange); }
 .uiMenuItem .dot.prio2 { background: var(--yellow); }
 .uiMenuItem .dot.prio0, .uiMenuItem .dot.prio3, .uiMenuItem .dot.prio4 { background: var(--stone); }

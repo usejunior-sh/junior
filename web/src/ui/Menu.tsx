@@ -119,6 +119,13 @@ export function MenuItem({ className, ...props }: ComponentPropsWithoutRef<typeo
   return <DropdownMenu.Item className={cx('uiMenuItem', className)} {...props} />
 }
 
+/**
+ * A menu item with no `uiMenuItem` pixels, for an item drawn as something
+ * else (a button inside the menu). Picking it still closes the whole menu
+ * tree, the way any item does.
+ */
+export const MenuBareItem = DropdownMenu.Item
+
 export function MenuSubTrigger({
   className,
   ...props
