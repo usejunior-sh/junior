@@ -17,6 +17,7 @@ import { holdIfAction } from '../session/actions-hold.js'
 import { ownServersOf } from '../../core/actions/own.js'
 import { deliverPendingSendBacks } from '../session/actions-send.js'
 import { syncInbox } from '../inbox/sync.js'
+import { contextForSession } from '../context-files.js'
 
 /** A macOS notification about a finished run, per the job's notify setting. */
 function notifyRun(rt: WorkspaceRuntime, w: Job, status: JobRunStatus, detail?: string): void {
@@ -152,7 +153,7 @@ export async function runJob(
       { instruction: job.instruction, tools: job.tools, project, model: job.model, output: job.output, schedule: scheduleOf(job), scope: job.scope, lateness, skills: job.skills, agents: job.agents, filing: job.filing, browser: job.browser },
       scanMcp,
       abort,
-      { ...runLimits, tab: session.id },
+      { ...runLimits, tab: session.id, context: await contextForSession(rt, session) },
     )
     // Past the fence, an outbound connector call is held for you, not run
     // (core/actions/queue.ts). Dry runs (previews) never hold: they record nothing.

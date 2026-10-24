@@ -12,6 +12,9 @@ import { checkBrowserProfile, checkLibrary } from '../job-files.js'
 import { WORKSPACE_PLUGIN } from '../library.js'
 import { fenceDecision, fenceFor } from '../../core/job/fence.js'
 import { personaAppend } from '../../core/junior/persona.js'
+import type { ContextLoad } from '../../shared/juniorContext.js'
+import { loadContextFiles } from '../context-files.js'
+import { workspaceDir } from '../workspaces.js'
 import { safeWhen } from '../../core/sources/slack.js'
 import { dryRunDecision, isArgsObject } from '../../core/actions/queue.js'
 import { log } from '../log.js'
@@ -136,7 +139,8 @@ export async function jobQuery(
   junior: McpServers[string],
   abort: AbortController,
   /** tab: the browser tab's key, the run's session id (a dry run's preview id); a browser job without one gets no browser */
-  extra: { maxBudgetUsd?: number; includePartialMessages?: boolean; tab?: string } = {},
+  /** context: the user's context files, when the caller already loaded them (a real run records their cost on its session) */
+  extra: { maxBudgetUsd?: number; includePartialMessages?: boolean; tab?: string; context?: ContextLoad } = {},
 ): Promise<AgentRunSpec> {
   // The fence below is the whole safety story: no veto, no run.
   requireVeto(rt.provider, 'job')
@@ -184,6 +188,7 @@ export async function jobQuery(
     const missing = checkLibrary({ skills, agents }, await jobLibrary(rt))
     if (missing.length) throw new Error(missing.join('; '))
   }
+  const context = extra.context ?? (await loadContextFiles(workspaceDir(rt.meta.id), spec.project))
   const extraTools = [...(skills.length ? ['Skill'] : []), ...(agents.length ? ['Agent'] : [])]
   const fromLibrary = [...skills, ...agents].some((n) => n.startsWith(`${WORKSPACE_PLUGIN}:`))
   const fence = fenceFor(spec.tools, spec.output, spec.project.path, { skills, agents }, browser ? { browser: true, readRoots: [downloadDirFor(browser.tab)] } : {})
@@ -193,7 +198,8 @@ export async function jobQuery(
   return {
     prompt,
     // A job run is Junior's too: its name and voice, and the one rule an unattended run can keep.
-    systemAppend: personaAppend(rt.persona, 'job'),
+    // Then the user's context files, the same ones a chat in this project reads; a trial run reads them too.
+    systemAppend: `${personaAppend(rt.persona, 'job')}${context.append}`,
     cwd: spec.project.path,
     userConfig: true,
     tools: [...runBaseTools(spec.tools), ...extraTools],

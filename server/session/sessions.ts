@@ -28,6 +28,7 @@ export async function deleteSession(rt: WorkspaceRuntime, sessionId: string): Pr
   rt.live.delete(sessionId)
   rt.rows.delete(sessionId)
   rt.sessionTeam.delete(sessionId)
+  rt.sessionContext.delete(sessionId)
   if (run) {
     // The lead gone, the run goes with it; a worker gone respawns on its next step.
     if (run.leadSessionId === sessionId) {

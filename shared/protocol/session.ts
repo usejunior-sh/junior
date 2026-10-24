@@ -137,6 +137,32 @@ export type SessionSummary = {
   updatedAt: number
   /** the team run this session leads or works on */
   teamRun?: SessionTeamRun
+  /** The user's context files loaded into its system prompt at its last spawn. Absent = none, or not spawned since boot. */
+  contextFiles?: SessionContextFiles
+}
+
+/**
+ * The context files a session loaded at spawn (shared/juniorContext.ts):
+ * `<workspace>/context.md` and `<project>/.junior/context.md`, with what each
+ * costs. Tokens are an estimate (about four characters a token), paid on every
+ * call the session makes.
+ */
+export type SessionContextFiles = {
+  /** estimated tokens of the whole block in the system prompt */
+  tokens: number
+  files: SessionContextFile[]
+}
+
+export type SessionContextFile = {
+  scope: 'workspace' | 'project'
+  /** absolute path of the file */
+  path: string
+  /** estimated tokens of what was loaded from it */
+  tokens: number
+  /** longer than the cap: only its start was loaded, and the prompt says so */
+  truncated?: boolean
+  /** how many invisible characters were taken out before loading */
+  stripped?: number
 }
 
 /**

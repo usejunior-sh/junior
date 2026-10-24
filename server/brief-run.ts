@@ -16,6 +16,7 @@ import { LiveSession, type SessionExtras } from './session/live-session.js'
 import { TEAM_COMPACT_WINDOW, teamRunOf, workerSpec } from './team-run/state.js'
 import { makeTeamMcp } from './team-run/mcp.js'
 import { juniorAppend } from './junior-ops.js'
+import { contextForSession } from './context-files.js'
 import { VERSION } from './config.js'
 import { EDIT_TOOLS } from './session/changes.js'
 import { errResult, okResult } from './junior-mcp.js'
@@ -67,6 +68,9 @@ const broadcastBrief = (rt: WorkspaceRuntime, job: BriefJob) => {
  * write tool on top.
  */
 export async function extrasFor(rt: WorkspaceRuntime, row: StoredSession): Promise<SessionExtras> {
+  // The user's context files ride on the identity block, so every kind below gets them,
+  // ahead of its own contract (a brief's "change nothing" stays the last word it reads).
+  const context = await contextForSession(rt, row)
   const identity = juniorSessionAppend(row.kind, {
     sessionId: row.id,
     workspaceId: rt.meta.id,
@@ -75,6 +79,7 @@ export async function extrasFor(rt: WorkspaceRuntime, row: StoredSession): Promi
     libraryRoot: rt.libraryDir,
     juniorName: rt.persona.name,
     ...(row.ultracode ? { ultracode: true } : {}),
+    ...(context.append ? { context: context.append } : {}),
   })
   const run = teamRunOf(rt, row.id)
   const worker = run && run.leadSessionId !== row.id ? [...run.workers].reverse().find((w) => w.sessionId === row.id) : undefined

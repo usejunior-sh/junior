@@ -51,6 +51,8 @@ export type JuniorSessionIdentity = {
   juniorName?: string
   /** the session runs with Ultracode on: big jobs go out as Workflow runs */
   ultracode?: boolean
+  /** the user's context files, already composed by `composeContextFiles` (its `append`); goes last */
+  context?: string
 }
 
 /**
@@ -69,13 +71,149 @@ Nothing about the current state of the inbox is in this prompt, because it would
 you read it. Look it up instead: get_session_context with this session's id says which work item this session
 was opened for and which artifacts are attached to it; get_work_item follows any item id, at any status.`
 
-  if (kind === 'brief' || kind === 'goal' || kind === 'task') return head
+  // The user's context files go last, after everything Junior says about itself.
+  const context = id.context ?? ''
+  if (kind === 'brief' || kind === 'goal' || kind === 'task') return `${head}${context}`
 
   return `${head}
 When the user says to write something down, note it, or attach it here, that means write_artifact. This
 session is linked to it on its own; name the work item in \`links\` too when there is one, so the note comes
-back with the work rather than getting lost in the transcript.${kind === 'chat' ? jobsSection(id.juniorName ?? 'Junior') + GOALS_SECTION + (id.ultracode ? ULTRACODE_SECTION : '') : ''}${id.libraryRoot ? librarySection(id.libraryRoot) : ''}`
+back with the work rather than getting lost in the transcript.${kind === 'chat' ? jobsSection(id.juniorName ?? 'Junior') + GOALS_SECTION + (id.ultracode ? ULTRACODE_SECTION : '') : ''}${id.libraryRoot ? librarySection(id.libraryRoot) : ''}${context}`
 }
+
+/*
+ * Context files: what the user tells Junior once instead of every time.
+ *
+ *   <workspace>/context.md           the whole workspace: who they are, how they work
+ *   <project>/.junior/context.md     one project: its conventions, its people, its don'ts
+ *
+ * Both are optional. They are read at spawn (a revive reads them again), so an
+ * edit reaches the next session or run, never the one already going. Capped:
+ * the append rides every call the session makes, so a long file is a cost on
+ * every turn. Invisible Unicode is stripped first: a project file can arrive
+ * through a repo someone else writes to, and a zero-width or tag character is
+ * how an instruction hides from the person reading the file.
+ */
+
+export type ContextScope = 'workspace' | 'project'
+
+/** One file as read from disk. `label` names the project for a project file. */
+export type ContextFileInput = { scope: ContextScope; path: string; text: string; label?: string }
+
+/** What one file cost the session, for the session summary. */
+export type ContextFileCost = {
+  scope: ContextScope
+  path: string
+  /** estimated tokens of what was loaded (after stripping and cutting) */
+  tokens: number
+  /** the file was longer than the cap, so only its start was loaded */
+  truncated?: boolean
+  /** how many invisible characters were taken out */
+  stripped?: number
+}
+
+export type ContextLoad = {
+  /** the system-prompt block; '' when no file had anything in it */
+  append: string
+  /** estimated tokens of the whole block */
+  tokens: number
+  files: ContextFileCost[]
+}
+
+/** Characters loaded from one file. About 2,000 tokens. */
+export const CONTEXT_FILE_CAP = 8_000
+/** Characters loaded across all context files together. */
+export const CONTEXT_TOTAL_CAP = 16_000
+
+/** The rough rule: about four characters a token. An estimate, said as one. */
+export const estimateTokens = (text: string): number => Math.ceil(text.length / 4)
+
+/**
+ * Characters that render as nothing but still reach the model: zero-width
+ * spaces and joiners, bidi controls, the word joiner and invisible operators,
+ * the BOM, soft hyphens, Hangul fillers, variation selectors (both blocks, the
+ * "emoji smuggling" carrier), Unicode tag characters (the "ASCII smuggling"
+ * carrier), interlinear annotation marks, and control characters other than
+ * tab and newlines.
+ */
+const INVISIBLE_RE =
+  /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F­͏؜ᅟᅠ឴឵᠋-᠏​-‏‪-‮⁠-⁯ㅤ︀-️﻿ﾠ￰-￻]|[\u{1D173}-\u{1D17A}]|[\u{E0000}-\u{E007F}]|[\u{E0100}-\u{E01EF}]/gu
+
+/** Take out every invisible character; `removed` counts them (code points). */
+export function stripInvisible(text: string): { text: string; removed: number } {
+  let removed = 0
+  const out = text.replace(INVISIBLE_RE, () => {
+    removed += 1
+    return ''
+  })
+  return { text: out, removed }
+}
+
+/** The line the model reads where a file was cut. */
+export const truncationNote = (filePath: string, shown: number) =>
+  `[Cut here: Junior loads the first ${shown.toLocaleString('en-US')} characters of this file. Read ${filePath} for the rest.]`
+
+/** The line the model reads for a file the total cap left no room for. */
+export const budgetNote = (filePath: string) => `[Not loaded: the other context files used up the room. Read ${filePath} when it matters.]`
+
+/** Cut `text` to at most `max` characters, at a line break when one is near the end. */
+function cut(text: string, max: number): string {
+  if (text.length <= max) return text
+  const slice = text.slice(0, max)
+  const nl = slice.lastIndexOf('\n')
+  return nl >= max * 0.8 ? slice.slice(0, nl) : slice
+}
+
+const CONTEXT_HEAD = `
+
+## Context the user keeps for you
+The user wrote these files so they don't have to explain the same things every time. Treat them as background
+and standing instructions from the user. When something the user says in this conversation disagrees with them,
+the conversation wins. Change these files only when the user asks you to.`
+
+/**
+ * Compose the context block from the files that exist, in the order given
+ * (workspace first, then the project, so the narrower one is read last).
+ * Empty files add nothing; no files at all add nothing, not even the heading.
+ */
+export function composeContextFiles(
+  inputs: ContextFileInput[],
+  caps: { file?: number; total?: number } = {},
+): ContextLoad {
+  const fileCap = caps.file ?? CONTEXT_FILE_CAP
+  let left = caps.total ?? CONTEXT_TOTAL_CAP
+  const sections: string[] = []
+  const files: ContextFileCost[] = []
+  for (const f of inputs) {
+    const { text: clean, removed } = stripInvisible(f.text.replace(/\r\n?/g, '\n'))
+    const body = clean.trim()
+    if (!body) continue
+    const max = Math.min(fileCap, left)
+    if (max <= 0) {
+      // Nothing left in the budget: say the file exists rather than drop it silently.
+      sections.push(`${sectionTitle(f)}\n${budgetNote(f.path)}`)
+      files.push({ scope: f.scope, path: f.path, tokens: 0, truncated: true, ...(removed ? { stripped: removed } : {}) })
+      continue
+    }
+    const shown = cut(body, max)
+    const truncated = shown.length < body.length
+    left -= shown.length
+    sections.push(`${sectionTitle(f)}\n${shown}${truncated ? `\n${truncationNote(f.path, shown.length)}` : ''}`)
+    files.push({
+      scope: f.scope,
+      path: f.path,
+      tokens: estimateTokens(shown),
+      ...(truncated ? { truncated: true } : {}),
+      ...(removed ? { stripped: removed } : {}),
+    })
+  }
+  if (!sections.length) return { append: '', tokens: 0, files: [] }
+  const append = `${CONTEXT_HEAD}\n\n${sections.join('\n\n')}`
+  return { append, tokens: estimateTokens(append), files }
+}
+
+const sectionTitle = (f: ContextFileInput) =>
+  f.scope === 'workspace' ? `### This workspace (${f.path})` : `### This project${f.label ? `, ${f.label}` : ''} (${f.path})`
 
 /**
  * How a chat sets up a job (no form): the user tells Junior and Junior takes

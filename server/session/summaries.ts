@@ -38,6 +38,7 @@ export function summarize(rt: WorkspaceRuntime, row: StoredSession): SessionSumm
     ...(row.jobId ? { jobId: row.jobId } : {}),
     ...(rt.sessionItem.has(row.id) ? { itemId: rt.sessionItem.get(row.id) } : {}),
     ...(teamRunLink(rt, row.id) ? { teamRun: teamRunLink(rt, row.id) } : {}),
+    ...(rt.sessionContext.has(row.id) ? { contextFiles: rt.sessionContext.get(row.id) } : {}),
     ...(l?.waiting ? { waiting: true, waitingOn: l.waitingOn } : {}),
     live: !!l,
   }
