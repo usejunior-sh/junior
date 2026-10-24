@@ -62,6 +62,8 @@ export function moveKey(i: MoveItem): string {
     f?.overridden ? 'o' : '',
     i.ciFailing ? 'red' : '',
     mainRedOnly(i.seen) ? 'main-red' : '',
+    i.seen?.graceUntil ?? '',
+    i.seen?.fixes ?? '',
     i.peopleWaiting,
     i.priority ?? '',
   ].join('|')
@@ -120,7 +122,9 @@ function fitted(verb: string, reasons: readonly string[], text: string): string[
  */
 export function rowMove(item: MoveItem, served: RowMove | undefined, now: number): RowLine | null {
   let m: { action: NextAction; verb: string; reasons: string[]; text: string }
-  if (served && served.key === moveKey(item)) m = served
+  // a grace window that has passed: the served line still says "fix after", so make it again
+  const graceOver = typeof item.seen?.graceUntil === 'number' && item.seen.graceUntil <= now
+  if (served && served.key === moveKey(item) && !graceOver) m = served
   else {
     try {
       m = nextMove(item, (served?.ctx ?? {}) as NextContext, now)

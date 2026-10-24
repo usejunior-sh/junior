@@ -252,6 +252,7 @@ button.jlTitle:hover { text-decoration: underline; text-decoration-color: var(--
 .hoRow .tx:hover .t { text-decoration: underline; text-decoration-color: var(--hair-bright); text-underline-offset: 3px; }
 .hoRow .m { margin-top: 2px; color: var(--ash); font-size: 0.9231rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hoRow .m .red { color: var(--red-ink); }
+.hoRow .m .mono { font-family: var(--mono); font-size: 0.8846rem; color: var(--ash); }
 .hoRow .mid { min-width: 0; font-size: 0.9231rem; color: var(--charcoal); line-height: 1.4; }
 .hoRow .would .l { display: block; font-family: var(--mono); font-size: 0.8077rem; color: var(--ash); }
 .hoRow .state { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }

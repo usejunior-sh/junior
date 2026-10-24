@@ -23,6 +23,7 @@ import { bySuggestion, STARTS, SUGGEST_SHOWN, type Suggestion } from '../../../c
 import { sectionOf } from '../../../core/junior/sections.js'
 import { watchOffOf } from '../../../core/junior/ledger.js'
 import { handBackLine } from '../../../core/babysit/ready.js'
+import { clockTime, fixFraction, graceShown } from '../../../core/babysit/grace.js'
 import { PIPELINE_STEPS, type Pipeline } from '../../../core/work/handoff.js'
 import { itemHash } from '../hooks.js'
 import { sendHandoff, snoozeItem, VERB, type HandoffVerb } from '../handoff.js'
@@ -93,6 +94,14 @@ function prSignals(i: ScoredItem): ReactNode[] {
   if (s?.bots) out.push(`${s.bots} bot comment${s.bots === 1 ? '' : 's'}`)
   if (s?.people) out.push(`${s.people} open thread${s.people === 1 ? '' : 's'}`)
   if (s?.rebase === 'conflict' || i.kind === 'own-pr-conflicting') out.push(<span key="cf" className="red">conflicts</span>)
+  // data, not a warning: mono ash, outside the red span
+  const g = i.handoff === 'on' ? graceShown(s, Date.now()) : null
+  if (g && 'fixes' in g)
+    out.push(
+      <span key="fx" className="mono">
+        {fixFraction(g.fixes)}
+      </span>,
+    )
   return out
 }
 
@@ -208,11 +217,25 @@ export function JuniorSuggested({ day, onNavigate }: { day: JuniorDay | null } &
 // ---------- My PRs ----------
 
 /** Where your PR stands with Junior, in a line and a sub-line. */
-function prState(i: ScoredItem): { tone?: 'live' | 'need' | 'paused'; label: ReactNode; sub: string } {
+function prState(i: ScoredItem): { tone?: 'live' | 'need' | 'paused'; label: ReactNode; sub: ReactNode } {
   if (i.handoff === 'paused') return { tone: 'paused', label: <span className="chip paused">Paused</span>, sub: 'Nothing runs until you resume.' }
   if (i.junior?.stage === 'needs-you') return { tone: 'need', label: <span className="chip need">Needs you</span>, sub: i.tasks?.next?.title ?? 'Open it to see.' }
   if (watchOffOf(i) === 'babysit') return { label: 'Babysitting off', sub: 'Nothing runs until you turn it on.' }
-  if (i.handoff === 'on') return { tone: 'live', label: 'Babysitting', sub: i.junior?.stage === 'working' ? (i.tasks?.line ?? 'Working on it.') : 'Nothing to do right now.' }
+  if (i.handoff === 'on') {
+    // you just pushed: the fix waits, and the line says until when (core/babysit/grace.ts)
+    const g = graceShown(i.seen, Date.now())
+    if (g && 'graceUntil' in g)
+      return {
+        tone: 'live',
+        label: 'Babysitting',
+        sub: (
+          <>
+            You just pushed. I’ll fix it after <time dateTime={new Date(g.graceUntil).toISOString()}>{clockTime(g.graceUntil)}</time> if it’s still red.
+          </>
+        ),
+      }
+    return { tone: 'live', label: 'Babysitting', sub: i.junior?.stage === 'working' ? (i.tasks?.line ?? 'Working on it.') : 'Nothing to do right now.' }
+  }
   return { label: 'Not handed off', sub: i.suggestion?.would ?? ((i.seen?.draft ?? i.isDraft) ? 'A draft. I won’t suggest it.' : 'Nothing to do yet.') }
 }
 

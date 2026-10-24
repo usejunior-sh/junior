@@ -30,6 +30,7 @@ import { sourceOf } from '../../shared/sources.js'
 import type { ItemFlow } from './flow.js'
 import { turnOf, type TurnContext, type TurnItem, type TurnOf, type TurnReason, type WhoseTurn } from './turn.js'
 import type { WorkItem } from './types.js'
+import { fixFraction, graceReasons, graceShown } from '../babysit/grace.js'
 
 /** What the next move is. One per item. */
 export type NextAction =
@@ -297,8 +298,13 @@ function reasonsOf(x: Facts, action: NextAction): string[] {
   const { item, turn } = x
   const out: string[] = []
   const a = age(x.now - sinceOf(item))
-  if (turn.turn === 'junior') out.push('with Junior')
-  else if (turn.turn === 'others') {
+  if (turn.turn === 'junior') {
+    out.push('with Junior')
+    // your PR, handed off: Junior waits out your push, or says how many fixes it spent (babysit/grace.ts)
+    const g = x.ownPr && item.handoff === 'on' ? graceShown(item.seen, x.now) : null
+    if (g && 'graceUntil' in g) out.push(...graceReasons(g.graceUntil))
+    else if (g) out.push(fixFraction(g.fixes))
+  } else if (turn.turn === 'others') {
     if (turn.reason === 'review-posted') out.push('review posted')
     if (turn.reason === 'main-red') out.push('main is red too', 'not yours')
     if (a && turn.reason !== 'snoozed' && turn.reason !== 'closed') out.push(`waiting ${a}`)
