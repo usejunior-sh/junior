@@ -9,7 +9,9 @@
  * runs. Pure and browser-safe: time is always an argument.
  */
 import type { ActionAllowedBy, ActionKind, ActionStatus } from '../actions/types.js'
+import { impactShown } from '../actions/view.js'
 import { approvalIdIn } from '../approvals/approvals.js'
+import { impactLine } from '../cards/impact.js'
 import type { TaskState } from '../work/tasks.js'
 
 export type LogFilter = 'all' | 'sent'
@@ -27,6 +29,8 @@ export type LogLine = {
   /** it left this machine */
   sent: boolean
   title: string
+  /** a send's impact line: what it does, who sees it, as whom, can it be taken back (core/cards/impact.ts); only on one that reached someone, may have, or still could */
+  impact?: string
   /** short state: "sent", "waiting on you", "fixed", "failed" */
   state: string
   tone: LogTone
@@ -45,8 +49,14 @@ export type LogAction = {
   id: string
   sessionId: string
   sessionKind: string
+  tool: string
   kind: ActionKind
   summary: string
+  /** the call's input, long strings trimmed */
+  args: Record<string, unknown>
+  groupKey: string | null
+  /** a held call's full args (your edit, once edited): what went out, word for word */
+  queue?: { args?: Record<string, unknown> } | null
   status: ActionStatus
   link: string | null
   error: string | null
@@ -110,15 +120,27 @@ export function allowedOf(a: Pick<LogAction, 'allowedBy' | 'allowedDetail' | 'se
   }
 }
 
+/** The impact line, from the args that went out (or wait to); nothing rather than a broken log over one odd record. */
+function impactOfLine(a: LogAction): string | undefined {
+  if (!impactShown(a.status)) return undefined
+  try {
+    return impactLine({ tool: a.tool, args: a.queue?.args ?? a.args ?? {}, kind: a.kind, link: a.link, groupKey: a.groupKey })
+  } catch {
+    return undefined
+  }
+}
+
 export function actionLine(a: LogAction, origin: string | null): LogLine {
   const [state, tone] = ACTION_STATE[a.status]
   const sent = a.status === 'succeeded'
+  const impact = impactOfLine(a)
   return {
     id: `send:${a.id}`,
     at: a.settledAt ?? a.updatedAt ?? a.attemptedAt,
     source: 'send',
     sent,
     title: a.summary,
+    ...(impact ? { impact } : {}),
     state,
     tone,
     kind: a.kind,

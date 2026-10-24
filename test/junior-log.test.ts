@@ -10,8 +10,11 @@ const act = (over: Partial<LogAction> = {}): LogAction => ({
   id: 's1:t1',
   sessionId: 's1',
   sessionKind: 'chat',
+  tool: 'Bash',
   kind: 'message',
   summary: 'Slack message to Anirudha',
+  args: { command: 'gh pr comment 3235 -R acme/api --body "Fixed."' },
+  groupKey: null,
   status: 'succeeded',
   link: 'https://acme.slack.com/archives/D1/p1',
   error: null,
@@ -65,4 +68,28 @@ test('the page: newest first, Sent filters, before pages', () => {
   assert.deepEqual(logPage(lines, 'all', p1.lines.at(-1)!.at, 2).lines.map((l) => l.at), [200, 110])
   assert.equal(latestAt(lines), 400)
   assert.equal(jobLine({ sessionId: 'j', title: 'x', status: 'failed', at: 1 }).tone, 'red')
+})
+
+test('a send line carries its impact line only when it reached someone, may have, or still could', () => {
+  const sent = actionLine(act({ kind: 'comment' }), null)
+  assert.equal(sent.impact, 'Comment on acme/api#3235 · as you · can edit or delete, not unsend')
+  const held = actionLine(act({ status: 'needs_you', allowedBy: null, settledAt: null }), null)
+  assert.equal(held.impact, 'Comment on acme/api#3235 · as you · can edit or delete, not unsend')
+  for (const status of ['rejected', 'failed', 'denied', 'expired', 'sent_back'] as const) {
+    assert.equal(actionLine(act({ status }), null).impact, undefined, status)
+  }
+})
+
+test('the impact line reads what went out: the held args (your edit), not the trimmed record', () => {
+  const edited = actionLine(
+    act({ tool: 'mcp__claude_ai_Slack__slack_send_message', args: { channel_id: 'C1', text: 'x' }, queue: { args: { channel_id: '#payments', text: 'x' } } }),
+    null,
+  )
+  assert.match(edited.impact ?? '', /#payments/)
+  assert.match(edited.impact ?? '', / · as you/)
+})
+
+test('task and job lines carry no impact line', () => {
+  assert.equal(taskLine({ id: 'k1', itemId: 'i', title: 'Fix lint', owner: 'junior', state: 'done', endedAt: 200 })?.impact, undefined)
+  assert.equal(jobLine({ sessionId: 'j1', title: 'Sentry junior', status: 'ok', at: 400 }).impact, undefined)
 })

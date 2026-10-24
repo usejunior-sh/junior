@@ -35,6 +35,11 @@
 .astub .ic { flex: none; color: var(--charcoal); }
 .astub .t1 { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 1rem; font-weight: 500; color: var(--ink); }
 .astub.go .t1 { flex: 1 1 auto; font-weight: 400; color: var(--body); }
+/* The impact line: what pressing the button does. A fact, never orange; it starts under the title text
+   (12px .ahead padding + 14px icon + 9px gap). Each part wraps as a unit, so the line breaks at " · ". */
+.astub .aimpact { margin: -2px 0 0; padding: 0 12px 8px 35px; font-family: var(--mono); font-size: 0.9231rem; line-height: 1.5; color: var(--mute); }
+.astub .aimpact .apart { display: inline-block; max-width: 100%; overflow-wrap: anywhere; vertical-align: top; }
+.astub .aimpact .asep { color: var(--stone); }
 .astub .sp { margin-left: auto; flex: none; font-size: 0.8462rem; color: var(--ash); }
 .astub .lk { display: inline-flex; align-items: center; gap: 5px; flex: 0 1 auto; min-width: 0; font-family: var(--mono); font-size: 0.9231rem; color: var(--ash); }
 .astub .lk span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -173,6 +178,7 @@
   .actSheet .astub.pinned { border: 0; background: transparent; }
   .actSheet .astub.pinned > .arow1 { padding-right: 0; }
   .actSheet .astub.pinned .ahead { padding-left: 0; }
+  .actSheet .astub.pinned .aimpact { padding-left: 23px; padding-right: 0; }
   .actSheet .astub .abody { padding: 10px 0 0; }
   /* Titles wrap rather than clip; the meta line sits on its own line, no rule through it. */
   .astub .t1 { white-space: normal; }

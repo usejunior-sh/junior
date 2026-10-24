@@ -69,6 +69,11 @@ function Line({ l, now, onNavigate }: { l: LogLine; now: number; onNavigate: (ha
         ) : (
           <span className="jlTitle">{l.title}</span>
         )}
+        {l.impact && (
+          <span className="jlImpact" title={l.impact}>
+            {l.impact}
+          </span>
+        )}
         <span className="jlMeta">
           {l.allowed && (
             <span className={`jlBy by-${l.allowed.by}`}>

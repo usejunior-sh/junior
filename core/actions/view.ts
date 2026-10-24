@@ -5,6 +5,7 @@
  * the server says the same short id in the message it hands the agent.
  */
 import type { ActionKind, ActionStatus } from './types.js'
+import { impactOf, type ImpactInput } from '../cards/impact.js'
 
 /** The Actions page's tabs: Needs you · Scheduled · Sent · Stopped. */
 export type ActionTab = 'needs_you' | 'scheduled' | 'sent' | 'stopped'
@@ -110,4 +111,29 @@ export function countdownText(ms: number): string {
   const d = Math.floor(s / 86_400)
   const h = Math.floor((s % 86_400) / 3600)
   return h ? `in ${d}d ${h}h` : `in ${d}d`
+}
+
+/**
+ * A send that reached someone, may have, or still could: its impact line
+ * (core/cards/impact.ts) is worth reading. Failed, denied, rejected, expired
+ * and sent-back sends reached nobody, so "can edit or delete, not unsend"
+ * would be a false claim on them.
+ */
+export const impactShown = (s: ActionStatus): boolean =>
+  s === 'needs_you' || s === 'scheduled' || s === 'sending' || s === 'succeeded' || s === 'attempted' || s === 'unknown'
+
+/**
+ * The impact line's parts, in reading order, for a UI that sets them apart
+ * (a card breaks the line only between parts, never inside "can close, not
+ * delete"). A part that is itself two (" · +1 more send") comes apart too.
+ * If the core ever throws on an odd record, the card still gets a line:
+ * `fallback` (the tool's name) and "as you". No facts: the web holds none yet.
+ */
+export function impactParts(action: ImpactInput, fallback: string): string[] {
+  try {
+    const i = impactOf(action)
+    return [i.what, i.reach, i.as, i.undo].flatMap((s) => (s ? s.split(' · ') : [])).filter((s) => s.trim())
+  } catch {
+    return [fallback, 'as you']
+  }
 }

@@ -11,15 +11,20 @@
  * update); a message, an email, a comment or a PR has to be opened and read.
  * Approved, it shrinks to "Sending … in 12s · Undo", then settles.
  *
+ * Under the title, a held (or sent) card says what pressing the button does:
+ * the impact line (core/cards/impact.ts), "Comment on acme/api#3235 · as you
+ * · can edit or delete, not unsend". It sits outside the Collapsible's body,
+ * so a closed held card still shows it; a settled stub stays one row.
+ *
  * Radix Collapsible owns the open/close; the row's link and buttons sit
  * beside its trigger, never inside it.
  */
 import * as Collapsible from '@radix-ui/react-collapsible'
 import { Check, ChevronRight, ExternalLink, RotateCcw, X } from 'lucide-react'
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { Fragment, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
 import { JuniorLabel } from './JuniorLabel.js'
 import type { ActionView } from '../../../shared/protocol.js'
-import { countdownText, payloadOf, quickApprovable } from '../../../core/actions/view.js'
+import { countdownText, impactParts, impactShown, payloadOf, quickApprovable } from '../../../core/actions/view.js'
 import {
   actOn,
   allowedText,
@@ -99,6 +104,14 @@ export function ActionCard({
 
   const Icon = KIND_ICON[a.kind]
   const isOpen = pinnedOpen || open
+  // The line reads the held draft (queue.args, your edit once approved), not an edit in progress.
+  const impactArgs = a.queue?.args ?? a.args
+  const impact = useMemo(
+    () => impactParts({ tool: a.tool, args: impactArgs, kind: a.kind, link: a.link, groupKey: a.groupKey }, toolText(a.tool)),
+    [a.tool, impactArgs, a.kind, a.link, a.groupKey],
+  )
+  // One action can show twice on a page (the item's Needs you block and its Actions list): ids stay unique.
+  const impactId = `imp-${useId()}`
 
   // Approved: the slim undo row, counting down.
   const left = a.queue?.sendAt != null ? a.queue.sendAt - now : 0
@@ -129,6 +142,9 @@ export function ActionCard({
 
   const quick = needs && !isOpen
   const tone = STATUS_TONE[a.status]
+  // On every held card, open or closed; on a settled one only once opened.
+  const showImpact = impactShown(a.status) && (needs || isOpen)
+  const describedBy = showImpact ? impactId : undefined
   return (
     <Collapsible.Root
       open={isOpen}
@@ -139,7 +155,7 @@ export function ActionCard({
     >
       <div className="arow1">
         <Collapsible.Trigger asChild disabled={pinnedOpen}>
-          <button type="button" className="ahead" title={pinnedOpen ? a.title : isOpen ? 'Close' : 'Open'}>
+          <button type="button" className="ahead" title={pinnedOpen ? a.title : isOpen ? 'Close' : 'Open'} aria-describedby={describedBy}>
             <Icon size={14} className="ic" aria-hidden="true" />
             <span className="t1">{a.title}</span>
             {a.count > 1 && <span className="pill mono">×{a.count}</span>}
@@ -154,11 +170,11 @@ export function ActionCard({
         {quick ? (
           <span className="quick">
             {quickApprovable(a.kind) && (
-              <button type="button" className="btn xs ok" title="Approve as drafted" aria-label={`Approve: ${a.title}`} disabled={busy} onClick={() => void run('approve')}>
+              <button type="button" className="btn xs ok" title="Approve as drafted" aria-label={`Approve: ${a.title}`} aria-describedby={describedBy} disabled={busy} onClick={() => void run('approve')}>
                 <Check size={12} aria-hidden="true" />
               </button>
             )}
-            <button type="button" className="btn xs" title="Reject" aria-label={`Reject: ${a.title}`} disabled={busy} onClick={() => void run('reject', { reason: '' })}>
+            <button type="button" className="btn xs" title="Reject" aria-label={`Reject: ${a.title}`} aria-describedby={describedBy} disabled={busy} onClick={() => void run('reject', { reason: '' })}>
               <X size={12} aria-hidden="true" />
             </button>
           </span>
@@ -178,6 +194,7 @@ export function ActionCard({
           </button>
         )}
       </div>
+      {showImpact && <ImpactLine id={impactId} parts={impact} />}
       <Collapsible.Content className="abody">
         {undoRow}
         {needs ? (
@@ -189,6 +206,31 @@ export function ActionCard({
         {footer}
       </Collapsible.Content>
     </Collapsible.Root>
+  )
+}
+
+/**
+ * What pressing the button does, in one muted mono line under the title. Each
+ * part is a unit that wraps as one, so the line breaks at " · " and never
+ * inside a claim. Screen readers hear ", " for the dot.
+ */
+export function ImpactLine({ id, parts }: { id?: string; parts: readonly string[] }) {
+  return (
+    <div className="aimpact" id={id}>
+      {parts.map((p, i) => (
+        <Fragment key={i}>
+          {i > 0 && (
+            <>
+              <span className="asep" aria-hidden="true">
+                {' · '}
+              </span>
+              <span className="sr-only">, </span>
+            </>
+          )}
+          <span className="apart">{p}</span>
+        </Fragment>
+      ))}
+    </div>
   )
 }
 

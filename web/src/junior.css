@@ -221,6 +221,8 @@ a.jrRef { overflow-wrap: anywhere; }
 button.jlTitle { cursor: pointer; }
 button.jlTitle:hover { text-decoration: underline; text-decoration-color: var(--hair-bright); }
 .src-task .jlTitle, .src-job .jlTitle { font-weight: 400; color: var(--body); }
+/* A send's impact line: one muted mono row under the title, the full text in its title attribute. */
+.jlImpact { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); font-size: 0.8462rem; color: var(--mute); }
 .jlMeta { display: flex; flex-wrap: wrap; gap: 0 12px; min-width: 0; color: var(--ash); font-size: 0.8462rem; }
 .jlBy { color: var(--charcoal); }
 .jlBy.by-rule .jrRef { font-size: inherit; }
@@ -300,6 +302,8 @@ button.jlTitle:hover { text-decoration: underline; text-decoration-color: var(--
 /* ---------- phone ---------- */
 @media (max-width: 767px), (pointer: coarse) and (max-height: 500px) {
   .jlLine { grid-template-columns: 30px minmax(0, 1fr) auto; }
+  /* No hover title on touch: the impact line wraps instead of clipping. */
+  .jlImpact { white-space: normal; overflow-wrap: anywhere; }
   .jlIc, .jlLink, .jlAside { display: none; }
   /* the card goes on top, compact; the day scrolls under it */
   
