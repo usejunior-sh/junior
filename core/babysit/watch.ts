@@ -22,6 +22,7 @@ import type { NewTask } from '../work/tasks.js'
 import type { PrSeen } from '../work/handoff.js'
 import type { BabysitPr } from './pr.js'
 import type { CiSort } from './ci-sort.js'
+import { readiness, readyLine, type Readiness } from './ready.js'
 
 export { MAX_FIX_ATTEMPTS }
 
@@ -51,6 +52,7 @@ export function seenOf(pr: BabysitPr): PrSeen {
     people: open.filter((t) => !t.isBot).length,
     rebase: pr.mergeable === 'CONFLICTING' ? 'conflict' : pr.behind ? 'behind' : null,
     draft: pr.isDraft,
+    ready: readiness(pr),
   }
 }
 
@@ -63,28 +65,18 @@ export type BabysitEvent =
   | { kind: 'bot_thread'; thread: PrThread }
   | { kind: 'human_thread'; thread: PrThread }
   | { kind: 'rebase'; sha: string; why: 'conflict' | 'behind' }
-  | { kind: 'green'; sha: string }
-
-const settled = (c: PrCheck) => c.status === 'success' || c.status === 'neutral'
+  /** `ready`: the gate it passed (ready.ts), for the hand-back's line */
+  | { kind: 'green'; sha: string; ready?: Readiness }
 
 /**
- * Ready for a reviewer: every check green, nothing open from a bot, no
- * conflict, and nobody asked yet. At least one check must have reported: a
- * PR whose CI hasn't started yet isn't green. (A repo with no CI at all is
- * never offered the request; ask in chat.)
+ * Ready for a reviewer: the hand-back gate passes (ready.ts: every check
+ * green, no thread open from a bot or a person, no conflict, not behind) and
+ * nobody was asked yet. At least one check must have reported: a PR whose CI
+ * hasn't started yet isn't green. (A repo with no CI at all is never offered
+ * the request; ask in chat.)
  */
-export function readyForReview(pr: BabysitPr): boolean {
-  return (
-    pr.state === 'OPEN' &&
-    pr.checks.length > 0 &&
-    pr.checks.every(settled) &&
-    !pr.threads.some((t) => t.isBot && !t.resolved) &&
-    pr.mergeable === 'MERGEABLE' &&
-    !pr.behind &&
-    pr.reviewers.length === 0 &&
-    !pr.reviewed &&
-    pr.reviewDecision !== 'APPROVED'
-  )
+export function readyForReview(pr: BabysitPr, ready: Readiness = readiness(pr)): boolean {
+  return pr.state === 'OPEN' && ready.ready && pr.reviewers.length === 0 && !pr.reviewed && pr.reviewDecision !== 'APPROVED'
 }
 
 /** Everything the PR shows right now that could need a task, in the order to act on it. */
@@ -96,7 +88,8 @@ export function babysitEvents(pr: BabysitPr): BabysitEvent[] {
   for (const thread of pr.threads) if (!thread.resolved) out.push({ kind: thread.isBot ? 'bot_thread' : 'human_thread', thread })
   if (pr.mergeable === 'CONFLICTING') out.push({ kind: 'rebase', sha, why: 'conflict' })
   else if (pr.behind) out.push({ kind: 'rebase', sha, why: 'behind' })
-  if (readyForReview(pr)) out.push({ kind: 'green', sha })
+  const ready = readiness(pr)
+  if (readyForReview(pr, ready)) out.push({ kind: 'green', sha, ready })
   return out
 }
 
@@ -225,11 +218,12 @@ export function decide(ev: BabysitEvent, w: BabysitWatch, ctx: DecideContext): B
           owner: 'you',
           state: 'waiting',
           why: 'playbook',
-          whyDetail: 'green',
+          // the hand-back's line: what was checked, so you don't open the PR to check
+          whyDetail: ev.ready ? readyLine(ev.ready) : 'green',
           step: 'request-review',
           // once per PR: a request you skipped isn't asked again on every push
           key: 'request-review',
-          input: { sha: ev.sha, reviewer: ctx.reviewer, draft: ctx.isDraft },
+          input: { sha: ev.sha, reviewer: ctx.reviewer, draft: ctx.isDraft, ...(ev.ready ? { ready: ev.ready.checks } : {}) },
         },
       }
     }
@@ -264,7 +258,11 @@ export function isStale(task: { step?: string; input?: Record<string, unknown> }
 export const BABYSIT_FAST_MS = 60_000
 export const BABYSIT_SLOW_MS = 5 * 60_000
 
-/** Something is moving: a check is still running, or Junior has work queued or running. */
-export function pollSoon(prs: readonly BabysitPr[], busy: boolean): boolean {
-  return busy || prs.some((p) => p.checks.some((c) => c.status === 'pending'))
+/**
+ * Something is moving: a check is still running, Junior has work queued or
+ * running, or a head moved since the last poll (a push whose checks haven't
+ * reported yet, so the hand-back gate is read again soon, not in 5 minutes).
+ */
+export function pollSoon(prs: readonly BabysitPr[], busy: boolean, moved = false): boolean {
+  return busy || moved || prs.some((p) => p.checks.some((c) => c.status === 'pending'))
 }

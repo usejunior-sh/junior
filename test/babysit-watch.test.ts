@@ -98,7 +98,8 @@ test('green waits for checks, bots, conflicts and a reviewer nobody asked yet', 
   assert.ok(!readyForReview(pr()), 'no check has reported yet')
   assert.ok(!readyForReview(pr({ checks: [check('lint', { status: 'pending' })] })))
   assert.ok(!readyForReview(pr({ checks: ok, threads: [thread()] })))
-  assert.ok(readyForReview(pr({ checks: ok, threads: [thread({ isBot: false })] })), 'a person’s thread doesn’t hold the request')
+  assert.ok(!readyForReview(pr({ checks: ok, threads: [thread({ isBot: false })] })), 'a person’s open thread holds the request too (ready.ts)')
+  assert.ok(readyForReview(pr({ checks: ok, threads: [thread({ isBot: false, resolved: true })] })))
   assert.ok(!readyForReview(pr({ checks: ok, reviewers: ['anirudha'] })))
   assert.ok(!readyForReview(pr({ checks: ok, reviewed: true })))
   assert.ok(!readyForReview(pr({ checks: ok, mergeable: 'UNKNOWN' })))
@@ -172,6 +173,7 @@ test('bot names, stale tasks, poll pace', () => {
   assert.ok(pollSoon([pr({ checks: [check('ci', { status: 'pending' })] })], false))
   assert.ok(pollSoon([], true))
   assert.ok(!pollSoon([pr()], false))
+  assert.ok(pollSoon([pr()], false, true), 'a head that moved since the last poll')
 })
 
 // ---- sorted before a fix is spent (ci-sort-glue) ----

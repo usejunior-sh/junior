@@ -155,7 +155,10 @@ test('a PR nobody handed off is read, not worked; handed off, its tasks come', (
     assert.equal((await store.tasks.list(id)).length, 0)
     // what it saw is kept, for the suggestion
     const w = await store.config.get<BabysitWatchState>(BABYSIT_WATCH_KEY)
-    assert.deepEqual(w?.prs[id]?.seen, { red: ['lint'], bots: 0, people: 0, rebase: null, draft: false })
+    const { ready, ...seen } = w?.prs[id]?.seen ?? {}
+    assert.deepEqual(seen, { red: ['lint'], bots: 0, people: 0, rebase: null, draft: false })
+    // and the hand-back gate on that head, read whether or not it's handed off
+    assert.deepEqual([ready?.ready, ready?.sha, ready?.checks.filter((c) => !c.ok).map((c) => c.id)], [false, 'fff', ['ci']])
     await store.items.setFields(id, { handoff: 'on' })
     assert.equal((await babysitTickOp(deps, T0 + 1000, true))?.added, 1)
     assert.deepEqual((await store.tasks.list(id)).map((t) => t.title), ['Fix lint'])

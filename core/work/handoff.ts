@@ -10,6 +10,7 @@
  *
  * Pure, browser-safe.
  */
+import type { Readiness } from '../babysit/ready.js'
 import type { Handoff, Reason } from './fields.js'
 import type { ItemTask } from './tasks.js'
 import type { WorkSource } from './types.js'
@@ -29,6 +30,12 @@ export type PrSeen = {
    * PR you handed off, and rebuilt every poll, so it can't outlive main going green.
    */
   mainRed?: MainRedCheck[]
+  /**
+   * The hand-back gate on the head this poll read (core/babysit/ready.ts): CI,
+   * threads, mergeable, behind, each with its evidence. Absent on a watch
+   * saved before the gate existed.
+   */
+  ready?: Readiness
 }
 
 /** One check red on main too, and where main's run is. */
