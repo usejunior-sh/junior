@@ -21,6 +21,7 @@ import { artifactStore, useArtifacts } from '../artifactStore.js'
 import { mentionHash, useRefIndex, type RefIndex } from '../refs.js'
 import { agentLabel, type AgentRun } from '../agents.js'
 import type { ShellRun } from '../../../core/shells/fold.js'
+import { HELD_FOR_YOU, parseReadback, type Readback } from '../../../core/job/readback-text.js'
 import { WORKFLOW_TOOL } from '../../../core/workflows/fold.js'
 import { buildTranscript, eventIndexOf, formatDuration, toolLine, type TranscriptItem } from '../transcript.js'
 import { AgentCard } from './Agents.js'
@@ -449,27 +450,66 @@ function linkifyText(text: string, refs: RefIndex, onRef: (hash: string) => void
 
 /**
  * A job a chat drafted (draft_job) is off until the user turns it on,
- * so the call's result carries a way there, right under it.
+ * so the call's result carries a way there, right under it, and what the
+ * file lets it do (job-readback-steps): rows the server built from the file,
+ * never the model's words. No read-back block (an older server, a parse
+ * miss) → the one-row strip alone, never a half ledger.
  */
 function DraftJobLinks({ tools, onRef }: { tools: readonly TranscriptItem[]; onRef: (hash: string) => void }) {
   const ids = tools.flatMap((t) => {
     if (t.kind !== 'tool' || !t.name.endsWith('__draft_job') || !t.result || t.result.isError) return []
     const m = /#(\/jobs\/[\w-]+)/.exec(t.result.text)
-    return m ? [{ key: t.key, hash: m[1]!, title: typeof t.input.title === 'string' ? t.input.title : 'the job' }] : []
+    return m
+      ? [{ key: t.key, hash: m[1]!, title: typeof t.input.title === 'string' ? t.input.title : 'the job', readback: parseReadback(t.result.text) }]
+      : []
   })
   if (!ids.length) return null
   return (
     <>
       {ids.map((d) => (
-        <div key={d.key} className="draftLink">
-          <span className="draftTag">draft</span>
-          <span>“{d.title}” is saved off until you enable it.</span>
-          <button type="button" className="btn sm primary" onClick={() => onRef(d.hash)}>
-            Review and enable
-          </button>
+        <div key={d.key} className={d.readback ? 'draftStrip' : undefined}>
+          <div className="draftLink">
+            <span className="draftTag">draft</span>
+            <span className="draftHead" title={d.title}>“{d.title}” is saved off until you enable it.</span>
+            <button type="button" className="btn sm primary" aria-label={`Review and enable “${d.title}”`} onClick={() => onRef(d.hash)}>
+              Review and enable
+            </button>
+          </div>
+          {d.readback && <DraftReadback title={d.title} readback={d.readback} />}
         </div>
       ))}
     </>
+  )
+}
+
+/** The read-back ledger: a <dl>, no stops, no motion. "Held for you" is plain, not a status. */
+function DraftReadback({ title, readback }: { title: string; readback: Readback }) {
+  return (
+    <section className="readback" aria-label={`What “${title}” may do`}>
+      <dl>
+        {readback.rows.map((r) => {
+          const held = r.label === 'Sends' && r.value.endsWith(` ${HELD_FOR_YOU}`)
+          return (
+            <Fragment key={r.label}>
+              <dt>{r.label}</dt>
+              <dd className={r.quiet ? 'quiet' : undefined}>
+                {held ? (
+                  <>
+                    {r.value.slice(0, -HELD_FOR_YOU.length)}
+                    <span className="held">{HELD_FOR_YOU}</span>
+                  </>
+                ) : (
+                  r.value
+                )}
+              </dd>
+            </Fragment>
+          )
+        })}
+      </dl>
+      <div className="rbFile" title={readback.file}>
+        from {readback.file}
+      </div>
+    </section>
   )
 }
 

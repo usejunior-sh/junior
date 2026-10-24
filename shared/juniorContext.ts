@@ -298,7 +298,12 @@ message starting "New job:"), take it on the way a good junior engineer would:
    web pages, also ask which browser profile it signs in as (suggest the workspace default) and which sites.
 3. Draft it with draft_job, the don'ts written into the instruction and any skills or agents it should use
    named (only those load in its runs). It is saved off; only the user turns it on.
-4. Offer a trial run with try_job, so they see what it would file before they turn it on.`
+4. After draft_job, send ONE message before any trial run. Write what each run does as a numbered
+   list: 3 to 6 steps, in order, one short sentence each, starting with a verb; the last step says
+   what it files. Open it with "Each run will:". Don't restate what it may touch or when it runs:
+   draft_job shows the user those lines from the file, under the call. End with one question and
+   your suggested answer: "Run a trial now? It files and sends nothing. Suggested: yes."
+5. Call try_job only after they say yes, so they see what it would file before they turn it on.`
 
 /** The jobs section for the default name, what a chat gets when the persona is unchanged. */
 export const JOBS_SECTION = jobsSection('Junior')

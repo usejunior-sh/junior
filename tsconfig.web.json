@@ -75,6 +75,7 @@
     "core/job/tools.ts",
     "core/job/schedule.ts",
     "core/job/run-rows.ts",
+    "core/job/readback-text.ts",
     "core/actions/types.ts",
     "core/actions/own.ts",
     "core/actions/bash.ts",

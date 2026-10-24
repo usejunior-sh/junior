@@ -9,6 +9,7 @@ import { scheduleOf } from '../../core/job/schedule.js'
 import type { JobFileReference, Project } from '../../shared/protocol.js'
 import { vetoRefusal } from '../providers/capabilities.js'
 import { isValidCron } from '../../core/job/cron.js'
+import { readbackOf, readbackText, type Readback } from '../../core/job/readback.js'
 import { listPlaybooks } from '../briefs.js'
 import { type ConnectorProbe, WorkspaceRuntime } from '../workspace/runtime.js'
 import { jobLibrary } from '../session/changes.js'
@@ -350,7 +351,7 @@ export async function saveJobText(rt: WorkspaceRuntime, id: string | null, raw: 
  * runs by itself. Checked like any job file; anything wrong is refused with
  * the reasons, so the chat can fix them and try again.
  */
-export async function draftJobOp(rt: WorkspaceRuntime, raw: unknown): Promise<{ id: string; title: string; file: string; warnings: string[] }> {
+export async function draftJobOp(rt: WorkspaceRuntime, raw: unknown): Promise<DraftedJob> {
   const r = (raw ?? {}) as Record<string, unknown>
   const text = (k: string) => (typeof r[k] === 'string' ? (r[k] as string).trim() : '')
   const title = text('title')
@@ -409,18 +410,27 @@ export async function draftJobOp(rt: WorkspaceRuntime, raw: unknown): Promise<{ 
   await rt.jobFiles.write(name, spec)
   await syncJobFiles(rt, { force: true })
   log('info', 'job', `drafted: ${title} (jobs/${name}.md) — off until reviewed`, { jobId: spec.id, workspace: rt.meta.id })
-  return { id: spec.id, title, file: `jobs/${name}.md`, warnings }
+  const file = `jobs/${name}.md`
+  // built from the file as written, so the chat's strip says what it grants
+  return { id: spec.id, title, file, warnings, readback: readbackOf(spec, { file, projectName: project.name }) }
 }
 
-/** What draft_job hands back: where the draft is and how to turn it on. */
-export function draftJobText(d: { id: string; title: string; file: string; warnings: string[] }, canTry = false): string {
+export type DraftedJob = { id: string; title: string; file: string; warnings: string[]; readback?: Readback }
+
+/**
+ * What draft_job hands back: where the draft is, how to turn it on, and the
+ * read-back built from the file. The chat renders that block under the call
+ * (job-readback-steps), so the model is told not to restate it.
+ */
+export function draftJobText(d: DraftedJob, canTry = false): string {
   return [
     `ok: drafted the job “${d.title}” (${d.file}, id ${d.id}). It is saved OFF and will not run until the user reviews and enables it.`,
     `Review and enable: #/jobs/${d.id}`,
     ...d.warnings.map((w) => `note: ${w}`),
     canTry
-      ? 'Tell the user it is drafted and off, and offer a trial run (try_job) so they see what it would file before turning it on — do not claim it is running.'
+      ? 'Now send ONE message: what each run does, as a numbered list, then one question with your suggested answer: "Run a trial now? It files and sends nothing. Suggested: yes." Call try_job only after they say yes. Do not claim it is running.'
       : 'Tell the user it is drafted and waiting for their review — do not claim it is running.',
+    ...(d.readback ? [readbackText(d.readback)] : []),
   ].join('\n')
 }
 

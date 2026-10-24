@@ -380,3 +380,12 @@ html.kbOpen .updateBar { display: none; }
   .ntoWhy .ntoChips .ntoChip { height: 44px; padding: 0 16px; }
   .jhGone.ntoWhy.out, .hoRows .hoGone.ntoWhy.out { min-height: 0; height: 0; padding-block: 0; }
 }
+
+/* ---------- phone: a drafted job's read-back ---------- */
+@media (max-width: 767px), (pointer: coarse) and (max-height: 500px) {
+  .draftStrip .draftLink { flex-wrap: wrap; }
+  .draftStrip .draftHead { flex: 1 1 100%; white-space: normal; overflow: visible; }
+  .draftStrip .draftLink .btn { flex: 1 1 100%; min-height: 44px; justify-content: center; }
+  .readback dl { grid-template-columns: 60px 1fr; column-gap: 8px; }
+  .readback .rbFile { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; overflow-wrap: normal; }
+}

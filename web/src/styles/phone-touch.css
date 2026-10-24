@@ -165,4 +165,16 @@
 .draftTag { margin-left: 8px; vertical-align: 1px; }
 /* draft_job's result in a chat: one click to the job page. */
 .draftLink { display: flex; align-items: center; gap: 10px; margin: 4px 0 10px; color: var(--body); font-size: 0.9615rem; }
+/* With a read-back (job-readback-steps): a ledger under one left rule, not a card.
+   What the file lets the job do, built by the server; no orange, nothing waits yet. */
+.draftStrip { border-left: 2px solid var(--hair-strong); padding-left: 12px; margin: 4px 0 12px; }
+.draftStrip .draftLink { margin: 0 0 8px; }
+.draftStrip .draftTag { margin-left: 0; }
+.draftStrip .draftHead { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.readback dl { display: grid; grid-template-columns: 72px 1fr; column-gap: 12px; row-gap: 2px; margin: 0; }
+.readback dt { font-family: var(--mono); font-size: 0.8462rem; color: var(--ash); line-height: 1.6; }
+.readback dd { margin: 0; font-family: var(--sans); font-size: 0.9615rem; color: var(--body); line-height: 1.5; overflow-wrap: anywhere; }
+.readback dd.quiet { color: var(--ash); }
+.readback .held { color: var(--charcoal); }
+.readback .rbFile { margin-top: 6px; font-family: var(--mono); font-size: 0.8462rem; color: var(--ash); overflow-wrap: anywhere; }
 
