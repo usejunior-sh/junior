@@ -271,3 +271,45 @@ test('a quieted item is still your turn: "not useful" is attention, not turn', (
   assert.equal(onNeeds(quiet), false)
   assert.deepEqual(turnOf(quiet), { turn: 'you', reason: 'junior-asks' })
 })
+
+test('an FYI message never changes the answer, on any fixture (status.ts)', () => {
+  for (const r of ROWS) {
+    assert.deepEqual(turnOf(r.item, { ...r.ctx, message: 'fyi' }), turnOf(r.item, r.ctx), r.name)
+  }
+})
+
+test('a question or an approval in the newest message puts the item with you, where nothing holds it first', () => {
+  const row = (name: string) => {
+    const r = ROWS.find((x) => x.name === name)
+    assert.ok(r, name)
+    return r
+  }
+  const cases: [name: string, question: TurnReason, approval: TurnReason][] = [
+    // someone else had the next move: a message that asks you takes it back
+    ['your PR waits on review', 'person-asks', 'person-asks'],
+    // a fresh review ask after Junior posted: Junior's review watch takes the next pass too
+    ['Junior posted its review', 'person-asks', 'junior-watching'],
+    ['you follow up on someone', 'person-asks', 'person-asks'],
+    ['a team waits on the world', 'person-asks', 'person-asks'],
+    ['handed off, not picked up yet', 'person-asks', 'person-asks'],
+    ['a mention', 'person-asks', 'person-asks'],
+    ['you paused Junior', 'person-asks', 'person-asks'],
+    // a handed-off review request: Junior's first pass comes before your review, but not before your answer
+    ['review request handed off, before the first pass', 'person-asks', 'junior-watching'],
+    // something holds it first, and keeps holding
+    ['snoozed', 'snoozed', 'snoozed'],
+    ['done', 'closed', 'closed'],
+    ['a chat on a prompt', 'session-blocked', 'session-blocked'],
+    ['Junior runs a task', 'junior-task', 'junior-task'],
+    ['a team runs', 'junior-run', 'junior-run'],
+    ['you said it waits on Niraj', 'set-waiting', 'set-waiting'],
+    ['your PR, CI red, handed off', 'junior-fixing', 'junior-fixing'],
+    ['your PR, approved', 'merge', 'merge'],
+    ['a session finished', 'result-ready', 'result-ready'],
+  ]
+  for (const [name, question, approval] of cases) {
+    const r = row(name)
+    assert.equal(turnOf(r.item, { ...r.ctx, message: 'question' }).reason, question, `${name} + question`)
+    assert.equal(turnOf(r.item, { ...r.ctx, message: 'approval' }).reason, approval, `${name} + approval`)
+  }
+})

@@ -23,8 +23,8 @@
  * one reason, and every reason belongs to exactly one turn (TURN_REASONS).
  * Roughly: something holding until you answer, then Junior busy, then your
  * PR's own state (red only where main is red too waits on main), then a
- * finished run, then someone else, then Junior watching, then whatever is
- * left is on your plate.
+ * finished run, then a message that asks you (status.ts), then someone else,
+ * then Junior watching, then whatever is left is on your plate.
  *
  * "Not useful" (ledger.ts `quieted`) is attention, not turn: a quieted item
  * is still yours, it just leaves the Needs you list until something new.
@@ -32,6 +32,7 @@
 import { askOf, type Ask } from './asks.js'
 import type { ItemFlow } from './flow.js'
 import { mainRedOnly } from './handoff.js'
+import type { MessageStatus } from './status.js'
 import type { ScoredItem, WorkItem } from './types.js'
 
 export type WhoseTurn = 'you' | 'junior' | 'others'
@@ -126,6 +127,12 @@ export interface TurnContext {
   blocked?: boolean
   /** sends drafted for it wait for your OK (core/actions/queue.ts) */
   heldSends?: number
+  /**
+   * the newest message on it, typed (status.ts statusOf). A question or an
+   * approval puts it with you; an FYI, or no message, leaves the rules
+   * below to decide: an FYI never moves an item to you on its own.
+   */
+  message?: MessageStatus
 }
 
 /** Flow next steps where Junior, a team or a goal is stopped until you answer. */
@@ -183,6 +190,13 @@ export function turnOf(item: TurnItem, ctx: TurnContext = {}): TurnOf {
   // A run finished: its result is yours to read.
   if (mine && f?.next && RESULT_NEXT.has(f.next)) return at('result-ready')
 
+  const juniorReviews = juniorCan && item.junior?.stage === 'watching' && item.tasks?.review?.state !== 'skipped'
+
+  // The newest message asks you. A question is yours to answer; an approval
+  // (a review ask) goes to Junior's review watch first when it can take it.
+  if (ctx.message === 'question') return at('person-asks')
+  if (ctx.message === 'approval') return at(juniorReviews ? 'junior-watching' : 'person-asks')
+
   // Someone else has the next move.
   if (item.tasks?.review?.state === 'posted') return at('review-posted')
   const ask = askOf({ kind: item.kind, ...(item.ask !== undefined ? { ask: item.ask } : {}) })
@@ -191,7 +205,7 @@ export function turnOf(item: TurnItem, ctx: TurnContext = {}): TurnOf {
   if (f?.turn === 'others') return at('world')
 
   // Handed off and the watch is on: a review request is Junior's to start on, unless it set it aside.
-  if (juniorCan && item.junior?.stage === 'watching' && item.tasks?.review?.state !== 'skipped') return at('junior-watching')
+  if (juniorReviews) return at('junior-watching')
 
   // A person asked you. A to-do you wrote yourself isn't one.
   if (item.source !== 'manual' && (item.peopleWaiting > 0 || HUMAN_ASKS.has(ask))) return at('person-asks')

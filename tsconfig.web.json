@@ -47,6 +47,7 @@
     "core/work/fade.ts",
     "core/work/flow.ts",
     "core/work/turn.ts",
+    "core/work/status.ts",
     "core/work/next.ts",
     "core/work/inbox-tabs.ts",
     "core/work/inbox-views.ts",
