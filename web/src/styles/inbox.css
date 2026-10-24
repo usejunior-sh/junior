@@ -338,7 +338,7 @@
 .descBlock .descMore { align-self: flex-start; font-size: 0.9231rem; }
 .descMeta { display: flex; align-items: center; gap: 18px; margin-top: -6px; color: var(--ash); font-size: 0.8462rem; flex-wrap: wrap; }
 .descMeta .spacer { flex: 1; }
-.jrMark { width: 20px; height: 20px; flex: none; border-radius: 50%; display: inline-grid; place-items: center; background: linear-gradient(135deg, #a9cdfc, #80b2f6); color: #0b1530; font-size: 0.7692rem; font-weight: 600; }
+.jrMark { width: 20px; height: 20px; flex: none; border-radius: 50%; display: inline-grid; place-items: center; background: linear-gradient(135deg, #cbbffa, #a593f5); color: #120d24; font-size: 0.7692rem; font-weight: 600; }
 
 .itemVerdict { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
 .verdictBox { display: flex; align-items: flex-start; gap: 12px; padding: 14px 16px; border-radius: var(--r-lg); border: 1px solid var(--hair-strong); background: var(--card); }

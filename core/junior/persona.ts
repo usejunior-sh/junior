@@ -37,8 +37,8 @@ export const REPLY_MAX = 400
 
 /** The deck's eight presets. */
 export const SWATCHES: ReadonlyArray<readonly [label: string, hex: string]> = [
+  ['Lavender', '#cbbffa'],
   ['Sky', '#a9cdfc'],
-  ['Lavender', '#b4a0f4'],
   ['Mint', '#7fe0b4'],
   ['Butter', '#f5d77a'],
   ['Apricot', '#ffb27a'],
