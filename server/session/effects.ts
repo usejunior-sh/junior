@@ -47,6 +47,8 @@ export const JUNIOR_READ_TOOLS = new Set([
   'mcp__junior__list_artifacts',
   'mcp__junior__read_artifact',
   'mcp__junior__get_today',
+  // A dry run of the send policy (core/actions/check.ts): it reads, never sends or queues.
+  'mcp__junior__check_send',
   // Other chats, by name (server/session/spawn-ops.ts): reading where they stand.
   'mcp__junior__read_session',
   'mcp__junior__list_sessions',

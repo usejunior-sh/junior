@@ -1,4 +1,4 @@
-import { type ActionMoveRequest, type ActionMoveResponse, type ActionOverrideRequest, type ActionOverrideResponse, type ActionsPendingResponse, type ActionsResponse, type ActionVerb, type CardSpecsResponse, isLinkKind, type LinksResponse } from '../../shared/protocol.js'
+import { type ActionCheckResponse, type ActionMoveRequest, type ActionMoveResponse, type ActionOverrideRequest, type ActionOverrideResponse, type ActionsPendingResponse, type ActionsResponse, type ActionVerb, type CardSpecsResponse, isLinkKind, type LinksResponse } from '../../shared/protocol.js'
 import { isActionKind } from '../../core/actions/types.js'
 import { localMidnight } from '../../core/job/schedule.js'
 import { overriddenOff } from '../../core/actions/sort.js'
@@ -8,6 +8,7 @@ import { actionViews, backfillActions, needsYouCount, setActionOverride } from '
 import { errText } from '../errors.js'
 import { broadcast } from '../ws/send.js'
 import { actionVerbOp } from '../session/actions-hold.js'
+import { checkSendOp } from '../session/actions-check.js'
 import { addLinkOp, linksFor } from '../artifacts-ops.js'
 import type { ScopedCtx } from './ctx.js'
 
@@ -80,6 +81,18 @@ export async function actionRoutes({ req, url, json, rt }: ScopedCtx): Promise<b
       body = { ok: false, error: errText(err) }
     }
     json(body.ok ? 200 : 502, body)
+    return true
+  }
+  // check_send (core/actions/check.ts): would this call go out as the user? A
+  // dry run of the policy for any agent on this Mac. Reads only: nothing is
+  // recorded, held or sent. POST only for its JSON body.
+  if (url.pathname === '/api/actions/check' && req.method === 'POST') {
+    try {
+      const raw = await readJsonBody(req, 200_000)
+      json(200, { ok: true, check: await checkSendOp(rt, raw) } satisfies ActionCheckResponse)
+    } catch (err) {
+      json(400, { ok: false, error: errText(err) } satisfies ActionCheckResponse)
+    }
     return true
   }
   // A queued action's verbs (core/actions/queue.ts): approve (optionally with

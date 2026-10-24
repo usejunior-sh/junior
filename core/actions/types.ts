@@ -169,3 +169,23 @@ export type ActionRecord = {
   /** a held call's approval state; absent on one recorded as it ran */
   queue?: ActionQueue | null
 }
+
+/** check_send (core/actions/check.ts): would a call go out as the user? */
+export type SendVerdict = 'free' | 'held' | 'destroys' | 'refused'
+
+export const SEND_VERDICTS: readonly SendVerdict[] = ['free', 'held', 'destroys', 'refused']
+
+/** What check_send answers: the verdict, one sentence why, and what it would be recorded as. */
+export type SendCheck = {
+  verdict: SendVerdict
+  /** one sentence, for the agent to act on and to repeat to the user */
+  why: string
+  /** when it sends: the kind of action it is (push, pr, message…) */
+  kind?: ActionKind
+  /** when it sends: one line on what goes out */
+  summary?: string
+  /** when it sorted as a send: why it counts (the pattern, the verb, the server's own word) */
+  sortedBy?: string
+  /** a free send let through by an advance approval: which one */
+  approval?: string
+}

@@ -16,6 +16,7 @@
  * the SQLite single-writer stays the server process whichever door was used.
  */
 import { HAND_OFF_NOTE_MAX, type HandoffReadiness } from '../work/handoff.js'
+import type { SendCheck } from '../actions/types.js'
 
 /** How a transport reaches the junior API. Returns the parsed JSON body. */
 export type McpApi = (path: string, body?: unknown, method?: string) => Promise<unknown>
@@ -67,6 +68,37 @@ export function handOffAnswer(id: string, readiness: HandoffReadiness): string {
         ? `ok: handed ${id} to Junior, but ${readiness.watch === 'babysit' ? 'babysitting is off' : 'first-pass reviews are off'}, so nothing runs yet. Tell the user: they turn it on in Settings → Automations. Don't turn it on yourself.`
         : `ok: handed ${id} to Junior, but nothing runs on it: ${readiness.why}.`
   return `${said}\nreadiness: ${JSON.stringify(readiness)}`
+}
+
+/**
+ * check_send: one table entry for all three doors, like hand_off_work_item.
+ * A dry run of the send policy (core/actions/check.ts) for any agent on this
+ * Mac. It reads; it never runs, sends or queues anything.
+ */
+export const CHECK_SEND_TOOL = {
+  name: 'check_send',
+  description:
+    "Ask Junior whether a call would go out as the user, before you make it. A dry run of the user's send policy: it never runs, sends or queues anything. Pass the tool name and its arguments. The answer is free (local work, a read, a push to a branch that isn't the default one, a draft PR, or a send the user approved in advance), held (it reaches a person, so it waits for the user's OK), destroys (it throws away work, so ask the user first) or refused (only the user approves sends, in the app), with one sentence why. Junior's own chats are held by this policy; anywhere else, follow the answer yourself: on held or destroys, show the user what you would send and wait.",
+  inputSchema: {
+    type: 'object',
+    properties: {
+      tool: { type: 'string', description: 'the tool as you would call it: "Bash", "Edit", "Write", or "mcp__<server>__<tool>" (e.g. "mcp__slack__send_message")' },
+      input: {
+        type: 'object',
+        description: 'its arguments, as you would pass them. For Bash: { "command": "git push origin main" }',
+      },
+      cwd: {
+        type: 'string',
+        description: 'for Bash: the absolute folder the command runs in, so a push with no branch named is judged against the branch checked out there. Without it, such a push is held',
+      },
+    },
+    required: ['tool'],
+  },
+}
+
+/** What check_send answers on every door: the verdict and why on one line, then the whole check as JSON. */
+export function checkSendAnswer(check: SendCheck): string {
+  return `${check.verdict}: ${check.why}\ncheck: ${JSON.stringify(check)}`
 }
 
 /** The MCP revision both transports speak. */
@@ -222,6 +254,7 @@ export const TOOLS = [
     },
   },
   HAND_OFF_TOOL,
+  CHECK_SEND_TOOL,
   // Today's plan (core/junior/today.ts): one list for the user and Junior per local day.
   {
     name: 'get_today',
@@ -449,6 +482,19 @@ export async function callTool(
     if (!body.ok) return { text: `rejected: ${body.error}`, isError: true }
     if (!body.readiness) return { text: `ok: handed ${args.id} to Junior`, isError: false }
     return { text: handOffAnswer(args.id, body.readiness), isError: false }
+  }
+  if (name === CHECK_SEND_TOOL.name) {
+    if (typeof args.tool !== 'string' || !args.tool.trim()) return { text: 'rejected: need the tool name, e.g. "Bash"', isError: true }
+    if (args.input !== undefined && (!args.input || typeof args.input !== 'object' || Array.isArray(args.input)))
+      return { text: 'rejected: input is the call\'s arguments, a JSON object', isError: true }
+    if (args.cwd !== undefined && typeof args.cwd !== 'string') return { text: 'rejected: cwd is an absolute folder path', isError: true }
+    const body = (await api('/api/actions/check', { tool: args.tool, input: args.input ?? {}, ...(args.cwd ? { cwd: args.cwd } : {}) })) as {
+      ok: boolean
+      check?: SendCheck
+      error?: string
+    }
+    if (!body.ok || !body.check) return { text: `rejected: ${body.error ?? 'no answer'}`, isError: true }
+    return { text: checkSendAnswer(body.check), isError: false }
   }
   if (name === 'get_today') {
     const body = (await api('/api/today')) as { ok: boolean; plan?: unknown; error?: string }

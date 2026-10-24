@@ -20,7 +20,7 @@ import { broadcast } from '../ws/send.js'
 // with a card. Permissions are untouched: this only jobs.
 
 /** What a connector's server said about one of its tools, from the latest probes. */
-function toolHints(rt: WorkspaceRuntime, toolName: string): ToolHints | undefined {
+export function toolHints(rt: WorkspaceRuntime, toolName: string): ToolHints | undefined {
   for (const probe of [rt.connectorCache, ...rt.folderProbes.values()]) {
     for (const c of probe?.connectors ?? []) {
       const t = c.tools.find((x) => x.fullName === toolName)

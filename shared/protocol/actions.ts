@@ -1,6 +1,7 @@
 import type { ActionRecord, ActionHistoryEntry } from '../../core/actions/types.js'
 import type { KindCount } from '../../core/actions/count.js'
 import type { CardPlan, CardSpec } from '../../core/cards/spec.js'
+import type { SendCheck } from '../../core/actions/types.js'
 
 // Actions (GET /api/actions, POST /api/actions/override), every outbound
 // action a session took: a PR, a comment, a ticket, a push. Domain types
@@ -17,6 +18,7 @@ export type {
   ActionWhy,
 } from '../../core/actions/types.js'
 export type { KindCount } from '../../core/actions/count.js'
+export type { SendCheck, SendVerdict } from '../../core/actions/types.js'
 
 /** A record as the page shows it: names for the ids it carries. */
 export type ActionView = ActionRecord & {
@@ -51,6 +53,14 @@ export type ActionsResponse =
       needsYou: number
     }
   | { ok: false; error: string }
+
+/**
+ * check_send (POST /api/actions/check): would a call go out as the user? A
+ * dry run of the policy; `cwd` is the folder its shell runs in, so a push
+ * with no branch named can be judged. Reads only.
+ */
+export type ActionCheckRequest = { tool: string; input?: Record<string, unknown>; cwd?: string }
+export type ActionCheckResponse = { ok: true; check: SendCheck } | { ok: false; error: string }
 
 /** The rail badge: how many queued actions wait on you. */
 export type ActionsPendingResponse = { ok: true; needsYou: number } | { ok: false; error: string }

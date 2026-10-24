@@ -1,7 +1,8 @@
 import { createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk'
 import { z } from 'zod'
 import { JUNIOR_MCP_INSTRUCTIONS } from '../shared/juniorContext.js'
-import { AGENTS_ARG, BROWSER_ARG, BROWSER_SITES_ARG, HAND_OFF_TOOL, handOffAnswer, SKILLS_ARG } from '../core/mcp/tools.js'
+import { AGENTS_ARG, BROWSER_ARG, BROWSER_SITES_ARG, CHECK_SEND_TOOL, checkSendAnswer, HAND_OFF_TOOL, handOffAnswer, SKILLS_ARG } from '../core/mcp/tools.js'
+import { checkSendOp } from './session/actions-check.js'
 import { handoffOp } from './handoff-ops.js'
 import { type Ask, ASK_ORDER } from '../core/work/asks.js'
 import { WorkspaceRuntime } from './workspace/runtime.js'
@@ -300,6 +301,23 @@ export function makeJuniorMcp(rt: WorkspaceRuntime, sessionId?: string) {
             return okResult(handOffAnswer(args.id, readiness))
           } catch (err) {
             return errResult(errText(err))
+          }
+        },
+      ),
+      // A free read (effects.ts): a dry run of the send policy. It never sends or queues.
+      tool(
+        CHECK_SEND_TOOL.name,
+        CHECK_SEND_TOOL.description,
+        {
+          tool: z.string().describe(CHECK_SEND_TOOL.inputSchema.properties.tool.description),
+          input: z.record(z.string(), z.unknown()).optional().describe(CHECK_SEND_TOOL.inputSchema.properties.input.description),
+          cwd: z.string().optional().describe(CHECK_SEND_TOOL.inputSchema.properties.cwd.description),
+        },
+        async (args) => {
+          try {
+            return okResult(checkSendAnswer(await checkSendOp(rt, args)))
+          } catch (err) {
+            return errResult(`rejected: ${errText(err)}`)
           }
         },
       ),
