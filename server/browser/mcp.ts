@@ -312,7 +312,7 @@ export function makeBrowserMcp(ctx: BrowserToolContext) {
 
       tool(
         'browser_eval',
-        'Run a JavaScript expression in the page and get its JSON value back (promises are awaited). For what the other tools can\'t read; asks the user first unless the session runs without prompts.',
+        'Run a JavaScript expression in the page and get its JSON value back (promises are awaited). For what the other tools can\'t read. On a site off this machine it always asks the user (a job can\'t); on a local page it asks unless the session runs without prompts.',
         { expression: z.string() },
         async (args) =>
           guarded(ctx, async (d) => {

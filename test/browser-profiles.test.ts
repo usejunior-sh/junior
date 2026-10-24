@@ -349,6 +349,43 @@ test('gate: on a signed-in site a Send click asks in a chat and is refused in a 
   })
 })
 
+test('gate: browser_eval on a signed-in site asks in a chat and is refused in a job; local pages are free', async () => {
+  const EVAL = 'mcp__browser__browser_eval'
+  const input = { expression: "document.querySelector('[aria-label=Send]').click()" }
+  await withHost(describing({ name: 'Send' }), async (hub) => {
+    const ctx = { hub, sessionId: 'g-eval', projectRoot: '/tmp/proj', mode: 'chat' as const }
+    // a dev server and a file inside the project: testing, no opinion
+    hub.page('g-eval').url = 'http://localhost:5173/'
+    assert.equal(await browserGate(ctx, EVAL, input), null)
+    assert.equal(await browserGate({ ...ctx, mode: 'job' }, EVAL, input), null)
+    hub.page('g-eval').url = 'file:///tmp/proj/dist/index.html'
+    assert.equal(await browserGate(ctx, EVAL, input), null)
+    // Gmail: a chat asks, and the permission handler hears why
+    hub.page('g-eval').url = 'https://mail.google.com/mail/u/0/'
+    const d = await browserGate(ctx, EVAL, input)
+    assert.ok(d && !d.allow && d.ask)
+    assert.match(d.reason, /Run a script on mail\.google\.com as Default\?/)
+    assert.match(hub.page('g-eval').takeAsk(EVAL, input)!, /Send included/)
+    // a job is refused outright
+    const j = await browserGate({ ...ctx, mode: 'job' }, EVAL, input)
+    assert.ok(j && !j.allow && !j.ask)
+    assert.match(j.reason, /A job can't run script on mail\.google\.com/)
+    // a file outside the project is not local
+    hub.page('g-eval').url = 'file:///Users/me/Downloads/statement.html'
+    const out = await browserGate(ctx, EVAL, input)
+    assert.ok(out && !out.allow && out.ask)
+    // no page yet: it may revive anywhere, so it asks too
+    hub.page('g-eval').url = ''
+    const u = await browserGate(ctx, EVAL, input)
+    assert.ok(u && !u.allow && u.ask)
+    assert.match(u.reason, /can't tell which site/)
+    // the user holds the tab: the tool says so, nothing to ask
+    hub.page('g-eval').url = 'https://mail.google.com/mail/u/0/'
+    hub.page('g-eval').heldByUser = true
+    assert.equal(await browserGate(ctx, EVAL, input), null)
+  })
+})
+
 test('gate: never a password on a site; a chat asks once per site; a job opens only its sites', async () => {
   await withHost(describing({ role: 'textbox', tag: 'input', type: 'password', editable: true, name: 'Password' }), async (hub) => {
     const ctx = { hub, sessionId: 'g2', projectRoot: '/tmp/proj', mode: 'chat' as const }

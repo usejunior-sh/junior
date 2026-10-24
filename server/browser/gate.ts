@@ -1,4 +1,4 @@
-import { BROWSER_SERVER, type ElementFacts, type ElementVerdict, clickVerdict, elementLabel, hostOf, isLocalUrl, keyVerdict, resolveUrl, typeVerdict } from '../../core/browser/policy.js'
+import { BROWSER_SERVER, type ElementFacts, type ElementVerdict, clickVerdict, elementLabel, evalVerdict, hostOf, isLocalUrl, keyVerdict, resolveUrl, typeVerdict } from '../../core/browser/policy.js'
 import { hostAllowed, siteOf } from '../../core/browser/profiles.js'
 import type { VetoDecision } from '../providers/types.js'
 import { BrowserHub } from './hub.js'
@@ -9,10 +9,11 @@ import { browserProfiles } from './profiles.js'
  * The browser's own step in a session's veto chain (.docs/browser.md →
  * Logged-in sites), ahead of the action hold. A profile can be signed in to
  * Gmail: one click there can send mail as the user. So on a page that isn't
- * on this machine, a click that commits (Send, Post, Merge, Delete…) or Enter
- * in a form asks the user in a chat and is refused in a job; Junior never
- * types a password there; a job opens only the sites its file names; a chat
- * asks once per site before it opens one.
+ * on this machine, a click that commits (Send, Post, Merge, Delete…), Enter
+ * in a form, or any browser_eval (script can click Send too) asks the user in
+ * a chat and is refused in a job; Junior never types a password there; a job
+ * opens only the sites its file names; a chat asks once per site before it
+ * opens one.
  *
  * Returns null when the browser has no opinion (the chain goes on), else the
  * decision. An ask is noted on the page's memory, so the session's
@@ -69,6 +70,21 @@ export async function browserGate(ctx: BrowserGateContext, toolName: string, inp
     }
     if (mem.sites.has(siteOf(new URL(url).hostname))) return null
     return ask(`Open ${hostOf(url)} as ${await profileName(i.profile)}? Junior asks once per site in a chat.`)
+  }
+
+  if (leaf === 'browser_eval') {
+    // Script can do anything a click can: off this machine it is a commit click.
+    const v = evalVerdict(pg.url, ctx.projectRoot)
+    if (v === 'free') return null
+    const where = pg.url ? hostOf(pg.url) : 'this page'
+    if (ctx.mode === 'job') {
+      return { allow: false, reason: `A job can't run script on ${where}: it may send or change something. Record what you found with your write tool instead.` }
+    }
+    return ask(
+      v === 'commit'
+        ? `Run a script on ${where} as ${await profileName()}? Script can do anything you can there, Send included.`
+        : `Run a script in the browser as ${await profileName()}? Junior can't tell which site it will run on.`,
+    )
   }
 
   if (leaf !== 'browser_act' && leaf !== 'browser_fill') return null

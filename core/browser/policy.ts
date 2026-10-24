@@ -142,6 +142,17 @@ export function typeVerdict(el: ElementFacts | null): ElementVerdict {
   return 'free'
 }
 
+/**
+ * What running script in a page may do. Script can do anything a click can,
+ * Send included, so off this machine it is judged as a commit click. On a dev
+ * server or a file inside the project it is testing, and free. A page we can't
+ * place (nothing loaded yet; a tab that revives where it last was) is unsure.
+ */
+export function evalVerdict(pageUrl: string | null | undefined, projectRoot?: string): ElementVerdict {
+  if (!pageUrl) return 'unsure'
+  return isLocalUrl(pageUrl, projectRoot) ? 'free' : 'commit'
+}
+
 /** The host a URL is on, for a prompt: "mail.google.com". */
 export function hostOf(url: string): string {
   try {

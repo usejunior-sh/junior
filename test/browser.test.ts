@@ -10,7 +10,7 @@ import path from 'node:path'
 import fs from 'node:fs/promises'
 import { WebSocketServer, WebSocket } from 'ws'
 import { formatSnapshot, uidsIn, type AXNode } from '../core/browser/snapshot.js'
-import { browserCallAllowed, isLocalUrl, resolveUrl } from '../core/browser/policy.js'
+import { browserCallAllowed, evalVerdict, isLocalUrl, resolveUrl } from '../core/browser/policy.js'
 import { dedupe, formatLogs, PageLogBuffer } from '../core/browser/logs.js'
 import { decodePng, diffImages, encodePng, type Rgba } from '../core/browser/image.js'
 import { BROWSER_WIRE_VERSION, parseHostFrame } from '../core/browser/wire.js'
@@ -75,6 +75,24 @@ test('policy: reading and using the page never asks; leaving the machine and eva
   assert.ok(!browserCallAllowed('mcp__browser__browser_open', { url: 'https://example.com' }))
   assert.ok(!browserCallAllowed('mcp__browser__browser_eval', { expression: '1' }))
   assert.ok(!browserCallAllowed('mcp__junior__list_work_items', {}))
+})
+
+test('policy: eval off this machine is a commit, on a local page it is free', () => {
+  // script in a signed-in tab can click Send: judged as a commit click
+  assert.equal(evalVerdict('https://mail.google.com/mail/u/0/', '/repo/app'), 'commit')
+  assert.equal(evalVerdict('https://github.com/acme/app/pull/1'), 'commit')
+  assert.equal(evalVerdict('http://192.168.1.4:3000/'), 'commit')
+  assert.equal(evalVerdict('http://localhost.evil.com/'), 'commit')
+  // a dev server, a file inside the project, a blank tab: testing, free
+  assert.equal(evalVerdict('http://localhost:5173/', '/repo/app'), 'free')
+  assert.equal(evalVerdict('http://127.0.0.1:3000/x'), 'free')
+  assert.equal(evalVerdict('file:///repo/app/dist/index.html', '/repo/app'), 'free')
+  assert.equal(evalVerdict('about:blank'), 'free')
+  // a file outside the project is not this project's page
+  assert.equal(evalVerdict('file:///Users/me/Downloads/statement.html', '/repo/app'), 'commit')
+  // no page yet: a revived tab may land anywhere
+  assert.equal(evalVerdict(''), 'unsure')
+  assert.equal(evalVerdict(undefined), 'unsure')
 })
 
 test('logs: read since the last action, deduped, levels filtered', () => {
