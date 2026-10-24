@@ -41,6 +41,7 @@ import { JuniorMyWork, JuniorPeople, JuniorSuggested, useHandoffCounts } from '.
 import { JuniorLedger } from './JuniorLedger.js'
 import { JuniorLog } from './JuniorLog.js'
 import { JuniorFirstOpen, JuniorGoals } from './JuniorToday.js'
+import { JuniorOnboarding } from './JuniorOnboarding.js'
 import { ChatComposer, type NewSession } from './ChatComposer.js'
 
 /** What the sheet over the page shows: every capability, or the persona. */
@@ -155,6 +156,9 @@ export function JuniorPage({ onNavigate, onDispatch, onCreate, createError, crea
   const unread = useLogUnread()
   const [listening, setListening] = useState(false)
   const now = Date.now()
+  const [skipped, setSkipped] = useOnboardingSkipped(workspaceId)
+  // No projects yet: Junior's first message, until it sets some up or you skip it.
+  const onboard = !!day?.seen && day.seen.projects.length === 0 && !skipped
 
   // A link to a hidden tab still opens it. Three tabs: the turns always show, Up next, Reviews and My PRs never do.
   const visible = three
@@ -177,7 +181,7 @@ export function JuniorPage({ onNavigate, onDispatch, onCreate, createError, crea
             voice: persona.voice,
             name: persona.name,
             you: day.you.name,
-            firstOpen: day.firstOpen,
+            firstOpen: day.firstOpen || onboard,
             needs: day.needs.length,
             people: day.morning.people.length,
             overdue: overdueCount(day.morning),
@@ -185,7 +189,7 @@ export function JuniorPage({ onNavigate, onDispatch, onCreate, createError, crea
           })
         : null,
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [day, persona.voice, persona.name],
+    [day, persona.voice, persona.name, onboard],
   )
 
   const working = (!!day && !day.now.idle) || items.some((i) => i.junior?.stage === 'working')
@@ -195,7 +199,8 @@ export function JuniorPage({ onNavigate, onDispatch, onCreate, createError, crea
       ? pageMood({ needs: day.needs.length, stuck: day.stuck, working, firstOpen: day.firstOpen, planDone: day.plan.done, planTotal: day.plan.total })
       : 'hello'
   const spin = working && !listening
-  const firstOpen = !!day && day.firstOpen && day.plan.total === 0
+  // Skip for now on a workspace with no projects: the old first-open block, for this session
+  const firstOpen = !!day && ((day.firstOpen && day.plan.total === 0) || (skipped && !!day.seen && day.seen.projects.length === 0))
   const me = day?.seen?.github ?? null
 
   const count = (id: PageTab) => {
@@ -251,7 +256,8 @@ export function JuniorPage({ onNavigate, onDispatch, onCreate, createError, crea
           onListen={setListening}
           starters={
             day &&
-            !firstOpen && (
+            !firstOpen &&
+            !onboard && (
               <>
                 {tryShortcuts(day.fill).slice(0, 1).map((t) => (
                   <button key={t.label} type="button" title={t.say} onClick={() => fillHome(t.say)}>
@@ -268,7 +274,16 @@ export function JuniorPage({ onNavigate, onDispatch, onCreate, createError, crea
         {day?.seen && <SourceLine seen={day.seen} />}
       </header>
 
-      {firstOpen && day ? (
+      {onboard && day ? (
+        <div className="jhBody">
+          <JuniorOnboarding
+            github={day.seen?.github ?? null}
+            onDone={reload}
+            onSkip={() => setSkipped(true)}
+            onNavigate={onNavigate}
+          />
+        </div>
+      ) : firstOpen && day ? (
         <div className="jhBody">
           <p className="jrBrief">{firstOpenLine(persona.voice)}</p>
           <JuniorFirstOpen day={day} />
@@ -635,6 +650,30 @@ function HomeComposer({
       />
     </div>
   )
+}
+
+/** Skip for now on Junior's first message: per workspace, for this browser session. */
+function useOnboardingSkipped(workspaceId: string): [boolean, (v: boolean) => void] {
+  const key = `junior.onboarding.skipped.${workspaceId}`
+  const read = () => {
+    try {
+      return sessionStorage.getItem(key) === '1'
+    } catch {
+      return false
+    }
+  }
+  const [skipped, setSkipped] = useState(read)
+  useEffect(() => setSkipped(read()), [key]) // eslint-disable-line react-hooks/exhaustive-deps
+  const set = (v: boolean) => {
+    setSkipped(v)
+    try {
+      if (v) sessionStorage.setItem(key, '1')
+      else sessionStorage.removeItem(key)
+    } catch {
+      // storage blocked: this page load only
+    }
+  }
+  return [skipped, set]
 }
 
 /** First open: who Junior is and how it works, before what it can see. */
