@@ -25,7 +25,7 @@ export { serverOf }
 // Verb tokens that mark a connector call's intent. Written as word sets and
 // matched against the tokens of a tool's leaf name, so both `slack_read_channel`
 // (snake) and `getJiraIssue` (camel) classify the same way. The permission
-// prompt's effect (server/index.ts classifyEffect) reads the same sets.
+// prompt's effect (server/session/effects.ts classifyEffect) reads the same sets.
 export const READ_VERBS = new Set([
   'read', 'search', 'list', 'get', 'fetch', 'lookup', 'view', 'query', 'describe', 'find', 'count', 'show', 'history', 'info',
 ])
