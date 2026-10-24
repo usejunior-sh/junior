@@ -29,6 +29,7 @@ import { filterCounts, filterRows, LEDGER_TAB_ROUTE, openTurnTab, TURN_FILTER_TI
 import { useAppearance } from '../appearance.js'
 import { draftStore, useHomeDraft } from '../drafts.js'
 import { itemHash, useWorkspaceId, type JuniorTab } from '../hooks.js'
+import { useOnboardingSkipped } from '../onboarding.js'
 import { inboxStore, useInbox } from '../inboxStore.js'
 import { useAwayWindow, useJuniorDay, usePersona } from '../junior.js'
 import { useLogUnread } from '../juniorLog.js'
@@ -748,30 +749,6 @@ function HomeComposer({
       />
     </div>
   )
-}
-
-/** Skip for now on Junior's first message: per workspace, for this browser session. */
-function useOnboardingSkipped(workspaceId: string): [boolean, (v: boolean) => void] {
-  const key = `junior.onboarding.skipped.${workspaceId}`
-  const read = () => {
-    try {
-      return sessionStorage.getItem(key) === '1'
-    } catch {
-      return false
-    }
-  }
-  const [skipped, setSkipped] = useState(read)
-  useEffect(() => setSkipped(read()), [key]) // eslint-disable-line react-hooks/exhaustive-deps
-  const set = (v: boolean) => {
-    setSkipped(v)
-    try {
-      if (v) sessionStorage.setItem(key, '1')
-      else sessionStorage.removeItem(key)
-    } catch {
-      // storage blocked: this page load only
-    }
-  }
-  return [skipped, set]
 }
 
 /** First open: who Junior is and how it works, before what it can see. */

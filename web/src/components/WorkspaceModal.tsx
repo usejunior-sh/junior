@@ -1,18 +1,22 @@
 /**
  * The workspace modal (.docs/workspaces.md), one component, two entrances:
  *
- *   create, "New workspace…" from the sidebar switcher
- *   onboarding, first run: the same flow, introducing the concept and
- *                 configuring the default workspace
+ *   create, "New workspace…" from the sidebar switcher: identity (name,
+ *                 colour, default project folder, every workspace has one,
+ *                 decision 549a251e) → Claude auth → verify
+ *   onboarding, first run: Claude auth → verify only. The default workspace
+ *                 keeps its born name "Default" and the first colour, both
+ *                 editable in Settings → Workspace; projects come from
+ *                 Junior's first message on the Junior page, so day one
+ *                 asks only what Junior can't guess.
  *
  * Editing an existing workspace lives on the settings page (Workspace and
  * Claude auth tabs), which shares these cards and the verify panel.
  *
- * Three steps: identity (name, colour, default project folder, every
- * workspace has one, decision 549a251e) → Claude auth (three cards, the
- * tradeoffs spelled out on each) → verify (a live probe with the workspace's own env, so a workspace
- * is never left silently broken, jobs fail in the background, auth must be
- * proven in the foreground).
+ * Claude auth is three cards, the tradeoffs spelled out on each; verify is a
+ * live probe with the workspace's own env, so a workspace is never left
+ * silently broken: jobs fail in the background, auth must be proven in the
+ * foreground.
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ProjectsResponse, Workspace, WorkspaceAuthBackend, WorkspaceResponse } from '../../../shared/protocol.js'
@@ -29,6 +33,18 @@ type Props = {
 
 type Step = 'identity' | 'auth' | 'verify'
 
+const STEPS: Record<WorkspaceModalMode['kind'], [Step, string][]> = {
+  create: [
+    ['identity', 'Name & project'],
+    ['auth', 'Claude auth'],
+    ['verify', 'Verify'],
+  ],
+  onboarding: [
+    ['auth', 'Claude login'],
+    ['verify', 'Check'],
+  ],
+}
+
 export function WorkspaceModal({ mode, onClose }: Props) {
   const dialog = useRef<HTMLDialogElement>(null)
   const [step, setStep] = useState<Step>('identity')
@@ -37,9 +53,8 @@ export function WorkspaceModal({ mode, onClose }: Props) {
   const [name, setName] = useState('')
   const [color, setColor] = useState(WORKSPACE_COLORS[0])
   const [description, setDescription] = useState('')
-  // the default project's folder; onboarding an existing workspace starts from its current default
+  // the default project's folder (create only: onboarding leaves projects to Junior's first message)
   const [folder, setFolder] = useState('')
-  const [currentDefault, setCurrentDefault] = useState('')
   const [folderError, setFolderError] = useState<string | null>(null)
   // auth
   const [authBackend, setAuthBackend] = useState<WorkspaceAuthBackend>('inherit')
@@ -55,25 +70,12 @@ export function WorkspaceModal({ mode, onClose }: Props) {
   useEffect(() => {
     if (!mode) return
     const ws = mode.kind === 'create' ? null : mode.workspace
-    setStep('identity')
-    // The default workspace is born "Default": onboarding asks for a real name.
-    setName(ws && ws.name !== 'Default' ? ws.name : '')
-    setColor(ws?.color ?? WORKSPACE_COLORS[0])
-    setDescription(ws?.description ?? '')
+    setStep(STEPS[mode.kind][0][0])
+    setName('')
+    setColor(WORKSPACE_COLORS[0])
+    setDescription('')
     setFolder('')
-    setCurrentDefault('')
     setFolderError(null)
-    if (ws) {
-      void fetch(`/api/projects?workspace=${encodeURIComponent(ws.id)}`)
-        .then((r) => r.json() as Promise<ProjectsResponse>)
-        .then((b) => {
-          const d = b.ok ? b.projects.find((p) => p.isDefault) : undefined
-          if (!d) return
-          setCurrentDefault(d.path)
-          setFolder((f) => f || d.path)
-        })
-        .catch(() => {})
-    }
     setAuthBackend(ws?.authBackend ?? 'inherit')
     setApiKey('')
     setTarget(ws)
@@ -112,19 +114,16 @@ export function WorkspaceModal({ mode, onClose }: Props) {
     void verifyWorkspace(id).then(setVerify)
   }, [])
 
-  /** Persist identity + auth, then move to the verify step. */
+  /** Persist identity (create only) + auth, then move to the verify step. */
   const save = useCallback(async () => {
     if (!mode) return
     setSaving(true)
     setError('')
     try {
-      const payload = {
-        name: name.trim(),
-        color,
-        description: description.trim(),
-        authBackend,
-        ...(apiKey.trim() ? { apiKey: apiKey.trim() } : {}),
-      }
+      const auth = { authBackend, ...(apiKey.trim() ? { apiKey: apiKey.trim() } : {}) }
+      // Onboarding sends the login only: the PUT leaves name, colour and description as they are.
+      const payload =
+        mode.kind === 'onboarding' ? auth : { name: name.trim(), color, description: description.trim(), ...auth }
       // Once created, a retry (say the folder was refused) edits it rather than creating a second.
       const url = target ? `/api/workspaces?id=${encodeURIComponent(target.id)}` : '/api/workspaces'
       const res = await fetch(url, {
@@ -135,7 +134,7 @@ export function WorkspaceModal({ mode, onClose }: Props) {
       const body = (await res.json()) as WorkspaceResponse
       if (!body.ok) throw new Error(body.error)
       setTarget(body.workspace)
-      if (folder.trim() && folder.trim() !== currentDefault) {
+      if (mode.kind === 'create' && folder.trim()) {
         const pr = await fetch(`/api/projects?workspace=${encodeURIComponent(body.workspace.id)}`, {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
@@ -143,22 +142,23 @@ export function WorkspaceModal({ mode, onClose }: Props) {
         })
         const pb = (await pr.json()) as ProjectsResponse
         if (!pb.ok) throw new Error(`Default project: ${pb.error}`)
-        setCurrentDefault(folder.trim())
+        setFolder('') // set: a retry edits the workspace without adding the project twice
       }
       setStep('verify')
       runVerify(body.workspace.id)
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
+      const msg = err instanceof Error ? err.message : String(err)
+      setError(mode.kind === 'onboarding' ? `Couldn't save. ${msg}` : msg)
     } finally {
       setSaving(false)
     }
-  }, [mode, target, name, color, description, folder, currentDefault, authBackend, apiKey, runVerify])
+  }, [mode, target, name, color, description, folder, authBackend, apiKey, runVerify])
 
   if (!mode) {
     return <dialog ref={dialog} className="wsModal" onClose={onClose} />
   }
 
-  const heading = mode.kind === 'onboarding' ? 'Welcome to Junior — set up your workspace' : 'New workspace'
+  const heading = mode.kind === 'onboarding' ? 'Set up Junior on this Mac' : 'New workspace'
   const needsKey = authBackend === 'api-key' && !apiKey.trim() && !(target?.apiKeyHint && mode.kind !== 'create')
 
   return (
@@ -169,23 +169,21 @@ export function WorkspaceModal({ mode, onClose }: Props) {
       onClick={(e) => e.target === dialog.current && close()}
     >
       <h3>{heading}</h3>
-      {mode.kind === 'onboarding' && step === 'identity' && (
+      {mode.kind === 'onboarding' && step === 'auth' && (
         <p className="wsIntro">
-          A workspace keeps its projects, inbox, jobs, and Claude account separate — work and
-          personal never share a pile. This sets up your first one; more can be added any time from
-          the sidebar.
+          Junior runs Claude with a login on this Mac. Pick which one. You can rename this workspace later.
         </p>
       )}
 
       <div className="wsSteps" aria-hidden="true">
-        {(['identity', 'auth', 'verify'] as Step[]).map((s, i) => (
+        {STEPS[mode.kind].map(([s, label], i) => (
           <span key={s} className={`wsStep${step === s ? ' active' : ''}`}>
-            {i + 1}. {s === 'identity' ? 'Name & project' : s === 'auth' ? 'Claude auth' : 'Verify'}
+            {i + 1}. {label}
           </span>
         ))}
       </div>
 
-      {step === 'identity' && (
+      {step === 'identity' && mode.kind === 'create' && (
         <>
           <label>Name</label>
           <input
@@ -211,15 +209,9 @@ export function WorkspaceModal({ mode, onClose }: Props) {
             onChange={(e) => setDescription(e.target.value)}
           />
           <div className="row">
-            {mode.kind === 'onboarding' ? (
-              <button type="button" className="cancel" onClick={finishOnboarding}>
-                Skip for now
-              </button>
-            ) : (
-              <button type="button" className="cancel" onClick={close}>
-                Cancel
-              </button>
-            )}
+            <button type="button" className="cancel" onClick={close}>
+              Cancel
+            </button>
             <button type="button" className="go" disabled={!name.trim() || !folder.trim()} onClick={() => setStep('auth')}>
               Next
             </button>
@@ -238,11 +230,17 @@ export function WorkspaceModal({ mode, onClose }: Props) {
           />
           {error && <div className="msg error">{error}</div>}
           <div className="row">
-            <button type="button" className="cancel" onClick={() => setStep('identity')}>
-              Back
-            </button>
+            {mode.kind === 'onboarding' ? (
+              <button type="button" className="cancel" onClick={finishOnboarding}>
+                Skip for now
+              </button>
+            ) : (
+              <button type="button" className="cancel" onClick={() => setStep('identity')}>
+                Back
+              </button>
+            )}
             <button type="button" className="go" disabled={saving || needsKey} onClick={() => void save()}>
-              {saving ? 'Saving…' : mode.kind === 'create' ? 'Create & verify' : 'Save & verify'}
+              {saving ? 'Saving…' : mode.kind === 'create' ? 'Create & verify' : 'Save and check'}
             </button>
           </div>
         </>

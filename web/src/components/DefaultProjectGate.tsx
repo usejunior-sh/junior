@@ -1,30 +1,36 @@
 /**
  * Every workspace has a default project. One that has
- * none, skipped onboarding, created from the CLI, or from before projects
- * were required, is asked for a folder when it opens. "Later" puts it off
- * for this page load; the next open asks again.
+ * none, created from the CLI, or from before projects were required, gets
+ * Junior's first message on the Junior page, which adds projects. This gate
+ * defers to it: it asks for a folder only once that message was skipped this
+ * session (web/src/onboarding.ts). "Later" puts it off for this page load;
+ * the next open asks again.
  */
 import { useEffect, useState } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
 import type { ProjectsResponse } from '../../../shared/protocol.js'
+import { defaultProjectGateOpen } from '../../../core/junior/onboarding-gate.js'
 import { FolderField, folderName } from './ProjectsTab.js'
 
 type Props = {
   workspaceId: string
   /** hold off while another modal (onboarding) has the screen */
   suspended: boolean
+  /** Junior's first message was skipped this session: until then it asks, not this dialog */
+  onboardingSkipped: boolean
 }
 
-export function DefaultProjectGate({ workspaceId, suspended }: Props) {
+export function DefaultProjectGate({ workspaceId, suspended, onboardingSkipped }: Props) {
   const [missing, setMissing] = useState(false)
   const [later, setLater] = useState(false)
   const [folder, setFolder] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
-  // Re-asked whenever another modal closes: onboarding may have just set one.
+  // Re-asked whenever another modal closes or the first message is skipped:
+  // either may have just set one.
   useEffect(() => {
-    if (!workspaceId || suspended) return
+    if (!workspaceId || suspended || !onboardingSkipped) return
     let live = true
     void fetch('/api/projects')
       .then((r) => r.json() as Promise<ProjectsResponse>)
@@ -35,7 +41,7 @@ export function DefaultProjectGate({ workspaceId, suspended }: Props) {
     return () => {
       live = false
     }
-  }, [workspaceId, suspended])
+  }, [workspaceId, suspended, onboardingSkipped])
 
   async function save() {
     setSaving(true)
@@ -56,7 +62,7 @@ export function DefaultProjectGate({ workspaceId, suspended }: Props) {
     }
   }
 
-  const open = missing && !later && !suspended
+  const open = defaultProjectGateOpen({ missing, later, suspended, onboardingSkipped })
 
   return (
     <Dialog.Root open={open} onOpenChange={(o) => !o && setLater(true)}>

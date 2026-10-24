@@ -46,6 +46,7 @@ import { ArtifactsPage } from './components/ArtifactsPage.js'
 import { usePendingActions } from './actions.js'
 import { ArtifactPage } from './components/ArtifactPage.js'
 import { DefaultProjectGate } from './components/DefaultProjectGate.js'
+import { useOnboardingSkipped } from './onboarding.js'
 import { type WorkspaceModalMode, WorkspaceModal } from './components/WorkspaceModal.js'
 import { useConn, useSessions, useTerminals, useCheckouts, useHashRoute, useEvents, usePaging, useWorkspaces, useBuild, useUpdatePending, useWorkspaceId, useOnboarded } from './hooks.js'
 import { useInbox, inboxStore } from './inboxStore.js'
@@ -102,6 +103,8 @@ export function App() {
   const onboarded = useOnboarded()
   const [wsModal, setWsModal] = useState<WorkspaceModalMode | null>(null)
   const activeWorkspace = workspaces.find((w) => w.id === workspaceId) ?? null
+  // Junior's first message owns a zero-project workspace; the default-project gate waits until it's skipped.
+  const [onboardingSkipped] = useOnboardingSkipped(workspaceId)
   const {
     tabs,
     preview,
@@ -134,8 +137,9 @@ export function App() {
   const [sheet, setSheet] = useState<RailSection | null>(null)
   useEffect(() => setSheet(null), [route, mobile])
 
-  // First run: the workspace modal doubles as onboarding, introduce the
-  // concept, name the default workspace, pick the Claude auth method.
+  // First run: the workspace modal asks only for the Claude login and checks
+  // it. Name, colour and description keep their defaults (Settings → Workspace);
+  // projects come from Junior's first message on the Junior page.
   useEffect(() => {
     if (!onboarded && activeWorkspace) {
       setWsModal({ kind: 'onboarding', workspace: activeWorkspace })
@@ -854,7 +858,7 @@ export function App() {
         onClose={() => setSystem((s) => ({ ...s, open: false }))}
       />
       <WorkspaceModal mode={wsModal} onClose={() => setWsModal(null)} />
-      <DefaultProjectGate workspaceId={workspaceId} suspended={wsModal !== null || !onboarded} />
+      <DefaultProjectGate workspaceId={workspaceId} suspended={wsModal !== null || !onboarded} onboardingSkipped={onboardingSkipped} />
     </div>
   )
 }
