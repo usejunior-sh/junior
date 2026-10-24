@@ -630,6 +630,23 @@ a.rdyChip:focus-visible { outline: 1px solid var(--hair-bright); outline-offset:
 .jhGone .tt { min-width: 0; flex: 1; margin-left: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ash); }
 .jhGone.out { height: 0; opacity: 0; }
 .jhEmpty:focus { outline: none; }
+/* "Not this one. Why?": the not-useful notice's slot, with three reason chips (NotThisOneWhy) */
+.hoRows .hoGone {
+  display: flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 12px; border-bottom: 1px solid var(--hair-soft);
+  font-size: 0.9615rem; color: var(--charcoal); overflow: hidden; transition: height 0.12s ease, opacity 0.12s ease;
+}
+.hoGone .w { flex: none; white-space: nowrap; }
+.ntoWhy { height: auto; min-height: 44px; flex-wrap: wrap; column-gap: 12px; row-gap: 6px; }
+.ntoWhy.out, .hoRows .hoGone.out { min-height: 0; height: 0; opacity: 0; }
+.ntoChips { display: flex; flex-wrap: wrap; gap: 6px; }
+.ntoChips .ntoChip { border: 1px solid var(--hair-strong); border-radius: var(--r-full); background: none; font-family: var(--sans); font-size: 0.9231rem; color: var(--body); }
+.ntoChips .ntoChip:hover:not(:disabled) { background: var(--hair-soft); }
+.ntoChips .ntoChip:focus-visible { outline: 2px solid var(--hair-bright); outline-offset: 1px; }
+.ntoChips[aria-busy] .ntoChip { cursor: progress; }
+.ntoSaid { min-width: 0; color: var(--ash); }
+.ntoLink { padding: 0; border: 0; background: none; font: inherit; color: var(--blue); cursor: pointer; }
+.ntoLink:hover { text-decoration: underline; text-underline-offset: 3px; }
+.ntoErr { flex-basis: 100%; margin: 0 0 8px; }
 .jhMore { display: block; margin: 8px 12px 0; padding: 0; border: 0; background: none; font: inherit; font-size: 0.9615rem; color: var(--ash); cursor: pointer; }
 .jhMore:hover { color: var(--ink); }
 .jhEmpty { display: flex; gap: 10px; align-items: center; justify-content: center; margin: 28px 0 0; color: var(--mute); font-size: 1.038rem; }
@@ -637,7 +654,7 @@ a.rdyChip:focus-visible { outline: 1px solid var(--hair-bright); outline-offset:
 
 @media (prefers-reduced-motion: reduce) {
   .jhHalo::before, .jhHalo .sat, .jhHalo .bob, .jhTicker .pulse::after, .jhXp { animation: none; }
-  .jhGone { transition: none; }
+  .jhGone, .hoRows .hoGone { transition: none; }
 }
 
 /* ---------- phone ---------- */

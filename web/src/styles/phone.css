@@ -371,3 +371,12 @@ html.kbOpen .shell.mobile .panel { bottom: 0; }
    over what you're typing: it steps aside and comes back when the keyboard
    closes. The live region has already announced it. */
 html.kbOpen .updateBar { display: none; }
+
+/* "Not this one. Why?" (NotThisOneWhy): the line on top, the chips wrap below it at 44px, full width */
+@media (max-width: 767px) {
+  .jhGone.ntoWhy, .hoRows .hoGone.ntoWhy { display: flex; flex-wrap: wrap; align-items: center; height: auto; padding: 8px 10px; }
+  .ntoWhy .w { flex-basis: 100%; }
+  .ntoWhy .ntoChips { flex-basis: 100%; }
+  .ntoWhy .ntoChips .ntoChip { height: 44px; padding: 0 16px; }
+  .jhGone.ntoWhy.out, .hoRows .hoGone.ntoWhy.out { min-height: 0; height: 0; padding-block: 0; }
+}

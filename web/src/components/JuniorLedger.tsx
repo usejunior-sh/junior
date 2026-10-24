@@ -43,6 +43,7 @@ import { kindIcon, shortAge } from '../itemUi.js'
 import { playbookOf, refOf } from '../refs.js'
 import { isMobile, useIsMobile } from '../useMobile.js'
 import { JuniorFace } from './JuniorFace.js'
+import { NotThisOneWhy } from './NotThisOneWhy.js'
 import { ReadyChips, ReadySummary } from './ReadyChips.js'
 import { SnoozeMenu } from './SnoozeMenu.js'
 import { ReasonChip } from './ReasonChip.js'
@@ -327,6 +328,8 @@ export function JuniorLedger({ tab, items, rows, needs, me, empty, moves, nudges
   const { busy, error, act, answered, turning, turnOn } = useAct(focusRow)
   // "Not useful": one notice at a time, in the marked row's slot
   const [gone, setGone] = useState<Gone | null>(null)
+  // "Not this one": a notice asking why, under the row (or in its slot if it left)
+  const [why, setWhy] = useState<{ item: ScoredItem; at: number; how: 'click' | 'key' } | null>(null)
   // the three tabs keep a quieted row on Needs you (last): it stays off the list while its notice shows
   const hiding = rows && gone ? gone.item.id : null
   // "Not now" on the dependency batch: gone at once, the server keeps it hidden from the next reload
@@ -604,7 +607,10 @@ export function JuniorLedger({ tab, items, rows, needs, me, empty, moves, nudges
         return
       }
       if (e.key === 'x') {
-        if (line.item.suggestion) act('not-now', line.item.id)
+        if (line.item.suggestion) {
+          act('not-now', line.item.id)
+          setWhy({ item: line.item, at: at!, how: 'key' })
+        }
         return
       }
     }
@@ -637,8 +643,12 @@ export function JuniorLedger({ tab, items, rows, needs, me, empty, moves, nudges
 
   const goneLine = notice && <GoneLine key={`gone:${notice.item.id}`} title={notice.item.title} leaving={notice.leaving} phone={phone} onUndo={undoGone} onHold={hold} />
   const noticeAt = notice ? Math.min(notice.at, shown.length) : -1
+  const whyRow = why ? shown.findIndex((l) => l.key === why.item.id) : -1
+  // under its row while the row stays; in its slot once it has left
+  const whyAt = !why ? -1 : whyRow >= 0 ? whyRow + 1 : Math.min(why.at, shown.length)
+  const whyLine = why && <NotThisOneWhy key={`why:${why.item.id}`} item={why.item} how={why.how} variant="jh" onDone={() => setWhy(null)} />
 
-  if (lines.length === 0 && !notice)
+  if (lines.length === 0 && !notice && !why)
     return (
       <p className="jhEmpty" ref={emptyRef} tabIndex={-1}>
         <JuniorFace mood="hello" size={18} motion="still" decorative /> {empty}
@@ -667,6 +677,7 @@ export function JuniorLedger({ tab, items, rows, needs, me, empty, moves, nudges
         return (
           <Fragment key={line.key}>
             {n === noticeAt && goneLine}
+            {n === whyAt && whyLine}
             {head}
             {line.batch ? (
               <DepBatchLine
@@ -708,6 +719,10 @@ export function JuniorLedger({ tab, items, rows, needs, me, empty, moves, nudges
                   onNotUseful={tab === 'needs' ? () => markGone(line.item, n, 'click') : undefined}
                   supervised={tab === 'with'}
                   nudge={nudgeRow(line.item)}
+                  onNotNow={() => {
+                    act('not-now', line.item.id)
+                    setWhy({ item: line.item, at: n, how: 'click' })
+                  }}
                 />
               )}
             </div>
@@ -716,6 +731,7 @@ export function JuniorLedger({ tab, items, rows, needs, me, empty, moves, nudges
         )
       })}
       {noticeAt === shown.length && goneLine}
+      {whyAt === shown.length && whyLine}
       {fyi > 0 && (
         <button type="button" className="jhMore" onClick={() => onNavigate('/inbox')}>
           {fyi} more for your info in the inbox
@@ -769,6 +785,7 @@ function ItemLine({
   onNotUseful,
   supervised = false,
   nudge,
+  onNotNow,
 }: {
   item: ScoredItem
   /** line 1, the next move; null falls back to the title-first row */
@@ -795,6 +812,8 @@ function ItemLine({
   supervised?: boolean
   /** a due nudge, or one you drafted */
   nudge?: NudgeRow
+  /** "Not this one" on its suggestion: the list asks why */
+  onNotNow: () => void
 }) {
   const who = whoOf(i, me)
   const Icon = kindIcon(i)
@@ -1003,7 +1022,7 @@ function ItemLine({
               </button>
             )}
             {i.suggestion && (
-              <button type="button" className="btn sm ghost" disabled={busy} title="Not this one" onClick={() => act('not-now', i.id)}>
+              <button type="button" className="btn sm ghost" disabled={busy} title="Not this one" onClick={onNotNow}>
                 <X size={13} aria-hidden="true" /> Not this one
               </button>
             )}

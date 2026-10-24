@@ -16,7 +16,7 @@
  * suggestion and where it stands with Junior (server/inbox/junior.ts).
  */
 import { X, ChevronDown } from 'lucide-react'
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
 import type { HandoffReadiness, JuniorDay, ScoredItem } from '../../../shared/protocol.js'
 import type { Verdict } from '../../../core/review/brief.js'
 import { bySuggestion, STARTS, SUGGEST_SHOWN, type Suggestion } from '../../../core/junior/suggest.js'
@@ -31,6 +31,9 @@ import { inboxStore, useInbox } from '../inboxStore.js'
 import { kindIcon, shortAge } from '../itemUi.js'
 import { playbookOf, refOf } from '../refs.js'
 import { JuniorBrief } from './JuniorBrief.js'
+import { NotThisOneWhy } from './NotThisOneWhy.js'
+import { openNotebook } from '../settings.js'
+import { useSuppressions } from '../suppressions.js'
 import { JuniorFace } from './JuniorFace.js'
 import { NeedsLine } from './JuniorToday.js'
 import { ReadyChips } from './ReadyChips.js'
@@ -153,6 +156,13 @@ export function JuniorSuggested({ day, onNavigate }: { day: JuniorDay | null } &
   const rows = items.filter((i): i is ScoredItem & { suggestion: Suggestion } => !!i.suggestion).sort(bySuggestion)
   const shown = all ? rows : rows.slice(0, SUGGEST_SHOWN)
   const snoozed = snap.counts?.snoozed ?? 0
+  // "Not this one": the row leaves, and its slot asks why for a few seconds
+  const [why, setWhy] = useState<{ item: ScoredItem; at: number } | null>(null)
+  const whyRow = why ? shown.findIndex((i) => i.id === why.item.id) : -1
+  // the notice sits in the slot; if a refetch brought the row back, just under it
+  const whyAt = !why ? -1 : whyRow >= 0 ? whyRow + 1 : Math.min(why.at, shown.length)
+  const whyLine = why && <NotThisOneWhy key={`why:${why.item.id}`} item={why.item} how="click" variant="ho" onDone={() => setWhy(null)} />
+  const kinds = useSuppressions().suppressions?.length ?? 0
   return (
     <>
       <section aria-label="Suggested" ref={sectionRef}>
@@ -163,34 +173,47 @@ export function JuniorSuggested({ day, onNavigate }: { day: JuniorDay | null } &
         <div className="jrNoteWrap">
           <WatchOffNote note={note} items={items} onDismiss={dismissNote} onError={setNoteError} />
         </div>
-        {rows.length === 0 ? (
+        {rows.length === 0 && !why ? (
           <p className="jrEmpty">
             <JuniorFace mood="hello" size={18} motion="still" decorative /> Nothing to suggest right now. I’ll add things here as they come in.
           </p>
         ) : (
           <div className="hoRows">
-            {shown.map((i) => (
-              <Row
-                key={i.id}
-                item={i}
-                meta={joined([refOf(i), ...(i.reason === 'your-pr' ? prSignals(i) : []), ...(i.reason === 'review-requested' ? [`${i.author} asked ${shortAge(i.createdAt)} ago`] : []), ...(slackAsks(i).length ? [<span key="sl" className="chipSl">asked in Slack too</span>] : [])])}
-                mid={
-                  <span className="would">
-                    <span className="l">{i.suggestion.head}</span>
-                    {i.suggestion.would}
-                  </span>
-                }
-                onNavigate={onNavigate}
-              >
-                <button type="button" className="btn xs primary" disabled={busy === i.id} onClick={() => act('start', i.id, i.suggestion.playbook === 'babysit' || i.suggestion.playbook === 'review' ? undefined : i.suggestion.playbook)}>
-                  {VERB[i.suggestion.playbook]}
-                </button>
-                <SnoozeButton item={i} />
-                <button type="button" className="iconBtn sm" title="Not this one" aria-label="Not this one" disabled={busy === i.id} onClick={() => act('not-now', i.id)}>
-                  <X size={14} aria-hidden="true" />
-                </button>
-              </Row>
+            {shown.map((i, n) => (
+              <Fragment key={i.id}>
+                {n === whyAt && whyLine}
+                <Row
+                  item={i}
+                  meta={joined([refOf(i), ...(i.reason === 'your-pr' ? prSignals(i) : []), ...(i.reason === 'review-requested' ? [`${i.author} asked ${shortAge(i.createdAt)} ago`] : []), ...(slackAsks(i).length ? [<span key="sl" className="chipSl">asked in Slack too</span>] : [])])}
+                  mid={
+                    <span className="would">
+                      <span className="l">{i.suggestion.head}</span>
+                      {i.suggestion.would}
+                    </span>
+                  }
+                  onNavigate={onNavigate}
+                >
+                  <button type="button" className="btn xs primary" disabled={busy === i.id} onClick={() => act('start', i.id, i.suggestion.playbook === 'babysit' || i.suggestion.playbook === 'review' ? undefined : i.suggestion.playbook)}>
+                    {VERB[i.suggestion.playbook]}
+                  </button>
+                  <SnoozeButton item={i} />
+                  <button
+                    type="button"
+                    className="iconBtn sm"
+                    title="Not this one"
+                    aria-label="Not this one"
+                    disabled={busy === i.id}
+                    onClick={() => {
+                      act('not-now', i.id)
+                      setWhy({ item: i, at: n })
+                    }}
+                  >
+                    <X size={14} aria-hidden="true" />
+                  </button>
+                </Row>
+              </Fragment>
             ))}
+            {whyAt === shown.length && whyLine}
             {rows.length > SUGGEST_SHOWN && (
               <button type="button" className="jrMore" onClick={() => setAll(!all)}>
                 {all ? 'Show fewer' : `Show ${rows.length - SUGGEST_SHOWN} more`}
@@ -203,6 +226,14 @@ export function JuniorSuggested({ day, onNavigate }: { day: JuniorDay | null } &
           <p className="jrQuiet">
             {snoozed} snoozed. They come back early if something changes.{' '}
             <button type="button" className="jrRef" onClick={() => onNavigate('/inbox/snoozed')}>
+              Show them
+            </button>
+          </p>
+        )}
+        {kinds > 0 && (
+          <p className="jrQuiet">
+            {kinds === 1 ? '1 kind not suggested.' : `${kinds} kinds not suggested.`}{' '}
+            <button type="button" className="jrRef" onClick={() => openNotebook()}>
               Show them
             </button>
           </p>

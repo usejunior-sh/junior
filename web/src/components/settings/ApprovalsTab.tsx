@@ -1,6 +1,8 @@
 import { type ReactNode, useEffect, useRef, useState } from 'react'
 import type { ScoreWeightView } from '../../../../shared/protocol.js'
-import { dayOf, scopeOf, setAgo } from '../../../../core/work/corrections.js'
+import { dayOf, kindWords, scopeOf, setAgo } from '../../../../core/work/corrections.js'
+import { REASON_WORDS, type Suppression } from '../../../../core/junior/suggest.js'
+import { clearSuppression, useSuppressions } from '../../suppressions.js'
 import { clearWeight, useWeights } from '../../weights.js'
 import { takeNotebookScroll } from '../../settings.js'
 import type { Learning } from '../../../../core/junior/learnings.js'
@@ -186,8 +188,8 @@ const NOTEBOOK_SHOWN = 20
 /**
  * Junior's notebook: what Junior keeps about how you work, one group per kind,
  * each on the same NotebookRow: Weights (the reason chip's corrections,
- * core/work/weights.ts) and Learned (core/junior/learnings.ts). Suppressions
- * join as a group of their own. No add button: a weight is born from a row's
+ * core/work/weights.ts), Learned (core/junior/learnings.ts) and Not suggested
+ * (core/junior/suggest.ts suppressions). No add button: a weight is born from a row's
  * reason, a learning from Junior noticing the same correction twice.
  */
 function Notebook() {
@@ -203,6 +205,7 @@ function Notebook() {
     <Section id="notebook" title="Junior’s notebook" hint="What Junior keeps about how you work. Clear or forget a line and it stops counting.">
       <WeightsGroup />
       <LearnedGroup />
+      <SuppressedGroup />
     </Section>
   )
 }
@@ -272,6 +275,82 @@ function WeightsGroup() {
       ) : (
         <p className="apEmpty">Nothing yet. Open a row’s reason to correct the order.</p>
       )}
+    </div>
+  )
+}
+
+/**
+ * Not suggested: the kinds of work you said to skip, by repo. Two "not mine"
+ * or "too small" reasons on a Not this one make one; Suggest again clears it.
+ */
+function SuppressedGroup() {
+  const { suppressions, error } = useSuppressions()
+  const [all, setAll] = useState(false)
+  const [rowErr, setRowErr] = useState<{ key: string; error: string } | null>(null)
+  const [busy, setBusy] = useState<string | null>(null)
+  const [said, setSaid] = useState('')
+  const listRef = useRef<HTMLUListElement>(null)
+  const shown = suppressions ? (all ? suppressions : suppressions.slice(0, NOTEBOOK_SHOWN)) : []
+  async function clear(s: Suppression, n: number) {
+    setBusy(s.key)
+    setRowErr(null)
+    const r = await clearSuppression(s.key)
+    setBusy(null)
+    if (!r.ok) return setRowErr({ key: s.key, error: r.error })
+    setSaid(`Junior suggests ${kindWords(s.kind)} in ${s.repo} again.`)
+    focusAfterRemove(listRef.current, n)
+  }
+  return (
+    <div className="apGroup">
+      <div className="apGroupHead">
+        <b>Not suggested</b> <small>Kinds of work you said to skip. Clear one and Junior suggests it again.</small>
+      </div>
+      {!suppressions && error ? (
+        <div className="msg error" role="alert">
+          Couldn’t load what Junior stopped suggesting. {error}
+        </div>
+      ) : !suppressions ? (
+        <Loading />
+      ) : suppressions.length ? (
+        <>
+          <ul className="apList" ref={listRef}>
+            {shown.map((s, n) => (
+              <NotebookRow
+                key={s.key}
+                title={`${kindWords(s.kind)} · ${s.repo}`}
+                mono
+                facts={`you said ${REASON_WORDS[s.reason]} twice · since ${dayOf(s.since)}`}
+                error={rowErr?.key === s.key ? `Couldn’t clear. ${rowErr.error}` : undefined}
+                actions={
+                  // in apActs, so on a phone the button drops under the facts
+                  <span className="apActs">
+                    <button
+                      type="button"
+                      className="btn sm"
+                      disabled={busy === s.key}
+                      aria-busy={busy === s.key || undefined}
+                      aria-label={`Suggest again: ${kindWords(s.kind)} in ${s.repo}`}
+                      onClick={() => void clear(s, n)}
+                    >
+                      Suggest again
+                    </button>
+                  </span>
+                }
+              />
+            ))}
+          </ul>
+          {!all && suppressions.length > NOTEBOOK_SHOWN && (
+            <button type="button" className="btn sm apMore" onClick={() => setAll(true)}>
+              Show all {suppressions.length}
+            </button>
+          )}
+        </>
+      ) : (
+        <p className="apEmpty">Nothing yet. Say why on a Not this one and Junior learns what to skip.</p>
+      )}
+      <p className="sr-only" role="status" aria-live="polite">
+        {said}
+      </p>
     </div>
   )
 }
