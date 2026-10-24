@@ -8,12 +8,14 @@
  * they cannot drift. A tool that exists over stdio and not over HTTP is the
  * kind of gap nobody notices until an agent silently stops being able to file
  * work. The in-process SDK server that web chats get is defined separately
- * with zod in server/index.ts, against the same `*Op` functions.
+ * with zod in server/junior-mcp.ts, against the same `*Op` functions; a tool
+ * exported here by name (HAND_OFF_TOOL) gives it its name, description and
+ * answer, so the third door can't drift either.
  *
  * Everything routes through the daemon's HTTP API via the injected `api`, so
  * the SQLite single-writer stays the server process whichever door was used.
  */
-
+import { HAND_OFF_NOTE_MAX, type HandoffReadiness } from '../work/handoff.js'
 
 /** How a transport reaches the junior API. Returns the parsed JSON body. */
 export type McpApi = (path: string, body?: unknown, method?: string) => Promise<unknown>
@@ -32,6 +34,40 @@ export const BROWSER_ARG =
   'a browser profile id or name (Settings → Browser) when the job reads web pages, e.g. a dashboard the user signs in to. Runs get the browser, signed in as it, and may read but never press Send or Save. Ask which profile first, suggesting the workspace default'
 export const BROWSER_SITES_ARG =
   'with browser: the only hosts runs may open, e.g. ["app.pendo.io"] or ["*.pendo.io"]; take them from the pages the job reads. Default = any site'
+
+/**
+ * hand_off_work_item: one table entry for all three doors. The in-process
+ * server (server/junior-mcp.ts) takes its name, description and argument
+ * descriptions from here, and answers through handOffAnswer like the
+ * dispatcher below.
+ */
+export const HAND_OFF_TOOL = {
+  name: 'hand_off_work_item',
+  description:
+    "Hand one work item to Junior, by id. The user's own PR: Junior babysits it (CI, review threads, rebases). A review request: Junior does a first pass. Anything else: Junior starts its playbook (answer, debug-fix or investigate). Junior works only what is handed off, and every send still waits for the user's OK. The answer carries readiness: if a watch is off, nothing runs yet. Tell the user; only they turn it on, in Settings → Automations. To hand off something new, create it with create_work_item first and pass the id it returns.",
+  inputSchema: {
+    type: 'object',
+    properties: {
+      id: { type: 'string', description: 'the work item, e.g. "github:owner/repo#12" or "manual:<uuid>"' },
+      note: {
+        type: 'string',
+        description: `one line for Junior: a pointer, not an explanation, e.g. "the flaky test is in auth.spec". Every task on the item reads it. ${HAND_OFF_NOTE_MAX} characters at most`,
+      },
+    },
+    required: ['id'],
+  },
+}
+
+/** What a hand-off answers on every door: one sentence for the model to act on, then readiness as JSON. */
+export function handOffAnswer(id: string, readiness: HandoffReadiness): string {
+  const said =
+    readiness.state === 'ready'
+      ? `ok: handed ${id} to Junior. Junior is on it.`
+      : readiness.state === 'watch-off'
+        ? `ok: handed ${id} to Junior, but ${readiness.watch === 'babysit' ? 'babysitting is off' : 'first-pass reviews are off'}, so nothing runs yet. Tell the user: they turn it on in Settings → Automations. Don't turn it on yourself.`
+        : `ok: handed ${id} to Junior, but nothing runs on it: ${readiness.why}.`
+  return `${said}\nreadiness: ${JSON.stringify(readiness)}`
+}
 
 /** The MCP revision both transports speak. */
 export const PROTOCOL_VERSION = '2024-11-05'
@@ -185,6 +221,7 @@ export const TOOLS = [
       required: ['id'],
     },
   },
+  HAND_OFF_TOOL,
   // Today's plan (core/junior/today.ts): one list for the user and Junior per local day.
   {
     name: 'get_today',
@@ -380,8 +417,9 @@ export async function callTool(
       : { text: `rejected: ${body.error}`, isError: true }
   }
   if (name === 'create_work_item') {
-    const body = (await api('/api/items/manual', args)) as { ok: boolean; error?: string }
-    return body.ok ? { text: 'ok: created', isError: false } : { text: `rejected: ${body.error}`, isError: true }
+    const body = (await api('/api/items/manual', args)) as { ok: boolean; id?: string; error?: string }
+    // the id is what hand_off_work_item and add_to_today need next
+    return body.ok ? { text: body.id ? `ok: created ${body.id}` : 'ok: created', isError: false } : { text: `rejected: ${body.error}`, isError: true }
   }
   if (name === 'draft_job') {
     const body = (await api('/api/jobs/drafted', args)) as { ok: boolean; text?: string; error?: string }
@@ -399,6 +437,18 @@ export async function callTool(
   if (name === 'resolve_work_item') {
     const body = (await api('/api/items/resolve', { id: args.id })) as { ok: boolean; error?: string }
     return body.ok ? { text: 'ok: done', isError: false } : { text: `rejected: ${body.error}`, isError: true }
+  }
+  if (name === HAND_OFF_TOOL.name) {
+    if (typeof args.id !== 'string' || !args.id) return { text: 'rejected: need a work-item id', isError: true }
+    if (args.note !== undefined && typeof args.note !== 'string') return { text: 'rejected: note is one line of text', isError: true }
+    const body = (await api('/api/handoff/start', { itemId: args.id, ...(args.note ? { note: args.note } : {}) })) as {
+      ok: boolean
+      readiness?: HandoffReadiness
+      error?: string
+    }
+    if (!body.ok) return { text: `rejected: ${body.error}`, isError: true }
+    if (!body.readiness) return { text: `ok: handed ${args.id} to Junior`, isError: false }
+    return { text: handOffAnswer(args.id, body.readiness), isError: false }
   }
   if (name === 'get_today') {
     const body = (await api('/api/today')) as { ok: boolean; plan?: unknown; error?: string }

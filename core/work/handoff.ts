@@ -93,6 +93,22 @@ export function handoffReadiness(item: { reason: Reason; source: WorkSource }, w
   return watches[watch] ? { state: 'ready' } : { state: 'watch-off', watch }
 }
 
+/** The longest note a hand-off keeps; longer is cut, never refused. */
+export const HAND_OFF_NOTE_MAX = 500
+
+/**
+ * A hand-off's note: one line, a pointer, not an explanation. Whitespace
+ * folds to single spaces and a long one is cut; blank is no note. It lands in
+ * the item's decisions, which every task on the item reads.
+ */
+export function handoffNote(raw: unknown): string | null {
+  if (raw === undefined || raw === null) return null
+  if (typeof raw !== 'string') throw new Error('note is one line of text')
+  const line = raw.replace(/\s+/g, ' ').trim()
+  if (!line) return null
+  return line.length > HAND_OFF_NOTE_MAX ? `${line.slice(0, HAND_OFF_NOTE_MAX - 1)}…` : line
+}
+
 /** The watch a task came from; null = one you asked for (a retry, a resume, a playbook), which no switch holds. */
 export function watchOf(t: Pick<ItemTask, 'step' | 'why'>): WatchId | null {
   if (t.why === 'you' || !t.step || !WATCH_STEPS.has(t.step)) return null

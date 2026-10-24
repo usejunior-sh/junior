@@ -1,7 +1,8 @@
 import { createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk'
 import { z } from 'zod'
 import { JUNIOR_MCP_INSTRUCTIONS } from '../shared/juniorContext.js'
-import { AGENTS_ARG, BROWSER_ARG, BROWSER_SITES_ARG, SKILLS_ARG } from '../core/mcp/tools.js'
+import { AGENTS_ARG, BROWSER_ARG, BROWSER_SITES_ARG, HAND_OFF_TOOL, handOffAnswer, SKILLS_ARG } from '../core/mcp/tools.js'
+import { handoffOp } from './handoff-ops.js'
 import { type Ask, ASK_ORDER } from '../core/work/asks.js'
 import { WorkspaceRuntime } from './workspace/runtime.js'
 import { VERSION } from './config.js'
@@ -280,6 +281,25 @@ export function makeJuniorMcp(rt: WorkspaceRuntime, sessionId?: string) {
             return okResult('ok: done')
           } catch (err) {
             return errResult(err instanceof Error ? err.message : String(err))
+          }
+        },
+      ),
+      // Hand-offs (server/handoff-ops.ts): name, description and answer come
+      // from the external table entry, so all three doors say the same thing.
+      // A write: it prompts like the other junior writes (effects.ts).
+      tool(
+        HAND_OFF_TOOL.name,
+        HAND_OFF_TOOL.description,
+        {
+          id: z.string().describe(HAND_OFF_TOOL.inputSchema.properties.id.description),
+          note: z.string().optional().describe(HAND_OFF_TOOL.inputSchema.properties.note.description),
+        },
+        async (args) => {
+          try {
+            const { readiness } = await handoffOp(rt, 'start', { itemId: args.id, ...(args.note ? { note: args.note } : {}) })
+            return okResult(handOffAnswer(args.id, readiness))
+          } catch (err) {
+            return errResult(errText(err))
           }
         },
       ),

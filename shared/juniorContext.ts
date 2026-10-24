@@ -28,6 +28,8 @@ export const JUNIOR_MCP_INSTRUCTIONS = `Junior is a local work inbox for one eng
 - brief — a model-written artifact about one item, produced by a headless run against a playbook. Read the brief before starting work on an item.
 - playbook / dispatch template — the user's own prose for how a kind of item gets briefed and how its session opens. User-owned files; not yours to rewrite.
 
+- hand-off — handing an item to Junior with hand_off_work_item. The user's own PR: Junior babysits it. A review request: a first pass. Anything else: its playbook. Junior works only what is handed off. The answer says whether it can run now; when a watch is off, tell the user rather than working around it.
+
 - today's plan — one list of work items for the user and Junior for the current local day, each with an owner: "you" (the user) or "junior" (Junior, the agent). Done comes from the item's own status; unfinished rows carry over to the next day. get_today reads it; add_to_today and remove_from_today change it.
 
 list_work_items, get_work_item, get_session_context, list_artifacts, read_artifact and get_today are free reads — use them rather than guessing. Every other tool writes, and the user is asked first.`
