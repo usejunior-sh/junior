@@ -33,7 +33,7 @@ function item(over: Partial<ScoredItem> = {}): ScoredItem {
 }
 
 const reviewReq = { kind: 'review-requested', reason: 'review-requested', ask: 'review', peopleWaiting: 1, group: 'blocking' } as const
-const empty = <T>(): Record<TurnTab, T[]> => ({ needs: [], with: [], waiting: [] })
+const empty = <T = ScoredItem>(): Record<TurnTab, T[]> => ({ needs: [], with: [], waiting: [] })
 
 test('filterCounts counts each filter a row keeps; one row can count twice', () => {
   const rows = [item(reviewReq), item({ kind: 'own-pr-approved', reason: 'your-pr', ask: 'do' }), item()]
