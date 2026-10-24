@@ -4,7 +4,9 @@ import type { ActionView, ScoredItem } from '../../../../shared/protocol.js'
 import type { ItemTask } from '../../../../core/work/tasks.js'
 import type { Verdict } from '../../../../core/work/verdict.js'
 import { requestCommands } from '../../../../core/babysit/reviewer.js'
+import { botRepliesOf, plainClaim, SEND_BOT_REPLIES_STEP } from '../../../../core/babysit/bot-card.js'
 import { ItemActions } from '../ActionCard.js'
+import { BotTriageCard } from './BotTriageCard.js'
 import { PostReview } from './PostReview.js'
 import { taskVerb, type TaskVerb } from './useItemTasks.js'
 
@@ -19,22 +21,6 @@ const str = (v: unknown) => (typeof v === 'string' ? v : '')
 const botName = (login: string) => {
   const base = login.replace(/\[bot\]$/, '')
   return base === 'cursor' ? 'Bugbot' : base
-}
-
-/** A bot's comment as one readable paragraph: no HTML, badges, folded details or links to "fix in". */
-export function plainClaim(body: string, max = 360): string {
-  const s = body
-    .replace(/^#{1,6}\s*(.+?)\s*$/gm, '$1.')
-    .replace(/^\*\*(.+?)\*\*\s*$/gm, '$1.')
-    .replace(/<!--[\s\S]*?-->/g, ' ')
-    .replace(/<details>[\s\S]*?<\/details>/gi, ' ')
-    .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')
-    .replace(/```[\s\S]*?```/g, ' ')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/[#*_`>]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-  return s.length > max ? `${s.slice(0, max - 1).trimEnd()}…` : s
 }
 
 type Act = (verb: TaskVerb, t: ItemTask, extra?: Record<string, unknown>) => Promise<void>
@@ -55,6 +41,7 @@ export function NeedsYou({ item, verdict, tasks, held, onChanged, onNavigate, on
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const waiting = tasks.filter((t) => t.state === 'waiting').sort((a, b) => a.createdAt - b.createdAt)
+  const fixing = new Set(tasks.filter((t) => t.step === 'fix-thread').map((t) => str(t.input?.threadId)).filter(Boolean))
   const ownAsk = !verdict.handedOff && verdict.turn === 'you' && waiting.length === 0 && held.length === 0
 
   const act: Act = async (verb, t, extra = {}) => {
@@ -94,6 +81,11 @@ export function NeedsYou({ item, verdict, tasks, held, onChanged, onNavigate, on
             )
           case 'send-reply':
             return <ReplyCard key={t.id} {...props} slack={item.source === 'slack'} />
+          case SEND_BOT_REPLIES_STEP: {
+            const replies = botRepliesOf(t.input)
+            if (replies.length) return <BotTriageCard key={t.id} t={t} replies={replies} fixing={fixing} onChanged={onChanged} />
+            return <TaskCard key={t.id} {...props} onNavigate={onNavigate} />
+          }
           case 'approve-plan':
             return <PlanCard key={t.id} {...props} onNavigate={onNavigate} />
           default:

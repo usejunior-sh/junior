@@ -38,7 +38,7 @@ export function snapshotFrom(pr: PrRef, data: J): PrSnapshot {
   const threads: PrThread[] = ((p.reviewThreads?.nodes ?? []) as J[]).map((t) => {
     const c = t.comments?.nodes?.[0] ?? {}
     const login = String(c.author?.login ?? 'ghost')
-    return { id: String(t.id), author: login, isBot: c.author?.__typename === 'Bot' || login.endsWith('[bot]'), resolved: !!t.isResolved, path: t.path ?? null, body: String(c.body ?? ''), url: c.url ?? null }
+    return { id: String(t.id), author: login, isBot: c.author?.__typename === 'Bot' || login.endsWith('[bot]'), resolved: !!t.isResolved, path: t.path ?? null, body: String(c.body ?? ''), url: c.url ?? null, ...(typeof t.line === 'number' ? { line: t.line } : {}) }
   })
   const state = p.state === 'MERGED' || p.state === 'CLOSED' ? p.state : 'OPEN'
   const mergeable = p.mergeable === 'MERGEABLE' || p.mergeable === 'CONFLICTING' ? p.mergeable : 'UNKNOWN'

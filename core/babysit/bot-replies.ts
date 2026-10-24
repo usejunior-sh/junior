@@ -18,38 +18,16 @@
  */
 import { addToTally, BOTS, GENERAL_RULE, type Bot, type Tally, type TallyRow, type Verdict, type VerdictKind, type VerdictRecord, VERDICTS } from './bot-triage.js'
 import { botName, fixThreadTask, type TaskSpec, type TriageThread } from './watch.js'
+import { MAX_BOT_REPLY, SEND_BOT_REPLIES_STEP, type BotReply, type ReplyVerdict } from './bot-card.js'
 
-/** The task on you that carries the drafted replies. */
-export const SEND_BOT_REPLIES_STEP = 'send-bot-replies'
+// The task's shape and its reader live in the browser-safe half, so the card can read it too.
+export { botRepliesOf, MAX_BOT_REPLY, SEND_BOT_REPLIES_STEP, type BotReply, type ReplyVerdict } from './bot-card.js'
 
 /** The step an advance approval's `when` names to cover these sends. */
 export const BOT_REPLY_STEP = { playbook: 'babysit', step: 'bot reply' } as const
 
 /** Where the tally of your approved verdicts lives in config. */
 export const BOT_TALLY_KEY = 'babysit.botTally'
-
-/** A reply is at most this long. GitHub takes more; a reply to a bot never needs it. */
-export const MAX_BOT_REPLY = 4000
-
-export type ReplyVerdict = Exclude<VerdictKind, 'fix'>
-
-/** One drafted reply, as the task carries it: enough to show it, send it, or turn it into a fix. */
-export type BotReply = {
-  threadId: string
-  /** the thread's author login, as GitHub gave it */
-  author: string
-  bot: Bot | null
-  rule: string
-  path: string | null
-  url: string | null
-  /** the bot's claim in one line */
-  message: string
-  /** the bot's comment, clipped: a fix task needs it */
-  body: string
-  verdict: ReplyVerdict
-  reply: string
-  why?: string
-}
 
 const n = (k: number, one: string, many = `${one}s`) => `${k} ${k === 1 ? one : many}`
 
@@ -78,6 +56,7 @@ export function repliesTask(triageTaskId: string, threads: readonly TriageThread
       bot: t.bot ?? null,
       rule: t.rule ?? GENERAL_RULE,
       path: t.path,
+      ...(typeof t.line === 'number' ? { line: t.line } : {}),
       url: t.url,
       message: t.message ?? '',
       body: t.body,
@@ -101,33 +80,6 @@ export function repliesTask(triageTaskId: string, threads: readonly TriageThread
 }
 
 const str = (v: unknown) => (typeof v === 'string' ? v : null)
-
-/** A replies task's drafted replies, read back from its input. Anything malformed is dropped. */
-export function botRepliesOf(input: Record<string, unknown> | undefined): BotReply[] {
-  const raw = Array.isArray(input?.replies) ? (input.replies as unknown[]) : []
-  const out: BotReply[] = []
-  for (const r of raw) {
-    if (!r || typeof r !== 'object') continue
-    const o = r as Record<string, unknown>
-    const threadId = str(o.threadId)?.trim()
-    const reply = str(o.reply)?.trim()
-    if (!threadId || !reply || (o.verdict !== 'wont-fix' && o.verdict !== 'incorrect')) continue
-    out.push({
-      threadId,
-      author: str(o.author) ?? '',
-      bot: BOTS.includes(o.bot as Bot) ? (o.bot as Bot) : null,
-      rule: str(o.rule) ?? GENERAL_RULE,
-      path: str(o.path),
-      url: str(o.url),
-      message: str(o.message) ?? '',
-      body: str(o.body) ?? '',
-      verdict: o.verdict,
-      reply,
-      ...(str(o.why) ? { why: o.why as string } : {}),
-    })
-  }
-  return out
-}
 
 /** What you changed on the card for one thread. */
 export type ReplyEdit = { verdict?: VerdictKind; reply?: string }
@@ -210,7 +162,7 @@ const where = (r: Pick<BotReply, 'path' | 'author' | 'bot'>) => (r.path ? r.path
 
 /** A thread you turned into Fix → "Fix CodeRabbit comment on api.ts" on Junior. */
 export function replyFixTask(r: BotReply): TaskSpec {
-  return fixThreadTask({ id: r.threadId, author: r.author, isBot: true, resolved: false, path: r.path, body: r.body, url: r.url }, `the user changed Junior's ${r.verdict === 'wont-fix' ? "won't fix" : 'incorrect'} to fix`)
+  return fixThreadTask({ id: r.threadId, author: r.author, isBot: true, resolved: false, path: r.path, ...(r.line ? { line: r.line } : {}), body: r.body, url: r.url }, `the user changed Junior's ${r.verdict === 'wont-fix' ? "won't fix" : 'incorrect'} to fix`)
 }
 
 const REPLY_MUTATION = 'mutation($id:ID!,$body:String!){addPullRequestReviewThreadReply(input:{pullRequestReviewThreadId:$id,body:$body}){comment{url}}}'

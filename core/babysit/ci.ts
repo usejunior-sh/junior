@@ -27,7 +27,7 @@ export type PrCheck = {
 }
 
 /** One review thread: who opened it, and whether it is resolved. */
-export type PrThread = { id: string; author: string; isBot: boolean; resolved: boolean; path: string | null; body: string; url: string | null }
+export type PrThread = { id: string; author: string; isBot: boolean; resolved: boolean; path: string | null; body: string; url: string | null; /** the line the thread sits on, when GitHub knows it */ line?: number | null }
 
 type J = Record<string, any> // eslint-disable-line @typescript-eslint/no-explicit-any
 

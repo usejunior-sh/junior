@@ -37,7 +37,7 @@ export const BABYSIT_QUERY = (first: number) => `query($q: String!) {
       ... on CheckRun { databaseId name status conclusion detailsUrl checkSuite { workflowRun { databaseId } } }
       ... on StatusContext { id context state targetUrl createdAt }
     } } } } } }
-    reviewThreads(first: 100) { nodes { id isResolved path comments(first: 1) { nodes { url body author { __typename login } } } } }
+    reviewThreads(first: 100) { nodes { id isResolved path line comments(first: 1) { nodes { url body author { __typename login } } } } }
   } } }
 }`
 

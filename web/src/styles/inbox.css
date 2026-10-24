@@ -409,3 +409,48 @@
 .postReview .prComments code { font-family: var(--mono); font-size: 0.7692rem; color: var(--mute); overflow-wrap: anywhere; }
 .postReview .ask a { color: var(--mute); font-size: 0.8462rem; text-decoration: none; }
 .postReview .ask a:hover { color: var(--ink); }
+
+/* Bot replies on one card (item/BotTriageCard.tsx): a dense row per thread, a verdict segment, the reply folded under it. */
+.btCard .btRows { display: flex; flex-direction: column; margin: 0 -14px; border-top: 1px solid var(--hair); }
+.btRow { display: grid; grid-template-columns: 96px minmax(0, 1fr) auto 14px; column-gap: 12px; row-gap: 4px; align-items: center; min-height: 40px; padding: 6px 14px; border-bottom: 1px solid var(--hair); }
+.btRow .btFile { font-family: var(--mono); font-size: 0.8462rem; color: var(--ash); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.btRow .btClaim { color: var(--charcoal); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.btRow .btVerdict { display: inline-flex; border: 1px solid var(--hair-strong); border-radius: var(--r-sm); background: var(--elev); overflow: hidden; }
+.btRow .btOpt { position: relative; height: 24px; padding: 0 9px; background: none; border: 0; border-left: 1px solid var(--hair); color: var(--ash); font: inherit; font-size: 0.8462rem; cursor: pointer; white-space: nowrap; }
+.btRow .btOpt:first-child { border-left: 0; }
+.btRow .btOpt:hover:not(:disabled) { color: var(--body); }
+.btRow .btOpt[data-state='checked'] { color: var(--ink); background: var(--wash-1); }
+.btRow .btOpt:focus-visible { outline: 1px solid var(--ink); outline-offset: -1px; }
+.btRow .btOpt:disabled { cursor: default; opacity: 0.7; }
+.btRow .btOpt.jrPick::after { content: ''; position: absolute; left: 50%; bottom: 2px; width: 3px; height: 3px; margin-left: -1.5px; border-radius: 50%; background: var(--blue); }
+.btRow .btChev { display: grid; place-items: center; width: 14px; height: 24px; padding: 0; background: none; border: 0; color: var(--ash); cursor: pointer; }
+.btRow .btChev svg { transition: transform 0.12s ease; }
+.btRow[data-state='open'] .btChev svg { transform: rotate(90deg); }
+.btRow .btChev:disabled { visibility: hidden; }
+.btRow .btDone { font-size: 0.8462rem; color: var(--ash); }
+.btRow .btDone.sent { color: var(--green); }
+.btRow .btBelow { grid-column: 2 / -1; display: flex; align-items: center; gap: 10px; min-width: 0; flex-wrap: wrap; }
+.btRow .btBelow:empty { display: none; }
+.btRow .btPreview { flex: 1; min-width: 0; color: var(--ash); font-size: 0.8462rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
+.btRow .btPeek { background: none; border: 0; padding: 0; font: inherit; font-size: 0.8462rem; cursor: text; }
+.btRow .btPeek:hover:not(:disabled) { color: var(--body); }
+.btRow .btThread { margin-left: auto; display: inline-flex; align-items: center; gap: 4px; color: var(--blue); font-size: 0.8462rem; text-decoration: none; white-space: nowrap; }
+.btRow .btReply { flex-basis: 100%; min-width: 0; }
+.btRow .btReply .nRecHead { justify-content: flex-start; }
+.btRow .btReply textarea:disabled { color: var(--charcoal); }
+.btRow .btEmpty { margin-top: 4px; color: var(--red); font-size: 0.8462rem; }
+.btRow.fix .btPreview { font-style: normal; color: var(--ash); }
+.btRow.done { opacity: 0.75; }
+.btCard .btNotice { margin: 0; }
+@media (max-width: 767px) {
+  .btRow { grid-template-columns: minmax(0, 1fr) 14px; padding: 8px 14px; }
+  .btRow .btFile { grid-column: 1 / 2; }
+  .btRow .btClaim { grid-column: 1 / -1; white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .btRow .btChev { grid-row: 1; grid-column: 2; width: 44px; height: 44px; margin-right: -14px; }
+  .btRow .btVerdict, .btRow .btDone { grid-column: 1 / -1; }
+  .btRow .btVerdict { display: flex; }
+  .btRow .btOpt { flex: 1; height: 44px; font-size: 0.9231rem; }
+  .btRow .btBelow { grid-column: 1 / -1; }
+  .btCard .btActs .btn { width: 100%; height: 44px; justify-content: center; }
+  .btCard .btHint { display: none; }
+}

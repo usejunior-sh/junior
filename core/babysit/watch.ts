@@ -281,7 +281,7 @@ export const MAX_TRIAGE_THREADS = 20
 
 /** One bot thread as a task carries it. */
 function threadInput(t: PrThread): Record<string, unknown> {
-  return { threadId: t.id, author: t.author, path: t.path, body: clip(t.body, 4_000), url: t.url }
+  return { threadId: t.id, author: t.author, path: t.path, ...(typeof t.line === 'number' ? { line: t.line } : {}), body: clip(t.body, 4_000), url: t.url }
 }
 
 /** "Fix Bugbot comment on api.ts": Junior fixes, pushes, replies and resolves. `why` = triage's reason, when it ran. */
@@ -379,6 +379,7 @@ export function triageThreadsOf(input: Record<string, unknown> | undefined): Tri
       isBot: true,
       resolved: false,
       path: str(o.path),
+      ...(typeof o.line === 'number' && Number.isInteger(o.line) && o.line > 0 ? { line: o.line } : {}),
       body: str(o.body) ?? '',
       url: str(o.url),
       ...(str(o.bot) ? { bot: o.bot as Bot } : {}),
