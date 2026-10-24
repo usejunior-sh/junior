@@ -1,4 +1,8 @@
-import { useEffect, useState } from 'react'
+import { type ReactNode, useEffect, useRef, useState } from 'react'
+import type { ScoreWeightView } from '../../../../shared/protocol.js'
+import { dayOf, scopeOf, setAgo } from '../../../../core/work/corrections.js'
+import { clearWeight, useWeights } from '../../weights.js'
+import { takeNotebookScroll } from '../../settings.js'
 import { type AdvanceApproval, describeApproval, isLive } from '../../../../core/approvals/approvals.js'
 import { revokeApproval, useApprovals } from '../../approvals.js'
 import { spanText } from '../../actions.js'
@@ -47,6 +51,7 @@ export function ApprovalsTab() {
         </Section>
       )}
       <WhatCounts />
+      <Notebook />
     </>
   )
 }
@@ -167,6 +172,105 @@ function ApprovalRow({ a, now }: { a: AdvanceApproval; now: number }) {
           Revoke
         </button>
       )}
+    </li>
+  )
+}
+
+/** Weights shown before "Show all". */
+const NOTEBOOK_SHOWN = 20
+
+/**
+ * Junior's notebook: what Junior keeps about how you work, one group per kind.
+ * Today only Weights (the reason chip's corrections, core/work/weights.ts);
+ * suppressions (not-this-one-reasons) and learnings (learnings-ui) join as
+ * groups of their own, on the same NotebookRow. No add button: a weight is
+ * born from a row's reason.
+ */
+function Notebook() {
+  const { weights, error } = useWeights()
+  const [all, setAll] = useState(false)
+  const [rowErr, setRowErr] = useState<{ key: string; error: string } | null>(null)
+  const [busy, setBusy] = useState<string | null>(null)
+  const listRef = useRef<HTMLUListElement>(null)
+  // the reason chip's link: land on this section, heading focused
+  useEffect(() => {
+    if (!takeNotebookScroll()) return
+    requestAnimationFrame(() => {
+      document.getElementById('notebook')?.scrollIntoView({ block: 'start' })
+      document.getElementById('notebook-title')?.focus({ preventScroll: true })
+    })
+  }, [])
+  const now = Date.now()
+  const shown = weights ? (all ? weights : weights.slice(0, NOTEBOOK_SHOWN)) : []
+  async function clear(w: ScoreWeightView, n: number) {
+    setBusy(w.key)
+    setRowErr(null)
+    const r = await clearWeight(w.key)
+    setBusy(null)
+    if (!r.ok) return setRowErr({ key: w.key, error: r.error })
+    // focus: the next row's Clear, else the previous one's, else the heading
+    requestAnimationFrame(() => {
+      const btns = listRef.current?.querySelectorAll<HTMLElement>('.apRow > .btn')
+      const to = btns?.length ? btns[Math.min(n, btns.length - 1)] : document.getElementById('notebook-title')
+      to?.focus()
+    })
+  }
+  return (
+    <Section id="notebook" title="Junior’s notebook" hint="What Junior keeps about how you work. Clear a line and it stops counting.">
+      {!weights && error ? (
+        <div className="msg error" role="alert">
+          Couldn’t load the notebook. {error}
+        </div>
+      ) : !weights ? (
+        <Loading />
+      ) : (
+        <div className="apGroup">
+          <div className="apGroupHead">
+            <b>Weights</b> <small>Points you added from a row’s reason. Each lasts 60 days.</small>
+          </div>
+          {weights.length ? (
+            <>
+              <ul className="apList" ref={listRef}>
+                {shown.map((w, n) => (
+                  <NotebookRow
+                    key={w.key}
+                    title={w.label}
+                    mono
+                    facts={`${scopeOf(w.key)} · set ${setAgo(w.setAt, now)} · counts until ${dayOf(w.expiresAt)}`}
+                    error={rowErr?.key === w.key ? `Couldn’t clear. ${rowErr.error}` : undefined}
+                    actions={
+                      <button type="button" className="btn sm" disabled={busy === w.key} aria-label={`Clear: ${w.label}`} onClick={() => void clear(w, n)}>
+                        Clear
+                      </button>
+                    }
+                  />
+                ))}
+              </ul>
+              {!all && weights.length > NOTEBOOK_SHOWN && (
+                <button type="button" className="btn sm apMore" onClick={() => setAll(true)}>
+                  Show all {weights.length}
+                </button>
+              )}
+            </>
+          ) : (
+            <p className="apEmpty">Nothing yet. Open a row’s reason to correct the order.</p>
+          )}
+        </div>
+      )}
+    </Section>
+  )
+}
+
+/** One line in Junior's notebook: what it is, its facts, its buttons. Every kind of entry uses it. */
+function NotebookRow({ title, mono, facts, actions, error }: { title: string; mono?: boolean; facts: string; actions: ReactNode; error?: string }) {
+  return (
+    <li className="apRow">
+      <div className="apMain">
+        <b className={mono ? 'mono' : undefined}>{title}</b>
+        <small>{facts}</small>
+        {error && <div className="msg error">{error}</div>}
+      </div>
+      {actions}
     </li>
   )
 }

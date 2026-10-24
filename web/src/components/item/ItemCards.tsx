@@ -3,6 +3,7 @@ import type { ScoredItem, BriefJob, BriefView } from '../../../../shared/protoco
 import { briefPill } from '../../briefStore.js'
 import { ago, KIND_LABEL } from '../../itemUi.js'
 import { Markdown } from '../Markdown.js'
+import { ReasonChip } from '../ReasonChip.js'
 
 export function ItemDetails({ item, jobTitles }: { item: ScoredItem; jobTitles: Map<string, string> }) {
   return (
@@ -20,10 +21,10 @@ export function ItemDetails({ item, jobTitles }: { item: ScoredItem; jobTitles: 
           </span>
         </div>
 
-        <div className="secLabel mute">Ranked because</div>
+        {/* the score as a sum, and its corrections; no `me` here, so your own rows may offer "This person matters" */}
+        <div className="secLabel mute">Why</div>
         <div className="line">
-          <span className="dash">—</span>
-          <span>{item.rankWhy}</span>
+          <ReasonChip item={item} me={null} />
         </div>
 
         {item.why && item.source !== 'manual' && (

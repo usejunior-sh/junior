@@ -7,7 +7,8 @@
  * closed; a click or Space opens one as a bordered card, its Message or
  * Context, what Junior says and the actions aligned to the row's columns.
  * Many can be open; Esc closes all. J/K move, ⏎ acts on an open row only,
- * S snoozes, D marks done, O opens the item. On Needs you, N marks an open
+ * S snoozes, D marks done, O opens the item, W opens the reason chip (the
+ * score as a sum, and corrections: ReasonChip.tsx). On Needs you, N marks an open
  * item row "not useful": it leaves until something new happens on it, and a
  * one-line notice holds its slot for 5 s with Undo (U).
  *
@@ -33,6 +34,8 @@ import { isMobile, useIsMobile } from '../useMobile.js'
 import { JuniorFace } from './JuniorFace.js'
 import { ReadyChips, ReadySummary } from './ReadyChips.js'
 import { SnoozeMenu } from './SnoozeMenu.js'
+import { ReasonChip } from './ReasonChip.js'
+import { isAdjusted } from '../../../core/work/corrections.js'
 import { TurnOnButton, WatchCap } from './WatchOff.js'
 import { setSelectedItem } from '../selection.js'
 
@@ -96,7 +99,10 @@ function primaryOf(i: ScoredItem, move: RowLine | null, act: Act, open: () => vo
   return { label: 'Hand to Junior', run: () => act('start', i.id, playbookOf(i)) }
 }
 
-/** What the source said: the message, or the context around it. */
+/**
+ * What the source said: the message, or the context around it. Why it ranked
+ * is the Why line's job (the reason chip), so rankWhy is no fallback here.
+ */
 function contextOf(i: ScoredItem): string {
   const s = i.seen
   const bits: string[] = []
@@ -106,7 +112,7 @@ function contextOf(i: ScoredItem): string {
   if (s?.bots) bits.push(`${s.bots} bot comment${s.bots === 1 ? '' : 's'}`)
   const asks = [...new Set((i.linked ?? []).filter((l) => l.source === 'slack').map((l) => l.author).filter(Boolean))]
   if (asks.length) bits.push(`${asks.join(', ')} asked in Slack too`)
-  const lead = i.description?.trim() || i.why?.trim() || i.rankWhy
+  const lead = i.description?.trim() || i.why?.trim()
   return [lead, ...bits].filter(Boolean).join(' · ')
 }
 
@@ -299,6 +305,8 @@ export function JuniorLedger({ tab, items, rows, needs, me, empty, moves, onNavi
   const [sel, setSel] = useState<number | null>(null)
   const [open, setOpen] = useState<ReadonlySet<string>>(() => new Set())
   const [snoozing, setSnoozing] = useState<string | null>(null)
+  // the row whose reason chip is open (W, or a click on the chip)
+  const [whyOpen, setWhyOpen] = useState<string | null>(null)
   const at = sel === null ? null : Math.min(sel, Math.max(0, shown.length - 1))
   // The item under the cursor, for the friction capture (⌘⇧.) to name. NeedLine rows have none.
   const cursorId = at === null ? null : (shown[at]?.item?.id ?? null)
@@ -316,6 +324,8 @@ export function JuniorLedger({ tab, items, rows, needs, me, empty, moves, onNavi
   const refocusAt = useRef<number | null>(null)
   /** our own move of focus to Undo after a click doesn't hold the timer; a person's does */
   const autoFocused = useRef(false)
+  /** a correction just re-ranked this row: the cursor follows it for a few seconds, until you move */
+  const follow = useRef<{ id: string; until: number } | null>(null)
   const rowEl = (key: string) => [...(listRef.current?.querySelectorAll<HTMLElement>('.jhItem') ?? [])].find((el) => el.dataset.key === key)
 
   const markGone = (item: ScoredItem, index: number, how: 'key' | 'click') => {
@@ -407,6 +417,22 @@ export function JuniorLedger({ tab, items, rows, needs, me, empty, moves, onNavi
         requestAnimationFrame(() => rowEl(id)?.querySelector<HTMLElement>('.jhRow')?.focus())
       }
     }
+    // after a correction: the row may move when the refetch lands; the cursor goes with it, and
+    // focus back to its chip if the move dropped it on body
+    const f = follow.current
+    if (f && Date.now() > f.until) follow.current = null
+    else if (f) {
+      const n = shown.findIndex((l) => l.key === f.id)
+      if (n >= 0 && n !== at) {
+        setSel(n)
+        requestAnimationFrame(() => {
+          const el = rowEl(f.id)
+          const a = document.activeElement
+          if (!a || a === document.body) el?.querySelector<HTMLElement>('.rsnChip')?.focus()
+          el?.scrollIntoView({ block: 'nearest' })
+        })
+      }
+    }
     if (refocusAt.current !== null && !gone) {
       const rows = listRef.current?.querySelectorAll<HTMLElement>('.jhItem > .jhRow')
       const n = refocusAt.current
@@ -443,6 +469,7 @@ export function JuniorLedger({ tab, items, rows, needs, me, empty, moves, onNavi
       const goNeed = (n: NeedsRow) => onNavigate(n.target.kind === 'session' ? n.target.id : '/junior/log')
       const move = (to: number) => {
         e.preventDefault()
+        follow.current = null
         setSel(to)
         requestAnimationFrame(() => listRef.current?.querySelector('.jhItem.focus')?.scrollIntoView({ block: 'nearest' }))
       }
@@ -473,6 +500,10 @@ export function JuniorLedger({ tab, items, rows, needs, me, empty, moves, onNavi
         return setSnoozing(line.key)
       }
       if (e.key === 'd') return void doneItem(line.item)
+      if (e.key === 'w' && line.item.rankParts?.length) {
+        e.preventDefault()
+        return setWhyOpen(line.key)
+      }
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
@@ -526,6 +557,7 @@ export function JuniorLedger({ tab, items, rows, needs, me, empty, moves, onNavi
         const isOpen = open.has(line.key)
         const focus = n === at
         const click = () => {
+          follow.current = null
           setSel(n)
           toggle(line.key)
         }
@@ -547,6 +579,12 @@ export function JuniorLedger({ tab, items, rows, needs, me, empty, moves, onNavi
                   turnOn={turnOn}
                   snoozing={snoozing === line.key}
                   onSnoozing={(o) => setSnoozing(o ? line.key : null)}
+                  whyOpen={whyOpen === line.key}
+                  onWhy={(o) => setWhyOpen(o ? line.key : null)}
+                  onSaved={(line2) => {
+                    setSaid(line2)
+                    follow.current = { id: line.item.id, until: Date.now() + 5000 }
+                  }}
                   onClick={click}
                   act={act}
                   onOpen={() => openItem(line.item.id)}
@@ -602,6 +640,9 @@ function ItemLine({
   turnOn,
   snoozing,
   onSnoozing,
+  whyOpen,
+  onWhy,
+  onSaved,
   onClick,
   act,
   onOpen,
@@ -618,6 +659,11 @@ function ItemLine({
   turnOn: TurnOn
   snoozing: boolean
   onSnoozing: (open: boolean) => void
+  /** the reason chip's popover, opened by W or a click */
+  whyOpen: boolean
+  onWhy: (open: boolean) => void
+  /** a correction was saved or cleared: the line to announce */
+  onSaved: (said: string) => void
   onClick: () => void
   act: Act
   onOpen: () => void
@@ -637,6 +683,11 @@ function ItemLine({
   // the cited brief replaces the Context line on Needs you; an open card is the only cost
   const brief = open && onNeeds(i) ? briefLines(i, me, Date.now()) : []
   const lead = brief.length ? keptLead(i) : null
+  // a weight you set counts on this row: a quiet "you set this", last so it gives way first
+  const adjusted = isAdjusted(i)
+  const reasons = adjusted && move ? [...move.reasons, 'you set this'] : move?.reasons
+  const context = contextOf(i)
+  const why = !!i.rankParts?.length
   return (
     <>
       <button
@@ -644,7 +695,7 @@ function ItemLine({
         className={`jhRow${move ? ' two' : ''}`}
         aria-expanded={open}
         // the age sits apart from the line on screen: the name reads the full line, age included
-        aria-label={move ? rowLabel([move.text, title || ref, p !== null ? 'Junior is working' : st.text, title ? ref : null]) : undefined}
+        aria-label={move ? rowLabel([move.text, adjusted ? 'you set this' : null, title || ref, p !== null ? 'Junior is working' : st.text, title ? ref : null]) : undefined}
         onClick={onClick}
       >
         <span className={`wc${who === 'You' ? ' you' : ''}`}>
@@ -653,7 +704,7 @@ function ItemLine({
         </span>
         {move ? (
           <span className="tc">
-            <MoveText verb={move.verb} reasons={move.reasons} withJunior={move.withJunior} />
+            <MoveText verb={move.verb} reasons={reasons ?? move.reasons} withJunior={move.withJunior} />
             {title ? (
               <span className="tt" title={title}>
                 {title}
@@ -663,7 +714,10 @@ function ItemLine({
             )}
           </span>
         ) : (
-          <span className="tt">{i.title}</span>
+          <span className="tt">
+            {i.title}
+            {adjusted && <span className="rsMark"> · you set this</span>}
+          </span>
         )}
         {p !== null ? (
           <span className="prog" role="progressbar" aria-label="How far Junior is" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(p * 100)}>
@@ -703,15 +757,19 @@ function ItemLine({
               )}
               <BriefLines lines={brief} />
             </>
-          ) : (
+          ) : (context || mainRedEvidence(i.seen, Date.now())) ? (
             <>
               <span className="lbl">{i.source === 'slack' ? 'Message' : 'Context'}</span>
               <span className="ctx">
-                {contextOf(i)}
+                {context}
                 <MainRedLine i={i} />
               </span>
             </>
-          )}
+          ) : null}
+          <span className="lbl">Why</span>
+          <span className="why">
+            <ReasonChip item={i} me={me} open={whyOpen} onOpenChange={onWhy} onSaved={onSaved} />
+          </span>
           {ready && (
             <>
               <span className="lbl">Ready</span>
@@ -761,6 +819,11 @@ function ItemLine({
               <button type="button" className="jhKey" onClick={() => void doneItem(i)}>
                 <Kbd>D</Kbd>done
               </button>
+              {why && (
+                <button type="button" className="jhKey" aria-keyshortcuts="w" title="See why it ranked here, and correct it." onClick={() => onWhy(true)}>
+                  <Kbd>W</Kbd>why
+                </button>
+              )}
               {onNotUseful && (
                 <button type="button" className="jhKey" aria-keyshortcuts="n" title="This didn’t need you. It leaves Needs you until something new happens." onClick={onNotUseful}>
                   <Kbd>N</Kbd>not useful

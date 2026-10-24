@@ -107,3 +107,21 @@ export function closeSettings() {
 }
 
 export const setSettingsTab = (tab: SettingsTab) => openSettings(tab)
+
+/**
+ * One-shot: the next Approvals tab scrolls to Junior's notebook and focuses its
+ * heading. Set by the reason chip's "See all in Junior's notebook" link, taken
+ * once by the notebook on mount. Routes have no anchors, so this stands in.
+ */
+let notebookScroll = false
+
+export function openNotebook() {
+  notebookScroll = true
+  openSettings('approvals')
+}
+
+export function takeNotebookScroll(): boolean {
+  const v = notebookScroll
+  notebookScroll = false
+  return v
+}

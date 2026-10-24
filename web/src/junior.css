@@ -543,6 +543,45 @@ a.rdyChip:focus-visible { outline: 1px solid var(--hair-bright); outline-offset:
 .jhKeys span { display: inline-flex; gap: 6px; align-items: center; }
 /* "not useful": the phone's way in (the key strip is hidden there), and the notice that holds the row's slot for 5 s */
 .jhXp .acts .nuPhone { display: none; }
+/* the reason chip (ReasonChip.tsx): the score as a sum in a hairline pill, the total never cut; no orange, no green/red for signs */
+.rsnPlain { color: var(--charcoal); overflow-wrap: anywhere; }
+.rsnChip {
+  display: inline-flex; align-items: center; gap: 8px; max-width: 100%; min-width: 0; justify-self: start; padding: 2px 10px;
+  border: 1px solid var(--hair-strong); border-radius: var(--r-full); background: none; cursor: pointer; text-align: left;
+  font-family: var(--mono); font-size: 0.9231rem; line-height: 1.5; color: var(--ash);
+}
+.rsnChip .ps { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rsnChip .sep { font-style: normal; color: var(--stone); }
+.rsnChip .tot { flex: none; color: var(--body); }
+.rsnChip svg { flex: none; }
+.rsnChip:hover, .rsnChip[data-state="open"] { background: var(--hair-soft); color: var(--charcoal); }
+.rsnChip:focus-visible { outline: 1px solid var(--hair-bright); outline-offset: 1px; }
+.uiMenu.rsnPop {
+  display: flex; flex-direction: column; gap: 10px; width: 360px; padding: 12px; border-radius: var(--r-lg);
+  box-shadow: 0 0 0 1px var(--ring), 0 6px 18px var(--drop); transform-origin: var(--radix-popover-content-transform-origin);
+}
+.rsnPop h4 { margin: 0; font-family: var(--sans); font-size: 1rem; font-weight: 500; color: var(--ink); }
+.rsnParts { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; font-family: var(--mono); font-size: 0.9231rem; }
+.rsnParts li { display: grid; grid-template-columns: 4.5ch minmax(0, 1fr); column-gap: 10px; align-items: baseline; }
+.rsnParts .pt { text-align: right; font-variant-numeric: tabular-nums; color: var(--ink); }
+.rsnParts .lb { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; min-width: 0; color: var(--charcoal); overflow-wrap: anywhere; }
+.rsnParts li.w .lb { color: var(--body); }
+.rsnParts li.tot .pt { margin-top: 2px; padding-top: 4px; border-top: 1px solid var(--hair); }
+.rsnParts li.tot .lb { margin-top: 2px; padding-top: 4px; color: var(--ash); }
+.rsnTag { display: inline-flex; align-items: center; height: 18px; padding: 0 6px; border: 1px solid var(--hair-strong); border-radius: var(--r-full); font-size: 0.7692rem; color: var(--ash); }
+.rsnParts .clr { margin-left: auto; padding: 0 6px; font-size: 0.8462rem; }
+.rsnFix { display: flex; flex-direction: column; gap: 8px; padding-top: 10px; border-top: 1px solid var(--hair); }
+.rsnFix .cap { font-size: 0.9231rem; color: var(--charcoal); }
+.rsnFix .row { display: flex; align-items: flex-start; gap: 10px; }
+.rsnFix .btn { flex: none; width: 168px; justify-content: flex-start; gap: 6px; }
+.rsnFix .btn[aria-pressed="true"] { border-color: var(--hair-bright); color: var(--ink); }
+.rsnFix .fx { min-width: 0; padding-top: 3px; font-size: 0.8462rem; color: var(--ash); overflow-wrap: anywhere; }
+.rsnPop .msg.error { margin: 0; }
+.rsnFoot { padding-top: 10px; border-top: 1px solid var(--hair); font-size: 0.8462rem; color: var(--ash); }
+.rsnFoot a { color: var(--blue); }
+.rsnFoot a:hover { text-decoration: underline; }
+/* "you set this" on a closed title-first row (a two-line row carries it as its last reason) */
+.jhRow .tt .rsMark { font-family: var(--mono); font-size: 0.9231rem; color: var(--ash); }
 .jhGone {
   display: flex; align-items: center; gap: 6px; height: 44px; padding: 0 12px; border-top: 1px solid transparent; border-radius: var(--r);
   font-size: 0.9615rem; color: var(--charcoal); overflow: hidden; transition: height 0.12s ease, opacity 0.12s ease;
@@ -603,6 +642,13 @@ a.rdyChip:focus-visible { outline: 1px solid var(--hair-bright); outline-offset:
   .jhXp .acts .cap { flex-basis: 100%; order: 9; }
   .jhXp .keys, .jhKeys, .jhKbd { display: none; }
   .jhXp .acts .nuPhone { display: inline-flex; }
+  /* the reason chip: full width, a real tap target; the popover's corrections stack at 44px */
+  .rsnChip { width: 100%; min-height: 36px; }
+  /* junior.css loads after phone-touch.css, so the full-width popover is restated here */
+  .uiMenu.rsnPop { width: calc(100vw - 16px); max-width: none; }
+  .rsnFix .row { flex-direction: column; gap: 4px; }
+  .rsnFix .btn { width: 100%; min-height: 44px; }
+  .rsnParts .clr { min-height: 36px; }
   .jhGone { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 12px; row-gap: 2px; height: auto; min-height: 52px; padding: 8px 10px; }
   .jhGone .w { grid-column: 1; grid-row: 1; }
   .jhGone .sep { display: none; }

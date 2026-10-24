@@ -5,10 +5,13 @@ export const Loading = () => <div className="pickerLoading">Loading…</div>
 
 // Building blocks: a section with a heading, and a row: label left, control right.
 
-export function Section({ title, hint, children }: { title: string; hint?: ReactNode; children: ReactNode }) {
+export function Section({ title, hint, children, id }: { title: string; hint?: ReactNode; children: ReactNode; id?: string }) {
+  // with an id, a link can land here: the heading takes focus programmatically (tabIndex -1)
   return (
-    <section className="setSection">
-      <h3>{title}</h3>
+    <section className="setSection" id={id} aria-labelledby={id ? `${id}-title` : undefined}>
+      <h3 id={id ? `${id}-title` : undefined} tabIndex={id ? -1 : undefined}>
+        {title}
+      </h3>
       {hint && <p className="hint">{hint}</p>}
       {children}
     </section>

@@ -233,6 +233,9 @@
 .apMain .apWhy { color: var(--charcoal); }
 .apEmpty { margin: 8px 0 0; color: var(--ash); }
 .apGroup + .apGroup { margin-top: 18px; }
+/* Junior's notebook (ApprovalsTab Notebook): a weight's signed label is data, in mono */
+.apMain b.mono { font-weight: 400; font-size: 0.9231rem; overflow-wrap: anywhere; }
+.apMore { margin-top: 8px; }
 .apGroupHead { display: flex; align-items: baseline; gap: 8px; margin-top: 12px; }
 .apGroupHead b { font-weight: 500; color: var(--ink); }
 .apGroupHead small { font-size: 0.8462rem; color: var(--ash); }
