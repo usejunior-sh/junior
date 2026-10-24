@@ -95,13 +95,13 @@
 .wsMenu .wsOpenTab:hover svg { color: var(--ink); }
 
 /* ---------- dialogs ---------- */
-dialog {
+dialog, .uiDialog {
   background: var(--card); color: var(--ink); border: 1px solid var(--hair-strong); border-radius: var(--r-lg);
   padding: 22px; width: 460px; max-width: 92vw; box-shadow: 0 0 0 1px var(--ring);
 }
 dialog::backdrop { background: var(--scrim); }
-dialog:focus, dialog:focus-visible { outline: none; }
-dialog h3 { margin: 0 0 14px; font-size: 1.1538rem; font-weight: 500; color: var(--ink); letter-spacing: -0.1px; }
+dialog:focus, dialog:focus-visible, .uiDialog:focus, .uiDialog:focus-visible { outline: none; }
+dialog h3, .uiDialog h3 { margin: 0 0 14px; font-size: 1.1538rem; font-weight: 500; color: var(--ink); letter-spacing: -0.1px; }
 dialog label { display: block; font-size: 0.9231rem; color: var(--mute); margin: 12px 0 5px; }
 dialog input, dialog textarea {
   width: 100%; background: var(--canvas); border: 1px solid var(--hair-strong); color: var(--ink);
@@ -110,20 +110,30 @@ dialog input, dialog textarea {
 }
 dialog input:focus, dialog textarea:focus { border-color: var(--ink); }
 dialog input::placeholder, dialog textarea::placeholder { color: var(--stone); }
-dialog .row { margin-top: 18px; display: flex; gap: 8px; justify-content: flex-end; align-items: center; }
-dialog .row button, dialog button.go, dialog button.cancel, dialog button.danger {
+dialog .row, .uiDialog .row { margin-top: 18px; display: flex; gap: 8px; justify-content: flex-end; align-items: center; }
+dialog .row button, dialog button.go, dialog button.cancel, dialog button.danger,
+.uiDialog .row button, .uiDialog button.go, .uiDialog button.cancel, .uiDialog button.danger {
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
   height: 30px; padding: 0 12px; border-radius: var(--r); font-size: 1rem; font-weight: 500;
   border: 1px solid var(--hair-strong); background: var(--elev); color: var(--ink);
 }
-dialog .go { background: var(--ink) !important; color: var(--on-primary) !important; border-color: var(--ink) !important; }
-dialog .go:hover:not(:disabled) { background: var(--primary-hover) !important; }
-dialog .go:disabled { opacity: 0.45; cursor: default; }
-dialog .cancel:hover { border-color: var(--hair-bright); }
+dialog .go, .uiDialog .go { background: var(--ink) !important; color: var(--on-primary) !important; border-color: var(--ink) !important; }
+dialog .go:hover:not(:disabled), .uiDialog .go:hover:not(:disabled) { background: var(--primary-hover) !important; }
+dialog .go:disabled, .uiDialog .go:disabled { opacity: 0.45; cursor: default; }
+dialog .cancel:hover, .uiDialog .cancel:hover { border-color: var(--hair-bright); }
 dialog .danger { color: var(--red) !important; border-color: var(--edge-red) !important; background: transparent !important; }
 dialog .danger:hover:not(:disabled) { background: var(--tint-red) !important; }
-dialog .row button:disabled { opacity: 0.45; cursor: default; }
-dialog p { color: var(--body); font-size: 1rem; line-height: 1.55; }
+dialog .row button:disabled, .uiDialog .row button:disabled { opacity: 0.45; cursor: default; }
+dialog p, .uiDialog p { color: var(--body); font-size: 1rem; line-height: 1.55; }
+/* A Radix Dialog's content (`Dialog.Content`, a div): the same surface as a
+   native <dialog>, centred above its .projOverlay scrim (z 90). No ::backdrop;
+   the scrim is the Overlay. */
+.uiDialog {
+  position: fixed; z-index: 91; top: 50%; left: 50%; margin: 0; transform: translate(-50%, -50%);
+  max-height: calc(100vh - 64px); overflow-y: auto; outline: none;
+}
+/* the item title under "Due date": three lines at most, the full title on hover */
+.dueDialog .wsIntro { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden; overflow-wrap: anywhere; }
 #deleteSession { width: 420px; }
 #deleteSession p { margin: 0; }
 #deleteSession p strong { color: var(--ink); font-weight: 500; }
@@ -166,8 +176,11 @@ dialog p { color: var(--body); font-size: 1rem; line-height: 1.55; }
 .palKeep { flex: none; display: flex; align-items: center; gap: 8px; color: var(--body); font-size: 0.8462rem; cursor: pointer; }
 
 /* help */
-dialog#helpOverlay { width: 400px; }
-#helpOverlay .helpHead { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: -4px -6px 14px 0; }
+#helpOverlay { width: 400px; }
+#helpOverlay .helpHead {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: -4px -6px 14px 0;
+  position: sticky; top: -22px; z-index: 1; background: var(--card);
+}
 #helpOverlay .helpHead h3 { margin: 0; }
 #helpOverlay table { width: 100%; border-collapse: collapse; }
 #helpOverlay td { padding: 6px 0; font-size: 1rem; color: var(--body); vertical-align: top; }

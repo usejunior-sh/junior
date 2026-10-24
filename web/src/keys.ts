@@ -25,13 +25,13 @@ export function anyDialogOpen(): boolean {
 /**
  * True while a modal is up that isn't the palette or the `?` overlay (those
  * two close for a global key): a native modal `<dialog>`, or a Radix Dialog /
- * AlertDialog (the palette is a Radix Dialog, `#palette`). Popovers and menus don't count; they sit in a popper wrapper.
+ * AlertDialog (the palette is `#palette`, the overlay `#helpOverlay`, both Radix). Popovers and menus don't count; they sit in a popper wrapper.
  */
 export function blockingModalOpen(): boolean {
-  const native = [...document.querySelectorAll('dialog')].some((d) => d.matches(':modal') && d.id !== 'palette' && d.id !== 'helpOverlay')
+  const native = [...document.querySelectorAll('dialog')].some((d) => d.matches(':modal'))
   if (native) return true
   return [...document.querySelectorAll('[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"]')].some(
-    (el) => el.id !== 'palette' && !el.closest('[data-radix-popper-content-wrapper]'),
+    (el) => el.id !== 'palette' && el.id !== 'helpOverlay' && !el.closest('[data-radix-popper-content-wrapper]'),
   )
 }
 

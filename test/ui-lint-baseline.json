@@ -4,9 +4,6 @@
     "web/src/components/ContextPanel.tsx": {
       "nativeDialogs": 1
     },
-    "web/src/components/HelpOverlay.tsx": {
-      "nativeDialogs": 1
-    },
     "web/src/components/JobFileEditor.tsx": {
       "nativeDialogs": 1
     },

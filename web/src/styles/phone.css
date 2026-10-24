@@ -249,7 +249,7 @@ html.kbOpen .shell.mobile .panel { bottom: 0; }
 
 /* ---------- phone: dialogs: full width, pinned near the top so a keyboard never covers them ---------- */
 @media (max-width: 767px), (pointer: coarse) and (max-height: 500px) {
-  dialog, dialog.itemComposer, #palette, dialog#helpOverlay, dialog.repoDialog, dialog.sheet {
+  dialog, dialog.itemComposer, #palette, .uiDialog, #helpOverlay, dialog.repoDialog, dialog.sheet {
     width: calc(100vw - 16px); max-width: none;
     margin: calc(env(safe-area-inset-top) + 8px) 8px auto;
     max-height: calc(var(--vvh, 100dvh) - env(safe-area-inset-top) - 16px); overflow-y: auto;
@@ -258,6 +258,10 @@ html.kbOpen .shell.mobile .panel { bottom: 0; }
   dialog .row button, dialog button.go, dialog button.cancel, dialog button.danger { height: 44px; padding: 0 16px; }
   /* the palette is Radix content, not a <dialog>: pinned near the top, footer sticky inside --vvh */
   #palette { top: 0; left: 0; transform: none; }
+  .uiDialog { top: 0; left: 0; right: auto; transform: none; padding: 18px 16px; }
+  .uiDialog .row button, .uiDialog button.go, .uiDialog button.cancel, .uiDialog button.danger { height: 44px; padding: 0 16px; }
+  #helpOverlay .helpHead { top: -18px; }
+  #helpOverlay .helpHead .iconBtn { width: 40px; height: 40px; }
   #palette [cmdk-root] { flex: 1; }
   #palette .palList { max-height: none; flex: 1; }
   #palette .palCancel { display: block; }
