@@ -4,7 +4,7 @@ import type { SlashCommandInfo } from './catalog.js'
 import type { Mention, ResolvedMention } from './mentions.js'
 import type { Checkout, CreateStep } from './projects.js'
 import type { SdkMessage } from './sdk.js'
-import type { EffortLevel, PermissionBehavior, PermissionMode, SessionMode, SessionSummary, ToolEffect } from './session.js'
+import type { EffortLevel, PermissionBehavior, PermissionMode, RewindResult, SessionMode, SessionSummary, ToolEffect } from './session.js'
 import type { Build } from './system.js'
 import type { ProviderId, Workspace } from './workspace.js'
 
@@ -27,6 +27,11 @@ export type SessionEvent =
       relay?: AgentRelay
       /** sent in Goal mode: Junior proposes a goal for it */
       mode?: 'goal'
+      /**
+       * The id the agent keeps this turn under: rewind_files can put the files
+       * back to how they were before it. Claude chats only; absent on older logs.
+       */
+      messageId?: string
     }
   | { kind: 'error'; message: string }
   /** a line Junior writes into the transcript itself. A team paused, a stage began */
@@ -201,6 +206,13 @@ export type ClientMessage =
   | { type: 'agent_background'; sessionId: string; toolUseId: string }
   /** A message for a subagent: relayed by the main agent with SendMessage, since the SDK can't address one directly. */
   | { type: 'agent_message'; sessionId: string; relay: AgentRelay; text: string }
+  /**
+   * Put a chat's files back to how they were before one of its messages
+   * (`messageId` off its `local_user` event). `dryRun` only lists what would
+   * change and touches nothing; only an exact `false` rewinds. Answered by
+   * rewind_result, to this socket.
+   */
+  | { type: 'rewind_files'; sessionId: string; messageId: string; dryRun: boolean }
   /** Open a shell in `cwd` (default: the project's folder); `command` is typed in first, if given. */
   | { type: 'terminal_create'; cwd?: string; projectId?: string; checkoutId?: string; title?: string; command?: string }
   /** Keystrokes / pasted text: raw, exactly as the terminal emulator produced them. */
@@ -307,4 +319,6 @@ export type ServerMessage =
   | { type: 'browser_tab'; tab: import('./browser.js').BrowserTabInfo }
   /** A session's tab downloaded a file (or refused one). */
   | { type: 'browser_download'; download: import('./browser.js').BrowserDownload }
+  /** The answer to a rewind_files from this socket. */
+  | { type: 'rewind_result'; result: RewindResult }
   | { type: 'error'; message: string }

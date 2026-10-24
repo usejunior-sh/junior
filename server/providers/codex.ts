@@ -265,6 +265,8 @@ export const codex: Provider = {
     inProcessMcp: false,
     hooks: false,
     streamDeltas: true,
+    // Codex keeps no per-turn file copies Junior can ask for.
+    fileCheckpoints: false,
   },
   auth: {
     apiKeyVar: CODEX_API_KEY_VAR,

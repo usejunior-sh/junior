@@ -7,7 +7,7 @@ import { claude } from '../server/providers/claude.js'
 import { missingCapabilities, requireCapabilities, requireVeto, vetoRefusal } from '../server/providers/capabilities.js'
 import type { Capabilities, Capability, Provider } from '../server/providers/types.js'
 
-const ALL: Capability[] = ['resume', 'interrupt', 'setModel', 'toolApproval', 'inProcessMcp', 'hooks', 'streamDeltas']
+const ALL: Capability[] = ['resume', 'interrupt', 'setModel', 'toolApproval', 'inProcessMcp', 'hooks', 'streamDeltas', 'fileCheckpoints']
 
 const fake = (off: Capability[]): Pick<Provider, 'label' | 'capabilities'> => ({
   label: 'Fake',

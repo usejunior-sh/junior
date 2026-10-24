@@ -28,6 +28,7 @@ import { itemFilesForSession } from '../items-ops.js'
 import { sessionNotice } from '../team-run/state.js'
 import { errText } from '../errors.js'
 import { checkModelChoice } from '../workspace/probes.js'
+import { rewindFilesOp } from '../session/rewind-ops.js'
 
 export function handleConnection(ws: WebSocket, req: http.IncomingMessage): void {
   const url = new URL(req.url ?? '/ws', `http://localhost:${PORT}`)
@@ -270,6 +271,11 @@ export function handleConnection(ws: WebSocket, req: http.IncomingMessage): void
           // A finished agent can still be written to: main resumes it, so revive main if needed.
           const session = await getOrRevive(rt, msg.sessionId)
           void session?.sendAgentMessage(msg.relay, msg.text)
+          break
+        }
+        case 'rewind_files': {
+          // Answered to this socket only: the transcript line after a real rewind reaches everyone.
+          send(ws, { type: 'rewind_result', result: await rewindFilesOp(rt, msg, getOrRevive) })
           break
         }
         case 'terminal_create': {

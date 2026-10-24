@@ -1,5 +1,5 @@
 import path from 'node:path'
-import { type ClientMessage, type EffortLevel, type ImageAttachment, isEffortLevel, isImageMediaType, isMentionKind, isProviderId, isSessionMode, MAX_IMAGE_BYTES, MAX_IMAGES_PER_MESSAGE, MAX_MENTIONS_PER_MESSAGE, type Mention, type QuestionAnswers } from '../../shared/protocol.js'
+import { type ClientMessage, type EffortLevel, type ImageAttachment, isEffortLevel, isImageMediaType, isMentionKind, isProviderId, isSessionMode, MAX_IMAGE_BYTES, MAX_IMAGES_PER_MESSAGE, MAX_MENTIONS_PER_MESSAGE, type Mention, type QuestionAnswers, REWIND_MESSAGE_ID } from '../../shared/protocol.js'
 import { clampPageLimit } from '../../core/store/event-page.js'
 
 const effort = (v: unknown): EffortLevel | undefined => (isEffortLevel(v) ? v : undefined)
@@ -193,6 +193,13 @@ export function parseClientMessage(raw: unknown): ClientMessage | null {
         ? { type: 'agent_message', sessionId: m.sessionId, relay, text: str(m.text).trim() }
         : null
     }
+    case 'rewind_files':
+      // The id goes to the agent as a checkpoint key: a UUID, nothing else.
+      // Only an exact false rewinds for real: anything else is a dry run,
+      // which lists what would change and touches nothing.
+      return typeof m.sessionId === 'string' && m.sessionId && typeof m.messageId === 'string' && REWIND_MESSAGE_ID.test(m.messageId)
+        ? { type: 'rewind_files', sessionId: m.sessionId, messageId: m.messageId.toLowerCase(), dryRun: m.dryRun !== false }
+        : null
     case 'terminal_create':
       return {
         type: 'terminal_create',

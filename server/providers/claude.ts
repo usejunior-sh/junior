@@ -35,7 +35,8 @@ const sleep = (ms: number) => new Promise((res) => setTimeout(res, ms))
 /** Our turns as the SDK's streaming-input messages. */
 async function* sdkTurns(input: AsyncIterable<UserTurn>): AsyncGenerator<SDKUserMessage> {
   for await (const turn of input) {
-    yield { type: 'user', message: { role: 'user', content: turn.content }, parent_tool_use_id: null } as SDKUserMessage
+    // The turn's own id, when it has one, is the key its file checkpoint is kept under.
+    yield { type: 'user', message: { role: 'user', content: turn.content }, parent_tool_use_id: null, ...(turn.id ? { uuid: turn.id } : {}) } as SDKUserMessage
   }
 }
 
@@ -112,6 +113,7 @@ export const claude: Provider = {
     inProcessMcp: true,
     hooks: true,
     streamDeltas: true,
+    fileCheckpoints: true,
   },
   auth: { apiKeyVar: CLAUDE_API_KEY_VAR, env: claudeAuthEnv, loginCommand: claudeLoginCommand },
   discovery: { configuredMcp: claudeConfiguredMcp, transcriptDir: claudeTranscriptDir },
@@ -154,6 +156,8 @@ export const claude: Provider = {
         ...(spec.resume ? { resume: spec.resume } : {}),
         ...(spec.title && !spec.resume ? { title: spec.title } : {}),
         ...(spec.plugins?.length ? { plugins: spec.plugins.map((p) => ({ type: 'local' as const, path: p })) } : {}),
+        // A copy of each file before a turn edits it, keyed by the turn's user message uuid (rewindFiles below).
+        ...(spec.fileCheckpoints ? { enableFileCheckpointing: true } : {}),
         hooks: {
           ...(spec.veto ? { PreToolUse: [{ hooks: [vetoHook(spec.veto)] }] } : {}),
           PostToolUse: [{ matcher: 'Workflow', hooks: [workflowNoteHook] }],
@@ -189,6 +193,8 @@ export const claude: Provider = {
       },
       // Plugins, skills and agents in one go, project and personal ones too, not only plugins'.
       reloadLibrary: async () => (await q.reloadPlugins()).commands,
+      // Query.rewindFiles(userMessageId, { dryRun }): only where checkpoints are kept.
+      ...(spec.fileCheckpoints ? { rewindFiles: (messageId: string, dryRun: boolean) => q.rewindFiles(messageId, { dryRun }) } : {}),
     }
   },
 

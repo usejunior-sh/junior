@@ -2,7 +2,7 @@ import { createSdkMcpServer } from '@anthropic-ai/claude-agent-sdk'
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import type { AgentRelay, EffortLevel, FastModeDisabledReason, FastModeState, FileRef, ImageAttachment, Mention, PermissionBehavior, PermissionMode, QuestionAnswers, SdkMessage, SessionEvent, SessionStatus } from '../../shared/protocol.js'
-import type { AgentSession, FastModeVerdict, McpServers, PermissionResult, PermissionUpdate, Provider, ToolCall, UserTurn } from '../providers/types.js'
+import type { AgentSession, FastModeVerdict, McpServers, PermissionResult, PermissionUpdate, Provider, RewindOutcome, ToolCall, UserTurn } from '../providers/types.js'
 import type { StoredSession } from '../../core/store/types.js'
 import { providerFor } from '../providers/registry.js'
 import { snapshotTree } from '../git.js'
@@ -109,6 +109,8 @@ export class LiveSession {
   private ultracodeChecked = false
   /** Ultracode switched in place: the next message tells the agent, its system prompt can't. */
   private modeNote: string | null = null
+  /** Files were rewound under the agent: the next message tells it (core/sessions/rewind.ts). */
+  private rewindNote: string | null = null
   /** This turn wrote a skill or agent file, reload them everywhere when it ends. */
   private libraryTouched = false
   /** The agent this session runs on: its own, not the workspace's. */
@@ -191,6 +193,10 @@ export class LiveSession {
       // through `approve` below. Only the servers registered in-process above
       // count as Junior's own; a user's server of the same name is held like any other.
       ...(this.provider.capabilities.hooks ? sessionVeto(rt, row, ownServersOf(mcpServers)) : {}),
+      // A chat keeps a copy of each file before a turn edits it, so the user can
+      // put files back to any of their messages (rewind_files). Not for headless
+      // runs: nobody is there to rewind them.
+      ...(row.kind === 'chat' && this.provider.capabilities.fileCheckpoints ? { fileCheckpoints: true } : {}),
       // Still set under every mode: the permissive modes short-circuit the
       // calls they cover before this runs, and whatever still reaches here
       // is a call that mode decided a human should see.
@@ -472,7 +478,9 @@ export class LiveSession {
     const attached = mentions?.length ? await resolveMentions(this.rt, this.row.cwd, mentions) : null
     // Before the agent can touch anything: the tree this turn starts from.
     await this.beginTurn()
-    this.emit({ kind: 'local_user', text, images, ...(opts.files?.length ? { files: opts.files } : {}), mentions: attached?.resolved, ...(opts.from ? { from: opts.from } : {}), ...(opts.fromSession ? { fromSession: opts.fromSession } : {}), ...(opts.mode ? { mode: opts.mode } : {}) }, true)
+    // The key this turn's file checkpoint is kept under, on the log so the transcript can offer a rewind to it.
+    const messageId = this.turnId()
+    this.emit({ kind: 'local_user', text, images, ...(opts.files?.length ? { files: opts.files } : {}), mentions: attached?.resolved, ...(opts.from ? { from: opts.from } : {}), ...(opts.fromSession ? { fromSession: opts.fromSession } : {}), ...(opts.mode ? { mode: opts.mode } : {}), ...(messageId ? { messageId } : {}) }, true)
     // A message from Junior or a teammate is framed for the model; the transcript keeps the raw text and a badge.
     // One sent in Goal mode says so, so Junior goes straight to a goal card.
     const filesNote = attachedFilesNote(this.rt.attachmentsDir, this.row.id, opts.files ?? [])
@@ -494,9 +502,41 @@ export class LiveSession {
       // Files go in as a path: Read opens them (pdf, csv, notebook, image) without a prompt.
       ...(filesNote ? [{ type: 'text' as const, text: filesNote }] : []),
       ...(this.modeNote ? [{ type: 'text' as const, text: this.modeNote }] : []),
+      ...(this.rewindNote ? [{ type: 'text' as const, text: this.rewindNote }] : []),
     ]
     this.modeNote = null
-    this.input.push({ content })
+    this.rewindNote = null
+    this.input.push({ content, ...(messageId ? { id: messageId } : {}) })
+  }
+
+  /** A fresh message id for a user turn, where this subprocess keeps file checkpoints. */
+  private turnId(): string | undefined {
+    return this.q.rewindFiles ? randomUUID() : undefined
+  }
+
+  /** Whether this subprocess keeps file checkpoints (a Claude chat spawned with them). */
+  get checkpoints(): boolean {
+    return !!this.q.rewindFiles
+  }
+
+  /** A turn is open, a prompt waits on the user, or a Workflow run is still editing: no files move under it. */
+  get busy(): boolean {
+    return this.status === 'running' || this.waiting || this.workflows > 0
+  }
+
+  /**
+   * Ask the agent to put files back to before the user turn `messageId`.
+   * `dryRun` only reports what would change. Throws where this subprocess
+   * keeps no checkpoints; the caller (server/session/rewind-ops.ts) checks first.
+   */
+  async rewindFiles(messageId: string, dryRun: boolean): Promise<RewindOutcome> {
+    if (!this.q.rewindFiles) throw new Error("This chat doesn't keep file checkpoints.")
+    return this.q.rewindFiles(messageId, dryRun)
+  }
+
+  /** After a real rewind: the next message tells the agent its edits since then are gone. */
+  noteRewound(note: string) {
+    this.rewindNote = note
   }
 
   private requestPermission(
@@ -774,11 +814,14 @@ export class LiveSession {
    */
   async sendAgentMessage(relay: AgentRelay, text: string) {
     await this.beginTurn()
-    this.emit({ kind: 'local_user', text, relay }, true)
+    const messageId = this.turnId()
+    this.emit({ kind: 'local_user', text, relay, ...(messageId ? { messageId } : {}) }, true)
     this.setStatus('running')
     this.watchTurn()
     void this.rt.store.sessions.touch(this.row.id)
-    this.input.push({ content: [{ type: 'text', text: frameAgentRelay(relay, text) }] })
+    const rewound = this.rewindNote
+    this.rewindNote = null
+    this.input.push({ content: [{ type: 'text', text: frameAgentRelay(relay, text) }, ...(rewound ? [{ type: 'text' as const, text: rewound }] : [])], ...(messageId ? { id: messageId } : {}) })
   }
 
   /**

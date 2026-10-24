@@ -138,3 +138,33 @@ export type SessionSummary = {
   /** the team run this session leads or works on */
   teamRun?: SessionTeamRun
 }
+
+/**
+ * File checkpoints (rewind_files): a Claude chat keeps a copy of each file
+ * before its turn edits it, keyed by the user message that started the turn
+ * (`messageId` on a `local_user` event). Rewinding puts the files back to how
+ * they were before that message. The conversation is not rewound, only files.
+ */
+
+/** A message id the agent keys checkpoints on: a UUID, the SDK's own user message id. */
+export const REWIND_MESSAGE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/**
+ * What a rewind_files request came back with. `ok` false = nothing changed on
+ * disk, and `error` says why in words the user can read. On a dry run, `ok`
+ * means the rewind would work, and the counts say what it would do; on a real
+ * one, it means it ran.
+ */
+export type RewindResult = {
+  sessionId: string
+  messageId: string
+  dryRun: boolean
+  ok: boolean
+  error?: string
+  /** files the rewind changes (dry run) or changed (real), absolute paths */
+  filesChanged?: string[]
+  insertions?: number
+  deletions?: number
+  /** real rewinds only: linked or unreadable files left alone, for safety */
+  skippedLinks?: number
+}

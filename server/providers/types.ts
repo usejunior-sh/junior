@@ -15,6 +15,7 @@ import type {
   McpServerStatus,
   PermissionResult,
   PermissionUpdate,
+  RewindFilesResult,
 } from '@anthropic-ai/claude-agent-sdk'
 import type {
   AgentCan,
@@ -52,6 +53,8 @@ export type Capability =
   | 'hooks'
   /** token deltas as well as whole messages */
   | 'streamDeltas'
+  /** keep a copy of each file before a turn edits it, and put files back to any user turn (SessionSpec.fileCheckpoints) */
+  | 'fileCheckpoints'
 
 export type Capabilities = Readonly<Record<Capability, boolean>>
 
@@ -97,11 +100,18 @@ export type McpStatus = McpServerStatus
 
 export type { PermissionResult, PermissionUpdate }
 
+/** What a rewind said (the SDK's RewindFilesResult): can it run, and what it changes. */
+export type RewindOutcome = RewindFilesResult
+
 /** Spawn-time environment overrides (workspace auth); undefined = inherit. */
 export type SpawnEnv = Record<string, string> | undefined
 
-/** One user turn into a live session: text and images, in order. */
+/**
+ * One user turn into a live session: text and images, in order. `id`: the
+ * turn's message id (a UUID), the key its file checkpoint is kept under.
+ */
 export type UserTurn = {
+  id?: string
   content: Array<
     | { type: 'text'; text: string }
     | { type: 'image'; source: { type: 'base64'; media_type: ImageMediaType; data: string } }
@@ -177,6 +187,8 @@ export type SessionSpec = {
   plugins?: string[]
   /** a veto on every call, before any mode or allow rule (a held action, in a job run or a team worker) */
   veto?: ToolVeto
+  /** keep file checkpoints per user turn, so rewindFiles can put files back (needs the `fileCheckpoints` capability) */
+  fileCheckpoints?: boolean
   approve: ToolApproval
 }
 
@@ -199,6 +211,12 @@ export interface AgentSession extends AsyncIterable<ProviderEvent> {
   backgroundTask(toolUseId: string): Promise<void>
   /** re-read skills and agents from disk; the refreshed `/` list. Absent where the agent can't. */
   reloadLibrary?(): Promise<CommandEntry[]>
+  /**
+   * Put files back to how they were before the user turn `messageId` (its
+   * UserTurn.id). `dryRun` only reports what would change. Absent unless the
+   * session was opened with `fileCheckpoints`.
+   */
+  rewindFiles?(messageId: string, dryRun: boolean): Promise<RewindOutcome>
 }
 
 /** One headless prompt run to completion (jobs, scans, drafts). */
