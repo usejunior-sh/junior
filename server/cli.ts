@@ -11,7 +11,6 @@
  *   junior install     keep it running: a macOS LaunchAgent (restarts after reboot/crash)
  *   junior uninstall   remove the LaunchAgent
  *   junior doctor      check the environment jobs depend on
- *   junior goal        create, list and show goals (over the running server)
  *   junior add         file a to-do in the inbox (over the running server)
  *
  * "Is junior running" is always decided by GET /api/health, a pid file can
@@ -33,7 +32,7 @@ import { checkHealth, JUNIOR_DIR, LOG_FILE, type Health } from './state.js'
 import { launchAgentInstalled, loadLaunchAgent, launchAgentLoaded, installLaunchAgent, launchAgentPlist, kickstartLaunchAgent } from './launchd.js'
 import { appCmd } from './cli/app.js'
 import { command, deferInstall, positional } from './cli/args.js'
-import { addCmd, goalCmd } from './cli/goal.js'
+import { addCmd } from './cli/add.js'
 import { logTail, logs, printRunning, resolvePort, status, stop } from './cli/lifecycle.js'
 import { OPT_OUT_FILE, doctor, uninstall } from './cli/service.js'
 import { bold, box, cyan, die, dim, green, red, row, tilde, yellow } from './cli/ui.js'
@@ -198,8 +197,7 @@ switch (command) {
     break
   case 'goal':
   case 'goals':
-    await goalCmd(positional[1], positional.slice(2))
-    break
+    die('"goal" is retired. Ask Junior for a goal in a chat. It runs as a team.')
   case 'add':
     await addCmd(positional.slice(1))
     break

@@ -74,7 +74,6 @@ const ROWS: Row[] = [
   { name: 'team gate', item: item(manual, { team: { state: 'gate', at: T0 } }), want: 'junior-asks' },
   { name: 'team proposed', item: item(manual, { team: { state: 'proposed', at: T0 } }), want: 'junior-asks' },
   { name: 'team on a budget pause', item: item(manual, { team: { state: 'paused', at: T0 } }), want: 'junior-asks' },
-  { name: 'goal plan ready', item: item(manual, { goal: { state: 'plan_ready', at: T0 } }), want: 'junior-asks' },
   { name: 'a session asks, read off the flow', item: item(manual, { session: { running: true, waiting: true, error: false, at: T0 } }), want: 'junior-asks' },
   { name: 'a task you own waits', item: item({ ...manual, tasks: tasks({ needsYou: 1 }) }), want: 'task-on-you' },
   { name: 'a brief failed', item: item(manual, { brief: { status: 'failed', at: T0 } }), want: 'broken' },
@@ -120,7 +119,6 @@ const ROWS: Row[] = [
   { name: 'your PR waits on review, handed off', item: item({ ...ownPr('own-pr-open'), ...handed('watching') }), want: 'reviewers' },
   { name: 'you follow up on someone', item: item({ kind: 'job-hit', source: 'job', reason: 'found', ask: 'follow-up' }), want: 'follow-up' },
   { name: 'a team waits on the world', item: item(manual, { team: { state: 'waiting', at: T0 } }), want: 'world' },
-  { name: 'a goal waits on the world', item: item(manual, { goal: { state: 'waiting_world', at: T0 } }), want: 'world' },
 
   // Junior watches it
   { name: 'review request handed off, before the first pass', item: item({ kind: 'review-requested', reason: 'review-requested', ask: 'review', peopleWaiting: 1, group: 'blocking', ...handed('watching') }), want: 'junior-watching' },
@@ -140,7 +138,6 @@ const ROWS: Row[] = [
   // left with you
   { name: 'you paused Junior', item: item({ ...manual, handoff: 'paused', junior: junior('paused') }), want: 'paused' },
   { name: 'you paused Junior, its task stopped', item: item({ ...manual, handoff: 'paused', junior: junior('paused'), tasks: tasks({ needsYou: 1 }) }), want: 'paused' },
-  { name: 'a goal is paused', item: item(manual, { goal: { state: 'paused', at: T0 } }), want: 'paused' },
   { name: 'your own to-do', item: item(manual), want: 'yours' },
   { name: 'a mention', item: item({ kind: 'mention' }), want: 'yours' },
   { name: 'a ticket assigned to you', item: item({ kind: 'ticket-assigned', source: 'linear', reason: 'assigned', ask: 'do', group: 'cycle' }), want: 'yours' },
@@ -190,7 +187,7 @@ test("flow.ts's turn reads straight across when nothing else is known", () => {
   for (const r of ROWS) {
     if (r.ctx || r.item.junior || r.item.tasks || r.item.handoff || r.item.status !== 'open' || !r.item.flow) continue
     const want = across[r.item.flow.turn]
-    if (!want) continue // none: a paused goal or an override to "Nobody", read by the rules
+    if (!want) continue // none: an override to "Nobody", read by the rules
     assert.equal(turnOf(r.item, r.ctx).turn, want, r.name)
     checked++
   }
@@ -217,7 +214,6 @@ const DIFFERENCES: Record<string, string> = {
   'team gate': 'needs.ts lists the gate as its own line, not the item row',
   'team proposed': 'needs.ts lists the plan as its own line, not the item row',
   'team on a budget pause': 'a budget pause waits on you; today no Needs you line shows it',
-  'goal plan ready': 'a goal plan waits on you; needs.ts has no goal source yet',
   'a session asks, read off the flow': 'needs.ts lists the held session as its own line, not the item row',
   'a task you own waits': 'a task on you is yours; today Needs you reads only Junior’s hand-off state',
   'a brief failed': 'something broke and only you can restart it; today it sits in Up next',
@@ -246,7 +242,6 @@ const DIFFERENCES: Record<string, string> = {
   // left with you
   'you paused Junior': 'you paused Junior, so it’s yours; today it sits in With Junior',
   'you paused Junior, its task stopped': 'you paused Junior, so it’s yours; today it sits in With Junior',
-  'a goal is paused': 'a paused goal moves only when you resume it; today it sits in Up next',
   'your own to-do': 'on your plate; today it sits in Up next',
   'a mention': 'on your plate; today it sits in Up next as FYI',
   'a ticket assigned to you': 'on your plate; today it sits in Up next',

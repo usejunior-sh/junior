@@ -1,11 +1,11 @@
 /**
- * Run guard (core/goals/run-guard.ts): the sleep watch that tells a slept
+ * Run guard (core/job/run-guard.ts): the sleep watch that tells a slept
  * run from a slow one, how a run's status is settled for sleep, and the
  * hard stop that ends a run whose stream never closes. Time is an argument.
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { HardStop, SLEEP_TICK_MS, SleepWatch, settleRunStatus, untilStopped } from '../core/goals/run-guard.js'
+import { HardStop, SLEEP_TICK_MS, SleepWatch, settleRunStatus, untilStopped } from '../core/job/run-guard.js'
 
 const T0 = new Date(2026, 9, 16, 3).getTime()
 const MIN = 60_000

@@ -1,15 +1,12 @@
 /**
- * core/babysit/ci.ts + snapshot.ts: the PR reading babysitting shares with the
- * goals engine's shepherd (moved out of core/goals, move-goal-helpers). The
- * flake test, the bot-comment fingerprint, the fix cap and the snapshot parse
- * behave as they did, and core/goals still re-exports the same functions.
+ * core/babysit/ci.ts + snapshot.ts: the PR reading babysitting uses (moved out
+ * of the old goals engine, move-goal-helpers). The flake test, the bot-comment
+ * fingerprint, the fix cap and the snapshot parse behave as they did.
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { checkFrom, fingerprint, looksFlaky, MAX_FIX_ATTEMPTS } from '../core/babysit/ci.js'
 import { snapshotFrom, type PrRef } from '../core/babysit/snapshot.js'
-import * as shepherd from '../core/goals/shepherd.js'
-import * as goalTypes from '../core/goals/types.js'
 
 const PR: PrRef = { repo: 'acme/app', number: 12 }
 
@@ -92,11 +89,4 @@ test('snapshotFrom reads what gh hands back', () => {
   )
   assert.deepEqual(s.threads[0], { id: 'T', author: 'dependabot[bot]', isBot: true, resolved: true, path: null, body: 'b', url: 'c' })
   assert.throws(() => snapshotFrom(PR, { data: { repository: { pullRequest: null } } }), /not found/)
-})
-
-test('core/goals re-exports the moved helpers unchanged, for one commit', () => {
-  assert.equal(shepherd.looksFlaky, looksFlaky)
-  assert.equal(shepherd.fingerprint, fingerprint)
-  assert.equal(shepherd.snapshotFrom, snapshotFrom)
-  assert.equal(goalTypes.MAX_FIX_ATTEMPTS, MAX_FIX_ATTEMPTS)
 })

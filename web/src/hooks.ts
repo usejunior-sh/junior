@@ -79,10 +79,8 @@ export type Route =
   | { page: 'changes' }
   /** `#/change/<checkoutId>/<encoded path>`: one changed file: its diff, and an editor (a project id = its main checkout) */
   | { page: 'change'; checkoutId: string; path: string }
-  /** `#/goals`: outcomes Junior drives across sessions */
+  /** `#/goals`: goals (team runs with a done-when); hidden, it redirects to Junior's page */
   | { page: 'goals' }
-  /** `#/goals/<id>`: one goal: its state and ledger */
-  | { page: 'goal'; id: string }
   /** `#/settings/<tab>`: the settings page, on that tab */
   | { page: 'settings'; tab: SettingsTab }
 
@@ -128,17 +126,8 @@ function parseRoute(hash: string): Route {
     const d = /^\/jobs\/([^/]+)$/.exec(hash)
     if (d) return { page: 'job', id: decodeURIComponent(d[1]) }
   }
-  if (hash === '/goals') return { page: 'goals' }
-  {
-    const m = /^\/goals\/([^/]+)$/.exec(hash)
-    if (m) {
-      try {
-        return { page: 'goal', id: decodeURIComponent(m[1]) }
-      } catch {
-        return { page: 'goals' }
-      }
-    }
-  }
+  // `#/goals/<id>` was the old goals engine's page: its links land with the goals.
+  if (hash === '/goals' || /^\/goals\/[^/]+$/.test(hash)) return { page: 'goals' }
   if (hash === '/artifacts' || hash.startsWith('/artifacts?')) return { page: 'artifacts' }
   if (hash.startsWith('/artifact/')) return { page: 'artifact', id: hash.slice('/artifact/'.length) }
   {

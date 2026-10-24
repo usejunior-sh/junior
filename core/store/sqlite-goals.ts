@@ -30,8 +30,8 @@ import {
   type SessionOutcome,
   type StepRole,
   type StepStatus,
+  TERMINAL_STATES,
 } from '../goals/types.js'
-import { TERMINAL_STATES } from '../goals/machine.js'
 import type { GoalQuery, GoalSessionRecord, GoalStore, NewGoal } from './types.js'
 
 type GoalRow = {

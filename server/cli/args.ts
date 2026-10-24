@@ -6,9 +6,9 @@ export let explicitPort: number | null = null
 export let explicitColor: string | null = null
 /** `junior install --defer`: write the agent, never restart a running server. */
 export let deferInstall = false
-/** `junior goal …` flags (`--workspace` serves `junior add` too) */
-export const goalFlags: { doneWhen?: string; horizon?: string; state?: string; workspace?: string } = {}
-const GOAL_FLAGS: Record<string, keyof typeof goalFlags> = { '--done-when': 'doneWhen', '--horizon': 'horizon', '--state': 'state', '--workspace': 'workspace' }
+/** `junior add` flags */
+export const addFlags: { workspace?: string } = {}
+const ADD_FLAGS: Record<string, keyof typeof addFlags> = { '--workspace': 'workspace' }
 export const positional: string[] = []
 for (let i = 0; i < args.length; i++) {
   const a = args[i]
@@ -28,11 +28,11 @@ for (let i = 0; i < args.length; i++) {
     explicitColor = args[++i] ?? null
   } else if (a.startsWith('--color=')) {
     explicitColor = a.slice('--color='.length)
-  } else if (GOAL_FLAGS[a.split('=')[0]!]) {
+  } else if (ADD_FLAGS[a.split('=')[0]!]) {
     const eq = a.indexOf('=')
     const v = eq > 0 ? a.slice(eq + 1) : args[++i]
     if (v === undefined) die(`${a} needs a value`)
-    goalFlags[GOAL_FLAGS[a.split('=')[0]!]!] = v
+    addFlags[ADD_FLAGS[a.split('=')[0]!]!] = v
   } else if (a.startsWith('-')) {
     die(`unknown option ${a} — try ${cyan('junior --help')}`)
   } else {

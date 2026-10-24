@@ -45,12 +45,6 @@ async function flowSignals(rt: WorkspaceRuntime): Promise<Map<string, FlowSignal
     const asks = run.goal?.questions.filter((q) => q.answer === null).length ?? 0
     if (!s.team || at > s.team.at) s.team = { state: run.state, at, ...(asks ? { asks } : {}), ...(run.goal && run.state === 'done' && !run.goal.acceptedAt ? { toAccept: true } : {}) }
   }
-  // Goals with an item: the newest live one per item (done and cancelled hand the item back to the rules).
-  for (const g of await rt.store.goals.list({ states: ['draft_plan', 'plan_ready', 'queued', 'running', 'waiting_world', 'waiting_you', 'result_ready', 'paused'] })) {
-    if (!g.sourceItemId || g.state === 'done' || g.state === 'cancelled') continue
-    const s = of(g.sourceItemId)
-    if (!s.goal || g.updatedAt > s.goal.at) s.goal = { state: g.state, at: g.updatedAt }
-  }
   for (const [id, f] of stored) if (f.override) of(id).override = f.override
   // Queued actions waiting on you: the item is on your turn until they're answered.
   for (const a of await rt.store.actions.list({ status: ['needs_you'], limit: 5000 })) {

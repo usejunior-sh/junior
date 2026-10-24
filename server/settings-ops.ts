@@ -1,9 +1,7 @@
 import path from 'node:path'
 import type { Project, WorkItem, WorkspaceSettings } from '../shared/protocol.js'
 import { DEFAULT_JOB_TIMEOUT_MS, MAX_JOB_TIMEOUT_MS } from '../core/job/types.js'
-import { goalMaxTeam, GOALS_MAX_TEAM_KEY } from './goals.js'
 import { log } from './log.js'
-import { MAX_GOAL_TEAM } from '../core/goals/types.js'
 import type { Provenance } from '../core/work/types.js'
 import type { UpsertResult } from '../core/store/types.js'
 import { WorkspaceRuntime } from './workspace/runtime.js'
@@ -86,7 +84,6 @@ export async function readSettings(rt: WorkspaceRuntime): Promise<WorkspaceSetti
     briefsDefaultModel: typeof model === 'string' && model ? model : null,
     hiddenModels: await readIdList(rt, HIDDEN_MODELS_KEY),
     customModels: await readIdList(rt, CUSTOM_MODELS_KEY),
-    goalsMaxTeam: await goalMaxTeam(rt),
     browserProfile: await workspaceBrowserProfile(rt),
   }
 }
@@ -145,11 +142,6 @@ export async function writeSettings(rt: WorkspaceRuntime, raw: unknown): Promise
   }
   if (r.hiddenModels !== undefined) await rt.store.config.set(HIDDEN_MODELS_KEY, modelIdList(r.hiddenModels, 'hiddenModels'))
   if (r.customModels !== undefined) await rt.store.config.set(CUSTOM_MODELS_KEY, modelIdList(r.customModels, 'customModels'))
-  if (r.goalsMaxTeam !== undefined) {
-    const n = r.goalsMaxTeam
-    if (typeof n !== 'number' || !Number.isInteger(n) || n < 1 || n > MAX_GOAL_TEAM) throw new Error(`goalsMaxTeam must be a whole number from 1 to ${MAX_GOAL_TEAM}`)
-    await rt.store.config.set(GOALS_MAX_TEAM_KEY, n)
-  }
   if (r.browserProfile !== undefined) {
     const id = await setWorkspaceBrowserProfile(rt, r.browserProfile)
     broadcast(rt, { type: 'browser_profiles', profiles: browserProfiles().list(), workspaceDefault: id })

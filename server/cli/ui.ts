@@ -56,11 +56,6 @@ export const HELP = `
   ${bold('Quick capture')} ${dim('(needs the server running)')}
     ${cyan('junior add <title>')}                  file a to-do in the inbox, with you ${dim('(--workspace <name|id>)')}
 
-  ${bold('Goals')} ${dim('(needs the server running)')}
-    ${cyan('junior goal create <title> --done-when <text>')}   start a goal ${dim('(--horizon today|until_done|ongoing)')}
-    ${cyan('junior goal list')}                    list goals ${dim('(--state plan_ready,waiting_you)')}
-    ${cyan('junior goal show <id>')}               a goal with its plan, handoff and latest log
-
   ${bold('Desktop app')} ${dim('(macOS)')}
     ${cyan('junior app install')}    install Junior.app ${dim('(opens the UI in its own window)')}
     ${cyan('junior app uninstall')}  remove Junior.app
@@ -68,7 +63,7 @@ export const HELP = `
   ${bold('Options')}
     ${cyan('--port <n>')}         port to serve on ${dim(`(default ${DEFAULT_PORT}; PORT env works too)`)}
     ${cyan('--color <hex>')}      workspace color for ${cyan('workspace create')}
-    ${cyan('--workspace <id>')}   the workspace ${cyan('goal')} and ${cyan('add')} act in ${dim('(default: the default workspace)')}
+    ${cyan('--workspace <id>')}   the workspace ${cyan('add')} acts in ${dim('(default: the default workspace)')}
     ${cyan('--version')}          print the version
     ${cyan('--help')}             show this help
 

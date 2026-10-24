@@ -8,10 +8,10 @@
  *   AC, killed when the last holder lets go, and gone with the daemon.
  *   A no-op off macOS.
  * - a sleep watch, ticked every few seconds: a long silence between ticks
- *   was sleep, so a run can be recorded `slept` (core/goals/run-guard.ts).
+ *   was sleep, so a run can be recorded `slept` (core/job/run-guard.ts).
  */
 import { spawn } from 'node:child_process'
-import { SLEEP_TICK_MS, SleepWatch } from '../core/goals/run-guard.js'
+import { SLEEP_TICK_MS, SleepWatch } from '../core/job/run-guard.js'
 
 /** What the assertion needs of a child process, `ChildProcess` fits; tests pass a fake. */
 export type Assertion = { kill(): void; once(event: 'exit', cb: () => void): void }

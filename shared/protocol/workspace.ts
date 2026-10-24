@@ -124,8 +124,8 @@ export type WorkspaceVerifyResponse =
  * What kind of session a row is. `chat` = a normal user conversation (the
  * default). `job-run` = one job's scan, run as a real session so its
  * transcript is the run's observability (.docs/jobs-v2.md); the sidebar
- * filters these out of the chat list. `goal` = a goal's headless lead,
- * drafting or revising its plan (server/goals.ts).
+ * filters these out of the chat list. `goal` = a lead the retired goals
+ * engine started; old rows keep it, nothing makes new ones.
  */
 export type SessionKind = 'chat' | 'job-run' | 'brief' | 'goal' | 'task'
 

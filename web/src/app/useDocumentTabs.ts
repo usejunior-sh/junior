@@ -45,8 +45,6 @@ export function useDocumentTabs({ conn, route, docKeys, inbox, artifacts, sessio
       }
       if (key.startsWith('job:')) return jobTitles.get(id) ?? null
       if (key.startsWith('job-form:')) return id === 'new' ? 'New job' : jobTitles.get(id) ?? null
-      // Old goals-engine pages keep the title they were opened with.
-      if (key.startsWith('goal:')) return null
       if (key.startsWith('change:')) {
         // A file is named by its basename; the path lives in the page header.
         const file = decodeURIComponent(id.slice(id.indexOf('/') + 1))

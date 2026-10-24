@@ -211,10 +211,10 @@ export function App() {
   useEffect(() => {
     document.title = activeWorkspace ? `Junior • ${activeWorkspace.name}` : 'Junior'
   }, [activeWorkspace?.name])
-  // The bare home route: Junior's page is the product's home. Goals are hidden
-  // (the engine stays), so an old link to one lands there too.
+  // The bare home route: Junior's page is the product's home. Goals are hidden,
+  // so an old link to them (or to an old goal page) lands there too.
   useEffect(() => {
-    if (route.page === 'home' || route.page === 'goals' || route.page === 'goal') navigate('/junior', { replace: true })
+    if (route.page === 'home' || route.page === 'goals') navigate('/junior', { replace: true })
   }, [route.page, navigate])
 
   // Settings is a page: remember its tab for the gear, and every other page
@@ -379,8 +379,6 @@ export function App() {
   const openTabs = useMemo<OpenTab[]>(
     () =>
       tabs.flatMap((key): OpenTab[] => {
-        // Goals are hidden: a goal tab left from before stays out of the band.
-        if (key.startsWith('goal:')) return []
         if (key.startsWith('draft:')) {
           const d = drafts.find((x) => x.id === key.slice(6))
           return d ? [{ key, kind: 'draft', title: draftTitle(d), color: 'var(--stone)', running: false }] : []
@@ -421,7 +419,7 @@ export function App() {
       : null
 
   const previewTab = useMemo<OpenTab | null>(() => {
-    const t = preview && !preview.startsWith('goal:') ? docTab(preview) : null
+    const t = preview ? docTab(preview) : null
     return t ? { ...t, preview: true } : null
   }, [preview, docTab])
 
@@ -671,7 +669,7 @@ export function App() {
               ) : (
                 <div id="empty">This draft was discarded.</div>
               )
-            ) : route.page === 'home' || route.page === 'settings' || route.page === 'goals' || route.page === 'goal' ? null : current ? (
+            ) : route.page === 'home' || route.page === 'settings' || route.page === 'goals' ? null : current ? (
               <div className={`sessRow${(teamRun && teamSide) || wf.sideRun ? ' withSide' : ''}${browserOpen ? ' withBrowser' : ''}`}>
               <div className="sessCol">
                 <ChatHeader

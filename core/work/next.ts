@@ -219,7 +219,6 @@ function decideVerb(x: Facts): string {
     case 'junior-asks':
       if (next === 'approve the team') return 'Approve the team'
       if (next === 'approve the step') return 'Approve the team step'
-      if (next === 'review the plan') return "Review Junior's plan"
       if (next === 'resume the team') return 'Resume the team'
       return 'Answer Junior'
     default:

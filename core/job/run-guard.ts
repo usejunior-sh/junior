@@ -1,5 +1,5 @@
 /**
- * What keeps a headless run honest about time (.docs/goals/goals-mapping.md):
+ * What keeps a headless run honest about time:
  * a sleep watch, so a run the Mac slept through is recorded `slept` rather
  * than failed or interrupted, and a hard stop, so a run past its timeout ends
  * and is recorded even when its stream never closes.
@@ -9,7 +9,7 @@
  * tell a slept span from a slow one; a gap between heartbeats can, because
  * timers don't fire while the machine sleeps.
  */
-import type { JobRunStatus } from '../job/types.js'
+import type { JobRunStatus } from './types.js'
 
 /** How often the daemon ticks the watch. */
 export const SLEEP_TICK_MS = 5_000

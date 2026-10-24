@@ -265,8 +265,6 @@ export type ServerMessage =
   | { type: 'actions_changed'; sessionId?: string }
   /** Advance approvals changed (added, revoked, used): Settings → Approvals and Rule cards refetch. */
   | { type: 'approvals_changed' }
-  /** A goal was created, moved, or its ledger was written, refetch the Goals list, the goal page, the Inbox count. */
-  | { type: 'goals_changed'; goalId?: string }
   /** The workspace's Junior persona changed (About me, or a chat's set_reply_style), the whole persona. */
   | { type: 'persona'; persona: import('../../core/junior/persona.js').Persona }
   /** Today's plan changed (a row added or removed, the day drafted), refetch. */

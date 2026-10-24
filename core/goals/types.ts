@@ -1,16 +1,11 @@
 /**
- * Goals (.docs/goals/goals-engine.md, mapping note .docs/goals/goals-mapping.md):
- * an outcome with a done-when that Junior drives across many short sessions,
- * pausing only at gates. A goal has a plan the user approved, a lead that wakes
- * on events, a team, gates and a ledger (plan/log/handoff files in the
- * artifacts repo; state in the database).
+ * The old goals engine's vocabulary. The engine is retired and its code is
+ * gone; its goal_* tables stay as history, and the store that reads them
+ * (core/store/sqlite-goals.ts) still types its rows with these. Goals today
+ * are team runs with a done-when (core/teams).
  *
- * This file is the shared vocabulary: browser-safe, no I/O. The web imports
- * these types through shared/protocol.ts. The state machine is
- * core/goals/machine.ts; the tool signatures core/goals/tools.ts.
+ * Browser-safe, no I/O.
  */
-import type { Turn } from '../work/flow.js'
-
 /**
  * Where a goal is (the lifecycle diagram's 8 states, plus two more):
  *   draft_plan     the lead is researching and writing the plan
@@ -50,18 +45,8 @@ export const GOAL_STATES: readonly GoalState[] = [
 ]
 export const isGoalState = (v: unknown): v is GoalState => typeof v === 'string' && (GOAL_STATES as readonly string[]).includes(v)
 
-export const GOAL_STATE_LABEL: Record<GoalState, string> = {
-  draft_plan: 'Drafting plan',
-  plan_ready: 'Plan ready',
-  queued: 'Queued',
-  running: 'Running',
-  waiting_world: 'Waiting on the world',
-  waiting_you: 'Waiting on you',
-  result_ready: 'Result ready',
-  done: 'Done',
-  paused: 'Paused',
-  cancelled: 'Cancelled',
-}
+/** States a goal never leaves. */
+export const TERMINAL_STATES: readonly GoalState[] = ['done', 'cancelled']
 
 /** today = finish by end of day; until_done = keep going; ongoing = never "done", e.g. keep a dependency current. */
 export type GoalHorizon = 'today' | 'until_done' | 'ongoing'
@@ -104,7 +89,6 @@ export type Goal = {
 
 /** agent = a session does it; gate = a pause the goal can't pass until it resolves; block = a workflow block expanded at approval. */
 export type StepType = 'agent' | 'gate' | 'block'
-export const STEP_TYPES: readonly StepType[] = ['agent', 'gate', 'block']
 
 export type StepRole = 'lead' | 'builder' | 'reviewer' | 'tester'
 export const STEP_ROLES: readonly StepRole[] = ['lead', 'builder', 'reviewer', 'tester']
@@ -114,9 +98,8 @@ export const STEP_ROLES: readonly StepRole[] = ['lead', 'builder', 'reviewer', '
  * the Inbox; watcher = plain code decides it (the PR watcher), never swept.
  */
 export type GateEvaluator = 'ai' | 'user' | 'watcher'
-export const GATE_EVALUATORS: readonly GateEvaluator[] = ['ai', 'user', 'watcher']
 
-/** A gate as the plan states it. Durations are strings like "5m", "4h", "1d" (core/goals/machine.ts parseDuration). */
+/** A gate as the plan states it. Durations are strings like "5m", "4h", "1d". */
 export type GateSpec = {
   evaluator: GateEvaluator
   condition: string
@@ -145,9 +128,6 @@ export type PlanStep = {
   block: string | null
 }
 
-/** The highest max team size a user can set (Settings → Teams): a team's widest fan-out. */
-export const MAX_GOAL_TEAM = 6
-
 /** One role on the team: how many, and why the lead wants them. */
 export type TeamSeat = { role: StepRole; count: number; why: string; model: string | null }
 
@@ -168,9 +148,6 @@ export type GoalPlan = {
   models: Partial<Record<'lead' | 'worker' | 'gate', string>> | null
 }
 
-/** Default models: lead Opus, workers Sonnet, gate checker Haiku. */
-export const DEFAULT_GOAL_MODELS = { lead: 'opus', worker: 'sonnet', gate: 'haiku' } as const
-
 // Steps at run time
 
 /**
@@ -190,16 +167,13 @@ export type GoalStepState = {
   goalId: string
   stepId: string
   status: StepStatus
-  /** sessions tried so far; caps fix loops (MAX_FIX_ATTEMPTS) */
+  /** sessions tried so far; capped fix loops */
   attempts: number
   sessionId: string | null
   startedAt: number | null
   endedAt: number | null
   updatedAt: number
 }
-
-// Moved to core/babysit/ci.ts (move-goal-helpers); re-exported for one commit.
-export { MAX_FIX_ATTEMPTS } from '../babysit/ci.js'
 
 /** open = waiting; met / expired / cancelled = settled. needs_user = handed to the Inbox as an approval. */
 export type GateStatus = 'open' | 'met' | 'needs_user' | 'expired' | 'cancelled'
@@ -235,16 +209,7 @@ export type Gate = {
 
 /** What an AI gate checker returns, and nothing else. The engine decides what follows. */
 export type GateVerdictKind = 'met' | 'not_met' | 'needs_user' | 'error'
-export const GATE_VERDICT_KINDS: readonly GateVerdictKind[] = ['met', 'not_met', 'needs_user', 'error']
 export type GateVerdict = { verdict: GateVerdictKind; evidence: string; checkAgainIn: string | null }
-
-/** minutes between checks after arming, then every 60, unless the gate sets check_every. */
-export const GATE_CHECK_SCHEDULE_MIN: readonly number[] = [5, 5, 10, 10, 20, 20, 30, 30, 40, 40]
-export const GATE_CHECK_TAIL_MIN = 60
-/** the sweep timer. */
-export const GATE_SWEEP_INTERVAL_MS = 5 * 60_000
-/** past this a gate becomes an approval in the Inbox. */
-export const GATE_DEFAULT_DEADLINE = '24h'
 
 // Events: the bus and the transition log, one table
 
@@ -344,15 +309,3 @@ export type GoalLogEntry = {
   /** the markdown section appended to log.md */
   text: string
 }
-
-/** The ledger's files, relative to the artifacts folder (the log rolls over past LOG_ROLLOVER_BYTES). */
-export const goalDir = (goalId: string) => `goals/${goalId}`
-export const LEDGER_FILES = ['plan.md', 'log.md', 'handoff.md'] as const
-export const LOG_ROLLOVER_BYTES = 200 * 1024
-/** the lead reads handoff.md plus this many latest log entries. */
-export const LEAD_LOG_ENTRIES = 5
-/** warn on the goal page after this many failed ledger commits in a row. */
-export const LEDGER_COMMIT_WARN_AFTER = 3
-
-/** Whose turn a goal is, in the inbox's own words (core/work/flow.ts). */
-export type GoalTurn = Turn

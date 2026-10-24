@@ -17,7 +17,7 @@
  *   others  → Waiting       a person, a reviewer, the world or the clock
  *
  * flow.ts's `me` is `you`, `ai` is `junior`, `others` is `others`; `none`
- * (a paused goal, an override to "Nobody") reads by the rules below.
+ * (an override to "Nobody") reads by the rules below.
  *
  * Rules run in order and the first match wins, so every item gets exactly
  * one reason, and every reason belongs to exactly one turn (TURN_REASONS).
@@ -135,14 +135,12 @@ export interface TurnContext {
   message?: MessageStatus
 }
 
-/** Flow next steps where Junior, a team or a goal is stopped until you answer. */
+/** Flow next steps where Junior or a team is stopped until you answer. */
 const ASK_NEXT: ReadonlySet<string> = new Set([
   'answer the session',
   'answer Junior',
-  'answer the goal',
   'approve the team',
   'approve the step',
-  'review the plan',
   'resume the team',
 ])
 /** Flow next steps where a run finished and its result is yours to read. */

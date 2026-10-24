@@ -46,8 +46,6 @@ export const JUNIOR_READ_TOOLS = new Set([
   'mcp__junior__get_workspace',
   'mcp__junior__list_artifacts',
   'mcp__junior__read_artifact',
-  'mcp__junior__goal_get',
-  'mcp__junior__goal_list',
   'mcp__junior__get_today',
   // Other chats, by name (server/session/spawn-ops.ts): reading where they stand.
   'mcp__junior__read_session',

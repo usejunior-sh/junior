@@ -45,8 +45,7 @@ export function makeJuniorMcp(rt: WorkspaceRuntime, sessionId?: string) {
     tools: [
       // Teams v2: any chat can become a lead (list_teams, propose_team, split_step, submit_step).
       ...teamLeadTools(rt),
-      // Goals are team runs with a done-when now (propose_team's `goal`); the old goals engine's
-      // goal_* tools stay in server/goals.ts but no chat is offered them.
+      // Goals are team runs with a done-when (propose_team's `goal`).
       tool(
         'list_work_items',
         'Read the ranked junior queue: work items with their score, group, and rankWhy (why it ranked). Open items by default — pass status to read the done, snoozed or archived lists instead. Optional filters narrow by source or kind.',

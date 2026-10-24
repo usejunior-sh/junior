@@ -4,12 +4,10 @@
  * done-when met. A dense table, goal, where it stands, due, last touched,
  * spend, with Active / Finished tabs. Goals are made by talking to Junior
  * ("Turn into a goal", or "New goal:" in any chat), never from a form here.
- *
- * goalDot / spendText / money still serve the old goals engine's page (GoalPage).
  */
 import { useMemo, useState } from 'react'
 import { horizonText } from '../../../core/teams/engine.js'
-import type { GoalSummary, SessionSummary, TeamGoalSummary } from '../../../shared/protocol.js'
+import type { SessionSummary, TeamGoalSummary } from '../../../shared/protocol.js'
 import { ago } from '../itemUi.js'
 import { rowOpen } from '../tabs.js'
 import { useTeamGoals, usd } from '../teams.js'
@@ -20,19 +18,6 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'active', label: 'Active' },
   { id: 'finished', label: 'Finished' },
 ]
-
-/** A goal's one colour: yours is yellow, Junior's pulses, the world's is blue. */
-export function goalDot(g: Pick<GoalSummary, 'state' | 'turn'>): string {
-  if (g.state === 'done') return 'green'
-  if (g.state === 'cancelled' || g.state === 'paused') return 'stone'
-  return g.turn === 'me' ? 'yellow' : g.turn === 'ai' ? 'live' : g.turn === 'others' ? 'blue' : 'stone'
-}
-
-export const money = (n: number) => `$${n < 10 ? n.toFixed(2) : Math.round(n)}`
-
-export function spendText(g: Pick<GoalSummary, 'spentUsd' | 'budget'>): string {
-  return g.budget.usd != null ? `${money(g.spentUsd)} / ${money(g.budget.usd)}` : money(g.spentUsd)
-}
 
 const finished = (g: TeamGoalSummary) => g.state === 'stopped' || (g.state === 'done' && !!g.acceptedAt)
 

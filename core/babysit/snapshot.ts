@@ -1,8 +1,7 @@
 /**
  * One PR as a snapshot: state, head, mergeability, review, checks on the
  * head commit and review threads, parsed from GitHub's GraphQL answer. The
- * babysit search (pr.ts) and the goals engine's PR shepherd both read PRs
- * through it. Lived in core/goals/shepherd.ts (move-goal-helpers).
+ * babysit search (pr.ts) reads PRs through it.
  *
  * Pure: no I/O, no clock. Browser-safe.
  */

@@ -14,8 +14,6 @@
  * the SQLite single-writer stays the server process whichever door was used.
  */
 
-import { GOAL_TOOLS } from '../goals/tools.js'
-import { LEAD_LOG_ENTRIES } from '../goals/types.js'
 
 /** How a transport reaches the junior API. Returns the parsed JSON body. */
 export type McpApi = (path: string, body?: unknown, method?: string) => Promise<unknown>
@@ -303,16 +301,7 @@ export const TOOLS = [
       required: ['artifactId', 'kind', 'id', 'role'],
     },
   },
-  // Goals (core/goals/tools.ts): goal_create, goal_get, goal_list, goal_propose_plan, goal_log_append, goal_handoff_write.
-  ...GOAL_TOOLS,
 ]
-
-/** A goal write's reply, as one line an agent can act on. */
-function goalWrite(body: { ok: boolean; goal?: { id: string; state: string }; outcome?: string; error?: string }): ToolResult {
-  return body.ok && body.goal
-    ? { text: `ok: ${body.outcome} · goal ${body.goal.id} · ${body.goal.state}`, isError: false }
-    : { text: `rejected: ${body.error}`, isError: true }
-}
 
 export async function callTool(
   api: McpApi,
@@ -499,29 +488,6 @@ export async function callTool(
       role: args.role,
     })) as { ok: boolean; error?: string }
     return body.ok ? { text: 'ok: linked', isError: false } : { text: `rejected: ${body.error}`, isError: true }
-  }
-  if (name === 'goal_create') return goalWrite((await api('/api/goals', args)) as Parameters<typeof goalWrite>[0])
-  if (name === 'goal_list') {
-    const states = Array.isArray(args.states) ? args.states.filter((x): x is string => typeof x === 'string') : []
-    const q = new URLSearchParams()
-    if (states.length) q.set('states', states.join(','))
-    if (typeof args.sourceItemId === 'string' && args.sourceItemId) q.set('item', args.sourceItemId)
-    const body = (await api(`/api/goals${q.size ? `?${q}` : ''}`)) as { ok: boolean; error?: string }
-    if (!body.ok) return { text: `failed: ${body.error}`, isError: true }
-    const { ok: _ok, ...rest } = body
-    return { text: JSON.stringify(rest, null, 2), isError: false }
-  }
-  if (name === 'goal_get') {
-    if (typeof args.id !== 'string' || !args.id) return { text: 'rejected: need a goal id', isError: true }
-    const body = (await api(`/api/goals/${encodeURIComponent(args.id)}?log=${LEAD_LOG_ENTRIES}`)) as { ok: boolean; error?: string }
-    if (!body.ok) return { text: `failed: ${body.error}`, isError: true }
-    const { ok: _ok, ...rest } = body
-    return { text: JSON.stringify(rest, null, 2), isError: false }
-  }
-  const goalPath = { goal_propose_plan: 'plan', goal_log_append: 'log', goal_handoff_write: 'handoff' }[name]
-  if (goalPath) {
-    if (typeof args.goalId !== 'string' || !args.goalId) return { text: 'rejected: need a goalId', isError: true }
-    return goalWrite((await api(`/api/goals/${encodeURIComponent(args.goalId)}/${goalPath}`, args)) as Parameters<typeof goalWrite>[0])
   }
   return { text: `unknown tool: ${name}`, isError: true }
 }

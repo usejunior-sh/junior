@@ -1,7 +1,7 @@
 /**
  * Which roles change files. Only a builder does; a lead, a reviewer and a
  * tester run read-only, held there by the role fence (fence.ts). Pure and
- * browser-safe. Lived in core/goals/run.ts.
+ * browser-safe.
  */
 
 /** The roles a session runs under: a goal's step roles. */

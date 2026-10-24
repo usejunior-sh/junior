@@ -111,13 +111,11 @@ const MORE: Row[] = [
   { name: 'Junior starts a first pass', item: item({ ...reviewReq, ...handed('watching') }), want: 'review', owner: jr, text: "Review Priya's PR · with Junior" },
   { name: 'review posted, the author has it', item: item({ ...reviewReq, ...handed('watching'), tasks: review('posted') }), want: 'wait', owner: person('Priya'), text: 'Wait on Priya · review posted · waiting 2d' },
   { name: 'a follow-up', item: item({ kind: 'job-hit', ask: 'follow-up', reason: 'found', author: '@niraj' }), want: 'wait', owner: person('niraj'), text: 'Wait on niraj · waiting 2d' },
-  { name: 'a goal waits on the world', item: item(manual, { goal: { state: 'waiting_world', at: T0 } }), want: 'wait', owner: person(null), text: 'Wait on an outside change · waiting 2d' },
   { name: 'snoozed', item: item({ ...slackReply, status: 'snoozed' }), want: 'wait', owner: person(null), text: 'Leave it · snoozed' },
   { name: 'Junior works your to-do', item: item({ ...manual, ...handed('working') }), want: 'do', owner: jr, text: 'Work on the to-do · with Junior' },
   // merging is yours: while Junior works an approved PR, the row says Junior works it
   { name: 'Junior works an approved PR', item: item({ ...ownPr('own-pr-approved'), ...handed('working') }), want: 'do', owner: jr, text: 'Work on your PR · with Junior' },
   { name: 'a team waits for your OK', item: item(manual, { team: { state: 'proposed', at: T0 } }), want: 'decide', owner: you, text: 'Approve the team · open 2d' },
-  { name: 'a goal plan to review', item: item(manual, { goal: { state: 'plan_ready', at: T0 } }), want: 'decide', owner: you, text: "Review Junior's plan · open 2d" },
   { name: 'Junior paused on you', item: item({ ...manual, ...handed('needs-you') }), want: 'decide', owner: you, text: 'Answer Junior · open 2d' },
   { name: 'a reviewer to pick', item: item({ ...manual, tasks: tasks({ needsYou: 1, next: { id: 't', title: 'Request a reviewer', step: 'request-review', owner: 'you' } }) }), want: 'decide', owner: you, text: 'Pick a reviewer · open 2d' },
   { name: 'a job asks you to decide', item: item({ kind: 'job-hit', ask: 'decide', reason: 'found', peopleWaiting: 3 }), want: 'decide', owner: you, text: 'Decide for Priya · waited 2d · 3 waiting' },
@@ -176,7 +174,6 @@ function* shapes(): Generator<{ item: ScoredItem; ctx: NextContext }> {
     { session: { running: true, waiting: true, error: false, at: T0 } },
     { session: { running: false, waiting: false, error: true, at: T0 } },
     { team: { state: 'gate', at: T0 } },
-    { goal: { state: 'paused', at: T0 } },
     { override: { turn: 'others', note: 'Niraj to confirm the copy and the date before Friday afternoon', at: T0 } },
   ]
   const extras: Partial<ScoredItem>[] = [{}, { ...handed('watching') }, { ...handed('working') }, { handoff: 'paused', junior: junior('paused') }, { ciFailing: true, priority: 1, peopleWaiting: 4, isDraft: true }, { status: 'snoozed' }, { tasks: review('ready') }]

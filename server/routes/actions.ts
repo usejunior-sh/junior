@@ -1,5 +1,3 @@
-import { type GoalDeps, type GoalEngine, goalsRoute } from '../goals.js'
-import { GoalLedger } from '../../core/goals/ledger.js'
 import { type ActionMoveRequest, type ActionMoveResponse, type ActionOverrideRequest, type ActionOverrideResponse, type ActionsPendingResponse, type ActionsResponse, type ActionVerb, type CardSpecsResponse, isLinkKind, type LinksResponse } from '../../shared/protocol.js'
 import { isActionKind } from '../../core/actions/types.js'
 import { localMidnight } from '../../core/job/schedule.js'
@@ -12,39 +10,18 @@ import { broadcast } from '../ws/send.js'
 import { actionVerbOp } from '../session/actions-hold.js'
 import { addLinkOp, linksFor } from '../artifacts-ops.js'
 import type { ScopedCtx } from './ctx.js'
-import type { WorkspaceRuntime } from '../workspace/runtime.js'
 
-// The old goals engine (server/goals.ts) is retired: nothing boots, ticks or
-// spawns for it. Its goals stay readable (the goal page, `junior goal list`)
-// until its files go; every write is refused.
+// The old goals engine is retired and its code is gone. Its goal_* rows stay
+// in the store as history; the API answers every method with 410.
 const GOALS_RETIRED = 'The old goals engine is retired. Ask Junior for a goal in a chat: it runs as a team.'
-const retiredEngine: GoalEngine = {
-  wakeLead: async () => {
-    throw new Error(GOALS_RETIRED)
-  },
-}
-const goalReads = new WeakMap<WorkspaceRuntime, GoalDeps>()
-function goalReadDeps(rt: WorkspaceRuntime): GoalDeps {
-  let d = goalReads.get(rt)
-  if (!d) {
-    d = { store: rt.store, ledger: new GoalLedger(rt.artifacts.root), now: Date.now, defaultProjectId: async () => null, changed: () => {}, emit: () => {} }
-    goalReads.set(rt, d)
-  }
-  return d
-}
 
 export async function actionRoutes({ req, url, json, rt }: ScopedCtx): Promise<boolean> {
   // Outbound actions (core/actions): every effect a session had that left
   // this machine, newest first. `item` = filed against it or made by a session
   // linked to it; records the actions file now sets aside come back `hidden`.
-  // Old goals (server/goals.ts): the list and the goal page read; writes are refused.
-  if ((url.pathname === '/api/goals' || url.pathname.startsWith('/api/goals/')) && req.method !== 'GET') {
+  // Old goals: retired, every method.
+  if (url.pathname === '/api/goals' || url.pathname.startsWith('/api/goals/')) {
     json(410, { ok: false, error: GOALS_RETIRED })
-    return true
-  }
-  const goalReply = await goalsRoute(goalReadDeps(rt), req, url, () => readJsonBody(req), retiredEngine)
-  if (goalReply) {
-    json(goalReply.status, goalReply.body)
     return true
   }
   if (url.pathname === '/api/actions' && req.method === 'GET') {

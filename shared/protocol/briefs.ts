@@ -81,8 +81,6 @@ export type WorkspaceSettings = {
   hiddenModels: string[]
   /** model ids typed by hand, for a model the probed catalog does not list (yet) */
   customModels: string[]
-  /** the most workers one goal runs side by side; a plan's team section can't ask for more */
-  goalsMaxTeam: number
   /** the browser profile this workspace's sessions use unless one picks another (.docs/browser.md) */
   browserProfile: string
 }

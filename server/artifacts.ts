@@ -12,7 +12,7 @@
  *     notes/         human notes (and model notes written via the MCP tool)
  *     briefs/        one brief per work item
  *     files/         non-markdown artifacts: <slug>-<id8>.<ext> + sidecar
- *     goals/         each goal's ledger (core/goals/ledger.ts), not indexed here
+ *     goals/         the old goals engine's ledgers, kept as history, not indexed here
  *
  * The file is the truth and this module never edits a file it did not write
  * except when asked to (PUT). Re-indexing is poll-on-demand: a listing older
@@ -426,7 +426,7 @@ export class ArtifactIndex {
       }
       for (const e of entries) {
         if (e.name === '.git' || e.name.startsWith('.')) continue
-        // goals/<id>/ is each goal's ledger (core/goals/ledger.ts), shown on the goal page, not as artifacts
+        // goals/<id>/ is an old goals-engine ledger, kept as history, not an artifact
         if (!rel && e.name === 'goals') continue
         const p = rel ? `${rel}/${e.name}` : e.name
         if (e.isDirectory()) queue.push(p)

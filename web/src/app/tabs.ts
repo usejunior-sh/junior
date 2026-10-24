@@ -3,7 +3,6 @@ import { changeId } from '../changesStore.js'
 import type { RailSection } from '../components/Rail.js'
 import type { PageTab, TabKind } from '../components/TabBand.js'
 import { runFileHash } from '../components/RunFolderPage.js'
-import { goalHash } from '../goals.js'
 import { type Route, itemHash } from '../hooks.js'
 
 export const PAGE_TABS: Record<'jobs' | 'terminals' | 'artifacts' | 'changes' | 'goals', PageTab> = {
@@ -59,8 +58,6 @@ export function tabKeyOf(route: Route): string | null {
       return `job:${route.id}`
     case 'job-form':
       return `job-form:${route.id ?? 'new'}`
-    case 'goal':
-      return `goal:${route.id}`
     case 'change':
       return `change:${changeId(route.checkoutId, route.path)}`
     case 'changes':
@@ -96,8 +93,6 @@ export function routeOfKey(key: string): string {
       return id === 'new' ? '/jobs/new' : `/jobs/${encodeURIComponent(id)}/edit`
     case 'change':
       return `/change/${id}`
-    case 'goal':
-      return goalHash(id)
     case 'page':
       return `/${id}`
     default:
@@ -107,7 +102,7 @@ export function routeOfKey(key: string): string {
 }
 
 /** Documents are peeked at; processes are pinned. */
-const DOC_KINDS: readonly TabKind[] = ['item', 'artifact', 'job', 'job-form', 'change', 'goal', 'run']
+const DOC_KINDS: readonly TabKind[] = ['item', 'artifact', 'job', 'job-form', 'change', 'run']
 
 export function kindOfKey(key: string): TabKind | null {
   const cut = key.indexOf(':')
@@ -135,7 +130,6 @@ export const GENERIC: Record<TabKind, string> = {
   job: 'Job',
   'job-form': 'Job',
   change: 'File',
-  goal: 'Goal',
   run: 'Team run',
 }
 
@@ -168,7 +162,6 @@ export function sectionOf(route: Route): RailSection | null {
     case 'job-form':
     case 'jobs':
       return 'jobs'
-    case 'goal':
     case 'goals':
       return 'goals'
     case 'settings':

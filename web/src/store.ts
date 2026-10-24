@@ -345,8 +345,6 @@ export class Store {
   /** Who follows outbound actions (the Actions page, an item, a transcript's action lines). */
   readonly #actionsListeners = new Set<(sessionId: string | undefined) => void>()
   readonly #approvalsListeners = new Set<() => void>()
-  /** Who follows goals (the Goals page, a goal page, the rail's count). */
-  readonly #goalsListeners = new Set<(goalId: string | undefined) => void>()
   /** Who follows today's plan (the Junior page). */
   readonly #todayListeners = new Set<() => void>()
   /** Who follows the browser: the profile list, a tab's remembered state, its downloads (browser.ts). */
@@ -473,9 +471,6 @@ export class Store {
       case 'approvals_changed':
         for (const fn of this.#approvalsListeners) fn()
         break
-      case 'goals_changed':
-        for (const fn of this.#goalsListeners) fn(msg.goalId)
-        break
       case 'browser_profiles':
       case 'browser_tab':
       case 'browser_download':
@@ -553,14 +548,6 @@ export class Store {
     this.#approvalsListeners.add(fn)
     return () => {
       this.#approvalsListeners.delete(fn)
-    }
-  }
-
-  /** Fires when a goal was created or written to (`goalId` = which). */
-  onGoalsChanged(fn: (goalId: string | undefined) => void): () => void {
-    this.#goalsListeners.add(fn)
-    return () => {
-      this.#goalsListeners.delete(fn)
     }
   }
 

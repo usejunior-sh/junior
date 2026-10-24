@@ -82,13 +82,6 @@ export interface TeamSignal {
   toAccept?: boolean
 }
 
-/** The newest live goal on the item (core/goals), reduced to what the rule reads. */
-export interface GoalSignal {
-  state: 'draft_plan' | 'plan_ready' | 'queued' | 'running' | 'waiting_world' | 'waiting_you' | 'result_ready' | 'paused'
-  /** epoch ms of its last change */
-  at: number
-}
-
 /** Queued actions (core/actions/queue.ts) on the item waiting on your approval. */
 export interface ActionsSignal {
   /** how many wait on you */
@@ -101,7 +94,6 @@ export interface FlowSignals {
   brief?: BriefSignal
   session?: SessionSignal
   team?: TeamSignal
-  goal?: GoalSignal
   actions?: ActionsSignal
   override?: FlowOverride
 }
@@ -134,7 +126,7 @@ export function flowOf(item: FlowItem, signals: FlowSignals = {}): ItemFlow {
   const o = signals.override
   if (!o || derived.stage === 'done') return derived
   // Something that happened after the override (a brief, a session, a queued action) wins.
-  const newest = Math.max(signals.brief?.at ?? 0, signals.session?.at ?? 0, signals.team?.at ?? 0, signals.goal?.at ?? 0, signals.actions?.at ?? 0)
+  const newest = Math.max(signals.brief?.at ?? 0, signals.session?.at ?? 0, signals.team?.at ?? 0, signals.actions?.at ?? 0)
   if (newest > o.at) return derived
   const stage = o.stage ?? derived.stage
   const turn = o.turn ?? derived.turn
@@ -173,27 +165,6 @@ function deriveFlow(item: FlowItem, s: FlowSignals): ItemFlow {
 
   const brief = s.brief
   const session = s.session
-  // A goal drives the item end to end: its lead's and workers' sessions are its own, so it reads first.
-  const goal = s.goal
-  if (goal && (!brief || goal.at >= brief.at)) {
-    switch (goal.state) {
-      case 'draft_plan':
-        return { stage: 'briefing', turn: 'ai', since: goal.at }
-      case 'plan_ready':
-        return { stage: 'ready', turn: 'me', next: 'review the plan', since: goal.at }
-      case 'queued':
-      case 'running':
-        return { stage: 'working', turn: 'ai', since: goal.at }
-      case 'waiting_world':
-        return { stage: 'working', turn: 'others', since: goal.at }
-      case 'waiting_you':
-        return { stage: 'working', turn: 'me', next: 'answer the goal', since: goal.at }
-      case 'result_ready':
-        return withOwnPr(item, { stage: 'review', turn: 'me', next: 'review result', since: goal.at })
-      case 'paused':
-        return { stage: 'working', turn: 'none', since: goal.at }
-    }
-  }
   // A team run is the dispatch, step by step; a stopped one hands back to the session rules.
   const team = s.team && s.team.state !== 'stopped' ? s.team : undefined
   if (team && (!brief || team.at >= brief.at)) {

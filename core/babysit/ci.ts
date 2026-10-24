@@ -4,9 +4,8 @@
  * it), and is this bot comment one Junior already fixed (its fingerprint).
  * Plus the cap on fix attempts per failing check.
  *
- * Shared by the babysit watch (watch.ts), the CI sort (ci-sort.ts) and the
- * goals engine's PR shepherd, so there is one flake regex and one cap. Lived
- * in core/goals/shepherd.ts and core/goals/types.ts (move-goal-helpers).
+ * Shared by the babysit watch (watch.ts) and the CI sort (ci-sort.ts), so
+ * there is one flake regex and one cap.
  *
  * Pure: no I/O, no clock. Browser-safe.
  */
