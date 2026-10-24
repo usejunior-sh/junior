@@ -1,7 +1,9 @@
 /**
  * The Junior page's list, the Ledger (.docs/junior-goals-teams/junior-home-list.html,
- * artifact 065cfb8a v7). One line per row: who · title · Junior's state in sky
- * · where · age (orange only when a person waits) · chevron. Rows start
+ * artifact 065cfb8a v7). One row per item: who · the next move over the title
+ * · Junior's state in sky · where · age (orange only when a person waits) ·
+ * chevron. The move leads (core/junior/row-move.ts): "Answer Priya · urgent",
+ * verb in ink, reasons in mono ash, the title quieter under it. Rows start
  * closed; a click or Space opens one as a bordered card, its Message or
  * Context, what Junior says and the actions aligned to the row's columns.
  * Many can be open; Esc closes all. J/K move, ⏎ acts on an open row only,
@@ -14,7 +16,9 @@
  */
 import { ChevronRight, X } from 'lucide-react'
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import type { HandoffReadiness, NeedsRow, ScoredItem, WatchId } from '../../../shared/protocol.js'
+import type { HandoffReadiness, NeedsRow, RowMove, ScoredItem, WatchId } from '../../../shared/protocol.js'
+import { enterVerb, rowLabel, rowMove, type RowLine } from '../../../core/junior/row-move.js'
+import { needsMoveText } from '../../../core/junior/needs.js'
 import { ageHot, cantWatchOf, juniorState, LEDGER_GROUP_TITLE, ledgerGroup, ledgerProgress, ledgerRows, NOT_USEFUL_HOLD_MAX_MS, NOT_USEFUL_NOTICE_MS, watchOffOf, type LedgerGroup, type LedgerTab } from '../../../core/junior/ledger.js'
 import { TURN_ON_LABEL, WATCH_CANT_SAYS, WATCH_OFF_SAYS, WATCH_STILL_OFF, withAnswer } from '../../../core/junior/watch-off.js'
 import { itemHash } from '../hooks.js'
@@ -42,7 +46,7 @@ const GONE_OUT_MS = 120
 type Gone = { item: ScoredItem; at: number; wasOpen: boolean; leaving: boolean; markedAt: number; marking: Promise<string | null> }
 
 /** One line of the ledger: an inbox item, or something Junior is held on (a blocked session, a plan, sends). */
-type Line = { key: string; group: LedgerGroup; item: ScoredItem; need?: undefined } | { key: string; group: LedgerGroup; need: NeedsRow; item?: undefined }
+type Line = { key: string; group: LedgerGroup; item: ScoredItem; move: RowLine | null; need?: undefined } | { key: string; group: LedgerGroup; need: NeedsRow; item?: undefined; move?: undefined }
 
 /** "acme/web#3312", or the item's home for anything that isn't a PR. */
 const refOf = (i: ScoredItem) => {
@@ -75,10 +79,13 @@ type Primary = { label: string; run: () => void; watch?: WatchId }
 type Act = (verb: HandoffVerb, id: string, playbook?: string) => void
 type TurnOn = (watch: WatchId, id: string) => void
 
-function primaryOf(i: ScoredItem, act: Act, open: () => void, turnOn: TurnOn): Primary {
+function primaryOf(i: ScoredItem, move: RowLine | null, act: Act, open: () => void, turnOn: TurnOn): Primary {
   // a local switch, not a send: safe on ⏎, its label and limit on screen
   const off = watchOffOf(i)
   if (off) return { label: TURN_ON_LABEL[off], run: () => turnOn(off, i.id), watch: off }
+  // ⏎ says the move only where pressing it finishes the move (reading, resuming), never "Answer Priya"
+  const ev = enterVerb(move, i.handoff === 'paused')
+  if (ev) return ev.does === 'open' ? { label: ev.label, run: open } : { label: ev.label, run: () => act('resume', i.id) }
   if (i.junior?.stage === 'needs-you' || i.tasks?.review?.state === 'ready' || i.tasks?.review?.state === 'failed') return { label: i.tasks?.review?.state === 'ready' ? 'Read pass' : 'Open', run: open }
   if (i.handoff === 'paused') return { label: 'Resume', run: () => act('resume', i.id) }
   if (i.handoff === 'on' && (i.junior?.stage === 'working' || i.junior?.stage === 'watching')) return { label: 'Pause', run: () => act('pause', i.id) }
@@ -171,9 +178,11 @@ type Props = Nav & {
   me: string | null
   /** what the tab says when it has nothing */
   empty: string
+  /** the server's next move per item (the day's); a row makes its own when missing or stale */
+  moves?: Readonly<Record<string, RowMove>>
 }
 
-export function JuniorLedger({ tab, items, needs, me, empty, onNavigate }: Props) {
+export function JuniorLedger({ tab, items, needs, me, empty, moves, onNavigate }: Props) {
   const listRef = useRef<HTMLDivElement>(null)
   // the Turn on button leaves once its row is ready: give focus to the row itself, unless it went elsewhere
   const focusRow = (id: string) =>
@@ -185,9 +194,10 @@ export function JuniorLedger({ tab, items, needs, me, empty, onNavigate }: Props
   const { busy, error, act, answered, turning, turnOn } = useAct(focusRow)
   const lines = useMemo<Line[]>(() => {
     const out: Line[] = tab === 'needs' ? needs.map((n) => ({ key: `need:${n.key}`, group: 'waiting' as const, need: n })) : []
-    for (const i of ledgerRows(items.map((i) => withAnswer(i, answered)), tab)) out.push({ key: i.id, group: ledgerGroup(i), item: i })
+    const now = Date.now()
+    for (const i of ledgerRows(items.map((i) => withAnswer(i, answered)), tab)) out.push({ key: i.id, group: ledgerGroup(i), item: i, move: rowMove(i, moves?.[i.id], now) })
     return out
-  }, [items, needs, tab, answered])
+  }, [items, needs, tab, answered, moves])
   // Up next folds its long FYI tail into a link to the inbox.
   const fyiAll = tab === 'up' ? lines.filter((l) => l.group === 'fyi').length : 0
   const firstFyi = lines.findIndex((l) => l.group === 'fyi')
@@ -361,7 +371,7 @@ export function JuniorLedger({ tab, items, needs, me, empty, onNavigate }: Props
       if (e.key === 'Enter') {
         e.preventDefault()
         if (line.need) return goNeed(line.need)
-        return primaryOf(line.item, act, () => openItem(line.item.id), turnOn).run()
+        return primaryOf(line.item, line.move, act, () => openItem(line.item.id), turnOn).run()
       }
       if (!line.item) return
       if (e.key === 'o') return openItem(line.item.id)
@@ -436,6 +446,7 @@ export function JuniorLedger({ tab, items, needs, me, empty, onNavigate }: Props
               ) : (
                 <ItemLine
                   item={line.item}
+                  move={line.move}
                   me={me}
                   open={isOpen}
                   busy={busy === line.item.id}
@@ -490,6 +501,7 @@ const Chev = () => <ChevronRight className="chev" size={14} aria-hidden="true" /
 
 function ItemLine({
   item: i,
+  move,
   me,
   open,
   busy,
@@ -503,6 +515,8 @@ function ItemLine({
   onNotUseful,
 }: {
   item: ScoredItem
+  /** line 1, the next move; null falls back to the title-first row */
+  move: RowLine | null
   me: string | null
   open: boolean
   busy: boolean
@@ -522,16 +536,38 @@ function ItemLine({
   const st = juniorState(i)
   const p = ledgerProgress(i)
   const hot = ageHot(i)
-  const primary = primaryOf(i, act, onOpen, turnOn)
+  const primary = primaryOf(i, move, act, onOpen, turnOn)
   const capId = `jhCap-${i.id}`
+  const ref = refOf(i)
+  const title = i.title?.trim()
   return (
     <>
-      <button type="button" className="jhRow" aria-expanded={open} onClick={onClick}>
+      <button
+        type="button"
+        className={`jhRow${move ? ' two' : ''}`}
+        aria-expanded={open}
+        // the age sits apart from the line on screen: the name reads the full line, age included
+        aria-label={move ? rowLabel([move.text, title || ref, p !== null ? 'Junior is working' : st.text, title ? ref : null]) : undefined}
+        onClick={onClick}
+      >
         <span className={`wc${who === 'You' ? ' you' : ''}`}>
           {who === 'Junior' ? <JuniorFace mood="hello" size={20} motion="still" decorative /> : who !== 'You' && <span className="av">{initials(who)}</span>}
           <span className="nm">{who}</span>
         </span>
-        <span className="tt">{i.title}</span>
+        {move ? (
+          <span className="tc">
+            <MoveText verb={move.verb} reasons={move.reasons} withJunior={move.withJunior} />
+            {title ? (
+              <span className="tt" title={title}>
+                {title}
+              </span>
+            ) : (
+              ref && <span className="tt ref">{ref}</span>
+            )}
+          </span>
+        ) : (
+          <span className="tt">{i.title}</span>
+        )}
         {p !== null ? (
           <span className="prog" role="progressbar" aria-label="How far Junior is" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(p * 100)}>
             <i style={{ width: `${Math.round(p * 100)}%` }} />
@@ -547,7 +583,9 @@ function ItemLine({
             </>
           )}
         </span>
-        <span className={`ag${hot ? ' hot' : ''}`}>{shortAge(i.updatedAt)}</span>
+        <span className={`ag${hot ? ' hot' : ''}`} title={move?.ageWords ?? (i.updatedAt ? `Updated ${shortAge(i.updatedAt)} ago` : undefined)}>
+          {move?.age ?? shortAge(i.updatedAt)}
+        </span>
         <Chev />
       </button>
       {open && (
@@ -658,18 +696,36 @@ function GoneLine({
 
 /** Something Junior is held on that isn't an item: a blocked chat, a plan or a gate, sends to OK. */
 function NeedLine({ need, open, onClick, onGo }: { need: NeedsRow; open: boolean; onClick: () => void; onGo: () => void }) {
+  // a row from an older server has no move: today's title-first shape
+  const move = need.move?.verb ? need.move : null
   return (
     <>
-      <button type="button" className="jhRow" aria-expanded={open} onClick={onClick}>
+      <button
+        type="button"
+        className={`jhRow${move ? ' two' : ''}`}
+        aria-expanded={open}
+        aria-label={move ? rowLabel([needsMoveText(move), need.subject, 'Paused on you']) : undefined}
+        onClick={onClick}
+      >
         <span className="wc">
           <JuniorFace mood="needs" size={20} motion="still" decorative />
           <span className="nm">Junior</span>
         </span>
-        <span className="tt">{need.title}</span>
+        {move ? (
+          <span className="tc">
+            <MoveText verb={move.verb} reasons={move.reasons} withJunior={false} />
+            {need.subject && (
+              <span className="tt" title={need.subject}>
+                {need.subject}
+              </span>
+            )}
+          </span>
+        ) : (
+          <span className="tt">{need.title}</span>
+        )}
         <span className="jrc">Paused on you</span>
-        <span className="wh">
-          <span>{need.meta}</span>
-        </span>
+        {/* the move's reasons already say where it came from */}
+        <span className="wh">{!move && <span>{need.meta}</span>}</span>
         <span className="ag">{need.right}</span>
         <Chev />
       </button>
@@ -687,5 +743,32 @@ function NeedLine({ need, open, onClick, onGo }: { need: NeedsRow; open: boolean
         </div>
       )}
     </>
+  )
+}
+
+/**
+ * Line 1 of a row: the verb in ink, then the reasons in mono ash, dots in
+ * stone. The reasons give way first; "with Junior" shows only on a phone,
+ * where the state column that says it is hidden.
+ */
+function MoveText({ verb, reasons, withJunior }: { verb: string; reasons: readonly string[]; withJunior: boolean }) {
+  const parts = withJunior ? [{ text: 'with Junior', wj: true }, ...reasons.map((text) => ({ text, wj: false }))] : reasons.map((text) => ({ text, wj: false }))
+  const full = [verb, ...(withJunior ? ['with Junior'] : []), ...reasons].join(' · ')
+  return (
+    <span className="mv" title={full}>
+      <span className="vb">{verb}</span>
+      {parts.length > 0 && (
+        <span className="rs">
+          {parts.map((r, n) => (
+            <span key={n} className={r.wj ? 'wj' : undefined}>
+              <i className="sep" aria-hidden="true">
+                {' · '}
+              </i>
+              {r.text}
+            </span>
+          ))}
+        </span>
+      )}
+    </span>
   )
 }

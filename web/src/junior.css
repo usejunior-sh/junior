@@ -441,6 +441,16 @@ button.jlTitle:hover { text-decoration: underline; text-decoration-color: var(--
 .jhRow .wc.you { color: var(--ash); }
 .jhRow .av { width: 20px; height: 20px; flex: none; display: inline-grid; place-items: center; border: 1px solid var(--hair-strong); border-radius: 50%; background: var(--elev); font-size: 0.6923rem; font-weight: 500; color: var(--charcoal); }
 .jhRow .tt { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); }
+/* two lines: the next move over the title (core/junior/row-move.ts). The reasons give way before the verb. */
+.jhRow.two { height: auto; min-height: 52px; padding-block: 8px; }
+.jhRow .tc { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.jhRow .mv { display: flex; align-items: baseline; min-width: 0; white-space: nowrap; }
+.jhRow .mv .vb { flex: none; max-width: 100%; overflow: hidden; text-overflow: ellipsis; color: var(--ink); }
+.jhRow .mv .rs { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-family: var(--mono); font-size: 0.9231rem; color: var(--ash); }
+.jhRow .mv .sep { font-style: normal; color: var(--stone); white-space: pre; }
+.jhRow .mv .wj { display: none; }
+.jhRow .tc .tt { font-size: 1rem; color: var(--charcoal); }
+.jhRow .tc .tt.ref { font-family: var(--mono); font-size: 0.9231rem; color: var(--ash); }
 .jhRow .jrc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.9615rem; color: var(--blue); }
 .jhRow .jrc.quiet { color: var(--ash); }
 .jhRow .prog { display: block; height: 3px; border-radius: 3px; background: var(--hair-strong); overflow: hidden; }
@@ -457,6 +467,11 @@ button.jlTitle:hover { text-decoration: underline; text-decoration-color: var(--
 .jhItem.open.focus { border-color: var(--ash); }
 .jhItem.open > .jhRow:hover { background: transparent; }
 .jhItem.open .tt { font-weight: 500; }
+/* open: the verb takes the weight, and both lines wrap so every reason reads */
+.jhItem.open .tc .tt { font-weight: 400; white-space: normal; overflow-wrap: anywhere; }
+.jhItem.open .mv { flex-wrap: wrap; white-space: normal; }
+.jhItem.open .mv .vb { font-weight: 500; overflow: visible; }
+.jhItem.open .mv .rs { overflow: visible; }
 .jhItem.open .chev { transform: rotate(90deg); color: var(--charcoal); }
 .jhXp {
   display: grid; grid-template-columns: 150px minmax(0, 1fr); column-gap: 18px; row-gap: 12px; margin: 0 12px; padding: 14px 0 16px;
@@ -510,7 +525,11 @@ button.jlTitle:hover { text-decoration: underline; text-decoration-color: var(--
   .jhRow { grid-template-columns: minmax(0, 1fr) auto 14px; height: auto; min-height: 52px; padding: 8px 10px; row-gap: 2px; }
   .jhRow .wc { grid-column: 1; grid-row: 2; font-size: 0.9231rem; color: var(--ash); }
   .jhRow .wc .av, .jhRow .wc svg { display: none; }
-  .jhRow .tt { grid-column: 1; grid-row: 1; }
+  .jhRow > .tt { grid-column: 1; grid-row: 1; }
+  /* move over title: the move names the person, so the who line goes */
+  .jhRow.two .wc { display: none; }
+  .jhRow .tc { grid-column: 1; grid-row: 1 / 3; }
+  .jhRow .mv .wj { display: inline; }
   .jhRow .jrc, .jhRow .prog, .jhRow .wh { display: none; }
   .jhRow .ag { grid-column: 2; grid-row: 1 / 3; }
   .jhRow .chev { grid-column: 3; grid-row: 1 / 3; }

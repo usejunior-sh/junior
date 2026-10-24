@@ -272,7 +272,7 @@ export function JuniorPage({ onNavigate, onDispatch, onCreate, createError, crea
           <div className="jhBody">
             {(LEDGER as readonly PageTab[]).map((id) => (
               <Tabs.Content key={id} value={id} className="jrPane">
-                {tab === id && <JuniorLedger tab={id as LedgerTab} items={items} needs={day?.needs ?? []} me={me} empty={EMPTY[id as LedgerTab]} onNavigate={onNavigate} />}
+                {tab === id && <JuniorLedger tab={id as LedgerTab} items={items} needs={day?.needs ?? []} moves={day?.moves} me={me} empty={EMPTY[id as LedgerTab]} onNavigate={onNavigate} />}
               </Tabs.Content>
             ))}
             <Tabs.Content value="suggested" className="jrPane">
