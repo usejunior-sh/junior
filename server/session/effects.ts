@@ -55,6 +55,8 @@ export const JUNIOR_READ_TOOLS = new Set([
   // Advance approvals: listing reads, proposing only shows a card. Only the user's Add makes one.
   'mcp__junior__list_approvals',
   'mcp__junior__propose_approval',
+  // Learnings: proposing writes only a quiet note or a card. Only the user's Keep makes one stick.
+  'mcp__junior__propose_learning',
 ])
 
 // Verb tokens that mark a connector call's intent: READ_VERBS / WRITE_VERBS

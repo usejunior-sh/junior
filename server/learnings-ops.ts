@@ -205,15 +205,16 @@ export async function listLearningsOp(rt: WorkspaceRuntime, opts: { all?: boolea
 }
 
 /**
- * Junior saw something worth learning, with a receipt. The first sighting is
- * a quiet candidate; a matching one on another day becomes a proposal. Never
- * keeps. (The propose_learning tool, its daily cap and the proposal card are
- * the next plan item, learnings-propose-tool.)
+ * Junior saw something worth learning, with a receipt (`source`; none is an
+ * error). The first sighting is a quiet candidate; a matching one on another
+ * day becomes a proposal, at most PROPOSALS_PER_DAY a day. Never keeps. The
+ * junior MCP's propose_learning calls it; its answer is the proposal card.
  */
 export async function proposeLearningOp(rt: WorkspaceRuntime, raw: unknown, now = Date.now()): Promise<Sighting> {
   const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>
   const s = await learningsFolder(rt).propose({ text: r.text, scope: r.scope ?? 'global', ref: r.source ?? r.ref }, now)
-  log('info', 'learnings', `${s.kind}: ${s.learning.text.slice(0, 80)}`, { learning: s.learning.id, workspace: rt.meta.id })
+  const what = s.kind === 'candidate' && s.held ? 'candidate (held: daily proposals used up)' : s.kind
+  log('info', 'learnings', `${what}: ${s.learning.text.slice(0, 80)}`, { learning: s.learning.id, workspace: rt.meta.id })
   if (s.kind !== 'candidate') changed(rt)
   return s
 }

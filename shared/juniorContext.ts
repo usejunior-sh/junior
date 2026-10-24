@@ -32,6 +32,8 @@ export const JUNIOR_MCP_INSTRUCTIONS = `Junior is a local work inbox for one eng
 
 - today's plan — one list of work items for the user and Junior for the current local day, each with an owner: "you" (the user) or "junior" (Junior, the agent). Done comes from the item's own status; unfinished rows carry over to the next day. get_today reads it; add_to_today and remove_from_today change it.
 
+- learning — something about how the user works, with a receipt (propose_learning, in chats). Propose only from the user's own edits, rejections or corrections, never from a guess. The first sighting is a quiet note; the same words and scope on another day become a proposal the user keeps or undoes; at most 3 new proposals a day. Only kept learnings are ever loaded.
+
 - check_send — ask whether a call would go out as the user before making it: free, held (waits for the user's OK), destroys (ask first) or refused. A dry run; it sends nothing.
 
 list_work_items, get_work_item, get_session_context, list_artifacts, read_artifact, get_today and check_send are free reads — use them rather than guessing. Every other tool writes, and the user is asked first.`

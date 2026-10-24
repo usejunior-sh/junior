@@ -12,6 +12,7 @@
  *   scope: repo:acme/web
  *   status: kept
  *   createdAt: 2026-10-20T09:12:00.000Z
+ *   proposedAt: 2026-10-21T10:05:00.000Z
  *   keptAt: 2026-10-21T16:40:00.000Z
  *   lastUsedAt: 2026-10-23T08:02:00.000Z
  *   sources:
@@ -22,6 +23,9 @@
  *
  * Statuses: `candidate` (seen once, never shown, never loaded), `proposed`
  * (seen on two different days, waiting on you), `kept` (you said keep).
+ * Only `kept` learnings ever go into a prompt (`loadable`). At most
+ * PROPOSALS_PER_DAY new proposals a day: past that, a second sighting stays
+ * a candidate and is proposed on a later day.
  *
  * The rules against memory rot, all pure and clock-free (time is an argument):
  * - expiry: a learning nobody used, kept or touched in 28 days goes;
@@ -51,19 +55,23 @@ export type Learning = {
   sources: LearningSource[]
   /** ms */
   createdAt: number
+  /** ms; when it became a proposal, absent while a candidate (and on files from before it was recorded) */
+  proposedAt?: number
   /** ms; when you kept it, absent until you do */
   keptAt?: number
   /** ms; when it last went into a chat or run, absent until it does */
   lastUsedAt?: number
 }
 
-export const LEARNING_FILE_KEYS = ['scope', 'status', 'createdAt', 'keptAt', 'lastUsedAt', 'sources'] as const
+export const LEARNING_FILE_KEYS = ['scope', 'status', 'createdAt', 'proposedAt', 'keptAt', 'lastUsedAt', 'sources'] as const
 
 /** Unused this long, a learning goes. */
 export const EXPIRE_DAYS = 28
 export const EXPIRE_MS = EXPIRE_DAYS * 86_400_000
 /** Kept learnings per scope. Keeping one more asks you to forget one first. */
 export const KEPT_PER_SCOPE = 20
+/** New proposals a day, per workspace: past this, the rest wait for another day. */
+export const PROPOSALS_PER_DAY = 3
 /** A learning is a line or two, not a document. */
 export const LEARNING_TEXT_MAX = 600
 /** Receipts kept per learning; past this, the oldest go. */
@@ -198,6 +206,7 @@ export function parseLearning(id: string, text: string): ParsedLearning {
   const status = doc.status
   if (!isLearningStatus(status)) errors.push(`status: one of ${LEARNING_STATUSES.join(', ')}`)
   const createdAt = timeOf('createdAt', doc.createdAt, errors, true)
+  const proposedAt = timeOf('proposedAt', doc.proposedAt, errors, false)
   const keptAt = timeOf('keptAt', doc.keptAt, errors, false)
   const lastUsedAt = timeOf('lastUsedAt', doc.lastUsedAt, errors, false)
   const sources = sourcesOf(doc.sources, errors)
@@ -207,6 +216,7 @@ export function parseLearning(id: string, text: string): ParsedLearning {
   if (status === 'kept' && keptAt === undefined && !errors.some((e) => e.startsWith('keptAt'))) errors.push('keptAt: a kept learning says when you kept it')
   if (errors.length || !scope || !isLearningStatus(status) || createdAt === undefined) return { learning: null, errors }
   const learning: Learning = { id, text: body, scope, status, sources, createdAt }
+  if (proposedAt !== undefined) learning.proposedAt = proposedAt
   if (keptAt !== undefined) learning.keptAt = keptAt
   if (lastUsedAt !== undefined) learning.lastUsedAt = lastUsedAt
   return { learning, errors: [] }
@@ -218,6 +228,7 @@ const iso = (ms: number) => new Date(ms).toISOString()
 /** The learning → its file. `parseLearning(l.id, serializeLearning(l))` gives `l` back. */
 export function serializeLearning(l: Learning): string {
   const lines = ['---', `scope: ${l.scope}`, `status: ${l.status}`, `createdAt: ${iso(l.createdAt)}`]
+  if (l.proposedAt !== undefined) lines.push(`proposedAt: ${iso(l.proposedAt)}`)
   if (l.keptAt !== undefined) lines.push(`keptAt: ${iso(l.keptAt)}`)
   if (l.lastUsedAt !== undefined) lines.push(`lastUsedAt: ${iso(l.lastUsedAt)}`)
   lines.push('sources:')
@@ -245,8 +256,12 @@ export function learningId(text: string, taken: ReadonlySet<string>): string {
 export type SightingInput = { text: string; scope: LearningScope; ref: string }
 
 export type Sighting =
-  /** first time: a quiet candidate, never shown, never loaded */
-  | { kind: 'candidate'; learning: Learning; created: boolean }
+  /**
+   * a quiet candidate, never shown, never loaded: the first sighting, one more
+   * on the same day, or (`held`) one on another day when today's proposals
+   * are used up
+   */
+  | { kind: 'candidate'; learning: Learning; created: boolean; held?: boolean }
   /** seen again on another day: now it's a proposal you see */
   | { kind: 'proposed'; learning: Learning }
   /** already proposed or kept: one more receipt, nothing else moves */
@@ -263,13 +278,20 @@ function withSource(sources: LearningSource[], s: LearningSource): LearningSourc
 export const findMatch = (list: readonly Learning[], text: string, scope: LearningScope): Learning | null =>
   list.find((l) => l.scope === scope && normaliseText(l.text) === normaliseText(text)) ?? null
 
+/** How many learnings became proposals on local day `day` (kept ones included: they were proposed first). */
+export function proposalsOn(list: readonly Learning[], day: string): number {
+  return list.filter((l) => l.proposedAt !== undefined && dayKey(l.proposedAt) === day).length
+}
+
 /**
  * Junior saw something worth learning. The first sighting is a candidate. A
  * matching sighting (same scope, same text once normalised) on a *different*
- * local day makes it a proposal; another on the same day doesn't. Never
- * returns a learning that is newly `kept`: only you keep.
+ * local day makes it a proposal; another on the same day doesn't. When
+ * `perDay` proposals were already made today, it stays a candidate (`held`)
+ * with the new receipt, and the next sighting on a later day proposes it.
+ * Never returns a learning that is newly `kept`: only you keep.
  */
-export function sight(list: readonly Learning[], input: SightingInput, now: number, newId: () => string): Sighting {
+export function sight(list: readonly Learning[], input: SightingInput, now: number, newId: () => string, perDay = PROPOSALS_PER_DAY): Sighting {
   const source = { ref: input.ref.trim(), day: dayKey(now) }
   const match = findMatch(list, input.text, input.scope)
   if (!match) {
@@ -278,8 +300,60 @@ export function sight(list: readonly Learning[], input: SightingInput, now: numb
   const sources = withSource(match.sources, source)
   if (match.status !== 'candidate') return { kind: 'known', learning: { ...match, sources } }
   const anotherDay = match.sources.some((s) => s.day !== source.day)
-  if (anotherDay) return { kind: 'proposed', learning: { ...match, sources, status: 'proposed' } }
+  if (anotherDay) {
+    if (proposalsOn(list, source.day) >= perDay) return { kind: 'candidate', created: false, held: true, learning: { ...match, sources } }
+    return { kind: 'proposed', learning: { ...match, sources, status: 'proposed', proposedAt: now } }
+  }
   return { kind: 'candidate', created: false, learning: { ...match, sources } }
+}
+
+/**
+ * What propose_learning answers, as JSON. A `proposed` answer is the session
+ * event the chat renders as a card ("Learned: … · Keep · Edit · Undo"):
+ * the tool call and this result are persisted in the session's event log like
+ * every tool call, and `learningProposalOf` reads the card back out of it.
+ */
+export type ProposeLearningResult = {
+  /** what the sighting did */
+  status: Sighting['kind']
+  /** true only for a new proposal: the one answer the user sees as a card */
+  shown: boolean
+  /** a second sighting that would have been a proposal, held because today's are used up */
+  held?: boolean
+  learning: Learning
+  /** one line for the model: what happened and what to do next */
+  note: string
+}
+
+export function proposeLearningResult(s: Sighting): ProposeLearningResult {
+  const base = { status: s.kind, shown: s.kind === 'proposed', learning: s.learning }
+  if (s.kind === 'proposed') {
+    return { ...base, note: 'Seen on two different days: shown to the user as a card. Nothing is kept until they press Keep. Carry on.' }
+  }
+  if (s.kind === 'known') {
+    return { ...base, note: `Already ${s.learning.status === 'kept' ? 'kept' : 'proposed'}; the receipt is added. Nothing else changes.` }
+  }
+  if (s.held) {
+    return { ...base, held: true, note: `Seen again, but ${PROPOSALS_PER_DAY} learnings were already proposed today. It stays a quiet note; the next sighting on a later day proposes it.` }
+  }
+  return {
+    ...base,
+    note: s.created
+      ? 'Noted quietly. The user does not see it. If you see the same thing on another day, propose it again with the same words and scope.'
+      : 'Seen again today. It stays a quiet note until it is seen on another day.',
+  }
+}
+
+/** A propose_learning result → the proposal card's learning, or null when the call made no card. Never throws. */
+export function learningProposalOf(resultText: string): Learning | null {
+  try {
+    const r = JSON.parse(resultText) as Partial<ProposeLearningResult>
+    if (r?.status !== 'proposed' || r.shown !== true || !r.learning || typeof r.learning !== 'object') return null
+    const l = r.learning
+    return isLearningId(l.id) && typeof l.text === 'string' && scopeFrom(l.scope) && Array.isArray(l.sources) ? l : null
+  } catch {
+    return null
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -422,6 +496,12 @@ export function budgetError(b: Budget): string {
   const hint = b.leastUsed ? ` The one used least lately: "${b.leastUsed.text.slice(0, 80)}".` : ''
   return `Junior keeps at most ${b.max} learnings ${where}. Forget one first.${hint}`
 }
+
+/**
+ * The learnings a prompt may carry: kept ones only. Candidates are Junior's
+ * quiet notes and proposals wait on you; neither ever reaches a model.
+ */
+export const loadable = (list: readonly Learning[]): Learning[] => list.filter((l) => l.status === 'kept')
 
 /** Mark learnings as used now (they went into a chat or a run). Returns only the ones that changed. */
 export function markUsed(list: readonly Learning[], ids: readonly string[], now: number): Learning[] {

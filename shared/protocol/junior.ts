@@ -102,7 +102,7 @@ export type TodayMatchResponse =
   | { ok: false; error: string }
 
 // Learnings with receipts (core/junior/learnings.ts), behind Junior's notebook.
-export type { Learning, LearningScope, LearningSource, LearningStatus } from '../../core/junior/learnings.js'
+export type { Learning, LearningScope, LearningSource, LearningStatus, ProposeLearningResult } from '../../core/junior/learnings.js'
 
 /** GET /api/learnings[?all=1]: proposed and kept (candidates too with all=1), and files that didn't parse. */
 export type LearningsResponse =

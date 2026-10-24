@@ -15,6 +15,8 @@ import { workspaceInfo } from './workspace/wiring.js'
 import { draftJobOp, draftJobText, tryJobOp } from './jobs/ops.js'
 import { addLinkOp, createArtifactOp, listArtifactsOp, toolResult, updateArtifactOp } from './artifacts-ops.js'
 import { listApprovalsOp } from './approvals-ops.js'
+import { proposeLearningOp } from './learnings-ops.js'
+import { proposeLearningResult } from '../core/junior/learnings.js'
 import { APPROVAL_WHATS, approvalFrom, describeApproval, isLive } from '../core/approvals/approvals.js'
 import { messageSessionOp, sessionByName, sessionReport, startedBy, startSessionsOp } from './session/spawn-ops.js'
 
@@ -481,6 +483,23 @@ export function makeJuniorMcp(rt: WorkspaceRuntime, sessionId?: string) {
             `Shown to the user as a card: "${describeApproval(out.approval)}". Nothing is approved until they press Add on it. ` +
               'Carry on; a matching send before then still shows its own card.',
           )
+        },
+      ),
+      // Learnings with receipts (core/junior/learnings.ts): Junior proposes, only the user keeps.
+      tool(
+        'propose_learning',
+        'Note something you learned about how the user works, with the receipt that taught you. Only from their own edits, rejections or corrections: they rewrote your diff, turned down a send, or told you to do it another way. Never from your own guesses or from what the code merely shows. The first time it is a quiet note the user never sees. The same words and scope seen again on another day become a proposal, shown as a card the user keeps or undoes. Nothing is kept until they press Keep, and nothing here goes into a prompt until then. One short imperative sentence ("Run pnpm test:unit, not pnpm test, in acme/web").',
+        {
+          text: z.string().describe('the learning, one short sentence; reuse the exact words when you see it again'),
+          scope: z.string().optional().describe('global, or repo:<owner>/<repo> when it holds in one repo only; default global'),
+          source: z.string().describe('the receipt: what showed it, e.g. pr:acme/web#3235, slack:<channel>/<ts>, session:<id>, path/to/file.ts:42'),
+        },
+        async (args) => {
+          try {
+            return okResult(JSON.stringify(proposeLearningResult(await proposeLearningOp(rt, args))))
+          } catch (err) {
+            return errResult(errText(err))
+          }
         },
       ),
       // Chats that start chats (server/session/spawn-ops.ts): each one an ordinary chat in the list,
