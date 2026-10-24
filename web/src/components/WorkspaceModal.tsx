@@ -21,10 +21,12 @@
  * chat can start. Skip for now stays the user's explicit call.
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
+import * as Dialog from '@radix-ui/react-dialog'
 import type { ProjectsResponse, Workspace, WorkspaceAuthBackend, WorkspaceResponse } from '../../../shared/protocol.js'
 import { store } from '../store.js'
 import { usePersona } from '../junior.js'
 import { FolderField, folderName } from './ProjectsTab.js'
+import { useReturnFocus } from '../ui/returnFocus.js'
 import { AuthCards, ColorPicker, VerifyLine, verifyWorkspace, WORKSPACE_COLORS, type VerifyState } from './workspaceAuth.js'
 
 export type WorkspaceModalMode = { kind: 'create' } | { kind: 'onboarding'; workspace: Workspace }
@@ -51,7 +53,6 @@ const verifyFailed = (v: VerifyState): boolean => v !== null && v !== 'probing' 
 
 export function WorkspaceModal({ mode, onClose }: Props) {
   const persona = usePersona()
-  const dialog = useRef<HTMLDialogElement>(null)
   const [step, setStep] = useState<Step>('identity')
 
   // identity
@@ -92,12 +93,7 @@ export function WorkspaceModal({ mode, onClose }: Props) {
     setVerify(null)
   }, [mode])
 
-  useEffect(() => {
-    const el = dialog.current
-    if (!el) return
-    if (mode && !el.open) el.showModal()
-    if (!mode && el.open) el.close()
-  }, [mode])
+  const returnFocus = useReturnFocus(mode !== null)
 
   const finishOnboarding = useCallback(() => {
     void fetch('/api/workspaces/onboarded', { method: 'POST' }).finally(() => {
@@ -184,165 +180,173 @@ export function WorkspaceModal({ mode, onClose }: Props) {
     }
   }, [mode, target, name, color, description, folder, authBackend, apiKey, runVerify])
 
-  if (!mode) {
-    return <dialog ref={dialog} className="wsModal" onClose={onClose} />
-  }
+  // Closed: nothing mounts. The hooks above still run, so each open reseeds.
+  if (!mode) return null
 
   const heading = mode.kind === 'onboarding' ? 'Set up Junior on this Mac' : 'New workspace'
   const needsKey = authBackend === 'api-key' && !apiKey.trim() && !(target?.apiKeyHint && mode.kind !== 'create')
 
   return (
-    <dialog
-      ref={dialog}
-      className="wsModal"
-      onClose={close}
-      onClick={(e) => e.target === dialog.current && close()}
-    >
-      <h3>{heading}</h3>
-      {mode.kind === 'onboarding' && (
-        <p className="wsIntro">
-          {persona.name} runs Claude with a login on this Mac. Pick which one. You can rename this workspace later.
-        </p>
-      )}
+    // Escape and a scrim click close as Cancel does: onboarding counts it as Skip.
+    <Dialog.Root open onOpenChange={(o) => !o && close()}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="projOverlay" />
+        <Dialog.Content
+          className="uiDialog wsModal"
+          onCloseAutoFocus={returnFocus}
+          {...(mode.kind === 'create' ? { 'aria-describedby': undefined } : {})}
+        >
+          <Dialog.Title asChild>
+            <h3>{heading}</h3>
+          </Dialog.Title>
+          {mode.kind === 'onboarding' && (
+            <Dialog.Description asChild>
+              <p className="wsIntro">
+                {persona.name} runs Claude with a login on this Mac. Pick which one. You can rename this workspace later.
+              </p>
+            </Dialog.Description>
+          )}
 
-      {STEPS[mode.kind].length > 1 && (
-        <div className="wsSteps" aria-hidden="true">
-          {STEPS[mode.kind].map(([s, label], i) => (
-            <span key={s} className={`wsStep${step === s ? ' active' : ''}`}>
-              {i + 1}. {label}
-            </span>
-          ))}
-        </div>
-      )}
+          {STEPS[mode.kind].length > 1 && (
+            <div className="wsSteps" aria-hidden="true">
+              {STEPS[mode.kind].map(([s, label], i) => (
+                <span key={s} className={`wsStep${step === s ? ' active' : ''}`}>
+                  {i + 1}. {label}
+                </span>
+              ))}
+            </div>
+          )}
 
-      {step === 'identity' && mode.kind === 'create' && (
-        <>
-          <label>Name</label>
-          <input
-            autoFocus
-            value={name}
-            placeholder="e.g. Work, Personal"
-            onChange={(e) => setName(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && name.trim() && folder.trim()) setStep('auth')
-            }}
-          />
-          <label>Color</label>
-          <ColorPicker value={color} onChange={setColor} />
-          <label>
-            Default project <span className="hint">· the folder sessions, terminals and jobs start in</span>
-          </label>
-          <FolderField value={folder} onChange={setFolder} onError={setFolderError} />
-          {folderError && <div className="projError">{folderError}</div>}
-          <label>Description (optional)</label>
-          <input
-            value={description}
-            placeholder="What lives in this workspace"
-            onChange={(e) => setDescription(e.target.value)}
-          />
-          <div className="row">
-            <button type="button" className="cancel" onClick={close}>
-              Cancel
-            </button>
-            <button type="button" className="go" disabled={!name.trim() || !folder.trim()} onClick={() => setStep('auth')}>
-              Next
-            </button>
-          </div>
-        </>
-      )}
+          {step === 'identity' && mode.kind === 'create' && (
+            <>
+              <label>Name</label>
+              <input
+                autoFocus
+                value={name}
+                placeholder="e.g. Work, Personal"
+                onChange={(e) => setName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && name.trim() && folder.trim()) setStep('auth')
+                }}
+              />
+              <label>Color</label>
+              <ColorPicker value={color} onChange={setColor} />
+              <label>
+                Default project <span className="hint">· the folder sessions, terminals and jobs start in</span>
+              </label>
+              <FolderField value={folder} onChange={setFolder} onError={setFolderError} />
+              {folderError && <div className="projError">{folderError}</div>}
+              <label>Description (optional)</label>
+              <input
+                value={description}
+                placeholder="What lives in this workspace"
+                onChange={(e) => setDescription(e.target.value)}
+              />
+              <div className="row">
+                <button type="button" className="cancel" onClick={close}>
+                  Cancel
+                </button>
+                <button type="button" className="go" disabled={!name.trim() || !folder.trim()} onClick={() => setStep('auth')}>
+                  Next
+                </button>
+              </div>
+            </>
+          )}
 
-      {step === 'auth' && (
-        <>
-          <AuthCards
-            value={authBackend}
-            onChange={editAuth}
-            apiKey={apiKey}
-            onApiKeyChange={editKey}
-            apiKeyHint={mode.kind === 'create' ? null : target?.apiKeyHint}
-          />
-          {error && <div className="msg error">{error}</div>}
-          {mode.kind === 'onboarding' && target && (verify !== null || target.authBackend === authBackend) ? (
+          {step === 'auth' && (
+            <>
+              <AuthCards
+                value={authBackend}
+                onChange={editAuth}
+                apiKey={apiKey}
+                onApiKeyChange={editKey}
+                apiKeyHint={mode.kind === 'create' ? null : target?.apiKeyHint}
+              />
+              {error && <div className="msg error">{error}</div>}
+              {mode.kind === 'onboarding' && target && (verify !== null || target.authBackend === authBackend) ? (
+                <VerifyLine
+                  workspace={target}
+                  state={verify}
+                  footer={
+                    <div className="row">
+                      {verify === null || verify === 'probing' ? (
+                        <>
+                          <button type="button" className="cancel" onClick={finishOnboarding}>
+                            Skip for now
+                          </button>
+                          <button
+                            type="button"
+                            className="go"
+                            disabled={saving || needsKey || verify === 'probing'}
+                            onClick={() => void save()}
+                          >
+                            {verify === 'probing' ? 'Checking…' : saving ? 'Saving…' : 'Save and check'}
+                          </button>
+                        </>
+                      ) : verifyFailed(verify) ? (
+                        <>
+                          <button type="button" className="cancel" onClick={finishOnboarding}>
+                            Finish anyway
+                          </button>
+                          <button ref={primary} type="button" className="go" onClick={() => runVerify(target.id)}>
+                            Try again
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button type="button" className="jrRef" onClick={() => runVerify(target.id)}>
+                            Check again
+                          </button>
+                          <button ref={primary} type="button" className="go" onClick={finishOnboarding}>
+                            Finish
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  }
+                />
+              ) : (
+                <div className="row">
+                  {mode.kind === 'onboarding' ? (
+                    <button type="button" className="cancel" onClick={finishOnboarding}>
+                      Skip for now
+                    </button>
+                  ) : (
+                    <button type="button" className="cancel" onClick={() => setStep('identity')}>
+                      Back
+                    </button>
+                  )}
+                  <button type="button" className="go" disabled={saving || needsKey} onClick={() => void save()}>
+                    {saving ? 'Saving…' : mode.kind === 'create' ? 'Create & verify' : 'Save and check'}
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+
+          {step === 'verify' && mode.kind === 'create' && target && (
             <VerifyLine
               workspace={target}
               state={verify}
               footer={
                 <div className="row">
-                  {verify === null || verify === 'probing' ? (
-                    <>
-                      <button type="button" className="cancel" onClick={finishOnboarding}>
-                        Skip for now
-                      </button>
-                      <button
-                        type="button"
-                        className="go"
-                        disabled={saving || needsKey || verify === 'probing'}
-                        onClick={() => void save()}
-                      >
-                        {verify === 'probing' ? 'Checking…' : saving ? 'Saving…' : 'Save and check'}
-                      </button>
-                    </>
-                  ) : verifyFailed(verify) ? (
-                    <>
-                      <button type="button" className="cancel" onClick={finishOnboarding}>
-                        Finish anyway
-                      </button>
-                      <button ref={primary} type="button" className="go" onClick={() => runVerify(target.id)}>
-                        Try again
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <button type="button" className="jrRef" onClick={() => runVerify(target.id)}>
-                        Check again
-                      </button>
-                      <button ref={primary} type="button" className="go" onClick={finishOnboarding}>
-                        Finish
-                      </button>
-                    </>
+                  {verify !== null && verify !== 'probing' && (
+                    <button type="button" className="jrRef" onClick={() => runVerify(target.id)}>
+                      {verifyFailed(verify) ? 'Try again' : 'Check again'}
+                    </button>
                   )}
+                  <button type="button" className="cancel" onClick={() => store.switchWorkspace(target.id)}>
+                    Switch to it
+                  </button>
+                  <button ref={primary} type="button" className="go" disabled={verify === 'probing'} onClick={close}>
+                    {verify === 'probing' ? 'Checking…' : 'Done'}
+                  </button>
                 </div>
               }
             />
-          ) : (
-            <div className="row">
-              {mode.kind === 'onboarding' ? (
-                <button type="button" className="cancel" onClick={finishOnboarding}>
-                  Skip for now
-                </button>
-              ) : (
-                <button type="button" className="cancel" onClick={() => setStep('identity')}>
-                  Back
-                </button>
-              )}
-              <button type="button" className="go" disabled={saving || needsKey} onClick={() => void save()}>
-                {saving ? 'Saving…' : mode.kind === 'create' ? 'Create & verify' : 'Save and check'}
-              </button>
-            </div>
           )}
-        </>
-      )}
-
-      {step === 'verify' && mode.kind === 'create' && target && (
-        <VerifyLine
-          workspace={target}
-          state={verify}
-          footer={
-            <div className="row">
-              {verify !== null && verify !== 'probing' && (
-                <button type="button" className="jrRef" onClick={() => runVerify(target.id)}>
-                  {verifyFailed(verify) ? 'Try again' : 'Check again'}
-                </button>
-              )}
-              <button type="button" className="cancel" onClick={() => store.switchWorkspace(target.id)}>
-                Switch to it
-              </button>
-              <button ref={primary} type="button" className="go" disabled={verify === 'probing'} onClick={close}>
-                {verify === 'probing' ? 'Checking…' : 'Done'}
-              </button>
-            </div>
-          }
-        />
-      )}
-    </dialog>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   )
 }

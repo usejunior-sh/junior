@@ -1,10 +1,14 @@
 /**
  * The system sheet: anchored top-right under the gauge icon. An icon rail of
  * three views (status · activity · logs) beside the body, the way the design's
- * "Usage & providers" sheet is laid out.
+ * "Usage & providers" sheet is laid out. A Radix Dialog around Radix Tabs
+ * (vertical: the arrow keys move along the rail); only the open tab mounts,
+ * so a tab fetches only while it shows.
  */
 import { Activity, Gauge, RefreshCw, ScrollText, X } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
+import * as Dialog from '@radix-ui/react-dialog'
+import * as Tabs from '@radix-ui/react-tabs'
 import type {
   ActivityResponse,
   ActivityRun,
@@ -17,6 +21,7 @@ import type {
 } from '../../../shared/protocol.js'
 import type { ConnState } from '../store.js'
 import { Select, SelectItem } from '../ui/Select.js'
+import { useReturnFocus } from '../ui/returnFocus.js'
 
 function rel(ms: number | null | undefined): string {
   if (!ms) return 'never'
@@ -54,57 +59,71 @@ export function SystemModal({
   conn: ConnState
   onClose: () => void
 }) {
-  const dialog = useRef<HTMLDialogElement>(null)
   const [tab, setTab] = useState<SystemTab>(initialTab)
   const [nonce, setNonce] = useState(0)
+  const returnFocus = useReturnFocus(open)
 
+  // Each open starts on the tab it was opened for.
   useEffect(() => {
-    const el = dialog.current
-    if (!el) return
-    if (open && !el.open) {
-      el.showModal()
-      setTab(initialTab)
-    }
-    if (!open && el.open) el.close()
+    if (open) setTab(initialTab)
   }, [open, initialTab])
 
   const title = TABS.find((t) => t.id === tab)?.label ?? ''
 
   return (
-    <dialog ref={dialog} className="sheet" onClose={onClose} onClick={(e) => e.target === dialog.current && onClose()}>
-      <div className="sheetRail" role="tablist">
-        {TABS.map(({ id, label, icon: Icon }) => (
-          <button
-            key={id}
-            type="button"
-            role="tab"
-            aria-selected={tab === id}
-            title={label}
-            className={`sheetTab${tab === id ? ' active' : ''}`}
-            onClick={() => setTab(id)}
+    <Dialog.Root open={open} onOpenChange={(o) => !o && onClose()}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="projOverlay" />
+        <Dialog.Content className="uiDialog sheet" onCloseAutoFocus={returnFocus}>
+          {/* display: contents, so the rail and the body stay the sheet's two grid columns */}
+          <Tabs.Root
+            className="sheetTabs"
+            orientation="vertical"
+            value={tab}
+            onValueChange={(v) => setTab(v as SystemTab)}
           >
-            <Icon size={15} aria-hidden="true" />
-          </button>
-        ))}
-      </div>
-      <div className="sheetBody">
-        <div className="sheetHead">
-          <span className="title">{title}</span>
-          <span className="sub">{tab === 'status' ? 'the daemon and its sources' : tab === 'activity' ? 'recent job runs' : 'daemon log'}</span>
-          <span className="right">
-            <button type="button" className="iconBtn" title="Refresh" onClick={() => setNonce((n) => n + 1)}>
-              <RefreshCw size={13} aria-hidden="true" />
-            </button>
-            <button type="button" className="iconBtn" title="Close (Esc)" aria-label="Close" onClick={onClose}>
-              <X size={14} aria-hidden="true" />
-            </button>
-          </span>
-        </div>
-        {open && tab === 'status' && <StatusTab key={nonce} conn={conn} />}
-        {open && tab === 'activity' && <ActivityTab key={nonce} />}
-        {open && tab === 'logs' && <LogsTab key={nonce} />}
-      </div>
-    </dialog>
+            <Tabs.List className="sheetRail" aria-label="System">
+              {TABS.map(({ id, label, icon: Icon }) => (
+                <Tabs.Trigger key={id} value={id} title={label} aria-label={label} className="sheetTab">
+                  <Icon size={15} aria-hidden="true" />
+                </Tabs.Trigger>
+              ))}
+            </Tabs.List>
+            <div className="sheetBody">
+              <div className="sheetHead">
+                <Dialog.Title asChild>
+                  <span className="title">{title}</span>
+                </Dialog.Title>
+                <Dialog.Description asChild>
+                  <span className="sub">
+                    {tab === 'status' ? 'the daemon and its sources' : tab === 'activity' ? 'recent job runs' : 'daemon log'}
+                  </span>
+                </Dialog.Description>
+                <span className="right">
+                  <button type="button" className="iconBtn" title="Refresh" onClick={() => setNonce((n) => n + 1)}>
+                    <RefreshCw size={13} aria-hidden="true" />
+                  </button>
+                  <Dialog.Close asChild>
+                    <button type="button" className="iconBtn" title="Close (Esc)" aria-label="Close">
+                      <X size={14} aria-hidden="true" />
+                    </button>
+                  </Dialog.Close>
+                </span>
+              </div>
+              <Tabs.Content value="status" className="sheetPane">
+                <StatusTab key={nonce} conn={conn} />
+              </Tabs.Content>
+              <Tabs.Content value="activity" className="sheetPane">
+                <ActivityTab key={nonce} />
+              </Tabs.Content>
+              <Tabs.Content value="logs" className="sheetPane">
+                <LogsTab key={nonce} />
+              </Tabs.Content>
+            </div>
+          </Tabs.Root>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   )
 }
 

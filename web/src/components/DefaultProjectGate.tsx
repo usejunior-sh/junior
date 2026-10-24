@@ -12,6 +12,7 @@ import type { ProjectsResponse } from '../../../shared/protocol.js'
 import { defaultProjectGateOpen } from '../../../core/junior/onboarding-gate.js'
 import { FolderField, folderName } from './ProjectsTab.js'
 import { useProjectGateDismissed } from '../onboarding.js'
+import { useReturnFocus } from '../ui/returnFocus.js'
 
 type Props = {
   workspaceId: string
@@ -64,39 +65,38 @@ export function DefaultProjectGate({ workspaceId, suspended, onboardingSkipped }
   }
 
   const open = defaultProjectGateOpen({ missing, dismissed, suspended, onboardingSkipped })
+  const returnFocus = useReturnFocus(open)
 
   return (
     <Dialog.Root open={open} onOpenChange={(o) => !o && dismiss()}>
       <Dialog.Portal>
         <Dialog.Overlay className="projOverlay" />
-        <Dialog.Content asChild>
-          <dialog open className="projModal projAddDialog">
-            <Dialog.Title asChild>
-              <h3>Pick a default project</h3>
-            </Dialog.Title>
-            <Dialog.Description asChild>
-              <p className="wsIntro">
-                Sessions, terminals and jobs in this workspace start in its default project. Pick the folder you
-                work in most. You can add more projects, or change the default, in Settings → Projects.
-              </p>
-            </Dialog.Description>
+        <Dialog.Content className="uiDialog projModal projGate" onCloseAutoFocus={returnFocus}>
+          <Dialog.Title asChild>
+            <h3>Pick a default project</h3>
+          </Dialog.Title>
+          <Dialog.Description asChild>
+            <p className="wsIntro">
+              Sessions, terminals and jobs in this workspace start in its default project. Pick the folder you
+              work in most. You can add more projects, or change the default, in Settings → Projects.
+            </p>
+          </Dialog.Description>
 
-            <label>Folder</label>
-            <FolderField value={folder} onChange={setFolder} onError={setError} autoFocus />
-            <p className="projGateHint">It won't ask again. Add one in Settings → Projects.</p>
-            {error && <div className="projError">{error}</div>}
+          <label>Folder</label>
+          <FolderField value={folder} onChange={setFolder} onError={setError} autoFocus />
+          <p className="projGateHint">It won't ask again. Add one in Settings → Projects.</p>
+          {error && <div className="projError">{error}</div>}
 
-            <div className="row">
-              <Dialog.Close asChild>
-                <button type="button" className="cancel">
-                  Not now
-                </button>
-              </Dialog.Close>
-              <button type="button" className="go" disabled={saving || !folder.trim()} onClick={() => void save()}>
-                {saving ? 'Saving…' : 'Use this folder'}
+          <div className="row">
+            <Dialog.Close asChild>
+              <button type="button" className="cancel">
+                Not now
               </button>
-            </div>
-          </dialog>
+            </Dialog.Close>
+            <button type="button" className="go" disabled={saving || !folder.trim()} onClick={() => void save()}>
+              {saving ? 'Saving…' : 'Use this folder'}
+            </button>
+          </div>
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

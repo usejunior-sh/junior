@@ -102,14 +102,15 @@ dialog, .uiDialog {
 dialog::backdrop { background: var(--scrim); }
 dialog:focus, dialog:focus-visible, .uiDialog:focus, .uiDialog:focus-visible { outline: none; }
 dialog h3, .uiDialog h3 { margin: 0 0 14px; font-size: 1.1538rem; font-weight: 500; color: var(--ink); letter-spacing: -0.1px; }
-dialog label { display: block; font-size: 0.9231rem; color: var(--mute); margin: 12px 0 5px; }
-dialog input, dialog textarea {
+/* :where keeps a Radix dialog's element rules as weak as a native one's, so a class (.checkLine, .logFilterInput) still wins */
+dialog label, :where(.uiDialog) label { display: block; font-size: 0.9231rem; color: var(--mute); margin: 12px 0 5px; }
+dialog input, dialog textarea, :where(.uiDialog) input, :where(.uiDialog) textarea {
   width: 100%; background: var(--canvas); border: 1px solid var(--hair-strong); color: var(--ink);
   border-radius: var(--r); padding: 8px 10px; font-size: 1rem; line-height: 1.45; outline: none;
   transition: border-color 0.12s;
 }
-dialog input:focus, dialog textarea:focus { border-color: var(--ink); }
-dialog input::placeholder, dialog textarea::placeholder { color: var(--stone); }
+dialog input:focus, dialog textarea:focus, :where(.uiDialog) input:focus, :where(.uiDialog) textarea:focus { border-color: var(--ink); }
+dialog input::placeholder, dialog textarea::placeholder, :where(.uiDialog) input::placeholder, :where(.uiDialog) textarea::placeholder { color: var(--stone); }
 dialog .row, .uiDialog .row { margin-top: 18px; display: flex; gap: 8px; justify-content: flex-end; align-items: center; }
 dialog .row button, dialog button.go, dialog button.cancel, dialog button.danger,
 .uiDialog .row button, .uiDialog button.go, .uiDialog button.cancel, .uiDialog button.danger {
@@ -187,12 +188,19 @@ dialog p, .uiDialog p { color: var(--body); font-size: 1rem; line-height: 1.55; 
 #helpOverlay td:first-child { width: 120px; }
 
 /* system sheet: anchored top right, icon rail + body */
-dialog.sheet { width: 600px; padding: 0; margin: 50px 88px auto auto; grid-template-columns: 48px minmax(0, 1fr); overflow: hidden; max-height: calc(100vh - 100px); }
-dialog.sheet[open] { display: grid; }
+/* Radix Dialog content; the Tabs root is display: contents, so the rail and the body are the grid's two columns */
+.uiDialog.sheet {
+  top: 50px; right: 88px; left: auto; transform: none; width: 600px; padding: 0;
+  display: grid; grid-template-columns: 48px minmax(0, 1fr); overflow: hidden; max-height: calc(100vh - 100px);
+}
+.sheetTabs { display: contents; }
+.sheetPane { min-width: 0; outline: none; }
+.sheetPane:focus-visible { outline: 1px solid var(--ink); outline-offset: 2px; border-radius: var(--r); }
 .sheetRail { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 0; border-right: 1px solid var(--hair); }
 .sheetTab { display: flex; width: 32px; height: 32px; align-items: center; justify-content: center; border-radius: var(--r); border: 1px solid transparent; background: transparent; color: var(--mute); }
 .sheetTab:hover { color: var(--ink); }
-.sheetTab.active { background: var(--elev); color: var(--ink); border-color: var(--hair-strong); }
+.sheetTab:focus-visible { outline: 1px solid var(--ink); outline-offset: 1px; }
+.sheetTab.active, .sheetTab[data-state="active"] { background: var(--elev); color: var(--ink); border-color: var(--hair-strong); }
 .sheetRail .sep { width: 20px; height: 1px; background: var(--hair-strong); margin: 4px 0; }
 .sheetBody { display: flex; flex-direction: column; gap: 14px; padding: 16px 18px; min-height: 0; overflow-y: auto; }
 .sheetHead { display: flex; align-items: center; gap: 8px; }

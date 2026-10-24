@@ -256,7 +256,7 @@ html.kbOpen .shell.mobile .panel { bottom: 0; }
 
 /* ---------- phone: dialogs: full width, pinned near the top so a keyboard never covers them ---------- */
 @media (max-width: 767px), (pointer: coarse) and (max-height: 500px) {
-  dialog, dialog.itemComposer, #palette, .uiDialog, #helpOverlay, dialog.repoDialog, dialog.sheet {
+  dialog, dialog.itemComposer, #palette, .uiDialog, .uiDialog.sheet, .uiDialog.wsModal, #helpOverlay, dialog.repoDialog {
     width: calc(100vw - 16px); max-width: none;
     margin: calc(env(safe-area-inset-top) + 8px) 8px auto;
     max-height: calc(var(--vvh, 100dvh) - env(safe-area-inset-top) - 16px); overflow-y: auto;
@@ -266,6 +266,8 @@ html.kbOpen .shell.mobile .panel { bottom: 0; }
   /* the palette is Radix content, not a <dialog>: pinned near the top, footer sticky inside --vvh */
   #palette { top: 0; left: 0; transform: none; }
   .uiDialog { top: 0; left: 0; right: auto; transform: none; padding: 18px 16px; }
+  /* the system sheet keeps its rail, edge to edge: no padding, and its desktop anchor (top 50px, right 88px) let go */
+  .uiDialog.sheet { top: 0; left: 0; right: auto; padding: 0; }
   .uiDialog .row button, .uiDialog button.go, .uiDialog button.cancel, .uiDialog button.danger { height: 44px; padding: 0 16px; }
   #helpOverlay .helpHead { top: -18px; }
   #helpOverlay .helpHead .iconBtn { width: 40px; height: 40px; }
