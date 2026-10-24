@@ -14,11 +14,12 @@
  * Which rows a tab shows and the words on them are core/junior/ledger.ts.
  * Every verb here is local or a hand-off; sends stay held for approval.
  */
-import { ChevronRight, X } from 'lucide-react'
+import { ChevronRight, ExternalLink, X } from 'lucide-react'
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { HandoffReadiness, NeedsRow, RowMove, ScoredItem, WatchId } from '../../../shared/protocol.js'
 import { enterVerb, rowLabel, rowMove, type RowLine } from '../../../core/junior/row-move.js'
 import { needsMoveText } from '../../../core/junior/needs.js'
+import { isMainRed, MAIN_RED_SAYS, mainRedEvidence } from '../../../core/junior/main-red.js'
 import { ageHot, cantWatchOf, juniorState, LEDGER_GROUP_TITLE, ledgerGroup, ledgerProgress, ledgerRows, NOT_USEFUL_HOLD_MAX_MS, NOT_USEFUL_NOTICE_MS, watchOffOf, type LedgerGroup, type LedgerTab } from '../../../core/junior/ledger.js'
 import { TURN_ON_LABEL, WATCH_CANT_SAYS, WATCH_OFF_SAYS, WATCH_STILL_OFF, withAnswer } from '../../../core/junior/watch-off.js'
 import { itemHash } from '../hooks.js'
@@ -113,6 +114,39 @@ function contextOf(i: ScoredItem): string {
   return [lead, ...bits].filter(Boolean).join(' · ')
 }
 
+/**
+ * Checks red on main too, under the context: which, the commit, how long ago,
+ * and a link to main's run. On its own line so the link never wraps mid-sentence.
+ */
+function MainRedLine({ i }: { i: ScoredItem }) {
+  const ev = mainRedEvidence(i.seen, Date.now())
+  if (!ev) return null
+  return (
+    <span className="ev">
+      <span>
+        {ev.checks} failed on main too
+        {ev.sha && (
+          <>
+            , at <span className="mono">{ev.sha}</span>
+          </>
+        )}
+        {ev.ago && (
+          <>
+            , <span className="mono">{ev.ago}</span> ago
+          </>
+        )}
+        .
+      </span>
+      {ev.url && (
+        <a href={ev.url} target="_blank" rel="noreferrer" aria-label={ev.linkLabel}>
+          Open main's run
+          <ExternalLink size={12} aria-hidden="true" />
+        </a>
+      )}
+    </span>
+  )
+}
+
 /** What Junior says about it, in a sentence. */
 function juniorSays(i: ScoredItem): string {
   if (i.handoff === 'paused') return 'Paused. Nothing runs until you resume.'
@@ -122,6 +156,7 @@ function juniorSays(i: ScoredItem): string {
   if (off) return WATCH_OFF_SAYS[off]
   const cant = cantWatchOf(i)
   if (cant) return WATCH_CANT_SAYS[cant]
+  if (isMainRed(i)) return MAIN_RED_SAYS
   const r = i.tasks?.review
   if (r?.state === 'ready') return r.line ?? 'My first pass is ready. Nothing is posted.'
   if (r?.state === 'reviewing') return 'Reading the diff now.'
@@ -591,7 +626,10 @@ function ItemLine({
       {open && (
         <div className="jhXp">
           <span className="lbl">{i.source === 'slack' ? 'Message' : 'Context'}</span>
-          <span className="ctx">{contextOf(i)}</span>
+          <span className="ctx">
+            {contextOf(i)}
+            <MainRedLine i={i} />
+          </span>
           <span className="lbl jr">Junior</span>
           <span className="said">{juniorSays(i)}</span>
           <div className="acts">

@@ -237,6 +237,9 @@ function waitVerb(x: Facts): string {
       return f?.note ? `Wait on ${clip(f.note, 8)}` : 'Wait on someone'
     case 'world':
       return 'Wait on an outside change'
+    // main is red too: nothing to do on this PR until main is green
+    case 'main-red':
+      return 'Leave it'
     case 'snoozed':
     case 'closed':
       return 'Leave it'
@@ -300,6 +303,7 @@ function reasonsOf(x: Facts, action: NextAction): string[] {
   if (turn.turn === 'junior') out.push('with Junior')
   else if (turn.turn === 'others') {
     if (turn.reason === 'review-posted') out.push('review posted')
+    if (turn.reason === 'main-red') out.push('main is red too', 'not yours')
     if (a && turn.reason !== 'snoozed' && turn.reason !== 'closed') out.push(`waiting ${a}`)
     if (turn.reason === 'snoozed') out.push('snoozed')
     if (turn.reason === 'closed') out.push('closed')
@@ -313,7 +317,7 @@ function reasonsOf(x: Facts, action: NextAction): string[] {
   else if (item.priority === 2) out.push('high priority')
   // red CI that isn't the move itself
   const red = (x.ownPr || item.kind === 'reply-needed') && item.ciFailing
-  if (red && action !== 'ci' && action !== 'decide') out.push('CI red too')
+  if (red && action !== 'ci' && action !== 'decide' && turn.reason !== 'main-red') out.push('CI red too')
   const broken = item.flow?.broken
   if (broken && broken !== 'CI failing' && action !== 'fix') out.push(broken)
   const paused = item.handoff === 'paused' || item.junior?.stage === 'paused'

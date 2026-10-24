@@ -481,6 +481,11 @@ button.jlTitle:hover { text-decoration: underline; text-decoration-color: var(--
 .jhXp .lbl { padding-top: 2px; font-family: var(--mono); font-size: 0.8462rem; letter-spacing: 0.02em; color: var(--ash); }
 .jhXp .lbl.jr { color: var(--blue); }
 .jhXp .ctx { color: var(--charcoal); overflow-wrap: anywhere; }
+/* checks red on main too: its own line under the context, the commit and age as data, main's run as a link */
+.jhXp .ev { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 12px; margin-top: 4px; }
+.jhXp .ev .mono { font-family: var(--mono); font-size: 0.9231rem; color: var(--ash); }
+.jhXp .ev a { display: inline-flex; align-items: center; gap: 4px; color: var(--blue); }
+.jhXp .ev a:hover { text-decoration: underline; }
 .jhXp .said { color: var(--body); }
 .jhXp .acts { grid-column: 2; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 2px; }
 .jhXp .acts .btn { gap: 6px; }
@@ -537,6 +542,9 @@ button.jlTitle:hover { text-decoration: underline; text-decoration-color: var(--
   .jhXp .lbl { padding-top: 8px; }
   .jhXp .acts { grid-column: 1; margin-top: 10px; }
   .jhXp .acts .btn { height: 36px; }
+  /* main's run drops to its own line, with a full tap target */
+  .jhXp .ev { display: block; }
+  .jhXp .ev a { display: flex; min-height: 36px; width: fit-content; }
   .jhXp .acts .cap { flex-basis: 100%; order: 9; }
   .jhXp .keys, .jhKeys, .jhKbd { display: none; }
   .jhXp .acts .nuPhone { display: inline-flex; }

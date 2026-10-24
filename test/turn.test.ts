@@ -48,6 +48,16 @@ const handed = (stage: JuniorWork['stage'], over: Partial<JuniorWork> = {}) => (
 
 type Row = { name: string; item: ScoredItem; ctx?: TurnContext; want: TurnReason }
 
+/** What the babysit watch saw: red checks, and which of them are red on main too. */
+const seenRed = (red: string[], onMain: string[]): NonNullable<ScoredItem['seen']> => ({
+  red,
+  bots: 0,
+  people: 0,
+  rebase: null,
+  draft: false,
+  mainRed: onMain.map((check) => ({ check, url: null, sha: null, at: null })),
+})
+
 const ROWS: Row[] = [
   // off the open list
   { name: 'snoozed', item: item({ status: 'snoozed' }), want: 'snoozed' },
@@ -90,6 +100,13 @@ const ROWS: Row[] = [
   { name: 'your PR, approved, handed off', item: item({ ...ownPr('own-pr-approved'), ...handed('watching') }), want: 'merge' },
   { name: 'your PR, conflicts', item: item(ownPr('own-pr-conflicting')), want: 'conflicts' },
   { name: 'your PR, conflicts, handed off', item: item({ ...ownPr('own-pr-conflicting'), ...handed('watching') }), want: 'junior-fixing' },
+  // red on main too (the babysit watch's sort): nobody's move on this PR
+  { name: 'your PR, red only where main is red too, handed off', item: item({ ...ownPr('own-pr-open', { ciFailing: true, seen: seenRed(['lint'], ['lint']) }), ...handed('watching') }), want: 'main-red' },
+  { name: 'your PR, red on main too and a real failure', item: item({ ...ownPr('own-pr-open', { ciFailing: true, seen: seenRed(['lint', 'test'], ['lint']) }), ...handed('watching') }), want: 'junior-fixing' },
+  { name: 'your PR, red on main too, babysit switched off', item: item({ ...ownPr('own-pr-open', { ciFailing: true, seen: seenRed(['lint'], ['lint']) }), ...handed('watching', { readiness: { state: 'watch-off', watch: 'babysit' } }) }), want: 'ci-red' },
+  { name: 'your PR, red on main too, you paused Junior', item: item({ ...ownPr('own-pr-open', { ciFailing: true, seen: seenRed(['lint'], ['lint']) }), handoff: 'paused', junior: junior('paused') }), want: 'ci-red' },
+  { name: 'your PR, red on main too, not handed off', item: item(ownPr('own-pr-open', { ciFailing: true, seen: seenRed(['lint'], ['lint']) })), want: 'ci-red' },
+  { name: 'your PR, red on main too and conflicting, handed off', item: item({ ...ownPr('own-pr-conflicting', { ciFailing: true, seen: seenRed(['lint'], ['lint']) }), ...handed('watching') }), want: 'junior-fixing' },
 
   // a run finished
   { name: 'a session finished', item: item(manual, { session: { running: false, waiting: false, error: false, at: T0 } }), want: 'result-ready' },
@@ -209,6 +226,9 @@ const DIFFERENCES: Record<string, string> = {
   'your PR, CI red, not handed off': 'nobody else will fix it; today it sits in Up next',
   'your PR, CI red, babysit switched off': 'Junior can’t run with the watch off; today it sits in Up next',
   'your PR, CI red, you paused Junior': 'you paused Junior, so the red CI is yours; today it sits in Up next',
+  'your PR, red on main too, babysit switched off': 'Junior can’t run with the watch off; today it sits in Up next',
+  'your PR, red on main too, you paused Junior': 'you paused Junior, so the red CI is yours; today it sits in Up next',
+  'your PR, red on main too, not handed off': 'nobody else will fix it; today it sits in Up next',
   'your PR, approved': 'merging is yours; today it sits in Up next',
   'your PR, approved, handed off': 'merging is yours even when handed off; today it sits in With Junior',
   'your PR, conflicts': 'nobody else will fix it; today it sits in Up next',

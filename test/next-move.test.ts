@@ -99,6 +99,14 @@ const FIRST_MATCH: Row[] = [
 /** More shapes: owners, names and reasons. */
 const MORE: Row[] = [
   { name: 'Junior fixes red CI on your PR', item: item({ ...ownPr('own-pr-open', { ciFailing: true }), ...handed('watching') }), want: 'ci', owner: jr, text: 'Fix red CI · with Junior' },
+  // red only where main is red too: nothing to do here, and nothing orange
+  {
+    name: 'red on main too, handed off',
+    item: item({ ...ownPr('own-pr-open', { ciFailing: true, seen: { red: ['lint'], bots: 0, people: 0, rebase: null, draft: false, mainRed: [{ check: 'lint', url: null, sha: null, at: null }] } }), ...handed('watching') }),
+    want: 'wait',
+    owner: person(null),
+    text: 'Leave it · main is red too · not yours · waiting 2d',
+  },
   { name: 'Junior resolves conflicts on your PR', item: item({ ...ownPr('own-pr-conflicting'), ...handed('working') }), want: 'conflict', owner: jr, text: 'Resolve conflicts · with Junior' },
   { name: 'Junior starts a first pass', item: item({ ...reviewReq, ...handed('watching') }), want: 'review', owner: jr, text: "Review Priya's PR · with Junior" },
   { name: 'review posted, the author has it', item: item({ ...reviewReq, ...handed('watching'), tasks: review('posted') }), want: 'wait', owner: person('Priya'), text: 'Wait on Priya · review posted · waiting 2d' },

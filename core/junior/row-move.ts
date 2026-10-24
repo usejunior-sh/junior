@@ -22,6 +22,7 @@
  */
 import { nextMove, type NextAction, type NextContext, type NextItem } from '../work/next.js'
 import type { TurnContext } from '../work/turn.js'
+import { mainRedOnly } from '../work/handoff.js'
 
 /** One item's move as the server made it, on the day (`JuniorDay.moves`). */
 export type RowMove = {
@@ -60,6 +61,7 @@ export function moveKey(i: MoveItem): string {
     f?.broken ?? '',
     f?.overridden ? 'o' : '',
     i.ciFailing ? 'red' : '',
+    mainRedOnly(i.seen) ? 'main-red' : '',
     i.peopleWaiting,
     i.priority ?? '',
   ].join('|')

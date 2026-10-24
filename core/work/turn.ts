@@ -22,14 +22,16 @@
  * Rules run in order and the first match wins, so every item gets exactly
  * one reason, and every reason belongs to exactly one turn (TURN_REASONS).
  * Roughly: something holding until you answer, then Junior busy, then your
- * PR's own state, then a finished run, then someone else, then Junior
- * watching, then whatever is left is on your plate.
+ * PR's own state (red only where main is red too waits on main), then a
+ * finished run, then someone else, then Junior watching, then whatever is
+ * left is on your plate.
  *
  * "Not useful" (ledger.ts `quieted`) is attention, not turn: a quieted item
  * is still yours, it just leaves the Needs you list until something new.
  */
 import { askOf, type Ask } from './asks.js'
 import type { ItemFlow } from './flow.js'
+import { mainRedOnly } from './handoff.js'
 import type { ScoredItem, WorkItem } from './types.js'
 
 export type WhoseTurn = 'you' | 'junior' | 'others'
@@ -67,6 +69,7 @@ export type TurnReason =
   | 'handed-in'
   // others
   | 'set-waiting'
+  | 'main-red'
   | 'reviewers'
   | 'review-posted'
   | 'follow-up'
@@ -96,6 +99,7 @@ export const TURN_REASONS: Record<TurnReason, { turn: WhoseTurn; text: string }>
   'junior-watching': { turn: 'junior', text: 'Junior is watching it' },
   'handed-in': { turn: 'junior', text: 'Handed to Junior' },
   'set-waiting': { turn: 'others', text: 'You said it waits on someone' },
+  'main-red': { turn: 'others', text: 'Main is red too · not yours' },
   reviewers: { turn: 'others', text: 'Waiting on reviewers' },
   'review-posted': { turn: 'others', text: 'Review posted. The author has it' },
   'follow-up': { turn: 'others', text: 'You wait on someone' },
@@ -114,7 +118,7 @@ export interface TurnOf {
 /** What the rules read off an item. Everything but kind, source and peopleWaiting may be absent. */
 export type TurnItem = Pick<WorkItem, 'kind' | 'source' | 'peopleWaiting'> &
   Partial<Pick<WorkItem, 'status' | 'handoff' | 'ciFailing'>> &
-  Partial<Pick<ScoredItem, 'junior' | 'tasks'>> & { ask?: string; flow?: ItemFlow }
+  Partial<Pick<ScoredItem, 'junior' | 'tasks' | 'seen'>> & { ask?: string; flow?: ItemFlow }
 
 /** What the item can't say about itself. */
 export interface TurnContext {
@@ -170,6 +174,8 @@ export function turnOf(item: TurnItem, ctx: TurnContext = {}): TurnOf {
 
   // Your PR's own state. Red CI and conflicts are Junior's on a PR it can babysit.
   const juniorCan = item.handoff === 'on' && !paused && item.junior?.readiness?.state !== 'watch-off' && item.junior?.readiness?.state !== 'unsupported'
+  // every red check failed on main too (the babysit watch's last poll): not this PR's to fix, nobody's move here
+  if (juniorCan && isOwnPr(item) && item.ciFailing && item.kind !== 'own-pr-conflicting' && mainRedOnly(item.seen)) return at('main-red')
   if ((isOwnPr(item) && item.ciFailing) || (mine && f?.next === 'fix CI')) return at(juniorCan ? 'junior-fixing' : 'ci-red')
   if (item.kind === 'own-pr-approved' || (mine && f?.next === 'merge')) return at('merge')
   if (item.kind === 'own-pr-conflicting' || (mine && f?.next === 'resolve conflicts')) return at(juniorCan ? 'junior-fixing' : 'conflicts')

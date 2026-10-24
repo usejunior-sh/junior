@@ -10,6 +10,7 @@ import { STAGE_LABEL, type ItemFlow, TURN_LABEL } from '../../../../core/work/fl
 import { type TabEntry, isHumanAsk, waitedFor } from '../../../../core/work/inbox-tabs.js'
 import type { InboxRoute } from '../../../../core/work/inbox-views.js'
 import { waitingText } from '../../inboxTabs.js'
+import { mainRedWhy } from '../../../../core/junior/main-red.js'
 import { DUE_KEY_OF, signalsText } from './rowHelpers.js'
 import { SnoozeMenu, SnoozeSub } from '../SnoozeMenu.js'
 import type { RowActions } from './SelectionBar.js'
@@ -188,7 +189,8 @@ export function WorkRow({
   const source = projectName(item.projectId) ?? item.repo
   // The scored reason ("2 people waiting · opened 3d ago") is the fallback when
   // the item carries no human note.
-  const trailing = item.why || item.rankWhy
+  // red only where main is red too: the row says so, muted, before the item's own why
+  const trailing = mainRedWhy(item) || item.why || item.rankWhy
 
   return (
     <div
