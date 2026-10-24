@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises'
-import { type ActivityResponse, type ItemDetailResponse, type ItemEventsResponse, type ItemListResponse, type ItemStateResponse, type JobFileResponse, type JobRunsResponse, type LogLevel, type LogsResponse, type SessionContextResponse, type SystemResponse, USAGE_WINDOWS, type UsageResponse } from '../../shared/protocol.js'
+import { type ActivityResponse, type ChangesSeenResponse, type ItemDetailResponse, type ItemEventsResponse, type ItemListResponse, type ItemStateResponse, type JobFileResponse, type JobRunsResponse, type LogLevel, type LogsResponse, type SessionContextResponse, type SystemResponse, USAGE_WINDOWS, type UsageResponse } from '../../shared/protocol.js'
 import type { ItemStatus } from '../../core/work/state.js'
 import { log, logSubsystems, recentLogs } from '../log.js'
 import { linkByRefs } from '../../core/work/link.js'
@@ -14,6 +14,7 @@ import { invalidateInbox } from '../ws/send.js'
 import { listItemsByStatus } from '../inbox/sync.js'
 import { itemDetailOp, markNotUsefulOp, sessionContextOp, undoNotUsefulOp } from '../items-ops.js'
 import { errText } from '../errors.js'
+import { changesSeenOp } from '../supervision-ops.js'
 import { jobFileReference, jobSpecFrom, saveJobText } from '../jobs/ops.js'
 import { jobLibrary } from '../session/changes.js'
 import { enqueueJob } from '../jobs/queue.js'
@@ -53,6 +54,18 @@ export async function itemRoutes({ req, url, json, rt }: ScopedCtx): Promise<boo
       body = { ok: true }
     } catch (err) {
       body = { ok: false, error: err instanceof Error ? err.message : String(err) }
+    }
+    json(body.ok ? 200 : 400, body)
+    return true
+  }
+  // The item page's list of files Junior changed since you last looked: opening it records that you looked.
+  // Your own signal, HTTP only: Junior can't mark its own work seen.
+  if (url.pathname === '/api/items/changes-seen' && req.method === 'POST') {
+    let body: ChangesSeenResponse
+    try {
+      body = { ok: true, ...(await changesSeenOp(rt, await readJsonBody(req))) }
+    } catch (err) {
+      body = { ok: false, error: errText(err) }
     }
     json(body.ok ? 200 : 400, body)
     return true

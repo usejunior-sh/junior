@@ -14,6 +14,7 @@ const EVENT_LABEL: Record<string, string> = {
   'flow-set': 'turn set',
   surfaced: 'reached Needs you',
   'not-useful': 'marked not useful',
+  'changes-seen': 'looked at Junior’s changes',
 }
 
 /** A stage/turn event's one line: "Ready · My turn", "Waiting on others, Niraj", "back to automatic". */

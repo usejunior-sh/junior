@@ -375,6 +375,27 @@ export class SqliteEvents implements EventStore {
     )
     return { next: upTo, done: upTo >= m, inits }
   }
+
+  async fileEdits(sessionIds: readonly string[], since: number): Promise<(StoredEvent & { sessionId: string })[]> {
+    const ids = [...new Set(sessionIds)]
+    if (ids.length === 0) return []
+    const out: (StoredEvent & { sessionId: string })[] = []
+    // instr() before the parse: only an assistant line naming a path is read.
+    for (let i = 0; i < ids.length; i += 200) {
+      const chunk = ids.slice(i, i + 200)
+      const rows = this.db
+        .prepare(
+          `SELECT session_id, seq, payload, created_at FROM session_events
+            WHERE session_id IN (${chunk.map(() => '?').join(', ')}) AND created_at > ? AND kind = 'sdk'
+              AND instr(payload, '"type":"assistant"') > 0
+              AND (instr(payload, '"file_path"') > 0 OR instr(payload, '"notebook_path"') > 0)
+            ORDER BY created_at, session_id, seq`,
+        )
+        .all(...chunk, since) as { session_id: string; seq: number; payload: string; created_at: number }[]
+      for (const r of rows) out.push({ sessionId: r.session_id, seq: r.seq, event: JSON.parse(r.payload) as SessionEvent, createdAt: r.created_at })
+    }
+    return out.sort((a, b) => a.createdAt - b.createdAt)
+  }
 }
 
 export class SqliteInbox implements InboxStore {

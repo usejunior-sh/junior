@@ -249,6 +249,12 @@ export interface EventStore {
    * Ask again from `next` until `done`.
    */
   sdkInits(after: number, page?: number): Promise<{ next: number; done: boolean; inits: SdkInit[] }>
+  /**
+   * Assistant events in these sessions logged after `since` (exclusive) that
+   * may name a file (core/work/supervision.ts touchesOf), oldest first. A
+   * cheap text filter runs before any JSON parse, so a long log stays cheap.
+   */
+  fileEdits(sessionIds: readonly string[], since: number): Promise<(StoredEvent & { sessionId: string })[]>
 }
 
 export interface InboxStore {
@@ -458,7 +464,7 @@ export interface WorkItemStore {
   /** Give every item without a project the one `assign` picks; returns how many were set. */
   backfillProjects(assign: (item: WorkItem) => string | null): Promise<number>
   /**
-   * Set or clear (null) reason · label · parent · playbook · handoff · notNow · notUseful (core/work/fields.ts).
+   * Set or clear (null) reason · label · parent · playbook · handoff · notNow · notUseful · changesSeenAt (core/work/fields.ts).
    * Absent keys are left alone. Never touched by ingestion.
    */
   setFields(id: string, patch: ItemFieldsPatch): Promise<void>
@@ -476,6 +482,7 @@ export type ItemFieldsPatch = {
   handoff?: Handoff | null
   notNow?: string | null
   notUseful?: string | null
+  changesSeenAt?: number | null
 }
 
 /**

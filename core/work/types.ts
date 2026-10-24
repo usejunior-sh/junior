@@ -140,6 +140,11 @@ export interface WorkItem {
    * quietKey). Off Needs you until the item's `updatedAt` or what Junior waits on moves.
    */
   notUseful?: string
+  /**
+   * When you last opened the item's list of files Junior changed (core/work/supervision.ts):
+   * files Junior touched after this count as not reviewed by you. Never touched by ingestion.
+   */
+  changesSeenAt?: number
 }
 
 /** One term of an item's score. `weight` names the weight you set (weights.ts) when it is one. */
@@ -179,4 +184,10 @@ export interface ScoredItem extends WorkItem {
   suggestion?: import('../junior/suggest.js').Suggestion
   /** the babysit watch's last read of your PR: what Junior would take on */
   seen?: import('./handoff.js').PrSeen
+  /**
+   * what Junior did on it that you haven't looked at (core/work/supervision.ts):
+   * files changed since you last opened its file list, and sends that wait for
+   * your OK. Absent when both are zero; only on items with Junior.
+   */
+  supervision?: { files: number; sends: number }
 }

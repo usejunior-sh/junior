@@ -93,6 +93,26 @@ export type ItemDetail = {
 
 export type ItemDetailResponse = { ok: true; detail: ItemDetail } | { ok: false; error: string }
 
+/** One file Junior changed on an item since you last looked (core/work/supervision.ts), newest first. */
+export type ChangedByJunior = {
+  /** relative to the session's folder when inside it, else as written */
+  path: string
+  sessionId: string
+  /** null when the chat was deleted */
+  sessionTitle: string | null
+  at: number
+}
+
+/**
+ * POST /api/items/changes-seen { id }: the item's files Junior changed since you
+ * last opened this list (at most SUPERVISION_LIST_MAX, newest first), and the
+ * time recorded, so they no longer count. `total` is every file marked seen;
+ * `since` the previous stamp (null the first time).
+ */
+export type ChangesSeenResponse =
+  | { ok: true; files: ChangedByJunior[]; total: number; since: number | null; seenAt: number }
+  | { ok: false; error: string }
+
 /**
  * What a junior session can learn about itself (GET /api/sessions/context?id=…).
  * A session is spawned before it is linked to a work item, so this is the only

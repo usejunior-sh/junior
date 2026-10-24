@@ -2,6 +2,7 @@ import { fetchGitHub, fetchGitHubClosed, listAffiliatedRepos } from '../../core/
 import { log } from '../log.js'
 import { taskSummary } from '../../core/work/tasks.js'
 import { withJunior } from './junior.js'
+import { withSupervision } from '../supervision-ops.js'
 import type { InboxSnapshot } from '../../shared/protocol.js'
 import { buildInbox } from '../../core/work/inbox.js'
 import { startOfDay } from '../../core/work/due.js'
@@ -150,6 +151,8 @@ export function syncInbox(rt: WorkspaceRuntime): Promise<InboxSnapshot> {
         if (sum) i.tasks = sum
       }
       await withJunior(rt, ranked, tasks)
+      // what Junior did on them that you haven't looked at (core/work/supervision.ts); never fails the sync
+      await withSupervision(rt, ranked, tasks)
       // the attention split's record of what reached you (core/junior/attention.ts); never fails the sync
       await recordSurfaced(rt.store.items, ranked, now).then(
         (ids) => ids.length && log('info', 'inbox', `${ids.length} item(s) reached Needs you`, { ids, workspace: rt.meta.id }),
