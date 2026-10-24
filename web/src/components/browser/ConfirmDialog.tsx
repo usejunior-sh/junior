@@ -41,25 +41,28 @@ export function ConfirmDialog({
     <Dialog.Root open={open} onOpenChange={(o) => !o && !busy && onClose()}>
       <Dialog.Portal>
         <Dialog.Overlay className="projOverlay" />
-        <Dialog.Content asChild role="alertdialog" onPointerDownOutside={(e) => e.preventDefault()} onInteractOutside={(e) => e.preventDefault()}>
-          <dialog open className="projModal projAddDialog bpConfirm">
-            <Dialog.Title asChild>
-              <h3>{title}</h3>
-            </Dialog.Title>
-            <Dialog.Description asChild>
-              <div className="wsIntro">{body}</div>
-            </Dialog.Description>
-            <div className="bpConfirmBtns">
-              <Dialog.Close asChild>
-                <button type="button" className="btn sm" disabled={busy}>
-                  Cancel
-                </button>
-              </Dialog.Close>
-              <button type="button" className={`btn sm ${danger ? 'danger' : 'primary'}`} disabled={busy} onClick={() => void go()}>
-                {confirm}
+        <Dialog.Content
+          className="uiDialog projModal bpConfirm"
+          role="alertdialog"
+          onPointerDownOutside={(e) => e.preventDefault()}
+          onInteractOutside={(e) => e.preventDefault()}
+        >
+          <Dialog.Title asChild>
+            <h3>{title}</h3>
+          </Dialog.Title>
+          <Dialog.Description asChild>
+            <div className="wsIntro">{body}</div>
+          </Dialog.Description>
+          <div className="bpConfirmBtns">
+            <Dialog.Close asChild>
+              <button type="button" className="btn sm" disabled={busy}>
+                Cancel
               </button>
-            </div>
-          </dialog>
+            </Dialog.Close>
+            <button type="button" className={`btn sm ${danger ? 'danger' : 'primary'}`} disabled={busy} onClick={() => void go()}>
+              {confirm}
+            </button>
+          </div>
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

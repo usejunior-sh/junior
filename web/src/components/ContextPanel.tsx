@@ -40,6 +40,7 @@ import {
   Workflow,
   X,
 } from 'lucide-react'
+import * as Dialog from '@radix-ui/react-dialog'
 import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import type { ArtifactWithLinks, Project, ProjectsResponse, SessionSummary, TerminalSummary } from '../../../shared/protocol.js'
 import { INBOX_VIEWS, VIEW_TITLE, type InboxRoute, type InboxView } from '../../../core/work/inbox-views.js'
@@ -289,6 +290,7 @@ export function SessionsPanel({
   const [renaming, setRenaming] = useState<string | null>(null)
   // Deleting is irreversible, so it is confirmed in a modal rather than on the row.
   const [deleting, setDeleting] = useState<SessionSummary | null>(null)
+  const panel = useRef<HTMLElement>(null)
   // Archive is the one unbounded group, so it is the only one that collapses.
   const [archiveOpen, setArchiveOpen] = useState(false)
   // Selecting an archived session reveals it, but the toggle still wins afterwards:
@@ -324,7 +326,7 @@ export function SessionsPanel({
   )
 
   return (
-    <aside className="panel" aria-label="Sessions">
+    <aside className="panel" aria-label="Sessions" ref={panel}>
       <PanelSearch onSearch={onSearch} placeholder="Search chats, items…" />
       <div className="panelBody">
         <div className="panelHead">
@@ -420,6 +422,7 @@ export function SessionsPanel({
 
       <DeleteSessionDialog
         session={deleting}
+        focusAfterDelete={() => panel.current?.querySelector<HTMLButtonElement>('.searchBtn')?.focus()}
         onCancel={() => setDeleting(null)}
         onConfirm={() => {
           if (deleting) onDelete(deleting.id)
@@ -559,42 +562,69 @@ function SessionRow({ session: s, active, renaming, onSelect, onStartRename, onE
 }
 
 /**
- * The confirmation for a delete. A native <dialog>, like the other modals, so
- * Escape and the backdrop close it and `anyDialogOpen` sees it.
+ * The confirmation for a delete. A Radix Dialog: Escape and a click on the
+ * scrim cancel, Cancel takes the first focus, and `anyDialogOpen` sees it.
+ * After a delete the row (the trigger) is gone, so focus lands on the panel's
+ * search button instead.
  */
 function DeleteSessionDialog({
   session,
   onCancel,
   onConfirm,
+  focusAfterDelete,
 }: {
   session: SessionSummary | null
   onCancel: () => void
   onConfirm: () => void
+  /** where focus goes once the session (and its row) is gone */
+  focusAfterDelete: () => void
 }) {
-  const dialog = useRef<HTMLDialogElement>(null)
-
-  useEffect(() => {
-    const el = dialog.current
-    if (!el) return
-    if (session && !el.open) el.showModal()
-    if (!session && el.open) el.close()
-  }, [session])
+  const deleted = useRef(false)
 
   return (
-    <dialog ref={dialog} id="deleteSession" onClose={onCancel} onClick={(e) => e.target === dialog.current && onCancel()}>
-      <h3>Delete session?</h3>
-      <p>
-        <strong>{session?.title}</strong> and its whole transcript will be deleted. This cannot be undone.
-      </p>
-      <div className="row">
-        <button type="button" className="cancel" onClick={onCancel}>
-          Cancel
-        </button>
-        <button type="button" className="danger" onClick={onConfirm}>
-          Delete session
-        </button>
-      </div>
-    </dialog>
+    <Dialog.Root open={session !== null} onOpenChange={(o) => !o && onCancel()}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="projOverlay" />
+        <Dialog.Content
+          id="deleteSession"
+          className="uiDialog"
+          onOpenAutoFocus={() => {
+            deleted.current = false
+          }}
+          onCloseAutoFocus={(e) => {
+            if (!deleted.current) return
+            e.preventDefault()
+            focusAfterDelete()
+          }}
+        >
+          <Dialog.Title asChild>
+            <h3>Delete session?</h3>
+          </Dialog.Title>
+          <Dialog.Description asChild>
+            <p>
+              <strong>{session?.title}</strong> and its whole transcript will be deleted. This cannot be undone.
+            </p>
+          </Dialog.Description>
+          <div className="row">
+            <Dialog.Close asChild>
+              <button type="button" className="cancel">
+                Cancel
+              </button>
+            </Dialog.Close>
+            <button
+              type="button"
+              className="danger"
+              onClick={() => {
+                deleted.current = true
+                onConfirm()
+              }}
+            >
+              Delete session
+            </button>
+          </div>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   )
 }
 

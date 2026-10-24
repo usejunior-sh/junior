@@ -121,8 +121,8 @@ dialog .go, .uiDialog .go { background: var(--ink) !important; color: var(--on-p
 dialog .go:hover:not(:disabled), .uiDialog .go:hover:not(:disabled) { background: var(--primary-hover) !important; }
 dialog .go:disabled, .uiDialog .go:disabled { opacity: 0.45; cursor: default; }
 dialog .cancel:hover, .uiDialog .cancel:hover { border-color: var(--hair-bright); }
-dialog .danger { color: var(--red) !important; border-color: var(--edge-red) !important; background: transparent !important; }
-dialog .danger:hover:not(:disabled) { background: var(--tint-red) !important; }
+dialog .danger, .uiDialog .danger { color: var(--red) !important; border-color: var(--edge-red) !important; background: transparent !important; }
+dialog .danger:hover:not(:disabled), .uiDialog .danger:hover:not(:disabled) { background: var(--tint-red) !important; }
 dialog .row button:disabled, .uiDialog .row button:disabled { opacity: 0.45; cursor: default; }
 dialog p, .uiDialog p { color: var(--body); font-size: 1rem; line-height: 1.55; }
 /* A Radix Dialog's content (`Dialog.Content`, a div): the same surface as a

@@ -253,6 +253,8 @@
 .rmChecks .ok { color: var(--green); }
 .rmChecks .warn { color: var(--yellow); }
 .rmChecks .bad { color: var(--red); }
+/* the margin a native <dialog>'s `dialog label` rule used to give it */
+.rmWorktree .checkLine { margin: 12px 0 5px; }
 .rmWorktree .checkLine code { font-family: var(--mono); font-size: 0.8462rem; color: var(--ink); }
 .rmWorktree .row .danger { margin-right: auto; }
 

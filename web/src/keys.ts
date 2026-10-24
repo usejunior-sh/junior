@@ -17,7 +17,7 @@ export function isTypingTarget(e: KeyboardEvent): boolean {
 export function anyDialogOpen(): boolean {
   return (
     document.querySelector(
-      'dialog[open], [data-popover-open], [data-radix-popper-content-wrapper], [role="dialog"][data-state="open"]',
+      'dialog[open], [data-popover-open], [data-radix-popper-content-wrapper], [role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"]',
     ) !== null
   )
 }
