@@ -549,6 +549,17 @@ export type ActionQuery = {
 }
 
 /**
+ * Held actions, for the track record (core/approvals/track.ts): the ones
+ * that waited on you, of a kind, started in [since, until]. Newest first.
+ */
+export type HeldActionQuery = {
+  kind?: ActionKind
+  since: number
+  until?: number
+  limit?: number
+}
+
+/**
  * Outbound actions (core/actions): one row per action, and one call row per
  * tool_use folded into it. The map from a transcript's tool call to its
  * record, and what makes recording a call twice a no-op.
@@ -564,6 +575,8 @@ export interface ActionStore {
   /** Drop a record (merged into another); its calls go with it unless re-put. */
   remove(id: string): Promise<void>
   list(q?: ActionQuery): Promise<ActionRecord[]>
+  /** Held actions only (a `queue`), by kind and window: what the track record reads. */
+  held(q: HeldActionQuery): Promise<ActionRecord[]>
   /**
    * Move a record `from` → `to` in one atomic update, only if it is still in
    * `from` (and, with `dueBy`, its send time has come). True = this caller

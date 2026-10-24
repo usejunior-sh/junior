@@ -188,6 +188,12 @@ export const BROWSER_TABS_SCHEMA = `CREATE TABLE IF NOT EXISTS browser_tabs (
      updated_at   INTEGER NOT NULL
    );`
 
+/**
+ * The track record's read (core/approvals/track.ts): held actions of a kind,
+ * in a time window. IF NOT EXISTS: migration 37 and ensureDurableSchema both run it.
+ */
+export const ACTIONS_TRACK_INDEX = 'CREATE INDEX IF NOT EXISTS idx_actions_kind_status_attempted ON actions(kind, status, attempted_at)'
+
 export const MIGRATIONS: string[] = [
   `CREATE TABLE sessions (
      id             TEXT PRIMARY KEY,
@@ -553,4 +559,7 @@ export const MIGRATIONS: string[] = [
   APPROVALS_SCHEMA,
   // 36: the browser pane's tabs: profile and last page per session. Also converged by ensureDurableSchema.
   BROWSER_TABS_SCHEMA,
+  // 37: the track record (core/approvals/track.ts) reads held actions by kind
+  // and window. Also converged by ensureDurableSchema.
+  ACTIONS_TRACK_INDEX,
 ]

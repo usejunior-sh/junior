@@ -1,6 +1,6 @@
 import { DatabaseSync } from 'node:sqlite'
 import { type ActionRecord, isActionKind, isActionStatus, isActionWhy, isActionAllowedBy, type ActionActor, type ActionStatus, type ActionHistoryEntry } from '../actions/types.js'
-import type { ActionStore, ActionQuery } from './types.js'
+import type { ActionStore, ActionQuery, HeldActionQuery } from './types.js'
 
 type ActionRow = {
   id: string
@@ -96,6 +96,9 @@ type ActionHistoryRow = {
   note: string | null
   args: string | null
 }
+
+/** Every status a held action can be in: `attempted` and `denied` are recorded-as-it-ran only. */
+const HELD_STATUSES: readonly ActionStatus[] = ['needs_you', 'scheduled', 'sending', 'unknown', 'sent_back', 'rejected', 'expired', 'succeeded', 'failed']
 
 const isActor = (v: string): v is ActionActor => v === 'agent' || v === 'you' || v === 'junior'
 
@@ -220,6 +223,25 @@ export class SqliteActions implements ActionStore {
     const limit = Math.max(1, Math.min(q.limit ?? 500, 5000))
     const rows = this.db
       .prepare(`SELECT * FROM actions${where.length ? ` WHERE ${where.join(' AND ')}` : ''} ORDER BY attempted_at DESC, id LIMIT ${limit}`)
+      .all(...params) as ActionRow[]
+    return this.hydrate(rows)
+  }
+
+  async held(q: HeldActionQuery): Promise<ActionRecord[]> {
+    // kind, status, attempted_at: the order of idx_actions_kind_status_attempted (migration 37).
+    const where = ['queue_args IS NOT NULL', `status IN (${HELD_STATUSES.map(() => '?').join(', ')})`, 'attempted_at >= ?']
+    const params: Array<string | number> = [...HELD_STATUSES, q.since]
+    if (q.kind) {
+      where.unshift('kind = ?')
+      params.unshift(q.kind)
+    }
+    if (q.until !== undefined) {
+      where.push('attempted_at <= ?')
+      params.push(q.until)
+    }
+    const limit = Math.max(1, Math.min(q.limit ?? 2000, 5000))
+    const rows = this.db
+      .prepare(`SELECT * FROM actions WHERE ${where.join(' AND ')} ORDER BY attempted_at DESC, id LIMIT ${limit}`)
       .all(...params) as ActionRow[]
     return this.hydrate(rows)
   }

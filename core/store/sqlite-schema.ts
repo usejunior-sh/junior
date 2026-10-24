@@ -1,5 +1,5 @@
 import { DatabaseSync } from 'node:sqlite'
-import { APPROVALS_SCHEMA, BROWSER_TABS_SCHEMA, GOALS_SCHEMA, MIGRATIONS, TASKS_SCHEMA, TODAY_SCHEMA } from './sqlite-migrations.js'
+import { ACTIONS_TRACK_INDEX, APPROVALS_SCHEMA, BROWSER_TABS_SCHEMA, GOALS_SCHEMA, MIGRATIONS, TASKS_SCHEMA, TODAY_SCHEMA } from './sqlite-migrations.js'
 
 /**
  * Converge the durable-inbox schema regardless of migration-version state.
@@ -207,6 +207,7 @@ export function ensureDurableSchema(db: DatabaseSync) {
   ensure('actions', 'delivery', 'delivery TEXT', ac)
   ensure('actions', 'cost_usd', 'cost_usd REAL', ac)
   db.exec('CREATE INDEX IF NOT EXISTS idx_actions_status ON actions(status)')
+  db.exec(ACTIONS_TRACK_INDEX)
 
   const wi = cols('work_items')
   ensure('work_items', 'due_at', 'due_at INTEGER', wi)
