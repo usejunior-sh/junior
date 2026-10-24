@@ -1,5 +1,6 @@
 import { DatabaseSync } from 'node:sqlite'
 import { ACTIONS_TRACK_INDEX, APPROVALS_SCHEMA, ITEM_EVENTS_AT_INDEX, BROWSER_TABS_SCHEMA, GOALS_SCHEMA, MIGRATIONS, TASKS_SCHEMA, TEAM_RUNS_SCHEMA, TODAY_SCHEMA } from './sqlite-migrations.js'
+import { ensureSearchIndex } from './sqlite-search.js'
 
 /**
  * Converge the durable-inbox schema regardless of migration-version state.
@@ -228,6 +229,8 @@ export function ensureDurableSchema(db: DatabaseSync) {
   db.exec(APPROVALS_SCHEMA)
   db.exec(BROWSER_TABS_SCHEMA)
   db.exec(TEAM_RUNS_SCHEMA)
+  // last: its triggers follow work_items, sessions and artifacts, all created above
+  ensureSearchIndex(db)
 }
 
 /*

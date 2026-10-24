@@ -20,6 +20,7 @@ import { ensureDurableSchema, migrate, renameLegacyTables, renameLegacyValues } 
 import { SqliteConfig, SqliteEvents, SqliteInbox, SqliteSessions, SqliteTurns } from './sqlite-sessions.js'
 import { SqliteItemTasks } from './sqlite-tasks.js'
 import { SqliteToday } from './sqlite-today.js'
+import { SqliteSearch } from './sqlite-search.js'
 import { SqliteApprovals } from './sqlite-approvals.js'
 import { SqliteBrowserTabs } from './sqlite-browser-tabs.js'
 import { copyLegacyTeamRuns, SqliteTeamRuns } from './sqlite-team-runs.js'
@@ -47,6 +48,7 @@ export function openSqliteStore(file: string): Store {
     jobRuns: new SqliteJobRuns(db),
     items: new SqliteWorkItems(db),
     artifacts: new SqliteArtifacts(db),
+    search: new SqliteSearch(db),
     links: new SqliteLinks(db),
     briefs: new SqliteBriefJobs(db),
     actions: new SqliteActions(db),

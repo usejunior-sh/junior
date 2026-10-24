@@ -26,4 +26,5 @@ export * from './protocol/mentions.js'
 export * from './protocol/wire.js'
 export * from './protocol/browser.js'
 export * from './protocol/workflows.js'
+export * from './protocol/search.js'
 

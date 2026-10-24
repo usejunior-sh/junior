@@ -29,6 +29,8 @@ import type {
   PermissionMode,
   Project,
   ProviderId,
+  SearchHit,
+  SearchKind,
   SessionEvent,
   SessionKind,
 } from '../../shared/protocol.js'
@@ -542,6 +544,29 @@ export interface ArtifactStore {
   remove(id: string): Promise<void>
 }
 
+export type SearchOptions = {
+  /** only these kinds; empty or absent = every kind */
+  kinds?: SearchKind[]
+  /** at most this many hits (default 20, capped at 100) */
+  limit?: number
+}
+
+/**
+ * Local full-text search over items, sessions and artifacts. Items and
+ * sessions follow their own rows; an artifact's body is read off disk by the
+ * artifact indexer and handed in here.
+ */
+export interface SearchStore {
+  /** Best hits first, each with a snippet; every word is a prefix and all must match. */
+  search(q: string, opts?: SearchOptions): Promise<SearchHit[]>
+  /** Set the searchable text of an indexed artifact (no-op for an unknown id). */
+  setArtifactBody(id: string, body: string): Promise<void>
+  /** Indexed artifacts whose body has not been read yet. */
+  artifactsWithoutBody(): Promise<string[]>
+  /** Refill the index from the rows (artifact bodies are read again later). */
+  rebuild(): Promise<void>
+}
+
 export type NewLink = { fromKind: LinkKind; fromId: string; toKind: LinkKind; toId: string; role: LinkRole }
 
 /**
@@ -787,6 +812,7 @@ export interface Store {
   jobRuns: JobRunLedger
   items: WorkItemStore
   artifacts: ArtifactStore
+  search: SearchStore
   links: LinkStore
   briefs: BriefJobStore
   actions: ActionStore

@@ -211,6 +211,24 @@ export const slug = (s: string): string =>
 
 export type ArtifactFile = { artifact: Artifact; body: string; data: Record<string, FrontmatterValue> }
 
+/** Text files over this are found by their title only. */
+const SEARCH_READ_MAX_BYTES = 2 * 1024 * 1024
+
+/** The words an artifact is found by: markup loses its tags and scripts; other text is as written. */
+export function searchTextOf(format: ArtifactFormat, text: string): string {
+  if (format !== 'html' && format !== 'svg') return text
+  return text
+    .replace(/<(script|style)\b[\s\S]*?<\/\1\s*>/gi, ' ')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&amp;/g, '&')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
 const SIDE = ARTIFACT_SIDECAR_SUFFIX
 const extOf = (rel: string): string => path.extname(rel).slice(1).toLowerCase()
 /** The format a content path says it is: only the extensions Junior writes are in the table. */
@@ -499,8 +517,36 @@ export class ArtifactIndex {
     const version = before ? before.version : history && !o.fresh ? Math.max(1, (await this.gitVersions(rel)).at(-1)?.version ?? 1) : 1
     file = { ...file, artifact: { ...file.artifact, version } }
     await this.store.artifacts.upsert(file.artifact)
+    await this.indexSearch(id, rel, file.artifact.format, file.artifact.size, md ? file.body : undefined)
     o.claimed?.set(id, rel)
     return file
+  }
+
+  /**
+   * Hand the file's words to the search index (core/store/sqlite-search.ts).
+   * Binaries and oversized files are found by title alone. Never fails the
+   * write it follows: an unreadable file is indexed as empty.
+   */
+  private async indexSearch(id: string, rel: string, format: ArtifactFormat, size: number, mdBody?: string): Promise<void> {
+    let body = ''
+    try {
+      if (mdBody !== undefined) body = mdBody
+      else if (isTextFormat(format) && size <= SEARCH_READ_MAX_BYTES) {
+        const text = await readFile(await this.abs(rel), 'utf8')
+        body = searchTextOf(format, format === 'md' ? parseFrontmatter(text).body : text)
+      }
+    } catch {
+      body = ''
+    }
+    await this.store.search.setArtifactBody(id, body).catch(() => {})
+  }
+
+  /** Rows the search index holds without a body (a DB from before search, a fresh rebuild) get it read now. */
+  private async backfillSearch(): Promise<void> {
+    for (const id of await this.store.search.artifactsWithoutBody()) {
+      const row = await this.store.artifacts.get(id)
+      if (row) await this.indexSearch(id, row.path, row.format, row.size)
+    }
   }
 
   /** Walk the folder when the index is stale (or `force`). Resolves to whether anything changed. */
@@ -562,6 +608,7 @@ export class ArtifactIndex {
       this.backfilled = true
       if (await this.backfillVersions().catch(() => false)) changed = true
     }
+    await this.backfillSearch().catch(() => {})
     return changed
   }
 

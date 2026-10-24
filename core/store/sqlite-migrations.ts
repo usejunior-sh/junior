@@ -1,3 +1,5 @@
+import { SEARCH_TABLES } from './sqlite-search.js'
+
 
 
 /**
@@ -602,4 +604,8 @@ export const MIGRATIONS: string[] = [
   // 39: team runs get their own tables (core/store/sqlite-team-runs.ts). Also
   // converged by ensureDurableSchema.
   TEAM_RUNS_SCHEMA,
+  // 40: local full-text search (core/store/sqlite-search.ts). The tables only:
+  // ensureDurableSchema adds the triggers once work_items, sessions and
+  // artifacts surely exist, and fills the index from them the first time.
+  SEARCH_TABLES,
 ]
