@@ -28,6 +28,7 @@ import { itemHash } from '../hooks.js'
 import { sendHandoff, snoozeItem, VERB, type HandoffVerb } from '../handoff.js'
 import { inboxStore, useInbox } from '../inboxStore.js'
 import { kindIcon, shortAge } from '../itemUi.js'
+import { playbookOf, refOf } from '../refs.js'
 import { JuniorBrief } from './JuniorBrief.js'
 import { JuniorFace } from './JuniorFace.js'
 import { NeedsLine } from './JuniorToday.js'
@@ -44,12 +45,6 @@ function useItems(): ScoredItem[] {
     if (!snap.loaded && !snap.loading) void inboxStore.refresh()
   }, [snap.loaded, snap.loading])
   return snap.items as ScoredItem[]
-}
-
-/** "acme/web#3312", or the item's home for anything that isn't a PR. */
-const refOf = (i: ScoredItem) => {
-  const m = /#(\d+)$/.exec(i.id)
-  return m && i.source === 'github' ? `${i.repo}#${m[1]}` : i.repo
 }
 
 /** One verb at a time, its error in a line under the list; `onStarted` hears a hand-off's readiness. */
@@ -368,9 +363,6 @@ function itemState(i: ScoredItem): { tone?: 'live' | 'need' | 'paused' | 'ok'; l
   const started = i.flow && (i.flow.stage === 'working' || i.flow.stage === 'review')
   return { label: 'Not handed off', sub: started ? `You’re on it${i.flow!.next ? ` · next: ${i.flow!.next}` : ''}.` : i.peopleWaiting > 0 ? `Waiting ${shortAge(i.createdAt)}.` : 'Yours.' }
 }
-
-/** The playbook a hand-off starts: the suggestion's, else a reply on Slack, a fix for a bug, else a look into it. */
-const playbookOf = (i: ScoredItem): string => i.suggestion?.playbook ?? (i.reason === 'asked' && i.source === 'slack' ? 'answer' : i.label === 'bug' ? 'debug-fix' : 'investigate')
 
 const ITEM_ORDER = (i: ScoredItem) => (i.junior?.stage === 'needs-you' ? 0 : !i.handoff && !i.junior ? 1 : i.junior?.stage === 'working' ? 2 : i.handoff === 'paused' ? 3 : 4)
 

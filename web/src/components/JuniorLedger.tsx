@@ -27,6 +27,7 @@ import { itemHash } from '../hooks.js'
 import { doneItem, markNotUseful, sendHandoff, snoozeItem, turnOnWatch, undoNotUseful, VERB, type HandoffVerb } from '../handoff.js'
 import { anyDialogOpen, isGoSequence, isTypingTarget } from '../keys.js'
 import { kindIcon, shortAge } from '../itemUi.js'
+import { playbookOf, refOf } from '../refs.js'
 import { isMobile, useIsMobile } from '../useMobile.js'
 import { JuniorFace } from './JuniorFace.js'
 import { ReadyChips, ReadySummary } from './ReadyChips.js'
@@ -52,12 +53,6 @@ type Gone = { item: ScoredItem; at: number; wasOpen: boolean; leaving: boolean; 
 /** One line of the ledger: an inbox item, or something Junior is held on (a blocked session, a plan, sends). */
 type Line = { key: string; group: LedgerGroup; item: ScoredItem; move: RowLine | null; need?: undefined } | { key: string; group: LedgerGroup; need: NeedsRow; item?: undefined; move?: undefined }
 
-/** "acme/web#3312", or the item's home for anything that isn't a PR. */
-const refOf = (i: ScoredItem) => {
-  const m = /#(\d+)$/.exec(i.id)
-  return m && i.source === 'github' ? `${i.repo}#${m[1]}` : i.repo
-}
-
 const initials = (name: string) =>
   name
     .replace(/^@/, '')
@@ -73,9 +68,6 @@ function whoOf(i: ScoredItem, me: string | null): string {
   if (!i.author) return i.source === 'job' ? 'Junior' : '—'
   return i.author.replace(/^@/, '')
 }
-
-/** The playbook a hand-off starts: the suggestion's, else a reply on Slack, a fix for a bug, else a look into it. */
-const playbookOf = (i: ScoredItem): string => i.suggestion?.playbook ?? (i.reason === 'asked' && i.source === 'slack' ? 'answer' : i.label === 'bug' ? 'debug-fix' : 'investigate')
 
 /** The one verb ⏎ does on an open row; `watch` when it turns a switched-off watch on. */
 type Primary = { label: string; run: () => void; watch?: WatchId }
@@ -627,11 +619,11 @@ function ItemLine({
             <span className={`jrc${st.quiet ? ' quiet' : ''}`}>{st.text}</span>
           )
         )}
-        <span className="wh">
-          {refOf(i) && (
+        <span className="wh" title={ref || undefined}>
+          {ref && (
             <>
               <Icon size={13} aria-hidden="true" />
-              <span>{refOf(i)}</span>
+              <span>{ref}</span>
             </>
           )}
         </span>

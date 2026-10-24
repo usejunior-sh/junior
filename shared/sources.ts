@@ -203,8 +203,8 @@ export const KNOWN_SOURCES: readonly KnownSource[] = ['github', 'slack', 'linear
 export const isKnownSource = (v: unknown): v is KnownSource => typeof v === 'string' && Object.prototype.hasOwnProperty.call(KNOWN, v)
 
 /**
- * The neutral descriptor: what any source Junior doesn't know by name gets. A
- * plain dot, no ref of its own, no reply route, and a hand-off looks into it.
+ * The neutral descriptor: what any source Junior doesn't know by name gets. The
+ * connector glyph, no ref of its own, no reply route, and a hand-off looks into it.
  * Its id and label are filled per source by `sourceOf`.
  */
 export const NEUTRAL_SOURCE: SourceDescriptor = {

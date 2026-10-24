@@ -23,6 +23,7 @@ import { itemHash, useWorkspaceId, type JuniorTab } from '../hooks.js'
 import { inboxStore, useInbox } from '../inboxStore.js'
 import { useAwayWindow, useJuniorDay, usePersona } from '../junior.js'
 import { useLogUnread } from '../juniorLog.js'
+import { refOf } from '../refs.js'
 import { Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from '../ui/Menu.js'
 import { JuniorAbout } from './JuniorAbout.js'
 import { JuniorCanDo } from './JuniorCanDo.js'
@@ -330,12 +331,6 @@ export function JuniorPage({ onNavigate, onDispatch, onCreate, createError, crea
       </Dialog.Root>
     </div>
   )
-}
-
-/** "acme/web#3312", or the item's home for anything that isn't a PR. */
-const refOf = (i: ScoredItem) => {
-  const m = /#(\d+)$/.exec(i.id)
-  return m && i.source === 'github' ? `${i.repo}#${m[1]}` : i.repo
 }
 
 const capital = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)

@@ -26,6 +26,7 @@
     "web/src/reloadGuard.ts",
     "web/src/friction.ts",
     "web/src/shortcuts.ts",
+    "web/src/itemRef.ts",
     "web/src/components/browser/steps.ts",
     "vite.config.ts"
   ]

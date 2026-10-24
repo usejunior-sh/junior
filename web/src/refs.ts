@@ -16,6 +16,9 @@ import { useArtifacts } from './artifactStore.js'
 import { itemHash, useSessions } from './hooks.js'
 import { useInbox } from './inboxStore.js'
 
+// The item ref formatter and playbook pick live in a store-free file so tests can load them.
+export { playbookOf, refOf } from './itemRef.js'
+
 export type RefHit = { kind: LinkKind; label: string; hash: string }
 
 export type RefIndex = {

@@ -12,6 +12,7 @@ import {
   Globe,
   Hash,
   ListTodo,
+  Plug,
   Radar,
   Ticket,
   type LucideProps,
@@ -19,6 +20,7 @@ import {
 import type { ComponentType } from 'react'
 import type { Group, ScoredItem } from '../../shared/protocol.js'
 import { ASKS, isAsk } from '../../core/work/asks.js'
+import { glyphOf, type ItemGlyph } from './itemRef.js'
 
 export { ASKS, ASK_ORDER, countOf, type Ask } from '../../core/work/asks.js'
 
@@ -64,16 +66,28 @@ export const GROUP_TITLE: Record<Group, string> = {
   fyi: 'FYI',
 }
 
+/**
+ * The Lucide glyph for each glyph key. A full Record, so a new icon key in
+ * shared/sources.ts is a compile error here until it gets a glyph. `dot`, the
+ * neutral source, draws the connector glyph: a literal dot is too small to see
+ * and reads as a status.
+ */
+const GLYPH: Record<ItemGlyph, ComponentType<LucideProps>> = {
+  pr: GitPullRequest,
+  hash: Hash,
+  ticket: Ticket,
+  globe: Globe,
+  radar: Radar,
+  todo: ListTodo,
+  dot: Plug,
+  alert: CircleAlert,
+  book: BookOpen,
+  calendar: CalendarDays,
+}
+
+/** The row's glyph; the rule is glyphOf in itemRef.ts. */
 export function kindIcon(item: Pick<ScoredItem, 'source' | 'kind' | 'ciFailing'>): ComponentType<LucideProps> {
-  if (item.ciFailing) return CircleAlert
-  if (item.kind === 'job-hit') return Radar
-  if (item.kind === 'digest') return BookOpen
-  if (item.kind === 'ticket-assigned') return Ticket
-  if (item.source === 'manual') return item.kind === 'manual' ? ListTodo : CalendarDays
-  if (item.source === 'slack') return Hash
-  if (item.source === 'linear') return Ticket
-  if (item.source === 'web') return Globe
-  return GitPullRequest
+  return GLYPH[glyphOf(item)]
 }
 
 /** The dot beside a row/card: red for failing CI, yellow for urgent/high, else none. */
