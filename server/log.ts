@@ -7,10 +7,16 @@
  * written one JSON object per line to ~/.junior/logs/junior-YYYY-MM-DD.jsonl.
  * The UI renders them human-readably; the file is the source of truth. On boot
  * we load recent lines back into the ring buffer so the panel is never empty.
+ *
+ * File writes go through a queue (server/log-writer.ts): a short timer appends
+ * them in batches, and the process 'exit' handler writes what's left
+ * synchronously, so log() never blocks the main thread on disk.
  */
 import { appendFileSync, mkdirSync, readFileSync, readdirSync, unlinkSync } from 'node:fs'
+import { appendFile } from 'node:fs/promises'
 import path from 'node:path'
 import type { LogEntry, LogLevel } from '../shared/protocol.js'
+import { createLogWriter } from './log-writer.js'
 
 const MAX_BUFFER = 2000
 const RETENTION_DAYS = 7
@@ -18,6 +24,14 @@ const buffer: LogEntry[] = []
 let seq = 0
 
 let logDir: string | null = null
+
+const writer = createLogWriter({
+  sink: {
+    append: (file, text) => appendFile(file, text),
+    appendSync: (file, text) => appendFileSync(file, text),
+  },
+})
+let exitHooked = false
 
 const dayFile = (d = new Date()) => path.join(logDir!, `junior-${d.toISOString().slice(0, 10)}.jsonl`)
 
@@ -28,6 +42,11 @@ export function initLogFile(dir: string): void {
     mkdirSync(dir, { recursive: true })
     loadRecent()
     pruneOld()
+    if (!exitHooked) {
+      // 'exit' runs on process.exit and on a crash; only sync work survives it.
+      process.on('exit', () => writer.flushSync())
+      exitHooked = true
+    }
   } catch (err) {
     console.error('[log] could not init log dir:', err)
     logDir = null
@@ -38,9 +57,16 @@ export function logFilePath(): string | null {
   return logDir
 }
 
+/** Write every queued line to disk now (tests, and anyone about to read the file). */
+export function flushLogs(): Promise<void> {
+  return writer.flush()
+}
+
 function loadRecent(): void {
   // Replay today's and yesterday's files (newest last), capped to the buffer.
+  // An exit flush can write a line twice (server/log-writer.ts): skip repeated seqs.
   const files = [dayFile(new Date(Date.now() - 86_400_000)), dayFile()]
+  const seen = new Set<number>()
   for (const f of files) {
     let text: string
     try {
@@ -52,6 +78,10 @@ function loadRecent(): void {
       if (!line.trim()) continue
       try {
         const e = JSON.parse(line) as LogEntry
+        if (typeof e.seq === 'number') {
+          if (seen.has(e.seq)) continue
+          seen.add(e.seq)
+        }
         buffer.push(e)
         if (typeof e.seq === 'number' && e.seq > seq) seq = e.seq
       } catch {
@@ -90,9 +120,9 @@ export function log(level: LogLevel, subsystem: string, message: string, fields?
 
   if (logDir) {
     try {
-      appendFileSync(dayFile(), JSON.stringify(entry) + '\n')
+      writer.write(dayFile(), JSON.stringify(entry))
     } catch {
-      // never let logging crash the caller
+      // never let logging crash the caller (a field that won't stringify)
     }
   }
 }
