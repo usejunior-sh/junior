@@ -76,6 +76,10 @@ const UNDO = {
   merge: 'undo needs a revert',
   release: 'hard to take back',
   delete: 'may not be undoable',
+  mirror: 'overwrites and deletes remote branches',
+  prune: 'deletes remote branches not here',
+  tags: 'undo needs deleting the tags',
+  auto: 'can turn off before it merges',
   scheduled: 'can cancel before it sends',
   draft: 'nobody sees it yet',
 } as const
@@ -109,9 +113,9 @@ function refText(repo: string | null, n: string | null, what: 'PR' | 'issue'): s
 }
 
 /** A GitHub URL's repo and number: https://github.com/acme/api/pull/3235. */
-function fromUrl(url: string | null | undefined): { repo: string; n: string | null } | null {
-  const m = url && /github\.com\/([\w.-]+\/[\w.-]+)(?:\/(?:pull|issues)\/(\d+))?/.exec(url)
-  return m ? { repo: m[1], n: m[2] ?? null } : null
+function fromUrl(url: string | null | undefined): { repo: string; n: string | null; noun: 'pr' | 'issue' | null } | null {
+  const m = url && /github\.com\/([\w.-]+\/[\w.-]+?)(?:\.git)?(?:\/(pull|issues)\/(\d+))?(?=[/?#]|$)/.exec(url)
+  return m ? { repo: m[1], n: m[3] ?? null, noun: m[2] === 'pull' ? 'pr' : m[2] === 'issues' ? 'issue' : null } : null
 }
 
 /** A connector server's name, the way a person says it: `claude_ai_Slack` → "Slack". */
@@ -167,14 +171,18 @@ function slackImpact(tool: string, args: Record<string, unknown>, facts: ImpactF
 }
 
 /** A GitHub MCP call (owner, repo, issue_number / pull_number). */
-function githubMcpImpact(tool: string, args: Record<string, unknown>, facts: ImpactFacts): Omit<Impact, 'as'> | null {
+function githubMcpImpact(tool: string, args: Record<string, unknown>, facts: ImpactFacts, link: string | null | undefined): Omit<Impact, 'as'> | null {
   if (!wordsOf(serverOf(tool)).includes('github')) return null
   const leaf = wordsOf(leafOf(tool))
   const owner = str(args.owner)
   const name = str(args.repo)
-  const repo = owner && name ? `${owner}/${name}` : str(facts.repo)
-  const pr = str(args.pull_number) ?? str(args.pullNumber)
-  const issue = str(args.issue_number) ?? str(args.issueNumber)
+  const landed = fromUrl(link)
+  const repo = owner && name ? `${owner}/${name}` : landed?.repo ?? str(facts.repo)
+  // The number only from the args, or from where it landed when the args name no repo of their own.
+  const fill = (noun: 'pr' | 'issue') => (landed?.noun === noun && (!owner || !name || repo === landed.repo) ? landed.n : null)
+  const creates = leaf.includes('create') && !leaf.includes('comment') && !leaf.includes('review')
+  const pr = str(args.pull_number) ?? str(args.pullNumber) ?? (creates ? null : fill('pr'))
+  const issue = str(args.issue_number) ?? str(args.issueNumber) ?? (creates ? null : fill('issue'))
   const ref = refText(repo, pr ?? issue, pr ? 'PR' : 'issue')
   if (leaf.includes('review')) {
     const ev = (str(args.event) ?? '').toUpperCase()
@@ -213,9 +221,12 @@ function ticketImpact(tool: string, args: Record<string, unknown>, kind: ActionK
   const svc = serverName(tool)
   if (kind === 'comment' && key) return { what: `Comment on ${key}`, reach: null, undo: UNDO.unsend }
   const state = str(args.state) ?? str(args.status) ?? str((args.transition as { name?: unknown } | undefined)?.name)
-  if (leaf.includes('transition') || (kind === 'update' && state)) {
+  // Linear's save_issue files and updates through one tool: an issue key means it already exists.
+  const existing = kind === 'update' || (kind === 'ticket' && !!key)
+  if (leaf.includes('transition') || (existing && state)) {
     return { what: `Move ${key ?? `a ${svc} issue`}${state ? ` to ${state}` : ''}`, reach: null, undo: UNDO.change }
   }
+  if (kind === 'ticket' && key) return { what: `Update ${key}`, reach: null, undo: UNDO.change }
   if (kind === 'ticket') {
     const where = str(args.projectKey) ?? str(args.team) ?? str(args.teamId) ?? str(args.project)
     return { what: `New issue in ${where ?? svc}`, reach: null, undo: UNDO.ticket }
@@ -242,7 +253,7 @@ function mailImpact(tool: string, args: Record<string, unknown>, kind: ActionKin
 function mcpImpact(a: ImpactInput, facts: ImpactFacts): Omit<Impact, 'as'> {
   const kind = a.kind ?? kindOfTool(a.tool)
   const args = a.args ?? {}
-  const known = slackImpact(a.tool, args, facts) ?? githubMcpImpact(a.tool, args, facts) ?? mailImpact(a.tool, args, kind) ?? ticketImpact(a.tool, args, kind)
+  const known = slackImpact(a.tool, args, facts) ?? githubMcpImpact(a.tool, args, facts, a.link) ?? mailImpact(a.tool, args, kind) ?? ticketImpact(a.tool, args, kind)
   if (known) return known
   return { what: `Sends through ${serverName(a.tool)}`, reach: null, undo: null }
 }
@@ -273,9 +284,9 @@ const flag = (f: Map<string, string[]>, ...names: string[]): string[] => names.f
 const shellKnows = (s: string) => /[$`]/.test(s)
 const literal = (s: string | undefined | null): string | null => (s && !shellKnows(s) ? s : null)
 
-const GH_VALUE = new Set(['-R', '--repo', '-b', '--body', '-F', '--body-file', '-t', '--title', '-B', '--base', '-H', '--head', '-r', '--reviewer', '-a', '--assignee', '-l', '--label', '-m', '--milestone', '-p', '--project', '-s', '--state', '-T', '--template', '--add-label', '--remove-label', '--add-reviewer', '--remove-reviewer', '--add-assignee', '--remove-assignee', '-c', '--comment', '--target', '-n', '--notes', '--subject', '--match-head-commit', '-X', '--method', '-f', '-F', '--field', '--raw-field', '--input', '-H', '--header', '--jq', '-q'])
+const GH_VALUE = new Set(['-R', '--repo', '-b', '--body', '-F', '--body-file', '-t', '--title', '-B', '--base', '-H', '--head', '-r', '--reviewer', '-a', '--assignee', '-l', '--label', '-m', '--milestone', '-p', '--project', '-s', '--state', '-T', '--template', '--add-label', '--remove-label', '--add-reviewer', '--remove-reviewer', '--add-assignee', '--remove-assignee', '-c', '--comment', '--target', '-n', '--notes', '--subject', '--match-head-commit', '-X', '--method', '-f', '--field', '--raw-field', '--input', '--header', '--jq', '-q'])
 
-function ghImpact(w: CommandPart, facts: ImpactFacts): (Omit<Impact, 'as'> & { kind: ActionKind }) | null {
+function ghImpact(w: CommandPart, facts: ImpactFacts, link: string | null | undefined): (Omit<Impact, 'as'> & { kind: ActionKind }) | null {
   // gh [-R repo] <noun> <verb> …
   const at = w.findIndex((t, i) => i > 0 && !t.startsWith('-') && w[i - 1] !== '-R' && w[i - 1] !== '--repo')
   if (at < 0) return null
@@ -284,7 +295,9 @@ function ghImpact(w: CommandPart, facts: ImpactFacts): (Omit<Impact, 'as'> & { k
   const pre = ghArgs(w.slice(1, at), GH_VALUE)
   if (noun === 'api') {
     const rest = ghArgs(w.slice(at + 1), GH_VALUE)
-    const method = (flag(rest.flags, '-X', '--method')[0] ?? 'POST').toUpperCase()
+    // gh api sends a GET unless it's given fields to send (then a POST) or a method.
+    const fields = flag(rest.flags, '-f', '-F', '--field', '--raw-field', '--input').length > 0
+    const method = (flag(rest.flags, '-X', '--method')[0] ?? (fields ? 'POST' : 'GET')).toUpperCase()
     const path = literal(rest.pos[0])
     return { kind: 'other', what: `Call the GitHub API${path ? ` · ${method} ${clip(path, 60)}` : ` · ${method}`}`, reach: null, undo: method === 'DELETE' ? UNDO.delete : null }
   }
@@ -299,8 +312,12 @@ function ghImpact(w: CommandPart, facts: ImpactFacts): (Omit<Impact, 'as'> & { k
   if (verb === 'merge') for (const f of ['-r', '-s', '-m', '-d']) vf.delete(f)
   const { pos, flags, bools } = ghArgs(w.slice(at + 2), vf)
   const url = fromUrl(pos[0])
-  const repo = literal(flag(flags, '-R', '--repo')[0] ?? flag(pre.flags, '-R', '--repo')[0]) ?? url?.repo ?? str(facts.repo)
-  const n = url?.n ?? (pos[0] && /^#?\d+$/.test(pos[0]) ? pos[0].replace('#', '') : null)
+  // Where a settled send landed: names the PR or issue a command left implicit (`gh pr comment` on this branch).
+  const landed = fromUrl(link)
+  const named = literal(flag(flags, '-R', '--repo')[0] ?? flag(pre.flags, '-R', '--repo')[0]) ?? url?.repo ?? null
+  const repo = named ?? landed?.repo ?? str(facts.repo)
+  const own = url?.n ?? (pos[0] && /^#?\d+$/.test(pos[0]) ? pos[0].replace('#', '') : null)
+  const n = own ?? (!pos[0] && landed?.noun === noun && (!named || named === landed.repo) ? landed.n : null)
   const what = noun === 'pr' ? 'PR' : 'issue'
   const ref = refText(repo, n, what)
   const thing = ref ?? (noun === 'pr' ? 'this branch’s PR' : 'an issue')
@@ -314,9 +331,10 @@ function ghImpact(w: CommandPart, facts: ImpactFacts): (Omit<Impact, 'as'> & { k
   if (noun === 'pr' && verb === 'create') {
     const draft = bools.has('-d') || bools.has('--draft')
     const base = literal(flag(flags, '-B', '--base')[0])
-    const named = flag(flags, '-r', '--reviewer').flatMap((s) => s.split(',')).map((s) => s.trim()).filter(Boolean)
-    // The people the command names are known; anyone else is the caller's fact.
-    const reach = named.length ? `asks ${plural(named.length, 'reviewer', 'reviewers')}` : countText(facts.reviewers, 'reviewer', 'reviewers')
+    const values = flag(flags, '-r', '--reviewer')
+    const people = values.flatMap((s) => s.split(',')).map((s) => s.trim()).filter(Boolean)
+    // The people the command names are known; a `$R` could be anyone, so then only the caller's fact counts.
+    const reach = people.length && values.every((v) => literal(v)) ? `asks ${plural(people.length, 'reviewer', 'reviewers')}` : countText(facts.reviewers, 'reviewer', 'reviewers')
     return { kind: 'pr', what: `Open ${draft ? 'a draft PR' : 'a PR'}${repo ? ` in ${repo}` : ''}${base ? ` into ${base}` : ''}`, reach, undo: UNDO.pr }
   }
   if (verb === 'comment') return { kind: 'comment', what: `Comment on ${thing}`, reach: null, undo: UNDO.unsend }
@@ -324,7 +342,12 @@ function ghImpact(w: CommandPart, facts: ImpactFacts): (Omit<Impact, 'as'> & { k
     const v = bools.has('-a') || bools.has('--approve') ? 'Approve' : bools.has('-r') || bools.has('--request-changes') ? 'Request changes on' : 'Review'
     return { kind: 'comment', what: `${v} ${thing}`, reach: null, undo: UNDO.review }
   }
-  if (noun === 'pr' && verb === 'merge') return { kind: 'merge', what: `Merge ${thing}`, reach: null, undo: UNDO.merge }
+  if (noun === 'pr' && verb === 'merge') {
+    // --auto merges later, once checks pass; --disable-auto turns that off.
+    if (bools.has('--disable-auto')) return { kind: 'update', what: `Turn off auto-merge for ${thing}`, reach: null, undo: UNDO.change }
+    if (bools.has('--auto')) return { kind: 'merge', what: `Turn on auto-merge for ${thing}`, reach: null, undo: UNDO.auto }
+    return { kind: 'merge', what: `Merge ${thing}`, reach: null, undo: UNDO.merge }
+  }
   if (verb === 'close') return { kind: 'update', what: `Close ${thing}`, reach: null, undo: UNDO.reopen }
   if (verb === 'reopen') return { kind: 'update', what: `Reopen ${thing}`, reach: null, undo: UNDO.change }
   if (noun === 'pr' && verb === 'ready') {
@@ -336,57 +359,76 @@ function ghImpact(w: CommandPart, facts: ImpactFacts): (Omit<Impact, 'as'> & { k
   return null
 }
 
-/** The remote a `git push` names, when it's plain text. */
-function pushRemote(w: CommandPart): string | null {
+/** A `git push`'s words: its flags, the remote and the refspecs, up to a redirection. */
+function pushArgs(w: CommandPart): { flags: string[]; remote: string | null; specs: string[] } {
   const at = w.indexOf('push')
   const VALUE = new Set(['-o', '--push-option', '--repo', '--receive-pack', '--exec'])
-  for (let i = at + 1; i < w.length; i++) {
-    const t = w[i]
-    if (/^[0-9]*[<>]/.test(t)) return null
-    if (t.startsWith('-')) {
-      if (VALUE.has(t)) i++
-      continue
-    }
-    return literal(t)
-  }
-  return null
-}
-
-/** The branch a push sends to, as plain words: "feat/x", the current one, or unknown. */
-function pushBranch(part: CommandPart, facts: ImpactFacts, groupKey: string | null | undefined): string | null {
-  const w = unwrap(part)
-  const at = w.indexOf('push')
-  if (wrappersOf(part).includes('xargs')) return null
-  const VALUE = new Set(['-o', '--push-option', '--repo', '--receive-pack', '--exec'])
-  const args: string[] = []
+  const flags: string[] = []
+  const pos: string[] = []
   for (let i = at + 1; i < w.length; i++) {
     const t = w[i]
     if (/^[0-9]*[<>]/.test(t)) break
     if (t.startsWith('-')) {
+      flags.push(t)
       if (VALUE.has(t)) i++
       continue
     }
-    args.push(t)
+    pos.push(t)
   }
-  const specs = args.slice(1)
-  const fromKey = groupKey?.startsWith('push:') ? groupKey.split(':').slice(2).join(':') : ''
-  if (specs.length > 1) return null
-  const spec = specs[0]
-  if (spec === undefined || spec === 'HEAD' || spec === '@' || /^\+?(?:HEAD|@)$/.test(spec)) return str(facts.currentBranch) ?? (fromKey && fromKey !== '?' ? fromKey : null)
-  const dst = spec.replace(/^\+/, '').split(':').pop()!.replace(/^refs\/heads\//, '')
-  if (/git branch --show-current|rev-parse --abbrev-ref/.test(dst)) return str(facts.currentBranch) ?? (fromKey && fromKey !== '?' ? fromKey : null)
-  return literal(dst) ?? (fromKey && fromKey !== '?' ? fromKey : null)
+  return { flags, remote: pos[0] === undefined ? null : literal(pos[0]), specs: pos.slice(1) }
 }
+
+/** A short-flag cluster (`-fu`) or a long flag, by name. */
+const hasFlag = (flags: string[], short: string | null, ...long: string[]) =>
+  flags.some((t) => long.some((l) => t === l || t.startsWith(`${l}=`)) || (!!short && /^-[a-zA-Z0-9]+$/.test(t) && t.slice(1).includes(short)))
+
+/** The branch a refspec lands on, as plain words, or null when only the shell knows it. */
+function specBranch(spec: string, current: string | null): string | null {
+  if (/^\+?(?:HEAD|@)$/.test(spec)) return current
+  const dst = spec.replace(/^\+/, '').split(':').pop()!.replace(/^refs\/heads\//, '')
+  if (/git branch --show-current|rev-parse --abbrev-ref/.test(dst)) return current
+  return literal(dst)
+}
+
+const listOf = (names: string[]): string => clip(names.join(', '), 60)
 
 function gitPushImpact(part: CommandPart, facts: ImpactFacts, groupKey: string | null | undefined): Omit<Impact, 'as'> & { kind: ActionKind } {
   const w = unwrap(part)
-  const force = w.some((t) => t === '-f' || t === '--force' || t.startsWith('--force-with-lease') || t.startsWith('--force-if-includes') || /^\+/.test(t.split(':')[0] ?? '') || /^-[a-zA-Z]*f[a-zA-Z]*$/.test(t))
-  const branch = pushBranch(part, facts, groupKey)
-  const remote = pushRemote(w)
-  const main = !!branch && !!facts.defaultBranch && branch === facts.defaultBranch
+  const { flags, remote, specs } = pushArgs(w)
   const to = remote ? ` to ${remote}` : ''
-  const what = `${force ? 'Force-push' : 'Push'} ${branch ?? 'a branch'}${to}`
-  return { kind: 'push', what, reach: main ? 'the default branch' : null, undo: force ? UNDO.force : UNDO.push }
+  const on = remote ? ` on ${remote}` : ''
+  const fromKey = groupKey?.startsWith('push:') ? groupKey.split(':').slice(2).join(':') : ''
+  const current = str(facts.currentBranch) ?? (fromKey && fromKey !== '?' ? fromKey : null)
+  const isDefault = (b: string | null) => !!b && !!facts.defaultBranch && b === facts.defaultBranch
+  const done = (what: string, branches: Array<string | null>, undo: string) =>
+    ({ kind: 'push' as const, what, reach: branches.some(isDefault) ? 'the default branch' : null, undo })
+
+  // Whole-remote pushes first: they reach past any one branch.
+  if (hasFlag(flags, null, '--mirror')) return { kind: 'push', what: `Mirror every branch and tag${to}`, reach: null, undo: UNDO.mirror }
+  const prune = hasFlag(flags, null, '--prune')
+  if (hasFlag(flags, null, '--all', '--branches')) return { kind: 'push', what: `Push all branches${to}`, reach: null, undo: prune ? UNDO.prune : UNDO.push }
+  const tags = hasFlag(flags, null, '--tags')
+
+  // `--delete x` and `:x` both delete the remote branch.
+  const del = hasFlag(flags, 'd', '--delete')
+  const deleted = del ? specs : specs.filter((s) => s.startsWith(':') && s.length > 1)
+  const pushed = del ? [] : specs.filter((s) => !deleted.includes(s))
+  if (del || deleted.length) {
+    const names = deleted.map((s) => specBranch(s.replace(/^:/, ''), null))
+    const known = names.length > 0 && names.every((n): n is string => !!n)
+    const gone = known ? `remote branch${names.length > 1 ? 'es' : ''} ${listOf(names as string[])}` : 'a remote branch'
+    const also = pushed.length ? ` and push ${listOf(pushed.map((s) => specBranch(s, current) ?? 'a branch'))}` : ''
+    return done(`Delete ${gone}${also}${on}`, names, UNDO.delete)
+  }
+
+  const force = flags.some((t) => t.startsWith('--force') || hasFlag([t], 'f')) || specs.some((s) => s.startsWith('+'))
+  const undo = prune ? UNDO.prune : force ? UNDO.force : tags ? UNDO.tags : UNDO.push
+  const verb = force ? 'Force-push' : 'Push'
+  if (tags && !specs.length) return { kind: 'push', what: `${verb} all tags${to}`, reach: null, undo }
+  // A command run per input (`xargs git push`) pushes whatever it's fed.
+  const branches = wrappersOf(part).includes('xargs') ? [null] : specs.length ? specs.map((s) => specBranch(s, current)) : [current]
+  const named = branches.every((b): b is string => !!b) ? listOf(branches as string[]) : branches.length > 1 ? 'several branches' : 'a branch'
+  return done(`${verb} ${named}${tags ? ' and all tags' : ''}${to}`, branches, undo)
 }
 
 /** The order a command that does several sends is read by: the headline wins (sort.ts KIND_RANK). */
@@ -398,7 +440,7 @@ function bashImpact(a: ImpactInput, facts: ImpactFacts): Omit<Impact, 'as'> {
   for (const part of splitCommand(cmd)) {
     const w = unwrap(part)
     if (w[0] === 'gh') {
-      const g = ghImpact(w, facts)
+      const g = ghImpact(w, facts, a.link)
       if (g) hits.push(g)
     } else if (w[0] === 'git' && w.includes('push') && !w.includes('--dry-run') && !w.includes('-n')) {
       hits.push(gitPushImpact(part, facts, a.groupKey))
