@@ -32,6 +32,7 @@
     "web/src/paletteSearch.ts",
     "web/src/selection.ts",
     "web/src/learnings-view.ts",
+    "web/src/typed.ts",
     "web/src/components/browser/steps.ts",
     "vite.config.ts"
   ]
