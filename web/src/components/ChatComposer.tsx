@@ -220,6 +220,7 @@ export function ChatComposer({ draft, onChange, onCreate, error, step, top, plac
   const cwd = draft.cwd ?? fallback?.path ?? '~'
   // The project's live checkouts; the picker shows for git projects only (main has a branch, or worktrees exist).
   const project = projects.find((p) => p.path === cwd)
+  const remember = useMemo(() => ({ project: project ? { id: project.id, name: project.name } : null }), [project?.id, project?.name])
   const projectCheckouts = project ? checkouts.filter((c) => c.projectId === project.id && c.state === 'active') : []
   const mainCo = projectCheckouts.find((c) => c.kind === 'main')
   const canPick = !!mainCo && (mainCo.branch !== null || projectCheckouts.length > 1)
@@ -382,6 +383,7 @@ export function ChatComposer({ draft, onChange, onCreate, error, step, top, plac
           />
         }
         cwd={cwd}
+        remember={remember}
         text={draft.text}
         onTextChange={(text) => {
           onChange({ text })

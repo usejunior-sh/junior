@@ -381,3 +381,45 @@ button.chip:hover:not(:disabled), .chip[data-state="open"] { color: var(--ink); 
 #newSessionHome .actions { display: flex; align-items: center; gap: 12px; }
 #newSessionHome .actions .hint { flex: 1; }
 
+
+/* `/remember`'s confirm strip, inside the prompt box where attachments show.
+   One line, a hairline under it, no fill: Junior's blue dot, never orange. */
+#composer .rememberStrip {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px;
+  margin: 0 -14px; padding: 8px 14px; border-bottom: 1px solid var(--hair);
+  font-size: 13px; color: var(--charcoal); min-width: 0;
+}
+#composer .rememberStrip .rsDot { flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--blue); }
+#composer .rememberStrip .rsLine { display: flex; align-items: baseline; gap: 8px; flex: 1 1 100%; min-width: 0; }
+#composer .rememberStrip .rsLine .rsDot { align-self: center; }
+#composer .rememberStrip .rsKicker, #composer .rememberStrip .rsLabel { color: var(--ash); flex: none; }
+#composer .rememberStrip .rsWords { color: var(--body); min-width: 0; overflow-wrap: anywhere; }
+#composer .rememberStrip .rsRow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; flex: 1 1 100%; padding-left: 14px; }
+#composer .rememberStrip .rsSeg { flex-wrap: wrap; }
+#composer .rememberStrip .segBtn[data-disabled] { opacity: 0.45; cursor: default; }
+#composer .rememberStrip .rsActs { display: inline-flex; gap: 6px; margin-left: auto; }
+#composer .rememberStrip .rsActs .btn { font-weight: 400; }
+#composer .rememberStrip .rsHint { flex: 1 1 100%; padding-left: 14px; font-family: var(--mono); font-size: 0.8462rem; color: var(--stone); }
+#composer .rememberStrip .rsHint.warn { font-family: var(--sans); color: var(--ash); }
+#composer .rememberStrip .msg.error { flex: 1 1 100%; margin: 0; }
+#composer .rememberStrip.done { flex-wrap: nowrap; }
+#composer .rememberStrip.done .rsText { flex: 0 1 auto; min-width: 0; color: var(--body); overflow-wrap: anywhere; }
+#composer .rememberStrip .rsOpen { flex: none; font-size: inherit; }
+#composer .rememberStrip .rsClose {
+  flex: none; margin-left: auto; display: inline-grid; place-items: center; width: 22px; height: 22px;
+  border: 0; border-radius: var(--r); background: transparent; color: var(--ash); cursor: pointer;
+}
+#composer .rememberStrip .rsClose:hover { color: var(--ink); background: var(--hair-soft); }
+#composer .rememberHint { font-size: 0.8462rem; color: var(--ash); }
+@media (max-width: 767px) {
+  #composer .rememberStrip { margin: 0 -8px 0 -12px; padding: 8px 12px; }
+  #composer .rememberStrip .rsRow { padding-left: 0; }
+  #composer .rememberStrip .rsLabel { display: none; }
+  #composer .rememberStrip .rsSeg { flex: 1 1 100%; flex-wrap: nowrap; }
+  #composer .rememberStrip .rsSeg .segBtn { flex: 1 1 0; justify-content: center; height: 36px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #composer .rememberStrip .rsActs { flex: 1 1 100%; margin-left: 0; }
+  #composer .rememberStrip .rsActs .btn { flex: 1 1 0; height: 36px; justify-content: center; }
+  #composer .rememberStrip .rsHint { padding-left: 0; }
+  /* Editors open on the Mac. */
+  #composer .rememberStrip .rsOpen { display: none; }
+}

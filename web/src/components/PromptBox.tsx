@@ -12,7 +12,11 @@ import {
   type ProviderId,
 } from '../../../shared/protocol.js'
 import { useAttachments } from '../attachments.js'
-import { activeCommand, insertCommand, useCommandSearch, useCommands, type CommandHit } from '../commands.js'
+import { activeCommand, insertCommand, REMEMBER_VERB, useCommandSearch, useCommands, type CommandHit } from '../commands.js'
+import { openContextFile } from '../checkouts.js'
+import { rememberArg, rememberLine, type RememberScope } from '../../../shared/remember.js'
+import type { RememberResponse } from '../../../shared/protocol.js'
+import { RememberStrip, type RememberProject, type RememberUi } from './RememberStrip.js'
 import {
   MENTION_TABS,
   activeMention,
@@ -73,7 +77,14 @@ type Props = {
   sendFace?: (hover: boolean) => ReactNode
   /** The head as a tray tucked under the card instead of a row on top, and + for attach (the Junior page). */
   headBelow?: boolean
+  /** Offer `/remember`: the line goes to this project's context file (or the workspace's when null), after a confirm. */
+  remember?: { project: RememberProject | null }
 }
+
+const JUNIOR_VERBS = [REMEMBER_VERB]
+const NO_VERBS: typeof JUNIOR_VERBS = []
+/** How long "Saved to …" stays before the strip goes by itself. */
+const SAVED_MS = 8000
 
 /**
  * The prompt box, shared by the draft tab and the live session so the two are
@@ -120,6 +131,7 @@ export function PromptBox({
   busy,
   sendFace,
   headBelow,
+  remember,
 }: Props) {
   const box = useRef<HTMLTextAreaElement>(null)
   const filePicker = useRef<HTMLInputElement>(null)
@@ -160,7 +172,72 @@ export function PromptBox({
   const [cmdSel, setCmdSel] = useState(0)
   const { commands, loading: cmdLoading } = useCommands(cwd, everSlashed)
   const cmdOpen = cmdActive !== null && !cmdDismissed
-  const cmdHits = useCommandSearch(cmdOpen ? cmdActive : null, commands)
+  const verbs = remember ? JUNIOR_VERBS : NO_VERBS
+  const cmdHits = useCommandSearch(cmdOpen ? cmdActive : null, commands, verbs)
+  // The lit pill knows Junior's verbs too, so `/remember` reads as a command.
+  const pillCommands = useMemo(() => (verbs.length ? [...verbs, ...commands] : commands), [verbs, commands])
+
+  // `/remember`: Enter opens a confirm strip instead of sending. Nothing is
+  // written before Save, and nothing reaches Claude.
+  const [rem, setRem] = useState<RememberUi | null>(null)
+  const [remHint, setRemHint] = useState(false)
+  const remProject = remember?.project ?? null
+
+  useEffect(() => {
+    if (rem?.phase !== 'saved') return
+    const t = setTimeout(() => setRem(null), SAVED_MS)
+    return () => clearTimeout(t)
+  }, [rem])
+
+  const focusBox = () => requestAnimationFrame(() => box.current?.focus())
+
+  /** Enter on `/remember …`: the hint for a bare one, else the confirm strip. */
+  function openRemember(arg: string) {
+    const checked = rememberLine(arg)
+    if (!checked.line) {
+      setRemHint(true)
+      return
+    }
+    setRemHint(false)
+    setRem({ phase: 'confirm', line: checked.line, scope: remProject ? 'project' : 'workspace', tooLong: !checked.ok })
+  }
+
+  async function saveRemember() {
+    if (!rem || rem.phase !== 'confirm' || rem.tooLong) return
+    const scope: RememberScope = remProject ? rem.scope : 'workspace'
+    const asked = rem
+    setRem({ ...asked, phase: 'saving', error: undefined })
+    let out: RememberResponse
+    try {
+      const res = await fetch('/api/context/remember', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ scope, projectId: scope === 'project' ? remProject?.id : undefined, text: asked.line }),
+      })
+      out = (await res.json()) as RememberResponse
+    } catch (err) {
+      out = { ok: false, error: String(err) }
+    }
+    if (!out.ok) {
+      setRem({ ...asked, phase: 'confirm', error: out.error })
+      return
+    }
+    onTextChange('')
+    setRem({ phase: 'saved', scope, projectName: scope === 'project' ? remProject?.name : undefined, already: out.already })
+    focusBox()
+  }
+
+  function cancelRemember() {
+    setRem(null)
+    focusBox()
+  }
+
+  async function openRemembered() {
+    if (rem?.phase !== 'saved') return
+    const at = rem
+    const error = await openContextFile(at.scope, at.scope === 'project' ? remProject?.id : undefined)
+    if (error) setRem({ ...at, openError: error })
+  }
 
   useEffect(() => setCmdSel(0), [cmdActive?.query])
   useEffect(() => {
@@ -264,6 +341,13 @@ export function PromptBox({
 
   function submit() {
     if (busy) return
+    if (remember) {
+      const arg = rememberArg(text)
+      if (arg !== null) {
+        openRemember(arg)
+        return
+      }
+    }
     const trimmed = text.trim()
     const images = attach.payload()
     const files = attach.fileIds()
@@ -303,6 +387,18 @@ export function PromptBox({
       >
         {!headBelow && <div className="cardHead">{head}</div>}
 
+        {rem && (
+          <RememberStrip
+            ui={rem}
+            project={remProject}
+            onScope={(scope) => setRem((r) => (r && r.phase === 'confirm' ? { ...r, scope, error: undefined } : r))}
+            onSave={() => void saveRemember()}
+            onCancel={cancelRemember}
+            onClose={cancelRemember}
+            onOpen={() => void openRemembered()}
+          />
+        )}
+
         <AttachmentStrip
           images={attach.images}
           files={attach.files.map((f) => ({ id: f.id, name: f.name, bytes: f.bytes, uploading: !f.uploadId }))}
@@ -330,7 +426,7 @@ export function PromptBox({
             onPick={pickCommand}
           >
             <div className="boxWrap">
-              <CommandPill text={text} commands={commands} boxRef={box} />
+              <CommandPill text={text} commands={pillCommands} boxRef={box} />
               <textarea
                 id="box"
                 ref={box}
@@ -340,6 +436,9 @@ export function PromptBox({
                 placeholder={placeholder}
                 onPaste={attach.onPaste}
                 onChange={(e) => {
+                  // Typing again closes /remember's strip (the line it showed is stale) and its hint.
+                  if (rem && rem.phase !== 'saving') setRem(null)
+                  if (remHint) setRemHint(false)
                   onTextChange(e.target.value)
                   setCaret(e.target.selectionStart ?? e.target.value.length)
                 }}
@@ -349,6 +448,12 @@ export function PromptBox({
                   if (e.key.startsWith('Arrow') || e.key === 'Home' || e.key === 'End') syncCaret()
                 }}
                 onKeyDown={(e) => {
+                  // Esc closes /remember's strip first, keeping the text in the box.
+                  if (e.key === 'Escape' && rem && rem.phase !== 'saving') {
+                    e.preventDefault()
+                    setRem(null)
+                    return
+                  }
                   if (cmdOpen) {
                     if (e.key === 'ArrowDown' && cmdHits.length) {
                       e.preventDefault()
@@ -418,6 +523,12 @@ export function PromptBox({
             </div>
           </SlashPicker>
         </MentionPicker>
+
+        {remHint && (
+          <div className="rememberHint" role="status">
+            Type what Junior should remember after /remember.
+          </div>
+        )}
 
         <div className="statusline">
           <input

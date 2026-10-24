@@ -4,7 +4,7 @@
  * opening one file a session wrote in the last of them.
  */
 import { useEffect, useSyncExternalStore } from 'react'
-import type { Checkout, Editor, EditorsResponse, OpenCheckoutResponse, OpenFileResponse } from '../../shared/protocol.js'
+import type { Checkout, ContextOpenResponse, Editor, EditorsResponse, OpenCheckoutResponse, OpenFileResponse } from '../../shared/protocol.js'
 
 export const checkoutOf = (checkouts: readonly Checkout[], id: string | undefined | null): Checkout | undefined =>
   id ? checkouts.find((c) => c.id === id) : undefined
@@ -105,6 +105,24 @@ export async function openSessionFile(sessionId: string, file: string): Promise<
       body: JSON.stringify({ path: file, editor: lastEditor() ?? undefined }),
     })
     const b = (await res.json()) as OpenFileResponse
+    return b.ok ? null : b.error
+  } catch (err) {
+    return String(err)
+  }
+}
+
+/**
+ * Open a context file (`/remember`'s target) in the editor "Open in…" last
+ * used. Resolves to an error message, or null.
+ */
+export async function openContextFile(scope: 'project' | 'workspace', projectId?: string): Promise<string | null> {
+  try {
+    const res = await fetch('/api/context/open', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ scope, projectId, editor: lastEditor() ?? undefined }),
+    })
+    const b = (await res.json()) as ContextOpenResponse
     return b.ok ? null : b.error
   } catch (err) {
     return String(err)

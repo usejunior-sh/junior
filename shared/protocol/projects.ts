@@ -75,6 +75,21 @@ export type OpenCheckoutResponse = { ok: true } | { ok: false; error: string }
 export type OpenFileResponse = { ok: true } | { ok: false; error: string }
 
 /**
+ * POST /api/context/remember with `{ scope: 'project' | 'workspace', projectId?, text }`:
+ * the composer's `/remember`, after the user pressed Save. Appends `- text` to
+ * `<project>/.junior/context.md` or the workspace's `context.md` (made when
+ * missing). `already`: the file had that line (case and spaces ignored), so
+ * nothing was written. `path` is the file, absolute.
+ */
+export type RememberResponse = { ok: true; path: string; already: boolean; line: string } | { ok: false; error: string }
+
+/**
+ * POST /api/context/open with `{ scope, projectId?, editor? }`: that context
+ * file in the editor last used here. From the Mac only.
+ */
+export type ContextOpenResponse = { ok: true } | { ok: false; error: string }
+
+/**
  * GET /api/checkouts/:id/removal: what removing a worktree would lose, read
  * before asking. `safe` = nothing: merged, clean, nothing running in it.
  */

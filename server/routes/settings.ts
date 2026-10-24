@@ -1,5 +1,5 @@
 import os from 'node:os'
-import { type CommandsResponse, type ConnectorsResponse, type FocusEndResponse, isProviderId, type JuniorDayResponse, type ModelsResponse, type PersonaResponse, type PlaybookResponse, type PlaybooksResponse, type ScoreWeightsResponse, type SettingsResponse, type TodayMatchResponse, type TodayResponse } from '../../shared/protocol.js'
+import { type CommandsResponse, type ConnectorsResponse, type ContextOpenResponse, type FocusEndResponse, type RememberResponse, isProviderId, type JuniorDayResponse, type ModelsResponse, type PersonaResponse, type PlaybookResponse, type PlaybooksResponse, type ScoreWeightsResponse, type SettingsResponse, type TodayMatchResponse, type TodayResponse } from '../../shared/protocol.js'
 import { RESERVED_SERVER } from '../../core/job/tools.js'
 import { isPlaybookName, listPlaybooks, readDispatchTemplate, readPlaybook, writeDispatchTemplate, writePlaybook } from '../briefs.js'
 import { FOLDER_PROBE_TTL_MS, probeCommands, probeConnectors, probeModels, usableCommands } from '../workspace/probes.js'
@@ -8,11 +8,41 @@ import { localServersElsewhere } from '../jobs/preview.js'
 import { addToTodayOp, ensureToday, juniorDayOp, juniorFocus, matchTodayOp, openTodayOp, removeFromTodayOp, savePersonaOp, todayView, userFirstName } from '../junior-ops.js'
 import { readJsonBody } from './http-util.js'
 import { errText } from '../errors.js'
-import { clearScoreWeightOp, endFocusOp, listScoreWeightsOp, readSettings, setScoreWeightOp, touchesWatches, writeSettings } from '../settings-ops.js'
+import { clearScoreWeightOp, endFocusOp, listScoreWeightsOp, openContextFileOp, rememberOp, readSettings, setScoreWeightOp, touchesWatches, writeSettings } from '../settings-ops.js'
 import { invalidateInbox } from '../ws/send.js'
+import { sameOrigin } from '../remote.js'
 import type { ScopedCtx } from './ctx.js'
 
-export async function settingsRoutes({ req, url, json, rt }: ScopedCtx): Promise<boolean> {
+export async function settingsRoutes({ req, url, json, rt, access }: ScopedCtx): Promise<boolean> {
+  // `/remember` in the composer: one line into a context file, after Save.
+  if (url.pathname === '/api/context/remember' && req.method === 'POST') {
+    let body: RememberResponse
+    try {
+      body = { ok: true, ...(await rememberOp(rt, await readJsonBody(req, 10_000))) }
+    } catch (err) {
+      body = { ok: false, error: errText(err) }
+    }
+    json(body.ok ? 200 : 400, body)
+    return true
+  }
+  // The context file, in the editor. Editors open on the Mac, like /open-file.
+  if (url.pathname === '/api/context/open' && req.method === 'POST') {
+    let body: ContextOpenResponse
+    if (access !== 'local') body = { ok: false, error: 'editors open on the Mac — use it there' }
+    else if (!sameOrigin(req, access)) {
+      json(403, { ok: false, error: 'cross-origin requests are not accepted' })
+      return true
+    } else {
+      try {
+        await openContextFileOp(rt, await readJsonBody(req, 10_000))
+        body = { ok: true }
+      } catch (err) {
+        body = { ok: false, error: errText(err) }
+      }
+    }
+    json(body.ok ? 200 : 400, body)
+    return true
+  }
   if (url.pathname === '/api/models') {
     // ?provider= names the agent whose list to read; absent = the workspace's.
     const asked = url.searchParams.get('provider')

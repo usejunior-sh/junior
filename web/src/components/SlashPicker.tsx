@@ -87,6 +87,8 @@ export const SlashPicker = forwardRef<HTMLDivElement, Props>(function SlashPicke
                 <span className="desc">{c.short}</span>
               </button>
             ))}
+            {/* Junior's own verbs show at once; the folder's list may still be on its way. */}
+            {hits.length > 0 && loading && <div className="mnEmpty">Reading this folder’s commands…</div>}
           </div>
           <div className="mnFoot">
             <span>

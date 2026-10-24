@@ -1,5 +1,5 @@
 import { Check, ChevronDown, ListChecks, Workflow, X } from 'lucide-react'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type {
   EffortLevel,
   ImageAttachment,
@@ -97,9 +97,14 @@ export function Composer({
       .catch(() => {})
   }, [])
 
+  // `/remember` saves to the session's project (stored, not derived from a worktree's folder).
+  const project = projectId ? projects.find((p) => p.id === projectId) : projects.find((p) => p.path === cwd)
+  const remember = useMemo(() => ({ project: project ? { id: project.id, name: project.name } : null }), [project?.id, project?.name])
+
   return (
     <PromptBox
       draftKey={sessionId}
+      remember={remember}
       head={<PromptHead projects={projects} cwd={cwd} projectId={projectId} branch={branch} />}
       cwd={cwd}
       text={text}

@@ -1,4 +1,5 @@
 import path from 'node:path'
+import { appendFile, mkdir, readFile, stat } from 'node:fs/promises'
 import type { Project, WorkItem, WorkspaceSettings } from '../shared/protocol.js'
 import { DEFAULT_JOB_TIMEOUT_MS, MAX_JOB_TIMEOUT_MS } from '../core/job/types.js'
 import { log } from './log.js'
@@ -12,6 +13,10 @@ import { browserProfiles } from './browser/profiles.js'
 import { DEFAULT_PROFILE } from '../core/browser/profiles.js'
 import type { WatchId, WatchSwitches } from '../core/work/handoff.js'
 import { describeFocus, endFocus, focusFrom, inFocus, readFocus, type FocusHours } from '../core/work/focus.js'
+import { appendBullet, hasLine, rememberLine, type RememberScope } from '../shared/remember.js'
+import { projectContextPath, workspaceContextPath } from './context-files.js'
+import { workspaceDir } from './workspaces.js'
+import { openFileIn } from './editors.js'
 import { dropWeight, liveWeights, putWeight, readWeights, type ScoreWeight, type ScoreWeightView, viewOf, weightFrom } from '../core/work/weights.js'
 
 // settings, briefs and dispatch
@@ -316,4 +321,70 @@ export async function endFocusOp(rt: WorkspaceRuntime, now = Date.now()): Promis
   log('info', 'inbox', 'focus ended early', { workspace: rt.meta.id, until: ended.endedUntil })
   invalidateInbox(rt)
   return focusView(ended, now)
+}
+
+// `/remember` in the composer (shared/remember.ts): one line appended to a
+// context file, only after the user pressed Save on the confirm strip. The
+// files are the ones server/context-files.ts loads at every spawn. Local
+// writes only: nothing here leaves the Mac, so no Action is held.
+
+type ContextTarget = { scope: RememberScope; path: string; projectName?: string }
+
+/** The file a `{ scope, projectId? }` names. A project scope needs a project that exists, with its folder still there. */
+export async function contextTargetOp(rt: WorkspaceRuntime, raw: unknown): Promise<ContextTarget> {
+  const r = (raw ?? {}) as { scope?: unknown; projectId?: unknown }
+  if (r.scope === 'workspace') return { scope: 'workspace', path: workspaceContextPath(workspaceDir(rt.meta.id)) }
+  if (r.scope !== 'project') throw new Error("scope must be 'project' or 'workspace'")
+  if (typeof r.projectId !== 'string' || !r.projectId) throw new Error('This chat has no project.')
+  const project = (await rt.store.projects.list()).find((p) => p.id === r.projectId)
+  if (!project) throw new Error('that project is gone')
+  const folder = await stat(project.path).catch(() => null)
+  if (!folder?.isDirectory()) throw new Error(`${project.name}'s folder is gone: ${project.path}`)
+  return { scope: 'project', path: projectContextPath(project.path), projectName: project.name }
+}
+
+const contextWrites = new Map<string, Promise<unknown>>()
+
+/** One append at a time per file, so two quick saves can't both miss each other's line. */
+function serialFile<T>(file: string, fn: () => Promise<T>): Promise<T> {
+  const next = (contextWrites.get(file) ?? Promise.resolve()).catch(() => undefined).then(fn)
+  contextWrites.set(file, next)
+  void next.finally(() => {
+    if (contextWrites.get(file) === next) contextWrites.delete(file)
+  }).catch(() => undefined)
+  return next
+}
+
+/**
+ * Save `{ scope, projectId?, text }` as `- text` in that context file. The
+ * folder and file are made when missing. A line the file already has (case
+ * and spaces ignored) is not added twice: `already: true`. The file is only
+ * ever appended to, so the rest of it is never rewritten.
+ */
+export async function rememberOp(rt: WorkspaceRuntime, raw: unknown): Promise<{ path: string; already: boolean; line: string }> {
+  const checked = rememberLine((raw as { text?: unknown } | null)?.text)
+  if (!checked.ok) throw new Error(checked.error)
+  const target = await contextTargetOp(rt, raw)
+  const line = checked.line
+  const already = await serialFile(target.path, async () => {
+    const before = await readFile(target.path, 'utf8').catch((err: NodeJS.ErrnoException) => {
+      if (err.code === 'ENOENT') return ''
+      throw err
+    })
+    if (hasLine(before, line)) return true
+    await mkdir(path.dirname(target.path), { recursive: true })
+    await appendFile(target.path, appendBullet(before, line).slice(before.length), 'utf8')
+    return false
+  })
+  log('info', 'context', already ? `already remembered in ${target.path}` : `remembered a line in ${target.path}`, { scope: target.scope, workspace: rt.meta.id })
+  return { path: target.path, already, line }
+}
+
+/** Open that context file in `editor` (else the first found, else the OS default). It has to exist: Save makes it. */
+export async function openContextFileOp(rt: WorkspaceRuntime, raw: unknown): Promise<void> {
+  const target = await contextTargetOp(rt, raw)
+  const st = await stat(target.path).catch(() => null)
+  if (!st?.isFile()) throw new Error('there is no context file there yet')
+  const editor = (raw as { editor?: unknown } | null)?.editor
+  await openFileIn(target.path, typeof editor === 'string' ? editor : undefined)
 }

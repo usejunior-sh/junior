@@ -16,6 +16,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { fuzzyRank, fuzzyScore } from '../../shared/fuzzy.js'
 import type { CommandsResponse, SlashCommandInfo } from '../../shared/protocol.js'
 import { store } from './store.js'
+import { REMEMBER_COMMAND } from '../../shared/remember.js'
 
 // The command under the caret
 
@@ -166,39 +167,63 @@ export const hit = (c: SlashCommandInfo): CommandHit => {
  * two are ranked separately and name matches always sort first, because
  * someone typing a name knows what they want.
  */
-export function useCommandSearch(active: ActiveCommand | null, commands: readonly SlashCommandInfo[]): CommandHit[] {
+export function useCommandSearch(
+  active: ActiveCommand | null,
+  sdkCommands: readonly SlashCommandInfo[],
+  /** Junior's own verbs (`/remember`): pinned first whenever they match */
+  verbs: readonly SlashCommandInfo[] = NO_VERBS,
+): CommandHit[] {
   return useMemo(() => {
     if (!active) return []
     const q = active.query
-    if (!q) return commands.slice(0, LIMIT).map(hit)
+    // A folder command with a verb's name is shadowed: the composer handles the verb itself.
+    const commands = verbs.length ? sdkCommands.filter((c) => !verbs.some((v) => v.name === c.name)) : sdkCommands
+    const pinned = verbs.filter((v) => !q || fuzzyScore(q, v.name) !== null).map(verbHit)
+    return [...pinned, ...rank(q, commands)].slice(0, LIMIT)
+  }, [active?.query, sdkCommands, verbs])
+}
 
-    const byName = fuzzyRank(q, commands, (c) => c.name, LIMIT)
-    const taken = new Set(byName.map((c) => c.name))
+const NO_VERBS: readonly SlashCommandInfo[] = []
 
-    // An alias is a name the user may well know (`/cost` for `/usage`), so it
-    // matches like one, and the row says which alias got them there.
-    const aliased: CommandHit[] = []
-    for (const c of commands) {
-      if (taken.has(c.name)) continue
-      const via = c.aliases?.find((a) => fuzzyScore(q, a) !== null)
-      if (via) {
-        aliased.push({ ...hit(c), via })
-        taken.add(c.name)
-      }
+/** A verb's row: badged `junior`, its whole description as the line. */
+const verbHit = (c: SlashCommandInfo): CommandHit => ({ ...c, short: c.description, source: 'junior' })
+
+/** `/remember`: Junior's own verb, never sent to Claude (shared/remember.ts). */
+export const REMEMBER_VERB: SlashCommandInfo = {
+  name: REMEMBER_COMMAND,
+  description: 'Save a line Junior reads in every chat.',
+  argumentHint: '<what to remember>',
+}
+
+function rank(q: string, commands: readonly SlashCommandInfo[]): CommandHit[] {
+  if (!q) return commands.slice(0, LIMIT).map(hit)
+
+  const byName = fuzzyRank(q, commands, (c) => c.name, LIMIT)
+  const taken = new Set(byName.map((c) => c.name))
+
+  // An alias is a name the user may well know (`/cost` for `/usage`), so it
+  // matches like one, and the row says which alias got them there.
+  const aliased: CommandHit[] = []
+  for (const c of commands) {
+    if (taken.has(c.name)) continue
+    const via = c.aliases?.find((a) => fuzzyScore(q, a) !== null)
+    if (via) {
+      aliased.push({ ...hit(c), via })
+      taken.add(c.name)
     }
+  }
 
-    // Descriptions are prose, so they need the floor that stops a short query
-    // from being a subsequence of every sentence in the list.
-    const byDesc = fuzzyRank(
-      q,
-      commands.filter((c) => !taken.has(c.name)),
-      (c) => c.description,
-      LIMIT,
-      2.5,
-    )
+  // Descriptions are prose, so they need the floor that stops a short query
+  // from being a subsequence of every sentence in the list.
+  const byDesc = fuzzyRank(
+    q,
+    commands.filter((c) => !taken.has(c.name)),
+    (c) => c.description,
+    LIMIT,
+    2.5,
+  )
 
-    return [...byName.map(hit), ...aliased, ...byDesc.map(hit)].slice(0, LIMIT)
-  }, [active?.query, commands])
+  return [...byName.map(hit), ...aliased, ...byDesc.map(hit)].slice(0, LIMIT)
 }
 
 /** The exact command a draft names, if it names one, for the composer's hint. */
