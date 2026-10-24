@@ -12,6 +12,8 @@ const EVENT_LABEL: Record<string, string> = {
   woken: 'snooze ended',
   moved: 'moved',
   'flow-set': 'turn set',
+  surfaced: 'reached Needs you',
+  'not-useful': 'marked not useful',
 }
 
 /** A stage/turn event's one line: "Ready · My turn", "Waiting on others, Niraj", "back to automatic". */

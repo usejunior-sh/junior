@@ -13,6 +13,8 @@ import { WorkspaceRuntime } from '../workspace/runtime.js'
 import { jobsEnabled, upsertItem } from '../settings-ops.js'
 import { overdueJobs } from '../jobs/scheduler.js'
 import { inboxAlerts, withFlows } from './flow.js'
+import { recordSurfaced } from '../attention-ops.js'
+import { errText } from '../errors.js'
 
 // Inbox: ranked work items from deterministic sources (core/work). No cron:
 // the server IS the long-running process. Sync happens when the page is
@@ -148,6 +150,11 @@ export function syncInbox(rt: WorkspaceRuntime): Promise<InboxSnapshot> {
         if (sum) i.tasks = sum
       }
       await withJunior(rt, ranked, tasks)
+      // the attention split's record of what reached you (core/junior/attention.ts); never fails the sync
+      await recordSurfaced(rt.store.items, ranked, now).then(
+        (ids) => ids.length && log('info', 'inbox', `${ids.length} item(s) reached Needs you`, { ids, workspace: rt.meta.id }),
+        (err) => log('warn', 'inbox', `could not record what reached Needs you: ${errText(err)}`, { workspace: rt.meta.id }),
+      )
       const [landedToday, alerts, counts] = await Promise.all([
         rt.store.items.countDoneSince(startOfDay(now)),
         inboxAlerts(rt),

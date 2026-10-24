@@ -35,7 +35,7 @@ import type {
 
 export type { SessionKind }
 import type { Provenance, WorkItem } from '../work/types.js'
-import type { ItemEvent, ItemStatus, StatusChange } from '../work/state.js'
+import type { ItemActor, ItemEvent, ItemNoteKind, ItemStatus, StatusChange } from '../work/state.js'
 import type { FlowOverride } from '../work/flow.js'
 import type { ActionHistoryEntry, ActionKind, ActionRecord, ActionStatus } from '../actions/types.js'
 import type { Gate, Goal, GoalEvent, GoalLogEntry, GoalState, GoalStepState } from '../goals/types.js'
@@ -352,6 +352,12 @@ export interface StoredFlow {
   override: FlowOverride | null
 }
 
+/** One item that reached Needs you, and what put it there. */
+export type SurfacedEntry = { id: string; detail?: Record<string, unknown> }
+
+/** An item event read by window: the event and whose it is. */
+export type ItemWindowEvent = ItemEvent & { itemId: string }
+
 export interface WorkItemStore {
   /**
    * Insert or refresh one scanned/source item. Id exists → update payload only
@@ -398,6 +404,17 @@ export interface WorkItemStore {
   deletedIds(): Promise<Set<string>>
   /** The append-only transition log for one item, in order. */
   events(id: string): Promise<ItemEvent[]>
+  /**
+   * Record that these items reached Needs you: one `surfaced` event per open
+   * cycle (core/work/state.ts itemCycles). An item that isn't open, or whose
+   * current cycle already has one, is skipped, so calling this on every sync
+   * is safe. Returns the ids it marked.
+   */
+  markSurfaced(entries: readonly SurfacedEntry[], at: number): Promise<string[]>
+  /** Append a note (surfaced, not-useful) to an item's log; its status doesn't move. False = no such item. */
+  note(id: string, event: ItemNoteKind, actor: ItemActor, at: number, detail?: Record<string, unknown>): Promise<boolean>
+  /** Every item event with `at` in [since, until), oldest first, each with its item's id. */
+  eventsBetween(since: number, until: number): Promise<ItemWindowEvent[]>
   /** Set (or clear, with null) the human's description on any item. Never touched by ingestion. */
   setDescription(id: string, description: string | null): Promise<void>
   /**

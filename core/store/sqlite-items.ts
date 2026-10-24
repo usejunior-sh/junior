@@ -1,9 +1,9 @@
 import { DatabaseSync } from 'node:sqlite'
 import type { ItemImage, FileRef } from '../../shared/protocol.js'
 import type { WorkItem, Provenance } from '../work/types.js'
-import { type ItemStatus, type ItemEventKind, shouldReopen, type StatusChange, eventForStatus, type ItemEvent } from '../work/state.js'
+import { type ItemStatus, type ItemEventKind, shouldReopen, type StatusChange, eventForStatus, type ItemEvent, type ItemNoteKind, surfacedThisCycle } from '../work/state.js'
 import { type FlowOverride, isStage, isTurn } from '../work/flow.js'
-import type { WorkItemStore, UpsertResult, NewManualItem, StoredFlow, ItemFieldsPatch } from './types.js'
+import type { WorkItemStore, UpsertResult, NewManualItem, StoredFlow, ItemFieldsPatch, ItemWindowEvent, SurfacedEntry } from './types.js'
 import type { Decision } from '../work/fields.js'
 
 type WorkItemRow = {
@@ -94,6 +94,16 @@ function mergeProvenance(existing: Provenance[] | undefined, add?: Provenance): 
 const fieldsFill = (base: WorkItem, item: WorkItem): Pick<WorkItem, 'reason' | 'label'> => ({
   ...(base.reason ?? item.reason ? { reason: base.reason ?? item.reason } : {}),
   ...(base.label ?? item.label ? { label: base.label ?? item.label } : {}),
+})
+
+type EventRow = { seq: number; at: number; actor: string; event: string; detail: string | null }
+
+const toEvent = (r: EventRow): ItemEvent => ({
+  seq: r.seq,
+  at: r.at,
+  actor: r.actor,
+  event: r.event as ItemEventKind,
+  ...(r.detail ? { detail: JSON.parse(r.detail) as Record<string, unknown> } : {}),
 })
 
 /** Who an ingestion transition is attributed to. */
@@ -415,14 +425,42 @@ export class SqliteWorkItems implements WorkItemStore {
   async events(id: string): Promise<ItemEvent[]> {
     const rows = this.db
       .prepare('SELECT seq, at, actor, event, detail FROM item_events WHERE item_id = ? ORDER BY seq')
-      .all(id) as { seq: number; at: number; actor: string; event: string; detail: string | null }[]
-    return rows.map((r) => ({
-      seq: r.seq,
-      at: r.at,
-      actor: r.actor,
-      event: r.event as ItemEventKind,
-      ...(r.detail ? { detail: JSON.parse(r.detail) as Record<string, unknown> } : {}),
-    }))
+      .all(id) as EventRow[]
+    return rows.map(toEvent)
+  }
+
+  async markSurfaced(entries: readonly SurfacedEntry[], at: number): Promise<string[]> {
+    const marked: string[] = []
+    const read = this.db.prepare('SELECT at, event FROM item_events WHERE item_id = ? ORDER BY seq')
+    this.db.exec('BEGIN')
+    try {
+      for (const { id, detail } of entries) {
+        if (marked.includes(id) || this.row(id)?.status !== 'open') continue
+        // the cycle rule is core/work/state.ts's, so this and the attention split can't disagree
+        if (surfacedThisCycle(read.all(id) as { at: number; event: ItemEventKind }[])) continue
+        this.appendEvent(id, at, 'system', 'surfaced', detail ?? {})
+        marked.push(id)
+      }
+      this.db.exec('COMMIT')
+    } catch (err) {
+      this.db.exec('ROLLBACK')
+      throw err
+    }
+    return marked
+  }
+
+  async note(id: string, event: ItemNoteKind, actor: string, at: number, detail: Record<string, unknown> = {}): Promise<boolean> {
+    if (!this.row(id)) return false
+    this.appendEvent(id, at, actor, event, detail)
+    return true
+  }
+
+  async eventsBetween(since: number, until: number): Promise<ItemWindowEvent[]> {
+    // idx_item_events_at (migration 38)
+    const rows = this.db
+      .prepare('SELECT item_id, seq, at, actor, event, detail FROM item_events WHERE at >= ? AND at < ? ORDER BY at, item_id, seq')
+      .all(since, until) as (EventRow & { item_id: string })[]
+    return rows.map((r) => ({ itemId: r.item_id, ...toEvent(r) }))
   }
 
   async setDescription(id: string, description: string | null): Promise<void> {

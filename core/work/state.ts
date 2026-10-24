@@ -32,6 +32,12 @@ export type ItemEventKind =
   // when the user overrides it (or clears the override)
   | 'moved'
   | 'flow-set'
+  // attention (core/junior/attention.ts): `surfaced` the first time an open
+  // item lands on Needs you in this open cycle (written by the inbox sync,
+  // once per cycle); `not-useful` when you mark a Needs you row not useful.
+  // Neither changes the item's status.
+  | 'surfaced'
+  | 'not-useful'
 
 /**
  * Who caused a transition. `user` = a click in the web UI; `agent:<sessionId>`
@@ -99,4 +105,68 @@ export function withLifecycle(
   returned: boolean,
 ): WorkItem {
   return { ...item, status, ...(returned ? { returned: true } : {}) }
+}
+
+/** Events that record something about an item without moving its status. */
+export type ItemNoteKind = 'surfaced' | 'not-useful'
+
+/** The status an event leaves the item in; null = it doesn't move the status. */
+export function statusAfter(event: ItemEventKind, before: ItemStatus | null): ItemStatus | null {
+  switch (event) {
+    case 'created':
+    case 'reopened':
+    case 'woken':
+      return 'open'
+    case 'done':
+    case 'archived':
+    case 'snoozed':
+      return event
+    case 'updated':
+      // only a reopen moves status on ingestion, and that writes `reopened`
+      return before
+    default:
+      return null
+  }
+}
+
+/** One open cycle of an item: from created (or reopened after a close) to its next done or archive. */
+export interface ItemCycle<E extends Pick<ItemEvent, 'at' | 'event'> = ItemEvent> {
+  /** the event that opened it */
+  start: E
+  /** every event in the cycle, the opening one first and the closing one last */
+  events: E[]
+  /** the done or archive that closed it; null while it is still open (or snoozed) */
+  end: E | null
+}
+
+/**
+ * Split an item's log into open cycles. A cycle starts at `created`, or at
+ * a `reopened`/`woken` that follows a done or archive; a snooze and its wake
+ * stay inside one cycle. A log whose first event isn't `created` (an older
+ * item) starts its first cycle at its first event. Events must be in order.
+ */
+export function itemCycles<E extends Pick<ItemEvent, 'at' | 'event'>>(events: readonly E[]): ItemCycle<E>[] {
+  const out: ItemCycle<E>[] = []
+  let cur: ItemCycle<E> | null = null
+  let status: ItemStatus | null = null
+  for (const e of events) {
+    const closed = status === 'done' || status === 'archived'
+    const next = statusAfter(e.event, status)
+    if (!cur || (closed && next === 'open') || e.event === 'created') {
+      cur = { start: e, events: [], end: null }
+      out.push(cur)
+    }
+    cur.events.push(e)
+    if (e.event === 'done' || e.event === 'archived') cur.end = e
+    else if (next === 'open' || next === 'snoozed') cur.end = null
+    if (next !== null) status = next
+  }
+  return out
+}
+
+/** Whether the item's current open cycle already has a `surfaced` event. */
+export function surfacedThisCycle(events: readonly Pick<ItemEvent, 'at' | 'event'>[]): boolean {
+  const cycles = itemCycles(events)
+  const last = cycles[cycles.length - 1]
+  return !!last && !last.end && last.events.some((e) => e.event === 'surfaced')
 }

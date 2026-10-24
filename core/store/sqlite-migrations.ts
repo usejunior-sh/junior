@@ -194,6 +194,12 @@ export const BROWSER_TABS_SCHEMA = `CREATE TABLE IF NOT EXISTS browser_tabs (
  */
 export const ACTIONS_TRACK_INDEX = 'CREATE INDEX IF NOT EXISTS idx_actions_kind_status_attempted ON actions(kind, status, attempted_at)'
 
+/**
+ * The attention split (core/junior/attention.ts) reads item events by time
+ * window. IF NOT EXISTS: migration 38 and ensureDurableSchema both run it.
+ */
+export const ITEM_EVENTS_AT_INDEX = 'CREATE INDEX IF NOT EXISTS idx_item_events_at ON item_events(at)'
+
 export const MIGRATIONS: string[] = [
   `CREATE TABLE sessions (
      id             TEXT PRIMARY KEY,
@@ -562,4 +568,7 @@ export const MIGRATIONS: string[] = [
   // 37: the track record (core/approvals/track.ts) reads held actions by kind
   // and window. Also converged by ensureDurableSchema.
   ACTIONS_TRACK_INDEX,
+  // 38: the attention split (core/junior/attention.ts) reads item events by
+  // window. Also converged by ensureDurableSchema.
+  ITEM_EVENTS_AT_INDEX,
 ]
