@@ -46,7 +46,7 @@ type Item = Pick<
 export const ledgerGroup = (i: Item): LedgerGroup => OF_GROUP[i.group]
 
 /** Junior is waiting on you: paused on you, or its first pass waits for your OK. */
-export const juniorWaits = (i: Item): boolean => i.junior?.stage === 'needs-you' || i.tasks?.review?.state === 'ready'
+export const juniorWaits = (i: Pick<Item, 'junior' | 'tasks'>): boolean => i.junior?.stage === 'needs-you' || i.tasks?.review?.state === 'ready'
 
 /**
  * What Junior waits on you for, in a word: the task it paused on, a first pass
@@ -73,7 +73,7 @@ export const NOT_USEFUL_HOLD_MAX_MS = 50_000
 export const NOT_USEFUL_UNDO_MS = 60_000
 
 /** On Needs you: Junior waits on you, and you haven't marked it not useful since the last new thing. */
-export const onNeeds = (i: Item): boolean => juniorWaits(i) && !quieted(i)
+export const onNeeds = (i: Pick<Item, 'junior' | 'tasks' | 'updatedAt' | 'notUseful'>): boolean => juniorWaits(i) && !quieted(i)
 
 /** You are waiting on someone else: their turn, or your PR waiting on review. */
 export const isWaitingOnOthers = (i: Item): boolean => i.flow?.turn === 'others' || i.kind === 'own-pr-open' || i.kind === 'own-pr-stale'
