@@ -157,7 +157,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .dot.live, .tool .glyph.busy, .toolGroup .glyph.busy, .toolGroup .glyph.bg, .probing .pip, .msg.assistant.live .md > :last-child::after, .topIcon .connDot.down { animation: none; }
+  .dot.live, .prow .rowSpin, .tool .glyph.busy, .toolGroup .glyph.busy, .toolGroup .glyph.bg, .probing .pip, .msg.assistant.live .md > :last-child::after, .topIcon .connDot.down { animation: none; }
   .uiMenu[data-state="open"] { animation: none; }
   .settingsOverlay, .mermaidModal, .setActions .saved { animation: none; }
   .selBar { animation: none; }

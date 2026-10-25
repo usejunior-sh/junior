@@ -437,12 +437,6 @@ export function SessionsPanel({
   )
 }
 
-const STATUS_DOT: Record<SessionSummary['status'], string> = {
-  starting: 'live',
-  running: 'live',
-  idle: 'green',
-  error: 'red',
-}
 
 type RowProps = {
   session: SessionSummary
@@ -468,11 +462,25 @@ function SessionRow({ session: s, active, renaming, onSelect, onStartRename, onE
   // A chat with one of Junior's agents shows its face, small, before the title.
   const agent = useChatAgent(s.agent)
   const persona = usePersona()
-  const dot = needs ? (
-    <span className="dot sm orange" title={`Waiting on you: ${needs}`} aria-hidden="true" />
-  ) : (
-    <span className={`dot sm ${STATUS_DOT[shown.status]}`} title={shown.title} aria-hidden="true" />
-  )
+  // Quiet at rest: a row gets a mark only when it needs you, is working, or failed.
+  const working = shown.status === 'running' || shown.status === 'starting'
+  const state = needs
+    ? { cls: 'needs', text: 'needs you', title: `Waiting on you: ${needs}` }
+    : shown.status === 'error'
+      ? { cls: 'failed', text: 'failed', title: shown.title }
+      : working
+        ? { cls: 'working', text: 'working', title: shown.title }
+        : null
+  // Before the title only when there is something to show: a spinner while working, else the agent's face.
+  const lead = working ? (
+    <span className="lead" aria-hidden="true">
+      <span className="rowSpin" />
+    </span>
+  ) : agent ? (
+    <span className="lead" aria-hidden="true">
+      <JuniorFace size={14} motion="still" colour={agent.colour ?? undefined} className="rowAgent" decorative />
+    </span>
+  ) : null
 
   useEffect(() => {
     if (renaming) input.current?.select()
@@ -481,7 +489,7 @@ function SessionRow({ session: s, active, renaming, onSelect, onStartRename, onE
   if (renaming) {
     return (
       <div className={`prow${active ? ' sel' : ''}`}>
-        {dot}
+        {lead}
         <input
           ref={input}
           className="renameInput"
@@ -513,8 +521,7 @@ function SessionRow({ session: s, active, renaming, onSelect, onStartRename, onE
         }
       }}
     >
-      {dot}
-      {agent && <JuniorFace size={14} motion="still" colour={agent.colour ?? undefined} className="rowAgent" decorative />}
+      {lead}
       {wt ? (
         <span className="t">
           <span className="nm">{s.title}</span>
@@ -527,7 +534,11 @@ function SessionRow({ session: s, active, renaming, onSelect, onStartRename, onE
       ) : (
         <span className="t">{s.title}</span>
       )}
-      {needs && <span className="needsMark">needs you</span>}
+      {state && (
+        <span className={`stateMark ${state.cls}`} title={state.title}>
+          {state.text}
+        </span>
+      )}
       {s.name && s.name.toLowerCase() !== s.title.toLowerCase() && <span className="nameMark">{s.name}</span>}
       {s.ultracode && <Workflow className="ucMark" size={11} aria-label="Ultracode" />}
       {s.pinned && <Pin className="pinMark" size={11} aria-label="Pinned" />}

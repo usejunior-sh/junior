@@ -21,7 +21,14 @@
 /* an Ultracode session: a quiet purple mark beside the pin */
 .prow .ucMark { flex: none; color: var(--purple); opacity: 0.85; }
 /* A session's name (/rename), when it differs from its title: how other chats address it. */
-.prow .needsMark { flex: none; font: 500 10px/1 var(--mono); color: var(--orange); }
+/* Session rows are quiet at rest: a lead (spinner or agent face) only when there is one, a state word only when live. */
+.prow .lead { flex: none; width: 14px; height: 14px; display: flex; align-items: center; justify-content: center; }
+.prow .rowSpin { width: 10px; height: 10px; border-radius: var(--r-full); border: 1.5px solid color-mix(in srgb, var(--blue) 25%, transparent); border-top-color: var(--blue); animation: spin 0.9s linear infinite; }
+.prow .stateMark { flex: none; font: 500 10px/1 var(--mono); }
+.prow .stateMark.needs { color: var(--orange); }
+.prow .stateMark.working { color: var(--blue); font-weight: 400; }
+.prow .stateMark.failed { color: var(--red); }
+.prow.wt > .lead { margin-top: 3px; }
 .prow .nameMark { flex: none; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 400 10px/1 var(--mono); color: var(--stone); }
 .prow.wt .ucMark { margin-top: 1px; }
 .termHome { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; padding: 40px; position: relative; text-align: center; }
