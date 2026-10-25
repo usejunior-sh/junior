@@ -1,6 +1,7 @@
 /**
- * The tab band: Inbox is pinned; every session opened in this browser gets a
- * closable tab beside it. Per workspace, per browser, a tab is where *you*
+ * The tab band: every session, shell or document opened in this browser gets
+ * a closable tab, Inbox included (closing it is allowed; it comes back when
+ * you next open the inbox). Per workspace, per browser, a tab is where *you*
  * are, not a property of the session, so it lives in localStorage, not the
  * server.
  */
@@ -135,6 +136,20 @@ export function useOpenTabs(workspaceId: string) {
     })
   }, [])
 
+  /**
+   * Drop the keys whose thing is gone (a discarded draft, a shell that died
+   * with the daemon). The band hides them, but a hidden key still decides
+   * neighbours and survives reloads, so they are cleaned out once the stores
+   * they point into have loaded.
+   */
+  const dropDead = useCallback((dead: (key: string) => boolean) => {
+    setBand((b) => {
+      const tabs = b.tabs.filter((t) => !dead(t))
+      const preview = b.preview && dead(b.preview) ? null : b.preview
+      return tabs.length === b.tabs.length && preview === b.preview ? b : prune({ ...b, tabs, preview })
+    })
+  }, [])
+
   /** Learn (or improve) the names of document tabs. */
   const remember = useCallback((patch: Record<string, string>) => {
     setBand((b) => {
@@ -143,7 +158,7 @@ export function useOpenTabs(workspaceId: string) {
     })
   }, [])
 
-  return { tabs, preview, titles, open, close, closeAll, replace, setPreview, remember, move }
+  return { tabs, preview, titles, open, close, closeAll, replace, setPreview, remember, move, dropDead }
 }
 
 /**

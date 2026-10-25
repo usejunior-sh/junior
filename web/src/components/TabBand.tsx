@@ -24,6 +24,7 @@ import {
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type ComponentType,
@@ -257,7 +258,7 @@ export function TabBand({
   const strip = useRef<HTMLDivElement>(null)
   const count = tabs.length + (preview ? 1 : 0) + (pageTab ? 1 : 0)
   const fade = useEdgeFade(strip, count)
-  const pageRef = useKeepInView(!!pageTab)
+  useKeepActiveInView(strip, activeKey, count)
   const { bag: dragBag, onStripDragLeave } = useTabDrag(tabs, onReorder)
 
   return (
@@ -302,7 +303,7 @@ export function TabBand({
         )}
 
         {pageTab && (
-          <button type="button" role="tab" aria-selected className="tab active" ref={pageRef}>
+          <button type="button" role="tab" aria-selected className="tab active">
             <pageTab.icon size={13} aria-hidden="true" />
             <span className="t">{pageTab.label}</span>
           </button>
@@ -317,15 +318,32 @@ export function TabBand({
 /**
  * Hold the selected tab on screen. Selecting happens from the inbox, the
  * command palette and the rail as well as from the band itself, so a tab can
- * become active while sitting well outside the scrolled strip.
+ * become active while sitting well outside the scrolled strip. Keyed on the
+ * active *key*, not a tab's active flag: the preview slot is one element that
+ * stays active while its document changes. Only the strip scrolls, never the
+ * page around it, which scrollIntoView would also move.
  */
-function useKeepInView(active: boolean) {
-  const ref = useRef<HTMLButtonElement>(null)
-  useEffect(() => {
-    if (!active) return
-    ref.current?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
-  }, [active])
-  return ref
+function useKeepActiveInView(strip: RefObject<HTMLDivElement | null>, activeKey: string, count: number) {
+  useLayoutEffect(() => {
+    const el = strip.current
+    const tab = el?.querySelector<HTMLElement>('.tab.active')
+    if (!el || !tab) return
+    // Clear of the 28px edge fade, so the tab reads as fully there.
+    const FADE = 28
+    const reveal = () => {
+      const box = el.getBoundingClientRect()
+      const t = tab.getBoundingClientRect()
+      const left = t.left - box.left + el.scrollLeft
+      const right = left + t.width
+      if (left - FADE < el.scrollLeft) el.scrollTo({ left: left - FADE, behavior: 'instant' })
+      else if (right + FADE > el.scrollLeft + el.clientWidth) el.scrollTo({ left: right + FADE - el.clientWidth, behavior: 'instant' })
+    }
+    reveal()
+    // A document tab learns its title after it opens, which widens it.
+    const ro = new ResizeObserver(reveal)
+    ro.observe(tab)
+    return () => ro.disconnect()
+  }, [strip, activeKey, count])
 }
 
 /**
@@ -360,13 +378,11 @@ function Tab({
   }
   const Icon = ICON[tab.kind]
   const dotted = tab.kind === 'session' || tab.kind === 'terminal'
-  const ref = useKeepInView(active)
   return (
     <CtxMenu>
       <CtxMenuTrigger asChild>
         <button
           type="button"
-          ref={ref}
           role="tab"
           aria-selected={active}
           draggable={!!drag}

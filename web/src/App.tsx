@@ -117,6 +117,7 @@ export function App() {
     setPreview,
     remember,
     move: moveTab,
+    dropDead: dropDeadTabs,
   } = useOpenTabs(workspaceId)
 
   /** Every document the band is holding: pinned or peeked. */
@@ -213,6 +214,14 @@ export function App() {
   const currentDraft = drafts.find((d) => d.id === currentDraftId) ?? null
   // Drafts are per workspace; bind before anything reads them.
   useEffect(() => draftStore.bind(workspaceId), [workspaceId])
+  // Once the daemon has said hello (the workspace id arrives with its
+  // sessions and shells) and drafts are bound, clean dead keys out of the band.
+  useEffect(() => {
+    if (!workspaceId) return
+    const draftIds = new Set(draftStore.all().map((d) => d.id))
+    const termIds = new Set(store.getTerminals().map((t) => t.id))
+    dropDeadTabs((k) => (k.startsWith('draft:') ? !draftIds.has(k.slice(6)) : k.startsWith('term:') ? !termIds.has(k.slice(5)) : false))
+  }, [workspaceId, dropDeadTabs])
   // Name the workspace in the tab title, with one tab per workspace, the
   // favicon alone cannot tell them apart.
   useEffect(() => {
@@ -317,8 +326,8 @@ export function App() {
   )
 
   // The rail only navigates: hiding the panel is its own button beside the
-  // search field (and ⌘B). Clicking any icon while collapsed reopens it,
-  // still landing on that section.
+  // search field (and ⌘B), and only Show panel or ⌘B brings it back. One
+  // setting for every section, so a rail click never changes it.
   const onRailGo = useCallback(
     (section: RailSection) => {
       if (mobile) {
@@ -332,32 +341,15 @@ export function App() {
         }
       } else {
         if (panelStepsAside) setKeepPanel(true)
-        if (panelSize.collapsed) panelSize.setCollapsed(false)
         goTo(section)
       }
     },
-    [mobile, panelSize, panelStepsAside, goTo],
+    [mobile, panelStepsAside, goTo],
   )
 
   const collapsePanel = useCallback(() => panelSize.setCollapsed(true), [panelSize])
 
-  // Closing the tab you are on lands you on its neighbour, else the inbox.
-  // A terminal tab closing does not kill the shell. That is the panel's menu.
   const activeTabKey = tabKeyOf(route) ?? 'home'
-  const closeOpenTab = useCallback(
-    (key: string) => {
-      if (key === activeTabKey) {
-        // A pinned tab hands over to its neighbour; the preview has none.
-        const i = tabs.indexOf(key)
-        const next = i === -1 ? undefined : tabs[i + 1] ?? tabs[i - 1]
-        navigate(next ? routeOfKey(next) : '/junior')
-      }
-      // Closing a draft tab discards the draft. There is nowhere else it lives.
-      if (key.startsWith('draft:')) draftStore.remove(key.slice(6))
-      closeTab(key)
-    },
-    [tabs, activeTabKey, navigate, closeTab],
-  )
 
   // Empty the band. Drafts go with their tabs: that is the only place they
   // live, and with nothing left open, Junior's page is where you land.
@@ -436,6 +428,24 @@ export function App() {
     const t = preview ? docTab(preview) : null
     return t ? { ...t, preview: true } : null
   }, [preview, docTab])
+
+  // Closing the tab you are on lands you on its neighbour in the band as
+  // drawn, else Junior's page. Hidden keys (a dead shell) are never a landing.
+  // A terminal tab closing does not kill the shell. That is the panel's menu.
+  const closeOpenTab = useCallback(
+    (key: string) => {
+      if (key === activeTabKey) {
+        const shown = [...openTabs, ...(previewTab ? [previewTab] : [])].map((t) => t.key)
+        const i = shown.indexOf(key)
+        const next = i === -1 ? undefined : shown[i + 1] ?? shown[i - 1]
+        navigate(next ? routeOfKey(next) : '/junior')
+      }
+      // Closing a draft tab discards the draft. There is nowhere else it lives.
+      if (key.startsWith('draft:')) draftStore.remove(key.slice(6))
+      closeTab(key)
+    },
+    [openTabs, previewTab, activeTabKey, navigate, closeTab],
+  )
 
   // The phone's top bar: what is in front, and where "back" goes. Back is
   // *up*, to the page's list, rather than browser history, so it means the

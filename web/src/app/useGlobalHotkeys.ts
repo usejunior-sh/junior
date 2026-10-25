@@ -60,8 +60,10 @@ export function useGlobalHotkeys({ route, navigate, newSession, newTerminal, ter
         startJuniorChat()
         return
       }
+      // ⌘B works from the message box too: it types nothing there. Ctrl-B
+      // still belongs to a focused field (a terminal's tmux prefix, readline).
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'b') {
-        if (isTypingTarget(e) || anyDialogOpen()) return
+        if (anyDialogOpen() || (isTypingTarget(e) && !e.metaKey)) return
         e.preventDefault()
         panelSize.toggleCollapsed()
         return
