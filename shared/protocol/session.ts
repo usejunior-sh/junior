@@ -93,6 +93,8 @@ export type SessionSummary = {
   name?: string
   /** the session that started this one, when one did */
   startedBy?: string
+  /** the chat agent it talks as (`junior:explainer`); look it up in the chat agents list. Absent = plain Junior. */
+  agent?: string
   cwd: string
   /** the project the session runs in; absent only on rows older than projects */
   projectId?: string

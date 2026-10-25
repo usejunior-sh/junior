@@ -3,6 +3,10 @@
  * are: the ranked Queue (inbox and item pages) or the Sessions list (home and
  * session pages). Both open with the search field, which is the ⌘K palette.
  */
+import { JuniorFace } from './JuniorFace.js'
+import { usePersona } from '../junior.js'
+import { useChatAgent } from '../chatAgents.js'
+import { agentTitle } from '../../../core/junior/agents.js'
 import {
   AlarmClock,
   Archive,
@@ -461,6 +465,9 @@ function SessionRow({ session: s, active, renaming, onSelect, onStartRename, onE
   const shown = shownStatus(s)
   // Waiting on you outranks working: the one orange in the list.
   const needs = needsYouText(s)
+  // A chat with one of Junior's agents shows its face, small, before the title.
+  const agent = useChatAgent(s.agent)
+  const persona = usePersona()
   const dot = needs ? (
     <span className="dot sm orange" title={`Waiting on you: ${needs}`} aria-hidden="true" />
   ) : (
@@ -497,7 +504,7 @@ function SessionRow({ session: s, active, renaming, onSelect, onStartRename, onE
       className={`prow${active ? ' sel' : ''}${wt ? ' wt' : ''}`}
       role="button"
       tabIndex={0}
-      title={[s.title, needs && `waiting on you: ${needs}`, s.name && `name: ${s.name}`, s.startedBy && 'started by another chat', wt?.path, shown.title].filter(Boolean).join('\n')}
+      title={[s.title, agent && agentTitle(persona.name, agent.label), needs && `waiting on you: ${needs}`, s.name && `name: ${s.name}`, s.startedBy && 'started by another chat', wt?.path, shown.title].filter(Boolean).join('\n')}
       onClick={onSelect}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
@@ -507,6 +514,7 @@ function SessionRow({ session: s, active, renaming, onSelect, onStartRename, onE
       }}
     >
       {dot}
+      {agent && <JuniorFace size={14} motion="still" colour={agent.colour ?? undefined} className="rowAgent" decorative />}
       {wt ? (
         <span className="t">
           <span className="nm">{s.title}</span>

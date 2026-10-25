@@ -29,6 +29,8 @@ export type Draft = {
   continueIn?: string
   /** `job` = "New job": a chat with Junior that sets one up, its first message prefixed "New job:"; `goal` = the same for a goal ("New goal:") */
   intent?: 'job' | 'goal'
+  /** the chat agent the session will talk as (`junior:reviewer`, core/junior/agents.ts); absent = plain Junior */
+  agent?: string
   /** the Junior page's own box: never a tab, never listed, never reused by New chat */
   home?: true
   createdAt: number

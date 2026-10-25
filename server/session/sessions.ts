@@ -95,7 +95,7 @@ export async function createSession(
   effort: EffortLevel | null,
   fastMode: boolean,
   permissionMode: PermissionMode | null,
-  opts: { kind?: SessionKind; spawn?: boolean; projectId?: string | null; checkoutId?: string | null; provider?: ProviderId; planning?: boolean; ultracode?: boolean; name?: string; startedBy?: string } = {},
+  opts: { kind?: SessionKind; spawn?: boolean; projectId?: string | null; checkoutId?: string | null; provider?: ProviderId; planning?: boolean; ultracode?: boolean; name?: string; startedBy?: string; agent?: string } = {},
 ): Promise<StoredSession> {
   const projectId = opts.projectId ?? (await defaultProject(rt))?.id ?? null
   // Every session names its checkout at birth: the one asked for, else its project's main folder.
@@ -115,6 +115,7 @@ export async function createSession(
     ...(opts.ultracode ? { ultracode: true } : {}),
     ...(opts.name ? { name: opts.name } : {}),
     ...(opts.startedBy ? { startedBy: opts.startedBy } : {}),
+    ...(opts.agent ? { agent: opts.agent } : {}),
     ...(opts.provider ? { provider: opts.provider } : {}),
     ...(opts.kind ? { kind: opts.kind } : {}),
   })

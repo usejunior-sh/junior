@@ -1,4 +1,7 @@
 import { Lock, Check, Copy, Sparkles, FolderOpen, Trash2, FileText } from 'lucide-react'
+import * as Switch from '@radix-ui/react-switch'
+import { agentFace, agentTitle, labelOf } from '../../../../core/junior/agents.js'
+import { usePersona } from '../../junior.js'
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { type LibraryEntry, AGENT_COLORS, type AgentEntry, type TeamLibraryResponse } from '../../../../shared/protocol.js'
 import { readFields, setField, bodyOf, setBody, slugName } from '../../../../shared/skillFile.js'
@@ -295,13 +298,30 @@ export function EntryEditor({
   )
 }
 
-/** An agent file's own keys: model, tools, colour. */
+/** An agent file's own keys: model, tools, colour, and whether a chat can talk as it (core/junior/agents.ts). */
 function AgentFields({ fields, readOnly, onSet }: { fields: Record<string, string>; readOnly: boolean; onSet: (key: string, value: string | null) => void }) {
   const models = usePickableModels().filter((m) => m.id !== 'default')
+  const persona = usePersona()
+  const chat = /^(true|yes|on)$/i.test(fields.chat ?? '')
   const model = fields.model ?? ''
   const ids = [...MODEL_ALIASES, ...models.map((m) => m.id).filter((id) => !MODEL_ALIASES.includes(id))]
   return (
     <>
+      <Field label="Chat" hint={`On: pick it in a new chat's composer, and ${persona.name} talks as ${agentTitle(persona.name, fields.label || labelOf(fields.name ?? ''))}.`}>
+        <Switch.Root className="uiSwitch" checked={chat} disabled={readOnly} onCheckedChange={(on) => onSet('chat', on ? 'true' : null)} aria-label="Chat with this agent">
+          <Switch.Thumb className="uiSwitchThumb" />
+        </Switch.Root>
+      </Field>
+      {chat && (
+        <>
+          <Field label="Label" hint={`Shown after the name: ${persona.name} · Label.`}>
+            <input className="teamInp wide" value={fields.label ?? ''} disabled={readOnly} placeholder={labelOf(fields.name ?? '')} onChange={(e) => onSet('label', e.target.value)} />
+          </Field>
+          <Field label="Skills" hint="Comma-separated. The only skills it loads in a chat. Empty = every skill.">
+            <input className="teamInp wide mono" value={fields.skills ?? ''} disabled={readOnly} placeholder="all skills" onChange={(e) => onSet('skills', e.target.value)} />
+          </Field>
+        </>
+      )}
       <Field label="Model" hint="Unset follows Claude Code’s subagent default; inherit uses the chat’s model.">
         <Select className="teamSel" aria-label="Model" value={model} disabled={readOnly} onValueChange={(v) => onSet('model', v || null)}>
           <SelectItem value="">Default</SelectItem>
@@ -316,15 +336,15 @@ function AgentFields({ fields, readOnly, onSet }: { fields: Record<string, strin
       <Field label="Tools" hint="Comma-separated, e.g. Read, Grep, Glob, Bash. Empty = every tool the chat has.">
         <input className="teamInp wide mono" value={fields.tools ?? ''} disabled={readOnly} placeholder="all tools" onChange={(e) => onSet('tools', e.target.value)} />
       </Field>
-      <Field label="Colour">
+      <Field label="Colour" hint={chat ? 'The colour of its face in a chat. Orange is kept for “needs you”.' : undefined}>
         <span className="lbColors">
           <button type="button" className={`lbColor none${!fields.color ? ' on' : ''}`} disabled={readOnly} title="None" aria-label="No colour" onClick={() => onSet('color', null)} />
-          {AGENT_COLORS.map((c) => (
+          {AGENT_COLORS.filter((c) => !chat || agentFace(c)).map((c) => (
             <button
               key={c}
               type="button"
               className={`lbColor${fields.color === c ? ' on' : ''}`}
-              style={{ background: AGENT_HEX[c] }}
+              style={{ background: chat ? agentFace(c)! : AGENT_HEX[c] }}
               disabled={readOnly}
               title={c}
               aria-label={c}

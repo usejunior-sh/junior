@@ -107,6 +107,7 @@ export function parseClientMessage(raw: unknown): ClientMessage | null {
         mode: isSessionMode(m.mode) ? m.mode : undefined,
         // An agent this build doesn't know is dropped: the session runs on Claude.
         provider: isProviderId(m.provider) ? m.provider : undefined,
+        agent: typeof m.agent === 'string' && /^[\w:.-]{1,120}$/.test(m.agent) ? m.agent : undefined,
         itemId: typeof m.itemId === 'string' && m.itemId ? m.itemId : undefined,
       }
     case 'set_model':

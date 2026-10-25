@@ -1,7 +1,7 @@
 import path from 'node:path'
 import { readFile } from 'node:fs/promises'
-import type { DispatchPreviewResponse, LibraryFileResponse, LibraryListResponse, TeamGoalsResponse, TeamRunFileResponse, TeamRunFilesResponse, TeamRunFolderResponse, TeamRunResponse } from '../../shared/protocol.js'
-import { createLibraryEntry, libraryTargets, listLibrary, locate as locateLibrary, readLibraryFile, removeLibraryItem, writeLibraryFile } from '../library.js'
+import type { ChatAgentsResponse, DispatchPreviewResponse, LibraryFileResponse, LibraryListResponse, TeamGoalsResponse, TeamRunFileResponse, TeamRunFilesResponse, TeamRunFolderResponse, TeamRunResponse } from '../../shared/protocol.js'
+import { createLibraryEntry, libraryTargets, listChatAgents, listLibrary, locate as locateLibrary, readLibraryFile, removeLibraryItem, writeLibraryFile } from '../library.js'
 import { JUNIOR_DIR } from '../state.js'
 import { isLibraryName } from '../teams.js'
 import { libraryRootsFor, reloadLibraryEverywhere } from '../session/changes.js'
@@ -20,7 +20,10 @@ export async function libraryRoutes({ req, url, json, rt }: ScopedCtx): Promise<
     const route = `${req.method} ${url.pathname}`
     try {
       const roots = await libraryRootsFor(rt)
-      if (route === 'GET /api/library') {
+      if (route === 'GET /api/library/chat-agents') {
+        const body: ChatAgentsResponse = { ok: true, agents: await listChatAgents(roots) }
+        json(200, body)
+      } else if (route === 'GET /api/library') {
         const kind = url.searchParams.get('kind')
         if (kind !== 'skill' && kind !== 'agent') throw new Error('need ?kind=skill or ?kind=agent')
         const body: LibraryListResponse = { ok: true, entries: await listLibrary(kind, roots), targets: libraryTargets(roots) }

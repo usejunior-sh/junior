@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
+import { useScopedAgent } from '../chatAgents.js'
 import type { Mood } from '../../../core/junior/mood.js'
 import { usePersona } from '../junior.js'
 import { JuniorFace } from './JuniorFace.js'
@@ -39,6 +40,7 @@ export function ChatFace({ mood, size, say, onClick }: { mood: Mood; size: numbe
   const box = useRef<HTMLSpanElement>(null)
   const seen = useOnScreen(box)
   const [hover, setHover] = useState(false)
+  const { colour } = useScopedAgent()
   const face = (
     <span
       className={`chatFace${onClick ? ' go' : ''}`}
@@ -51,7 +53,7 @@ export function ChatFace({ mood, size, say, onClick }: { mood: Mood; size: numbe
       aria-label={onClick && say ? (typeof say === 'string' ? say : `${say.line}. ${say.sub ?? ''}`) : undefined}
       onKeyDown={onClick ? (e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), onClick()) : undefined}
     >
-      <JuniorFace mood={hover && mood === 'done' ? 'done' : chatMood(mood)} size={size} motion={seen ? 'follow' : 'still'} reach={1.2} features={1.3} decorative />
+      <JuniorFace mood={hover && mood === 'done' ? 'done' : chatMood(mood)} size={size} motion={seen ? 'follow' : 'still'} reach={1.2} features={1.3} colour={colour} decorative />
     </span>
   )
   if (!say) return face
@@ -78,13 +80,13 @@ export function ChatFace({ mood, size, say, onClick }: { mood: Mood; size: numbe
  * a renamed Junior follows.
  */
 export function JuniorLabel({ mood, size = 26, say, children, className }: { mood: Mood; size?: number; say?: Say; children?: ReactNode; className?: string }) {
-  const persona = usePersona()
+  const { name } = useScopedAgent()
   return (
     <span className={`jrLabel${className ? ` ${className}` : ''}`}>
       <span className="jrFace">
         <ChatFace mood={mood} size={size} say={say} />
       </span>
-      <span className="jrWho">{persona.name}</span>
+      <span className="jrWho">{name}</span>
       {children}
     </span>
   )

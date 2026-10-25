@@ -75,6 +75,8 @@ export type StoredSession = {
   name: string | null
   /** The session that started this one with start_session; null when you did. */
   startedBy: string | null
+  /** The chat agent it talks as (`junior:explainer`, `explainer`), fixed at creation; null = plain Junior. */
+  agent: string | null
   /** How much the session asks before acting; null = 'default' (ask). */
   permissionMode: PermissionMode | null
   /** The agent the session runs on, fixed at creation; rows from before providers are 'claude'. */
@@ -124,6 +126,7 @@ export type NewSession = {
   ultracode?: boolean
   name?: string | null
   startedBy?: string | null
+  agent?: string | null
   permissionMode?: PermissionMode | null
   /** omitted = 'claude' */
   provider?: ProviderId

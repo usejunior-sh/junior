@@ -156,6 +156,7 @@ export const claude: Provider = {
         ...(spec.resume ? { resume: spec.resume } : {}),
         ...(spec.title && !spec.resume ? { title: spec.title } : {}),
         ...(spec.plugins?.length ? { plugins: spec.plugins.map((p) => ({ type: 'local' as const, path: p })) } : {}),
+        ...(spec.skills ? { skills: spec.skills } : {}),
         // A copy of each file before a turn edits it, keyed by the turn's user message uuid (rewindFiles below).
         ...(spec.fileCheckpoints ? { enableFileCheckpointing: true } : {}),
         hooks: {

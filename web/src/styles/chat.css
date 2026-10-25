@@ -434,3 +434,26 @@ button.chip:hover:not(:disabled), .chip[data-state="open"] { color: var(--ink); 
   /* Editors open on the Mac. */
   #composer .rememberStrip .rsOpen { display: none; }
 }
+
+/* The agent chip (AgentPicker): who a new chat talks to. The face carries the colour; the chip stays quiet. */
+.chip.agentChip { gap: 6px; color: var(--ash); flex: none; }
+.chip.agentChip.picked { color: var(--ink); }
+/* Its popover: the model picker's shell (.mpop, .mpSearch), two-line rows, a capped list that scrolls. */
+.mpop.agpop { width: 360px; display: flex; flex-direction: column; max-height: min(420px, 60vh); }
+.agpop .agCount { font-family: var(--mono); font-size: 0.8077rem; color: var(--stone); }
+.agList { flex: 1 1 auto; min-height: 0; max-height: 300px; overflow-y: auto; padding: 4px 6px 6px; display: flex; flex-direction: column; }
+.agSep { padding: 8px 8px 4px; color: var(--stone); font-size: 0.7692rem; letter-spacing: 0.6px; text-transform: uppercase; }
+.agOpt { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 44px; padding: 5px 8px; border: 0; border-radius: var(--r-sm); background: transparent; color: var(--body); text-align: left; }
+.agOpt.at { background: var(--wash-2); color: var(--ink); }
+.agOpt.sel { background: var(--wash-3); color: var(--ink); }
+.agOpt .agText { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.agOpt .n { font-size: 1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.agOpt .d { color: var(--ash); font-size: 0.8462rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.agOpt .chk { flex: none; color: transparent; }
+.agOpt.sel .chk { color: var(--ink); }
+.agFoot { flex: none; display: flex; align-items: center; gap: 8px; padding: 8px 8px 8px 14px; border-top: 1px solid var(--hair); color: var(--stone); font-size: 0.8462rem; }
+.agFoot span { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.agManage { flex: none; display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 9px; border-radius: var(--r-full); border: 1px solid var(--hair-strong); background: transparent; color: var(--body); font-size: 0.8462rem; }
+.agManage:hover { color: var(--ink); background: var(--wash-2); }
+.agentTag { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 8px 0 5px; border-radius: var(--r-full); border: 1px solid var(--border); font-size: 12px; color: var(--ink); white-space: nowrap; }
+.prow .rowAgent { flex: none; }

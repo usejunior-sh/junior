@@ -366,6 +366,21 @@ button.jlTitle:hover { text-decoration: underline; text-decoration-color: var(--
 /* working: the halo spins; listening or free, only its hairline ring shows */
 .jhHalo.on::before, .jhHalo.on .sat { opacity: 1; animation-play-state: running; }
 .jhHalo .bob { display: inline-block; animation: jhBob 2.2s ease-in-out infinite; }
+/* The big face wearing a chat agent (JuniorHalo): the ring takes its colour, a name tag sits on the ring's foot. */
+.jhHalo.agent { border-radius: 50%; box-shadow: 0 0 56px color-mix(in srgb, var(--junior) 16%, transparent); }
+.jhHalo.agent::after { border-color: color-mix(in srgb, var(--junior) 45%, transparent); }
+/* The picked agent's name over the headline (AgentEyebrow): Geist Mono eyebrow, the agent's colour on the dot only. */
+.agEyebrow { display: inline-flex; align-items: center; gap: 8px; margin: 0; font-family: var(--mono); font-size: 0.8846rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--mute); animation: agEyebrowIn 0.18s ease; }
+.agEyebrow .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--agent, var(--junior)); }
+.agEyebrow b { font-weight: 400; color: var(--ink); }
+.agEyebrowX { display: inline-grid; place-items: center; width: 18px; height: 18px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--ash); cursor: pointer; }
+.agEyebrowX:hover, .agEyebrowX:focus-visible { color: var(--ink); background: var(--wash-3); outline: none; }
+/* Space from the ring, tight to the line it labels: the Junior page (h1 has its own 22px) and a new chat (22px flex gap). */
+.jhTop .agEyebrow { margin-top: 20px; }
+.jhTop .agEyebrow + .jhHello { margin-top: 8px; }
+#newSessionHome .nsWho .agEyebrow { margin: -2px 0 -14px; }
+@keyframes agEyebrowIn { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .agEyebrow { animation: none; } }
 @keyframes jhSpin { to { transform: rotate(360deg); } }
 @keyframes jhBob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
 

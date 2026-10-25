@@ -22,6 +22,7 @@ import type { TreeChange } from '../git.js'
 import { log } from '../log.js'
 import { openSqliteStore } from '../../core/store/sqlite.js'
 import { ensureWorkspacePlugin } from '../library.js'
+import { seedChatAgents } from '../chat-agents.js'
 import { LiveSession, type SessionExtras } from '../session/live-session.js'
 import type { QueuedRun } from '../jobs/queue.js'
 import type { JobPreview } from '../jobs/preview.js'
@@ -210,7 +211,9 @@ export class WorkspaceRuntime {
     this.attachmentsDir = path.join(workspaceDir(meta.id), 'attachments')
     this.teamLibrary = new TeamLibrary(workspaceDir(meta.id))
     this.libraryDir = path.join(workspaceDir(meta.id), 'library')
-    void ensureWorkspacePlugin(this.libraryDir).catch((err) => log('warn', 'library', `could not set up ${this.libraryDir}: ${errText(err)}`))
+    void ensureWorkspacePlugin(this.libraryDir)
+      .then(() => seedChatAgents(this.libraryDir))
+      .catch((err) => log('warn', 'library', `could not set up ${this.libraryDir}: ${errText(err)}`))
     this.jobFiles = new JobFiles(workspaceDir(meta.id))
     this.actionsFile = new ActionsFile(workspaceDir(meta.id))
     this.cardSpecs = new CardSpecs(workspaceDir(meta.id))

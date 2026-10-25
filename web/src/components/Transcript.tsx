@@ -1,4 +1,5 @@
 import { KeyRound } from 'lucide-react'
+import { useScopedAgent } from '../chatAgents.js'
 import { Fragment, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
   mentionToken,
@@ -198,7 +199,7 @@ const clock = (ms: number) => new Date(ms).toLocaleTimeString([], { hour: '2-dig
  * its name and what it's doing or when it spoke.
  */
 function Speaker({ mood, say, at }: { mood: Mood; say: Say; at?: number }) {
-  const persona = usePersona()
+  const { name } = useScopedAgent()
   const self = useRef<HTMLDivElement>(null)
   const note = mood === 'needs' ? 'needs you' : mood === 'working' ? 'is working' : mood === 'think' ? 'is thinking' : mood === 'stuck' ? 'got stuck' : null
   return (
@@ -206,7 +207,7 @@ function Speaker({ mood, say, at }: { mood: Mood; say: Say; at?: number }) {
       <span className="spFace">
         <ChatFace mood={mood} size={38} say={say} onClick={mood === 'needs' ? () => jumpToWaiting(self.current) : undefined} />
       </span>
-      <span className="spWho">{persona.name}</span>
+      <span className="spWho">{name}</span>
       {note && <span className={`spNote ${mood}`}>{note}</span>}
       {at !== undefined && <time className="spAt">{clock(at)}</time>}
     </div>
@@ -216,9 +217,10 @@ function Speaker({ mood, say, at }: { mood: Mood; say: Say; at?: number }) {
 /** A turn's end as Junior's sign-off: "done · 32.2s · 9 turns · $0.80", the word in Junior's colour. */
 function SignOff({ stats, word = 'done' }: { stats: string; word?: string }) {
   const persona = usePersona()
+  const { colour } = useScopedAgent()
   return (
     <span className="metaText">
-      <span className="soDone" style={{ color: persona.colour }}>
+      <span className="soDone" style={{ color: colour ?? persona.colour }}>
         {word}
       </span>{' '}
       · {stats}

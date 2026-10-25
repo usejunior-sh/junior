@@ -15,6 +15,7 @@ export function summarize(rt: WorkspaceRuntime, row: StoredSession): SessionSumm
     title: row.title,
     ...(row.name ? { name: row.name } : {}),
     ...(row.startedBy ? { startedBy: row.startedBy } : {}),
+    ...(row.agent ? { agent: row.agent } : {}),
     cwd: row.cwd,
     ...(row.projectId ? { projectId: row.projectId } : {}),
     status: l?.status ?? 'idle',

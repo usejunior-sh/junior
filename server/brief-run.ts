@@ -1,4 +1,6 @@
 import { createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk'
+import { agentAppend, agentDisallowed } from '../core/junior/agents.js'
+import { chatAgentNamed } from './chat-agents.js'
 import { z } from 'zod'
 import { randomUUID } from 'node:crypto'
 import os from 'node:os'
@@ -115,7 +117,20 @@ export async function extrasFor(rt: WorkspaceRuntime, row: StoredSession): Promi
   // A chat gets the browser pane's tools: with Junior.app closed they answer
   // "open Junior.app" rather than vanish, so a session never has to respawn.
   // It is one of Junior's chats, so it also gets the persona and today's plan.
-  if (row.kind === 'chat') return { systemAppend: `${identity}${await juniorAppend(rt)}`, mcp: { browser: browserMcpFor(rt, row) } }
+  // A chat talking as an agent (core/junior/agents.ts) gets its prompt between
+  // the identity and the persona, so the rules still come last, and its tools
+  // and skills narrow the session. An agent gone since reads as plain Junior.
+  if (row.kind === 'chat') {
+    const agent = await chatAgentNamed(rt, row.agent)
+    if (!agent) return { systemAppend: `${identity}${await juniorAppend(rt)}`, mcp: { browser: browserMcpFor(rt, row) } }
+    return {
+      systemAppend: `${identity}${agentAppend(agent, rt.persona.name)}${await juniorAppend(rt)}`,
+      mcp: { browser: browserMcpFor(rt, row) },
+      disallowedTools: agentDisallowed(agent),
+      ...(agent.skills ? { skills: agent.skills } : {}),
+      ...(agent.model ? { model: agent.model } : {}),
+    }
+  }
   // A babysit task's session: its submit_task tool, its per-task budget, the headless contract last.
   const taskRun = rt.taskRuns.get(row.id)
   // Strict: none of ~/.claude's connectors and plugins, whose schemas would ride every call.

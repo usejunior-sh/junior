@@ -1,4 +1,5 @@
 import type { TeamRecipe } from '../../core/teams/recipe.js'
+import type { ChatAgent } from '../../core/junior/agents.js'
 import type { EffortLevel } from './session.js'
 
 // Teams v2 (server/teams.ts, core/teams/recipe.ts): a team is a recipe file
@@ -76,6 +77,8 @@ export type LibraryEntry = {
   model?: string
   color?: string
   tools?: string
+  /** agents: `chat: true`, so a chat can talk as it (core/junior/agents.ts) */
+  chat?: boolean
   /** skills: how many files sit beside SKILL.md */
   files?: number
 }
@@ -86,6 +89,9 @@ export type LibraryTarget = { id: string; label: string; dir: string }
 export type LibraryListResponse =
   | { ok: true; entries: LibraryEntry[]; targets: LibraryTarget[] }
   | { ok: false; error: string }
+
+/** The agents a chat can talk as (core/junior/agents.ts). */
+export type ChatAgentsResponse = { ok: true; agents: ChatAgent[] } | { ok: false; error: string }
 
 /** One file of a skill or agent. `files` lists a skill folder's files relative to it. */
 export type LibraryFileResponse =

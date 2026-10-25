@@ -165,6 +165,8 @@ export type ClientMessage =
       fastMode?: boolean
       /** The agent to run on, for the session's whole life. Omitted = 'claude'. */
       provider?: ProviderId
+      /** The chat agent to talk as (`junior:explainer`), for the session's whole life. Omitted = plain Junior. */
+      agent?: string
       /** The work item this session is dispatched for, recorded as a `dispatch` link. */
       itemId?: string
     }

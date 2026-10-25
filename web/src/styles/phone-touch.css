@@ -34,7 +34,7 @@
     min-width: min(260px, calc(100vw - 16px)); max-width: calc(100vw - 16px);
   }
   .uiMenuItem { min-height: 44px; }
-  .mpop, .mpop.withRail, .slPop, .uiMenu.rsnPop { width: calc(100vw - 16px); max-width: none; }
+  .mpop, .mpop.withRail, .mpop.agpop, .slPop, .uiMenu.rsnPop { width: calc(100vw - 16px); max-width: none; }
   .mpRail { width: 60px; padding: 4px; }
   .mpAgent { min-height: 56px; }
   .wformSelect { width: 100%; }

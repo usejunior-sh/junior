@@ -24,6 +24,7 @@ import os from 'node:os'
 import path from 'node:path'
 import type { LibraryEntry, LibraryKind, LibrarySource, LibraryTarget } from '../shared/protocol.js'
 import { readFields, slugName } from '../shared/skillFile.js'
+import { type ChatAgent, chatAgentFrom } from '../core/junior/agents.js'
 
 /** The plugin name the workspace library loads under, the `junior:` in `/junior:<skill>`. */
 export const WORKSPACE_PLUGIN = 'junior'
@@ -204,7 +205,29 @@ async function agentsIn(root: LibraryRoot): Promise<LibraryEntry[]> {
       ...(f.model ? { model: f.model } : {}),
       ...(f.color ? { color: f.color } : {}),
       ...(f.tools ? { tools: f.tools } : {}),
+      ...(/^(true|yes|on)$/i.test(f.chat ?? '') ? { chat: true } : {}),
     })
+  }
+  return out
+}
+
+/**
+ * The agents a chat can talk as: workspace and personal agent files with
+ * `chat: true`. The first of a name wins, the workspace before personal.
+ */
+export async function listChatAgents(roots: LibraryRoot[]): Promise<ChatAgent[]> {
+  const out: ChatAgent[] = []
+  for (const root of roots.filter((r) => r.source === 'workspace' || r.source === 'personal')) {
+    const base = path.join(root.dir, 'agents')
+    for (const n of (await entriesIn(base)).sort()) {
+      if (!n.endsWith('.md')) continue
+      const file = path.join(base, n)
+      if ((await isDirent(file)) !== 'file') continue
+      const text = await readHead(file)
+      const slug = n.slice(0, -3)
+      const a = chatAgentFrom(text, { name: called(root, readFields(text).name || slug), slug, path: file, scope: root.label })
+      if (a && !out.some((o) => o.label.toLowerCase() === a.label.toLowerCase())) out.push(a)
+    }
   }
   return out
 }

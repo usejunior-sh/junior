@@ -245,6 +245,7 @@ export function LibraryTab({ kind, refreshNonce }: { kind: LibraryKind; refreshN
 function EntryMeta({ e }: { e: LibraryEntry }) {
   return (
     <>
+      {e.kind === 'agent' && e.chat && <span className="lbChip" title="A chat can talk as this agent">chat</span>}
       {e.kind === 'agent' && e.color && (AGENT_COLORS as readonly string[]).includes(e.color) && (
         <span className="lbSwatch" style={{ background: AGENT_HEX[e.color as keyof typeof AGENT_HEX] }} aria-hidden="true" />
       )}

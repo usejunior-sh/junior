@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef, useCallback, type CSSProperties } from 'react'
+import { SessionAgentScope } from './chatAgents.js'
 import { useLogUnread } from './juniorLog.js'
 import type { TerminalSummary, WorkflowAgent, WorkflowRun } from '../../shared/protocol.js'
 import { CommandPalette } from './components/CommandPalette.js'
@@ -685,6 +686,7 @@ export function App() {
             ) : route.page === 'home' || route.page === 'settings' || route.page === 'goals' ? null : current ? (
               <div className={`sessRow${(teamRun && teamSide) || wf.sideRun ? ' withSide' : ''}${browserOpen ? ' withBrowser' : ''}`}>
               <div className="sessCol">
+              <SessionAgentScope agent={current.agent}>
                 <ChatHeader
                   current={current}
                   chatHeaderRef={chatHeaderRef}
@@ -799,6 +801,7 @@ export function App() {
                 )}
                 </>
                 )}
+              </SessionAgentScope>
               </div>
               {browserOpen && <BrowserPane key={current.id} tabKey={current.id} onTerminal={currentCheckout ? () => newTerminalIn(currentCheckout.id) : undefined} />}
               {wf.sideRun && (

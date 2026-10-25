@@ -117,6 +117,8 @@ export function ensureDurableSchema(db: DatabaseSync) {
   // session can address it; and the session that started it, when one did (start_session).
   ensure('sessions', 'name', 'name TEXT', s)
   ensure('sessions', 'started_by', 'started_by TEXT', s)
+  // The chat agent (a Settings → Agents file with `chat: true`) the session talks as, fixed at creation.
+  ensure('sessions', 'agent', 'agent TEXT', s)
   db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_sessions_name ON sessions(name COLLATE NOCASE) WHERE name IS NOT NULL')
 
   const w = cols('jobs')

@@ -61,6 +61,10 @@ export type SessionExtras = {
   strictMcpConfig?: boolean
   /** plain MCP server configs passed through (e.g. the user's chrome-devtools for a browser-allowed agent) */
   externalMcp?: Record<string, Record<string, unknown>>
+  /** the only skills the session loads (a chat agent's `skills` line) */
+  skills?: string[]
+  /** the model when the row has none (a chat agent's `model`) */
+  model?: string
 }
 
 // Live session: one running Claude subprocess bound to a stored session row.
@@ -161,7 +165,8 @@ export class LiveSession {
       ...(rt.envFor(row.provider) ? { env: rt.envFor(row.provider) } : {}),
       // Omitted when the user never picked: Claude Code's own default is a
       // real choice (an org can move it), not a model we should pin here.
-      ...(row.model ? { model: row.model } : {}),
+      ...(row.model ? { model: row.model } : extras.model ? { model: extras.model } : {}),
+      ...(extras.skills ? { skills: extras.skills } : {}),
       ...(row.effort ? { effort: row.effort } : {}),
       // Fast mode: the same model at up to ~2.5x output speed, priced higher.
       // Set at spawn and cleared, not set false, when turned off (see setFastMode).

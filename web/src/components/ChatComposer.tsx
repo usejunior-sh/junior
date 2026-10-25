@@ -1,4 +1,7 @@
 import * as RadioGroup from '@radix-ui/react-radio-group'
+import type { ChatAgent } from '../../../core/junior/agents.js'
+import { AgentPicker } from './AgentPicker.js'
+import { useChatAgent } from '../chatAgents.js'
 import { CalendarCheck, Check, Folder, GitBranch, LoaderCircle, Plus, Repeat, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import {
@@ -101,6 +104,8 @@ export type NewSession = {
   mode?: SessionMode
   /** The agent the session runs on for life; absent = Claude. */
   provider?: ProviderId
+  /** The chat agent it talks as (`junior:explainer`); absent = plain Junior. */
+  agent?: string
   images?: ImageAttachment[]
   /** upload ids of files attached to the first message */
   files?: string[]
@@ -116,7 +121,7 @@ export type NewSession = {
 type Props = {
   /** The draft this tab edits; text and folder round-trip through it so they survive a tab switch. */
   draft: Draft
-  onChange: (patch: { text?: string; cwd?: string; label?: string; checkoutId?: string; newBranch?: string }) => void
+  onChange: (patch: { text?: string; cwd?: string; label?: string; checkoutId?: string; newBranch?: string; agent?: string }) => void
   onCreate: (s: NewSession) => void
   /** the last send failed (e.g. the worktree couldn't be made). A new object per failure */
   error?: { message: string } | null
@@ -144,6 +149,10 @@ export type ComposerTop = {
   /** a dispatched item's draft */
   dispatched: boolean
   onClaude: boolean
+  /** the chat agent picked in the box, so the big face wears its colour and tag */
+  agent: ChatAgent | null
+  /** back to plain Junior */
+  clearAgent: () => void
 }
 
 const STEPS: { step: CreateStep; label: (branch: string) => string }[] = [
@@ -258,6 +267,10 @@ export function ChatComposer({ draft, onChange, onCreate, error, step, top, plac
   const [provider, setProvider] = useState<ProviderId>('claude')
   const onClaude = provider === 'claude'
   const persona = usePersona()
+  // Who it talks to: plain Junior or one of its agents, for this chat's whole life. On the draft,
+  // so the big face over the box (the greeting, the Junior page) wears it too and a tab switch keeps it.
+  const agentInfo = useChatAgent(draft.agent)
+  const setAgent = (agent: string | undefined) => onChange({ agent })
 
   // A pasted job recipe turns the box into a job chat (job-recipe-ui); the server frames it before the model reads it.
   // "Not a recipe" sends this draft as a plain message instead, until the box is emptied.
@@ -347,8 +360,8 @@ export function ChatComposer({ draft, onChange, onCreate, error, step, top, plac
   }, [cwd])
 
   return (
-    <div id={id} className={`chatComposer${onClaude ? ' junior' : ''}`} style={{ '--junior': persona.colour } as CSSProperties}>
-      {top?.({ mood, look, handoff, job, goal, dispatched: !!draft.label, onClaude })}
+    <div id={id} className={`chatComposer${onClaude ? ' junior' : ''}`} style={{ '--junior': agentInfo?.colour ?? persona.colour } as CSSProperties}>
+      {top?.({ mood, look, handoff, job, goal, dispatched: !!draft.label, onClaude, agent: onClaude && !job ? agentInfo : null, clearAgent: () => setAgent(undefined) })}
       {draft.itemId && canPick && mainCo && !goal && (
         <div className="runIn">
           <span className="lbl" id={`runin-${draft.id}`}>
@@ -431,7 +444,7 @@ export function ChatComposer({ draft, onChange, onCreate, error, step, top, plac
           onClaude
             ? (hover) => (
                 <>
-                  <JuniorFace mood={hover ? 'listen' : 'hello'} size={18} motion="wander" look={{ x: 0, y: 0 }} decorative />
+                  <JuniorFace mood={hover ? 'listen' : 'hello'} size={18} motion="wander" look={{ x: 0, y: 0 }} colour={agentInfo?.colour ?? undefined} decorative />
                   <span>Send</span>
                   <kbd aria-hidden="true">↵</kbd>
                 </>
@@ -460,6 +473,7 @@ export function ChatComposer({ draft, onChange, onCreate, error, step, top, plac
               fastMode: onClaude && fastMode,
               ...(onClaude && !job && mode !== 'normal' ? { mode } : {}),
               ...(onClaude ? {} : { provider }),
+              ...(onClaude && !job && agentInfo ? { agent: agentInfo.name } : {}),
               images,
               ...(files ? { files } : {}),
               mentions,
@@ -499,7 +513,7 @@ export function ChatComposer({ draft, onChange, onCreate, error, step, top, plac
           setFastMode(on)
           writeSessionDefaults({ fastMode: on })
         }}
-        {...(job ? {} : { mode, onModeChange: setMode })}
+        {...(job ? {} : { mode, onModeChange: setMode, agentPicker: <AgentPicker agent={draft.agent} onChange={setAgent} /> })}
       />
       {recipe && job && !making && (
         <div className="nsPull nsRecipe" role="note" aria-label="Recipe detected">

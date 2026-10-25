@@ -5,6 +5,7 @@
  * it." when you send.
  * A connected agent (Codex) gets a plain heading instead.
  */
+import { AgentEyebrow } from './AgentEyebrow.js'
 import { useEffect, useMemo, useState, type ComponentProps } from 'react'
 import { sessionAsk } from '../../../core/junior/greeting.js'
 import { usePersona, useYouName } from '../junior.js'
@@ -62,8 +63,9 @@ function Greeting({ s }: { s: ComposerTop }) {
         // Junior is Claude here: it asks, its face beside the line, and the face reacts to you.
         <div className={`nsWho${s.handoff ? ' handoff' : ''}`}>
           <span className="nsFace">
-            <JuniorHalo mood={s.mood} spin={s.mood === 'working'} look={s.look} />
+            <JuniorHalo mood={s.mood} spin={s.mood === 'working'} look={s.look} agent={s.agent} />
           </span>
+          <AgentEyebrow agent={s.agent} onClear={s.clearAgent} />
           <h2 className="nsLine" aria-label={s.handoff ? 'On it.' : `${greet} ${question}`}>
             <span aria-hidden="true">
               {s.handoff ? (

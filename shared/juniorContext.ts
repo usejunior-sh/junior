@@ -380,4 +380,11 @@ a skill is <dir>/skills/<name>/SKILL.md (frontmatter: name, description; then th
 is <dir>/agents/<name>.md (frontmatter: name, description, optional tools and model; then its system prompt).
 Put it where the user says. With no preference: this workspace's library, ${root} (its skills load as
 /junior:<name> in this workspace's sessions); ~/.claude for "personal" or "everywhere"; <project>/.claude for
-one repo. Junior reloads skills and agents in every open session once your turn ends, so it is usable at once.`
+one repo. Junior reloads skills and agents in every open session once your turn ends, so it is usable at once.
+
+An agent the user wants to chat with ("a debugger I can talk to", "an explainer persona") is a chat agent:
+an agent file with \`chat: true\`, a short \`label\` (shown as "<your name> · <label>"), a \`color\` (blue,
+green, red, yellow, cyan, pink or purple, never orange: orange means "needs you"), optional \`skills\` (the
+only skills it loads, comma-separated) and \`tools\` (built-in tools it keeps). It is still you, with the same
+rules; its prompt only narrows how you work. Put it in the workspace library unless the user says otherwise.
+It shows up in the new chat composer's agent chip and in Settings → Agents.`

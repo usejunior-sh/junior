@@ -185,6 +185,8 @@ export type SessionSpec = {
   title?: string
   /** local plugin folders to load (the workspace's skills and agents); adapters without plugins ignore it */
   plugins?: string[]
+  /** the only skills the session loads, by name or `:name` suffix; omitted = every one */
+  skills?: string[]
   /** a veto on every call, before any mode or allow rule (a held action, in a job run or a team worker) */
   veto?: ToolVeto
   /** keep file checkpoints per user turn, so rewindFiles can put files back (needs the `fileCheckpoints` capability) */

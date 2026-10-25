@@ -1,4 +1,6 @@
 import { Globe } from 'lucide-react'
+import { useScopedAgent } from '../chatAgents.js'
+import { JuniorFace } from '../components/JuniorFace.js'
 import { type RefObject, useState, useEffect } from 'react'
 import type { SessionStatus, SessionSummary } from '../../../shared/protocol.js'
 import { useChanges } from '../changesStore.js'
@@ -140,6 +142,7 @@ export function ChatHeader({
         </AgentsMenu>
       )}
       <ArtifactsMenu sessionId={current.id} onNavigate={onNavigate} />
+      <AgentTag />
       {!mobile && <BrowserButton sessionId={current.id} open={browserOpen} />}
       <SessionCost sessionId={current.id} status={current.status} workflows={current.workflows} />
       <span className={`state ${shown.status}`} title={shown.title}>
@@ -155,6 +158,18 @@ export function ChatHeader({
         {STATUS_LABEL[shown.status]}
       </span>
     </div>
+  )
+}
+
+/** Who this chat talks as, when it's one of Junior's agents: its face and "Junior · Reviewer". */
+function AgentTag() {
+  const { agent, colour, name } = useScopedAgent()
+  if (!agent) return null
+  return (
+    <span className="agentTag" title={agent.description || name}>
+      <JuniorFace size={16} motion="still" colour={colour} decorative />
+      {name}
+    </span>
   )
 }
 

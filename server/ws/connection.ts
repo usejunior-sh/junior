@@ -1,4 +1,5 @@
 import path from 'node:path'
+import { chatAgentNamed } from '../chat-agents.js'
 import { chatPermissionMode } from '../../core/actions/policy.js'
 import http from 'node:http'
 import { WebSocket } from 'ws'
@@ -100,6 +101,8 @@ export function handleConnection(ws: WebSocket, req: http.IncomingMessage): void
               provider: msg.provider,
               planning: msg.mode === 'plan' && (msg.provider ?? 'claude') === 'claude',
               ultracode: msg.mode === 'ultracode' && (msg.provider ?? 'claude') === 'claude',
+              // A chat agent is Claude's too, and must be one this workspace offers.
+              agent: (msg.provider ?? 'claude') === 'claude' ? (await chatAgentNamed(rt, msg.agent))?.name : undefined,
             },
           )
           // Dispatched from an item: the link is what the item page shows as "sessions".

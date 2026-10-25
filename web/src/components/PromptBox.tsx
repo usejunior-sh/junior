@@ -62,6 +62,8 @@ type Props = {
   /** How a new chat works (Solo / Ultracode), new sessions only; with it, Shift+Tab cycles this. */
   mode?: SessionMode
   onModeChange?: (mode: SessionMode) => void
+  /** Who the new chat talks to: the agent chip, before the model (new Claude sessions only). */
+  agentPicker?: ReactNode
   /** Status chips where the mode picker would be: a running session's "Planning" and "Ultracode". */
   status?: ReactNode
   /** A turn is in flight: offer the interrupt button. */
@@ -123,6 +125,7 @@ export function PromptBox({
   onFastModeChange,
   mode,
   onModeChange,
+  agentPicker,
   status,
   running,
   onInterrupt,
@@ -550,6 +553,7 @@ export function PromptBox({
           >
             {headBelow ? <Plus aria-hidden="true" /> : <Paperclip aria-hidden="true" />}
           </button>
+          {(provider ?? 'claude') === 'claude' && agentPicker}
           <ModelPopover
             model={model}
             effort={effort}

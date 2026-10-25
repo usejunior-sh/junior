@@ -13,6 +13,8 @@
  * with Up next, Reviews and My PRs as filter pills inside them. Off, the page
  * is as it was.
  */
+import { AgentEyebrow } from './AgentEyebrow.js'
+import { useChatAgent } from '../chatAgents.js'
 import * as Dialog from '@radix-ui/react-dialog'
 import * as RadioGroup from '@radix-ui/react-radio-group'
 import * as Tabs from '@radix-ui/react-tabs'
@@ -129,6 +131,9 @@ function useItems(): { items: ScoredItem[]; loaded: boolean } {
 export function JuniorPage({ onNavigate, onDispatch, onCreate, createError, createStep, initialTab }: Props) {
   const workspaceId = useWorkspaceId()
   const persona = usePersona()
+  // The box's picked agent (on its draft): the big face wears its colour and a name tag.
+  const homeDraft = useHomeDraft()
+  const homeAgent = useChatAgent(homeDraft?.agent)
   const win = useAwayWindow(workspaceId)
   const { day, error, reload } = useJuniorDay(win)
   const { items, loaded } = useItems()
@@ -252,13 +257,13 @@ export function JuniorPage({ onNavigate, onDispatch, onCreate, createError, crea
   }
 
   return (
-    <div className="jhPage" ref={pageRef} style={{ '--junior': persona.colour } as CSSProperties}>
+    <div className="jhPage" ref={pageRef} style={{ '--junior': homeAgent?.colour ?? persona.colour } as CSSProperties}>
       <div className="jhGlow" aria-hidden="true" />
       <header className="jhTop">
         <Menu>
           <MenuTrigger asChild>
             <button type="button" className="jhFaceBtn" title={`${persona.name}: customize, what I can see, what I can do`}>
-              <JuniorHalo mood={mood} spin={spin} />
+              <JuniorHalo mood={mood} spin={spin} agent={homeAgent} />
               <span className="hint" aria-hidden="true">
                 Click me
               </span>
@@ -266,6 +271,7 @@ export function JuniorPage({ onNavigate, onDispatch, onCreate, createError, crea
           </MenuTrigger>
           <FaceMenu day={day} onSheet={setSheet} />
         </Menu>
+        <AgentEyebrow agent={homeAgent} onClear={homeDraft ? () => draftStore.update(homeDraft.id, { agent: undefined }) : undefined} />
         <h1 className="jhHello" aria-live="polite">
           {head ? `${head.greet} ${head.news}` : persona.name}
         </h1>
