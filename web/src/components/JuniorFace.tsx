@@ -7,7 +7,7 @@
  *
  * Motion: `follow` tracks the pointer (the Junior page only), `wander`
  * glances and blinks, `still` moves only when the mood changes (the rail).
- * Reduced motion turns all of it off. Below 32px the eye highlights go and
+ * Reduced motion turns all of it off. Below 20px the eye highlights go and
  * the eyes and mouth draw a little bigger, so the face survives at 16px.
  *
  * React renders the skeleton once; one shared animation frame loop moves
@@ -304,7 +304,7 @@ export const JuniorFace = memo(function JuniorFace({ mood = 'hello', size = 40, 
   const ctl = useRef<FaceCtl | null>(null)
   const p = facePalette(colour ?? persona.colour)
   const body = shapePaths(shape ?? persona.shape)
-  const small = size < 32
+  const small = size < 20
   // Lines in viewBox units, never thinner than about one screen pixel.
   const line = 112 / size
 
