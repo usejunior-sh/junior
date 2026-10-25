@@ -38,6 +38,7 @@ import { ToolCard } from './ToolCard.js'
 import { ArtifactCard } from './ArtifactCard.js'
 import { BrowserShots } from './BrowserShots.js'
 import { FileChip } from './AttachmentStrip.js'
+import { ZoomableImage } from './ImageLightbox.js'
 import { ToolGroup } from './ToolGroup.js'
 import { ActionNotes } from './ActionCard.js'
 import { RuleCards } from './RuleCard.js'
@@ -608,7 +609,7 @@ const Item = memo(function Item({
           {item.images && item.images.length > 0 && (
             <div className="msgImages">
               {item.images.map((img, i) => (
-                <img
+                <ZoomableImage
                   key={i}
                   src={`data:${img.mediaType};base64,${img.data}`}
                   alt={img.name ?? 'Attached image'}

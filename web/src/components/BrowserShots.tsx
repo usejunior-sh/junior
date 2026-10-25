@@ -6,11 +6,10 @@
  * as its own line.
  */
 import { useState } from 'react'
-import * as Dialog from '@radix-ui/react-dialog'
-import { X } from 'lucide-react'
 import { BROWSER_SHOT_RE } from '../../../shared/protocol.js'
 import { profileById, shotSrc, useBrowserProfiles } from '../browser.js'
 import { ProfileDot } from './browser/ProfileMenu.js'
+import { ImageLightbox } from './ImageLightbox.js'
 import type { TranscriptItem } from '../transcript.js'
 
 type Shot = { key: string; n: number; caption: string }
@@ -88,18 +87,12 @@ export function BrowserShots({ sessionId, tools }: { sessionId: string; tools: r
           </button>
         ))}
       </div>
-      <Dialog.Root open={!!open} onOpenChange={(o) => !o && setOpen(null)}>
-        <Dialog.Portal>
-          <Dialog.Overlay className="shotOverlay" />
-          <Dialog.Content className="shotLightbox" aria-describedby={undefined}>
-            <Dialog.Title className="shotLbTitle mono">{open ? `#${open.n}${open.caption ? ` · ${open.caption}` : ''}` : ''}</Dialog.Title>
-            <Dialog.Close className="btn sm ghost icon shotLbClose" aria-label="Close">
-              <X size={14} aria-hidden="true" />
-            </Dialog.Close>
-            {open && <img src={shotSrc(sessionId, open.n)} alt={open.caption || `Browser screenshot ${open.n}`} />}
-          </Dialog.Content>
-        </Dialog.Portal>
-      </Dialog.Root>
+      <ImageLightbox
+        src={open ? shotSrc(sessionId, open.n) : null}
+        alt={open ? open.caption || `Browser screenshot ${open.n}` : ''}
+        title={open ? `#${open.n}${open.caption ? ` · ${open.caption}` : ''}` : ''}
+        onClose={() => setOpen(null)}
+      />
     </>
   )
 }
