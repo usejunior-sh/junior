@@ -53,7 +53,7 @@ export function ChatFace({ mood, size, say, onClick }: { mood: Mood; size: numbe
       aria-label={onClick && say ? (typeof say === 'string' ? say : `${say.line}. ${say.sub ?? ''}`) : undefined}
       onKeyDown={onClick ? (e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), onClick()) : undefined}
     >
-      <JuniorFace mood={hover && mood === 'done' ? 'done' : chatMood(mood)} size={size} motion={seen ? 'follow' : 'still'} reach={1.2} features={1.3} colour={colour} decorative />
+      <JuniorFace mood={hover && mood === 'done' ? 'done' : chatMood(mood)} size={size} motion={seen ? 'follow' : 'still'} reach={1.2} colour={colour} decorative />
     </span>
   )
   if (!say) return face
