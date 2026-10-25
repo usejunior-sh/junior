@@ -404,6 +404,10 @@ body.bpResizing, body.bpResizing * { cursor: col-resize !important; user-select:
 .shotLightbox img { max-width: 100%; min-height: 0; flex: 1; object-fit: contain; border-radius: var(--r); border: 1px solid var(--hair-strong); }
 .shotLbTitle { margin: 0; font-size: 0.8462rem; font-weight: 400; color: var(--mute); }
 .shotLbClose { position: absolute; top: 0; right: 0; }
+/* ZoomableImage: a thumbnail that opens ImageLightbox; the button adds no box of its own. */
+.imgZoom { all: unset; display: block; cursor: zoom-in; }
+.imgZoom:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; border-radius: var(--r-sm); }
+.attachments .thumb .imgZoom { width: 100%; height: 100%; }
 .teamSideBtn.on { color: var(--ink); background: var(--elev); }
 .swatch.sys { background: none; border: 1px dashed var(--ash); }
 

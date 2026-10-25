@@ -1,6 +1,7 @@
 import { FileText, LoaderCircle, X } from 'lucide-react'
 import type { Mention } from '../../../shared/protocol.js'
 import { fileSize } from '../attachments.js'
+import { ZoomableImage } from './ImageLightbox.js'
 import { MentionChip } from './MentionPicker.js'
 
 /**
@@ -57,7 +58,7 @@ export function AttachmentStrip({ images, files = [], mentions = [], error, onRe
         <div className="thumbs">
           {images.map((img) => (
             <div className="thumb" key={img.id}>
-              <img src={img.url} alt={img.name ?? 'Attached image'} />
+              <ZoomableImage src={img.url} alt={img.name ?? 'Attached image'} title={img.name} />
               <button
                 className="drop"
                 onClick={() => onRemove(img.id)}

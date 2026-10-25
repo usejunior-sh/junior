@@ -11,6 +11,7 @@ import { withWorkspace } from '../workspaceUrl.js'
 import { MAX_SERIES, SERIES, OTHER_KEY, OTHER } from '../usageFormat.js'
 import { useAttachments } from '../attachments.js'
 import { AttachmentStrip, FileChip } from './AttachmentStrip.js'
+import { ZoomableImage } from './ImageLightbox.js'
 import { useSessions, useCheckouts } from '../hooks.js'
 import { useInbox, inboxStore } from '../inboxStore.js'
 import { useBriefs, briefStore, briefPill } from '../briefStore.js'
@@ -630,16 +631,13 @@ export function ItemPage({ id, onDispatch, onNavigate, onDirty }: Props) {
               {item.images && item.images.length > 0 && (
                 <div className="descShots">
                   {item.images.map((img) => (
-                    <a
+                    <ZoomableImage
                       key={img.id}
                       className="shot"
-                      href={withWorkspace(itemImageUrl(item.id, img.id))}
-                      target="_blank"
-                      rel="noreferrer"
-                      title={img.name ?? 'Open full size'}
-                    >
-                      <img src={withWorkspace(itemImageUrl(item.id, img.id))} alt={img.name ?? 'Attached screenshot'} />
-                    </a>
+                      src={withWorkspace(itemImageUrl(item.id, img.id))}
+                      alt={img.name ?? 'Attached screenshot'}
+                      title={img.name}
+                    />
                   ))}
                 </div>
               )}
