@@ -289,7 +289,9 @@ export class LiveSession {
           // Take it rather than make the composer pay for its own probe.
           void this.refreshCommands()
           this.checkUltracode(ev.tools)
-          this.setStatus('idle')
+          // init opens every turn, after the message that made it running.
+          // Only a spawn with nothing sent yet settles to idle here.
+          if (this.status === 'starting') this.setStatus('idle')
         }
         // Skills can be discovered mid-run (the agent walks into a subdirectory
         // with its own). The contract is replace-don't-merge.
