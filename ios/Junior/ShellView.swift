@@ -138,6 +138,17 @@ struct ShellView: UIViewRepresentable {
                 DispatchQueue.main.async { self.onUnpaired() }
                 return
             }
+            // Any other error page in place of Junior (a dead ngrok address, a quota hit, a
+            // proxy down): offer Try again and Pair again instead of leaving the user on it.
+            if response.isForMainFrame, let http = response.response as? HTTPURLResponse, http.statusCode >= 400 {
+                decisionHandler(.cancel)
+                let code = http.value(forHTTPHeaderField: "ngrok-error-code").map { ", \($0)" } ?? ""
+                let host = http.url?.host ?? "your Mac"
+                DispatchQueue.main.async {
+                    self.model.failure = "\(host) answered with an error (HTTP \(http.statusCode)\(code)). If your Mac’s address changed, pair again with the new QR code."
+                }
+                return
+            }
             decisionHandler(.allow)
         }
 

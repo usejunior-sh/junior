@@ -11,7 +11,7 @@ settings:
     CURRENT_PROJECT_VERSION: "1"
     CODE_SIGN_STYLE: Automatic
     # Set your own team in Xcode (Signing & Capabilities), or here, before running on a device.
-    DEVELOPMENT_TEAM: ""
+    DEVELOPMENT_TEAM: 9L823597V5
 targets:
   Junior:
     type: application
