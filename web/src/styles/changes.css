@@ -336,3 +336,10 @@
 .phonePop .phoneCode { margin: 0; padding: 0 15px 6px; }
 .phonePop .phoneCode .row { padding: 8px 12px; }
 .phonePop .phoneCode .digits { font-size: 1.4rem; }
+.phoneReach { align-items: stretch; }
+.phoneReach .reachCard { justify-content: center; white-space: nowrap; }
+.phonePop .tunnelLine { gap: 7px; }
+.phonePop .tunnelUp .tunnelLine { margin-bottom: 6px; }
+.phonePop .tunnelUp { padding-top: 0; }
+.phonePop .tunnelUp .tunnelLine { padding: 0; }
+.phonePop .mcpSnip code { font-size: 0.7692rem; overflow-wrap: anywhere; }

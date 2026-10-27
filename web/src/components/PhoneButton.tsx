@@ -181,8 +181,7 @@ function PairSection({
           <QrCode text={`${ts.url}/api/pair?token=${encodeURIComponent(status.token)}`} />
         </div>
         <p className="phonePopHint">
-          Scan in the Junior iPhone app, on Wi-Fi or mobile data. A camera opens it in Safari instead, where ngrok shows a one-time
-          page: tap <b>Visit Site</b>. Keep this Mac awake, or the address stops answering.
+          Scan in the Junior iPhone app. A camera opens Safari instead, where ngrok shows a page: tap <b>Visit Site</b>. Keep this Mac awake.
         </p>
       </div>
     )
@@ -196,8 +195,7 @@ function PairSection({
         <QrCode text={pairUrl} />
       </div>
       <p className="phonePopHint">
-        Scan in the Junior iPhone app, on the same Wi-Fi as this Mac. Nothing loads? Check that macOS Firewall lets <b>node</b>{' '}
-        accept incoming connections.
+        Scan in the Junior iPhone app, on the same Wi-Fi. Nothing loads? Let <b>node</b> accept incoming connections in the macOS Firewall.
       </p>
       {hosts.length > 1 && (
         <div className="phonePopRow">
@@ -247,14 +245,14 @@ function TunnelLine({ status, onRetry }: { status: Local['tunnelStatus']; onRetr
   if (status.state === 'starting')
     return (
       <p className="tunnelLine">
-        <span className="dot live" aria-hidden="true" /> Starting ngrok — your public address appears here in a moment…
+        <span className="dot live" aria-hidden="true" /> Starting ngrok…
       </p>
     )
   if (status.state === 'up')
     return (
       <div className="tunnelUp">
         <p className="tunnelLine">
-          <span className="dot green" aria-hidden="true" /> Live — this address leads to this Mac from anywhere:
+          <span className="dot green" aria-hidden="true" /> Live, reachable from anywhere
         </p>
         <Snippet label="public address" text={status.url} />
       </div>
