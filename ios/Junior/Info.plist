@@ -22,7 +22,7 @@
 	<string>1</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
-		<key>NSAllowsArbitraryLoadsInWebContent</key>
+		<key>NSAllowsArbitraryLoads</key>
 		<true/>
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
@@ -31,6 +31,14 @@
 	<string>Junior scans the QR code on your Mac to pair this phone.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Junior talks to the copy of Junior running on your Mac, on your Wi-Fi.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Junior attaches the photos you pick to your message.</string>
+	<key>UIAppFonts</key>
+	<array>
+		<string>Geist.ttf</string>
+		<string>GeistMono.ttf</string>
+		<string>InstrumentSerif-Regular.ttf</string>
+	</array>
 	<key>UILaunchScreen</key>
 	<dict>
 		<key>UIColorName</key>

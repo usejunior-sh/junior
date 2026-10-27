@@ -2,7 +2,7 @@ name: Junior
 options:
   bundleIdPrefix: sh.usejunior
   deploymentTarget:
-    iOS: "16.0"
+    iOS: "17.0"
   createIntermediateGroups: true
 settings:
   base:
@@ -37,6 +37,12 @@ targets:
         UIStatusBarStyle: UIStatusBarStyleLightContent
         NSCameraUsageDescription: Junior scans the QR code on your Mac to pair this phone.
         NSLocalNetworkUsageDescription: Junior talks to the copy of Junior running on your Mac, on your Wi-Fi.
+        # The Mac answers on a LAN address over plain http; ngrok is https.
         NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true
           NSAllowsLocalNetworking: true
-          NSAllowsArbitraryLoadsInWebContent: true
+        UIAppFonts:
+          - Geist.ttf
+          - GeistMono.ttf
+          - InstrumentSerif-Regular.ttf
+        NSPhotoLibraryUsageDescription: Junior attaches the photos you pick to your message.

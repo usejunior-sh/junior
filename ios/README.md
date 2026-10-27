@@ -1,43 +1,49 @@
 # Junior for iPhone
 
-A thin native shell around Junior's own web UI. The Mac runs Junior; this app is the window onto it.
-It adds what a home-screen PWA cannot: a camera scan to pair, a saved pairing that survives iOS
-dropping cookies, a full-screen web view with no Safari chrome and no pinch zoom, and a reload when
-you come back after a while away (iOS freezes the socket while the app is in the background).
+A native SwiftUI client for the Junior running on your Mac. It speaks the same WebSocket and HTTP API
+as the browser (`shared/protocol/wire.ts`), so chats live on the Mac: one started here shows in the
+browser, and the other way round. No server changes, no third-party packages.
+
+- **Pair:** scan the QR code in the Mac's top-bar phone popover, or paste its link. The link
+  (`<mac>/api/pair?token=...`) is kept in the Keychain; the token rides every request as
+  `Authorization: Bearer`. A 401 sends the app back to the scanner.
+- **Workspaces:** the pill at the top left switches; the socket and every request carry `?workspace=`.
+- **Chats:** the list, a chat's newest page (older ones on request), live streaming, tool calls as one
+  line each (tap for input and result), permission prompts, questions and plans to approve, photos,
+  Stop. New chat: pick a project, write the first message.
+- **Artifacts:** read-only. Markdown rendered, html/svg in a web view, images and PDFs as themselves.
+- **Background:** iOS freezes the socket; coming back reconnects and the open chat re-subscribes.
+
+| File | What |
+|---|---|
+| `Client.swift` | the connection: socket, reconnects, workspace switch, HTTP |
+| `Transcript.swift` | the event log folded into rows (the essentials of `web/src/transcript.ts`) |
+| `ChatsView` · `ChatView` · `PromptCard` · `Composer` | chats |
+| `ArtifactsView` | artifacts |
+| `MarkdownText` | block markdown, inline through Foundation's parser |
+| `PairView` · `ScannerView` · `Pairing` | pairing and the Keychain |
 
 ## Run it
 
-You need Xcode. Free signing works, and the app expires after 7 days; a developer account lasts a year.
+You need Xcode, signed in with your Apple ID (Settings → Accounts). Free signing lasts 7 days.
 
 ```sh
-brew install xcodegen      # only to regenerate the project; the .xcodeproj is committed
-open ios/Junior.xcodeproj
+open ios/Junior.xcodeproj    # pick your iPhone, ⌘R
 ```
 
-1. Select the **Junior** target, Signing & Capabilities, and pick your Team.
-2. Plug in the iPhone, choose it as the run destination, press Run. Trust the developer profile on the
-   phone (Settings → General → VPN & Device Management) the first time.
-3. On the Mac, click the phone icon in Junior's top bar, switch **Allow other devices** on, and pick
-   *Same Wi-Fi* or *Anywhere*. In dev, start Vite with `JUNIOR_DEV_LAN=1 npm run dev`.
-4. Scan the QR code with the app. Allow Camera and Local Network when iOS asks.
-
-## How it works
-
-- The QR code is `<mac>/api/pair?token=...`. The app loads it in a `WKWebView`; the Mac answers with a
-  cookie and a redirect to Junior (`server/phone.ts`).
-- The link is kept in the Keychain. Every launch loads it again, so a dropped cookie re-pairs by itself.
-- A 401 from the Mac (token reset, access switched off) sends the app back to the scanner.
-- Links to other sites open in Safari. Two-finger long press: Reload, or Pair with another Mac.
-- The page gets a `nativeShell` class on `<html>` and `JuniorApp/0.1` in its user agent, for CSS or code
-  that must tell the app from a browser.
+On the Mac: the phone icon in Junior's top bar → switch on → scan.
 
 ## Simulator
 
-No camera there. Pair with a launch argument (debug builds only), from a signed build so the Keychain works:
+No camera there, and no taps from a script. Debug builds take launch arguments:
 
 ```sh
-xcrun simctl launch booted sh.usejunior.junior.phone -pairLink "http://<mac-ip>:5188/api/pair?token=<token>"
+xcrun simctl launch booted sh.usejunior.junior.phone -pairLink "http://<mac-ip>:5178/api/pair?token=<token>"
+xcrun simctl launch booted sh.usejunior.junior.phone -openChat <session-id>
+xcrun simctl launch booted sh.usejunior.junior.phone -tab artifacts -openArtifact first
 ```
+
+Build signed (`CODE_SIGN_IDENTITY=-`) so the Keychain works.
 
 ## Regenerate the project
 
