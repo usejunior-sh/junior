@@ -255,7 +255,7 @@ Settings → MCP shows the URL for the workspace you're in, and the one command 
 
 ## Privacy
 
-Everything runs on your Mac. Data lives in SQLite under `~/.junior`, one database per workspace. The server answers only this machine, unless you pair a phone in Settings → Phone. Sources go through your `gh` login and your claude.ai connectors. Junior, jobs and briefs spend your Claude or Codex plan, and the app shows what each one cost.
+Everything runs on your Mac. Data lives in SQLite under `~/.junior`, one database per workspace. The server answers only this machine, unless you pair a phone from the top bar. Sources go through your `gh` login and your claude.ai connectors. Junior, jobs and briefs spend your Claude or Codex plan, and the app shows what each one cost.
 
 ## Development
 

@@ -10,6 +10,7 @@ import type { ConnState } from '../store.js'
 import { Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from '../ui/Menu.js'
 import { basePath } from '../workspaceUrl.js'
 import { JuniorLogo } from './Logo.js'
+import { PhoneButton } from './PhoneButton.js'
 import { ProvidersButton } from './ProvidersButton.js'
 import { WaitingButton } from './WaitingButton.js'
 
@@ -160,6 +161,7 @@ function SystemIcons({
   return (
     <>
       <WaitingButton />
+      <PhoneButton />
       {/* a daemon from before providers sends none. It shows once that daemon restarts */}
       {workspace?.providers && <ProvidersButton workspace={workspace} />}
       <button type="button" className="topIcon" title={CONN_TITLE[conn]} onClick={() => onOpenSystem('status')}>

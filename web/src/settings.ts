@@ -28,7 +28,6 @@ export type SettingsTab =
   | 'themes'
   | 'sessions'
   | 'shortcuts'
-  | 'phone'
   | 'about'
 
 export type SettingsTabMeta = {
@@ -62,7 +61,6 @@ export const SETTINGS_TABS: ReadonlyArray<SettingsTabMeta> = [
   { id: 'themes', label: 'Themes', sub: 'Colour themes for the workbench — one for dark mode, one for light.', group: 'app' },
   { id: 'sessions', label: 'Chats', sub: 'Defaults for every new chat started from this browser.', group: 'app' },
   { id: 'shortcuts', label: 'Shortcuts', sub: 'Every key the workbench answers to.', group: 'app' },
-  { id: 'phone', label: 'Phone', sub: 'Use Junior from your phone — on the same Wi-Fi, or from anywhere. Pair it with a QR code.', group: 'app' },
   { id: 'about', label: 'About', sub: 'The daemon behind this page: version, ports, and where its data lives.', group: 'app' },
 ]
 

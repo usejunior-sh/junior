@@ -250,7 +250,7 @@ export function pairPageHtml(error?: string, codes = true): string {
   .err { color: #ff2047; }
 </style></head><body><main>
 <h1>Pair this device.</h1>
-<p>This is a junior running on your Mac. On the Mac, open <b>Settings → Phone</b> and scan the QR code with this device's camera.</p>
+<p>This is a junior running on your Mac. On the Mac, click the <b>phone icon</b> in the top bar and scan the QR code with this device's camera.</p>
 ${error ? `<p class="err">${error}</p>` : ''}
 ${codes ? CODE_FORM : ''}
 </main></body></html>`

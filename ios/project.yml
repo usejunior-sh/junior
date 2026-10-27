@@ -1,0 +1,42 @@
+name: Junior
+options:
+  bundleIdPrefix: sh.usejunior
+  deploymentTarget:
+    iOS: "16.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    CODE_SIGN_STYLE: Automatic
+    # Set your own team in Xcode (Signing & Capabilities), or here, before running on a device.
+    DEVELOPMENT_TEAM: ""
+targets:
+  Junior:
+    type: application
+    platform: iOS
+    sources:
+      - Junior
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: sh.usejunior.junior.phone
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        TARGETED_DEVICE_FAMILY: "1"
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: Junior/Info.plist
+    info:
+      path: Junior/Info.plist
+      properties:
+        CFBundleDisplayName: Junior
+        UILaunchScreen:
+          UIColorName: Canvas
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        UIUserInterfaceStyle: Dark
+        UIStatusBarStyle: UIStatusBarStyleLightContent
+        NSCameraUsageDescription: Junior scans the QR code on your Mac to pair this phone.
+        NSLocalNetworkUsageDescription: Junior talks to the copy of Junior running on your Mac, on your Wi-Fi.
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+          NSAllowsArbitraryLoadsInWebContent: true

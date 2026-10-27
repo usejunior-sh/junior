@@ -320,3 +320,19 @@
   .phoneQrCard { width: min(240px, 100%); align-self: center; }
 }
 
+
+/* top bar → phone popover: switch, where from, QR, code */
+.phonePop { width: 300px; }
+.phonePop .head .uiSwitch { margin-left: 4px; }
+.phonePopHint { margin: 0; padding: 0 15px 10px; font-size: 0.8846rem; line-height: 1.5; color: var(--mute); }
+.phonePopHint code { font-family: var(--mono); font-size: 0.8462rem; }
+.phonePopErr { margin: 6px 15px 8px; }
+.phoneReach { padding: 0 15px 10px; }
+.phoneReach .reachCard { padding: 8px 10px; }
+.phonePop .tunnelLine, .phonePop .tunnelUp { padding: 0 15px 8px; margin: 0; }
+.phonePopPair { display: flex; flex-direction: column; gap: 10px; padding: 4px 0 4px; border-top: 1px solid var(--hair); }
+.phonePopPair .phoneQrCard { width: 184px; align-self: center; margin-top: 10px; }
+.phonePopRow { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0 15px; font-size: 0.8846rem; color: var(--ash); }
+.phonePop .phoneCode { margin: 0; padding: 0 15px 6px; }
+.phonePop .phoneCode .row { padding: 8px 12px; }
+.phonePop .phoneCode .digits { font-size: 1.4rem; }

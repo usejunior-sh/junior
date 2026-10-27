@@ -4,7 +4,7 @@
     "web/src/components/JuniorFace.tsx": {
       "colours": 7
     },
-    "web/src/components/PhoneTab.tsx": {
+    "web/src/components/PhoneButton.tsx": {
       "colours": 2
     },
     "web/src/components/workspaceAuth.tsx": {

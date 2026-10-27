@@ -11,9 +11,9 @@ import type { RouteCtx } from './routes/ctx.js'
 import { readJsonBody } from './routes/http-util.js'
 import { errText } from './errors.js'
 
-/** Phone access (server/remote.ts): off until switched on in Settings → Phone. */
+/** Phone access (server/remote.ts): off until switched on from the top bar's Phone button. */
 export let remote = loadRemote()
-/** The 6-digit code Settings → Phone shows; memory only. A restart just mints another. */
+/** The 6-digit code the Phone popover shows; memory only. A restart just mints another. */
 let pairCode: PairCode | null = null
 /** Phone access from anywhere: the user's ngrok, run while access and "Anywhere" are both on. */
 export const tunnel = new NgrokTunnel((): void => {
