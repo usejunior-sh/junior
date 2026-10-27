@@ -31,6 +31,14 @@ open ios/Junior.xcodeproj
 - The page gets a `nativeShell` class on `<html>` and `JuniorApp/0.1` in its user agent, for CSS or code
   that must tell the app from a browser.
 
+## Simulator
+
+No camera there. Pair with a launch argument (debug builds only), from a signed build so the Keychain works:
+
+```sh
+xcrun simctl launch booted sh.usejunior.junior.phone -pairLink "http://<mac-ip>:5188/api/pair?token=<token>"
+```
+
 ## Regenerate the project
 
 `ios/project.yml` is the source. After changing it, or adding a Swift file: `cd ios && xcodegen generate`.

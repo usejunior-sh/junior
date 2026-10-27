@@ -2,7 +2,7 @@ import SwiftUI
 import WebKit
 
 struct RootView: View {
-    @State private var link: URL? = Keychain.load()
+    @State private var link: URL? = RootView.launchLink() ?? Keychain.load()
     @State private var notice: String?
     @StateObject private var model = ShellModel()
 
@@ -30,6 +30,18 @@ struct RootView: View {
             Button("Pair with another Mac", role: .destructive) { forget(notice: nil) }
             Button("Cancel", role: .cancel) {}
         }
+    }
+
+    /// Debug builds only: `-pairLink <url>` as a launch argument pairs without a camera
+    /// (the Simulator has none): `xcrun simctl launch <device> sh.usejunior.junior.phone -pairLink <url>`.
+    private static func launchLink() -> URL? {
+        #if DEBUG
+        if let text = UserDefaults.standard.string(forKey: "pairLink"), let url = Pairing.parse(text) {
+            Keychain.save(url)
+            return url
+        }
+        #endif
+        return nil
     }
 
     /// Drop the pairing: the saved link, and the cookie the Mac gave this phone.
