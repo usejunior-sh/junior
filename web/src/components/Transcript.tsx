@@ -78,7 +78,7 @@ type Props = {
   timeOf?: (ev: SessionEvent) => number | undefined
   /** Leave out the streaming line: the events aren't the session's main stream (a workflow agent's). */
   noLive?: boolean
-  /** An agent's DM: a turn ends in a short chat-style note under the reply ("done · 2.9s · $0.02"), not a ruled divider. */
+  /** An agent's DM: a turn ends in a short note under the reply ("done · 2.9s · 1 turn · $0.02"), shown on hover, not a ruled divider. */
   chat?: boolean
   /** A paged log (store.getPaging): where `events` starts in the whole log, and the older-page state. Unset = whole. */
   paging?: SessionPaging | null

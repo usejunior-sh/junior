@@ -96,8 +96,11 @@
 }
 /* A DM reads like a conversation: no opening inventory unless something broke. */
 .sessCol.dm #transcript details.init:not(.trouble) { display: none; }
-/* A turn ends in a short note tucked under the reply, like a chat's timestamp, not a ruled divider across the page. */
-.meta.chat { justify-content: flex-start; gap: 8px; margin-top: -8px; font-size: 0.7692rem; }
+/* A turn ends in a short note tucked under the reply, not a ruled divider across the page. Like a chat's
+   timestamp it stays out of the way: it shows while you hover the reply, or the note itself. */
+.meta.chat { justify-content: flex-start; gap: 8px; margin-top: -8px; font-size: 0.7692rem; opacity: 0; transition: opacity 0.15s; }
+#transcript .inner > :hover + .meta.chat, #transcript .inner > :hover + * + .meta.chat, .meta.chat:hover, .meta.chat:focus-within { opacity: 1; }
+@media (hover: none) { .meta.chat { opacity: 1; } }
 .meta.chat::before, .meta.chat::after { display: none; }
 .meta.chat .soDone::before { content: "✓ "; }
 .toolRail {

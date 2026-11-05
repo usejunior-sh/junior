@@ -617,14 +617,12 @@ export function initTrouble(servers: readonly { name: string; status: string }[]
 }
 
 /**
- * A DM's sign-off keeps what a person reading a chat cares about: how long it
- * took and what it cost, to the cent. The turn count is the model's own
- * bookkeeping, so it goes. "2.9s · 1 turn · $0.0197" → "2.9s · $0.02".
+ * A DM's sign-off, shown on hover under a reply: the cost to the cent, the
+ * rest as it is. "2.9s · 1 turn · $0.0197" → "2.9s · 1 turn · $0.02".
  */
 export function chatStats(stats: string): string {
   return stats
     .split(' · ')
-    .filter((p) => !/^\d+ turns?$/.test(p))
     .map((p) => (/^\$\d+\.\d+$/.test(p) ? `$${Math.max(Number(p.slice(1)), 0.01).toFixed(2)}` : p))
     .join(' · ')
 }
