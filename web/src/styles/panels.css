@@ -30,12 +30,12 @@
 .prow .stateMark.failed { color: var(--red); }
 .prow.wt > .lead { margin-top: 3px; }
 /* An agent on the Agents panel: its face, name and one line of what it does; its DM's age at rest. */
-.prow.agent { height: auto; padding-top: 7px; padding-bottom: 7px; align-items: flex-start; }
-.prow.agent > .lead { width: 18px; height: 18px; margin-top: 1px; }
+.prow.agent { height: auto; padding: 8px 10px; gap: 12px; align-items: center; border-radius: var(--r-lg); }
+.prow.agent > .lead { width: 36px; height: 36px; }
 .prow.agent .t { display: flex; flex-direction: column; gap: 2px; white-space: normal; min-width: 0; }
-.prow.agent .t .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.prow.agent .t .sub { color: var(--stone); font-size: 0.8462rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.prow.agent .stateMark, .prow.agent .age { margin-top: 3px; }
+.prow.agent .t .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); font-weight: 500; }
+.prow.agent .t .sub { color: var(--ash); font-size: 0.8846rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.prow.agent .stateMark, .prow.agent .age { align-self: flex-start; margin-top: 4px; }
 .prow.agent .age { flex: none; font: 400 10px/1 var(--mono); color: var(--stone); }
 .prow .nameMark { flex: none; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 400 10px/1 var(--mono); color: var(--stone); }
 .prow.wt .ucMark { margin-top: 1px; }

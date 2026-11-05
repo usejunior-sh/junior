@@ -14,6 +14,7 @@ import { usePersona } from '../junior.js'
 import { shownStatus } from '../sessionModes.js'
 import { PanelSearch } from './ContextPanel.js'
 import { JuniorFace } from './JuniorFace.js'
+import { useState } from 'react'
 
 type Props = {
   /** the DM key on screen (`junior`, `junior:explainer`) */
@@ -51,6 +52,8 @@ export function AgentsPanel({ current, onOpen, onPin, onSearch }: Props) {
 }
 
 function AgentRow({ row, dm, active, onOpen, onPin }: { row: Row; dm: SessionSummary | undefined; active: boolean; onOpen: () => void; onPin: () => void }) {
+  // Hovering a row wakes its face: the eyes follow your pointer, so the list feels like people, not files.
+  const [hover, setHover] = useState(false)
   // Waiting on you outranks working: the one orange in the list.
   const needs = dm ? needsYouText(dm) : null
   const shown = dm ? shownStatus(dm) : null
@@ -70,6 +73,8 @@ function AgentRow({ row, dm, active, onOpen, onPin }: { row: Row; dm: SessionSum
       title={[row.label, row.description, 'Double-click to keep it open as a tab'].filter(Boolean).join('\n')}
       onClick={onOpen}
       onDoubleClick={onPin}
+      onPointerEnter={() => setHover(true)}
+      onPointerLeave={() => setHover(false)}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault()
@@ -78,7 +83,7 @@ function AgentRow({ row, dm, active, onOpen, onPin }: { row: Row; dm: SessionSum
       }}
     >
       <span className="lead" aria-hidden="true">
-        <JuniorFace size={18} motion="still" colour={row.colour} decorative />
+        <JuniorFace size={36} motion={hover ? 'follow' : 'still'} colour={row.colour} decorative />
       </span>
       <span className="t">
         <span className="nm">{row.label}</span>
