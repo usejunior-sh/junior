@@ -170,18 +170,21 @@ export function OpenIn({
   checkout,
   newTerminalIn,
   align,
+  bare = false,
 }: {
   current: SessionSummary
   checkout: ReturnType<typeof checkoutOf>
   newTerminalIn: (checkoutId: string) => void
   align: 'start' | 'end'
+  /** a tooltip outside names it: no native title */
+  bare?: boolean
 }) {
   if (!checkout)
     return (
       <button
         type="button"
         className="ib"
-        title={`${homely(current.cwd)} · click to copy the path`}
+        title={bare ? undefined : `${homely(current.cwd)} · click to copy the path`}
         aria-label="Copy the folder path"
         onClick={() => void navigator.clipboard?.writeText(current.cwd).catch(() => {})}
       >
@@ -190,7 +193,7 @@ export function OpenIn({
     )
   return (
     <CheckoutMenu checkout={checkout} align={align} onNewTerminal={() => newTerminalIn(checkout.id)}>
-      <button type="button" className="ib" title={`Open in… · ${homely(checkout.path)}`} aria-label="Open in">
+      <button type="button" className="ib" title={bare ? undefined : `Open in… · ${homely(checkout.path)}`} aria-label="Open in">
         <Folder size={15} aria-hidden="true" />
       </button>
     </CheckoutMenu>
@@ -202,7 +205,7 @@ export function OpenIn({
  * where the browser lives). Once the chat uses a profile other than the
  * workspace's default, a small swatch sits on the icon and the tooltip names it.
  */
-export function BrowserButton({ sessionId, open, className = '' }: { sessionId: string; open: boolean; className?: string }) {
+export function BrowserButton({ sessionId, open, className = '', bare = false }: { sessionId: string; open: boolean; className?: string; /** a tooltip outside names it: no native title */ bare?: boolean }) {
   const tab = useBrowserTab(sessionId)
   const snap = useBrowserProfiles()
   const profile = profileById(snap, tab?.effectiveProfile)
@@ -212,11 +215,13 @@ export function BrowserButton({ sessionId, open, className = '' }: { sessionId: 
       type="button"
       className={`ib${className ? ` ${className}` : ''}${open ? ' on' : ''}`}
       title={
-        !hasBrowser
-          ? 'Browser · open Junior.app: the browser lives there.'
-          : open
-            ? 'Hide the browser'
-            : `Browser${profile ? ` · ${profile.name}` : ''}`
+        bare
+          ? undefined
+          : !hasBrowser
+            ? 'Browser · open Junior.app: the browser lives there.'
+            : open
+              ? 'Hide the browser'
+              : `Browser${profile ? ` · ${profile.name}` : ''}`
       }
       aria-label={open ? 'Hide the browser' : 'Show the browser'}
       aria-pressed={open}

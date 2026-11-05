@@ -4,8 +4,36 @@
  * native view hidden, so a dead dev server reads as ours, not Chromium's.
  */
 import { Globe, RotateCw } from 'lucide-react'
+import { useState } from 'react'
 import type { BrowserProfile } from '../../../../shared/protocol.js'
 import { pageErrorView, shortUrl } from '../../browserUrl.js'
+
+/**
+ * Ports a local dev server usually listens on (Vite, Next, Astro, Angular, Rails,
+ * Django, plain http servers). Junior's own (5178, 5188, 5189) are left out:
+ * opening Junior inside itself is never what you meant. So is 5000: on a Mac
+ * that's usually AirPlay, which answers too.
+ */
+export const DEV_PORTS = [5173, 5174, 3000, 3001, 4321, 4200, 8080, 8000, 3030] as const
+
+/**
+ * The first port that answers on localhost, or null. A no-cors request
+ * resolves on any answer and rejects on a refused connection, which is all
+ * we need to know; each try gives up after a short wait.
+ */
+async function findDevServer(): Promise<string | null> {
+  const probe = (port: number) =>
+    new Promise<string | null>((resolve) => {
+      const ctl = new AbortController()
+      const t = setTimeout(() => ctl.abort(), 800)
+      fetch(`http://localhost:${port}/`, { mode: 'no-cors', signal: ctl.signal })
+        .then(() => resolve(`http://localhost:${port}`))
+        .catch(() => resolve(null))
+        .finally(() => clearTimeout(t))
+    })
+  const found = await Promise.all(DEV_PORTS.map(probe))
+  return found.find(Boolean) ?? null
+}
 
 export function EmptyState({
   profile,
@@ -23,14 +51,30 @@ export function EmptyState({
   signin: boolean
   onOpen: (url: string) => void
 }) {
+  const [detect, setDetect] = useState<'idle' | 'looking' | 'none'>('idle')
+  const detectServer = async () => {
+    setDetect('looking')
+    const url = await findDevServer()
+    if (url) onOpen(url)
+    setDetect(url ? 'idle' : 'none')
+  }
   return (
     <div className="bpEmpty">
-      <p className="bpLead">Open a page</p>
+      <Globe size={22} className="bpGlobe" aria-hidden="true" />
+      <p className="bpLead">{signin ? 'Sign in here' : 'Browse with Junior'}</p>
       <p>
         {signin
           ? 'Type a URL above and sign in. Junior uses these logins when you name this profile.'
-          : 'Type a URL above, or pick one below. Junior opens pages here when it checks its work.'}
+          : 'Type a URL, or ask Junior to open a site. Junior can read, click and type.'}
       </p>
+      {!signin && (
+        <p className="bpDetect">
+          {detect === 'none' ? 'No dev server answered on the usual ports.' : 'Preview your app instead?'}{' '}
+          <button type="button" className="bpLink" disabled={detect === 'looking'} onClick={() => void detectServer()}>
+            {detect === 'looking' ? 'Looking…' : detect === 'none' ? 'Try again' : 'Detect dev server'}
+          </button>
+        </p>
+      )}
       {lastUrl && (
         <button type="button" className="btn ghost bpReopen" onClick={() => onOpen(lastUrl)}>
           <RotateCw size={13} aria-hidden="true" />

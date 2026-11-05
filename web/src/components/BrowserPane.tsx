@@ -16,26 +16,27 @@ import {
   ArrowDown,
   ArrowLeft,
   ArrowRight,
+  ArrowUp,
   Check,
   ClipboardCopy,
   Crosshair,
   Eraser,
   ExternalLink,
+  Globe,
   Laptop,
+  type LucideIcon,
   Monitor,
   Moon,
   MoreHorizontal,
   RotateCw,
-  Search,
   Scan,
+  Search,
   Smartphone,
   SquareTerminal,
   Sun,
   SunMoon,
   Tablet,
   X,
-  ArrowUp,
-  type LucideIcon,
 } from 'lucide-react'
 import { siteOf, profileOfSigninTab } from '../../../core/browser/profiles.js'
 import type { BrowserPickResponse } from '../../../shared/protocol.js'
@@ -302,16 +303,40 @@ export function BrowserPane({ tabKey, onClose, embedded = false, onTerminal }: P
   if (!browserBridge) {
     return (
       <aside className="browserPane" aria-label="Browser">
-        <div className="bpBar">
-          <span className="bpTitle">Browser</span>
+        {/* The same two rows as in Junior.app, at rest: the layout tells you what it does before it can. */}
+        <div className="bpTabsRow">
+          <div className="bpPages">
+            <div className="bpPageList">
+              <div className="bpPage" data-active>
+                <span className="bpPageTab">
+                  <span className="bpPageName">New tab</span>
+                </span>
+              </div>
+            </div>
+          </div>
           <span className="sp" />
           <button type="button" className="btn sm ghost icon" title="Close the browser" onClick={() => (onClose ? onClose() : browserPane.set(tabKey, false))}>
             <X size={14} aria-hidden="true" />
           </button>
         </div>
-        <div className="bpEmpty">
-          <p className="bpLead">The browser lives in Junior.app.</p>
-          <p>Open this chat there to watch Junior check its work.</p>
+        <div className="bpBar">
+          <button type="button" className="btn sm ghost icon bpNavBtn" title="Back" disabled>
+            <ArrowLeft size={14} aria-hidden="true" />
+          </button>
+          <button type="button" className="btn sm ghost icon bpNavBtn" title="Forward" disabled>
+            <ArrowRight size={14} aria-hidden="true" />
+          </button>
+          <button type="button" className="btn sm ghost icon" title="Reload" disabled>
+            <RotateCw size={14} aria-hidden="true" />
+          </button>
+          <span className="bpAddrIdle">Type a URL</span>
+        </div>
+        <div className="bpStage">
+          <div className="bpEmpty">
+            <Globe size={22} className="bpGlobe" aria-hidden="true" />
+            <p className="bpLead">The browser lives in Junior.app</p>
+            <p>Open this chat there to watch Junior read, click and type on a page.</p>
+          </div>
         </div>
       </aside>
     )
@@ -371,7 +396,29 @@ export function BrowserPane({ tabKey, onClose, embedded = false, onTerminal }: P
           {...split.handleProps}
         />
       )}
-      <div className="bpBar">
+      {/* Row 1: the pages it has open, then the pane's own tools. Row 2: where it is, and how to move. */}
+      <div className="bpTabsRow">
+        <Tabs.Root
+          className="bpPages"
+          value={String(tab?.pages.find((p) => p.key === tab.pageKey)?.n ?? 1)}
+          onValueChange={(v) => void pageAction('switch', Number(v))}
+        >
+          <Tabs.List className="bpPageList" aria-label="Pages">
+            {(tab?.pages.length ? tab.pages : [{ key: 'blank', n: 1, title: '', url }]).map((p) => (
+              <div key={p.key} className="bpPage" data-active={!tab?.pages.length || p.key === tab.pageKey || undefined}>
+                <Tabs.Trigger value={String(p.n)} className="bpPageTab" title={p.title || p.url || 'New tab'}>
+                  <span className="bpPageName">{!p.title && isBlank(p.url ?? '') ? 'New tab' : pageName(p.title, p.url)}</span>
+                </Tabs.Trigger>
+                {p.n > 1 && (
+                  <button type="button" className="bpPageClose" title={`Close page ${p.n}`} aria-label={`Close page ${p.n}`} onClick={() => void pageAction('close', p.n)}>
+                    <X size={11} aria-hidden="true" />
+                  </button>
+                )}
+              </div>
+            ))}
+          </Tabs.List>
+        </Tabs.Root>
+        <span className="sp" />
         {!chat ? (
           <ProfileChipStatic profile={profile} />
         ) : (
@@ -382,38 +429,6 @@ export function BrowserPane({ tabKey, onClose, embedded = false, onTerminal }: P
             onPick={(id) => void switchProfile(id)}
             onPress={freeze}
           />
-        )}
-        <button type="button" className="btn sm ghost icon bpNavBtn" title="Back" disabled={!state.canGoBack} onClick={() => browserBridge!.nav(view, 'back')}>
-          <ArrowLeft size={14} aria-hidden="true" />
-        </button>
-        <button type="button" className="btn sm ghost icon bpNavBtn" title="Forward" disabled={!state.canGoForward} onClick={() => browserBridge!.nav(view, 'forward')}>
-          <ArrowRight size={14} aria-hidden="true" />
-        </button>
-        <button
-          type="button"
-          className="btn sm ghost icon"
-          title={state.loading ? 'Stop' : 'Reload'}
-          disabled={!state.exists}
-          onClick={() => (error ? void open(error.url) : browserBridge!.nav(view, state.loading ? 'stop' : 'reload'))}
-        >
-          {state.loading ? <X size={14} aria-hidden="true" /> : <RotateCw size={14} aria-hidden="true" />}
-        </button>
-        {findOpen ? (
-          <FindBar tabKey={view} onClose={() => setFindOpen(false)} />
-        ) : (
-          <AddressField ref={address} url={shownUrl} onGo={(u) => void open(u)} />
-        )}
-        {chat && (
-          <button
-            type="button"
-            className={`btn sm ghost icon${picking ? ' on' : ''}`}
-            disabled={!state.exists}
-            title={picking ? 'Picking: click an element on the page (Esc cancels)' : 'Pick an element and hand it to the composer'}
-            aria-pressed={picking}
-            onClick={() => void pick()}
-          >
-            <Crosshair size={14} aria-hidden="true" />
-          </button>
         )}
         {!signin && (
         <Menu>
@@ -496,31 +511,42 @@ export function BrowserPane({ tabKey, onClose, embedded = false, onTerminal }: P
             <X size={14} aria-hidden="true" />
           </button>
         )}
+      </div>
+      <div className="bpBar">
+        <button type="button" className="btn sm ghost icon bpNavBtn" title="Back" disabled={!state.canGoBack} onClick={() => browserBridge!.nav(view, 'back')}>
+          <ArrowLeft size={14} aria-hidden="true" />
+        </button>
+        <button type="button" className="btn sm ghost icon bpNavBtn" title="Forward" disabled={!state.canGoForward} onClick={() => browserBridge!.nav(view, 'forward')}>
+          <ArrowRight size={14} aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          className="btn sm ghost icon"
+          title={state.loading ? 'Stop' : 'Reload'}
+          disabled={!state.exists}
+          onClick={() => (error ? void open(error.url) : browserBridge!.nav(view, state.loading ? 'stop' : 'reload'))}
+        >
+          {state.loading ? <X size={14} aria-hidden="true" /> : <RotateCw size={14} aria-hidden="true" />}
+        </button>
+        {findOpen ? (
+          <FindBar tabKey={view} onClose={() => setFindOpen(false)} />
+        ) : (
+          <AddressField ref={address} url={shownUrl} onGo={(u) => void open(u)} />
+        )}
+        {chat && (
+          <button
+            type="button"
+            className={`btn sm ghost icon${picking ? ' on' : ''}`}
+            disabled={!state.exists}
+            title={picking ? 'Picking: click an element on the page (Esc cancels)' : 'Pick an element and hand it to the composer'}
+            aria-pressed={picking}
+            onClick={() => void pick()}
+          >
+            <Crosshair size={14} aria-hidden="true" />
+          </button>
+        )}
         <Progress loading={!!state.loading} />
       </div>
-      {tab && tab.pages.length > 1 && (
-        <Tabs.Root
-          className="bpPages"
-          value={String(tab.pages.find((p) => p.key === tab.pageKey)?.n ?? 1)}
-          onValueChange={(v) => void pageAction('switch', Number(v))}
-        >
-          <Tabs.List className="bpPageList" aria-label="Pages">
-            {tab.pages.map((p) => (
-              <div key={p.key} className="bpPage" data-active={p.key === tab.pageKey || undefined}>
-                <Tabs.Trigger value={String(p.n)} className="bpPageTab" title={p.title || p.url || `Page ${p.n}`}>
-                  <span className="bpPageN mono">{p.n}</span>
-                  <span className="bpPageName">{pageName(p.title, p.url)}</span>
-                </Tabs.Trigger>
-                {p.n > 1 && (
-                  <button type="button" className="bpPageClose" title={`Close page ${p.n}`} aria-label={`Close page ${p.n}`} onClick={() => void pageAction('close', p.n)}>
-                    <X size={11} aria-hidden="true" />
-                  </button>
-                )}
-              </div>
-            ))}
-          </Tabs.List>
-        </Tabs.Root>
-      )}
       {held ? (
         <div className="bpStrip wheel" role="status">
           <b>You have the page.</b>
