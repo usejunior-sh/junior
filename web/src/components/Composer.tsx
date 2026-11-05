@@ -17,6 +17,7 @@ import { useScopedAgent } from '../chatAgents.js'
 import { Menu, MenuContent, MenuItem, MenuTrigger } from '../ui/Menu.js'
 import { PromptBox } from './PromptBox.js'
 import { PromptHead } from './PromptHead.js'
+import { JuniorFace } from './JuniorFace.js'
 
 type Props = {
   /** The live session this composer steers: keys its unsent draft. */
@@ -52,8 +53,9 @@ type Props = {
 }
 
 /**
- * The session composer: the same prompt box the draft tab uses, headed by the
- * folder the session runs in, plus the interrupt button while a turn is live.
+ * The session composer: the same prompt box the draft tab uses, drawn the same
+ * way (where it runs in a tray under the box, + on the left, send on the right),
+ * plus the interrupt button while a turn is live.
  */
 export function Composer({
   dm = false,
@@ -107,84 +109,99 @@ export function Composer({
   const remember = useMemo(() => ({ project: project ? { id: project.id, name: project.name } : null }), [project?.id, project?.name])
 
   return (
-    <PromptBox
-      draftKey={sessionId}
-      remember={remember}
-      head={<PromptHead projects={projects} cwd={cwd} projectId={projectId} branch={branch} />}
-      cwd={cwd}
-      text={text}
-      onTextChange={setText}
-      placeholder={
-        showPlanning
-          ? `What should ${persona.name} plan? It edits nothing until you approve the plan.`
-          : running
-            ? 'Steer the session… (queued until this turn ends)'
-            : showUltracode
-              ? `Describe a big job. ${persona.name} splits it across agents and checks the results.`
-              : dm
-                ? `Message ${agent?.label ?? persona.name}…`
-                : 'Steer the session…'
-      }
-      sendTitle="Send (Enter)"
-      onSubmit={(trimmed, images, mentions, files) => {
-        onSend(trimmed, images, mentions, undefined, files)
-        setText('')
-      }}
-      // No mode picker once a session has started: Junior can plan, start a goal or set up a job from
-      // what you say. Plan mode and Ultracode still show while they hold, each with a way out.
-      status={
-        showPlanning || ultracodeChip ? (
-          <>
-            {showPlanning && (
-              <button type="button" className="chip sessionMode plan planning" onClick={() => onPlanningChange(false)} title={`${persona.name} is planning: it edits nothing until you approve the plan. Click to stop planning.`} aria-label="Stop planning">
-                <ListChecks size={13} aria-hidden="true" />
-                <span className="name">Planning</span>
-                <X size={12} aria-hidden="true" />
-              </button>
-            )}
-            {ultracodeChip && (
-              // A menu, not a one-click switch: a stray click mustn't drop the mode, and off can come back on.
-              <Menu>
-                <MenuTrigger asChild>
-                  <button type="button" className={`chip sessionMode ${showUltracode ? 'ultracode ultracodeOn' : 'normal ultracodeOff'}`} aria-label={`Ultracode: ${showUltracode ? 'on' : 'off'}`} title={showUltracode ? `Ultracode is on: ${persona.name} fans big jobs out to many agents.` : 'Ultracode is off for this session.'}>
-                    <Workflow size={13} aria-hidden="true" />
-                    <span className="name">{showUltracode ? 'Ultracode' : 'Ultracode off'}</span>
-                    <ChevronDown size={12} aria-hidden="true" />
-                  </button>
-                </MenuTrigger>
-                <MenuContent className="perm" side="top" align="start">
-                  <MenuItem className={`wrap mode-ultracode${showUltracode ? ' on' : ''}`} onSelect={() => !showUltracode && onUltracodeChange!(true)}>
-                    <Workflow className="modeIcon" size={14} aria-hidden="true" />
-                    <span className="text">
-                      <span className="name">Ultracode on</span>
-                      <span className="desc">Big jobs fan out to many agents at once. Costs more.</span>
-                    </span>
-                    {showUltracode && <Check className="check" size={14} aria-hidden="true" />}
-                  </MenuItem>
-                  <MenuItem className={`wrap${showUltracode ? '' : ' on'}`} onSelect={() => showUltracode && onUltracodeChange!(false)}>
-                    <X className="modeIcon" size={14} aria-hidden="true" />
-                    <span className="text">
-                      <span className="name">Ultracode off</span>
-                      <span className="desc">One agent at a time. Runs already going carry on.</span>
-                    </span>
-                    {!showUltracode && <Check className="check" size={14} aria-hidden="true" />}
-                  </MenuItem>
-                </MenuContent>
-              </Menu>
-            )}
-          </>
-        ) : undefined
-      }
-      model={model}
-      effort={effort}
-      fastMode={fastMode}
-      fastModeState={fastModeState}
-      fastModeDisabledReason={fastModeDisabledReason}
-      onModelChange={onModelChange}
-      provider={provider}
-      onFastModeChange={onFastModeChange}
-      running={running}
-      onInterrupt={onInterrupt}
-    />
+    <div className="chatComposer live">
+      <PromptBox
+        draftKey={sessionId}
+        remember={remember}
+        headBelow
+        head={<PromptHead projects={projects} cwd={cwd} projectId={projectId} branch={branch} />}
+        cwd={cwd}
+        text={text}
+        onTextChange={setText}
+        placeholder={
+          showPlanning
+            ? `What should ${persona.name} plan? It edits nothing until you approve the plan.`
+            : running
+              ? 'Steer the session… (queued until this turn ends)'
+              : showUltracode
+                ? `Describe a big job. ${persona.name} splits it across agents and checks the results.`
+                : dm
+                  ? `Message ${agent?.label ?? persona.name}…`
+                  : 'Steer the session…'
+        }
+        sendTitle="Send (Enter)"
+        // The new-session box's send: a pill with Junior in it once there's something to send.
+        sendFace={
+          claude
+            ? (hover) => (
+                <>
+                  <JuniorFace mood={hover ? 'listen' : 'hello'} size={18} motion="wander" look={{ x: 0, y: 0 }} decorative />
+                  <span>Send</span>
+                  <kbd aria-hidden="true">↵</kbd>
+                </>
+              )
+            : undefined
+        }
+        onSubmit={(trimmed, images, mentions, files) => {
+          onSend(trimmed, images, mentions, undefined, files)
+          setText('')
+        }}
+        // No mode picker once a session has started: Junior can plan, start a goal or set up a job from
+        // what you say. Plan mode and Ultracode still show while they hold, each with a way out.
+        status={
+          showPlanning || ultracodeChip ? (
+            <>
+              {showPlanning && (
+                <button type="button" className="chip sessionMode plan planning" onClick={() => onPlanningChange(false)} title={`${persona.name} is planning: it edits nothing until you approve the plan. Click to stop planning.`} aria-label="Stop planning">
+                  <ListChecks size={13} aria-hidden="true" />
+                  <span className="name">Planning</span>
+                  <X size={12} aria-hidden="true" />
+                </button>
+              )}
+              {ultracodeChip && (
+                // A menu, not a one-click switch: a stray click mustn't drop the mode, and off can come back on.
+                <Menu>
+                  <MenuTrigger asChild>
+                    <button type="button" className={`chip sessionMode ${showUltracode ? 'ultracode ultracodeOn' : 'normal ultracodeOff'}`} aria-label={`Ultracode: ${showUltracode ? 'on' : 'off'}`} title={showUltracode ? `Ultracode is on: ${persona.name} fans big jobs out to many agents.` : 'Ultracode is off for this session.'}>
+                      <Workflow size={13} aria-hidden="true" />
+                      <span className="name">{showUltracode ? 'Ultracode' : 'Ultracode off'}</span>
+                      <ChevronDown size={12} aria-hidden="true" />
+                    </button>
+                  </MenuTrigger>
+                  <MenuContent className="perm" side="top" align="start">
+                    <MenuItem className={`wrap mode-ultracode${showUltracode ? ' on' : ''}`} onSelect={() => !showUltracode && onUltracodeChange!(true)}>
+                      <Workflow className="modeIcon" size={14} aria-hidden="true" />
+                      <span className="text">
+                        <span className="name">Ultracode on</span>
+                        <span className="desc">Big jobs fan out to many agents at once. Costs more.</span>
+                      </span>
+                      {showUltracode && <Check className="check" size={14} aria-hidden="true" />}
+                    </MenuItem>
+                    <MenuItem className={`wrap${showUltracode ? '' : ' on'}`} onSelect={() => showUltracode && onUltracodeChange!(false)}>
+                      <X className="modeIcon" size={14} aria-hidden="true" />
+                      <span className="text">
+                        <span className="name">Ultracode off</span>
+                        <span className="desc">One agent at a time. Runs already going carry on.</span>
+                      </span>
+                      {!showUltracode && <Check className="check" size={14} aria-hidden="true" />}
+                    </MenuItem>
+                  </MenuContent>
+                </Menu>
+              )}
+            </>
+          ) : undefined
+        }
+        model={model}
+        effort={effort}
+        fastMode={fastMode}
+        fastModeState={fastModeState}
+        fastModeDisabledReason={fastModeDisabledReason}
+        onModelChange={onModelChange}
+        provider={provider}
+        onFastModeChange={onFastModeChange}
+        running={running}
+        onInterrupt={onInterrupt}
+      />
+    </div>
   )
 }
