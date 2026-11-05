@@ -13,6 +13,147 @@
 #chatHeader .state.running, #chatHeader .state.starting { color: var(--body); }
 #chatHeader .state.error { color: var(--red); }
 
+/* The chat header (variant F, artifact 9d492a83): face, title and one status dot on the left;
+   one icon per thing on the right, names in tooltips. The folder lives in the composer. */
+#chatHeader:not(.termHeader) { gap: 8px; padding-right: 12px; }
+#chatHeader:not(.termHeader) #chatTitle { flex: 0 1 auto; max-width: 60%; }
+#chatHeader .chFace { flex: none; display: inline-flex; }
+#chatHeader .chDot { flex: none; }
+#chatHeader .chDot.idle { background: var(--stone); }
+#chatHeader .chIcons { margin-left: auto; flex: none; display: flex; align-items: center; gap: 2px; }
+#chatHeader .chSep { width: 1px; height: 16px; background: var(--hair-strong); margin: 0 6px 0 2px; }
+#chatHeader .ib, #chatHeader .ibSplit {
+  position: relative; height: 28px; min-width: 28px; display: inline-flex; align-items: center; justify-content: center; gap: 2px;
+  padding: 0 6px; border: 0; border-radius: var(--r); background: none; color: var(--ash); cursor: pointer;
+}
+#chatHeader .ib:hover, #chatHeader .ibSplit:hover, #chatHeader .ib[data-state="open"], #chatHeader .ibSplit[data-state="open"] { background: var(--hair-soft); color: var(--ink); }
+#chatHeader .ib.on { background: var(--hair-soft); color: var(--ink); }
+#chatHeader .ibSplit svg:last-child { color: var(--stone); }
+/* A count rides beside its icon in mono; a live dot replaces it while something runs. Never orange. */
+#chatHeader .ibCount { font: 400 0.7692rem var(--mono); color: var(--ash); }
+#chatHeader .ibLive { width: 6px; height: 6px; border-radius: var(--r-full); background: var(--blue); animation: pulse 1.4s ease-in-out infinite; }
+#chatHeader .ibProfile { position: absolute; right: 4px; bottom: 4px; display: inline-flex; }
+/* The cost/context ring: sky fill for the context in use, amber past 80%. */
+#chatHeader .costRing .ctxRing .track { fill: none; stroke: var(--hair-strong); stroke-width: 2; }
+#chatHeader .costRing .ctxRing .fill { fill: none; stroke: var(--blue); stroke-width: 2; stroke-linecap: round; }
+#chatHeader .costRing.full .ctxRing .fill { stroke: var(--amber); }
+#chatHeader .costRing { gap: 5px; font-variant-numeric: tabular-nums; }
+#chatHeader .chIcons .costSkel { margin-left: 4px; width: 16px; height: 16px; }
+@media (prefers-reduced-motion: reduce) { #chatHeader .ibLive { animation: none; } }
+.costPop .ctxRow { display: flex; align-items: center; gap: 8px; margin-top: 4px; font-size: 0.8462rem; }
+.costPop .ctxRow .lab { color: var(--ash); }
+.costPop .ctxRow .ctxBar { flex: 1; height: 4px; border-radius: var(--r-full); background: var(--hair-strong); overflow: hidden; }
+.costPop .ctxRow .ctxBar i { display: block; height: 100%; background: var(--blue); }
+.costPop .ctxRow .ctxBar i.full { background: var(--amber); }
+.costPop .ctxRow .val { font-family: var(--mono); color: var(--body); font-variant-numeric: tabular-nums; }
+
+/* Variant I (artifact 9d492a83). A DM's top is a floating pill over its transcript, which scrolls
+   under it; a chat keeps the slim header. Every tool lives in the right rail. */
+.sessCol { position: relative; }
+.dmPillWrap { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); z-index: 5; max-width: calc(100% - 48px); display: flex; }
+/* The pill (P5, artifact 9d492a83) is a button: it opens the agent's card in the sidebar. On hover it
+   grows and a chevron slides in, which says so. Its edge is its status, one border, never two: a sky light sweeps round it while the agent
+   works, it turns orange when it needs you. The edge is a border-box gradient, so it can move. */
+@property --sweep { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
+.dmPill {
+  --fill: var(--elev); --edge: var(--hair-strong);
+  min-width: 0; display: inline-flex; align-items: center; gap: 12px; padding: 7px 18px 7px 9px; cursor: pointer; text-align: left; font-size: 1.155em;
+  border: 1px solid transparent; border-radius: var(--r-full); color: var(--ink); font-family: inherit; line-height: inherit;
+  background: linear-gradient(var(--fill), var(--fill)) padding-box, linear-gradient(var(--edge), var(--edge)) border-box;
+  transform-origin: 50% 50%; transition: transform 0.16s ease-out, box-shadow 0.2s, padding 0.16s ease-out;
+}
+.dmPill .chev { flex: none; width: 0; margin-left: -12px; opacity: 0; color: var(--mute); transition: width 0.16s ease-out, margin 0.16s ease-out, opacity 0.12s; }
+.dmPill:hover, .dmPill:focus-visible { --fill: color-mix(in srgb, var(--elev) 92%, var(--ink)); --edge: var(--hair-bright); transform: scale(1.05); padding-right: 8px; }
+.dmPill:hover .chev, .dmPill:focus-visible .chev { width: 14px; margin-left: 0; opacity: 1; }
+.dmPill:active { transform: scale(1.02); }
+.dmPill.on { --edge: var(--hair-bright); }
+.dmPill:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
+.dmPill .tx { display: flex; flex-direction: column; justify-content: center; min-width: 0; line-height: 1.25; }
+.dmPill .nm { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dmPill .nm .jr { color: var(--mute); font-weight: 400; }
+.dmPill .nm .jrSep { color: var(--stone); }
+.dmPill .step { font: 400 0.8077rem var(--mono); color: var(--ash); max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dmPill.working {
+  background: linear-gradient(var(--fill), var(--fill)) padding-box,
+    conic-gradient(from var(--sweep), color-mix(in srgb, var(--blue) 18%, transparent) 0deg 250deg, var(--blue) 320deg, color-mix(in srgb, var(--blue) 40%, var(--ink)) 345deg, color-mix(in srgb, var(--blue) 18%, transparent) 360deg) border-box;
+  box-shadow: 0 0 18px -4px color-mix(in srgb, var(--blue) 40%, transparent);
+  animation: pillSweep 2.2s linear infinite;
+}
+.dmPill.needs { --edge: var(--orange); box-shadow: 0 0 18px -4px color-mix(in srgb, var(--orange) 50%, transparent); }
+.dmPill.needs .step { color: var(--orange); }
+.dmPill.error .step { color: var(--red); }
+@keyframes pillSweep { to { --sweep: 360deg; } }
+@media (prefers-reduced-motion: reduce) {
+  .dmPill, .dmPill .chev { transition: none; }
+  .dmPill:hover, .dmPill:focus-visible, .dmPill:active { transform: none; }
+  .dmPill.working { animation: none; }
+}
+/* The pill is desktop-only (a phone keeps its header row), so are its room and its fade:
+   what scrolls under the pill fades out first, so the pill never sits on top of text. */
+@media (min-width: 768px) {
+  .sessCol.dm #transcript { padding-top: 88px; }
+  .sessCol.dm::before { content: ""; position: absolute; top: 0; left: 0; right: 12px; height: 80px; z-index: 4; pointer-events: none; background: linear-gradient(var(--canvas) 45%, transparent); }
+}
+/* A DM reads like a conversation: no opening inventory unless something broke, no name on every reply. */
+.sessCol.dm #transcript details.init:not(.trouble) { display: none; }
+.sessCol.dm .speaker .spWho { display: none; }
+.toolRail {
+  width: 48px; flex: none; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 0;
+  border-left: 1px solid var(--hair); background: var(--deep);
+}
+.toolRail .ib {
+  position: relative; width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; gap: 2px;
+  border: 0; border-radius: var(--r); background: none; color: var(--ash); cursor: pointer;
+}
+.toolRail .ib:hover, .toolRail .ib[data-state="open"], .toolRail .ib.on { background: var(--hair-soft); color: var(--ink); }
+/* The open tab: a short bar on the rail's inner edge, by the sidebar it opened. */
+.toolRail .tab.on { position: relative; }
+.toolRail .tab.on::before { content: ""; position: absolute; left: -8px; top: 8px; bottom: 8px; width: 2px; border-radius: 2px; background: var(--ink); }
+.toolRail .ibCount { position: absolute; right: 1px; bottom: 1px; font: 400 9px var(--mono); color: var(--ash); }
+.toolRail .ibLive { position: absolute; right: 4px; top: 4px; width: 6px; height: 6px; border-radius: var(--r-full); background: var(--blue); animation: pulse 1.4s ease-in-out infinite; }
+.toolRail .ibProfile { position: absolute; right: 4px; bottom: 4px; display: inline-flex; }
+.toolRail .trSep { width: 20px; height: 1px; background: var(--hair-strong); margin: 4px 0; }
+.toolRail .trGap { flex: 1; }
+/* The cost ring stacks its figure under it in the rail's width. */
+.toolRail .costRing { width: 40px; height: auto; flex-direction: column; gap: 3px; padding: 5px 0; font-variant-numeric: tabular-nums; }
+.toolRail .costRing .ibCount { position: static; font-size: 9.5px; }
+.toolRail .costRing .ctxRing .track { fill: none; stroke: var(--hair-strong); stroke-width: 2; }
+.toolRail .costRing .ctxRing .fill { fill: none; stroke: var(--blue); stroke-width: 2; stroke-linecap: round; }
+.toolRail .costRing.full .ctxRing .fill { stroke: var(--amber); }
+.toolRail .costSkel { width: 16px; height: 16px; border-radius: var(--r-full); background: var(--hair-strong); }
+@media (prefers-reduced-motion: reduce) { .toolRail .ibLive { animation: none; } }
+
+/* The chat's right sidebar (chatSide.ts): Artifacts or Background agents, a stats bar at the foot.
+   The Browser tab is the browser pane, in the same slot. */
+.chatSide { width: 340px; max-width: 45%; flex: none; display: flex; flex-direction: column; min-height: 0; border-left: 1px solid var(--hair); background: var(--card); }
+.chatSide .csHead { height: var(--bar-h); flex: none; display: flex; align-items: center; gap: 8px; padding: 0 8px 0 16px; border-bottom: 1px solid var(--hair); }
+.chatSide .csHead .t { color: var(--ink); font-weight: 500; }
+.chatSide .csHead .n { font: 400 0.8462rem var(--mono); color: var(--ash); }
+.chatSide .csHead .iconBtn { margin-left: auto; }
+.chatSide .csBody { flex: 1; min-height: 0; overflow-y: auto; padding: 6px; }
+.chatSide .csEmpty { padding: 16px 10px; color: var(--mute); font-size: 0.9231rem; }
+.chatSide .csRow { width: 100%; display: flex; align-items: center; gap: 10px; padding: 7px 10px; border: 0; border-radius: var(--r); background: none; color: var(--body); font: inherit; text-align: left; cursor: pointer; }
+.chatSide .csRow:hover { background: var(--hair-soft); color: var(--ink); }
+.chatSide .csRow .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chatSide .csRow .val { flex: none; font: 400 0.8462rem var(--mono); color: var(--ash); }
+.chatSide .csRow.foot { color: var(--mute); margin-top: 4px; border-top: 1px solid var(--hair-soft); border-radius: 0; }
+.chatSide .csAgents { display: flex; flex-direction: column; gap: 6px; padding: 4px; }
+.chatSide .csAgents .sel .agentCard { border-color: var(--hair-bright); }
+.chatSide .csAbout { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 24px 16px; text-align: center; }
+.chatSide .csAbout .nm { color: var(--ink); font-size: 1.1538rem; font-weight: 500; }
+.chatSide .csAbout p { margin: 0; color: var(--mute); max-width: 32ch; }
+.chatSide .csAbout dl { width: 100%; margin: 8px 0 4px; display: flex; flex-direction: column; border-top: 1px solid var(--hair); text-align: left; }
+.chatSide .csAbout dl > div { display: flex; gap: 12px; padding: 8px 2px; border-bottom: 1px solid var(--hair-soft); }
+.chatSide .csAbout dt { flex: none; width: 52px; color: var(--ash); }
+.chatSide .csAbout dd { margin: 0; flex: 1; min-width: 0; color: var(--body); overflow-wrap: anywhere; }
+.chatSide .csAbout dd.mono { font-family: var(--mono); font-size: 0.8462rem; }
+.chatSide .csAbout dd .note { color: var(--ash); }
+.chatSide .csStats { flex: none; display: flex; align-items: center; gap: 10px; padding: 9px 14px; border-top: 1px solid var(--hair); font: 400 0.8462rem var(--mono); color: var(--ash); font-variant-numeric: tabular-nums; }
+.chatSide .csStats .lab { color: var(--stone); }
+.chatSide .csStats .ctxBar { flex: 1; height: 4px; border-radius: var(--r-full); background: var(--hair-strong); overflow: hidden; }
+.chatSide .csStats .ctxBar i { display: block; height: 100%; background: var(--blue); }
+.chatSide .csStats .ctxBar i.full { background: var(--amber); }
+
 /* session cost: a pill pushed right beside the status; hover opens the split.
    Same vocabulary as .costBlock on the item page, sized for a popover. */
 #chatHeader .costPill { margin-left: auto; flex: none; cursor: default; font-variant-numeric: tabular-nums; }

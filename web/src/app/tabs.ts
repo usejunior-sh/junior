@@ -1,11 +1,12 @@
-import { Terminal as TerminalIcon, FileText, FileDiff, CalendarClock, Target } from 'lucide-react'
+import { Terminal as TerminalIcon, FileText, FileDiff, CalendarClock, Target, Bot } from 'lucide-react'
 import { changeId } from '../changesStore.js'
 import type { RailSection } from '../components/Rail.js'
 import type { PageTab, TabKind } from '../components/TabBand.js'
 import { runFileHash } from '../components/RunFolderPage.js'
 import { type Route, itemHash } from '../hooks.js'
 
-export const PAGE_TABS: Record<'jobs' | 'terminals' | 'artifacts' | 'changes' | 'goals', PageTab> = {
+export const PAGE_TABS: Record<'agents' | 'jobs' | 'terminals' | 'artifacts' | 'changes' | 'goals', PageTab> = {
+  agents: { key: 'page:agents', label: 'Agents', icon: Bot },
   terminals: { key: 'page:terminals', label: 'Terminals', icon: TerminalIcon },
   artifacts: { key: 'page:artifacts', label: 'Artifacts', icon: FileText },
   changes: { key: 'page:changes', label: 'Changes', icon: FileDiff },
@@ -14,9 +15,10 @@ export const PAGE_TABS: Record<'jobs' | 'terminals' | 'artifacts' | 'changes' | 
 }
 
 /** The sections whose list is the panel: on a phone, their bottom-bar tab opens it as a sheet. */
-export const MOBILE_SHEETS: readonly RailSection[] = ['inbox', 'sessions', 'terminals', 'changes']
+export const MOBILE_SHEETS: readonly RailSection[] = ['agents', 'inbox', 'sessions', 'terminals', 'changes']
 export const SHEET_LABEL: Record<RailSection, string> = {
   junior: 'Junior',
+  agents: 'Agents',
   inbox: 'Inbox',
   sessions: 'Chats',
   artifacts: 'Artifacts',
@@ -60,6 +62,7 @@ export function tabKeyOf(route: Route): string | null {
       return `job-form:${route.id ?? 'new'}`
     case 'change':
       return `change:${changeId(route.checkoutId, route.path)}`
+    case 'agents':
     case 'changes':
     case 'artifacts':
     case 'jobs':
@@ -142,6 +145,8 @@ export function sectionOf(route: Route): RailSection | null {
   switch (route.page) {
     case 'junior':
       return 'junior'
+    case 'agents':
+      return 'agents'
     case 'inbox':
     case 'item':
       return 'inbox'

@@ -408,3 +408,9 @@ html.kbOpen .updateBar { display: none; }
   .readback dl { grid-template-columns: 60px 1fr; column-gap: 8px; }
   .readback .rbFile { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; overflow-wrap: normal; }
 }
+
+/* The icon chat header on a phone: the face and the icons stay; the separator steps aside. */
+@media (max-width: 767px) {
+  #chatHeader .chSep { display: none; }
+  #chatHeader:not(.termHeader) { padding: 0 6px 0 12px; }
+}

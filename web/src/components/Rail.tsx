@@ -1,17 +1,19 @@
-import { CalendarClock, FileDiff, FileText, Inbox, MessagesSquare, Terminal, type LucideProps } from 'lucide-react'
+import { Bot, CalendarClock, FileDiff, FileText, Inbox, MessagesSquare, Terminal, type LucideProps } from 'lucide-react'
 import { Fragment, type ComponentType } from 'react'
 import type { Mood } from '../../../core/junior/mood.js'
 import { MOOD_LABEL } from '../../../core/junior/mood.js'
 import { JuniorFace } from './JuniorFace.js'
 
 /** Every section a route can sit in. Actions and Goals are routes with no rail entry (Actions folded into Junior's log in M2; Goals is hidden). */
-export type RailSection = 'junior' | 'inbox' | 'sessions' | 'artifacts' | 'changes' | 'terminals' | 'jobs' | 'actions' | 'goals'
+export type RailSection = 'junior' | 'agents' | 'inbox' | 'sessions' | 'artifacts' | 'changes' | 'terminals' | 'jobs' | 'actions' | 'goals'
 
 type Props = {
   active: RailSection | null
   /** Set only where the active icon toggles the panel (the phone sheet). */
   collapsed?: boolean
   inboxCount: number
+  /** Agents' DMs waiting on you */
+  agentsCount: number
   runningCount: number
   terminalCount: number
   changedCount: number
@@ -23,8 +25,9 @@ type Props = {
   onGo: (section: RailSection) => void
 }
 
-/** Junior · Inbox, a gap, then the places you work. `gap` starts the second group. */
+/** Junior · Agents · Inbox, a gap, then the places you work. `gap` starts the second group. */
 const ITEMS: Array<{ id: RailSection; label: string; icon: ComponentType<LucideProps>; gap?: true }> = [
+  { id: 'agents', label: 'Agents', icon: Bot },
   { id: 'inbox', label: 'Inbox', icon: Inbox },
   { id: 'sessions', label: 'Chats', icon: MessagesSquare, gap: true },
   { id: 'artifacts', label: 'Artifacts', icon: FileText },
@@ -34,7 +37,7 @@ const ITEMS: Array<{ id: RailSection; label: string; icon: ComponentType<LucideP
 ]
 
 /** The labelled 64px rail: Junior first, then one button per destination, counts as small badges. */
-export function Rail({ active, collapsed, inboxCount, runningCount, terminalCount, changedCount, juniorName, juniorMood, juniorUnread = false, onGo }: Props) {
+export function Rail({ active, collapsed, inboxCount, agentsCount, runningCount, terminalCount, changedCount, juniorName, juniorMood, juniorUnread = false, onGo }: Props) {
   const juniorToggle = collapsed !== undefined && active === 'junior'
   return (
     <nav className="rail" aria-label="Sections">
@@ -57,7 +60,9 @@ export function Rail({ active, collapsed, inboxCount, runningCount, terminalCoun
         const badge =
           id === 'inbox'
             ? inboxCount
-            : id === 'sessions'
+            : id === 'agents'
+              ? agentsCount
+              : id === 'sessions'
               ? runningCount
               : id === 'terminals'
                 ? terminalCount

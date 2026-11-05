@@ -10,10 +10,10 @@
  * seconds, and once more when the last one ends.
  */
 import * as Popover from '@radix-ui/react-popover'
-import { useEffect, useRef, useState, type PointerEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type PointerEvent } from 'react'
 import type { SessionStatus, SessionsUsage, SessionsUsageResponse } from '../../../shared/protocol.js'
 import { useEvents } from '../hooks.js'
-import { MAX_SERIES, OTHER, SERIES, modelLabel, money, tokens } from '../usageFormat.js'
+import { MAX_SERIES, OTHER, SERIES, contextUse, modelLabel, money, tokens } from '../usageFormat.js'
 
 /** The widest window the ledger offers: a session from last month still adds up. */
 const DAYS = 90
@@ -28,21 +28,24 @@ const HOVER_CLOSE_MS = 160
 const lastSeen = new Map<string, SessionsUsage>()
 
 /**
+ * What a session has cost so far, from the usage ledger, refetched as it
+ * replies and while its workflows run. The header's ring and the sidebar's
+ * stats bar both read this, so they never disagree. `settled` = the ledger has
+ * answered for this session (until then, show a skeleton).
+ *
  * `workflows`: the summary's count of runs still going. Only a live subprocess
  * counts any, so a run the log never saw end (a restart, a crash) can't keep
- * the pill polling.
+ * the figure polling.
  */
-export function SessionCost({ sessionId, status, workflows = 0 }: { sessionId: string; status: SessionStatus; workflows?: number }) {
+export function useSessionSpend(sessionId: string, status: SessionStatus, workflows = 0) {
   const events = useEvents(sessionId)
   const replies = events.reduce((n, ev) => (ev.kind === 'sdk' && ev.message.type === 'assistant' ? n + 1 : n), 0)
   const workflowRunning = workflows > 0
   /** Bumped every WORKFLOW_POLL_MS while a run is going: each bump is a refetch. */
   const [tick, setTick] = useState(0)
   const [usage, setUsage] = useState<SessionsUsage | null>(() => lastSeen.get(sessionId) ?? null)
-  const [open, setOpen] = useState(false)
   /** The session the ledger has answered for, until then, a skeleton holds the pill's place. */
   const [settled, setSettled] = useState<string | null>(() => (lastSeen.has(sessionId) ? sessionId : null))
-  const hover = useRef<ReturnType<typeof setTimeout>>(undefined)
   /** The session whose first, undelayed fetch has gone out. */
   const fetchedFor = useRef<string | null>(null)
 
@@ -87,13 +90,23 @@ export function SessionCost({ sessionId, status, workflows = 0 }: { sessionId: s
     return () => clearInterval(t)
   }, [workflowRunning])
 
+  return { usage, spend: usage?.bySession[sessionId], settled: settled === sessionId, running: status === 'running' || status === 'starting' || workflowRunning }
+}
+
+export function SessionCost({ sessionId, status, workflows = 0, compact = false }: { sessionId: string; status: SessionStatus; workflows?: number; compact?: boolean }) {
+  const events = useEvents(sessionId)
+  // The chat header's ring: how full the main agent's context is, beside what it has cost.
+  const ctx = useMemo(() => contextUse(events), [events])
+  const { usage, spend, settled, running } = useSessionSpend(sessionId, status, workflows)
+  const [open, setOpen] = useState(false)
+  const hover = useRef<ReturnType<typeof setTimeout>>(undefined)
+
   useEffect(() => () => clearTimeout(hover.current), [])
 
-  const spend = usage?.bySession[sessionId]
   if (!spend) {
     // Loading: a faint bar where the figure will land.
     // Answered with no spend (a session yet to reply): nothing.
-    return settled === sessionId ? null : <span className="costSkel" aria-hidden="true" />
+    return settled ? null : <span className="costSkel" aria-hidden="true" />
   }
 
   const later = (next: boolean, ms: number) => {
@@ -108,7 +121,6 @@ export function SessionCost({ sessionId, status, workflows = 0 }: { sessionId: s
   const prompt = spend.input + spend.cacheWrite + spend.cacheRead
   const hit = prompt > 0 ? Math.round((spend.cacheRead / prompt) * 100) : 0
   const models = (usage?.models ?? []).filter((m) => m.tokens > 0)
-  const running = status === 'running' || status === 'starting' || workflowRunning
   // Who spent it: the main agent, its subagents, and Ultracode runs' agents, each a disjoint share.
   const sub = spend.subagents && spend.subagents.messages > 0 ? spend.subagents : undefined
   const wf = spend.workflows && spend.workflows.messages > 0 ? spend.workflows : undefined
@@ -123,15 +135,31 @@ export function SessionCost({ sessionId, status, workflows = 0 }: { sessionId: s
   return (
     <Popover.Root open={open} onOpenChange={setOpen}>
       <Popover.Trigger asChild>
-        <button
-          type="button"
-          className={`pill mono costPill${open ? ' on' : ''}`}
-          aria-label={`Session cost ${money(spend.cost)} — show breakdown`}
-          {...hoverProps}
-        >
-          {money(spend.cost)}
-          {!spend.priced && '+'}
-        </button>
+        {compact ? (
+          <button
+            type="button"
+            className={`ib costRing${open ? ' on' : ''}${ctx && ctx.pct >= 80 ? ' full' : ''}`}
+            aria-label={`${money(spend.cost)}${spend.priced ? '' : '+'} spent${ctx ? `, ${ctx.pct}% of context used` : ''} — show breakdown`}
+            {...hoverProps}
+          >
+            <ContextRing pct={ctx?.pct ?? 0} />
+            {/* The figure beside the ring: a ring alone, nearly empty, reads as a spinner. */}
+            <span className="ibCount">
+              {money(spend.cost)}
+              {!spend.priced && '+'}
+            </span>
+          </button>
+        ) : (
+          <button
+            type="button"
+            className={`pill mono costPill${open ? ' on' : ''}`}
+            aria-label={`Session cost ${money(spend.cost)} — show breakdown`}
+            {...hoverProps}
+          >
+            {money(spend.cost)}
+            {!spend.priced && '+'}
+          </button>
+        )}
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Content
@@ -154,6 +182,17 @@ export function SessionCost({ sessionId, status, workflows = 0 }: { sessionId: s
           <div className="sub">
             {tokens(spend.tokens)} tokens · {spend.messages} {spend.messages === 1 ? 'API call' : 'API calls'}
           </div>
+          {ctx && (
+            <div className="ctxRow" title="The main agent's last prompt, against its model's context window">
+              <span className="lab">Context</span>
+              <span className="ctxBar" aria-hidden="true">
+                <i style={{ width: `${ctx.pct}%` }} className={ctx.pct >= 80 ? 'full' : undefined} />
+              </span>
+              <span className="val">
+                {tokens(ctx.used)} / {tokens(ctx.window)} · {ctx.pct}%
+              </span>
+            </div>
+          )}
 
           {/* A daemon older than the breakdown sends the totals only. */}
           {typeof spend.input === 'number' && (
@@ -215,5 +254,17 @@ export function SessionCost({ sessionId, status, workflows = 0 }: { sessionId: s
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>
+  )
+}
+
+/** A small ring filled to how much of the context is in use: sky, amber past 80%. */
+function ContextRing({ pct }: { pct: number }) {
+  const r = 6
+  const c = 2 * Math.PI * r
+  return (
+    <svg className="ctxRing" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+      <circle cx="8" cy="8" r={r} className="track" />
+      <circle cx="8" cy="8" r={r} className="fill" strokeDasharray={`${(c * pct) / 100} ${c}`} transform="rotate(-90 8 8)" />
+    </svg>
   )
 }

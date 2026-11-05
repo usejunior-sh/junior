@@ -33,6 +33,8 @@ export type Draft = {
   agent?: string
   /** the Junior page's own box: never a tab, never listed, never reused by New chat */
   home?: true
+  /** an agent's empty DM box on the Agents page (its DM key): never a tab, never listed, like `home` */
+  dm?: string
   createdAt: number
 }
 
@@ -45,7 +47,7 @@ let listed: readonly Draft[] = []
 const listeners = new Set<() => void>()
 
 function notify() {
-  listed = drafts.filter((d) => !d.home)
+  listed = drafts.filter((d) => !d.home && !d.dm)
   for (const fn of listeners) fn()
 }
 
@@ -114,12 +116,12 @@ export const draftStore = {
 
   /** An untouched draft: `n` focuses it rather than stacking blank tabs. */
   findEmpty(): Draft | undefined {
-    return drafts.find((d) => !d.home && !d.text.trim() && !d.label && !d.intent)
+    return drafts.find((d) => !d.home && !d.dm && !d.text.trim() && !d.label && !d.intent)
   },
 
   /** An untouched "New job" draft, reused like an empty session draft. */
   findEmptyJob(): Draft | undefined {
-    return drafts.find((d) => !d.home && !d.text.trim() && d.intent === 'job')
+    return drafts.find((d) => !d.home && !d.dm && !d.text.trim() && d.intent === 'job')
   },
 }
 
@@ -141,5 +143,15 @@ export function useHomeDraft(): Draft | null {
   useEffect(() => {
     if (!d) draftStore.create({ home: true })
   }, [d])
+  return d
+}
+
+/** An agent's DM box before its first message: one draft per DM key, made the first time it's needed. */
+export function useDmDraft(dm: string, agent: string | undefined): Draft | null {
+  const all = useSyncExternalStore(draftStore.subscribe, draftStore.all)
+  const d = all.find((x) => x.dm === dm) ?? null
+  useEffect(() => {
+    if (!d) draftStore.create({ dm, ...(agent ? { agent } : {}) })
+  }, [d, dm, agent])
   return d
 }

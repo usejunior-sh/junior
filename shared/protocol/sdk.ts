@@ -51,7 +51,12 @@ export type SdkMessage = {
   model?: string
   tools?: string[]
   mcp_servers?: McpServerInfo[]
-  message?: { role?: string; content?: RawBlock[] }
+  message?: {
+    role?: string
+    content?: RawBlock[]
+    /** assistant only: what this API call read and wrote; its prompt side is the context in use */
+    usage?: { input_tokens?: number; cache_creation_input_tokens?: number; cache_read_input_tokens?: number; output_tokens?: number }
+  }
   event?: StreamEvent
   total_cost_usd?: number
   duration_ms?: number
@@ -60,7 +65,7 @@ export type SdkMessage = {
   duration_api_ms?: number
   is_error?: boolean
   /** result only: cumulative use per model since the subprocess's counters started */
-  modelUsage?: Record<string, { inputTokens?: number; outputTokens?: number; cacheReadInputTokens?: number; cacheCreationInputTokens?: number; costUSD?: number }>
+  modelUsage?: Record<string, { inputTokens?: number; outputTokens?: number; cacheReadInputTokens?: number; cacheCreationInputTokens?: number; costUSD?: number; contextWindow?: number }>
   /** Carried on init and result messages; the session's fast-mode reality. */
   fast_mode_state?: FastModeState
   fast_mode_disabled_reason?: FastModeDisabledReason

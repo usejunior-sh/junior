@@ -67,6 +67,8 @@ export type Route =
   /** `#/junior`: Junior's page, on Needs you; `#/junior/<tab>` opens a tab (old `#/actions` links land on the log) */
   | { page: 'junior'; tab?: JuniorTab }
   | { page: 'session'; id: string }
+  /** `#/agents/<name>`: one agent's DM (`junior` = Junior's own); bare `#/agents` opens Junior's */
+  | { page: 'agents'; name?: string }
   | { page: 'draft'; id: string }
   /** `#/inbox/<view>`: one inbox view (or Snoozed, Archived); bare `#/inbox` opens In progress when something is held on you */
   | { page: 'inbox'; view?: InboxRoute }
@@ -103,6 +105,14 @@ function parseRoute(hash: string): Route {
   if (hash === '/actions') return { page: 'junior', tab: 'log' }
   const jr = /^\/junior\/(needs|up|reviews|prs|with|waiting|suggested|people|work|plan|log)$/.exec(hash)?.[1]
   if (jr) return { page: 'junior', tab: jr as JuniorTab }
+  if (hash === '/agents') return { page: 'agents' }
+  if (hash.startsWith('/agents/')) {
+    try {
+      return { page: 'agents', name: decodeURIComponent(hash.slice('/agents/'.length)) }
+    } catch {
+      return { page: 'agents' }
+    }
+  }
   if (hash === '/inbox') return { page: 'inbox' }
   if (hash.startsWith('/inbox/')) {
     const view = parseInboxRoute(hash.slice('/inbox/'.length))

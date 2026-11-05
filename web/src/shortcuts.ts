@@ -13,6 +13,7 @@ export function shortcutsFor(mod: string): ReadonlyArray<[keys: string, what: st
     [`${mod}K`, 'Search — chats, items, projects, commands'],
     [`${mod},`, 'Settings'],
     [`${mod}B`, 'Hide / show the side panel'],
+    [mod === '⌘' ? '⌘⌥B' : `${mod}Alt+B`, "Hide / show the chat's right sidebar"],
     [`${mod}J`, 'New chat with Junior'],
     [frictionKeyLabel(mod), 'Note what annoyed you, for later'],
     ['n', 'New chat (in the inbox: new work item)'],

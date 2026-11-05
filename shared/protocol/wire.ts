@@ -167,6 +167,8 @@ export type ClientMessage =
       provider?: ProviderId
       /** The chat agent to talk as (`junior:explainer`), for the session's whole life. Omitted = plain Junior. */
       agent?: string
+      /** The agent's DM: its one long-running chat. If it already has one, the message goes there instead. */
+      dm?: boolean
       /** The work item this session is dispatched for, recorded as a `dispatch` link. */
       itemId?: string
     }

@@ -603,3 +603,15 @@ export function toolResultNote(item: ToolItem): string {
   const n = item.result.text.split('\n').filter((l) => l.trim()).length
   return n ? `${n} ${n === 1 ? 'line' : 'lines'}` : 'no output'
 }
+
+/**
+ * A server that failed and isn't serving its tools through another of the same
+ * name: the one case worth the opening line in a DM. Servers waiting on a
+ * sign-in or still connecting are normal, not trouble.
+ */
+export function initTrouble(servers: readonly { name: string; status: string }[], mcpTools: readonly string[]): boolean {
+  // `mcp__<server>__<tool>` → the server name
+  const serving = new Set(mcpTools.map((t) => t.slice(5).split('__')[0] ?? ''))
+  return servers.some((s) => s.status === 'failed' && !serving.has(s.name))
+}
+

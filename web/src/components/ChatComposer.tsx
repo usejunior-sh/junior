@@ -135,6 +135,8 @@ type Props = {
   starters?: ReactNode
   /** the root's id (the new-chat page lays itself out by it) */
   id?: string
+  /** the agent is fixed (an agent's DM): no agent picker */
+  agentLocked?: boolean
 }
 
 /** What the box is doing, for a top that reacts to it. */
@@ -206,7 +208,7 @@ function titleFrom(text: string, mentions: readonly Mention[] = []): string {
  * model, mode, Fast, the starters under it; its draft carries the text and
  * folder, and the first send turns it into a session.
  */
-export function ChatComposer({ draft, onChange, onCreate, error, step, top, placeholder, starters, id }: Props) {
+export function ChatComposer({ draft, onChange, onCreate, error, step, top, placeholder, starters, id, agentLocked }: Props) {
   const [projects, setProjects] = useState<Project[]>([])
   const [branch, setBranch] = useState<string | null>(null)
   const checkouts = useCheckouts()
@@ -513,7 +515,7 @@ export function ChatComposer({ draft, onChange, onCreate, error, step, top, plac
           setFastMode(on)
           writeSessionDefaults({ fastMode: on })
         }}
-        {...(job ? {} : { mode, onModeChange: setMode, agentPicker: <AgentPicker agent={draft.agent} onChange={setAgent} /> })}
+        {...(job ? {} : { mode, onModeChange: setMode, ...(agentLocked ? {} : { agentPicker: <AgentPicker agent={draft.agent} onChange={setAgent} /> }) })}
       />
       {recipe && job && !making && (
         <div className="nsPull nsRecipe" role="note" aria-label="Recipe detected">

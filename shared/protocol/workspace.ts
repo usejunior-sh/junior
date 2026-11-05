@@ -125,9 +125,11 @@ export type WorkspaceVerifyResponse =
  * default). `job-run` = one job's scan, run as a real session so its
  * transcript is the run's observability (.docs/jobs-v2.md); the sidebar
  * filters these out of the chat list. `goal` = a lead the retired goals
- * engine started; old rows keep it, nothing makes new ones.
+ * engine started; old rows keep it, nothing makes new ones. `dm` = an
+ * agent's one long-running chat on the Agents page, at most one per agent;
+ * the chat list leaves these out.
  */
-export type SessionKind = 'chat' | 'job-run' | 'brief' | 'goal' | 'task'
+export type SessionKind = 'chat' | 'job-run' | 'brief' | 'goal' | 'task' | 'dm'
 
 /**
  * The coding agent a session runs on, fixed for its life. Chats can pick;

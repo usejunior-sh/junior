@@ -10,6 +10,7 @@
  * from GET /api/browser/tabs/:key and `browser_tab`. A tab is only ever made
  * over HTTP (POST …/open), so the daemon always names its profile.
  */
+import { chatSide, useChatSide } from './chatSide.js'
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import type {
   BrowserDownload,
@@ -90,43 +91,20 @@ export const browserBridge: BrowserBridge | null = (() => {
 /** Junior.app can host the pane here. */
 export const hasBrowser = browserBridge !== null
 
-// ── which sessions have the pane open (per browser, survives a reload) ──────
-
-const KEY = 'junior.browserOpen'
-let open: Set<string> = (() => {
-  try {
-    const v: unknown = JSON.parse(localStorage.getItem(KEY) ?? '[]')
-    return new Set(Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string').slice(-50) : [])
-  } catch {
-    return new Set<string>()
-  }
-})()
-const listeners = new Set<() => void>()
+// ── which sessions have the pane open: the chat sidebar's Browser tab (chatSide.ts) ──────
 
 export const browserPane = {
-  isOpen: (sessionId: string) => open.has(sessionId),
+  isOpen: (sessionId: string) => chatSide.get(sessionId) === 'browser',
+  /** Open shows the browser in the chat's sidebar; close clears it only if the browser is what shows. */
   set(sessionId: string, on: boolean) {
-    if (open.has(sessionId) === on) return
-    open = new Set(open)
-    if (on) open.add(sessionId)
-    else open.delete(sessionId)
-    try {
-      localStorage.setItem(KEY, JSON.stringify([...open]))
-    } catch {
-      // storage blocked: open for this page load only
-    }
-    for (const fn of listeners) fn()
+    if (on) chatSide.set(sessionId, 'browser')
+    else chatSide.closeBrowser(sessionId)
   },
-  subscribe(fn: () => void) {
-    listeners.add(fn)
-    return () => {
-      listeners.delete(fn)
-    }
-  },
+  subscribe: chatSide.subscribe,
 }
 
 export function useBrowserOpen(sessionId: string | null): boolean {
-  return useSyncExternalStore(browserPane.subscribe, () => (sessionId ? open.has(sessionId) : false))
+  return useChatSide(sessionId) === 'browser'
 }
 
 // The agent opened a page: the pane on that session opens itself.

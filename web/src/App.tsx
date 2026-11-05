@@ -52,14 +52,14 @@ import { type WorkspaceModalMode, WorkspaceModal } from './components/WorkspaceM
 import { useConn, useSessions, useTerminals, useCheckouts, useHashRoute, useEvents, usePaging, useWorkspaces, useBuild, useUpdatePending, useWorkspaceId, useOnboarded } from './hooks.js'
 import { useInbox, inboxStore } from './inboxStore.js'
 import { useArtifacts, artifactStore } from './artifactStore.js'
-import { useModels, findModel } from './models.js'
+import { useModels } from './models.js'
 import { noteSettingsTab, noteReturnHash, closeSettings, openSettings } from './settings.js'
 import { store } from './store.js'
 import { usePanelWidth } from './panelWidth.js'
 import { useIsMobile } from './useMobile.js'
 import { useOpenTabs, useLastRoutes, projectColor } from './tabs.js'
 import { AppPanel } from './app/AppPanel.js'
-import { ChatHeader, useNarrowFolder } from './app/ChatHeader.js'
+import { ChatHeader } from './app/ChatHeader.js'
 import { MOBILE_SHEETS, PAGE_TABS, SHEET_LABEL, isDocKey, routeOfKey, sectionOf, tabKeyOf } from './app/tabs.js'
 import { useDispatchers } from './app/useDispatchers.js'
 import { useDocumentTabs } from './app/useDocumentTabs.js'
@@ -71,6 +71,11 @@ import { useTeamRail } from './app/useTeamRail.js'
 import { useWorkflowRail } from './app/useWorkflows.js'
 import { isWorking } from './sessionModes.js'
 import { useTerminalActions } from './app/useTerminalActions.js'
+import { AgentDmStart } from './components/AgentDmStart.js'
+import { ChatSide } from './components/ChatSide.js'
+import { ToolRail } from './components/ToolRail.js'
+import { useChatSide } from './chatSide.js'
+import { JUNIOR_DM, findDm } from '../../core/junior/dms.js'
 
 export function App() {
   const conn = useConn()
@@ -85,7 +90,9 @@ export function App() {
   const artifacts = useArtifacts()
   const changes = useChanges()
   const [route, navigate] = useHashRoute()
-  const currentId = route.page === 'session' ? route.id : null
+  // On the Agents page the session in front is the agent's DM, when it has one yet.
+  const dmShown = route.page === 'agents' ? findDm(sessions, route.name ?? JUNIOR_DM) : undefined
+  const currentId = route.page === 'session' ? route.id : (dmShown?.id ?? null)
   const currentTerminalId = route.page === 'terminal' ? route.id : null
   const currentDraftId = route.page === 'draft' ? route.id : null
   const events = useEvents(currentId)
@@ -155,11 +162,14 @@ export function App() {
   // The browser pane beside this session (.docs/browser.md), never on a phone. Outside
   // Junior.app it opens to say the browser lives there.
   const browserOpen = useBrowserOpen(currentId) && !mobile
+  // The chat's right sidebar (chatSide.ts): Artifacts or Background agents here; Browser is the pane above.
+  const sideTabRaw = useChatSide(currentId)
+  const sideTab = !mobile && sideTabRaw && sideTabRaw !== 'browser' ? sideTabRaw : null
   // A narrow window can't hold the chats list, a chat and the browser at once: while
   // the pane shows, the list steps aside for display only (the saved setting stays),
   // and comes back when the pane closes, the window widens, or you ask for it.
   const narrowWindow = useWindowNarrower(1180)
-  const paneShown = browserOpen && route.page === 'session' && !!current
+  const paneShown = browserOpen && (route.page === 'session' || route.page === 'agents') && !!current
   const [keepPanel, setKeepPanel] = useState(false)
   useEffect(() => {
     if (!paneShown || !narrowWindow) setKeepPanel(false)
@@ -168,9 +178,6 @@ export function App() {
   const panelCollapsed = panelSize.collapsed || panelStepsAside
   const currentCheckout = checkoutOf(checkouts, current?.checkoutId)
   const chatHeaderRef = useRef<HTMLDivElement>(null)
-  const folderTextRef = useRef<HTMLSpanElement>(null)
-  const folderMeasureRef = useRef<HTMLSpanElement>(null)
-  const folderShort = useNarrowFolder(chatHeaderRef, folderTextRef, folderMeasureRef, `${current?.cwd}`)
   const { teamRun, teamSide, setTeamSide, teamTab, setTeamTab, runsView, setRunsView, railOn, runScroll, openTeamRun, teamMarks, teamCheckoutId } = useTeamRail({ current, currentId, events, mobile, navigate, openTab, sessions })
   const { agents, shells, workflows, openAgent, showAgent } = useSessionAgents({ events, current, currentId })
   // Ultracode runs: the run panel shares the team drawer's slot, so opening one closes the other.
@@ -282,6 +289,8 @@ export function App() {
     lastSession.current = currentId
     const runOf = (id: string) => sessions.find((s) => s.id === id)?.teamRun?.id
     const sameTeam = from && from !== currentId && runOf(from) && runOf(from) === runOf(currentId)
+    // A DM lives on the Agents page, not in a tab of its own.
+    if (sessions.find((s) => s.id === currentId)?.kind === 'dm') return
     if (sameTeam && tabsNow.current.includes(from) && !tabsNow.current.includes(currentId)) replaceTab(from, currentId)
     else openTab(currentId)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -420,7 +429,7 @@ export function App() {
   // Only the rail *indexes* get a transient page tab now: an artifact, job
   // or item in front is a document, and gets a real tab of its own.
   const pageTab =
-    route.page === 'jobs' || route.page === 'terminals' || route.page === 'artifacts' || route.page === 'changes'
+    route.page === 'agents' || route.page === 'jobs' || route.page === 'terminals' || route.page === 'artifacts' || route.page === 'changes'
       ? PAGE_TABS[route.page]
       : null
 
@@ -478,6 +487,8 @@ export function App() {
       case 'session':
       case 'draft':
         return () => setSheet('sessions')
+      case 'agents':
+        return () => setSheet('agents')
       case 'terminal':
         return () => setSheet('terminals')
       case 'change':
@@ -492,9 +503,10 @@ export function App() {
   // Brief runs and goal leads are sessions too, but they belong to their item
   // or goal: the Sessions panel and the palette list only chats.
   // A team's workers live under their lead (the run rail), not in the list: one row per team, not one per member.
-  const chatSessions = useMemo(() => sessions.filter((s) => s.kind !== 'brief' && s.kind !== 'goal' && s.teamRun?.role !== 'worker'), [sessions])
+  // An agent's DM lives on the Agents page, not in the chat list.
+  const chatSessions = useMemo(() => sessions.filter((s) => s.kind !== 'brief' && s.kind !== 'goal' && s.kind !== 'dm' && s.teamRun?.role !== 'worker'), [sessions])
+  const dmsWaiting = sessions.filter((s) => s.kind === 'dm' && s.waiting).length
   const runningCount = chatSessions.filter(isWorking).length
-  const modelName = current ? findModel(models, current.model)?.name ?? current.model : undefined
 
   // The Actions page is a list and a detail side by side: it needs the room, so no panel beside it.
   // Junior's page is one centred column: no panel beside it either.
@@ -562,6 +574,7 @@ export function App() {
           active={mobile ? sheet ?? railActive : railActive}
           collapsed={mobile ? !sheet : undefined}
           inboxCount={inbox.items.length}
+          agentsCount={dmsWaiting}
           runningCount={runningCount}
           terminalCount={terminals.filter((t) => t.status === 'running').length}
           changedCount={changes.projects.reduce((n, p) => n + p.checkouts.reduce((m, c) => m + c.files.length, 0), 0)}
@@ -693,25 +706,21 @@ export function App() {
               ) : (
                 <div id="empty">This draft was discarded.</div>
               )
-            ) : route.page === 'home' || route.page === 'settings' || route.page === 'goals' ? null : current ? (
+            ) : route.page === 'home' || route.page === 'settings' || route.page === 'goals' ? null : route.page === 'agents' && !current ? (
+              <AgentDmStart key={route.name ?? JUNIOR_DM} dm={route.name ?? JUNIOR_DM} onCreate={create} createError={createError} createStep={createStep} />
+            ) : current ? (
               <div className={`sessRow${(teamRun && teamSide) || wf.sideRun ? ' withSide' : ''}${browserOpen ? ' withBrowser' : ''}`}>
-              <div className="sessCol">
+              <div className={`sessCol${current.kind === 'dm' ? ' dm' : ''}`}>
               <SessionAgentScope agent={current.agent}>
                 <ChatHeader
                   current={current}
                   chatHeaderRef={chatHeaderRef}
-                  folderTextRef={folderTextRef}
-                  folderMeasureRef={folderMeasureRef}
-                  folderShort={folderShort}
-                  modelName={modelName}
                   currentCheckout={currentCheckout}
                   newTerminalIn={newTerminalIn}
-                  changes={changes}
                   agents={agents}
                   openAgent={openAgent}
                   showAgent={showAgent}
                   mobile={mobile}
-                  browserOpen={browserOpen}
                   onNavigate={navigate}
                 />
                 {railOn && teamRun ? (
@@ -787,6 +796,7 @@ export function App() {
                 ) : (
                 <Composer
                   key={`composer-${current.id}`}
+                  dm={current.kind === 'dm'}
                   sessionId={current.id}
                   status={current.status}
                   cwd={current.cwd}
@@ -814,6 +824,7 @@ export function App() {
               </SessionAgentScope>
               </div>
               {browserOpen && <BrowserPane key={current.id} tabKey={current.id} onTerminal={currentCheckout ? () => newTerminalIn(currentCheckout.id) : undefined} />}
+              {sideTab && <ChatSide session={current} tab={sideTab} agents={agents} openAgent={openAgent} showAgent={showAgent} onNavigate={navigate} />}
               {wf.sideRun && (
                 <WorkflowSide
                   sessionId={current.id}
@@ -840,6 +851,7 @@ export function App() {
                   files={railOn ? <TeamFiles run={teamRun} checkoutId={teamCheckoutId} onNavigate={navigate} onOpenRun={openTeamRun} /> : undefined}
                 />
               )}
+              {!mobile && <ToolRail current={current} checkout={currentCheckout} newTerminalIn={newTerminalIn} agents={agents} browserOpen={browserOpen} />}
               </div>
             ) : (
               <div id="empty">Session not found — it may have been deleted.</div>

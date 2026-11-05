@@ -120,7 +120,7 @@ export async function extrasFor(rt: WorkspaceRuntime, row: StoredSession): Promi
   // A chat talking as an agent (core/junior/agents.ts) gets its prompt between
   // the identity and the persona, so the rules still come last, and its tools
   // and skills narrow the session. An agent gone since reads as plain Junior.
-  if (row.kind === 'chat') {
+  if (row.kind === 'chat' || row.kind === 'dm') {
     const agent = await chatAgentNamed(rt, row.agent)
     if (!agent) return { systemAppend: `${identity}${await juniorAppend(rt)}`, mcp: { browser: browserMcpFor(rt, row) } }
     return {

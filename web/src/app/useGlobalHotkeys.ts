@@ -1,4 +1,5 @@
 import { type Dispatch, type SetStateAction, useRef, useEffect } from 'react'
+import { chatSide } from '../chatSide.js'
 import { startJuniorChat } from '../junior.js'
 import type { RailSection } from '../components/Rail.js'
 import type { Route } from '../hooks.js'
@@ -60,9 +61,16 @@ export function useGlobalHotkeys({ route, navigate, newSession, newTerminal, ter
         startJuniorChat()
         return
       }
+      // ⌘⌥B: the chat's right sidebar (chatSide.ts). By code, since ⌥B types "∫" on a Mac.
+      if ((e.metaKey || e.ctrlKey) && e.altKey && !e.shiftKey && e.code === 'KeyB') {
+        if (anyDialogOpen() || !currentId) return
+        e.preventDefault()
+        chatSide.toggleOpen(currentId)
+        return
+      }
       // ⌘B works from the message box too: it types nothing there. Ctrl-B
       // still belongs to a focused field (a terminal's tmux prefix, readline).
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'b') {
+      if ((e.metaKey || e.ctrlKey) && !e.altKey && e.key.toLowerCase() === 'b') {
         if (anyDialogOpen() || (isTypingTarget(e) && !e.metaKey)) return
         e.preventDefault()
         panelSize.toggleCollapsed()

@@ -4,20 +4,27 @@
  * up and the count moves while the menu is open. The full list, with filters, is
  * the Artifacts tab, one click away.
  */
-import { List } from 'lucide-react'
+import { FileText, List } from 'lucide-react'
 import { useSessionArtifacts } from '../artifactsClient.js'
 import { artifactAgo, FormatIcon } from '../artifactFormat.js'
 import { Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from '../ui/Menu.js'
 
-export function ArtifactsMenu({ sessionId, onNavigate }: { sessionId: string; onNavigate: (hash: string) => void }) {
+export function ArtifactsMenu({ sessionId, onNavigate, compact = false }: { sessionId: string; onNavigate: (hash: string) => void; compact?: boolean }) {
   const artifacts = useSessionArtifacts(sessionId)
   if (!artifacts.length) return null
   return (
     <Menu>
       <MenuTrigger asChild>
-        <button type="button" className="btn sm ghost artifactsBtn" title="Files Junior published in this session">
-          Artifacts <span className="n">{artifacts.length}</span>
-        </button>
+        {compact ? (
+          <button type="button" className="ib" title={`Artifacts from this chat · ${artifacts.length}`} aria-label={`Artifacts from this chat, ${artifacts.length}`}>
+            <FileText size={15} aria-hidden="true" />
+            <span className="ibCount">{artifacts.length}</span>
+          </button>
+        ) : (
+          <button type="button" className="btn sm ghost artifactsBtn" title="Files Junior published in this session">
+            Artifacts <span className="n">{artifacts.length}</span>
+          </button>
+        )}
       </MenuTrigger>
       <MenuContent className="artMenu" align="end">
         <div className="artMenuHead">

@@ -33,6 +33,8 @@
     "web/src/selection.ts",
     "web/src/learnings-view.ts",
     "web/src/typed.ts",
+    "web/src/usageFormat.ts",
+    "web/src/chatSide.ts",
     "web/src/components/browser/steps.ts",
     "vite.config.ts"
   ]

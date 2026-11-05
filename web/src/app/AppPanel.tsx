@@ -1,4 +1,6 @@
 import type { Dispatch, SetStateAction } from 'react'
+import { AgentsPanel } from '../components/AgentsPanel.js'
+import { JUNIOR_DM } from '../../../core/junior/dms.js'
 import type { SessionSummary } from '../../../shared/protocol.js'
 import { ChangesPanel } from '../components/ChangesPanel.js'
 import { useChanges, changeId } from '../changesStore.js'
@@ -74,7 +76,13 @@ export function AppPanel({
   setPinned: (sessionId: string, pinned: boolean) => void
   deleteSession: (sessionId: string) => void
 }) {
-  return panelSection === 'terminals' ? (
+  return panelSection === 'agents' ? (
+      <AgentsPanel
+        current={route.page === 'agents' ? (route.name ?? JUNIOR_DM) : null}
+        onOpen={(key) => navigate(`/agents/${encodeURIComponent(key)}`)}
+        onSearch={() => setPaletteOpen(true)}
+      />
+    ) : panelSection === 'terminals' ? (
       <TerminalsPanel
         terminals={terminals}
         currentId={currentTerminalId}

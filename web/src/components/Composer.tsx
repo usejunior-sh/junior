@@ -13,6 +13,7 @@ import type {
 } from '../../../shared/protocol.js'
 import { composerDrafts, useComposerDraft } from '../composerDrafts.js'
 import { usePersona } from '../junior.js'
+import { useScopedAgent } from '../chatAgents.js'
 import { Menu, MenuContent, MenuItem, MenuTrigger } from '../ui/Menu.js'
 import { PromptBox } from './PromptBox.js'
 import { PromptHead } from './PromptHead.js'
@@ -46,6 +47,8 @@ type Props = {
   onInterrupt: () => void
   onModelChange: (model: string | undefined, effort: EffortLevel | undefined) => void
   onFastModeChange: (fastMode: boolean) => void
+  /** An agent's DM: the empty box says who you're messaging rather than "Steer the session…". */
+  dm?: boolean
 }
 
 /**
@@ -53,6 +56,7 @@ type Props = {
  * folder the session runs in, plus the interrupt button while a turn is live.
  */
 export function Composer({
+  dm = false,
   sessionId,
   status,
   cwd,
@@ -81,6 +85,7 @@ export function Composer({
   const [projects, setProjects] = useState<Project[]>([])
   const running = status === 'running' || status === 'starting'
   const persona = usePersona()
+  const { agent } = useScopedAgent()
   // Plan and Ultracode are Claude's; another agent never shows their chips.
   const claude = (provider ?? 'claude') === 'claude'
   const showPlanning = !!planning && claude
@@ -116,7 +121,9 @@ export function Composer({
             ? 'Steer the session… (queued until this turn ends)'
             : showUltracode
               ? `Describe a big job. ${persona.name} splits it across agents and checks the results.`
-              : 'Steer the session…'
+              : dm
+                ? `Message ${agent?.label ?? persona.name}…`
+                : 'Steer the session…'
       }
       sendTitle="Send (Enter)"
       onSubmit={(trimmed, images, mentions, files) => {

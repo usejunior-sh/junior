@@ -23,6 +23,7 @@ import { replaySession } from './history.js'
 import { renameCommand } from '../../core/sessions/names.js'
 import { setSessionNameOp } from '../session/spawn-ops.js'
 import { createSession, defaultProject, deleteSession, getOrRevive, projectForSession } from '../session/sessions.js'
+import { dmKey, findDm } from '../../core/junior/dms.js'
 import { expandHome } from '../folders.js'
 import { linkSessionToItem } from '../settings-ops.js'
 import { itemFilesForSession } from '../items-ops.js'
@@ -69,6 +70,22 @@ export function handleConnection(ws: WebSocket, req: http.IncomingMessage): void
             throw new Error(`${providerFor(msg.provider).label} isn't connected in this workspace — connect it in Settings → Providers`)
           // Named uploads must still be there. Checked first, before a worktree or a session exists, so a stale one creates nothing.
           if (msg.files) await resolveUploads(rt.attachmentsDir, msg.files, MAX_FILES_PER_MESSAGE)
+          // An agent's DM is its one long-running chat: when it has one already, the message goes there.
+          if (msg.dm) {
+            const named = msg.agent ? (await chatAgentNamed(rt, msg.agent))?.name : undefined
+            if (msg.agent && !named) throw new Error('that agent is gone — pick another one')
+            const existing = findDm(rt.rows.values(), dmKey(named))
+            if (existing) {
+              send(ws, { type: 'session_created', session: summarize(rt, existing) })
+              const text = msg.firstMessage?.trim()
+              if (text || msg.images?.length) void (await getOrRevive(rt, existing.id))?.sendUserMessage(text ?? '', msg.images, msg.mentions)
+              break
+            }
+            // A DM runs on Claude and belongs to its agent, not to a work item.
+            msg.agent = named
+            msg.provider = 'claude'
+            msg.itemId = undefined
+          }
           // A checkout names both the folder and the project; it must still be there.
           let checkout = msg.checkoutId ? rt.checkouts.get(msg.checkoutId) : undefined
           if (msg.checkoutId && checkout?.state !== 'active') throw new Error('that checkout is gone — pick another folder')
@@ -103,6 +120,7 @@ export function handleConnection(ws: WebSocket, req: http.IncomingMessage): void
               ultracode: msg.mode === 'ultracode' && (msg.provider ?? 'claude') === 'claude',
               // A chat agent is Claude's too, and must be one this workspace offers.
               agent: (msg.provider ?? 'claude') === 'claude' ? (await chatAgentNamed(rt, msg.agent))?.name : undefined,
+              ...(msg.dm ? { kind: 'dm' as const } : {}),
             },
           )
           // Dispatched from an item: the link is what the item page shows as "sessions".
@@ -173,7 +191,7 @@ export function handleConnection(ws: WebSocket, req: http.IncomingMessage): void
         }
         case 'set_session_mode': {
           const row = rt.rows.get(msg.sessionId)
-          if (!row || row.provider !== 'claude' || row.kind !== 'chat') break
+          if (!row || row.provider !== 'claude' || (row.kind !== 'chat' && row.kind !== 'dm')) break
           const planning = msg.mode === 'plan'
           if (row.planning === planning) break
           row.planning = planning

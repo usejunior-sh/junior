@@ -1,4 +1,5 @@
 import { useRef, useState, useEffect } from 'react'
+import { dmKey } from '../../../core/junior/dms.js'
 import type { CreateStep } from '../../../shared/protocol.js'
 import { draftStore } from '../drafts.js'
 import { store } from '../store.js'
@@ -43,6 +44,12 @@ export function useNewSessionFlow({ navigate, replaceTab, openTab, currentTermin
         const d = pendingDraft.current
         pendingDraft.current = null
         setCreateStep(null)
+        // An agent's DM opens where it lives, on the Agents page, never in a tab.
+        if (s.kind === 'dm') {
+          if (d) draftStore.remove(d)
+          navigate(`/agents/${encodeURIComponent(dmKey(s.agent))}`)
+          return
+        }
         if (d) {
           replaceTab(draftKey(d), s.id)
           draftStore.remove(d)

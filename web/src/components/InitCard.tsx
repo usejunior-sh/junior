@@ -1,5 +1,5 @@
 import { memo } from 'react'
-import type { TranscriptItem } from '../transcript.js'
+import { initTrouble, type TranscriptItem } from '../transcript.js'
 
 type Init = Extract<TranscriptItem, { kind: 'init' }>
 
@@ -22,7 +22,8 @@ export const InitCard = memo(function InitCard({ item }: { item: Init }) {
   const live = (name: string, status: string) => status === 'connected' || serving.has(name)
   const connected = item.servers.filter((s) => live(s.name, s.status)).length
   return (
-    <details className="init">
+    // `trouble`: a DM hides this line unless something actually broke (session.css).
+    <details className={`init${initTrouble(item.servers, item.mcpTools) ? ' trouble' : ''}`}>
       <summary>
         session ready · model <b>{item.model ?? '?'}</b> · {item.toolCount} tools
         {item.servers.length > 0 && (
@@ -51,3 +52,4 @@ export const InitCard = memo(function InitCard({ item }: { item: Init }) {
     </details>
   )
 })
+

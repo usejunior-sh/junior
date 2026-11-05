@@ -38,7 +38,7 @@ export const JUNIOR_MCP_INSTRUCTIONS = `Junior is a local work inbox for one eng
 
 list_work_items, get_work_item, get_session_context, list_artifacts, read_artifact, get_today and check_send are free reads — use them rather than guessing. Every other tool writes, and the user is asked first.`
 
-export type JuniorSessionKind = 'chat' | 'job-run' | 'brief' | 'goal' | 'task'
+export type JuniorSessionKind = 'chat' | 'job-run' | 'brief' | 'goal' | 'task' | 'dm'
 
 export type JuniorSessionIdentity = {
   /** the junior session id: the handle for get_session_context and `links` */
@@ -80,8 +80,15 @@ was opened for and which artifacts are attached to it; get_work_item follows any
   return `${head}
 When the user says to write something down, note it, or attach it here, that means write_artifact. This
 session is linked to it on its own; name the work item in \`links\` too when there is one, so the note comes
-back with the work rather than getting lost in the transcript.${kind === 'chat' ? jobsSection(id.juniorName ?? 'Junior') + GOALS_SECTION + (id.ultracode ? ULTRACODE_SECTION : '') : ''}${id.libraryRoot ? librarySection(id.libraryRoot) : ''}${context}`
+back with the work rather than getting lost in the transcript.${kind === 'dm' ? DM_SECTION : ''}${kind === 'chat' || kind === 'dm' ? jobsSection(id.juniorName ?? 'Junior') + GOALS_SECTION + (id.ultracode ? ULTRACODE_SECTION : '') : ''}${id.libraryRoot ? librarySection(id.libraryRoot) : ''}${context}`
 }
+
+/** A DM: the user's one long-running chat with this agent, on the Agents page. */
+const DM_SECTION = `
+
+This chat is a DM: the user's one long-running chat with you, on the Agents page. They come back to it
+over days, so it outlives any one task. Keep each reply short. When a request grows into real work (several
+files, a long investigation), offer to move it to a new chat with start_session rather than filling this one.`
 
 /*
  * Context files: what the user tells Junior once instead of every time.

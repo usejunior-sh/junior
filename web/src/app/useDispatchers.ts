@@ -18,7 +18,8 @@ export function useDispatchers({ navigate, pendingDraft, setCreateError, inbox, 
   inbox: ReturnType<typeof useInbox>
   checkouts: ReturnType<typeof useCheckouts>
 }) {
-  const create = useCallback((draftId: string, s: NewSession) => {
+  // `dm`: the first message of an agent's DM (core/junior/dms.ts), its one long-running chat.
+  const create = useCallback((draftId: string, s: NewSession, dm?: boolean) => {
     pendingDraft.current = draftId
     setCreateError(null)
     store.send({
@@ -32,6 +33,7 @@ export function useDispatchers({ navigate, pendingDraft, setCreateError, inbox, 
       ...(s.mode && s.mode !== 'normal' ? { mode: s.mode } : {}),
       provider: s.provider,
       ...(s.agent ? { agent: s.agent } : {}),
+      ...(dm ? { dm: true } : {}),
       images: s.images,
       ...(s.files ? { files: s.files } : {}),
       mentions: s.mentions,
