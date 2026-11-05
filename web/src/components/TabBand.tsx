@@ -20,7 +20,7 @@ import {
   X,
   XCircle,
   type LucideProps,
-  Inbox,
+  ListChecks,
 } from 'lucide-react'
 import { JuniorFace } from './JuniorFace.js'
 import {
@@ -72,7 +72,7 @@ const ICON: Record<TabKind, ComponentType<LucideProps>> = {
   'job-form': CalendarClock,
   change: FileDiff,
   run: FolderOpen,
-  inbox: Inbox,
+  inbox: ListChecks,
   dm: Bot,
 }
 

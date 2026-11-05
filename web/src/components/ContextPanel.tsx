@@ -109,11 +109,11 @@ export function InboxTabsPanel({ tabs, views, statusCounts, loaded, current, onG
   // Done and All read the server's done list, which the sidebar doesn't hold: no count beats a wrong one.
   const count: Record<InboxView, number | null> = { todo: views.todo.length, doing: views.doing.length, done: null, all: null }
   return (
-    <aside className="panel" aria-label="Inbox">
+    <aside className="panel" aria-label="Tasks">
       <PanelSearch onSearch={onSearch} placeholder="Search items, chats…" />
       <div className="panelBody">
         <div className="panelHead">
-          <span>Inbox</span>
+          <span>Tasks</span>
           <span className="n">{loaded ? open : ''}</span>
           <span className="acts">
             <button type="button" className="iconBtn sm" title="Add a work item (n)" onClick={onAdd}>
@@ -124,7 +124,7 @@ export function InboxTabsPanel({ tabs, views, statusCounts, loaded, current, onG
             </button>
           </span>
         </div>
-        <nav aria-label="Inbox views">
+        <nav aria-label="Task views">
           {INBOX_VIEWS.map((v) => {
             const Icon = VIEW_ICON[v]
             const n = count[v]

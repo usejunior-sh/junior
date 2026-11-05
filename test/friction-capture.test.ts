@@ -46,10 +46,10 @@ test('filing a note makes one manual item labelled friction, due Later, with the
     assert.equal(item.kind, 'manual')
     assert.equal(item.title, 'transcript jumps to top')
     assert.equal(item.label, 'friction')
-    assert.equal(item.description, 'Noted on Inbox (#/inbox) · selected github:acme/api#412')
+    assert.equal(item.description, 'Noted on Tasks (#/inbox) · selected github:acme/api#412')
     assert.ok(item.description?.includes('#/inbox'))
     assert.ok(item.description?.includes('github:acme/api#412'))
-    // the description is the row's muted reason in the Inbox
+    // the description is the row's muted reason in Tasks
     assert.equal(item.why, item.description)
     assert.equal(item.dueSource, 'you', 'filed into a section, not left to the default')
     assert.equal(dueOf({ ask: 'do', dueAt: item.dueAt, dueSource: item.dueSource }, Date.now()).section, 'later')
@@ -142,7 +142,7 @@ test('isFrictionKey: ⌘⇧. and Ctrl+Shift+., by the Period code only', () => {
 // ---------------------------------------------------------------------------
 
 test('description: page, hash, and the selected item when there is one', () => {
-  assert.equal(frictionDescription({ page: 'inbox', hash: '#/inbox', selected: 'github:acme/api#412' }), 'Noted on Inbox (#/inbox) · selected github:acme/api#412')
+  assert.equal(frictionDescription({ page: 'inbox', hash: '#/inbox', selected: 'github:acme/api#412' }), 'Noted on Tasks (#/inbox) · selected github:acme/api#412')
   assert.equal(frictionDescription({ page: 'settings', hash: '#/settings/connectors' }), 'Noted on Settings (#/settings/connectors)')
   assert.equal(frictionDescription({ page: 'session', hash: '#/abc', selected: null }), 'Noted on Chat (#/abc)')
   assert.equal(frictionDescription({ page: 'home', hash: '' }), 'Noted on Junior (#/)')

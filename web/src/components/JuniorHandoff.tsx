@@ -495,7 +495,7 @@ export const JuniorPeople = ({ onNavigate }: Nav) => (
 )
 
 export const JuniorMyWork = ({ onNavigate }: Nav) => (
-  <ItemList section="work" title="My work" aside="assigned to you, or started" empty="Nothing assigned to you or started. Your backlog is in the inbox." onNavigate={onNavigate} />
+  <ItemList section="work" title="My work" aside="assigned to you, or started" empty="Nothing assigned to you or started. Your backlog is in Tasks." onNavigate={onNavigate} />
 )
 
 /** FYI: you were mentioned, nothing is asked. Read it, or snooze it. */
@@ -516,7 +516,7 @@ function Fyi({ items, onNavigate }: { items: ScoredItem[] } & Nav) {
         ))}
         {rows.length > SUGGEST_SHOWN && (
           <button type="button" className="jrMore" onClick={() => onNavigate('/inbox')}>
-            {rows.length - SUGGEST_SHOWN} more in your inbox
+            {rows.length - SUGGEST_SHOWN} more in your tasks
           </button>
         )}
       </div>

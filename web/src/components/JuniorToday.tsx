@@ -29,7 +29,7 @@ export function JuniorGoals({ day, onNavigate, onDispatch }: Props) {
         <span className="n">
           {day.plan.done} of {day.plan.total} done
         </span>
-        <span className="aside">{day.plan.drafted ? 'I drafted it from your inbox · ' : ''}every session today can see it</span>
+        <span className="aside">{day.plan.drafted ? 'I drafted it from your tasks · ' : ''}every session today can see it</span>
       </h2>
       <div className="jrPlan">
         {day.plan.rows.map((r) => (
@@ -173,7 +173,7 @@ function PlanLine({
       <button
         type="button"
         className="rm"
-        title="Take it off today (the item stays in your inbox)"
+        title="Take it off today (it stays in your tasks)"
         aria-label={`Take “${row.title}” off today`}
         disabled={busy}
         onClick={(e) => {
@@ -279,7 +279,7 @@ function AlsoToday({ name, onAdded, placeholder }: { name: string; onAdded: (ite
               ) : (
                 <>
                   <div className="txt">
-                    That's <b>{reply.ref}</b> in your inbox: “{reply.title}”. Whose is it today?
+                    That's <b>{reply.ref}</b> in your tasks: “{reply.title}”. Whose is it today?
                   </div>
                   <div className="acts">
                     <button type="button" className="btn sm primary" disabled={busy} onClick={() => void add({ itemId: reply.id, owner: 'you' })}>
@@ -397,7 +397,7 @@ export function JuniorFirstOpen({ day }: { day: JuniorDay }) {
             void draftToday()
           }}
         >
-          draft one from your inbox
+          draft one from your tasks
         </button>
         .
       </p>

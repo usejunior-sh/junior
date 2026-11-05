@@ -19,7 +19,7 @@ export const EMPTY_TEXT: Record<InboxRoute, string> = {
   todo: 'Nothing waiting to be started.',
   doing: 'Nothing in progress. Start a chat on an item and it shows here.',
   done: 'Nothing done yet.',
-  all: 'No work items yet.',
+  all: 'No tasks yet.',
   snoozed: 'Nothing snoozed.',
   archived: 'Nothing archived.',
 }

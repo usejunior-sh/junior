@@ -403,7 +403,7 @@ export function App() {
             ? [{ key, kind: 'terminal', title: t.title, color: projectColor(t.projectId ?? t.cwd), running: t.status === 'running', ...worktreeTag(t.checkoutId) }]
             : []
         }
-        if (key === 'inbox') return [{ key, kind: 'inbox', title: 'Inbox', color: 'var(--stone)', running: false }]
+        if (key === 'inbox') return [{ key, kind: 'inbox', title: 'Tasks', color: 'var(--stone)', running: false }]
         if (isDocKey(key)) {
           const t = docTab(key)
           return t ? [t] : []
@@ -464,7 +464,7 @@ export function App() {
     : route.page === 'junior'
       ? persona.name
       : route.page === 'inbox'
-      ? 'Inbox'
+      ? 'Tasks'
       : route.page === 'settings'
         ? 'Settings'
       : [...openTabs, ...(previewTab ? [previewTab] : [])].find((t) => t.key === activeTabKey)?.title ?? pageTab?.label ?? null

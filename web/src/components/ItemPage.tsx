@@ -433,7 +433,7 @@ export function ItemPage({ id, onDispatch, onNavigate, onDirty }: Props) {
               </>
             ) : (
               <>
-                This item is not in the inbox any more. <a href="#/inbox">Back to the inbox</a>
+                This task is not in your tasks any more. <a href="#/inbox">Back to Tasks</a>
               </>
             )}
           </div>

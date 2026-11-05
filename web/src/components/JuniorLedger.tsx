@@ -840,7 +840,7 @@ export function JuniorLedger({ tab, items, rows, needs, me, empty, moves, nudges
       {whyAt === mainCount && whyLine}
       {fyi > 0 && (
         <button type="button" className="jhMore" onClick={() => onNavigate('/inbox')}>
-          {fyi} more for your info in the inbox
+          {fyi} more for your info in your tasks
         </button>
       )}
       {closeLines.length > 0 && (

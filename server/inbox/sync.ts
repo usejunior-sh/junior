@@ -128,7 +128,7 @@ export function syncInbox(rt: WorkspaceRuntime): Promise<InboxSnapshot> {
       // Honest empty state: a workspace with no repos scoped pulls no GitHub.
       // Say so, so "nothing here" is never mistaken for "the source is broken".
       if (scoped.size === 0) {
-        notices.push('github: no repos scoped to this workspace — pick repos in the inbox’s repo filter to pull PRs and issues here')
+        notices.push('github: no repos scoped to this workspace — pick repos in the Tasks repo filter to pull PRs and issues here')
       }
       if (slackConnected(rt) === false) {
         notices.push('slack: the claude.ai Slack connector is disconnected — reconnect it for Slack items to appear')

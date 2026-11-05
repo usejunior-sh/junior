@@ -130,7 +130,7 @@ function Section({
         {rows.slice(0, SHOWN).map((r) => children(r))}
         {more > 0 && (
           <button type="button" className="jrMore" onClick={() => onNavigate('/inbox')}>
-            {more} more in your inbox
+            {more} more in your tasks
           </button>
         )}
       </div>

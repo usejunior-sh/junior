@@ -19,7 +19,7 @@ export const MOBILE_SHEETS: readonly RailSection[] = ['agents', 'inbox', 'sessio
 export const SHEET_LABEL: Record<RailSection, string> = {
   junior: 'Junior',
   agents: 'Agents',
-  inbox: 'Inbox',
+  inbox: 'Tasks',
   sessions: 'Chats',
   artifacts: 'Artifacts',
   changes: 'Changes',
@@ -140,7 +140,7 @@ export const GENERIC: Record<TabKind, string> = {
   'job-form': 'Job',
   change: 'File',
   run: 'Team run',
-  inbox: 'Inbox',
+  inbox: 'Tasks',
   dm: 'Agent',
 }
 

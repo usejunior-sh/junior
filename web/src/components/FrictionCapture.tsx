@@ -85,7 +85,7 @@ export function FrictionCapture({
     if (body?.ok) {
       filed.current = true
       setStatus({ phase: 'done' })
-      setSaid("Noted for later. It's in your inbox.")
+      setSaid("Noted for later. It's in your tasks.")
       closeTimer.current = window.setTimeout(() => onOpenChange(false), DONE_HOLD_MS)
       return
     }

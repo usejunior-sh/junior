@@ -197,7 +197,7 @@ export function ItemComposer({
           >
             <div className="composerHead">
               <div className="crumbs">
-                <span className="crumb">Inbox</span>
+                <span className="crumb">Tasks</span>
                 <span className="crumbSep">›</span>
                 <Dialog.Title asChild>
                   <span className="crumb now">{editing ? 'Edit work item' : 'New work item'}</span>
@@ -327,7 +327,7 @@ export function ItemComposer({
                   Cancel
                 </button>
                 <button type="submit" className="go" disabled={saving || attach.uploading || !title.trim()}>
-                  {saving ? 'Saving…' : attach.uploading ? 'Uploading…' : editing ? 'Save changes' : 'Add item'}
+                  {saving ? 'Saving…' : attach.uploading ? 'Uploading…' : editing ? 'Save changes' : 'Add task'}
                 </button>
               </div>
             </div>

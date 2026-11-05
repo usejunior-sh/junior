@@ -85,7 +85,7 @@ export function cronToPreset(cron: string): { preset: SchedulePreset; time: stri
 /** What a run produces. */
 export const OUTPUTS: Array<{ id: JobOutput; label: string; hint: string }> = [
   { id: 'items', label: 'Work items', hint: 'One item per match, deduped by its link.' },
-  { id: 'digest', label: 'Digest', hint: 'One rolling item with a markdown report. Each run rewrites it and it returns to the inbox.' },
+  { id: 'digest', label: 'Digest', hint: 'One rolling item with a markdown report. Each run rewrites it and it returns to your tasks.' },
 ]
 
 /**

@@ -1,4 +1,4 @@
-import { Bot, CalendarClock, FileDiff, FileText, Inbox, MessagesSquare, Terminal, type LucideProps } from 'lucide-react'
+import { Bot, CalendarClock, FileDiff, FileText, ListChecks, MessagesSquare, Terminal, type LucideProps } from 'lucide-react'
 import { Fragment, type ComponentType } from 'react'
 import type { Mood } from '../../../core/junior/mood.js'
 import { MOOD_LABEL } from '../../../core/junior/mood.js'
@@ -26,13 +26,13 @@ type Props = {
 }
 
 /**
- * Junior · Agents · Inbox, a gap, then the places you work. `gap` starts the second group.
+ * Junior · Agents · Tasks, a gap, then the places you work. `gap` starts the second group.
  * `phoneOnly`: on a desktop it lives elsewhere (Changes is a tab in each chat's sidebar); a phone has
  * no sidebar, so there it keeps its place in the bottom bar.
  */
 const ITEMS: Array<{ id: RailSection; label: string; icon: ComponentType<LucideProps>; gap?: true; phoneOnly?: true }> = [
   { id: 'agents', label: 'Agents', icon: Bot },
-  { id: 'inbox', label: 'Inbox', icon: Inbox },
+  { id: 'inbox', label: 'Tasks', icon: ListChecks },
   { id: 'sessions', label: 'Chats', icon: MessagesSquare, gap: true },
   { id: 'artifacts', label: 'Artifacts', icon: FileText },
   { id: 'changes', label: 'Changes', icon: FileDiff, phoneOnly: true },

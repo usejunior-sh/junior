@@ -203,7 +203,7 @@ function StatusTab({ conn }: { conn: ConnState }) {
         />
       )}
       <Row label="Job runs in flight" value={String(status.runningJobs)} />
-      <Row label="Inbox last synced" value={rel(status.inboxSyncedAt)} />
+      <Row label="Tasks last synced" value={rel(status.inboxSyncedAt)} />
       <Row
         label="GitHub last reconcile"
         value={status.githubNotice ? status.githubNotice : rel(status.githubReconcileAt)}

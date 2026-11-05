@@ -420,7 +420,7 @@ export function InboxPage({ view, tabs, views, onDispatch, onRefineJob, onOpenIt
             {loading && count === 0 ? (
               <span className="muted">syncing…</span>
             ) : (
-              <span className="muted">{`${count} item${count === 1 ? '' : 's'}.`}</span>
+              <span className="muted">{`${count} task${count === 1 ? '' : 's'}.`}</span>
             )}
           </h1>
           <span className="pageMeta" title={snap.syncedAt ? new Date(snap.syncedAt).toLocaleString() : undefined}>
@@ -462,7 +462,7 @@ export function InboxPage({ view, tabs, views, onDispatch, onRefineJob, onOpenIt
           )}
           <div className="right">
             <button type="button" className="btn sm ghost" onClick={() => setComposer({ open: true, editing: null })}>
-              + Add item
+              + Add task
             </button>
             <button type="button" className="btn sm ghost mono" onClick={() => setReposOpen(true)}>
               {repoCount == null ? 'Repos' : repoCount === 0 ? 'Repos: none' : `Repos: ${repoCount}`}

@@ -13,7 +13,7 @@ export const FRICTION_MAX = 500
 const PAGE_NAMES: Record<string, string> = {
   home: 'Junior',
   junior: 'Junior',
-  inbox: 'Inbox',
+  inbox: 'Tasks',
   item: 'Item',
   session: 'Chat',
   draft: 'Chat',
