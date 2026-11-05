@@ -52,16 +52,18 @@ export function AgentsPanel({ current, onOpen, onPin, onSearch }: Props) {
 }
 
 function AgentRow({ row, dm, active, onOpen, onPin }: { row: Row; dm: SessionSummary | undefined; active: boolean; onOpen: () => void; onPin: () => void }) {
-  // Hovering a row wakes its face: the eyes follow your pointer, so the list feels like people, not files.
+  // At rest a face shows its DM's state (working, needs you, hello). Hovering wakes it: a happy face whose
+  // eyes follow your pointer, so the list feels like people, not files. The face eases between the two.
   const [hover, setHover] = useState(false)
   // Waiting on you outranks working: the one orange in the list.
   const needs = dm ? needsYouText(dm) : null
   const shown = dm ? shownStatus(dm) : null
+  const working = shown?.status === 'running' || shown?.status === 'starting'
   const state = needs
     ? { cls: 'needs', text: 'needs you', title: `Waiting on you: ${needs}` }
     : shown?.status === 'error'
       ? { cls: 'failed', text: 'failed', title: shown.title }
-      : shown?.status === 'running' || shown?.status === 'starting'
+      : working
         ? { cls: 'working', text: 'working', title: shown.title }
         : null
   return (
@@ -83,7 +85,7 @@ function AgentRow({ row, dm, active, onOpen, onPin }: { row: Row; dm: SessionSum
       }}
     >
       <span className="lead" aria-hidden="true">
-        <JuniorFace size={36} motion={hover ? 'follow' : 'still'} colour={row.colour} decorative />
+        <JuniorFace size={36} motion={hover ? 'follow' : 'still'} mood={hover ? 'done' : needs ? 'needs' : working ? 'working' : 'hello'} colour={row.colour} decorative />
       </span>
       <span className="t">
         <span className="nm">{row.label}</span>
