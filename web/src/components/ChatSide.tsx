@@ -3,9 +3,9 @@
  * who the chat talks as, its artifacts, or its background agents, with a stats
  * bar at the bottom. The browser tab is the browser pane itself, in this slot.
  */
-import { List, X } from 'lucide-react'
+import { ChevronDown, Folder, List, X } from 'lucide-react'
 import { useMemo } from 'react'
-import type { SessionSummary } from '../../../shared/protocol.js'
+import type { CheckoutChanges, SessionSummary } from '../../../shared/protocol.js'
 import type { AgentRun } from '../agents.js'
 import { artifactAgo, FormatIcon } from '../artifactFormat.js'
 import { useSessionArtifacts } from '../artifactsClient.js'
@@ -19,8 +19,11 @@ import { EFFORT_LABEL, findModel, useModels } from '../models.js'
 import { usePersona } from '../junior.js'
 import { agentTitle } from '../../../core/junior/agents.js'
 import { useSessionSpend } from './SessionCost.js'
+import { ChangeFileRows, useChangesPoll } from './ChangesPanel.js'
+import { CheckoutMenu } from './CheckoutMenu.js'
+import { changeId, useChanges } from '../changesStore.js'
 
-const TITLE: Record<Exclude<SideTab, 'browser'>, string> = { agent: 'About', artifacts: 'Artifacts', agents: 'Background agents' }
+const TITLE: Record<Exclude<SideTab, 'browser'>, string> = { agent: 'About', changes: 'Changes', artifacts: 'Artifacts', agents: 'Background agents' }
 
 type Props = {
   session: SessionSummary
@@ -29,16 +32,20 @@ type Props = {
   openAgent: AgentRun | null
   showAgent: (toolUseId: string | null) => void
   onNavigate: (hash: string) => void
+  /** Keep a changed file as a tab of its own (⌘-click, middle-click on a row). */
+  onPin: (key: string) => void
+  newTerminalIn: (checkoutId: string) => void
 }
 
-export function ChatSide({ session, tab, agents, openAgent, showAgent, onNavigate }: Props) {
+export function ChatSide({ session, tab, agents, openAgent, showAgent, onNavigate, onPin, newTerminalIn }: Props) {
   const artifacts = useSessionArtifacts(session.id)
   // Running first, then the newest: what's going on now is what you came to look at.
   const runs = useMemo(
     () => [...agents].sort((a, b) => Number(b.state === 'running') - Number(a.state === 'running') || (b.startedAt ?? 0) - (a.startedAt ?? 0)),
     [agents],
   )
-  const count = tab === 'artifacts' ? artifacts.length : tab === 'agents' ? agents.length : 0
+  const changed = useChatChanges(session.checkoutId)
+  const count = tab === 'artifacts' ? artifacts.length : tab === 'agents' ? agents.length : tab === 'changes' ? (changed?.files.length ?? 0) : 0
   return (
     <aside className="chatSide" aria-label={TITLE[tab]}>
       <div className="csHead">
@@ -49,7 +56,9 @@ export function ChatSide({ session, tab, agents, openAgent, showAgent, onNavigat
         </button>
       </div>
       <div className="csBody">
-        {tab === 'agent' ? (
+        {tab === 'changes' ? (
+          <SideChanges cc={changed} onNavigate={onNavigate} onPin={onPin} newTerminalIn={newTerminalIn} />
+        ) : tab === 'agent' ? (
           <AgentAbout session={session} onNavigate={onNavigate} />
         ) : tab === 'artifacts' ? (
           artifacts.length === 0 ? (
@@ -172,5 +181,69 @@ function AgentAbout({ session, onNavigate }: { session: SessionSummary; onNaviga
         Edit in Settings → Agents
       </button>
     </div>
+  )
+}
+
+/** This chat's folder as the changes store sees it (null until it loads, or for a chat with no checkout). */
+export function useChatChanges(checkoutId: string | undefined): CheckoutChanges | null {
+  const { projects } = useChanges()
+  return useMemo(() => {
+    if (!checkoutId) return null
+    for (const p of projects) for (const c of p.checkouts) if (c.checkout.id === checkoutId) return c
+    return null
+  }, [projects, checkoutId])
+}
+
+/**
+ * Every uncommitted file in the chat's folder, the same rows as the rail's
+ * Changes, under a bar that says which folder and branch it is and opens it
+ * elsewhere. It lists the disk, so a change from a terminal or an editor shows
+ * up here too, not only the agent's.
+ */
+function SideChanges({
+  cc,
+  onNavigate,
+  onPin,
+  newTerminalIn,
+}: {
+  cc: CheckoutChanges | null
+  onNavigate: (hash: string) => void
+  onPin: (key: string) => void
+  newTerminalIn: (checkoutId: string) => void
+}) {
+  useChangesPoll()
+  const { projects, loaded } = useChanges()
+  if (!cc) return <div className="csEmpty">{loaded ? "This chat's folder isn't a project with git, so there are no changes to list." : 'Loading changes…'}</div>
+  const project = projects.find((p) => p.project.id === cc.checkout.projectId)?.project.name
+  return (
+    <>
+      <div className="csFolder" title={cc.checkout.path}>
+        <Folder size={14} aria-hidden="true" />
+        <span className="t">
+          {project ?? cc.checkout.path}
+          {cc.checkout.branch && <span className="br"> / {cc.checkout.branch}</span>}
+        </span>
+        <CheckoutMenu checkout={cc.checkout} align="end" onNewTerminal={() => newTerminalIn(cc.checkout.id)}>
+          <button type="button" className="iconBtn" title="Open in…" aria-label="Open in">
+            <Folder size={14} aria-hidden="true" />
+            <ChevronDown size={12} aria-hidden="true" />
+          </button>
+        </CheckoutMenu>
+      </div>
+      {cc.error ? (
+        <div className="csEmpty">git failed for this folder: {cc.error}</div>
+      ) : cc.files.length === 0 ? (
+        <div className="csEmpty">No uncommitted changes in this folder.</div>
+      ) : (
+        <div className="csChanges">
+          <ChangeFileRows
+            cc={cc}
+            current={null}
+            onOpen={(checkoutId, path) => onNavigate(`/change/${changeId(checkoutId, path)}`)}
+            onPin={(checkoutId, path) => onPin(`change:${changeId(checkoutId, path)}`)}
+          />
+        </div>
+      )}
+    </>
   )
 }

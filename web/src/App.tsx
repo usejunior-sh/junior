@@ -825,7 +825,7 @@ export function App() {
               </SessionAgentScope>
               </div>
               {browserOpen && <BrowserPane key={current.id} tabKey={current.id} onTerminal={currentCheckout ? () => newTerminalIn(currentCheckout.id) : undefined} />}
-              {sideTab && <ChatSide session={current} tab={sideTab} agents={agents} openAgent={openAgent} showAgent={showAgent} onNavigate={navigate} />}
+              {sideTab && <ChatSide session={current} tab={sideTab} agents={agents} openAgent={openAgent} showAgent={showAgent} onNavigate={navigate} onPin={pin} newTerminalIn={newTerminalIn} />}
               {wf.sideRun && (
                 <WorkflowSide
                   sessionId={current.id}

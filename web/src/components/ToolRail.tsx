@@ -1,10 +1,10 @@
 /**
  * The chat's tool rail (variant I, artifact 9d492a83): a 48px column on the
  * right, the one home for a chat's tools on a desktop. The sidebar toggle on
- * top, then the tabs it switches (Artifacts, Background agents, Browser), and
- * at the foot where the chat runs (Open in) and what it has cost.
+ * top, then the tabs it switches (Changes, Artifacts, Background agents,
+ * Browser), and at the foot where the chat runs (Open in) and what it has cost.
  */
-import { FileText, PanelRight } from 'lucide-react'
+import { FileDiff, FileText, PanelRight } from 'lucide-react'
 import type { SessionSummary } from '../../../shared/protocol.js'
 import type { AgentRun } from '../agents.js'
 import { AgentsIcon, BrowserButton, OpenIn, agentsTitle } from '../app/ChatHeader.js'
@@ -12,6 +12,7 @@ import { useSessionArtifacts } from '../artifactsClient.js'
 import { chatSide, useChatSide } from '../chatSide.js'
 import type { checkoutOf } from '../checkouts.js'
 import { SessionCost } from './SessionCost.js'
+import { useChatChanges } from './ChatSide.js'
 
 type Props = {
   current: SessionSummary
@@ -24,6 +25,7 @@ type Props = {
 export function ToolRail({ current, checkout, newTerminalIn, agents, browserOpen }: Props) {
   const side = useChatSide(current.id)
   const artifacts = useSessionArtifacts(current.id).length
+  const changed = useChatChanges(current.checkoutId)?.files.length ?? 0
   return (
     <nav className="toolRail" aria-label="Chat tools">
       <button
@@ -37,6 +39,19 @@ export function ToolRail({ current, checkout, newTerminalIn, agents, browserOpen
         <PanelRight size={15} aria-hidden="true" />
       </button>
       <span className="trSep" aria-hidden="true" />
+      {current.checkoutId && (
+        <button
+          type="button"
+          className={`ib tab${side === 'changes' ? ' on' : ''}`}
+          title={`Changes in this folder · ${changed}`}
+          aria-label={`Changes in this folder, ${changed}`}
+          aria-pressed={side === 'changes'}
+          onClick={() => chatSide.toggle(current.id, 'changes')}
+        >
+          <FileDiff size={15} aria-hidden="true" />
+          {changed > 0 && <span className="ibCount">{changed}</span>}
+        </button>
+      )}
       <button
         type="button"
         className={`ib tab${side === 'artifacts' ? ' on' : ''}`}

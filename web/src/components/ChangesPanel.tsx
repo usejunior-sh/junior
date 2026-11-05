@@ -47,10 +47,8 @@ type Props = {
 
 const fileCount = (pc: ProjectChanges) => pc.checkouts.reduce((n, c) => n + c.files.length, 0)
 
-export function ChangesPanel({ projects, loaded, loading, current, onOpen, onPin, onNewTerminal, onSearch }: Props) {
-  const [collapsed, setCollapsed] = useState(readCollapsed)
-
-  // Fresh on arrival, then a slow poll while the panel is on screen.
+/** Fresh on arrival, then a slow poll while the list is on screen (this panel, a chat's Changes tab). */
+export function useChangesPoll() {
   useEffect(() => {
     void changesStore.refresh()
     const t = window.setInterval(() => {
@@ -58,6 +56,62 @@ export function ChangesPanel({ projects, loaded, loading, current, onOpen, onPin
     }, POLL_MS)
     return () => window.clearInterval(t)
   }, [])
+}
+
+/** One checkout's changed files as rows: status, name and folder, +/−. A row opens the file; ⌘-click keeps it as a tab. */
+export function ChangeFileRows({
+  cc,
+  nested = false,
+  current,
+  onOpen,
+  onPin,
+}: {
+  cc: CheckoutChanges
+  nested?: boolean
+  current: { checkoutId: string; path: string } | null
+  onOpen: (checkoutId: string, path: string) => void
+  onPin: (checkoutId: string, path: string) => void
+}) {
+  return (
+    <>
+      {cc.files.map((f) => {
+        const sel = current?.checkoutId === cc.checkout.id && current.path === f.path
+        const dir = dirName(f.path)
+        return (
+          <button
+            key={f.path}
+            type="button"
+            className={`prow chg${nested ? ' nested' : ''}${sel ? ' sel' : ''}`}
+            title={f.path}
+            {...rowOpen(
+              () => onOpen(cc.checkout.id, f.path),
+              () => onPin(cc.checkout.id, f.path),
+            )}
+          >
+            <span className={`st ${f.status}`}>{STATUS_LETTER[f.status]}</span>
+            <span className="t">
+              <span className="nm">{baseName(f.path)}</span>
+              {dir && <span className="sub">{dir}</span>}
+            </span>
+            <span className="m">
+              {f.isBinary ? (
+                'bin'
+              ) : (
+                <>
+                  <span className="pl">+{f.insertions}</span> <span className="mn">−{f.deletions}</span>
+                </>
+              )}
+            </span>
+          </button>
+        )
+      })}
+    </>
+  )
+}
+
+export function ChangesPanel({ projects, loaded, loading, current, onOpen, onPin, onNewTerminal, onSearch }: Props) {
+  const [collapsed, setCollapsed] = useState(readCollapsed)
+  useChangesPoll()
 
   function toggle(id: string) {
     setCollapsed((prev) => {
@@ -77,38 +131,7 @@ export function ChangesPanel({ projects, loaded, loading, current, onOpen, onPin
   const ordered = [...projects].sort((a, b) => Number(fileCount(b) > 0) - Number(fileCount(a) > 0))
   const total = projects.reduce((n, p) => n + fileCount(p), 0)
 
-  const files = (cc: CheckoutChanges, nested: boolean) =>
-    cc.files.map((f) => {
-      const sel = current?.checkoutId === cc.checkout.id && current.path === f.path
-      const dir = dirName(f.path)
-      return (
-        <button
-          key={f.path}
-          type="button"
-          className={`prow chg${nested ? ' nested' : ''}${sel ? ' sel' : ''}`}
-          title={f.path}
-          {...rowOpen(
-            () => onOpen(cc.checkout.id, f.path),
-            () => onPin(cc.checkout.id, f.path),
-          )}
-        >
-          <span className={`st ${f.status}`}>{STATUS_LETTER[f.status]}</span>
-          <span className="t">
-            <span className="nm">{baseName(f.path)}</span>
-            {dir && <span className="sub">{dir}</span>}
-          </span>
-          <span className="m">
-            {f.isBinary ? (
-              'bin'
-            ) : (
-              <>
-                <span className="pl">+{f.insertions}</span> <span className="mn">−{f.deletions}</span>
-              </>
-            )}
-          </span>
-        </button>
-      )
-    })
+  const files = (cc: CheckoutChanges, nested: boolean) => <ChangeFileRows cc={cc} nested={nested} current={current} onOpen={onOpen} onPin={onPin} />
 
   // "Open in…" and friends ride beside a group's toggle, never inside it. A button can't hold a button.
   const menu = (cc: CheckoutChanges) => (

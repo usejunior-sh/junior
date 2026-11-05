@@ -145,6 +145,11 @@
 .chatSide .csRow.foot { color: var(--mute); margin-top: 4px; border-top: 1px solid var(--hair-soft); border-radius: 0; }
 .chatSide .csAgents { display: flex; flex-direction: column; gap: 6px; padding: 4px; }
 .chatSide .csAgents .sel .agentCard { border-color: var(--hair-bright); }
+.chatSide .csFolder { display: flex; align-items: center; gap: 8px; margin: 2px 2px 8px; padding: 6px 6px 6px 10px; border-bottom: 1px solid var(--hair); color: var(--ash); }
+.chatSide .csFolder .t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 400 0.8462rem var(--mono); color: var(--body); }
+.chatSide .csFolder .br { color: var(--mute); }
+.chatSide .csFolder .iconBtn { display: inline-flex; align-items: center; gap: 2px; width: auto; padding: 0 6px; }
+.chatSide .csChanges { display: flex; flex-direction: column; }
 .chatSide .csAbout { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 24px 16px; text-align: center; }
 .chatSide .csAbout .nm { color: var(--ink); font-size: 1.1538rem; font-weight: 500; }
 .chatSide .csAbout p { margin: 0; color: var(--mute); max-width: 32ch; }
