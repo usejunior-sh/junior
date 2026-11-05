@@ -769,6 +769,7 @@ export function App() {
                   sessionId={current.id}
                   events={events}
                   turns={sessionChanges?.turns}
+                  chat={current.kind === 'dm'}
                   onRespond={respond}
                   onNavigate={navigate}
                   agents={agents}

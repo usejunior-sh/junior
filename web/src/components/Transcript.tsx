@@ -24,7 +24,7 @@ import { agentLabel, type AgentRun } from '../agents.js'
 import type { ShellRun } from '../../../core/shells/fold.js'
 import { HELD_FOR_YOU, parseReadback, type Readback } from '../../../core/job/readback-text.js'
 import { WORKFLOW_TOOL } from '../../../core/workflows/fold.js'
-import { buildTranscript, eventIndexOf, formatDuration, toolLine, type TranscriptItem } from '../transcript.js'
+import { buildTranscript, chatStats, eventIndexOf, formatDuration, toolLine, type TranscriptItem } from '../transcript.js'
 import { AgentCard } from './Agents.js'
 import { WorkflowCard } from './ultracode/WorkflowCard.js'
 import { WorkflowApproval } from './ultracode/WorkflowApproval.js'
@@ -78,6 +78,8 @@ type Props = {
   timeOf?: (ev: SessionEvent) => number | undefined
   /** Leave out the streaming line: the events aren't the session's main stream (a workflow agent's). */
   noLive?: boolean
+  /** An agent's DM: a turn ends in a short chat-style note under the reply ("done · 2.9s · $0.02"), not a ruled divider. */
+  chat?: boolean
   /** A paged log (store.getPaging): where `events` starts in the whole log, and the older-page state. Unset = whole. */
   paging?: SessionPaging | null
   /** Ask for the page before the oldest one held, and again after a failure. */
@@ -260,6 +262,7 @@ export function Transcript({
   workflows = NO_WORKFLOWS,
   onOpenWorkflow,
   timeOf = store.eventTime,
+  chat = false,
   noLive,
   paging = null,
   onLoadEarlier,
@@ -371,6 +374,7 @@ export function Transcript({
             sessionId={sessionId}
             actionByCall={actionByCall}
             signoff={!speaker ? undefined : moods?.going.has(item.key) ? RUN_GOING : 'done'}
+            chat={chat}
           />
           </Fragment>
         ))}
@@ -537,6 +541,7 @@ const Item = memo(function Item({
   sessionId,
   actionByCall,
   signoff,
+  chat = false,
 }: {
   item: TranscriptItem
   turn?: SessionTurnSummary
@@ -557,6 +562,8 @@ const Item = memo(function Item({
   actionByCall: ReadonlyMap<string, ActionView>
   /** a turn's end reads as Junior's sign-off ("done · 32s · …") rather than "turn done": the word it opens with */
   signoff?: string
+  /** an agent's DM: the sign-off is a short note under the reply */
+  chat?: boolean
 }) {
   switch (item.kind) {
     case 'agent':
@@ -663,9 +670,9 @@ const Item = memo(function Item({
       // A turn that changed files says so here, where it happened, the drawer
       // below answers "in total", this answers "in this turn".
       return (
-        <div className={`meta${signoff && item.stats ? ' signoff' : ''}`}>
+        <div className={`meta${signoff && item.stats ? ' signoff' : ''}${chat ? ' chat' : ''}`}>
           {signoff && item.stats ? (
-            <SignOff stats={item.stats} word={signoff} />
+            <SignOff stats={chat ? chatStats(item.stats) : item.stats} word={signoff} />
           ) : (
             <span className="metaText" title={item.text}>
               {item.text}

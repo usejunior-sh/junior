@@ -94,9 +94,12 @@
   .sessCol.dm #transcript { padding-top: 88px; }
   .sessCol.dm::before { content: ""; position: absolute; top: 0; left: 0; right: 12px; height: 80px; z-index: 4; pointer-events: none; background: linear-gradient(var(--canvas) 45%, transparent); }
 }
-/* A DM reads like a conversation: no opening inventory unless something broke, no name on every reply. */
+/* A DM reads like a conversation: no opening inventory unless something broke. */
 .sessCol.dm #transcript details.init:not(.trouble) { display: none; }
-.sessCol.dm .speaker .spWho { display: none; }
+/* A turn ends in a short note tucked under the reply, like a chat's timestamp, not a ruled divider across the page. */
+.meta.chat { justify-content: flex-start; gap: 8px; margin-top: -8px; font-size: 0.7692rem; }
+.meta.chat::before, .meta.chat::after { display: none; }
+.meta.chat .soDone::before { content: "✓ "; }
 .toolRail {
   width: 48px; flex: none; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 0;
   border-left: 1px solid var(--hair); background: var(--deep);
