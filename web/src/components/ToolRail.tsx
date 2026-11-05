@@ -28,17 +28,19 @@ export function ToolRail({ current, checkout, newTerminalIn, agents, browserOpen
   const changed = useChatChanges(current.checkoutId)?.files.length ?? 0
   return (
     <nav className="toolRail" aria-label="Chat tools">
-      <button
-        type="button"
-        className={`ib${side ? ' on' : ''}`}
-        title={side ? 'Hide the sidebar (⌘⌥B)' : 'Show the sidebar (⌘⌥B)'}
-        aria-label={side ? 'Hide the sidebar' : 'Show the sidebar'}
-        aria-pressed={!!side}
-        onClick={() => chatSide.toggleOpen(current.id)}
-      >
-        <PanelRight size={15} aria-hidden="true" />
-      </button>
-      <span className="trSep" aria-hidden="true" />
+      {/* As tall as the chat's header and the sidebar's, with the same bottom line, so the three read as one. */}
+      <div className="trHead">
+        <button
+          type="button"
+          className={`ib${side ? ' on' : ''}`}
+          title={side ? 'Hide the sidebar (⌘⌥B)' : 'Show the sidebar (⌘⌥B)'}
+          aria-label={side ? 'Hide the sidebar' : 'Show the sidebar'}
+          aria-pressed={!!side}
+          onClick={() => chatSide.toggleOpen(current.id)}
+        >
+          <PanelRight size={15} aria-hidden="true" />
+        </button>
+      </div>
       {current.checkoutId && (
         <button
           type="button"
@@ -75,9 +77,7 @@ export function ToolRail({ current, checkout, newTerminalIn, agents, browserOpen
           <AgentsIcon agents={agents} />
         </button>
       )}
-      <span className={`tab${browserOpen ? ' on' : ''}`}>
-        <BrowserButton sessionId={current.id} open={browserOpen} />
-      </span>
+      <BrowserButton sessionId={current.id} open={browserOpen} className="tab" />
       <span className="trGap" />
       <OpenIn current={current} checkout={checkout} newTerminalIn={newTerminalIn} align="end" />
       <SessionCost sessionId={current.id} status={current.status} workflows={current.workflows} compact />

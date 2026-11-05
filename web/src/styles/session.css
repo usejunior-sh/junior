@@ -104,7 +104,7 @@
 .meta.chat::before, .meta.chat::after { display: none; }
 .meta.chat .soDone::before { content: "✓ "; }
 .toolRail {
-  width: 48px; flex: none; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 0;
+  width: 48px; flex: none; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 0 0 10px;
   border-left: 1px solid var(--hair); background: var(--deep);
 }
 .toolRail .ib {
@@ -112,13 +112,12 @@
   border: 0; border-radius: var(--r); background: none; color: var(--ash); cursor: pointer;
 }
 .toolRail .ib:hover, .toolRail .ib[data-state="open"], .toolRail .ib.on { background: var(--hair-soft); color: var(--ink); }
-/* The open tab: a short bar on the rail's inner edge, by the sidebar it opened. */
-.toolRail .tab.on { position: relative; }
+/* The open tab: a short bar on the rail's inner edge (the rail is 48px, a button 32px: 8px either side), by the sidebar it opened. */
 .toolRail .tab.on::before { content: ""; position: absolute; left: -8px; top: 8px; bottom: 8px; width: 2px; border-radius: 2px; background: var(--ink); }
 .toolRail .ibCount { position: absolute; right: 1px; bottom: 1px; font: 400 9px var(--mono); color: var(--ash); }
 .toolRail .ibLive { position: absolute; right: 4px; top: 4px; width: 6px; height: 6px; border-radius: var(--r-full); background: var(--blue); animation: pulse 1.4s ease-in-out infinite; }
 .toolRail .ibProfile { position: absolute; right: 4px; bottom: 4px; display: inline-flex; }
-.toolRail .trSep { width: 20px; height: 1px; background: var(--hair-strong); margin: 4px 0; }
+.toolRail .trHead { align-self: stretch; height: var(--bar-h); flex: none; display: flex; align-items: center; justify-content: center; border-bottom: 1px solid var(--hair); margin-bottom: 6px; }
 .toolRail .trGap { flex: 1; }
 /* The cost ring stacks its figure under it in the rail's width. */
 .toolRail .costRing { width: 40px; height: auto; flex-direction: column; gap: 3px; padding: 5px 0; font-variant-numeric: tabular-nums; }
@@ -368,6 +367,8 @@
   position: relative; flex: 0 0 54%; min-width: min(360px, 50%); max-width: calc(100% - min(380px, 46%)); min-height: 0; display: flex; flex-direction: column;
   border-left: 1px solid var(--hair); background: var(--canvas);
 }
+/* With the tool rail beside it, the pane's share and its cap leave the rail its 48px. */
+.sessRow:has(> .toolRail) .browserPane { max-width: calc(100% - min(380px, 46%) - 48px); }
 .bpResize {
   position: absolute; top: 0; bottom: 0; left: -4px; width: 7px; z-index: 3;
   cursor: col-resize; touch-action: none; outline: none;

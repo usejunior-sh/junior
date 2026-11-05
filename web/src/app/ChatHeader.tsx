@@ -202,7 +202,7 @@ export function OpenIn({
  * where the browser lives). Once the chat uses a profile other than the
  * workspace's default, a small swatch sits on the icon and the tooltip names it.
  */
-export function BrowserButton({ sessionId, open }: { sessionId: string; open: boolean }) {
+export function BrowserButton({ sessionId, open, className = '' }: { sessionId: string; open: boolean; className?: string }) {
   const tab = useBrowserTab(sessionId)
   const snap = useBrowserProfiles()
   const profile = profileById(snap, tab?.effectiveProfile)
@@ -210,7 +210,7 @@ export function BrowserButton({ sessionId, open }: { sessionId: string; open: bo
   return (
     <button
       type="button"
-      className={`ib${open ? ' on' : ''}`}
+      className={`ib${className ? ` ${className}` : ''}${open ? ' on' : ''}`}
       title={
         !hasBrowser
           ? 'Browser · open Junior.app: the browser lives there.'
