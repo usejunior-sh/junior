@@ -1,6 +1,7 @@
 import {
   ArrowLeft,
   ArrowRight,
+  Bot,
   CalendarClock,
   ChevronRight,
   CircleDot,
@@ -21,6 +22,7 @@ import {
   type LucideProps,
   Inbox,
 } from 'lucide-react'
+import { JuniorFace } from './JuniorFace.js'
 import {
   useCallback,
   useEffect,
@@ -58,7 +60,7 @@ const homely = (p: string) => p.replace(/^\/(?:Users|home)\/[^/]+/, '~')
  * would be lost; the rest are *documents*, which is why only they are ever
  * peeked at rather than pinned.
  */
-export type TabKind = 'session' | 'terminal' | 'draft' | 'item' | 'artifact' | 'job' | 'job-form' | 'change' | 'run' | 'inbox'
+export type TabKind = 'session' | 'terminal' | 'draft' | 'item' | 'artifact' | 'job' | 'job-form' | 'change' | 'run' | 'inbox' | 'dm'
 
 const ICON: Record<TabKind, ComponentType<LucideProps>> = {
   session: MessageSquare,
@@ -71,6 +73,7 @@ const ICON: Record<TabKind, ComponentType<LucideProps>> = {
   change: FileDiff,
   run: FolderOpen,
   inbox: Inbox,
+  dm: Bot,
 }
 
 export type OpenTab = {
@@ -89,6 +92,8 @@ export type OpenTab = {
   branchGone?: boolean
   /** the peek slot: styled as provisional, and replaced by the next document */
   preview?: boolean
+  /** an agent's DM: its face's colour, in place of the icon (undefined = the persona's) */
+  face?: string
 }
 
 export type PageTab = { key: string; label: string; icon: ComponentType<LucideProps> }
@@ -377,7 +382,8 @@ function Tab({
     onClose(tab.key)
   }
   const Icon = ICON[tab.kind]
-  const dotted = tab.kind === 'session' || tab.kind === 'terminal'
+  // A DM's face is its mark; its dot shows only while the agent works.
+  const dotted = tab.kind === 'session' || tab.kind === 'terminal' || (tab.kind === 'dm' && tab.running)
   return (
     <CtxMenu>
       <CtxMenuTrigger asChild>
@@ -397,7 +403,7 @@ function Tab({
           onDragEnd={drag?.onDragEnd}
         >
           {drag?.dropEdge === 'before' && <span className="dropline before" aria-hidden="true" />}
-          <Icon size={13} aria-hidden="true" />
+          {tab.kind === 'dm' ? <JuniorFace size={14} motion="still" colour={tab.face} decorative /> : <Icon size={13} aria-hidden="true" />}
           <span className={`t${tab.kind === 'draft' ? ' draft' : ''}`}>
             {tab.waiting ? (
               <span className="pdot needs" aria-label="waiting on you" />

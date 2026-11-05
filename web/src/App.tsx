@@ -429,7 +429,7 @@ export function App() {
   // Only the rail *indexes* get a transient page tab now: an artifact, job
   // or item in front is a document, and gets a real tab of its own.
   const pageTab =
-    route.page === 'agents' || route.page === 'jobs' || route.page === 'terminals' || route.page === 'artifacts' || route.page === 'changes'
+    route.page === 'jobs' || route.page === 'terminals' || route.page === 'artifacts' || route.page === 'changes'
       ? PAGE_TABS[route.page]
       : null
 

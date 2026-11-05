@@ -12,7 +12,7 @@ import { useTeamRun } from '../components/TeamRun.js'
 import { useTerminals, type Route } from '../hooks.js'
 import { useInbox, inboxStore } from '../inboxStore.js'
 import { useArtifacts, artifactStore } from '../artifactStore.js'
-import { draftRoute } from './tabs.js'
+import { draftRoute, dmTabKey } from './tabs.js'
 import type { Navigate } from './types.js'
 
 export function AppPanel({
@@ -80,6 +80,7 @@ export function AppPanel({
       <AgentsPanel
         current={route.page === 'agents' ? (route.name ?? JUNIOR_DM) : null}
         onOpen={(key) => navigate(`/agents/${encodeURIComponent(key)}`)}
+        onPin={(key) => pin(dmTabKey(key))}
         onSearch={() => setPaletteOpen(true)}
       />
     ) : panelSection === 'terminals' ? (

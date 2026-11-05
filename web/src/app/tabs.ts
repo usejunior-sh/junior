@@ -1,12 +1,12 @@
-import { Terminal as TerminalIcon, FileText, FileDiff, CalendarClock, Target, Bot } from 'lucide-react'
+import { Terminal as TerminalIcon, FileText, FileDiff, CalendarClock, Target } from 'lucide-react'
+import { JUNIOR_DM } from '../../../core/junior/dms.js'
 import { changeId } from '../changesStore.js'
 import type { RailSection } from '../components/Rail.js'
 import type { PageTab, TabKind } from '../components/TabBand.js'
 import { runFileHash } from '../components/RunFolderPage.js'
 import { type Route, itemHash } from '../hooks.js'
 
-export const PAGE_TABS: Record<'agents' | 'jobs' | 'terminals' | 'artifacts' | 'changes' | 'goals', PageTab> = {
-  agents: { key: 'page:agents', label: 'Agents', icon: Bot },
+export const PAGE_TABS: Record<'jobs' | 'terminals' | 'artifacts' | 'changes' | 'goals', PageTab> = {
   terminals: { key: 'page:terminals', label: 'Terminals', icon: TerminalIcon },
   artifacts: { key: 'page:artifacts', label: 'Artifacts', icon: FileText },
   changes: { key: 'page:changes', label: 'Changes', icon: FileDiff },
@@ -30,6 +30,8 @@ export const SHEET_LABEL: Record<RailSection, string> = {
 }
 
 export const termKey = (id: string) => `term:${id}`
+/** An agent's DM tab: `dm:junior`, `dm:junior:writer`. */
+export const dmTabKey = (dm: string) => `dm:${dm}`
 export const draftKey = (id: string) => `draft:${id}`
 export const draftRoute = (id: string) => `/new/${id}`
 
@@ -46,6 +48,9 @@ export function tabKeyOf(route: Route): string | null {
       return 'inbox'
     case 'session':
       return route.id
+    // An agent's DM is a document tab: peeked when you pick the agent, kept when you double-click it.
+    case 'agents':
+      return dmTabKey(route.name ?? JUNIOR_DM)
     case 'draft':
       return draftKey(route.id)
     case 'terminal':
@@ -62,7 +67,6 @@ export function tabKeyOf(route: Route): string | null {
       return `job-form:${route.id ?? 'new'}`
     case 'change':
       return `change:${changeId(route.checkoutId, route.path)}`
-    case 'agents':
     case 'changes':
     case 'artifacts':
     case 'jobs':
@@ -96,6 +100,8 @@ export function routeOfKey(key: string): string {
       return id === 'new' ? '/jobs/new' : `/jobs/${encodeURIComponent(id)}/edit`
     case 'change':
       return `/change/${id}`
+    case 'dm':
+      return `/agents/${encodeURIComponent(id)}`
     case 'page':
       return `/${id}`
     default:
@@ -105,7 +111,7 @@ export function routeOfKey(key: string): string {
 }
 
 /** Documents are peeked at; processes are pinned. */
-const DOC_KINDS: readonly TabKind[] = ['item', 'artifact', 'job', 'job-form', 'change', 'run']
+const DOC_KINDS: readonly TabKind[] = ['item', 'artifact', 'job', 'job-form', 'change', 'run', 'dm']
 
 export function kindOfKey(key: string): TabKind | null {
   const cut = key.indexOf(':')
@@ -135,6 +141,7 @@ export const GENERIC: Record<TabKind, string> = {
   change: 'File',
   run: 'Team run',
   inbox: 'Inbox',
+  dm: 'Agent',
 }
 
 /**

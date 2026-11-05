@@ -5,6 +5,11 @@ import { useConn, type Route } from '../hooks.js'
 import { useInbox } from '../inboxStore.js'
 import { useArtifacts } from '../artifactStore.js'
 import { GENERIC, isDocKey, kindOfKey, sectionOf, tabKeyOf } from './tabs.js'
+import { JUNIOR_DM, findDm } from '../../../core/junior/dms.js'
+import { useChatAgents } from '../chatAgents.js'
+import { usePersona } from '../junior.js'
+import { needsYouText } from '../inboxTabs.js'
+import { isWorking } from '../sessionModes.js'
 import type { TabsApi } from './types.js'
 
 export function useDocumentTabs({ conn, route, docKeys, inbox, artifacts, sessions, titles, openTab, remember, setPreview }: {
@@ -33,6 +38,10 @@ export function useDocumentTabs({ conn, route, docKeys, inbox, artifacts, sessio
       .catch(() => {})
   }, [conn, wantJobTitles])
 
+  // DM tabs are named and faced after their agent, and light up like a chat's.
+  const chatAgents = useChatAgents()
+  const persona = usePersona()
+
   /** The live name for a document tab, or null while its store is still cold. */
   const liveTitle = useCallback(
     (key: string): string | null => {
@@ -43,6 +52,11 @@ export function useDocumentTabs({ conn, route, docKeys, inbox, artifacts, sessio
         const lead = sessions.find((s) => s.teamRun?.id === id && s.teamRun.role === 'lead')
         return lead ? `Run · ${lead.title}` : null
       }
+      if (key.startsWith('dm:')) {
+        if (id === JUNIOR_DM) return persona.name
+        // The face already says it's Junior: the tab names the agent alone, so it fits.
+        return chatAgents.find((a) => a.name === id)?.label ?? null
+      }
       if (key.startsWith('job:')) return jobTitles.get(id) ?? null
       if (key.startsWith('job-form:')) return id === 'new' ? 'New job' : jobTitles.get(id) ?? null
       if (key.startsWith('change:')) {
@@ -52,7 +66,7 @@ export function useDocumentTabs({ conn, route, docKeys, inbox, artifacts, sessio
       }
       return null
     },
-    [inbox.items, artifacts.artifacts, jobTitles, sessions],
+    [inbox.items, artifacts.artifacts, jobTitles, sessions, chatAgents, persona.name],
   )
 
   /** A document tab: its best known name, no project dot, nothing running. */
@@ -60,9 +74,16 @@ export function useDocumentTabs({ conn, route, docKeys, inbox, artifacts, sessio
     (key: string): OpenTab | null => {
       const kind = kindOfKey(key)
       if (!kind) return null
-      return { key, kind, title: (liveTitle(key) ?? titles[key]) || GENERIC[kind], color: 'var(--stone)', running: false }
+      const tab: OpenTab = { key, kind, title: (liveTitle(key) ?? titles[key]) || GENERIC[kind], color: 'var(--stone)', running: false }
+      if (kind !== 'dm') return tab
+      const dm = key.slice(3)
+      const session = findDm(sessions, dm)
+      const face = dm === JUNIOR_DM ? undefined : (chatAgents.find((a) => a.name === dm)?.colour ?? undefined)
+      const waiting = session ? needsYouText(session) : null
+      const running = !!session && isWorking(session)
+      return { ...tab, face, color: running ? 'var(--blue)' : 'var(--stone)', running, ...(waiting ? { waiting } : {}) }
     },
-    [liveTitle, titles],
+    [liveTitle, titles, sessions, chatAgents],
   )
 
   /** Commit a peeked document to a real tab, it stops being replaceable. */
