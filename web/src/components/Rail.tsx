@@ -25,13 +25,17 @@ type Props = {
   onGo: (section: RailSection) => void
 }
 
-/** Junior · Agents · Inbox, a gap, then the places you work. `gap` starts the second group. */
-const ITEMS: Array<{ id: RailSection; label: string; icon: ComponentType<LucideProps>; gap?: true }> = [
+/**
+ * Junior · Agents · Inbox, a gap, then the places you work. `gap` starts the second group.
+ * `phoneOnly`: on a desktop it lives elsewhere (Changes is a tab in each chat's sidebar); a phone has
+ * no sidebar, so there it keeps its place in the bottom bar.
+ */
+const ITEMS: Array<{ id: RailSection; label: string; icon: ComponentType<LucideProps>; gap?: true; phoneOnly?: true }> = [
   { id: 'agents', label: 'Agents', icon: Bot },
   { id: 'inbox', label: 'Inbox', icon: Inbox },
   { id: 'sessions', label: 'Chats', icon: MessagesSquare, gap: true },
   { id: 'artifacts', label: 'Artifacts', icon: FileText },
-  { id: 'changes', label: 'Changes', icon: FileDiff },
+  { id: 'changes', label: 'Changes', icon: FileDiff, phoneOnly: true },
   { id: 'terminals', label: 'Terminals', icon: Terminal },
   { id: 'jobs', label: 'Jobs', icon: CalendarClock },
 ]
@@ -56,7 +60,7 @@ export function Rail({ active, collapsed, inboxCount, agentsCount, runningCount,
         <span className="label">{juniorName}</span>
         {juniorUnread && <span className="railDot" aria-label="new in the log" />}
       </button>
-      {ITEMS.map(({ id, label, icon: Icon, gap }) => {
+      {ITEMS.filter((it) => !it.phoneOnly || collapsed !== undefined).map(({ id, label, icon: Icon, gap }) => {
         const badge =
           id === 'inbox'
             ? inboxCount
