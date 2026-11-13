@@ -58,6 +58,8 @@ export const JUNIOR_READ_TOOLS = new Set([
   'mcp__junior__list_sessions',
   // Pinned notes: reading the list.
   'mcp__junior__list_pins',
+  // Junior's work log: reading what its threads reported.
+  'mcp__junior__read_work_log',
   // Advance approvals: listing reads, proposing only shows a card. Only the user's Add makes one.
   'mcp__junior__list_approvals',
   'mcp__junior__propose_approval',

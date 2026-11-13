@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { agentLines, coordinatorAppend } from '../core/junior/coordinator.js'
+import { agentLines, COORDINATOR_DISALLOWED, coordinatorAppend, threadAppend } from '../core/junior/coordinator.js'
 import { addPin } from '../core/junior/pins.js'
 
 const agents = [
@@ -19,8 +19,24 @@ test('the coordinator block lists the agents and the rules', () => {
   assert.match(text, /Reading it back: <the task>\. <what waits for the user>\. I gave it to <Agent>\./)
   assert.match(text, /Added to the <title> thread\./)
   assert.match(text, /call pin_note/)
-  assert.match(text, /When no agent fits the task, do it yourself/)
+  assert.match(text, /When no agent fits, start the thread without `agent`/)
+  assert.match(text, /"Pointers:"/)
+  assert.match(text, /"Done when:"/)
+  assert.match(text, /read_work_log/)
+  assert.doesNotMatch(text, /do it yourself/)
   assert.doesNotMatch(text, /## Pinned notes/)
+})
+
+test("Junior's chat can't edit or run commands; reads stay", () => {
+  for (const t of ['Edit', 'Write', 'MultiEdit', 'NotebookEdit', 'Bash', 'Task', 'Agent']) assert.ok(COORDINATOR_DISALLOWED.includes(t), t)
+  for (const t of ['Read', 'Grep', 'Glob']) assert.ok(!COORDINATOR_DISALLOWED.includes(t), t)
+})
+
+test('a thread leads each reply with a sentence that stands alone', () => {
+  const text = threadAppend('Robin')
+  assert.match(text, /## You are a thread/)
+  assert.match(text, /Robin started this chat/)
+  assert.match(text, /start the reply with one plain sentence that says the outcome/)
 })
 
 test("the persona's name is the one used", () => {
@@ -33,6 +49,6 @@ test('active pins ride along', () => {
   assert.match(text, /## Pinned notes\n.*\n- Onboarding belongs to another team \(standing; p-/)
 })
 
-test('no agents yet: Junior does the work itself', () => {
-  assert.match(agentLines([]), /do the work yourself/)
+test('no agents yet: threads run as plain Junior', () => {
+  assert.match(agentLines([]), /start each thread as plain you, without `agent`/)
 })

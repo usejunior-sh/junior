@@ -7,6 +7,13 @@
  * one to show.
  */
 
+/**
+ * Where a DM compacts. A DM never ends and re-reads its whole history on
+ * every turn, so history is cost; left alone, Claude Code waits until ~967K
+ * on a 1M window. Team workers use the same number.
+ */
+export const DM_COMPACT_WINDOW = 200_000
+
 /** Junior's own DM key: plain Junior, no chat agent. */
 export const JUNIOR_DM = 'junior'
 

@@ -103,12 +103,8 @@ export function agentStatus(agent: string, sessions: readonly ThreadSession[], d
 /** The longest first sentence a thread's report quotes before it cuts. */
 const REPORT_MAX = 180
 
-/**
- * The line Junior's chat gets when a thread it started finishes a turn: who,
- * which thread, and the first sentence of what it said, plain text. A notice,
- * not a message: it is shown, never fed back to the model.
- */
-export function threadReportLine(who: string, title: string, said: string): string {
+/** The first sentence of a reply, plain text, cut at REPORT_MAX. '' when it said nothing. */
+export function threadReportSentence(said: string): string {
   const plain = said
     .replace(/```[\s\S]*?```/g, ' ')
     .replace(/[*_`#>]/g, '')
@@ -116,6 +112,15 @@ export function threadReportLine(who: string, title: string, said: string): stri
     .replace(/\s+/g, ' ')
     .trim()
   const first = /^(.+?[.!?])(\s|$)/.exec(plain)?.[1] ?? plain
-  const cut = first.length > REPORT_MAX ? `${first.slice(0, REPORT_MAX - 1).trimEnd()}…` : first
+  return first.length > REPORT_MAX ? `${first.slice(0, REPORT_MAX - 1).trimEnd()}…` : first
+}
+
+/**
+ * The line Junior's chat gets when a thread it started finishes a turn: who,
+ * which thread, and the first sentence of what it said, plain text. A notice,
+ * not a message: it is shown, never fed back to the model.
+ */
+export function threadReportLine(who: string, title: string, said: string): string {
+  const cut = threadReportSentence(said)
   return cut ? `${who} replied in "${title}": ${cut}` : `${who} replied in "${title}".`
 }

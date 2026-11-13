@@ -19,6 +19,8 @@ import { listApprovalsOp } from './approvals-ops.js'
 import { proposeLearningOp } from './learnings-ops.js'
 import { proposeLearningResult } from '../core/junior/learnings.js'
 import { listPinsOp, pinNoteOp, unpinOp } from './pins-ops.js'
+import { recentWork, WORKLOG_KEEP_DAYS, worklogLine } from '../core/junior/worklog.js'
+import { worklogFor } from './worklog-ops.js'
 import { APPROVAL_WHATS, approvalFrom, describeApproval, isLive } from '../core/approvals/approvals.js'
 import { messageSessionOp, sessionByName, sessionReport, startedBy, startSessionsOp } from './session/spawn-ops.js'
 
@@ -581,6 +583,21 @@ export function makeJuniorMcp(rt: WorkspaceRuntime, sessionId?: string) {
           return errResult(errText(err))
         }
       }),
+      // Junior's work log (core/junior/worklog.ts): what the threads it started last reported. A read.
+      tool(
+        'read_work_log',
+        `What the threads you started from your chat last reported, one dated line each, newest first. Use it for "what did you do yesterday" or to find an older thread by its title. It keeps ${WORKLOG_KEEP_DAYS} days.`,
+        { days: z.number().int().min(1).max(WORKLOG_KEEP_DAYS).optional().describe('how far back, in days (default 7)') },
+        async (args) => {
+          try {
+            const now = Date.now()
+            const lines = recentWork(await worklogFor(rt, now), now, args.days ?? 7, 200).map(worklogLine)
+            return okResult(lines.length ? lines.join('\n') : 'Nothing in the work log for that window.')
+          } catch (err) {
+            return errResult(errText(err))
+          }
+        },
+      ),
       tool(
         'unpin',
         'Take a pinned note off, by its id (list_pins shows ids). Use it when the user says a pinned fact no longer holds.',
