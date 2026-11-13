@@ -125,7 +125,7 @@ export function TopBar({
           />
         }
         badge={<BuildBadge build={build} onOpenSystem={onOpenSystem} />}
-        system={<SystemIcons workspace={current} conn={conn} onOpenSystem={onOpenSystem} onOpenSettings={onOpenSettings} settingsOpen={settingsOpen} onHelp={onHelp} />}
+        system={<SystemIcons workspace={current} conn={conn} onOpenSystem={onOpenSystem} onOpenSettings={onOpenSettings} settingsOpen={settingsOpen} onHelp={onHelp} noSettings={!!team} />}
       />
     )
   }
@@ -176,7 +176,7 @@ export function TopBar({
         </div>
         <BuildBadge build={build} onOpenSystem={onOpenSystem} />
         <span className="spacer" />
-        <SystemIcons workspace={current} conn={conn} onOpenSystem={onOpenSystem} onOpenSettings={onOpenSettings} settingsOpen={settingsOpen} onHelp={onHelp} />
+        <SystemIcons workspace={current} conn={conn} onOpenSystem={onOpenSystem} onOpenSettings={onOpenSettings} settingsOpen={settingsOpen} onHelp={onHelp} noSettings />
       </header>
     )
   }
@@ -205,7 +205,12 @@ function SystemIcons({
   onOpenSettings,
   settingsOpen,
   onHelp,
-}: Pick<Props, 'conn' | 'onOpenSystem' | 'onOpenSettings' | 'settingsOpen' | 'onHelp'> & { workspace: Workspace | undefined }) {
+  noSettings,
+}: Pick<Props, 'conn' | 'onOpenSystem' | 'onOpenSettings' | 'settingsOpen' | 'onHelp'> & {
+  workspace: Workspace | undefined
+  /** The team layout: Settings lives at the foot of the sidebar and the rail, so the bar drops its gear. */
+  noSettings?: boolean
+}) {
   return (
     <>
       <WaitingButton />
@@ -219,15 +224,17 @@ function SystemIcons({
       <button type="button" className="topIcon" title="Job runs and activity" onClick={() => onOpenSystem('activity')}>
         <Activity size={15} aria-hidden="true" />
       </button>
-      <button
-        type="button"
-        className={`topIcon${settingsOpen ? ' on' : ''}`}
-        title={settingsOpen ? 'Close settings (Esc)' : `Settings (${MOD_LABEL},)`}
-        aria-pressed={!!settingsOpen}
-        onClick={onOpenSettings}
-      >
-        <Settings size={15} aria-hidden="true" />
-      </button>
+      {!noSettings && (
+        <button
+          type="button"
+          className={`topIcon${settingsOpen ? ' on' : ''}`}
+          title={settingsOpen ? 'Close settings (Esc)' : `Settings (${MOD_LABEL},)`}
+          aria-pressed={!!settingsOpen}
+          onClick={onOpenSettings}
+        >
+          <Settings size={15} aria-hidden="true" />
+        </button>
+      )}
       <button type="button" className="topIcon" title="Keyboard shortcuts (?)" onClick={onHelp}>
         <CircleHelp size={15} aria-hidden="true" />
       </button>
