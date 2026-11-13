@@ -147,7 +147,7 @@ kbd { font-family: var(--mono); font-size: 0.8462rem; color: var(--ash); border:
 .buildBadge {
   display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 9px;
   border-radius: var(--r-full); border: 1px solid currentColor; background: transparent;
-  font-family: var(--mono); font-size: 0.6923rem; letter-spacing: 0.06em; text-transform: uppercase;
+  font-family: var(--mono); font-size: 0.6923rem; letter-spacing: 0.1em; text-transform: uppercase;
   white-space: nowrap; flex: none; opacity: 0.78; transition: opacity 0.1s ease, background 0.1s ease;
 }
 .buildBadge:hover { opacity: 1; background: color-mix(in srgb, currentColor 12%, transparent); }
@@ -217,7 +217,7 @@ kbd { font-family: var(--mono); font-size: 0.8462rem; color: var(--ash); border:
   transition: background 0.1s ease;
 }
 .wsLabelled:hover, .wsLabelled[data-state="open"] { background: var(--wash-3); }
-.wsLabelled .wsLabel { font: 500 0.7692rem/1 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ash); flex: none; }
+.wsLabelled .wsLabel { font: 500 0.7692rem/1 var(--mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--ash); flex: none; }
 .wsLabelled .wsLabelSep { width: 1px; height: 14px; background: var(--hair-strong); flex: none; }
 .wsLabelled .wsDot { width: 7px; height: 7px; border-radius: var(--r-full); flex: none; }
 .wsLabelled .wsName { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

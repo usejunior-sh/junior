@@ -960,7 +960,7 @@ body.bpResizing, body.bpResizing * { cursor: col-resize !important; user-select:
 .tmSub { color: var(--mute); font-size: 0.8846rem; margin: 0; }
 .tmGrid { display: grid; border: 1px solid var(--hair); border-bottom: 0; border-radius: var(--r-lg); overflow: hidden; }
 .tmGrid > div { border-bottom: 1px solid var(--hair); padding: 8px 10px; min-height: 40px; display: flex; align-items: center; min-width: 0; }
-.tmH { font-family: var(--mono); font-size: 0.7308rem; color: var(--stone); text-transform: uppercase; letter-spacing: 0.06em; background: var(--card); gap: 6px; min-height: 30px !important; }
+.tmH { font-family: var(--mono); font-size: 0.7308rem; color: var(--stone); text-transform: uppercase; letter-spacing: 0.1em; background: var(--card); gap: 6px; min-height: 30px !important; }
 .tmH .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tmTask { flex-direction: column; align-items: flex-start !important; justify-content: center; gap: 1px; }
 .tmTask .tag { font-family: var(--mono); font-size: 0.7308rem; color: var(--ash); }

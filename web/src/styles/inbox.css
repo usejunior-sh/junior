@@ -388,7 +388,7 @@
 .needCard .nRead { display: flex; gap: 8px; align-items: flex-start; color: var(--body); line-height: 1.5; }
 .needCard .nRec { border: 1px solid var(--hair); border-radius: var(--r); background: var(--deep); }
 .needCard .nRecHead { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-bottom: 1px solid var(--hair); color: var(--ash); font-size: 0.8462rem; }
-.needCard .nRecHead .tag { font-family: var(--mono); font-size: 0.7692rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--yellow); border: 1px solid var(--edge-yellow); border-radius: var(--r-full); padding: 0 7px; }
+.needCard .nRecHead .tag { font-family: var(--mono); font-size: 0.7692rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--yellow); border: 1px solid var(--edge-yellow); border-radius: var(--r-full); padding: 0 7px; }
 .needCard .nRec textarea { display: block; width: 100%; box-sizing: border-box; background: transparent; border: 0; outline: none; resize: vertical; color: var(--ink); font: inherit; line-height: 1.55; padding: 8px 10px; }
 .needCard .nActs, .needCard .ask { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .needCard .nFine { margin-left: auto; color: var(--ash); font-size: 0.8462rem; }

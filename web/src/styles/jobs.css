@@ -134,7 +134,7 @@
 .toolServers .tsHead .m { margin-left: auto; color: var(--ash); font-size: 0.8462rem; }
 .toolServers .tsEmpty { padding: 12px; color: var(--ash); font-size: 0.9231rem; }
 .toolServers .tsGroup + .tsGroup { border-top: 1px solid var(--hair-soft); }
-.toolServers .tsScope { padding: 8px 12px 2px; color: var(--stone); font-size: 0.7692rem; font-family: var(--mono); text-transform: uppercase; letter-spacing: 0.04em; }
+.toolServers .tsScope { padding: 8px 12px 2px; color: var(--stone); font-size: 0.7692rem; font-family: var(--mono); text-transform: uppercase; letter-spacing: 0.1em; }
 .tsRow { display: flex; flex-direction: column; }
 .tsRow.orphan { flex-direction: row; align-items: center; gap: 8px; padding: 6px 12px; color: var(--mute); border-top: 1px solid var(--hair-soft); }
 .tsRow.orphan .name { color: var(--ink); }

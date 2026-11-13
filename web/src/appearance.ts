@@ -39,7 +39,7 @@ const THREE_TABS_KEY = 'junior.appearance.threeTabs'
 
 export const FONT_MIN = 12
 export const FONT_MAX = 18
-export const FONT_DEFAULT = 13
+export const FONT_DEFAULT = 14
 
 const MODES: ThemeMode[] = ['system', 'light', 'dark']
 export const isThemeMode = (v: unknown): v is ThemeMode =>

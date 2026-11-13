@@ -220,7 +220,7 @@ dialog p, .uiDialog p { color: var(--body); font-size: 1rem; line-height: 1.55; 
 .sysRunRow { display: flex; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--hair); font-size: 1rem; }
 .sysRunTitle { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sysRunMeta { color: var(--ash); font-size: 0.8462rem; font-family: var(--mono); }
-.runStatus { font-size: 0.7692rem; font-family: var(--mono); padding: 0 7px; border-radius: var(--r-full); border: 1px solid var(--hair-strong); text-transform: uppercase; letter-spacing: 0.03em; color: var(--ash); line-height: 16px; }
+.runStatus { font-size: 0.7692rem; font-family: var(--mono); padding: 0 7px; border-radius: var(--r-full); border: 1px solid var(--hair-strong); text-transform: uppercase; letter-spacing: 0.1em; color: var(--ash); line-height: 16px; }
 .runStatus.ok { color: var(--green); border-color: var(--edge-green); }
 .runStatus.failed { color: var(--red); border-color: var(--edge-red); }
 .runStatus.timeout { color: var(--red); border-color: var(--edge-red); }
