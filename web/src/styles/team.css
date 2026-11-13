@@ -67,9 +67,11 @@
 .tsTyping i:nth-child(3) { animation-delay: 0.3s; }
 @keyframes tsBlink { 0%, 80%, 100% { opacity: 0.3; } 40% { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .tsTyping i { animation: none; opacity: 0.6; } }
+/* an agent: a small face and its name, a thread's height */
+.tsAg { color: var(--ink); }
+.tsYou { width: 7px; height: 7px; border-radius: 50%; flex: none; margin-right: 4px; background: var(--orange); }
 /* quiet agents, folded into one row */
-.tsFolded { padding: 6px 8px; }
-.tsFolded .tsL1 b { font-weight: 400; color: var(--mute); }
+.tsAg.tsFolded { color: var(--mute); }
 
 .tsScroll { flex: 1; min-height: 0; overflow: hidden auto; padding: 0 0 8px; }
 .tsLabel {
@@ -77,8 +79,35 @@
   font: 400 0.7857rem/1 var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--ash);
 }
 .tsN { margin-left: 6px; color: var(--stone); }
+/* waiting on you: one card under Junior, the only orange edge in the sidebar */
+.tsWaiting {
+  margin: 10px 8px 0; padding: 4px; border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--orange) 32%, var(--hair)); background: var(--card);
+}
+.tsWaitHead {
+  display: flex; align-items: center; gap: 6px; height: 26px; padding: 0 8px;
+  font: 400 0.7857rem/1 var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--orange);
+}
+.tsWaitRow {
+  display: flex; align-items: center; gap: 10px; width: 100%; padding: 7px 8px;
+  border: 0; border-radius: 9px; background: transparent; color: var(--ink); text-align: left;
+  transition: background 0.12s ease;
+}
+.tsWaitRow:hover { background: var(--elev); }
+.tsWaitRow.on { background: var(--elev); box-shadow: inset 2px 0 0 var(--orange); }
+.tsWaitRow .tsL2 { color: var(--mute); }
+.tsWaitMore { display: block; margin: 2px 0 2px 42px; padding: 4px 0; border: 0; background: transparent; color: var(--ash); font-size: 0.9286rem; }
+.tsWaitMore:hover { color: var(--ink); }
 .tsLabelBtn { width: 22px; height: 22px; display: grid; place-items: center; flex: none; border: 0; border-radius: var(--r-sm); background: transparent; color: var(--ash); }
 .tsLabelBtn:hover { background: var(--elev); color: var(--ink); }
+
+/* how full a conversation's context is: a hairline under its words, neutral, amber near compaction (never orange) */
+.tsConv, .tsThread, .tsWaitRow { position: relative; }
+.ctxLine { position: absolute; left: 40px; right: 8px; bottom: 2px; height: 2px; border-radius: var(--r-full); background: var(--hair); overflow: hidden; pointer-events: none; }
+.ctxLine i { display: block; height: 100%; background: var(--ash); opacity: 0.7; }
+.ctxLine i.full { background: var(--amber); opacity: 1; }
+.tsJunior .ctxLine { left: 57px; bottom: 4px; }
+.tsWaitRow .ctxLine { left: 42px; bottom: 3px; }
 
 /* an open thread: who has it, the title, whose turn it is */
 .tsThread {
@@ -220,7 +249,7 @@ button.threadCard:hover { background: var(--card); }
 .prT > span.bad { color: var(--body); }
 .prOn { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px 0 5px; border: 0; border-radius: var(--r-full); background: var(--tint-blue); color: var(--blue); font-size: 0.8846rem; white-space: nowrap; }
 .prOn:hover { background: var(--glow-blue); }
-.teamSide .tsMore { display: block; width: auto; margin: 2px 0 0 49px; padding: 4px 0; border: 0; background: transparent; color: var(--ash); font-size: 0.9286rem; }
+.teamSide .tsMore { display: block; width: auto; margin: 2px 0 0 48px; padding: 4px 0; border: 0; background: transparent; color: var(--ash); font-size: 0.9286rem; }
 .teamSide .tsMore.th { margin-left: 46px; }
 .teamSide .tsMore:hover { color: var(--ink); }
 /* .tsScroll is also a name in changes.css: undo what leaks in. */

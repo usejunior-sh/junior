@@ -674,7 +674,6 @@ export function App() {
                 if (dm && !composerDrafts.get(dm.id)) composerDrafts.set(dm.id, 'Make me a new agent. It should ')
                 navigate('/junior')
               }}
-              onNewChat={newSession}
               onSearch={() => setPaletteOpen(true)}
               onSettings={() => openSettings()}
             />

@@ -20,6 +20,8 @@ import { setSidebarCollapsed } from '../layout.js'
 import { JuniorFace } from './JuniorFace.js'
 import { relTime } from '../itemUi.js'
 import { MOD_LABEL } from '../keys.js'
+import { contextLabel, RowContextBar, summaryContext } from './ContextBar.js'
+import type { ContextUse } from '../../../core/usage/context.js'
 
 export type SidebarPlace = 'junior' | 'tasks' | 'prs' | 'artifacts' | 'jobs' | 'settings' | { agent: string } | { thread: string } | null
 
@@ -36,7 +38,6 @@ type Props = {
   onThread: (id: string) => void
   onPlace: (place: 'tasks' | 'prs' | 'artifacts' | 'jobs') => void
   onNewAgent: () => void
-  onNewChat: () => void
   /** the command palette (⌘K) */
   onSearch: () => void
   onSettings: () => void
@@ -146,9 +147,13 @@ export function TeamSidebar(p: Props) {
   // Busy, recent and open agents keep their rows, and never fewer than AGENTS_SHOWN: the list is never just the fold.
   const shownAgents = agentRows.filter((r, i) => allAgents || i < AGENTS_SHOWN || r.state !== 'idle' || r.recent || isActive({ agent: r.a.name }))
   const folded = agentRows.filter((r) => !shownAgents.includes(r))
-  const shownThreads = showAll ? threads : threads.slice(0, THREADS_SHOWN)
+  // Only the threads where it is your turn; the rest show as a working agent in Team, and in Junior's line.
+  const waiting = useMemo(() => threads.filter((t) => t.state === 'you'), [threads])
+  const shownThreads = showAll ? waiting : waiting.slice(0, THREADS_SHOWN)
   const juniorDm = findDm(p.sessions, JUNIOR_DM)
   const juniorBusy = !!juniorDm && isWorking(juniorDm)
+  const juniorCtx = summaryContext(juniorDm)
+  const byId = useMemo(() => new Map(p.sessions.map((s) => [s.id, s])), [p.sessions])
 
   return (
     <nav className="teamSide" aria-label="Junior and the team">
@@ -170,6 +175,7 @@ export function TeamSidebar(p: Props) {
         type="button"
         className={`tsConv tsJunior${isActive('junior') ? ' on' : ''}`}
         aria-current={isActive('junior') ? 'page' : undefined}
+        title={juniorCtx ? `${persona.name}: ${contextLabel(juniorCtx, 'dm')}` : undefined}
         onClick={p.onJunior}
       >
         <span className={`tsRing${say.needs ? ' you' : juniorBusy ? ' work' : ''}`}>
@@ -192,30 +198,31 @@ export function TeamSidebar(p: Props) {
             {say.needs}
           </span>
         )}
+        <RowContextBar use={juniorCtx} />
       </button>
 
       <div className="tsScroll">
-        <div className="tsLabel">
-          <span className="tsGrow">
-            Threads{threads.length > 0 && <span className="tsN">{threads.length}</span>}
-          </span>
-          <button type="button" className="tsLabelBtn" title="New chat" aria-label="New chat" onClick={p.onNewChat}>
-            <Plus size={14} aria-hidden="true" />
-          </button>
-        </div>
-        {threads.length === 0 && <p className="tsEmpty">Nothing open. Tell {persona.name} what you need.</p>}
-        {shownThreads.map((t) => (
-          <ThreadRow key={t.id} t={t} agentLabel={labelOf(t.agent)} colour={colourOf(t.agent)} active={isActive({ thread: t.id })} onOpen={() => p.onThread(t.id)} />
-        ))}
-        {threads.length > THREADS_SHOWN && (
-          <button type="button" className="tsMore th" onClick={() => setShowAll((v) => !v)}>
-            {showAll ? 'Show fewer' : `Show all ${threads.length}`}
-          </button>
+        {/* What waits on you, as one card under Junior. Nothing waiting: no card, Junior's line already says so. */}
+        {waiting.length > 0 && (
+          <section className="tsWaiting" aria-label="Waiting on you">
+            <div className="tsWaitHead">
+              <span className="tsGrow">Waiting on you</span>
+              <span>{waiting.length}</span>
+            </div>
+            {shownThreads.map((t) => (
+              <ThreadRow key={t.id} t={t} agentLabel={labelOf(t.agent)} colour={colourOf(t.agent)} ctx={summaryContext(byId.get(t.id))} active={isActive({ thread: t.id })} onOpen={() => p.onThread(t.id)} />
+            ))}
+            {waiting.length > THREADS_SHOWN && (
+              <button type="button" className="tsWaitMore" onClick={() => setShowAll((v) => !v)}>
+                {showAll ? 'Show fewer' : `Show all ${waiting.length}`}
+              </button>
+            )}
+          </section>
         )}
 
         <div className="tsLabel">
           <span className="tsGrow">
-            Agents{agentRows.length > 0 && <span className="tsN">{agentRows.length}</span>}
+            Team{agentRows.length > 0 && <span className="tsN">{agentRows.length}</span>}
           </span>
           <button type="button" className="tsLabelBtn" title={`Ask ${persona.name} for a new agent`} aria-label={`Ask ${persona.name} for a new agent`} onClick={p.onNewAgent}>
             <Plus size={14} aria-hidden="true" />
@@ -230,18 +237,15 @@ export function TeamSidebar(p: Props) {
             st={r.st}
             state={r.state}
             dm={r.dm}
+            ctx={summaryContext(r.dm)}
             active={isActive({ agent: r.a.name })}
             onOpen={() => p.onAgent(r.a.name)}
           />
         ))}
         {folded.length > 0 && (
-          <button type="button" className="tsConv tsFolded" title={`Show ${folded.map((r) => r.a.label).join(', ')}`} onClick={() => setAllAgents(true)}>
-            <JuniorFace size={24} motion="still" mood="hello" colour={folded[0].a.colour ?? undefined} decorative />
-            <span className="tsT">
-              <span className="tsL1">
-                <b>{foldedNames(folded.map((r) => r.a.label))}</b>
-              </span>
-            </span>
+          <button type="button" className="tsThread tsAg tsFolded" title={`Show ${folded.map((r) => r.a.label).join(', ')}`} onClick={() => setAllAgents(true)}>
+            <JuniorFace size={22} motion="still" mood="hello" colour={folded[0].a.colour ?? undefined} decorative />
+            <span className="tsTitle">{foldedNames(folded.map((r) => r.a.label))}</span>
           </button>
         )}
         {allAgents && agentRows.length > AGENTS_SHOWN && agentRows.some((r) => r.state === 'idle' && !r.recent) && (
@@ -297,57 +301,55 @@ function Place({ on, icon, label, title, count, onClick }: { on: boolean; icon: 
 }
 
 /**
- * One agent, as a conversation: its face, its name, when it last spoke, and its latest line. Working shows
- * typing dots and what it is on; waiting on you puts the orange dot on its face. Hovering wakes the face.
+ * One agent: a small face and its name, one line like a thread. Working shows typing dots; waiting on you,
+ * the orange dot. Its latest line rides in the tooltip. Hovering wakes the face.
  */
-function AgentRow(r: { label: string; description: string; colour?: string; st: AgentStatus; state: AgentState; dm?: SessionSummary; active: boolean; onOpen: () => void }) {
+function AgentRow(r: { label: string; description: string; colour?: string; st: AgentStatus; state: AgentState; dm?: SessionSummary; ctx: ContextUse | null; active: boolean; onOpen: () => void }) {
   const [hover, setHover] = useState(false)
-  const line = r.state === 'working' ? r.st.line : (r.dm?.lastLine ?? (r.state === 'you' ? r.st.line : r.description))
-  const quiet = r.state === 'idle' && !r.dm?.lastLine
+  const said = r.state === 'working' ? r.st.line : (r.dm?.lastLine ?? (r.state === 'you' ? r.st.line : r.description))
   return (
     <button
       type="button"
-      className={`tsConv${r.active ? ' on' : ''}${r.state === 'you' ? ' you' : ''}${quiet ? ' quiet' : ''}`}
+      className={`tsThread tsAg${r.active ? ' on' : ''}`}
       aria-current={r.active ? 'page' : undefined}
-      title={r.description}
+      title={`${r.label}: ${said}${r.ctx ? `\n${contextLabel(r.ctx, 'dm')}` : ''}`}
       onClick={r.onOpen}
       onPointerEnter={() => setHover(true)}
       onPointerLeave={() => setHover(false)}
     >
-      <span className={`tsRing${r.state === 'you' ? ' you' : r.state === 'working' ? ' work' : ''}`}>
-        <JuniorFace size={30} motion={hover ? 'follow' : 'still'} mood={hover ? 'done' : r.state === 'you' ? 'needs' : r.state === 'working' ? 'working' : 'hello'} colour={r.colour} decorative />
-      </span>
-      <span className="tsT">
-        <span className="tsL1">
-          <b>{r.label}</b>
-          {r.dm && <small>{ago(r.dm.updatedAt)}</small>}
-        </span>
-        <span className={`tsL2${r.state === 'working' ? ' work' : ''}`}>
-          {r.state === 'working' && <Typing />}
-          <span>{line}</span>
-        </span>
-      </span>
+      <JuniorFace size={22} motion={hover ? 'follow' : 'still'} mood={hover ? 'done' : r.state === 'you' ? 'needs' : r.state === 'working' ? 'working' : 'hello'} colour={r.colour} decorative />
+      <span className="tsTitle">{r.label}</span>
+      {r.state === 'working' && <Typing />}
+      {r.state === 'you' && <span className="tsYou" aria-label="needs you" />}
+      <RowContextBar use={r.ctx} />
     </button>
   )
 }
 
-/** One open thread: the face of whoever has it, the title, and whose turn it is. The face wakes on hover too. */
-function ThreadRow({ t, agentLabel, colour, active, onOpen }: { t: Thread; agentLabel: string; colour?: string; active: boolean; onOpen: () => void }) {
+/** A thread waiting on you: the face of whoever has it, the title, how long it has waited, and who asks. */
+function ThreadRow({ t, agentLabel, colour, ctx, active, onOpen }: { t: Thread; agentLabel: string; colour?: string; ctx: ContextUse | null; active: boolean; onOpen: () => void }) {
   const [hover, setHover] = useState(false)
-  const mood = t.state === 'you' ? 'needs' : t.state === 'working' ? 'working' : t.state === 'stopped' ? 'stuck' : 'hello'
   return (
     <button
       type="button"
-      className={`tsThread${active ? ' on' : ''}`}
+      className={`tsWaitRow${active ? ' on' : ''}`}
       aria-current={active ? 'page' : undefined}
-      title={`${t.title} · ${agentLabel}`}
+      title={`${t.title} · ${agentLabel}${t.question ? ' asks you a question' : ' waits on you'}${ctx ? `\n${contextLabel(ctx)}` : ''}`}
       onClick={onOpen}
       onPointerEnter={() => setHover(true)}
       onPointerLeave={() => setHover(false)}
     >
-      <JuniorFace mood={hover ? 'done' : mood} size={20} motion={hover ? 'follow' : 'still'} colour={colour} decorative />
-      <span className="tsTitle">{t.title}</span>
-      <span className={`tsTag ${t.state}`}>{t.state === 'you' ? 'You' : t.state === 'working' ? 'Working' : t.state === 'stopped' ? 'Stopped' : 'Ready'}</span>
+      <JuniorFace mood={hover ? 'done' : 'needs'} size={24} motion={hover ? 'follow' : 'still'} colour={colour} decorative />
+      <span className="tsT">
+        <span className="tsL1">
+          <b>{t.title}</b>
+          <small>{ago(t.updatedAt)}</small>
+        </span>
+        <span className="tsL2">
+          <span>{t.question ? `${agentLabel} asks` : `${agentLabel} waits for your OK`}</span>
+        </span>
+      </span>
+      <RowContextBar use={ctx} />
     </button>
   )
 }
