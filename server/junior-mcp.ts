@@ -25,9 +25,19 @@ import { forgetOp, memoryForPrompt, rememberOp } from './memory-ops.js'
 import { MEMORY_MAX_BYTES, memoryLine } from '../core/junior/memory.js'
 import { APPROVAL_WHATS, approvalFrom, describeApproval, isLive } from '../core/approvals/approvals.js'
 import { messageSessionOp, sessionByName, sessionReport, startedBy, startSessionsOp } from './session/spawn-ops.js'
+import { MAX_FORWARDED } from './attachments.js'
 
 export const okResult = (text: string) => ({ content: [{ type: 'text' as const, text }] })
 export const errResult = (text: string) => ({ content: [{ type: 'text' as const, text }], isError: true })
+
+/** start_session / message_session: files that go with the message, as the thread's own attachments (server/attachments.ts readForwarded). */
+const ATTACHMENTS_ARG = z
+  .array(z.string())
+  .max(MAX_FORWARDED)
+  .optional()
+  .describe(
+    'absolute paths of images and files to send with it, as real attachments the thread sees, copied now so a temp file can\'t vanish. Pass every image and file the user attached: an image\'s path is in its "[Image: source: …]" line, a file\'s in the attached-files note',
+  )
 
 /**
  * `sessionId` is the chat this server instance belongs to (one instance per
@@ -667,6 +677,7 @@ export function makeJuniorMcp(rt: WorkspaceRuntime, sessionId?: string) {
                 mode: z.enum(['normal', 'plan']).optional().describe('plan: it plans and waits for the user to approve before editing'),
                 worktree: z.string().optional().describe('a branch name: run in a new worktree on that branch instead of this folder'),
                 agent: z.string().optional().describe('the agent this thread talks as: its label (Reviewer), file name or full name; omit for plain Junior'),
+                attachments: ATTACHMENTS_ARG,
               }),
             )
             .min(1)
@@ -688,11 +699,12 @@ export function makeJuniorMcp(rt: WorkspaceRuntime, sessionId?: string) {
         {
           name: z.string().describe('the session\'s name'),
           text: z.string().describe('the message'),
+          attachments: ATTACHMENTS_ARG,
         },
         async (args) => {
           if (!sessionId) return errResult('message_session needs a chat session')
           try {
-            const target = await messageSessionOp(rt, sessionId, args.name, args.text)
+            const target = await messageSessionOp(rt, sessionId, args.name, args.text, args.attachments)
             return okResult(`ok: sent to "${target.name}"`)
           } catch (err) {
             return errResult(errText(err))

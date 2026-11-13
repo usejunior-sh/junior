@@ -500,7 +500,7 @@ export class LiveSession {
     this.emit({ kind: 'local_user', text, images, ...(opts.files?.length ? { files: opts.files } : {}), mentions: attached?.resolved, ...(opts.from ? { from: opts.from } : {}), ...(opts.fromSession ? { fromSession: opts.fromSession } : {}), ...(opts.report ? { report: true as const } : {}), ...(opts.mode ? { mode: opts.mode } : {}), ...(messageId ? { messageId } : {}) }, true)
     // A message from Junior or a teammate is framed for the model; the transcript keeps the raw text and a badge.
     // One sent in Goal mode says so, so Junior goes straight to a goal card.
-    const filesNote = attachedFilesNote(this.rt.attachmentsDir, this.row.id, opts.files ?? [])
+    const filesNote = attachedFilesNote(this.rt.attachmentsDir, this.row.id, opts.files ?? [], opts.from)
     // Another chat's message (start_session / message_session) names that chat, so it never reads as the user.
     // A thread's report to its DM comes framed already (core/junior/thread-wake.ts).
     const sender = opts.fromSession && !opts.report ? this.rt.rows.get(opts.fromSession) : undefined

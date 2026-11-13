@@ -22,7 +22,11 @@ export function useOpenThread(): (sessionId: string) => void {
 }
 
 type Started = { id: string; name: string; title: string }
-type Ref = { key: string; kind: 'started'; started: Started } | { key: string; kind: 'pending'; title: string } | { key: string; kind: 'failed'; name: string; error: string } | { key: string; kind: 'added'; name: string }
+type Ref = { key: string; kind: 'started'; started: Started; attached: number } | { key: string; kind: 'pending'; title: string } | { key: string; kind: 'failed'; name: string; error: string } | { key: string; kind: 'added'; name: string; attached: number }
+
+/** How many files went with a hand-off: its `attachments` list. */
+export const attachedCount = (v: unknown): number => (Array.isArray(v) ? v.filter((p) => typeof p === 'string' && p.trim()).length : 0)
+const attachedWords = (n: number): string => (n ? ` · ${n} attached` : '')
 
 /** What a start_session result says: `{ started: [...] }`, each a thread or an error. */
 export function startedOf(text: string): (Started | { name: string; error: string })[] {
@@ -50,9 +54,11 @@ function refsIn(tools: readonly TranscriptItem[]): Ref[] {
         return specs.map((s, i) => ({ key: `${t.key}.${i}`, kind: 'pending' as const, title: String(s.title ?? s.name ?? 'A thread') }))
       }
       if (t.result.isError) return []
-      return startedOf(t.result.text).map((s, i) => ('error' in s ? { key: `${t.key}.${i}`, kind: 'failed' as const, name: s.name, error: s.error } : { key: `${t.key}.${i}`, kind: 'started' as const, started: s }))
+      // One result per spec, in order, so the spec at the same index says what went with it.
+      const specs = Array.isArray(t.input.sessions) ? (t.input.sessions as Record<string, unknown>[]) : []
+      return startedOf(t.result.text).map((s, i) => ('error' in s ? { key: `${t.key}.${i}`, kind: 'failed' as const, name: s.name, error: s.error } : { key: `${t.key}.${i}`, kind: 'started' as const, started: s, attached: attachedCount(specs[i]?.attachments) }))
     }
-    if (t.name.endsWith('__message_session') && t.result && !t.result.isError && typeof t.input.name === 'string') return [{ key: t.key, kind: 'added', name: t.input.name }]
+    if (t.name.endsWith('__message_session') && t.result && !t.result.isError && typeof t.input.name === 'string') return [{ key: t.key, kind: 'added', name: t.input.name, attached: attachedCount(t.input.attachments) }]
     return []
   })
 }
@@ -64,9 +70,9 @@ export function ThreadCards({ tools }: { tools: readonly TranscriptItem[] }) {
     <div className="threadCards">
       {refs.map((r) =>
         r.kind === 'started' ? (
-          <ThreadCard key={r.key} id={r.started.id} fallbackTitle={r.started.title} />
+          <ThreadCard key={r.key} id={r.started.id} fallbackTitle={r.started.title} attached={r.attached} />
         ) : r.kind === 'added' ? (
-          <AddedTo key={r.key} name={r.name} />
+          <AddedTo key={r.key} name={r.name} attached={r.attached} />
         ) : r.kind === 'failed' ? (
           <div key={r.key} className="threadCard failed">
             <span className="tcT">
@@ -90,7 +96,7 @@ export function ThreadCards({ tools }: { tools: readonly TranscriptItem[] }) {
 export const STATE_WORDS: Record<ThreadState, string> = { you: 'Needs you', working: 'Working', stopped: 'Stopped', ready: 'Ready for you' }
 
 /** One thread, live: its agent's face, title, and whose turn it is. */
-export function ThreadCard({ id, fallbackTitle }: { id: string; fallbackTitle?: string }) {
+export function ThreadCard({ id, fallbackTitle, attached = 0 }: { id: string; fallbackTitle?: string; attached?: number }) {
   const sessions = useSessions()
   const agents = useChatAgents()
   const persona = usePersona()
@@ -113,7 +119,10 @@ export function ThreadCard({ id, fallbackTitle }: { id: string; fallbackTitle?: 
       <JuniorFace mood={state === 'you' ? 'needs' : state === 'working' ? 'working' : state === 'stopped' ? 'stuck' : 'hello'} size={28} motion="still" colour={agent?.colour ?? undefined} decorative />
       <span className="tcT">
         <b>{s.title}</b>
-        <span>{agent?.label ?? persona.name}</span>
+        <span>
+          {agent?.label ?? persona.name}
+          {attachedWords(attached)}
+        </span>
       </span>
       <span className={`tcState ${state}`}>{STATE_WORDS[state]}</span>
     </button>
@@ -121,7 +130,7 @@ export function ThreadCard({ id, fallbackTitle }: { id: string; fallbackTitle?: 
 }
 
 /** "Added to the #498 thread": the routing receipt for a follow-up. */
-function AddedTo({ name }: { name: string }) {
+function AddedTo({ name, attached }: { name: string; attached: number }) {
   const sessions = useSessions()
   const open = useOpenThread()
   const s = sessions.find((x) => x.name?.toLowerCase() === name.toLowerCase())
@@ -135,6 +144,7 @@ function AddedTo({ name }: { name: string }) {
       ) : (
         name
       )}
+      {attachedWords(attached)}
     </div>
   )
 }

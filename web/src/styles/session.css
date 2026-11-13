@@ -294,6 +294,9 @@
   text-decoration: underline; text-decoration-color: var(--hair-strong); text-underline-offset: 2px;
 }
 .msg.teammate .msgFromLink:hover { text-decoration-color: currentColor; }
+.msg.teammate .msgImages { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.msg.teammate .msgImages img { max-width: 200px; max-height: 200px; border-radius: var(--r); border: 1px solid var(--hair-strong); display: block; }
+.msg.teammate .msgFiles { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; margin-bottom: 8px; }
 
 /* team strip: the members of a team, one tab per session, over the transcript */
 #teamStrip {

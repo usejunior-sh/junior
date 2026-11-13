@@ -560,6 +560,30 @@ function mentionOpener(m: ResolvedMention, onRef: (hash: string) => void): (() =
 
 type WfAsker = { run: WorkflowRun; agent?: WorkflowAgent }
 
+type UserItem = Extract<TranscriptItem, { kind: 'user' }>
+
+/** A message's pasted images and attached files: the user's own, or ones another chat forwarded with its message. */
+function MessageAttachments({ images, files }: { images: UserItem['images']; files: UserItem['files'] }) {
+  return (
+    <>
+      {images && images.length > 0 && (
+        <div className="msgImages">
+          {images.map((img, i) => (
+            <ZoomableImage key={i} src={`data:${img.mediaType};base64,${img.data}`} alt={img.name ?? 'Attached image'} title={img.name} />
+          ))}
+        </div>
+      )}
+      {files && files.length > 0 && (
+        <div className="msgFiles">
+          {files.map((f) => (
+            <FileChip key={f.id} file={f} />
+          ))}
+        </div>
+      )}
+    </>
+  )
+}
+
 const Item = memo(function Item({
   item,
   turn,
@@ -638,6 +662,7 @@ const Item = memo(function Item({
                 item.from
               )}
             </div>
+            <MessageAttachments images={item.images} files={item.files} />
             <Markdown text={item.text} refs={refs} onRef={onRef} />
           </div>
         )
@@ -648,25 +673,7 @@ const Item = memo(function Item({
               Goal
             </div>
           )}
-          {item.images && item.images.length > 0 && (
-            <div className="msgImages">
-              {item.images.map((img, i) => (
-                <ZoomableImage
-                  key={i}
-                  src={`data:${img.mediaType};base64,${img.data}`}
-                  alt={img.name ?? 'Attached image'}
-                  title={img.name}
-                />
-              ))}
-            </div>
-          )}
-          {item.files && item.files.length > 0 && (
-            <div className="msgFiles">
-              {item.files.map((f) => (
-                <FileChip key={f.id} file={f} />
-              ))}
-            </div>
-          )}
+          <MessageAttachments images={item.images} files={item.files} />
           {withMentionLabels(item.text, item.mentions, refs, onRef)}
           {item.mentions && item.mentions.length > 0 && (
             <div className="msgMentions">

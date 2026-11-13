@@ -23,6 +23,7 @@ test('the coordinator block lists the agents and the rules', () => {
   assert.match(text, /"Pointers:"/)
   assert.match(text, /"Done when:"/)
   assert.match(text, /read_work_log/)
+  assert.match(text, /Forward every image and file the user attached in `attachments`/)
   assert.doesNotMatch(text, /do it yourself/)
   assert.doesNotMatch(text, /## Pinned notes/)
 })

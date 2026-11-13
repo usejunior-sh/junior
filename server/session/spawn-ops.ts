@@ -18,6 +18,7 @@ import { broadcastSessionList } from '../ws/send.js'
 import { log } from '../log.js'
 import { errText } from '../errors.js'
 import { checkoutById, makeWorktree } from './checkouts.js'
+import { copyForwardedFiles, readForwarded, type ForwardedAttachments } from '../attachments.js'
 import { lastReplyText } from './mentions.js'
 import { createSession, getOrRevive } from './sessions.js'
 import { checkAnswer } from './thread-wake.js'
@@ -29,7 +30,7 @@ export const MAX_STARTED_PER_CALL = 6
 /** A backstop on two chats messaging each other forever: messages one session may send per hour. */
 const MAX_MESSAGES_PER_HOUR = 30
 
-export type StartSpec = { name: string; title?: string; prompt: string; mode?: 'normal' | 'plan'; worktree?: string; agent?: string }
+export type StartSpec = { name: string; title?: string; prompt: string; mode?: 'normal' | 'plan'; worktree?: string; agent?: string; attachments?: string[] }
 
 /**
  * The chat agent a spec asks for, by name (`junior:reviewer`), file stem or
@@ -92,6 +93,15 @@ export async function startSessionsOp(rt: WorkspaceRuntime, parentId: string, sp
   const dup = names.find((n, i) => names.findIndex((m) => sameName(m, n)) !== i)
   if (dup) throw new Error(`the name "${dup}" is used twice`)
   for (const s of specs) if (!s.prompt.trim()) throw new Error(`"${s.name}" has no prompt`)
+  // Attachments are read now, before any session exists: a bad path starts none, and a temp file can't vanish meanwhile.
+  const forwarded: ForwardedAttachments[] = []
+  for (const s of specs) {
+    try {
+      forwarded.push(await readForwarded(s.attachments))
+    } catch (err) {
+      throw new Error(`"${s.name}": ${errText(err)}`)
+    }
+  }
 
   const project = parent.projectId ? (await rt.store.projects.list()).find((p) => p.id === parent.projectId) : undefined
   const agents = specs.some((s) => s.agent?.trim()) ? await chatAgentsFor(rt) : []
@@ -99,7 +109,7 @@ export async function startSessionsOp(rt: WorkspaceRuntime, parentId: string, sp
   for (const [i, spec] of specs.entries()) {
     // One that fails (an unknown agent, a worktree that can't be made) is reported, and the rest still start.
     try {
-      out.push(await startOne(rt, parent, project, spec, names[i], resolveAgent(agents, spec.agent)))
+      out.push(await startOne(rt, parent, project, spec, names[i], resolveAgent(agents, spec.agent), forwarded[i]))
     } catch (err) {
       out.push({ name: names[i], error: errText(err) })
     }
@@ -107,7 +117,7 @@ export async function startSessionsOp(rt: WorkspaceRuntime, parentId: string, sp
   return out
 }
 
-async function startOne(rt: WorkspaceRuntime, parent: StoredSession, project: Project | undefined, spec: StartSpec, name: string, agent: ChatAgent | null): Promise<{ id: string; name: string; title: string; agent?: string }> {
+async function startOne(rt: WorkspaceRuntime, parent: StoredSession, project: Project | undefined, spec: StartSpec, name: string, agent: ChatAgent | null, forwarded: ForwardedAttachments): Promise<{ id: string; name: string; title: string; agent?: string }> {
   // Same folder as the parent by default; a branch gets its own worktree, so parallel edits don't collide.
   let checkout = checkoutById(rt, parent.checkoutId)
   if (spec.worktree?.trim()) {
@@ -126,19 +136,22 @@ async function startOne(rt: WorkspaceRuntime, parent: StoredSession, project: Pr
     ...(agent ? { agent: agent.name } : {}),
   })
   broadcastSessionList(rt)
+  const files = await copyForwardedFiles(rt.attachmentsDir, row.id, forwarded.files)
   const live = await getOrRevive(rt, row.id)
-  void live?.sendUserMessage(spec.prompt.trim(), undefined, undefined, { from: parent.name ?? parent.title, fromSession: parent.id })
+  void live?.sendUserMessage(spec.prompt.trim(), forwarded.images.length ? forwarded.images : undefined, undefined, { from: parent.name ?? parent.title, fromSession: parent.id, ...(files.length ? { files } : {}) })
   return { id: row.id, name, title, ...(agent ? { agent: agent.label } : {}) }
 }
 
 /** Send `text` to the session named `name`, from `fromId`. Revives it if it has stopped. */
-export async function messageSessionOp(rt: WorkspaceRuntime, fromId: string, name: string, text: string): Promise<StoredSession> {
+export async function messageSessionOp(rt: WorkspaceRuntime, fromId: string, name: string, text: string, attachments?: string[]): Promise<StoredSession> {
   const from = rt.rows.get(fromId)
   if (!from) throw new Error('unknown session')
   const target = sessionByName(rt, name)
   if (!target) throw new Error(`no session is named "${name}"`)
   if (target.id === fromId) throw new Error('a session cannot message itself')
   if (!text.trim()) throw new Error('the message is empty')
+  // Read before the answer guard and the rate count, so a bad path spends neither.
+  const forwarded = await readForwarded(attachments)
   // A DM answering a thread's report: once per report, never a reply to its own answer.
   checkAnswer(rt, fromId, target.id)
   const now = Date.now()
@@ -149,7 +162,8 @@ export async function messageSessionOp(rt: WorkspaceRuntime, fromId: string, nam
   bySender.set(fromId, [...recent, now])
   const live = await getOrRevive(rt, target.id)
   if (!live) throw new Error(`"${name}" could not be started (its folder may be gone)`)
-  void live.sendUserMessage(text.trim(), undefined, undefined, { from: from.name ?? from.title, fromSession: from.id })
+  const files = await copyForwardedFiles(rt.attachmentsDir, target.id, forwarded.files)
+  void live.sendUserMessage(text.trim(), forwarded.images.length ? forwarded.images : undefined, undefined, { from: from.name ?? from.title, fromSession: from.id, ...(files.length ? { files } : {}) })
   return target
 }
 

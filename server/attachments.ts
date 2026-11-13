@@ -17,7 +17,7 @@ import { copyFile, mkdir, readFile, readdir, rename, rm, stat, writeFile } from 
 import type http from 'node:http'
 import path from 'node:path'
 
-import { MAX_FILE_BYTES, type FileRef } from '../shared/protocol.js'
+import { MAX_FILE_BYTES, MAX_FILES_PER_MESSAGE, MAX_IMAGE_BYTES, MAX_IMAGES_PER_MESSAGE, type FileRef, type ImageAttachment, type ImageMediaType } from '../shared/protocol.js'
 
 const UPLOAD_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const MAX_NAME_CHARS = 120
@@ -306,9 +306,67 @@ export const missingFilesNote = (missing: readonly FileRef[]): string | null =>
 
 const kb = (n: number): string => (n < 1024 * 1024 ? `${Math.max(1, Math.round(n / 1024))} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`)
 
-/** The text block that tells the model where the user's files are. Empty list = no block. */
-export function attachedFilesNote(root: string, sessionId: string, files: readonly FileRef[]): string | null {
+/** The text block that tells the model where the attached files are. Empty list = no block. `by` = who attached them, the user by default. */
+export function attachedFilesNote(root: string, sessionId: string, files: readonly FileRef[], by = 'The user'): string | null {
   if (files.length === 0) return null
   const lines = files.map((f) => `- ${sessionFilePath(root, sessionId, f)} (${f.name}, ${kb(f.bytes)})`)
-  return `The user attached ${files.length === 1 ? 'a file' : 'files'}. Read ${files.length === 1 ? 'it' : 'them'} from disk:\n${lines.join('\n')}`
+  return `${by} attached ${files.length === 1 ? 'a file' : 'files'}. Read ${files.length === 1 ? 'it' : 'them'} from disk:\n${lines.join('\n')}`
+}
+
+/** At most this many paths in one `attachments` list (start_session / message_session). */
+export const MAX_FORWARDED = MAX_IMAGES_PER_MESSAGE + MAX_FILES_PER_MESSAGE
+
+/** The image type the bytes say they are, from their first bytes, never the extension; null = not one the API takes. */
+export function sniffImage(buf: Buffer): ImageMediaType | null {
+  if (buf.length >= 8 && buf.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return 'image/png'
+  if (buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return 'image/jpeg'
+  if (buf.length >= 6 && /^GIF8[79]a$/.test(buf.subarray(0, 6).toString('latin1'))) return 'image/gif'
+  if (buf.length >= 12 && buf.subarray(0, 4).toString('latin1') === 'RIFF' && buf.subarray(8, 12).toString('latin1') === 'WEBP') return 'image/webp'
+  return null
+}
+
+/** Paths read off disk for a message from another chat: images to send inline, files still to copy. */
+export type ForwardedAttachments = { images: ImageAttachment[]; files: { path: string; name: string; bytes: number }[] }
+
+/**
+ * The files one chat hands another with its message (start_session /
+ * message_session `attachments`), read now: the user's screenshot sits in
+ * Claude Code's temp folder, which macOS may empty before the thread looks.
+ * An image the API takes, under the image cap, rides inline like a pasted one;
+ * anything else is copied into the thread's folder by `copyForwardedFiles`.
+ * Every path is checked first, so one bad path sends nothing.
+ */
+export async function readForwarded(paths: readonly string[] | undefined): Promise<ForwardedAttachments> {
+  const out: ForwardedAttachments = { images: [], files: [] }
+  const list = (paths ?? []).map((p) => p.trim()).filter(Boolean)
+  if (list.length > MAX_FORWARDED) throw new Error(`up to ${MAX_FORWARDED} attachments at a time`)
+  if (new Set(list).size !== list.length) throw new Error('an attachment is listed twice')
+  for (const p of list) {
+    if (!path.isAbsolute(p)) throw new Error(`an attachment must be an absolute path: ${p}`)
+    const s = await stat(p).catch(() => null)
+    if (!s) throw new Error(`no file at ${p}`)
+    if (!s.isFile()) throw new Error(`not a file: ${p}`)
+    if (s.size === 0) throw new Error(`the file is empty: ${p}`)
+    if (s.size > MAX_FILE_BYTES) throw new Error(`each file must be under ${Math.round(MAX_FILE_BYTES / 1024 / 1024)}MB: ${p}`)
+    const name = sanitizeFileName(path.basename(p))
+    const head = s.size <= MAX_IMAGE_BYTES ? await readFile(p) : null
+    const mediaType = head ? sniffImage(head) : null
+    if (head && mediaType) out.images.push({ name, mediaType, data: head.toString('base64') })
+    else out.files.push({ path: p, name, bytes: s.size })
+  }
+  if (out.images.length > MAX_IMAGES_PER_MESSAGE) throw new Error(`up to ${MAX_IMAGES_PER_MESSAGE} images at a time`)
+  if (out.files.length > MAX_FILES_PER_MESSAGE) throw new Error(`up to ${MAX_FILES_PER_MESSAGE} files (other than images) at a time`)
+  return out
+}
+
+/** Copy forwarded files into a session's folder, each under a fresh uuid, as a user's attached files sit. Returns their refs, in order. */
+export async function copyForwardedFiles(root: string, sessionId: string, files: ForwardedAttachments['files']): Promise<FileRef[]> {
+  const out: FileRef[] = []
+  for (const f of files) {
+    const ref: FileRef = { id: randomUUID(), name: f.name, bytes: f.bytes }
+    await mkdir(path.join(sessionFilesDir(root, sessionId), ref.id), { recursive: true })
+    await copyFile(f.path, sessionFilePath(root, sessionId, ref))
+    out.push(ref)
+  }
+  return out
 }

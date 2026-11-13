@@ -59,6 +59,7 @@ export function coordinatorAppend({ juniorName, agents, pins }: CoordinatorInput
     `  Pointers, not summaries: the thread reads them itself. Leave the section out when there are none.`,
     `  Then "Done when:" and one line on what the user gets at the end (a diff to review, a draft for their OK, an answer).`,
     `  Nothing else from this chat. Never rephrase the user's words.`,
+    `- Forward every image and file the user attached in \`attachments\` (start_session or message_session), by path. Never describe a screenshot instead of sending it.`,
     `- Before you start a thread, read it back in one line: "Reading it back: <the task>. <what waits for the user>. I gave it to <Agent>."`,
     `- Give each thread a short title the user will recognise: "Review #512", "Get #498 green".`,
     `- When a follow-up belongs to a thread that exists, send it there with message_session. Then say "Added to the <title> thread."`,
