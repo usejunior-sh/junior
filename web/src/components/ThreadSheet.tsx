@@ -54,7 +54,7 @@ export function ThreadSheet({ sessionId, onClose, onFull, onNavigate }: Props) {
             <b>Thread</b>
             <span>This thread was deleted.</span>
           </span>
-          <button type="button" className="tsIcon" aria-label="Close the thread" onClick={onClose}>
+          <button type="button" className="iconBtn" aria-label="Close the thread" onClick={onClose}>
             <X size={16} aria-hidden="true" />
           </button>
         </header>
@@ -79,10 +79,10 @@ export function ThreadSheet({ sessionId, onClose, onFull, onNavigate }: Props) {
             {firstAt ? ` · ${clock(firstAt)}` : ''}
           </span>
         </span>
-        <button type="button" className="tsIcon" title="Open full size: folder, model, terminal, browser" aria-label="Open full size" onClick={onFull}>
+        <button type="button" className="iconBtn" title="Open full size: folder, model, terminal, browser" aria-label="Open full size" onClick={onFull}>
           <Maximize2 size={15} aria-hidden="true" />
         </button>
-        <button type="button" className="tsIcon" title="Close (Esc)" aria-label="Close the thread" onClick={onClose}>
+        <button type="button" className="iconBtn" title="Close (Esc)" aria-label="Close the thread" onClick={onClose}>
           <X size={16} aria-hidden="true" />
         </button>
       </header>

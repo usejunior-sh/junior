@@ -89,7 +89,7 @@ export function PullRequestsPage({ onNavigate }: { onNavigate: (hash: string) =>
             {i.repo} · {st.text}
           </span>
         </span>
-        <a className="tsIcon" href={i.url} target="_blank" rel="noreferrer" title="Open on GitHub" aria-label="Open on GitHub">
+        <a className="iconBtn" href={i.url} target="_blank" rel="noreferrer" title="Open on GitHub" aria-label="Open on GitHub">
           <ExternalLink size={14} aria-hidden="true" />
         </a>
         {on ? (
