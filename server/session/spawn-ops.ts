@@ -114,7 +114,8 @@ async function startOne(rt: WorkspaceRuntime, parent: StoredSession, project: Pr
     checkout = await makeWorktree(rt, project, spec.worktree.trim())
   }
   const title = spec.title?.trim() || name
-  const row = await createSession(rt, title, checkout?.path ?? parent.cwd, parent.model, parent.effort, false, chatPermissionMode('claude'), {
+  // A thread runs like the chat that started it: same model, effort and fast mode.
+  const row = await createSession(rt, title, checkout?.path ?? parent.cwd, parent.model, parent.effort, parent.provider === 'claude' && parent.fastMode === true, chatPermissionMode('claude'), {
     spawn: false,
     projectId: parent.projectId,
     ...(checkout ? { checkoutId: checkout.id } : {}),
