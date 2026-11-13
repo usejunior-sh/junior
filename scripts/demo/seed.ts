@@ -213,7 +213,7 @@ async function writeTranscript(store: Store, sessionId: string, model: string, s
   }
   for (const step of steps) {
     if ('user' in step) {
-      await append({ kind: 'local_user', text: step.user }, 0)
+      await append({ kind: 'local_user', text: step.user, ...(step.from ? { from: step.from } : {}), ...(step.fromSession ? { fromSession: step.fromSession } : {}) } as SessionEvent, 0)
       if (first) {
         first = false
         await append(
@@ -257,7 +257,18 @@ async function seedSessions(store: Store, cwd: string, now: number): Promise<voi
     const start = now - s.started
     at(start)
     const model = s.model ?? W.MODEL
-    await store.sessions.create({ id: s.id, title: s.title, cwd, projectId: W.ID.project, model, permissionMode: 'auto' })
+    await store.sessions.create({
+      id: s.id,
+      title: s.title,
+      cwd,
+      projectId: W.ID.project,
+      model,
+      permissionMode: 'auto',
+      ...(s.kind ? { kind: s.kind } : {}),
+      ...(s.agent ? { agent: s.agent } : {}),
+      ...(s.startedBy ? { startedBy: s.startedBy } : {}),
+      ...(s.name ? { name: s.name } : {}),
+    })
     if (s.itemId) await store.links.add({ fromKind: 'session', fromId: s.id, toKind: 'item', toId: s.itemId, role: 'dispatch' })
     const end = await writeTranscript(store, s.id, model, s.steps, start, cwd)
     at(end)

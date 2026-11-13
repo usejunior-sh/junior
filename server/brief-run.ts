@@ -1,6 +1,8 @@
 import { createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk'
 import { agentAppend, agentDisallowed } from '../core/junior/agents.js'
-import { chatAgentNamed } from './chat-agents.js'
+import { chatAgentNamed, chatAgentsFor } from './chat-agents.js'
+import { coordinatorAppend } from '../core/junior/coordinator.js'
+import { pinsForPrompt } from './pins-ops.js'
 import { z } from 'zod'
 import { randomUUID } from 'node:crypto'
 import os from 'node:os'
@@ -122,6 +124,11 @@ export async function extrasFor(rt: WorkspaceRuntime, row: StoredSession): Promi
   // and skills narrow the session. An agent gone since reads as plain Junior.
   if (row.kind === 'chat' || row.kind === 'dm') {
     const agent = await chatAgentNamed(rt, row.agent)
+    // Junior's own chat (no agent) runs the team: it hands tasks to agents as threads, with the pins in each brief.
+    if (!agent && row.kind === 'dm') {
+      const coordinator = coordinatorAppend({ juniorName: rt.persona.name, agents: await chatAgentsFor(rt), pins: await pinsForPrompt(rt) })
+      return { systemAppend: `${identity}${coordinator}${await juniorAppend(rt)}`, mcp: { browser: browserMcpFor(rt, row) } }
+    }
     if (!agent) return { systemAppend: `${identity}${await juniorAppend(rt)}`, mcp: { browser: browserMcpFor(rt, row) } }
     return {
       systemAppend: `${identity}${agentAppend(agent, rt.persona.name)}${await juniorAppend(rt)}`,

@@ -315,6 +315,8 @@ export type ServerMessage =
   | { type: 'approvals_changed' }
   /** Learnings changed (proposed, kept, edited, forgotten, expired): Junior's notebook refetches. */
   | { type: 'learnings_changed' }
+  /** Pinned notes changed (Junior pinned one, the user unpinned one): GET /api/pins again. */
+  | { type: 'pins_changed' }
   /** The workspace's Junior persona changed (About me, or a chat's set_reply_style), the whole persona. */
   | { type: 'persona'; persona: import('../../core/junior/persona.js').Persona }
   /** Today's plan changed (a row added or removed, the day drafted), refetch. */

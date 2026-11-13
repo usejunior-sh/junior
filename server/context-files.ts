@@ -77,11 +77,11 @@ export const contextCost = (load: ContextLoad): SessionContextFiles => ({ tokens
  * remember its cost for the session summary. Never throws: a context file
  * that can't be read must not stop a session from starting.
  */
-export async function contextForSession(rt: WorkspaceRuntime, row: Pick<StoredSession, 'id' | 'projectId'>): Promise<ContextLoad> {
+export async function contextForSession(rt: WorkspaceRuntime, row: Pick<StoredSession, 'id' | 'projectId'> & { agent?: string | null }): Promise<ContextLoad> {
   try {
     const project = row.projectId ? ((await rt.store.projects.list()).find((p) => p.id === row.projectId) ?? null) : null
     const files = await loadContextFiles(workspaceDir(rt.meta.id), project)
-    const load = withLearnings(files, await learningsForSession(rt, project, { sessionId: row.id }))
+    const load = withLearnings(files, await learningsForSession(rt, project, { sessionId: row.id, agent: row.agent ?? null }))
     noteSessionContext(rt, row.id, load)
     return load
   } catch (err) {

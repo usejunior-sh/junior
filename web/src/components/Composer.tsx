@@ -50,6 +50,8 @@ type Props = {
   onFastModeChange: (fastMode: boolean) => void
   /** An agent's DM: the empty box says who you're messaging rather than "Steer the session…". */
   dm?: boolean
+  /** The empty box's words, when the default doesn't fit ("Reply to Reviewer…"). */
+  placeholder?: string
 }
 
 /**
@@ -59,6 +61,7 @@ type Props = {
  */
 export function Composer({
   dm = false,
+  placeholder: placeholderOverride,
   sessionId,
   status,
   cwd,
@@ -119,7 +122,7 @@ export function Composer({
         text={text}
         onTextChange={setText}
         placeholder={
-          showPlanning
+          placeholderOverride && !running ? placeholderOverride : showPlanning
             ? `What should ${persona.name} plan? It edits nothing until you approve the plan.`
             : running
               ? 'Steer the session… (queued until this turn ends)'

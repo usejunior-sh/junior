@@ -20,13 +20,29 @@ import { errText } from '../errors.js'
 import { checkoutById, makeWorktree } from './checkouts.js'
 import { lastReplyText } from './mentions.js'
 import { createSession, getOrRevive } from './sessions.js'
+import { chatAgentsFor } from '../chat-agents.js'
+import type { ChatAgent } from '../../core/junior/agents.js'
 
 /** At most this many sessions in one start_session call. */
 export const MAX_STARTED_PER_CALL = 6
 /** A backstop on two chats messaging each other forever: messages one session may send per hour. */
 const MAX_MESSAGES_PER_HOUR = 30
 
-export type StartSpec = { name: string; title?: string; prompt: string; mode?: 'normal' | 'plan'; worktree?: string }
+export type StartSpec = { name: string; title?: string; prompt: string; mode?: 'normal' | 'plan'; worktree?: string; agent?: string }
+
+/**
+ * The chat agent a spec asks for, by name (`junior:reviewer`), file stem or
+ * label, any case. Null when the spec names none; throws with the known
+ * labels when it names one that isn't there.
+ */
+export function resolveAgent(agents: readonly ChatAgent[], raw: string | undefined): ChatAgent | null {
+  const want = raw?.trim().toLowerCase()
+  if (!want) return null
+  const hit = agents.find((a) => a.name.toLowerCase() === want || a.slug.toLowerCase() === want || a.label.toLowerCase() === want)
+  if (hit) return hit
+  const known = agents.map((a) => a.label).join(', ')
+  throw new Error(`no agent is called "${raw}"${known ? `; known agents: ${known}` : '; this workspace has no chat agents'}`)
+}
 
 const sent = new WeakMap<WorkspaceRuntime, Map<string, number[]>>()
 
@@ -65,7 +81,7 @@ export async function setSessionNameOp(rt: WorkspaceRuntime, sessionId: string, 
 }
 
 /** Start one chat per spec, each opened with its prompt as a message from `parentId`. */
-export async function startSessionsOp(rt: WorkspaceRuntime, parentId: string, specs: StartSpec[]): Promise<({ id: string; name: string; title: string } | { name: string; error: string })[]> {
+export async function startSessionsOp(rt: WorkspaceRuntime, parentId: string, specs: StartSpec[]): Promise<({ id: string; name: string; title: string; agent?: string } | { name: string; error: string })[]> {
   const parent = rt.rows.get(parentId)
   if (!parent) throw new Error('unknown session')
   if (!specs.length) throw new Error('nothing to start')
@@ -77,11 +93,12 @@ export async function startSessionsOp(rt: WorkspaceRuntime, parentId: string, sp
   for (const s of specs) if (!s.prompt.trim()) throw new Error(`"${s.name}" has no prompt`)
 
   const project = parent.projectId ? (await rt.store.projects.list()).find((p) => p.id === parent.projectId) : undefined
-  const out: ({ id: string; name: string; title: string } | { name: string; error: string })[] = []
+  const agents = specs.some((s) => s.agent?.trim()) ? await chatAgentsFor(rt) : []
+  const out: ({ id: string; name: string; title: string; agent?: string } | { name: string; error: string })[] = []
   for (const [i, spec] of specs.entries()) {
-    // One that fails (a worktree that can't be made) is reported, and the rest still start.
+    // One that fails (an unknown agent, a worktree that can't be made) is reported, and the rest still start.
     try {
-      out.push(await startOne(rt, parent, project, spec, names[i]))
+      out.push(await startOne(rt, parent, project, spec, names[i], resolveAgent(agents, spec.agent)))
     } catch (err) {
       out.push({ name: names[i], error: errText(err) })
     }
@@ -89,7 +106,7 @@ export async function startSessionsOp(rt: WorkspaceRuntime, parentId: string, sp
   return out
 }
 
-async function startOne(rt: WorkspaceRuntime, parent: StoredSession, project: Project | undefined, spec: StartSpec, name: string): Promise<{ id: string; name: string; title: string }> {
+async function startOne(rt: WorkspaceRuntime, parent: StoredSession, project: Project | undefined, spec: StartSpec, name: string, agent: ChatAgent | null): Promise<{ id: string; name: string; title: string; agent?: string }> {
   // Same folder as the parent by default; a branch gets its own worktree, so parallel edits don't collide.
   let checkout = checkoutById(rt, parent.checkoutId)
   if (spec.worktree?.trim()) {
@@ -104,11 +121,12 @@ async function startOne(rt: WorkspaceRuntime, parent: StoredSession, project: Pr
     planning: spec.mode === 'plan',
     name,
     startedBy: parent.id,
+    ...(agent ? { agent: agent.name } : {}),
   })
   broadcastSessionList(rt)
   const live = await getOrRevive(rt, row.id)
   void live?.sendUserMessage(spec.prompt.trim(), undefined, undefined, { from: parent.name ?? parent.title, fromSession: parent.id })
-  return { id: row.id, name, title }
+  return { id: row.id, name, title, ...(agent ? { agent: agent.label } : {}) }
 }
 
 /** Send `text` to the session named `name`, from `fromId`. Revives it if it has stopped. */

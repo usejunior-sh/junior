@@ -3,7 +3,7 @@ import { HOUR, ID, MIN } from './base.js'
 // Sessions: a compact transcript DSL, expanded to SDK events by seed.ts
 
 export type Step =
-  | { user: string }
+  | { user: string; from?: string; fromSession?: string }
   | { say: string }
   | { tool: string; input: Record<string, unknown>; out: string; secs?: number; error?: boolean; id?: string }
   | { done: { turns: number; cost: number } }
@@ -16,6 +16,14 @@ export type DemoSession = {
   itemId?: string
   model?: string
   pinned?: boolean
+  /** Junior's own chat */
+  kind?: 'dm'
+  /** the chat agent it talks as (`junior:reviewer`) */
+  agent?: string
+  /** the session that started it: a thread Junior handed out */
+  startedBy?: string
+  /** its handle, what message_session addresses */
+  name?: string
   steps: Step[]
 }
 
@@ -231,6 +239,83 @@ export function sessions(root: string): DemoSession[] {
           say: '`a91f0c2` added fuzzy matching with `ILIKE \'%term%\'`, which can\'t use the btree index on `name`. Every search now seq-scans `customers`. A `pg_trgm` GIN index fixes it without changing behavior:\n\n```sql\nCREATE INDEX CONCURRENTLY customers_name_trgm ON customers USING gin (name gin_trgm_ops);\n```',
         },
         { done: { turns: 2, cost: 0.05 } },
+      ],
+    },
+    // Junior's one chat: a standing fact pinned, then two tasks handed to agents as threads.
+    {
+      id: ID.s.juniorDm,
+      title: 'Junior',
+      kind: 'dm',
+      started: 2 * HOUR,
+      steps: [
+        { user: 'Dev is failing. The tenant migration did not run.' },
+        { tool: 'mcp__junior__pin_note', input: { text: 'Dev is failing: the tenant migration did not run.', scope: 'today' }, out: '{"pinned":{"id":"p1","text":"Dev is failing: the tenant migration did not run.","scope":"today"}}' },
+        { say: 'Pinned for today. Any thread that touches the API gets it.' },
+        { user: 'Get #482 green.' },
+        { say: 'Reading it back: fix CI on #482, the Redis rate-limit PR. The push waits for you. I gave it to Babysitter.' },
+        {
+          tool: 'mcp__junior__start_session',
+          input: { sessions: [{ name: 'green-482', title: 'Get #482 green', agent: 'babysitter', prompt: '"Get #482 green."' }] },
+          out: JSON.stringify({ started: [{ id: ID.s.babysit482, name: 'green-482', title: 'Get #482 green', agent: 'Babysitter' }], next: 'message_session to follow up' }),
+        },
+        { user: 'Review #477 for me.' },
+        { say: "Reading it back: review Priya's PR #477, idempotency keys for POST /charges. The comment waits for you. I gave it to Reviewer." },
+        {
+          tool: 'mcp__junior__start_session',
+          input: { sessions: [{ name: 'review-477', title: 'Review #477', agent: 'reviewer', prompt: '"Review #477 for me."' }] },
+          out: JSON.stringify({ started: [{ id: ID.s.review477, name: 'review-477', title: 'Review #477', agent: 'Reviewer' }], next: 'message_session to follow up' }),
+        },
+        { done: { turns: 3, cost: 0.04 } },
+      ],
+    },
+    {
+      id: ID.s.babysit482,
+      title: 'Get #482 green',
+      name: 'green-482',
+      agent: 'junior:babysitter',
+      startedBy: ID.s.juniorDm,
+      started: 90 * MIN,
+      steps: [
+        {
+          user: '"Get #482 green."\n\nContext from Junior:\n- Dev is failing: the tenant migration did not run. (pinned today)',
+          from: 'Junior',
+          fromSession: ID.s.juniorDm,
+        },
+        {
+          tool: 'Bash',
+          input: { command: 'gh pr checks 482', description: 'CI on #482' },
+          out: 'test-api   fail   2m11s\nlint       pass   41s\nbuild      pass   1m02s',
+          secs: 3,
+        },
+        { say: 'One failing step: `test-api`. The first real error is `ECONNREFUSED 127.0.0.1:6379` in `src/ratelimit/redis.test.ts:18`. The test job has no Redis service.' },
+        {
+          tool: 'Edit',
+          input: { file_path: f('.github/workflows/ci.yml'), old_string: '    services:\n      postgres:', new_string: '    services:\n      redis:\n        image: redis:7\n        ports: ["6379:6379"]\n      postgres:' },
+          out: 'The file .github/workflows/ci.yml has been updated.',
+          secs: 1,
+        },
+        { say: 'Added a Redis service to the test job. Committed locally on the PR branch. The push waits for you.' },
+        { done: { turns: 4, cost: 0.11 } },
+      ],
+    },
+    {
+      id: ID.s.review477,
+      title: 'Review #477',
+      name: 'review-477',
+      agent: 'junior:reviewer',
+      startedBy: ID.s.juniorDm,
+      started: 40 * MIN,
+      steps: [
+        {
+          user: '"Review #477 for me."\n\nContext from Junior:\n- Dev is failing: the tenant migration did not run. (pinned today)',
+          from: 'Junior',
+          fromSession: ID.s.juniorDm,
+        },
+        { tool: 'Bash', input: { command: 'gh pr diff 477 --name-only', description: 'Files in #477' }, out: 'src/charges/idempotency.ts\nsrc/charges/idempotency.test.ts\nsrc/routes/charges.ts', secs: 2 },
+        {
+          say: 'Two findings, most severe first.\n\n1. **The key is checked and stored in two steps** (`src/charges/idempotency.ts:42`). Two requests with the same key can both pass the check. Use one `INSERT … ON CONFLICT DO NOTHING` and read the row back.\n2. **Keys never expire** (`src/charges/idempotency.ts:57`). The table grows forever. Add a 24 hour TTL.\n\nDraft review comment, not sent:\n\n> Two things before this merges. The check and the insert race (idempotency.ts:42). And keys need a TTL (idempotency.ts:57).',
+        },
+        { done: { turns: 3, cost: 0.07 } },
       ],
     },
   ]

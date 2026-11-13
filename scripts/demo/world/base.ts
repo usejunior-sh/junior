@@ -19,6 +19,10 @@ export const ID = {
     replyPriya: '0d3e5a1c-4b7e-4f0a-9c2e-1a6f00000003',
     flags: '0d3e5a1c-4b7e-4f0a-9c2e-1a6f00000004',
     latency: '0d3e5a1c-4b7e-4f0a-9c2e-1a6f00000005',
+    // the redesign (.docs/redesign-b2-plan.md): Junior's one chat, and the threads it handed out
+    juniorDm: '0d3e5a1c-4b7e-4f0a-9c2e-1a6f00000006',
+    babysit482: '0d3e5a1c-4b7e-4f0a-9c2e-1a6f00000007',
+    review477: '0d3e5a1c-4b7e-4f0a-9c2e-1a6f00000008',
   },
   job: {
     prSweep: '6a0b1f2e-0000-4c1d-8e7f-000000000001',

@@ -92,6 +92,34 @@ export const SCENES: Scene[] = [
     viewport: { width: 390, height: 844 },
     headline: 'Your inbox, in your pocket.',
   },
+  // The team layout (.docs/redesign-b2-plan.md): Junior's one chat, a thread beside it, PRs, an agent.
+  {
+    name: 'team-home',
+    hash: '#/junior',
+    headline: 'A junior engineer for senior engineers.',
+    sub: 'One chat with Junior. It hands each task to an agent and asks before anything goes out.',
+    settleMs: 1500,
+  },
+  {
+    name: 'team-thread',
+    hash: '#/junior',
+    click: 'Review #477',
+    headline: 'Every task starts clean.',
+    sub: 'The agent gets your words and the facts that matter. Nothing else from your chat.',
+    settleMs: 1500,
+  },
+  {
+    name: 'team-prs',
+    hash: '#/prs',
+    headline: 'Your PRs and your reviews, on one page.',
+    sub: 'Hand one to Junior in a click. You approve what goes out.',
+  },
+  {
+    name: 'team-agent',
+    hash: `#/agents/${encodeURIComponent('junior:reviewer')}`,
+    headline: 'Each agent learns how you like the job done.',
+    sub: 'Its instructions, its threads, and the notes you kept. Nothing is kept until you say so.',
+  },
 ]
 
 /** The tab strip every desktop scene opens with, like a real afternoon. */

@@ -13,6 +13,9 @@ import {
   citationOf,
   citeOf,
   forScope,
+  agentScopes,
+  scopeWhere,
+  scopeFrom,
   keep,
   loadVerdict,
   parseLearning,
@@ -97,6 +100,37 @@ test('only kept learnings for the matching scope are included', () => {
   assert.deepEqual(web, ['Run pnpm test:unit in acme/web', 'Squash merge everywhere'])
   assert.deepEqual(forScope(list, null).map((l) => l.text), ['Squash merge everywhere'])
   assert.deepEqual(forScope(list, 'other/repo').map((l) => l.text), ['Squash merge everywhere'])
+})
+
+test("a session talking as an agent loads that agent's learnings first, and no other agent's", () => {
+  const list: Learning[] = [
+    kept('Squash merge everywhere', 'global', ['pr:a/b#1']),
+    kept('Run pnpm test:unit in acme/web', 'repo:acme/web', ['pr:acme/web#1']),
+    kept('Check tests before style', 'agent:reviewer', ['session:s-1']),
+    kept('Rerun the tenant test once first', 'agent:junior:babysitter', ['session:s-2']),
+  ]
+  assert.deepEqual(
+    forScope(list, 'acme/web', 'junior:reviewer').map((l) => l.text),
+    ['Check tests before style', 'Run pnpm test:unit in acme/web', 'Squash merge everywhere'],
+  )
+  // The full name and the file stem both match.
+  assert.deepEqual(forScope(list, null, 'junior:babysitter').map((l) => l.text), ['Rerun the tenant test once first', 'Squash merge everywhere'])
+  // Plain Junior gets no agent's learnings.
+  assert.deepEqual(forScope(list, null).map((l) => l.text), ['Squash merge everywhere'])
+  assert.deepEqual(forScope(list, null, null).map((l) => l.text), ['Squash merge everywhere'])
+})
+
+test('agent scopes parse, and say where they hold', () => {
+  assert.equal(scopeFrom('agent:Reviewer'), 'agent:reviewer')
+  assert.equal(scopeFrom(' agent:junior:babysitter '), 'agent:junior:babysitter')
+  assert.equal(scopeFrom('agent:'), null)
+  assert.equal(scopeFrom('agent:bad name'), null)
+  assert.equal(scopeFrom('acme/web'), 'repo:acme/web')
+  assert.deepEqual(agentScopes('junior:reviewer'), ['agent:junior:reviewer', 'agent:reviewer'])
+  assert.deepEqual(agentScopes(undefined), [])
+  assert.equal(scopeWhere('agent:junior:reviewer'), 'the reviewer agent')
+  assert.equal(scopeWhere('repo:acme/web', 'for '), 'for acme/web')
+  assert.equal(scopeWhere('global'), 'everywhere')
 })
 
 test('a learning whose cited file is gone is skipped and marked stale on disk', async () => {

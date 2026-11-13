@@ -35,6 +35,31 @@ type Props = {
   build: Build | null
   /** Inside Junior.app: the bar is the window's title bar (see desktop.ts). */
   desktop?: { panelCollapsed: boolean; onTogglePanel: () => void }
+  /**
+   * The team sidebar's layout. The bar's left zone sits over the sidebar and carries the wordmark and the
+   * sidebar toggle.
+   */
+  team?: TeamBar
+}
+
+type TeamBar = { sidebarOpen: boolean; onToggleSidebar: () => void }
+
+/** The sidebar toggle, at the right end of the bar's left zone. New chats start from the sidebar's Threads +. */
+function SidebarButtons({ team }: { team: TeamBar }) {
+  return (
+    <>
+      <button
+        type="button"
+        className="topIcon"
+        title={`${team.sidebarOpen ? 'Hide' : 'Show'} the sidebar (${MOD_LABEL}\\)`}
+        aria-label={team.sidebarOpen ? 'Hide the sidebar' : 'Show the sidebar'}
+        aria-pressed={team.sidebarOpen}
+        onClick={team.onToggleSidebar}
+      >
+        <PanelLeft size={15} aria-hidden="true" />
+      </button>
+    </>
+  )
 }
 
 /**
@@ -81,12 +106,14 @@ export function TopBar({
   onHelp,
   build,
   desktop,
+  team,
 }: Props) {
   const current = workspaces.find((w) => w.id === workspaceId)
   if (desktop && !mobile) {
     return (
       <DesktopBar
         {...desktop}
+        team={team}
         switcher={
           <WorkspaceSwitcher
             labelled
@@ -129,6 +156,27 @@ export function TopBar({
         <button type="button" className={`topIcon${settingsOpen ? ' on' : ''}`} aria-label="Settings" aria-pressed={!!settingsOpen} onClick={onOpenSettings}>
           <Settings size={17} aria-hidden="true" />
         </button>
+      </header>
+    )
+  }
+  if (team) {
+    return (
+      <header className={`topbar teamBar${team.sidebarOpen ? '' : ' sidebarHidden'}`}>
+        <div className="tbSide">
+          <JuniorLogo />
+          <WorkspaceSwitcher
+            workspaces={workspaces}
+            workspaceId={workspaceId}
+            onSwitch={onSwitchWorkspace}
+            onNew={onNewWorkspace}
+            onSettings={onWorkspaceSettings}
+          />
+          <span className="spacer" />
+          <SidebarButtons team={team} />
+        </div>
+        <BuildBadge build={build} onOpenSystem={onOpenSystem} />
+        <span className="spacer" />
+        <SystemIcons workspace={current} conn={conn} onOpenSystem={onOpenSystem} onOpenSettings={onOpenSettings} settingsOpen={settingsOpen} onHelp={onHelp} />
       </header>
     )
   }
@@ -197,32 +245,39 @@ function SystemIcons({
 function DesktopBar({
   panelCollapsed,
   onTogglePanel,
+  team,
   switcher,
   badge,
   system,
 }: {
   panelCollapsed: boolean
   onTogglePanel: () => void
+  team?: TeamBar
   switcher: ReactNode
   badge: ReactNode
   system: ReactNode
 }) {
   const nav = useDesktopNav()
+  const hidden = team ? !team.sidebarOpen : panelCollapsed
   return (
-    <header className={`topbar desktopBar${panelCollapsed ? ' panelHidden' : ''}${nav.fullscreen ? ' fullscreen' : ''}`}>
+    <header className={`topbar desktopBar${team ? ' team' : ''}${hidden ? ' panelHidden' : ''}${nav.fullscreen ? ' fullscreen' : ''}`}>
       <div className="dbSide">
         <JuniorLogo />
         <span className="spacer" />
-        <button
-          type="button"
-          className="topIcon"
-          title={`${panelCollapsed ? 'Show' : 'Hide'} panel (${MOD_LABEL}B)`}
-          aria-label={panelCollapsed ? 'Show panel' : 'Hide panel'}
-          aria-pressed={!panelCollapsed}
-          onClick={onTogglePanel}
-        >
-          <PanelLeft size={15} aria-hidden="true" />
-        </button>
+        {team ? (
+          <SidebarButtons team={team} />
+        ) : (
+          <button
+            type="button"
+            className="topIcon"
+            title={`${panelCollapsed ? 'Show' : 'Hide'} panel (${MOD_LABEL}B)`}
+            aria-label={panelCollapsed ? 'Show panel' : 'Hide panel'}
+            aria-pressed={!panelCollapsed}
+            onClick={onTogglePanel}
+          >
+            <PanelLeft size={15} aria-hidden="true" />
+          </button>
+        )}
         <button type="button" className="topIcon" title={`Back (${MOD_LABEL}[)`} aria-label="Back" disabled={!nav.canGoBack} onClick={goBack}>
           <ChevronLeft size={16} aria-hidden="true" />
         </button>

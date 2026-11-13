@@ -14,7 +14,9 @@ export function shortcutsFor(mod: string): ReadonlyArray<[keys: string, what: st
     [`${mod},`, 'Settings'],
     [`${mod}B`, 'Hide / show the side panel'],
     [mod === '⌘' ? '⌘⌥B' : `${mod}Alt+B`, "Hide / show the chat's right sidebar"],
-    [`${mod}J`, 'New chat with Junior'],
+    [`${mod}J`, "Junior's chat (classic layout: a new chat with Junior)"],
+    [`${mod}\\`, 'Hide / show the team sidebar'],
+    [mod === '⌘' ? '⌃`' : 'Ctrl+`', 'New scratch terminal'],
     [frictionKeyLabel(mod), 'Note what annoyed you, for later'],
     ['n', 'New chat (in Tasks: new task)'],
     ['Shift+Tab', 'New chat: switch Solo / Ultracode'],
@@ -41,7 +43,7 @@ export function shortcutsFor(mod: string): ReadonlyArray<[keys: string, what: st
     ['c', 'Junior: close with a note (on a Close? row)'],
     ['r', 'Tasks: refresh'],
     ['?', 'Keyboard shortcuts'],
-    ['Esc', 'Close dialogs'],
+    ['Esc', 'Close dialogs, or the thread open beside Junior’s chat'],
   ]
 }
 

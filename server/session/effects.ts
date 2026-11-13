@@ -37,8 +37,11 @@ export const TEAM_TOOLS = new Set([
   'mcp__junior__ask_you',
   'mcp__team__submit_step',
 ])
-/** Starting and messaging other chats: local work, since each chat's own sends stay held. Never a prompt. */
-export const SESSION_TOOLS = new Set(['mcp__junior__start_session', 'mcp__junior__message_session'])
+/**
+ * Starting and messaging other chats: local work, since each chat's own sends stay held. Never a prompt.
+ * Pinning a note (and taking one off) only writes the workspace's pins.json: never a prompt either.
+ */
+export const SESSION_TOOLS = new Set(['mcp__junior__start_session', 'mcp__junior__message_session', 'mcp__junior__pin_note', 'mcp__junior__unpin'])
 export const JUNIOR_READ_TOOLS = new Set([
   'mcp__junior__list_work_items',
   'mcp__junior__get_work_item',
@@ -53,6 +56,8 @@ export const JUNIOR_READ_TOOLS = new Set([
   // Other chats, by name (server/session/spawn-ops.ts): reading where they stand.
   'mcp__junior__read_session',
   'mcp__junior__list_sessions',
+  // Pinned notes: reading the list.
+  'mcp__junior__list_pins',
   // Advance approvals: listing reads, proposing only shows a card. Only the user's Add makes one.
   'mcp__junior__list_approvals',
   'mcp__junior__propose_approval',

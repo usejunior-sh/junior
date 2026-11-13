@@ -18,6 +18,7 @@ import { addLinkOp, createArtifactOp, listArtifactsOp, toolResult, updateArtifac
 import { listApprovalsOp } from './approvals-ops.js'
 import { proposeLearningOp } from './learnings-ops.js'
 import { proposeLearningResult } from '../core/junior/learnings.js'
+import { listPinsOp, pinNoteOp, unpinOp } from './pins-ops.js'
 import { APPROVAL_WHATS, approvalFrom, describeApproval, isLive } from '../core/approvals/approvals.js'
 import { messageSessionOp, sessionByName, sessionReport, startedBy, startSessionsOp } from './session/spawn-ops.js'
 
@@ -545,7 +546,7 @@ export function makeJuniorMcp(rt: WorkspaceRuntime, sessionId?: string) {
         'Note something you learned about how the user works, with the receipt that taught you. Only from their own edits, rejections or corrections: they rewrote your diff, turned down a send, or told you to do it another way. Never from your own guesses or from what the code merely shows. The first time it is a quiet note the user never sees. The same words and scope seen again on another day become a proposal, shown as a card the user keeps or undoes. Nothing is kept until they press Keep, and nothing here goes into a prompt until then. One short imperative sentence ("Run pnpm test:unit, not pnpm test, in acme/web").',
         {
           text: z.string().describe('the learning, one short sentence; reuse the exact words when you see it again'),
-          scope: z.string().optional().describe('global, or repo:<owner>/<repo> when it holds in one repo only; default global'),
+          scope: z.string().optional().describe('global; repo:<owner>/<repo> when it holds in one repo only; agent:<name> (agent:reviewer) for how one of the user\'s agents should do its job; default global'),
           source: z.string().describe('the receipt: what showed it, e.g. pr:acme/web#3235, slack:<channel>/<ts>, session:<id>, path/to/file.ts:42'),
         },
         async (args) => {
@@ -556,11 +557,48 @@ export function makeJuniorMcp(rt: WorkspaceRuntime, sessionId?: string) {
           }
         },
       ),
+      // Pinned notes (core/junior/pins.ts): standing facts and rules the user told Junior. Local, no card.
+      tool(
+        'pin_note',
+        'Pin a fact or rule the user just told you, so it outlives the chat scrolling away and goes into the briefs you write for threads ("Dev is failing: the tenant migration did not run", "Onboarding belongs to another team: don\'t touch it"). One line, in plain words. scope today (default) for a fact about now; always for a standing rule. Say so in one short line after: "Noted. I pinned it for today." Pinning the same words twice keeps one pin.',
+        {
+          text: z.string().describe('the note, one line'),
+          scope: z.enum(['today', 'always']).optional().describe('today (default): true for the rest of the day; always: until the user unpins it'),
+        },
+        async (args) => {
+          try {
+            const r = await pinNoteOp(rt, args)
+            return okResult(JSON.stringify({ pinned: r.pin, ...(r.existed ? { note: 'already pinned' } : {}) }, null, 2))
+          } catch (err) {
+            return errResult(errText(err))
+          }
+        },
+      ),
+      tool('list_pins', 'The pinned notes that hold now, oldest first, each with its id and scope.', {}, async () => {
+        try {
+          return okResult(JSON.stringify(await listPinsOp(rt), null, 2))
+        } catch (err) {
+          return errResult(errText(err))
+        }
+      }),
+      tool(
+        'unpin',
+        'Take a pinned note off, by its id (list_pins shows ids). Use it when the user says a pinned fact no longer holds.',
+        { id: z.string().describe('the pin\'s id, p-…') },
+        async (args) => {
+          try {
+            const pin = await unpinOp(rt, args.id)
+            return okResult(`ok: unpinned "${pin.text}"`)
+          } catch (err) {
+            return errResult(errText(err))
+          }
+        },
+      ),
       // Chats that start chats (server/session/spawn-ops.ts): each one an ordinary chat in the list,
       // addressed by its name (the handle `/rename` sets). Local work, so no card.
       tool(
         'start_session',
-        'Start new chat sessions, one per task, each opened with its prompt as a message from this chat. Use it when the user hands you several things to do in parallel ("start 3 sessions: one for X, one for Y…"). Each is a normal chat in the list that the user can open and type into. Give each a short unique name (what /rename sets); you address it by that name later with message_session and read_session. A session runs in this chat\'s folder unless you give it a worktree branch, which keeps parallel edits apart. Write each prompt as a full hand-off: the session starts with none of this chat\'s context.',
+        'Start new chat sessions, one per task, each opened with its prompt as a message from this chat. This is how you hand a task to one of the user\'s agents: give `agent` (Reviewer, Babysitter, …) and the session is a thread that talks as that agent, with its instructions and memory. Without `agent` it is plain Junior. Use it too when the user hands you several things to do in parallel ("start 3 sessions: one for X, one for Y…"). Each is a normal chat the user can open and type into. Give each a short unique name (what /rename sets); you address it by that name later with message_session and read_session. A session runs in this chat\'s folder unless you give it a worktree branch, which keeps parallel edits apart. Write each prompt as a full hand-off: the session starts with none of this chat\'s context.',
         {
           sessions: z
             .array(
@@ -570,6 +608,7 @@ export function makeJuniorMcp(rt: WorkspaceRuntime, sessionId?: string) {
                 prompt: z.string().describe('the first message: the task, with every bit of context it needs'),
                 mode: z.enum(['normal', 'plan']).optional().describe('plan: it plans and waits for the user to approve before editing'),
                 worktree: z.string().optional().describe('a branch name: run in a new worktree on that branch instead of this folder'),
+                agent: z.string().optional().describe('the agent this thread talks as: its label (Reviewer), file name or full name; omit for plain Junior'),
               }),
             )
             .min(1)

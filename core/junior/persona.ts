@@ -35,10 +35,10 @@ export const DEFAULT_NAME = 'Junior'
 export const NAME_MAX = 20
 export const REPLY_MAX = 400
 
-/** The deck's eight presets. */
+/** The deck's eight presets. Sky is the brand's J key (design.md), so it comes first and is the default. */
 export const SWATCHES: ReadonlyArray<readonly [label: string, hex: string]> = [
-  ['Lavender', '#cbbffa'],
   ['Sky', '#a9cdfc'],
+  ['Lavender', '#cbbffa'],
   ['Mint', '#7fe0b4'],
   ['Butter', '#f5d77a'],
   ['Apricot', '#ffb27a'],

@@ -42,8 +42,12 @@ import { dayKey } from './today.js'
 export const LEARNING_STATUSES = ['candidate', 'proposed', 'kept', 'stale'] as const
 export type LearningStatus = (typeof LEARNING_STATUSES)[number]
 
-/** `global`, or one repo: `repo:<owner>/<repo>` (lowercase). */
-export type LearningScope = 'global' | `repo:${string}`
+/**
+ * `global`, one repo: `repo:<owner>/<repo>`, or one chat agent:
+ * `agent:<name>` (how that agent should do its job; its file stem or full
+ * name, `agent:reviewer`). All lowercase.
+ */
+export type LearningScope = 'global' | `repo:${string}` | `agent:${string}`
 
 /** A receipt: what Junior saw (a PR, a thread, a session, a file:line) and the local day it saw it. */
 export type LearningSource = { ref: string; day: string }
@@ -92,16 +96,21 @@ export const LOSS_MIN_CHARS = 20
 
 const ID_RE = /^[a-z0-9][a-z0-9-]{0,63}$/
 const REPO_RE = /^repo:[a-z0-9_.-]+\/[a-z0-9_.-]+$/
+const AGENT_RE = /^agent:[a-z0-9][a-z0-9:_.-]{0,63}$/
 const DAY_RE = /^(\d{4})-(\d{2})-(\d{2})$/
 
 export const isLearningId = (v: unknown): v is string => typeof v === 'string' && ID_RE.test(v)
 export const isLearningStatus = (v: unknown): v is LearningStatus => typeof v === 'string' && (LEARNING_STATUSES as readonly string[]).includes(v)
 
-/** A scope as typed (`global`, `repo:Acme/Web`, `acme/web`) → the stored form, or null. */
+/** What a bad scope is told. */
+export const SCOPE_HINT = 'scope: global, repo:<owner>/<repo>, or agent:<name>'
+
+/** A scope as typed (`global`, `repo:Acme/Web`, `acme/web`, `agent:Reviewer`) → the stored form, or null. */
 export function scopeFrom(raw: unknown): LearningScope | null {
   if (typeof raw !== 'string') return null
   const s = raw.trim().toLowerCase()
   if (s === 'global') return 'global'
+  if (s.startsWith('agent:')) return AGENT_RE.test(s) ? (s as LearningScope) : null
   const repo = s.startsWith('repo:') ? s : `repo:${s}`
   return REPO_RE.test(repo) ? (repo as LearningScope) : null
 }
@@ -211,7 +220,7 @@ export function parseLearning(id: string, text: string): ParsedLearning {
     if (!(LEARNING_FILE_KEYS as readonly string[]).includes(k)) errors.push(`unknown key "${k}" (expected ${LEARNING_FILE_KEYS.join(', ')})`)
   }
   const scope = scopeFrom(doc.scope)
-  if (!scope) errors.push('scope: global, or repo:<owner>/<repo>')
+  if (!scope) errors.push(SCOPE_HINT)
   const status = doc.status
   if (!isLearningStatus(status)) errors.push(`status: one of ${LEARNING_STATUSES.join(', ')}`)
   const createdAt = timeOf('createdAt', doc.createdAt, errors, true)
@@ -505,7 +514,7 @@ export function edit(list: readonly Learning[], id: string, input: EditInput, ma
 }
 
 export function budgetError(b: Budget): string {
-  const where = b.scope === 'global' ? 'everywhere' : `for ${b.scope.slice('repo:'.length)}`
+  const where = scopeWhere(b.scope, 'for ')
   const hint = b.leastUsed ? ` The one used least lately: "${b.leastUsed.text.slice(0, 80)}".` : ''
   return `Junior keeps at most ${b.max} learnings ${where}. Forget one first.${hint}`
 }
@@ -596,16 +605,39 @@ export function loadVerdict(checks: readonly CitationCheck[]): 'load' | 'stale' 
 /** Every receipt gone: the learning waits on you to keep or forget. */
 export const markStale = (l: Learning, now: number): Learning => ({ ...l, status: 'stale', staleAt: now })
 
+/** Where a scope holds, in words: "everywhere", "acme/web", "the reviewer agent". `pre` goes before a repo or agent. */
+export function scopeWhere(scope: LearningScope, pre = ''): string {
+  if (scope === 'global') return 'everywhere'
+  if (scope.startsWith('agent:')) return `${pre}the ${scope.slice('agent:'.length).split(':').pop()} agent`
+  return `${pre}${scope.slice('repo:'.length)}`
+}
+
+/**
+ * The scopes a session talking as `agent` matches: its full name
+ * (`junior:reviewer`) and its file stem (`reviewer`). None for plain Junior.
+ */
+export function agentScopes(agent: string | null | undefined): LearningScope[] {
+  const a = agent?.trim().toLowerCase()
+  if (!a) return []
+  const keys = [...new Set([a, a.split(':').pop() ?? a])]
+  return keys.map((k) => `agent:${k}`).filter((s) => AGENT_RE.test(s)) as LearningScope[]
+}
+
 /**
  * The kept learnings a session in `repo` may load (null: no repo, so only
- * global ones), within the per-scope budget, the repo's own first, then the
+ * global ones), plus, for a session talking as `agent`, that agent's own,
+ * within the per-scope budget: the agent's first, then the repo's, then the
  * most recently active. Capped at `max`; the caller drops stale ones before
  * it caps.
  */
-export function forScope(list: readonly Learning[], repo: string | null): Learning[] {
+export function forScope(list: readonly Learning[], repo: string | null, agent?: string | null): Learning[] {
   const repoScope = repo ? scopeFrom(repo) : null
-  const mine = withinBudget(loadable(list)).filter((l) => l.scope === 'global' || (repoScope !== null && repoScope !== 'global' && l.scope === repoScope))
-  return mine.sort((a, b) => Number(b.scope !== 'global') - Number(a.scope !== 'global') || lastActive(b) - lastActive(a) || a.id.localeCompare(b.id))
+  const agents = new Set<LearningScope>(agentScopes(agent))
+  const rank = (l: Learning) => (l.scope.startsWith('agent:') ? 2 : l.scope === 'global' ? 0 : 1)
+  const mine = withinBudget(loadable(list)).filter(
+    (l) => l.scope === 'global' || (repoScope !== null && repoScope !== 'global' && l.scope === repoScope) || agents.has(l.scope),
+  )
+  return mine.sort((a, b) => rank(b) - rank(a) || lastActive(b) - lastActive(a) || a.id.localeCompare(b.id))
 }
 
 /** The receipt a prompt shows: the newest one still there (or not checkable), else the newest. */

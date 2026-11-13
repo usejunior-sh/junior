@@ -44,6 +44,7 @@ import { ToolGroup } from './ToolGroup.js'
 import { ActionNotes } from './ActionCard.js'
 import { RuleCards } from './RuleCard.js'
 import { LearnedLines } from './LearnedLine.js'
+import { ThreadCards } from './ThreadCards.js'
 import { useActions } from '../actions.js'
 import type { ActionView } from '../../../shared/protocol.js'
 
@@ -85,6 +86,11 @@ type Props = {
   /** Ask for the page before the oldest one held, and again after a failure. */
   onLoadEarlier?: (sessionId: string) => void
   onRetryEarlier?: (sessionId: string) => void
+  /**
+   * A thread Junior started: its first message from Junior is the brief, drawn
+   * as "What Junior told Reviewer" so you can see the context is clean.
+   */
+  brief?: { from: string; to: string; onEdit?: () => void }
 }
 
 export type TranscriptMark = { at: number; key: string; node: ReactNode }
@@ -267,6 +273,7 @@ export function Transcript({
   paging = null,
   onLoadEarlier,
   onRetryEarlier,
+  brief,
 }: Props) {
   // A paged log counts from where the held part starts, so keys survive a prepend;
   // `midway` leaves off what only the start of the log can tell.
@@ -335,6 +342,7 @@ export function Transcript({
     return { m, tailMarks }
   }, [items, marks, midway, base])
 
+  const briefKey = brief ? items.find((it) => it.kind === 'user' && it.from)?.key : undefined
   return (
     <div id="transcript" ref={ref}>
       <div className="inner">
@@ -348,7 +356,9 @@ export function Transcript({
         )}
         {!scope && paging && <PagingStatus paging={paging} />}
         {lead}
-        {items.map((item) => (
+        {items.map((item) => item.key === briefKey && item.kind === 'user' ? (
+          <BriefCard key={item.key} from={brief!.from} to={brief!.to} text={item.text} refs={refs} onRef={onNavigate} onEdit={brief!.onEdit} />
+        ) : (
           <Fragment key={item.key}>
           {marksBefore.m.get(item.key)?.map((x) => <Fragment key={x.key}>{x.node}</Fragment>)}
           {moods?.at.has(item.key) && <Speaker {...moods.at.get(item.key)!} at={timeAt(item)} />}
@@ -516,6 +526,29 @@ function DraftReadback({ title, readback }: { title: string; readback: Readback 
       <div className="rbFile" title={readback.file}>
         from {readback.file}
       </div>
+    </section>
+  )
+}
+
+/**
+ * A thread's brief: the only context it started with. Your words, the facts
+ * Junior passed along, and nothing else from the chat (.docs/redesign-b2-plan.md).
+ */
+function BriefCard({ from, to, text, refs, onRef, onEdit }: { from: string; to: string; text: string; refs: RefIndex; onRef: (hash: string) => void; onEdit?: () => void }) {
+  return (
+    <section className="briefCard" aria-label={`What ${from} told ${to}`}>
+      <div className="bcHead">
+        <span>
+          What {from} told {to}
+        </span>
+        {onEdit && (
+          <button type="button" className="jrRef" onClick={onEdit}>
+            Correct it
+          </button>
+        )}
+      </div>
+      <Markdown text={text} refs={refs} onRef={onRef} />
+      <p className="bcFoot">This is all the thread knows. Nothing else from your chat came along.</p>
     </section>
   )
 }
@@ -711,6 +744,7 @@ const Item = memo(function Item({
           <DraftJobLinks tools={[item]} onRef={onRef} />
           <RuleCards sessionId={sessionId} tools={[item]} />
           <LearnedLines tools={[item]} />
+          <ThreadCards tools={[item]} />
           <BrowserShots sessionId={sessionId} tools={[item]} />
         </>
       )
@@ -722,6 +756,7 @@ const Item = memo(function Item({
           <DraftJobLinks tools={item.members} onRef={onRef} />
           <RuleCards sessionId={sessionId} tools={item.members} />
           <LearnedLines tools={item.members} />
+          <ThreadCards tools={item.members} />
           <BrowserShots sessionId={sessionId} tools={item.members} />
         </>
       )

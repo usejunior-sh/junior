@@ -75,6 +75,7 @@ export function tabKeyOf(route: Route): string | null {
       return PAGE_TABS[route.page].key
     case 'home':
     case 'settings':
+    case 'prs':
       return null
   }
 }
@@ -175,6 +176,8 @@ export function sectionOf(route: Route): RailSection | null {
     case 'job-form':
     case 'jobs':
       return 'jobs'
+    case 'prs':
+      return 'inbox'
     case 'goals':
       return 'goals'
     case 'settings':

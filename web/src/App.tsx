@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef, useCallback, type CSSProperties } from 'react'
-import { SessionAgentScope } from './chatAgents.js'
+import { SessionAgentScope, useChatAgents } from './chatAgents.js'
 import { useLogUnread } from './juniorLog.js'
 import type { TerminalSummary, WorkflowAgent, WorkflowRun } from '../../shared/protocol.js'
 import { CommandPalette } from './components/CommandPalette.js'
@@ -75,7 +75,15 @@ import { AgentDmStart } from './components/AgentDmStart.js'
 import { ChatSide } from './components/ChatSide.js'
 import { ToolRail } from './components/ToolRail.js'
 import { useChatSide } from './chatSide.js'
+import { composerDrafts } from './composerDrafts.js'
 import { JUNIOR_DM, findDm } from '../../core/junior/dms.js'
+import { TeamRail, TeamSidebar, type SidebarPlace } from './components/TeamSidebar.js'
+import { ThreadSheet } from './components/ThreadSheet.js'
+import { ThreadOpenContext } from './components/ThreadCards.js'
+import { JuniorNeedsDock } from './components/JuniorNeedsDock.js'
+import { AgentPage } from './components/AgentPage.js'
+import { PullRequestsPage } from './components/PullRequestsPage.js'
+import { toggleSidebar, useLayout, useSidebarCollapsed } from './layout.js'
 
 export function App() {
   const conn = useConn()
@@ -90,8 +98,25 @@ export function App() {
   const artifacts = useArtifacts()
   const changes = useChanges()
   const [route, navigate] = useHashRoute()
-  // On the Agents page the session in front is the agent's DM, when it has one yet.
-  const dmShown = route.page === 'agents' ? findDm(sessions, route.name ?? JUNIOR_DM) : undefined
+  // The redesign (.docs/redesign-b2-plan.md): a team sidebar in place of the rail, and Junior's
+  // chat as home. A phone keeps the classic shell until it gets its own pass.
+  const layout = useLayout()
+  const sidebarCollapsed = useSidebarCollapsed()
+  const mobileNow = useIsMobile()
+  const team = layout === 'team' && !mobileNow
+  /** Home in the team layout: Junior's one chat, where `#/junior` (no tab) lands. */
+  const juniorHome = team && route.page === 'junior' && !route.tab
+  /** An agent's page (team layout, `/agents/<name>/about`): who it is, its threads, memory and jobs. */
+  const agentPage = team && route.page === 'agents' && !!route.name && route.name !== JUNIOR_DM && route.about ? route.name : null
+  /** A chat with Junior or one of its agents (team layout): threads open beside it. */
+  const dmView = juniorHome || (team && route.page === 'agents' && !agentPage)
+  // A thread open beside Junior's chat: only at home; anywhere else it opens full size.
+  const [sheetThread, setSheetThread] = useState<string | null>(null)
+  useEffect(() => {
+    if (!dmView) setSheetThread(null)
+  }, [dmView])
+  // On the Agents page the session in front is the agent's DM, when it has one yet; at home, Junior's.
+  const dmShown = route.page === 'agents' && !agentPage ? findDm(sessions, route.name ?? JUNIOR_DM) : juniorHome ? findDm(sessions, JUNIOR_DM) : undefined
   const currentId = route.page === 'session' ? route.id : (dmShown?.id ?? null)
   const currentTerminalId = route.page === 'terminal' ? route.id : null
   const currentDraftId = route.page === 'draft' ? route.id : null
@@ -142,6 +167,8 @@ export function App() {
   const pendingActions = usePendingActions()
   // Junior's name and face, everywhere it shows: the rail and the phone's title.
   const persona = usePersona()
+  const chatAgents = useChatAgents()
+  const chatAgentLabel = (name?: string) => (name ? chatAgents.find((a) => a.name === name)?.label : undefined)
   const juniorMood = useRailMood(pendingActions)
   const [sheet, setSheet] = useState<RailSection | null>(null)
   useEffect(() => setSheet(null), [route, mobile])
@@ -377,6 +404,54 @@ export function App() {
   // derived shell state
 
   const railActive: RailSection | null = sectionOf(route)
+  // What the team sidebar marks: Junior's chat, an agent, a thread, or a place.
+  const sidebarPlace: SidebarPlace =
+    juniorHome
+      ? 'junior'
+      : route.page === 'agents'
+        ? (route.name ?? JUNIOR_DM) === JUNIOR_DM ? 'junior' : { agent: route.name! }
+        : route.page === 'session'
+          ? { thread: route.id }
+          : route.page === 'inbox' || route.page === 'item'
+            ? 'tasks'
+            : route.page === 'prs'
+            ? 'prs'
+            : route.page === 'artifacts' || route.page === 'artifact'
+              ? 'artifacts'
+              : route.page === 'jobs' || route.page === 'job' || route.page === 'job-form'
+                ? 'jobs'
+                : route.page === 'settings'
+                  ? 'settings'
+                  : null
+  // ⌘\ hides and shows the team sidebar.
+  useEffect(() => {
+    if (!team) return
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && e.key === '\\') {
+        e.preventDefault()
+        toggleSidebar()
+      }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [team])
+  /** A thread from the chat, the sidebar or a card: beside Junior's chat in the team layout, else full size. */
+  const openThread = useCallback(
+    (id: string) => {
+      if (!team) return navigate(id)
+      if (!dmView) navigate('/junior')
+      setSheetThread(id)
+    },
+    [team, dmView, navigate],
+  )
+  useEffect(() => {
+    if (!sheetThread) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !e.defaultPrevented && !(e.target instanceof HTMLElement && e.target.closest('[role="dialog"], [role="menu"]'))) setSheetThread(null)
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [sheetThread])
   // Which list the panel shows: the route's section, or on a phone the open sheet (none when shut).
   const panelSection: RailSection | null = mobile ? sheet : railActive
 
@@ -511,7 +586,7 @@ export function App() {
   // The Actions page is a list and a detail side by side: it needs the room, so no panel beside it.
   // Junior's page is one centred column: no panel beside it either.
   const panel =
-    !panelSection || panelSection === 'actions' || panelSection === 'goals' || panelSection === 'junior' ? null : (
+    team || !panelSection || panelSection === 'actions' || panelSection === 'goals' || panelSection === 'junior' ? null : (
       <AppPanel
         panelSection={panelSection}
         terminals={terminals}
@@ -564,12 +639,47 @@ export function App() {
         onHelp={() => setHelpOpen(true)}
         build={build}
         desktop={isDesktop ? { panelCollapsed, onTogglePanel: panelStepsAside ? () => setKeepPanel(true) : panelSize.toggleCollapsed } : undefined}
+        team={team ? { sidebarOpen: !sidebarCollapsed, onToggleSidebar: toggleSidebar } : undefined}
       />
       <UpdateBar pending={updatePending} mobile={mobile} onReload={store.reloadForUpdate} onHide={store.hideUpdate} />
 
       <div
-        className={`shell${panelSize.dragging ? ' resizing' : ''}${panelCollapsed ? ' collapsed' : ''}${mobile ? ' mobile' : ''}${sheet ? ' sheetOpen' : ''}`}
+        className={`shell${team ? ' team' : ''}${panelSize.dragging ? ' resizing' : ''}${panelCollapsed ? ' collapsed' : ''}${mobile ? ' mobile' : ''}${sheet ? ' sheetOpen' : ''}`}
       >
+        {team ? (
+          sidebarCollapsed ? (
+            <TeamRail
+              needs={dmsWaiting + pendingActions + sessions.filter((s) => s.kind !== 'dm' && s.waiting).length}
+              active={sheetThread ? { thread: sheetThread } : sidebarPlace}
+              taskCount={inbox.items.length}
+              prCount={inbox.items.filter((i) => i.reason === 'your-pr' || i.reason === 'review-requested').length}
+              onJunior={() => navigate('/junior')}
+              onPlace={(place) => navigate(place === 'tasks' ? '/inbox' : `/${place}`)}
+              onSettings={() => openSettings()}
+            />
+          ) : (
+            <TeamSidebar
+              sessions={sessions}
+              pendingSends={pendingActions}
+              active={sheetThread ? { thread: sheetThread } : sidebarPlace}
+              taskCount={inbox.items.length}
+              prCount={inbox.items.filter((i) => i.reason === 'your-pr' || i.reason === 'review-requested').length}
+              onJunior={() => navigate('/junior')}
+              onAgent={(name) => navigate(`/agents/${encodeURIComponent(name)}`)}
+              onThread={openThread}
+              onPlace={(place) => navigate(place === 'tasks' ? '/inbox' : `/${place}`)}
+              onNewAgent={() => {
+                // A conversation, not a form: Junior asks what the agent is for and writes its file.
+                const dm = findDm(sessions, JUNIOR_DM)
+                if (dm && !composerDrafts.get(dm.id)) composerDrafts.set(dm.id, 'Make me a new agent. It should ')
+                navigate('/junior')
+              }}
+              onNewChat={newSession}
+              onSearch={() => setPaletteOpen(true)}
+              onSettings={() => openSettings()}
+            />
+          )
+        ) : (
         <Rail
           active={mobile ? sheet ?? railActive : railActive}
           collapsed={mobile ? !sheet : undefined}
@@ -583,6 +693,7 @@ export function App() {
           juniorUnread={logUnread}
           onGo={onRailGo}
         />
+        )}
 
         {route.page === 'settings' && !sheet ? (
           <SettingsPage workspace={activeWorkspace} tab={route.tab} onOpenSystem={(tab) => setSystem({ open: true, tab })} />
@@ -608,7 +719,7 @@ export function App() {
             preview={previewTab}
             onPin={pin}
             pageTab={pageTab}
-            onShowPanel={panelCollapsed && !isDesktop ? () => (panelStepsAside ? setKeepPanel(true) : panelSize.setCollapsed(false)) : undefined}
+            onShowPanel={!team && panelCollapsed && !isDesktop ? () => (panelStepsAside ? setKeepPanel(true) : panelSize.setCollapsed(false)) : undefined}
             onSelect={(key) => navigate(routeOfKey(key))}
             onClose={closeOpenTab}
             onCloseAll={closeAllOpenTabs}
@@ -618,8 +729,13 @@ export function App() {
             terminalCwd={terminalCwd}
           />}
 
+          <ThreadOpenContext.Provider value={team ? openThread : null}>
           <div className="content">
-            {route.page === 'junior' ? (
+            {route.page === 'prs' ? (
+              <PullRequestsPage onNavigate={navigate} />
+            ) : agentPage ? (
+              <AgentPage key={agentPage} name={agentPage} onNavigate={navigate} />
+            ) : route.page === 'junior' && !juniorHome ? (
               <JuniorPage key={route.tab ?? 'home'} initialTab={route.tab} onNavigate={navigate} onDispatch={dispatchById} onCreate={create} createError={createError} createStep={createStep} />
             ) : route.page === 'inbox' ? (
               <InboxPage
@@ -706,14 +822,15 @@ export function App() {
               ) : (
                 <div id="empty">This draft was discarded.</div>
               )
-            ) : route.page === 'home' || route.page === 'settings' || route.page === 'goals' ? null : route.page === 'agents' && !current ? (
-              <AgentDmStart key={route.name ?? JUNIOR_DM} dm={route.name ?? JUNIOR_DM} onCreate={create} createError={createError} createStep={createStep} />
+            ) : route.page === 'home' || route.page === 'settings' || route.page === 'goals' ? null : (route.page === 'agents' || juniorHome) && !current ? (
+              <AgentDmStart key={route.page === 'agents' ? (route.name ?? JUNIOR_DM) : JUNIOR_DM} dm={route.page === 'agents' ? (route.name ?? JUNIOR_DM) : JUNIOR_DM} onCreate={create} createError={createError} createStep={createStep} />
             ) : current ? (
               <div className={`sessRow${(teamRun && teamSide) || wf.sideRun ? ' withSide' : ''}${browserOpen ? ' withBrowser' : ''}`}>
               <div className={`sessCol${current.kind === 'dm' ? ' dm' : ''}`}>
               <SessionAgentScope agent={current.agent}>
                 <ChatHeader
                   current={current}
+                  onAbout={team && current.kind === 'dm' && current.agent ? () => navigate(`/agents/${encodeURIComponent(current.agent!)}/about`) : undefined}
                   chatHeaderRef={chatHeaderRef}
                   currentCheckout={currentCheckout}
                   newTerminalIn={newTerminalIn}
@@ -770,6 +887,7 @@ export function App() {
                   events={events}
                   turns={sessionChanges?.turns}
                   chat={current.kind === 'dm'}
+                  brief={!openAgent && current.startedBy && sessions.find((x) => x.id === current.startedBy)?.kind === 'dm' ? { from: persona.name, to: chatAgentLabel(current.agent) ?? persona.name } : undefined}
                   onRespond={respond}
                   onNavigate={navigate}
                   agents={agents}
@@ -795,6 +913,8 @@ export function App() {
                 ) : currentCheckout?.state === 'removed' ? (
                   <GoneCheckoutBar checkout={currentCheckout} onContinueInMain={() => continueInMain(current)} />
                 ) : (
+                <>
+                {juniorHome && <JuniorNeedsDock onOpenSession={openThread} onNavigate={navigate} />}
                 <Composer
                   key={`composer-${current.id}`}
                   dm={current.kind === 'dm'}
@@ -819,12 +939,16 @@ export function App() {
                   onModelChange={setModel}
                   onFastModeChange={setFastMode}
                 />
+                </>
                 )}
                 </>
                 )}
               </SessionAgentScope>
               </div>
-              {browserOpen && <BrowserPane key={current.id} tabKey={current.id} onTerminal={currentCheckout ? () => newTerminalIn(currentCheckout.id) : undefined} />}
+              {dmView && sheetThread && (
+                <ThreadSheet sessionId={sheetThread} onClose={() => setSheetThread(null)} onFull={() => navigate(sheetThread)} onNavigate={navigate} />
+              )}
+              {browserOpen && !sheetThread && <BrowserPane key={current.id} tabKey={current.id} onTerminal={currentCheckout ? () => newTerminalIn(currentCheckout.id) : undefined} />}
               {sideTab && <ChatSide session={current} tab={sideTab} agents={agents} openAgent={openAgent} showAgent={showAgent} onNavigate={navigate} onPin={pin} newTerminalIn={newTerminalIn} />}
               {wf.sideRun && (
                 <WorkflowSide
@@ -852,12 +976,13 @@ export function App() {
                   files={railOn ? <TeamFiles run={teamRun} checkoutId={teamCheckoutId} onNavigate={navigate} onOpenRun={openTeamRun} /> : undefined}
                 />
               )}
-              {!mobile && <ToolRail current={current} checkout={currentCheckout} newTerminalIn={newTerminalIn} agents={agents} browserOpen={browserOpen} />}
+              {!mobile && !sheetThread && <ToolRail current={current} checkout={currentCheckout} newTerminalIn={newTerminalIn} agents={agents} browserOpen={browserOpen} />}
               </div>
             ) : (
               <div id="empty">Session not found — it may have been deleted.</div>
             )}
           </div>
+          </ThreadOpenContext.Provider>
         </div>
         </>
         )}

@@ -29,6 +29,7 @@ import {
   parseLearning,
   refProblem,
   scopeFrom,
+  SCOPE_HINT,
   serializeLearning,
   sight,
   sweep,
@@ -125,7 +126,7 @@ export class LearningsFolder {
     const bad = textProblem(input.text) ?? refProblem(input.ref)
     if (bad) return Promise.reject(new Error(bad))
     const scope = scopeFrom(input.scope)
-    if (!scope) return Promise.reject(new Error('scope: global, or repo:<owner>/<repo>'))
+    if (!scope) return Promise.reject(new Error(SCOPE_HINT))
     return this.update(async ({ learnings, broken }) => {
       const taken = new Set([...learnings.map((l) => l.id), ...broken.map((b) => b.id)])
       const s = sight(learnings, { text: input.text as string, scope, ref: input.ref as string }, now, () => learningId(input.text as string, taken))
@@ -249,7 +250,7 @@ export async function editLearningOp(rt: WorkspaceRuntime, raw: unknown): Promis
   }
   if (r.scope !== undefined) {
     const scope = scopeFrom(r.scope)
-    if (!scope) throw new Error('scope: global, or repo:<owner>/<repo>')
+    if (!scope) throw new Error(SCOPE_HINT)
     input.scope = scope
   }
   if (input.text === undefined && input.scope === undefined) throw new Error('nothing to change: send text or scope')
@@ -363,7 +364,8 @@ async function checkFile(c: Extract<Citation, { kind: 'file' }>, root: string | 
 
 /** Re-check one learning's receipts on this machine. No network: PR and thread refs pass as they are. */
 export async function checkCitations(l: Learning, env: CitationEnv): Promise<CitationCheck[]> {
-  const root = l.scope === 'global' ? null : env.projectPath
+  // Only a repo's own learning cites files in this project; a global or an agent's was learned anywhere.
+  const root = l.scope.startsWith('repo:') ? env.projectPath : null
   return Promise.all(
     l.sources.map(async (s): Promise<CitationCheck> => {
       const c = citationOf(s.ref)
@@ -389,7 +391,7 @@ export type LoadedLearnings = LearningsLoad & {
 
 /**
  * The kept learnings for one session, composed for its system prompt: global
- * ones and the session's repo's, each with a receipt, at most LOAD_MAX and
+ * ones, the session's repo's and its agent's, each with a receipt, at most LOAD_MAX and
  * LEARNINGS_CAP characters. Each one's receipts are re-checked first; one
  * whose receipts are all gone is skipped and marked `stale`. The ones loaded
  * get lastUsedAt = now. `dry` (a trial run) changes nothing on disk.
@@ -399,12 +401,12 @@ export async function loadLearnings(
   repo: string | null,
   env: CitationEnv,
   now: number,
-  opts: { dry?: boolean } = {},
+  opts: { dry?: boolean; agent?: string | null } = {},
 ): Promise<LoadedLearnings> {
   const work = async ({ learnings }: LearningsRead): Promise<LoadedLearnings> => {
     const stale: Learning[] = []
     const pick: { l: Learning; checks?: CitationCheck[] }[] = []
-    for (const l of forScope(learnings, repo)) {
+    for (const l of forScope(learnings, repo, opts.agent)) {
       if (pick.length >= LOAD_MAX) break
       if (vouched(l)) {
         pick.push({ l })
@@ -443,7 +445,7 @@ const NO_LEARNINGS: LoadedLearnings = { append: '', tokens: 0, ids: [], stale: [
 export async function learningsForSession(
   rt: WorkspaceRuntime,
   project: { path: string; repo?: string } | null,
-  opts: { dry?: boolean; now?: number; sessionId?: string } = {},
+  opts: { dry?: boolean; now?: number; sessionId?: string; agent?: string | null } = {},
 ): Promise<LoadedLearnings> {
   try {
     const env: CitationEnv = {
@@ -451,7 +453,7 @@ export async function learningsForSession(
       itemExists: async (id) => (await rt.store.items.get(id)) != null,
       sessionExists: async (id) => (await rt.store.sessions.get(id)) != null,
     }
-    const r = await loadLearnings(learningsFolder(rt), project?.repo?.trim() || null, env, opts.now ?? Date.now(), { dry: opts.dry })
+    const r = await loadLearnings(learningsFolder(rt), project?.repo?.trim() || null, env, opts.now ?? Date.now(), { dry: opts.dry, agent: opts.agent ?? null })
     for (const l of r.stale) {
       log('info', 'learnings', `stale, every receipt is gone: ${l.text.slice(0, 80)}`, { learning: l.id, workspace: rt.meta.id, ...(opts.sessionId ? { session: opts.sessionId } : {}) })
     }

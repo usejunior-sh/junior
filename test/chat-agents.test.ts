@@ -66,7 +66,7 @@ test('starters are seeded once: edits kept, a deleted one stays deleted', async 
   try {
     await seedChatAgents(dir)
     const agents = path.join(dir, 'agents')
-    for (const n of ['debugger', 'explainer', 'reviewer', 'writer']) assert.ok(existsSync(path.join(agents, `${n}.md`)), n)
+    for (const n of ['babysitter', 'debugger', 'explainer', 'reviewer', 'writer']) assert.ok(existsSync(path.join(agents, `${n}.md`)), n)
     await writeFile(path.join(agents, 'writer.md'), '---\nname: writer\nchat: true\n---\nmine\n')
     await rm(path.join(agents, 'debugger.md'))
     await seedChatAgents(dir)
@@ -75,7 +75,7 @@ test('starters are seeded once: edits kept, a deleted one stays deleted', async 
 
     const root: LibraryRoot = { id: 'workspace', source: 'workspace', label: 'Workspace', dir, editable: true, namespace: 'junior' }
     const list = await listChatAgents([root])
-    assert.deepEqual(list.map((a) => a.name).sort(), ['junior:explainer', 'junior:reviewer', 'junior:writer'])
+    assert.deepEqual(list.map((a) => a.name).sort(), ['junior:babysitter', 'junior:explainer', 'junior:reviewer', 'junior:writer'])
     assert.ok(list.filter((a) => a.slug !== 'writer').every((a) => a.colour), 'every untouched starter has a face colour')
   } finally {
     await rm(dir, { recursive: true, force: true })

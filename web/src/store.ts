@@ -191,6 +191,7 @@ export class Store {
       // A reconnect leaves the UI holding a stale transcript; re-subscribing
       // replays the session log from the server.
       if (this.#subscribedTo) this.#sendSubscribe(this.#subscribedTo)
+      for (const id of this.#followed) if (id !== this.#subscribedTo) this.send({ type: 'subscribe', sessionId: id })
       // A request lost with the old socket may be asked again.
       for (const [id, p] of this.#paging) if (p.failed) this.#setPaging(id, { ...p, failed: false })
       for (const id of this.#subscribedTerminals) this.send({ type: 'terminal_subscribe', terminalId: id })
@@ -294,6 +295,20 @@ export class Store {
     this.#subscribedPaged = opts.paged === true
     this.#sendSubscribe(sessionId)
   }
+
+  /**
+   * Hold a second session's log beside the one in front (a thread open next to
+   * Junior's chat). Live events reach every client anyway; this asks for the
+   * history now and again after a reconnect. Returns the unfollow.
+   */
+  followSession(sessionId: string): () => void {
+    this.#followed.add(sessionId)
+    if (this.#subscribedTo !== sessionId) this.send({ type: 'subscribe', sessionId })
+    return () => {
+      this.#followed.delete(sessionId)
+    }
+  }
+  #followed = new Set<string>()
 
   #sendSubscribe(sessionId: string) {
     this.send({ type: 'subscribe', sessionId, ...(this.#subscribedPaged ? { paged: true } : {}) })

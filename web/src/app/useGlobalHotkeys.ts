@@ -1,3 +1,4 @@
+import { getLayout } from '../layout.js'
 import { type Dispatch, type SetStateAction, useRef, useEffect } from 'react'
 import { chatSide } from '../chatSide.js'
 import { startJuniorChat } from '../junior.js'
@@ -58,7 +59,16 @@ export function useGlobalHotkeys({ route, navigate, newSession, newTerminal, ter
         e.preventDefault()
         setHelpOpen(false)
         setPaletteOpen(false)
-        startJuniorChat()
+        // The team layout has one chat with Junior: ⌘J goes there instead of opening a new one.
+        if (getLayout() === 'team' && !window.matchMedia('(max-width: 767px)').matches) navigate('/junior')
+        else startJuniorChat()
+        return
+      }
+      // ⌃\`: a scratch terminal, with no thread behind it (the team layout has no Terminals rail entry).
+      if (e.ctrlKey && !e.metaKey && !e.altKey && e.code === 'Backquote') {
+        if (anyDialogOpen()) return
+        e.preventDefault()
+        newTerminal(terminalCwd)
         return
       }
       // ⌘⌥B: the chat's right sidebar (chatSide.ts). By code, since ⌥B types "∫" on a Mac.

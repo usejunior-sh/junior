@@ -3,7 +3,7 @@
  * .docs/junior-goals-teams/junior-brand-v2.html), round eyes that catch the
  * light and a small mouth. Expressions are states, hello, listen, think,
  * working, needs, done, stuck, asleep, and ease into each other. The persona's
- * shape and colour still apply: the key is the default shape, lavender its colour.
+ * shape and colour still apply: the key is the default shape, sky its colour.
  *
  * Motion: `follow` tracks the pointer (the Junior page only), `wander`
  * glances and blinks, `still` moves only when the mood changes (the rail).
@@ -76,10 +76,10 @@ function hslToHex(h: number, s: number, l: number): string {
 
 const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v))
 
-/** The brand's lavender key, exactly. */
-const BRAND = { top: '#cbbffa', body: '#a593f5', skirt: '#5534be', eye: '#120d24' }
+/** The brand's sky J key, exactly (design.md: top, body, skirt and smile, eyes). */
+const BRAND = { top: '#a9cdfc', body: '#80b2f6', skirt: '#2f63c9', eye: '#0b1530' }
 
-/** Top, body, skirt and eyes from one colour (the key's top); lavender is the brand's own. */
+/** Top, body, skirt and eyes from one colour (the key's top); sky is drawn exactly, every other colour is derived. */
 export function facePalette(colour: string) {
   const top = /^#[0-9a-f]{6}$/i.test(colour) ? colour.toLowerCase() : BRAND.top
   if (top === BRAND.top) return BRAND

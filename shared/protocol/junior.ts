@@ -177,5 +177,11 @@ export type LearningsResponse =
     }
   | { ok: false; error: string }
 
+// Pinned notes (core/junior/pins.ts): what the user told Junior to keep in mind, carried into each thread's brief.
+export type { Pin, PinScope } from '../../core/junior/pins.js'
+
+/** GET /api/pins: the pins that hold now, oldest first. POST /api/pins/unpin {id}: the same list, after. */
+export type PinsResponse = { ok: true; pins: import('../../core/junior/pins.js').Pin[] } | { ok: false; error: string }
+
 /** POST /api/learnings/keep|forget {id}, /api/learnings/edit {id, text?, scope?, confirm?}: the learning after (or as forgotten). */
 export type LearningResponse = { ok: true; learning: import('../../core/junior/learnings.js').Learning } | { ok: false; error: string }

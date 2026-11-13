@@ -1,4 +1,5 @@
 import { createSdkMcpServer } from '@anthropic-ai/claude-agent-sdk'
+import { reportThreadTurn } from './thread-report.js'
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import type { AgentRelay, EffortLevel, FastModeDisabledReason, FastModeState, FileRef, ImageAttachment, Mention, PermissionBehavior, PermissionMode, QuestionAnswers, SdkMessage, SessionEvent, SessionStatus } from '../../shared/protocol.js'
@@ -33,6 +34,7 @@ import { resolveMentions } from './mentions.js'
 import { classifyEffect, SESSION_TOOLS, sessionScoped, TEAM_TOOLS, JUNIOR_READ_TOOLS } from './effects.js'
 import { teamRunOf } from '../team-run/state.js'
 import { noteActionEvent } from './actions-record.js'
+import { lineOf } from '../../core/junior/last-line.js'
 import { endedTask, owedProgress, type ProgressPending, snapshotAgentIds, throttleProgress, WorkflowTurns } from './workflow-tasks.js'
 import { costStep, lastResultMark, type CostMark } from '../../core/usage/turn-cost.js'
 import { STALL_TICK_MS, stallNotice, TurnWatch } from '../../core/sessions/stall.js'
@@ -340,6 +342,11 @@ export class LiveSession {
           this.rt.files.invalidate(this.row.cwd)
           // A brief run is one turn: its result is the run's end.
           if (this.row.kind === 'brief') void onBriefTurnDone(this.rt, this.row.id)
+          // A thread Junior started: one line in Junior's chat says it replied.
+          if (this.row.startedBy) {
+            const said = (ev.record as { result?: unknown }).result
+            void reportThreadTurn(this.rt, this.row, typeof said === 'string' ? said : '').catch(() => {})
+          }
           // A skill or agent this turn wrote is usable now, here and in every other session.
           if (this.libraryTouched) {
             this.libraryTouched = false
@@ -886,5 +893,10 @@ export class LiveSession {
     })
     // What the log keeps, the actions record reads: one fold, live or backfilled.
     noteActionEvent(this.rt, this.row, event)
+    // A DM's latest line rides on its summary; the next session-list broadcast (the turn's status change) carries it.
+    if (this.row.kind === 'dm') {
+      const line = lineOf(event)
+      if (line) this.rt.lastLine.set(this.row.id, line)
+    }
   }
 }

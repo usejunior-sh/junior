@@ -3,7 +3,7 @@
  * "Learned: …" footer and the Learned group in Junior's notebook. Pure, no
  * React, time is an argument, so test/learnings-ui.test.ts can pin it down.
  */
-import { dropsTooMuch, LOSS_MIN_CHARS, type Learning, type LearningScope } from '../../core/junior/learnings.js'
+import { dropsTooMuch, LOSS_MIN_CHARS, scopeWhere, type Learning, type LearningScope } from '../../core/junior/learnings.js'
 
 /** A receipt as a label: where it opens, if anywhere. `hash` is an in-app route, `href` a web page. */
 export type SourceView = { label: string; mono: boolean; title: string; href?: string; hash?: string }
@@ -47,7 +47,7 @@ function hostOf(url: string): string {
 export const latestSource = (l: Learning): string | null => l.sources.at(-1)?.ref ?? null
 
 /** "everywhere", or the repo it holds in. */
-export const scopeText = (scope: LearningScope): string => (scope === 'global' ? 'everywhere' : scope.slice('repo:'.length))
+export const scopeText = (scope: LearningScope): string => scopeWhere(scope)
 
 /** How long ago, short: "just now", "5m", "3h", "yesterday", "4d", "3w", "2mo". Feeds "used … ago". */
 export function agoText(ms: number): string {

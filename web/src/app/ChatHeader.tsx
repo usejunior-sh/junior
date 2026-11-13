@@ -43,6 +43,7 @@ export function ChatHeader({
   showAgent,
   mobile,
   onNavigate,
+  onAbout,
 }: {
   current: SessionSummary
   chatHeaderRef: RefObject<HTMLDivElement | null>
@@ -53,13 +54,15 @@ export function ChatHeader({
   showAgent: (toolUseId: string | null) => void
   mobile: boolean
   onNavigate: (hash: string) => void
+  /** Team layout: the DM pill opens the agent's page instead of its card in the sidebar. */
+  onAbout?: () => void
 }) {
   const shown = shownStatus(current)
   const { agent, colour, name } = useScopedAgent()
   const persona = usePersona()
   const dot = <StatusDot status={shown.status} title={shown.title} />
   if (current.kind === 'dm' && !mobile)
-    return <DmPill current={current} label={agent?.label ?? persona.name} colour={colour} headerRef={chatHeaderRef} />
+    return <DmPill current={current} label={agent?.label ?? persona.name} colour={colour} headerRef={chatHeaderRef} onAbout={onAbout} />
   return (
     <div id="chatHeader" ref={chatHeaderRef}>
       <span className="chFace" title={name}>
@@ -94,7 +97,7 @@ export function ChatHeader({
  * grows it and shows a chevron: click it for the agent's card in the sidebar,
  * again to close it.
  */
-function DmPill({ current, label, colour, headerRef }: { current: SessionSummary; label: string; colour: string | undefined; headerRef: RefObject<HTMLDivElement | null> }) {
+function DmPill({ current, label, colour, headerRef, onAbout }: { current: SessionSummary; label: string; colour: string | undefined; headerRef: RefObject<HTMLDivElement | null>; onAbout?: () => void }) {
   const open = useChatSide(current.id) === 'agent'
   const persona = usePersona()
   const shown = shownStatus(current)
@@ -110,7 +113,7 @@ function DmPill({ current, label, colour, headerRef }: { current: SessionSummary
         className={`dmPill ${state}${open ? ' on' : ''}`}
         title={working ? `${label} is working · about ${label}` : open ? `Hide ${label}'s card` : `About ${label}`}
         aria-pressed={open}
-        onClick={() => chatSide.toggle(current.id, 'agent')}
+        onClick={() => (onAbout ? onAbout() : chatSide.toggle(current.id, 'agent'))}
       >
         <JuniorFace size={25} motion="still" mood={state === 'needs' ? 'needs' : state === 'working' ? 'working' : 'hello'} colour={colour} decorative />
         <span className="tx">

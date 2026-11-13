@@ -12,6 +12,7 @@
  */
 import * as Dialog from '@radix-ui/react-dialog'
 import * as Switch from '@radix-ui/react-switch'
+import { getLayout, setLayout } from '../layout.js'
 import { Command as K } from 'cmdk'
 import { ChevronLeft } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
@@ -336,6 +337,14 @@ export function CommandPalette({
         hint: t.id === 'connectors' ? 'g c' : t.id === 'projects' ? 'g p' : t.sub,
         run: () => onOpenSettings(t.id),
       })),
+      { id: 'junior-chat', section: 'Pages', label: 'Junior’s chat', hint: `${MOD_LABEL}J`, run: () => onNavigate('/junior') },
+      { id: 'prs', section: 'Pages', label: 'Pull requests', run: () => onNavigate('/prs') },
+      { id: 'artifacts', section: 'Pages', label: 'Artifacts', run: () => onNavigate('/artifacts') },
+      { id: 'junior-page', section: 'Pages', label: 'Junior’s page: the ledger', run: () => onNavigate('/junior/needs') },
+      getLayout() === 'team'
+        ? { id: 'layout', section: 'Actions', label: 'Switch to the classic layout (rail and tabs)', run: () => setLayout('classic') }
+        : { id: 'layout', section: 'Actions', label: 'Switch to the team layout (sidebar and one chat)', run: () => setLayout('team') },
+      { id: 'scratch', section: 'Actions', label: 'New scratch terminal', hint: '⌃`', run: onNewTerminal },
       { id: 'inbox', section: 'Pages', label: 'Tasks', hint: 'g i', run: () => onNavigate('/inbox') },
       { id: 'sessions', section: 'Pages', label: 'Chats', hint: 'g s', run: () => onNavigate('') },
       { id: 'terminals', section: 'Pages', label: 'Terminals', hint: 'g t', run: () => onNavigate('/terminals') },

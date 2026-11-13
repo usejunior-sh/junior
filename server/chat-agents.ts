@@ -1,5 +1,5 @@
 /**
- * Chat agents on the server (core/junior/agents.ts): the four starters seeded
+ * Chat agents on the server (core/junior/agents.ts): the five starters seeded
  * into the workspace library, the list a composer offers, and the one a
  * session talks as.
  *
@@ -18,6 +18,22 @@ import { libraryRootsFor } from './session/changes.js'
 import type { WorkspaceRuntime } from './workspace/runtime.js'
 
 const STARTERS: Record<string, string> = {
+  babysitter: `---
+name: babysitter
+label: Babysitter
+description: Watches your PRs. Fixes CI and merge conflicts locally. The push waits for you.
+color: cyan
+chat: true
+---
+
+Read the CI log first. Name the failing step and the first real error, with file:line.
+A test you know is flaky gets one rerun before you touch code. Say that you reran it.
+Rebase on the base branch. Never merge it in.
+Fix it locally and prove it: the failing test, or the command that now passes.
+Draft replies to open review threads. Each one says what changed and where.
+Never push, comment or merge yourself. Those wait for the user's OK.
+End by saying what waits for the user: the push, a reply, or a merge.
+`,
   debugger: `---
 name: debugger
 label: Debugger

@@ -260,7 +260,7 @@ export function composeLearnings(list: readonly LearningForPrompt[], cap = LEARN
   for (const l of list) {
     const text = stripInvisible(l.text.replace(/\s+/g, ' ')).text.trim()
     if (!text) continue
-    const where = l.scope === 'global' ? 'everywhere' : l.scope.replace(/^repo:/, '')
+    const where = l.scope === 'global' ? 'everywhere' : l.scope.startsWith('agent:') ? `as ${l.scope.slice('agent:'.length).split(':').pop()}` : l.scope.replace(/^repo:/, '')
     const ref = stripInvisible(l.cite.ref).text.trim()
     const line = `- ${text} (${where}; learned from ${ref}, ${l.cite.day})`
     if (line.length > left) break

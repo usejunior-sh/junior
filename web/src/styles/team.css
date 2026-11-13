@@ -1,0 +1,239 @@
+/* ---------- the team sidebar (redesign B2, .docs/sidebar-concepts.html 01) ----------
+   Everything you talk to is a conversation row: Junior pinned first, then the
+   open threads, then the agents with their latest line. Search and the four
+   places on top, you at the bottom. Tokens only (design.md): warm ink, paper
+   text, sky is Junior, orange means needs you and nothing else. */
+
+:root { --team-side-w: 288px; }
+.teamSide {
+  width: var(--team-side-w); flex: none; display: flex; flex-direction: column; min-height: 0;
+  background: var(--deep); border-right: 1px solid var(--hair);
+  /* Type as on usejunior.sh: rows at 14px, second lines at 13px, labels mono 11px spaced 0.12em. */
+  font-size: 1rem; line-height: 1.4;
+}
+.teamSide button { box-sizing: border-box; }
+.tsGrow { flex: 1; min-width: 0; }
+
+.tsFind {
+  display: flex; align-items: center; gap: 8px; height: 32px; margin: 6px 10px 0; padding: 0 6px 0 10px;
+  border: 1px solid var(--hair); border-radius: 9px; background: var(--card); color: var(--ash); font-size: 0.9286rem; text-align: left;
+  transition: border-color 0.12s ease, color 0.12s ease;
+}
+.tsFind:hover { border-color: var(--hair-strong); color: var(--mute); }
+.tsFind kbd { font: 400 0.7143rem var(--mono); color: var(--ash); border: 1px solid var(--hair-strong); border-radius: 5px; padding: 1px 5px; background: var(--deep); }
+
+/* the four places: an icon, a name, a count when there is something to look at */
+.tsPlaces { display: grid; grid-template-columns: repeat(4, 1fr); gap: 2px; margin: 10px 10px 0; }
+.tsPlaces button {
+  position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 0 6px;
+  border: 0; border-radius: 10px; background: transparent; color: var(--mute); font-size: 0.7857rem;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+.tsPlaces button svg { color: var(--ash); }
+.tsPlaces button:hover { background: var(--card); color: var(--ink); }
+.tsPlaces button.on { background: var(--elev); color: var(--ink); }
+.tsPlaces button:hover svg, .tsPlaces button.on svg { color: var(--ink); }
+.tsPlaces small { position: absolute; top: 3px; left: calc(50% + 10px); font: 500 0.6786rem var(--mono); color: var(--ash); }
+
+/* a conversation: face, name and when it last spoke, then its latest line */
+.tsConv {
+  display: flex; align-items: center; gap: 11px; width: calc(100% - 16px); margin: 0 8px; padding: 7px 8px;
+  border: 0; border-radius: 10px; background: transparent; color: var(--ink); text-align: left;
+  transition: background 0.12s ease;
+}
+.tsConv:hover { background: var(--card); }
+.tsConv.on { background: var(--elev); }
+.tsT { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.tsL1 { display: flex; align-items: center; gap: 6px; }
+.tsL1 b { flex: 1; min-width: 0; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tsL1 small { flex: none; font: 400 0.75rem var(--mono); color: var(--stone); }
+.tsL2 { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 0.9286rem; color: var(--ash); }
+.tsL2 > span:last-child { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tsL2 em { font-style: normal; color: var(--orange); }
+.tsConv.you .tsL2 { color: var(--body); }
+.tsL2.work > span:last-child { color: var(--blue); }
+.tsConv.quiet .tsL2 { color: var(--stone); }
+/* Junior: pinned first, a little bigger */
+.tsJunior { margin-top: 10px; padding: 9px 8px; }
+.tsJunior .tsL1 b { font-size: 1.0714rem; }
+.tsBadge { flex: none; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--orange); color: var(--deep); font: 600 0.7143rem/18px var(--mono); text-align: center; }
+/* the face's state: a sky ring while it works, an orange dot when it waits on you */
+.tsRing { position: relative; flex: none; display: block; border-radius: 11px; }
+.tsRing.work::after { content: ""; position: absolute; inset: -3px; border-radius: 13px; border: 1.5px solid var(--blue); opacity: 0.7; }
+.tsRing.you::after { content: ""; position: absolute; right: -2px; top: -2px; width: 9px; height: 9px; border-radius: 50%; background: var(--orange); border: 2px solid var(--deep); }
+.tsTyping { display: inline-flex; align-items: center; gap: 3px; flex: none; }
+.tsTyping i { width: 4px; height: 4px; border-radius: 50%; background: var(--blue); opacity: 0.3; animation: tsBlink 1.2s ease-in-out infinite; }
+.tsTyping i:nth-child(2) { animation-delay: 0.15s; }
+.tsTyping i:nth-child(3) { animation-delay: 0.3s; }
+@keyframes tsBlink { 0%, 80%, 100% { opacity: 0.3; } 40% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .tsTyping i { animation: none; opacity: 0.6; } }
+/* quiet agents, folded into one row */
+.tsFolded { padding: 6px 8px; }
+.tsFolded .tsL1 b { font-weight: 400; color: var(--mute); }
+
+.tsScroll { flex: 1; min-height: 0; overflow: hidden auto; padding: 0 0 8px; }
+.tsLabel {
+  display: flex; align-items: center; gap: 6px; height: 22px; margin: 16px 14px 4px;
+  font: 400 0.7857rem/1 var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--ash);
+}
+.tsN { margin-left: 6px; color: var(--stone); }
+.tsLabelBtn { width: 22px; height: 22px; display: grid; place-items: center; flex: none; border: 0; border-radius: var(--r-sm); background: transparent; color: var(--ash); }
+.tsLabelBtn:hover { background: var(--elev); color: var(--ink); }
+
+/* an open thread: who has it, the title, whose turn it is */
+.tsThread {
+  display: flex; align-items: center; gap: 10px; width: calc(100% - 16px); height: 32px; margin: 0 8px; padding: 0 8px;
+  border: 0; border-radius: 9px; background: transparent; color: var(--body); text-align: left;
+  transition: background 0.12s ease;
+}
+.tsThread:hover { background: var(--card); color: var(--ink); }
+.tsThread.on { background: var(--elev); color: var(--ink); }
+.tsTitle { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tsTag {
+  flex: none; height: 18px; padding: 0 6px; border-radius: var(--r-sm);
+  font: 400 0.6786rem/18px var(--mono); text-transform: uppercase; letter-spacing: 0.1em; color: var(--ash);
+}
+.tsTag.you { color: var(--orange); background: var(--tint-orange); }
+.tsTag.working { color: var(--blue); }
+.tsTag.stopped { color: var(--red); }
+.tsEmpty { margin: 2px 16px; font-size: 0.9286rem; color: var(--ash); }
+
+/* Settings, at the bottom */
+.tsFoot { padding: 6px 8px 8px; border-top: 1px solid var(--hair); }
+.tsSettings {
+  display: flex; align-items: center; gap: 10px; width: 100%; height: 34px; padding: 0 10px;
+  border: 0; border-radius: 9px; background: transparent; color: var(--mute); text-align: left;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+.tsSettings svg { color: var(--ash); }
+.tsSettings:hover { background: var(--card); color: var(--ink); }
+.tsSettings.on { background: var(--elev); color: var(--ink); }
+.tsSettings:hover svg, .tsSettings.on svg { color: var(--ink); }
+
+/* collapsed: the sidebar folds into a rail (not .teamRail: session.css has that one, for team runs). Junior and its count, the places and theirs, Settings. */
+.sideRail {
+  width: 64px; flex: none; display: flex; flex-direction: column; align-items: center; gap: 4px; min-height: 0;
+  padding: 10px 0; background: var(--deep); border-right: 1px solid var(--hair);
+}
+.sideRail button { box-sizing: border-box; }
+.trItem {
+  position: relative; width: 54px; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 7px 0 5px;
+  border: 0; border-radius: 10px; background: transparent; color: var(--ash); font-size: 0.6786rem;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+.trItem:hover { background: var(--card); color: var(--ink); }
+.trItem.on { background: var(--elev); color: var(--ink); }
+.trItem small {
+  position: absolute; top: 2px; right: 3px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px;
+  background: var(--elev); font: 500 0.6429rem/16px var(--mono); color: var(--body); text-align: center;
+}
+.trItem small.you { background: var(--orange); color: var(--deep); }
+.trJunior { padding: 6px 0; }
+.trSep { width: 28px; height: 1px; margin: 4px 0; background: var(--hair-strong); flex: none; }
+
+/* ---------- threads in Junior's chat ---------- */
+.threadCards { display: flex; flex-direction: column; gap: 6px; margin: 6px 0 10px; }
+.threadCard {
+  display: flex; align-items: center; gap: 12px; width: min(460px, 100%); padding: 9px 14px;
+  border: 1px solid var(--hair-strong); border-radius: var(--r-lg); background: transparent; color: var(--ink); text-align: left;
+}
+button.threadCard:hover { background: var(--card); }
+.threadCard.you { border-color: color-mix(in srgb, var(--orange) 55%, transparent); }
+.threadCard.pending, .threadCard.gone, .threadCard.failed { color: var(--mute); border-style: dashed; }
+.tcT { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.tcT b { font-weight: 500; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tcT span { font-size: 0.8846rem; color: var(--mute); }
+.tcState { font-size: 0.8846rem; color: var(--blue); white-space: nowrap; }
+.tcState.you { color: var(--orange); }
+.tcState.stopped { color: var(--red); }
+.tcState.ready { color: var(--mute); }
+.threadAdded { margin: 2px 0 8px; font-size: 0.8846rem; color: var(--ash); }
+
+/* the brief: all the thread knows */
+.briefCard { margin: 0 0 18px; padding: 14px 16px; border: 1px dashed var(--hair-bright); border-radius: var(--r-lg); color: var(--body); }
+.briefCard .bcHead { display: flex; align-items: center; margin-bottom: 8px; font-weight: 500; color: var(--ink); }
+.briefCard .bcHead span { flex: 1; }
+.briefCard .bcFoot { margin: 10px 0 0; font-size: 0.8846rem; color: var(--ash); }
+
+/* a thread beside Junior's chat */
+.threadSheet { width: min(560px, 46%); flex: none; display: flex; flex-direction: column; min-height: 0; border-left: 1px solid var(--hair-strong); background: var(--canvas); }
+.tshHead { display: flex; align-items: center; gap: 12px; padding: 14px 14px 10px 18px; flex: none; }
+.tshT { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.tshT b { font: 400 1.6rem/1.1 var(--serif); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tshT > span { font-size: 0.8846rem; color: var(--mute); }
+.tshBody { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.threadSheet #transcript .inner { max-width: none; }
+.shell.team .sessRow:has(> .threadSheet) > .sessCol { min-width: 0; }
+
+/* needs you, docked over the box in Junior's chat */
+.needsDock { width: min(var(--measure), calc(100% - 48px)); margin: 0 auto 8px; border: 1px solid color-mix(in srgb, var(--orange) 40%, var(--hair-strong)); border-radius: var(--r-lg); background: var(--card); }
+.ndHead { display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 14px; border: 0; background: transparent; color: var(--ink); text-align: left; }
+.ndDot { width: 7px; height: 7px; border-radius: 50%; background: var(--orange); flex: none; }
+.ndTitle { flex: 1; font-weight: 500; }
+.ndRows { list-style: none; margin: 0; padding: 0 14px 8px; }
+.ndRows li { display: flex; align-items: center; gap: 12px; padding: 8px 0; border-top: 1px solid var(--hair); }
+.ndT { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.ndT b { font-weight: 400; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ndT span { font-size: 0.8846rem; color: var(--mute); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ndRows li.ndMore { justify-content: flex-start; }
+
+.tsLabelBtn { width: 22px; height: 22px; display: grid; place-items: center; border: 0; border-radius: var(--r-sm); background: transparent; color: var(--ash); }
+.tsLabelBtn:hover { background: var(--elev); color: var(--ink); }
+
+/* ---------- an agent's page ---------- */
+.agentPage .inner { max-width: 860px; }
+.agHead { display: flex; align-items: center; gap: 18px; margin-top: 12px; }
+.agWho { flex: 1; min-width: 0; }
+.agWho h1 { margin: 0; font: 400 2.6rem/1.05 var(--serif); }
+.agWho p { margin: 6px 0 0; color: var(--mute); font-size: 1.05rem; }
+.agHead .btn { display: inline-flex; align-items: center; gap: 6px; }
+.agRoute { margin: 14px 0 0; font-size: 0.9231rem; color: var(--ash); }
+.agH { margin: 32px 0 10px; font: 400 0.7692rem/1 var(--mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--ash); }
+.agEmpty { margin: 0; color: var(--ash); font-size: 0.9231rem; }
+.agPast { margin-top: 8px; }
+.agPast summary { cursor: pointer; color: var(--mute); font-size: 0.9231rem; margin-bottom: 6px; }
+.agTwo { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 32px; }
+@media (max-width: 1100px) { .agTwo { grid-template-columns: 1fr; } }
+.agPanel { padding: 14px 16px; border: 1px solid var(--hair); border-radius: var(--r-lg); background: var(--card); min-width: 0; }
+.agPanelHead { display: flex; align-items: center; margin-bottom: 8px; }
+.agPanelHead h3 { flex: 1; margin: 0; font-size: 1rem; font-weight: 500; }
+.agFoot { margin: 10px 0 0; font-size: 0.8462rem; color: var(--ash); }
+.agMemory { margin: 0; padding-left: 18px; color: var(--body); }
+.agMemory li { margin-bottom: 6px; }
+.agMemory li.proposed span { font: 400 0.7308rem var(--mono); text-transform: uppercase; color: var(--blue); margin-left: 4px; }
+.agJobs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.agJob { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 14px; border: 1px solid var(--hair-strong); border-radius: var(--r-lg); background: transparent; color: var(--ink); text-align: left; }
+.agJob:hover { background: var(--card); }
+
+/* ---------- pull requests ---------- */
+.prPage .inner { max-width: 960px; }
+.prH1 { margin: 12px 0 0; font: 400 2.6rem/1.05 var(--serif); }
+.prSub { margin: 6px 0 0; color: var(--mute); }
+.prList { list-style: none; margin: 0; padding: 0; border: 1px solid var(--hair); border-radius: var(--r-lg); background: var(--card); }
+.prRow { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-top: 1px solid var(--hair); }
+.prRow:first-child { border-top: 0; }
+.prNum { width: 52px; flex: none; font: 400 0.8462rem var(--mono); color: var(--ash); }
+.prT { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.prTitle { padding: 0; border: 0; background: transparent; color: var(--ink); text-align: left; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.prTitle:hover { text-decoration: underline; text-underline-offset: 3px; }
+.prT > span { font-size: 0.8846rem; color: var(--mute); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.prT > span.bad { color: var(--body); }
+.prOn { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px 0 5px; border: 0; border-radius: var(--r-full); background: var(--tint-blue); color: var(--blue); font-size: 0.8846rem; white-space: nowrap; }
+.prOn:hover { background: var(--glow-blue); }
+.teamSide .tsMore { display: block; width: auto; margin: 2px 0 0 49px; padding: 4px 0; border: 0; background: transparent; color: var(--ash); font-size: 0.9286rem; }
+.teamSide .tsMore.th { margin-left: 46px; }
+.teamSide .tsMore:hover { color: var(--ink); }
+/* .tsScroll is also a name in changes.css: undo what leaks in. */
+.teamSide .tsScroll { max-height: none; overscroll-behavior: contain; }
+/* Junior.app's title bar: its left zone is the sidebar's head, one column with it. */
+.desktopBar.team .dbSide { width: var(--team-side-w); }
+/* 1px taller to cover the bar's rule; the 1px of padding keeps what's inside centred where it sits collapsed. */
+.desktopBar.team:not(.panelHidden) .dbSide { position: relative; z-index: 1; align-self: flex-start; height: calc(100% + 1px); padding-bottom: 1px; background: var(--deep); }
+/* The browser's top bar in the team layout: its left zone sits over the sidebar. */
+.teamBar { padding-left: 0; }
+.teamBar .tbSide { display: flex; align-items: center; gap: 8px; height: 100%; width: var(--team-side-w); flex: none; padding: 0 8px 0 14px; border-right: 1px solid var(--hair); box-sizing: border-box; }
+/* The left zone is the sidebar's head: same ground, and it covers the bar's rule so the two read as one column. */
+.teamBar:not(.sidebarHidden) { align-items: stretch; }
+.teamBar:not(.sidebarHidden) .tbSide { position: relative; z-index: 1; height: calc(100% + 1px); margin-bottom: -1px; padding-bottom: 1px; background: var(--deep); }
+.teamBar:not(.sidebarHidden) > :not(.tbSide) { align-self: center; }
+.teamBar.sidebarHidden .tbSide { width: auto; border-right: 0; }

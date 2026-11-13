@@ -68,7 +68,7 @@ export type Route =
   | { page: 'junior'; tab?: JuniorTab }
   | { page: 'session'; id: string }
   /** `#/agents/<name>`: one agent's DM (`junior` = Junior's own); bare `#/agents` opens Junior's */
-  | { page: 'agents'; name?: string }
+  | { page: 'agents'; name?: string; about?: boolean }
   | { page: 'draft'; id: string }
   /** `#/inbox/<view>`: one inbox view (or Snoozed, Archived); bare `#/inbox` opens In progress when something is held on you */
   | { page: 'inbox'; view?: InboxRoute }
@@ -81,6 +81,8 @@ export type Route =
   /** `#/jobs/<id>`: one job: health, runs, items */
   | { page: 'job'; id: string }
   | { page: 'artifacts' }
+  /** `#/prs`: your pull requests and the ones waiting on your review (team layout) */
+  | { page: 'prs' }
   | { page: 'artifact'; id: string }
   /** `#/run/<runId>/<path>`: one file in a team run's folder (plan.md, ledger.md, a handoff…) */
   | { page: 'run'; runId: string; path: string }
@@ -108,7 +110,10 @@ function parseRoute(hash: string): Route {
   if (hash === '/agents') return { page: 'agents' }
   if (hash.startsWith('/agents/')) {
     try {
-      return { page: 'agents', name: decodeURIComponent(hash.slice('/agents/'.length)) }
+      // `#/agents/<name>/about`: the agent's page (team layout); bare `#/agents/<name>` is its chat.
+      const rest = hash.slice('/agents/'.length)
+      if (rest.endsWith('/about')) return { page: 'agents', name: decodeURIComponent(rest.slice(0, -'/about'.length)), about: true }
+      return { page: 'agents', name: decodeURIComponent(rest) }
     } catch {
       return { page: 'agents' }
     }
@@ -156,6 +161,7 @@ function parseRoute(hash: string): Route {
       }
     }
   }
+  if (hash === '/prs') return { page: 'prs' }
   if (hash === '/changes') return { page: 'changes' }
   {
     const m = /^\/change\/([^/]+)\/(.+)$/.exec(hash)

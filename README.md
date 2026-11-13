@@ -37,6 +37,16 @@ curl -fsSL https://usejunior.sh/install.sh | sh
 
 <p align="center"><sub>Example work. Your Tuesday will have more of it.</sub></p>
 
+## One chat, a small team
+
+You talk to Junior in one chat. Junior hands each task to one of its agents, such as Reviewer or Babysitter, as a thread.
+
+- **Each thread starts clean.** It gets your words and the facts that matter, nothing else. You can read exactly what Junior told it.
+- **Each agent has its own instructions and memory.** It learns how you like the job done. Nothing is kept until you say so.
+- **Junior says what needs you.** One line, in the sidebar, always current.
+
+<img src="docs/team.png" alt="Junior's app. On the left, Junior's card says one thing needs you, above its agents and two open threads. In the middle, Junior's chat: it pinned a fact, then handed fix CI on #482 to Babysitter and review #477 to Reviewer. On the right, the Review #477 thread, opening with what Junior told Reviewer, then two findings and a review comment that is not sent." width="100%">
+
 ## Why Junior
 
 **Junior brings you what needs you. And takes what doesn't.** On your Mac, with your tools, and it asks before anything goes out.
