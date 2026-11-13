@@ -1,4 +1,4 @@
-import { Activity, FileDiff, FileText, Folder, Globe, Info, MessagesSquare, PanelRight } from 'lucide-react'
+import { Activity, FileDiff, FileText, Folder, Globe, Info, MessagesSquare } from 'lucide-react'
 import { useMemo, type ReactNode, type RefObject } from 'react'
 import { useScopedAgent } from '../chatAgents.js'
 import { JuniorFace } from '../components/JuniorFace.js'
@@ -172,7 +172,8 @@ function TopBar({ current, chatHeaderRef, currentCheckout, newTerminalIn, agents
  * The chat's tools, in the bar: each icon opens its tab in the sidebar, or
  * closes it when it is the one showing. Threads (what this chat handed out),
  * Changes, Artifacts, Background agents, Browser, then where it runs (Open
- * in), About (a chat's agent; a DM's face does this), and the sidebar toggle.
+ * in), and About (a chat's agent; a DM's face does this). ⌘⌥B shows or hides
+ * the sidebar.
  */
 function ChatTools({
   current,
@@ -255,27 +256,16 @@ function ChatTools({
           </button>
         </HeadTip>
       )}
-      <HeadTip label={side ? 'Hide the sidebar' : 'Show the sidebar'} keys="⌘⌥B">
-        <button
-          type="button"
-          className={`ib${side ? ' on' : ''}`}
-          aria-label={side ? 'Hide the sidebar' : 'Show the sidebar'}
-          aria-pressed={!!side}
-          onClick={() => chatSide.toggleOpen(current.id)}
-        >
-          <PanelRight size={15} aria-hidden="true" />
-        </button>
-      </HeadTip>
     </span>
   )
 }
 
 /**
- * A tool's tooltip: the name, its key, and a line of what's there, opening
+ * A tool's tooltip: the name and a line of what's there, opening
  * below. The span gives Radix a box to anchor on, so a menu trigger inside
  * (Open in) keeps working.
  */
-function HeadTip({ label, note, keys, children }: { label: string; note?: string; keys?: string; children: ReactNode }) {
+function HeadTip({ label, note, children }: { label: string; note?: string; children: ReactNode }) {
   return (
     <Tooltip
       side="bottom"
@@ -285,7 +275,6 @@ function HeadTip({ label, note, keys, children }: { label: string; note?: string
       content={
         <>
           <span className="rtName">{label}</span>
-          {keys && <span className="rtKeys">{keys}</span>}
           {note && <span className="rtNote">{note}</span>}
         </>
       }
