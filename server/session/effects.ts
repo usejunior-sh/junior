@@ -40,8 +40,9 @@ export const TEAM_TOOLS = new Set([
 /**
  * Starting and messaging other chats: local work, since each chat's own sends stay held. Never a prompt.
  * Pinning a note (and taking one off) only writes the workspace's pins.json: never a prompt either.
+ * Nor does remember / forget: they write only Junior's own memory.md, which Junior keeps without asking.
  */
-export const SESSION_TOOLS = new Set(['mcp__junior__start_session', 'mcp__junior__message_session', 'mcp__junior__pin_note', 'mcp__junior__unpin'])
+export const SESSION_TOOLS = new Set(['mcp__junior__start_session', 'mcp__junior__message_session', 'mcp__junior__pin_note', 'mcp__junior__unpin', 'mcp__junior__remember', 'mcp__junior__forget'])
 export const JUNIOR_READ_TOOLS = new Set([
   'mcp__junior__list_work_items',
   'mcp__junior__get_work_item',
@@ -60,6 +61,8 @@ export const JUNIOR_READ_TOOLS = new Set([
   'mcp__junior__list_pins',
   // Junior's work log: reading what its threads reported.
   'mcp__junior__read_work_log',
+  // Junior's memory: reading memory.md.
+  'mcp__junior__read_memory',
   // Advance approvals: listing reads, proposing only shows a card. Only the user's Add makes one.
   'mcp__junior__list_approvals',
   'mcp__junior__propose_approval',

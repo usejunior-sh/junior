@@ -21,6 +21,8 @@ import { proposeLearningResult } from '../core/junior/learnings.js'
 import { listPinsOp, pinNoteOp, unpinOp } from './pins-ops.js'
 import { recentWork, WORKLOG_KEEP_DAYS, worklogLine } from '../core/junior/worklog.js'
 import { worklogFor } from './worklog-ops.js'
+import { forgetOp, memoryForPrompt, rememberOp } from './memory-ops.js'
+import { MEMORY_MAX_BYTES, memoryLine } from '../core/junior/memory.js'
 import { APPROVAL_WHATS, approvalFrom, describeApproval, isLive } from '../core/approvals/approvals.js'
 import { messageSessionOp, sessionByName, sessionReport, startedBy, startSessionsOp } from './session/spawn-ops.js'
 
@@ -598,6 +600,45 @@ export function makeJuniorMcp(rt: WorkspaceRuntime, sessionId?: string) {
           }
         },
       ),
+      // Junior's memory (core/junior/memory.ts): facts it keeps on its own in memory.md. Local, no card.
+      tool(
+        'remember',
+        `Keep a fact in your memory, which every chat and thread you start reads: who someone is, what a project or service is, where a long piece of work stands, a decision and why. One plain line. To update a line, pass \`replaces\` with some of its text. Not for how the user wants work done (propose_learning), facts true only today or rules they state (pin_note), or secrets. The file holds ${MEMORY_MAX_BYTES} bytes; the oldest lines move to an archive when it is full.`,
+        {
+          text: z.string().describe('the fact, one line'),
+          replaces: z.string().optional().describe('some text of the one line this replaces'),
+        },
+        async (args) => {
+          try {
+            const r = await rememberOp(rt, args)
+            const notes = [r.existed ? 'already kept' : '', r.replaced ? `replaced: ${r.replaced.text}` : '', r.archived.length ? `${r.archived.length} oldest line${r.archived.length === 1 ? '' : 's'} moved to memory-archive.md` : ''].filter(Boolean)
+            return okResult(`ok: remembered${notes.length ? ` (${notes.join('; ')})` : ''}`)
+          } catch (err) {
+            return errResult(errText(err))
+          }
+        },
+      ),
+      tool(
+        'forget',
+        'Drop one line from your memory, by some of its text. Use it when the user says a fact is wrong or no longer holds, or when you find it is.',
+        { text: z.string().describe('some text of the one line to drop') },
+        async (args) => {
+          try {
+            const gone = await forgetOp(rt, args.text)
+            return okResult(`ok: forgot "${gone.text}"`)
+          } catch (err) {
+            return errResult(errText(err))
+          }
+        },
+      ),
+      tool('read_memory', 'Your memory as it is now, oldest line first. Your prompt has it as of when this chat started.', {}, async () => {
+        try {
+          const lines = await memoryForPrompt(rt)
+          return okResult(lines.length ? lines.map(memoryLine).join('\n') : 'Your memory is empty.')
+        } catch (err) {
+          return errResult(errText(err))
+        }
+      }),
       tool(
         'unpin',
         'Take a pinned note off, by its id (list_pins shows ids). Use it when the user says a pinned fact no longer holds.',

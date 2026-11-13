@@ -5,6 +5,8 @@ import { COORDINATOR_DISALLOWED, coordinatorAppend, threadAppend } from '../core
 import { DM_COMPACT_WINDOW } from '../core/junior/dms.js'
 import { worklogAppend } from '../core/junior/worklog.js'
 import { worklogFor } from './worklog-ops.js'
+import { memoryAppend } from '../core/junior/memory.js'
+import { memoryForPrompt } from './memory-ops.js'
 import { pinsForPrompt } from './pins-ops.js'
 import { z } from 'zod'
 import { randomUUID } from 'node:crypto'
@@ -129,6 +131,8 @@ export async function extrasFor(rt: WorkspaceRuntime, row: StoredSession): Promi
     const agent = await chatAgentNamed(rt, row.agent)
     // A DM never ends, so it compacts early: every turn re-reads its history.
     const compact = row.kind === 'dm' ? { settings: { autoCompactWindow: DM_COMPACT_WINDOW } } : {}
+    // Junior's own memory.md rides every one of its chats, DMs and threads: facts it keeps without asking.
+    const memory = memoryAppend(await memoryForPrompt(rt))
     // Junior's own chat (no agent) runs the team: it talks and hands each task to a thread, with the pins in
     // each brief and the work log in its own prompt. It reads but can't edit or run commands: work done here
     // would be re-read on every later turn.
@@ -136,14 +140,14 @@ export async function extrasFor(rt: WorkspaceRuntime, row: StoredSession): Promi
       const now = Date.now()
       const coordinator = coordinatorAppend({ juniorName: rt.persona.name, agents: await chatAgentsFor(rt), pins: await pinsForPrompt(rt, now) })
       const worklog = worklogAppend(await worklogFor(rt, now), now)
-      return { systemAppend: `${identity}${coordinator}${worklog}${await juniorAppend(rt)}`, mcp: { browser: browserMcpFor(rt, row) }, disallowedTools: [...COORDINATOR_DISALLOWED], ...compact }
+      return { systemAppend: `${identity}${coordinator}${memory}${worklog}${await juniorAppend(rt)}`, mcp: { browser: browserMcpFor(rt, row) }, disallowedTools: [...COORDINATOR_DISALLOWED], ...compact }
     }
     // A thread Junior started from its own chat leads each reply with the sentence Junior's chat shows.
     const parent = row.startedBy ? rt.rows.get(row.startedBy) : undefined
     const thread = parent?.kind === 'dm' && !parent.agent ? threadAppend(rt.persona.name) : ''
-    if (!agent) return { systemAppend: `${identity}${thread}${await juniorAppend(rt)}`, mcp: { browser: browserMcpFor(rt, row) }, ...compact }
+    if (!agent) return { systemAppend: `${identity}${thread}${memory}${await juniorAppend(rt)}`, mcp: { browser: browserMcpFor(rt, row) }, ...compact }
     return {
-      systemAppend: `${identity}${thread}${agentAppend(agent, rt.persona.name)}${await juniorAppend(rt)}`,
+      systemAppend: `${identity}${thread}${agentAppend(agent, rt.persona.name)}${memory}${await juniorAppend(rt)}`,
       mcp: { browser: browserMcpFor(rt, row) },
       disallowedTools: agentDisallowed(agent),
       ...(agent.skills ? { skills: agent.skills } : {}),
