@@ -199,6 +199,7 @@ html.kbOpen .shell.mobile .panel { bottom: 0; }
   .earlierNote .short { display: inline; }
 
   #composer { padding: 6px 8px 8px; }
+  .ctxMeter { padding: 4px 12px 0; }
   #composer .frame { min-width: 0; gap: 6px; padding: 8px 8px 6px 12px; }
   /* A session's project is fixed and the header shows it; only a new session's composer keeps its head (the project picker). */
   #composer .frame .cardHead { display: none; }

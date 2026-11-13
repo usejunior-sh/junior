@@ -30,6 +30,7 @@
     "core/shells/fold.ts",
     "core/workflows",
     "core/usage/turn-cost.ts",
+    "core/usage/context.ts",
     "core/teams/engine.ts",
     "core/teams/engine-*.ts",
     "core/work/state.ts",

@@ -390,7 +390,18 @@ button.chip:hover:not(:disabled), .chip[data-state="open"] { color: var(--ink); 
 /* A live session's box: drawn like the new chat's, but it keeps the page's gutter and opens at two lines. */
 .chatComposer.live { flex: none; }
 .chatComposer.live #composer { padding: 12px 40px 20px; }
+/* The gutter sits outside the measure, so the box lines up with the messages above it. */
+.chatComposer.live #composer.headBelow { max-width: calc(var(--measure) + 80px); }
 .chatComposer.live #box { min-height: 3em; }
+/* Junior's context, above its box: lined up with the box's right edge, neutral, amber near compaction. */
+.ctxMeter { flex: none; display: flex; justify-content: flex-end; width: 100%; max-width: calc(var(--measure) + 80px); margin: 0 auto; padding: 8px 40px 0; box-sizing: border-box; }
+.ctxMeterIn { display: inline-flex; align-items: center; gap: 8px; padding: 2px 4px; border-radius: var(--r-sm); font: 400 0.75rem var(--mono); color: var(--ash); font-variant-numeric: tabular-nums; cursor: default; }
+.ctxMeterIn:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.ctxMeterIn .lab { color: var(--stone); }
+.ctxMeterBar { width: 88px; height: 3px; border-radius: var(--r-full); background: var(--hair-strong); overflow: hidden; }
+.ctxMeterBar i { display: block; height: 100%; background: var(--ash); }
+.ctxMeterIn.full .ctxMeterBar i { background: var(--amber); }
+.ctxMeterIn.full .pct { color: var(--amber); }
 /* The draft box opens tall: a first prompt is usually a paragraph. In a live
    session it starts at two lines and grows with what you type. */
 #newSessionHome .actions { display: flex; align-items: center; gap: 12px; }

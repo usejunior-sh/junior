@@ -35,6 +35,7 @@ import { classifyEffect, SESSION_TOOLS, sessionScoped, TEAM_TOOLS, JUNIOR_READ_T
 import { teamRunOf } from '../team-run/state.js'
 import { noteActionEvent } from './actions-record.js'
 import { lineOf } from '../../core/junior/last-line.js'
+import { foldContext } from '../../core/usage/context.js'
 import { endedTask, owedProgress, type ProgressPending, snapshotAgentIds, throttleProgress, WorkflowTurns } from './workflow-tasks.js'
 import { costStep, lastResultMark, type CostMark } from '../../core/usage/turn-cost.js'
 import { STALL_TICK_MS, stallNotice, TurnWatch } from '../../core/sessions/stall.js'
@@ -898,5 +899,9 @@ export class LiveSession {
       const line = lineOf(event)
       if (line) this.rt.lastLine.set(this.row.id, line)
     }
+    // So does how full its context is, for every chat: the sidebar draws a bar under each row.
+    const fill = this.rt.contextFill.get(this.row.id) ?? {}
+    const next = foldContext(fill, event)
+    if (next !== fill) this.rt.contextFill.set(this.row.id, next)
   }
 }

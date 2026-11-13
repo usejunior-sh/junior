@@ -12,6 +12,7 @@ import { expandHome } from '../folders.js'
 import { checkoutById, mainCheckout, syncCheckouts } from './checkouts.js'
 import { LiveSession } from './live-session.js'
 import { lineOf } from '../../core/junior/last-line.js'
+import { foldContext, type ContextFill } from '../../core/usage/context.js'
 import { chatPermissionMode } from '../../core/actions/policy.js'
 import { extrasFor } from '../brief-run.js'
 
@@ -31,6 +32,7 @@ export async function deleteSession(rt: WorkspaceRuntime, sessionId: string): Pr
   rt.rows.delete(sessionId)
   rt.sessionTeam.delete(sessionId)
   rt.sessionContext.delete(sessionId)
+  rt.contextFill.delete(sessionId)
   if (run) {
     // The lead gone, the run goes with it; a worker gone respawns on its next step.
     if (run.leadSessionId === sessionId) {
@@ -190,7 +192,9 @@ export async function loadSessions(rt: WorkspaceRuntime) {
 
     const events = await rt.store.events.read(row.id)
     const unresolved = new Map<string, true>()
+    let fill: ContextFill = {}
     for (const e of events) {
+      fill = foldContext(fill, e.event)
       if (e.event.kind === 'permission_request') unresolved.set(e.event.id, true)
       if (e.event.kind === 'permission_resolved') unresolved.delete(e.event.id)
       if (row.kind === 'dm') {
@@ -198,6 +202,7 @@ export async function loadSessions(rt: WorkspaceRuntime) {
         if (line) rt.lastLine.set(row.id, line)
       }
     }
+    if (fill.used !== undefined || fill.window !== undefined) rt.contextFill.set(row.id, fill)
     let seq = events.length ? events[events.length - 1].seq : 0
     for (const id of unresolved.keys()) {
       seq += 1

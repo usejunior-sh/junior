@@ -4,8 +4,6 @@
  * page. One module on purpose: two formattings of `$`, or two blues for Opus,
  * is how two surfaces start disagreeing.
  */
-import type { SessionEvent } from '../../shared/protocol.js'
-
 /** `$4.73`, `$1.2k`, and `<$0.01` rather than a misleading `$0.00`. */
 export const money = (n: number) =>
   n >= 1000 ? `$${(n / 1000).toFixed(1)}k` : n >= 0.01 || n === 0 ? `$${n.toFixed(2)}` : '<$0.01'
@@ -41,28 +39,5 @@ export function modelLabel(id: string): string {
   return version ? `${family} ${version}` : family
 }
 
-/**
- * How full the main agent's context is: the prompt side of its last reply
- * (input, cache writes and cache reads) over the model's window, which the
- * latest `result` reports. Subagents run in their own context, so their
- * replies don't count. Null until both are known (before the first turn ends).
- */
-export function contextUse(events: readonly SessionEvent[]): { used: number; window: number; pct: number } | null {
-  let used: number | null = null
-  let window: number | null = null
-  for (let i = events.length - 1; i >= 0 && (used === null || window === null); i--) {
-    const ev = events[i]
-    if (ev.kind !== 'sdk') continue
-    const m = ev.message
-    if (used === null && m.type === 'assistant' && !m.parent_tool_use_id && m.message?.usage) {
-      const u = m.message.usage
-      used = (u.input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0)
-    }
-    if (window === null && m.type === 'result' && m.modelUsage) {
-      const w = Math.max(0, ...Object.values(m.modelUsage).map((x) => x.contextWindow ?? 0))
-      if (w > 0) window = w
-    }
-  }
-  if (used === null || window === null) return null
-  return { used, window, pct: Math.min(100, Math.round((used / window) * 100)) }
-}
+/** How full a session's context is (core/usage/context.ts): one rule for the chat and the sidebar. */
+export { contextUse, contextPct, CONTEXT_FULL_PCT } from '../../core/usage/context.js'

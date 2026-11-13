@@ -93,10 +93,11 @@ export function useSessionSpend(sessionId: string, status: SessionStatus, workfl
   return { usage, spend: usage?.bySession[sessionId], settled: settled === sessionId, running: status === 'running' || status === 'starting' || workflowRunning }
 }
 
-export function SessionCost({ sessionId, status, workflows = 0, compact = false }: { sessionId: string; status: SessionStatus; workflows?: number; compact?: boolean }) {
+export function SessionCost({ sessionId, status, workflows = 0, compact = false, kind }: { sessionId: string; status: SessionStatus; workflows?: number; compact?: boolean; kind?: string }) {
   const events = useEvents(sessionId)
   // The chat header's ring: how full the main agent's context is, beside what it has cost.
-  const ctx = useMemo(() => contextUse(events), [events])
+  // A DM is full at its compaction point, as its sidebar row and composer meter say.
+  const ctx = useMemo(() => contextUse(events, kind), [events, kind])
   const { usage, spend, settled, running } = useSessionSpend(sessionId, status, workflows)
   const [open, setOpen] = useState(false)
   const hover = useRef<ReturnType<typeof setTimeout>>(undefined)
@@ -183,7 +184,7 @@ export function SessionCost({ sessionId, status, workflows = 0, compact = false 
             {tokens(spend.tokens)} tokens · {spend.messages} {spend.messages === 1 ? 'API call' : 'API calls'}
           </div>
           {ctx && (
-            <div className="ctxRow" title="The main agent's last prompt, against its model's context window">
+            <div className="ctxRow" title={kind === 'dm' ? "The main agent's last prompt, against where this chat compacts" : "The main agent's last prompt, against its model's context window"}>
               <span className="lab">Context</span>
               <span className="ctxBar" aria-hidden="true">
                 <i style={{ width: `${ctx.pct}%` }} className={ctx.pct >= 80 ? 'full' : undefined} />
