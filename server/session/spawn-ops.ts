@@ -20,6 +20,7 @@ import { errText } from '../errors.js'
 import { checkoutById, makeWorktree } from './checkouts.js'
 import { lastReplyText } from './mentions.js'
 import { createSession, getOrRevive } from './sessions.js'
+import { checkAnswer } from './thread-wake.js'
 import { chatAgentsFor } from '../chat-agents.js'
 import type { ChatAgent } from '../../core/junior/agents.js'
 
@@ -138,6 +139,8 @@ export async function messageSessionOp(rt: WorkspaceRuntime, fromId: string, nam
   if (!target) throw new Error(`no session is named "${name}"`)
   if (target.id === fromId) throw new Error('a session cannot message itself')
   if (!text.trim()) throw new Error('the message is empty')
+  // A DM answering a thread's report: once per report, never a reply to its own answer.
+  checkAnswer(rt, fromId, target.id)
   const now = Date.now()
   const bySender = sent.get(rt) ?? new Map<string, number[]>()
   sent.set(rt, bySender)

@@ -1,5 +1,6 @@
 import { createSdkMcpServer } from '@anthropic-ai/claude-agent-sdk'
-import { reportThreadTurn } from './thread-report.js'
+import { reportThreadBlocked, reportThreadTurn } from './thread-report.js'
+import { dmTurnEnded, threadUserMessage } from './thread-wake.js'
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import type { AgentRelay, EffortLevel, FastModeDisabledReason, FastModeState, FileRef, ImageAttachment, Mention, PermissionBehavior, PermissionMode, QuestionAnswers, SdkMessage, SessionEvent, SessionStatus } from '../../shared/protocol.js'
@@ -348,6 +349,8 @@ export class LiveSession {
             const said = (ev.record as { result?: unknown }).result
             void reportThreadTurn(this.rt, this.row, typeof said === 'string' ? said : '').catch(() => {})
           }
+          // A DM's turn ended: thread reports that queued while it worked wake it now.
+          if (this.row.kind === 'dm') dmTurnEnded(this.rt, this.row.id)
           // A skill or agent this turn wrote is usable now, here and in every other session.
           if (this.libraryTouched) {
             this.libraryTouched = false
@@ -487,7 +490,7 @@ export class LiveSession {
   }
 
   /** `opts.files` are already claimed into this session's folder (claimSessionFiles). */
-  async sendUserMessage(text: string, images?: ImageAttachment[], mentions?: Mention[], opts: { from?: string; fromSession?: string; mode?: 'goal'; files?: FileRef[] } = {}) {
+  async sendUserMessage(text: string, images?: ImageAttachment[], mentions?: Mention[], opts: { from?: string; fromSession?: string; mode?: 'goal'; files?: FileRef[]; report?: true } = {}) {
     // Mentions are resolved now, against this session's folder, so the event
     // log records what the model was actually given (and why a file wasn't).
     const attached = mentions?.length ? await resolveMentions(this.rt, this.row.cwd, mentions) : null
@@ -495,13 +498,16 @@ export class LiveSession {
     await this.beginTurn()
     // The key this turn's file checkpoint is kept under, on the log so the transcript can offer a rewind to it.
     const messageId = this.turnId()
-    this.emit({ kind: 'local_user', text, images, ...(opts.files?.length ? { files: opts.files } : {}), mentions: attached?.resolved, ...(opts.from ? { from: opts.from } : {}), ...(opts.fromSession ? { fromSession: opts.fromSession } : {}), ...(opts.mode ? { mode: opts.mode } : {}), ...(messageId ? { messageId } : {}) }, true)
+    this.emit({ kind: 'local_user', text, images, ...(opts.files?.length ? { files: opts.files } : {}), mentions: attached?.resolved, ...(opts.from ? { from: opts.from } : {}), ...(opts.fromSession ? { fromSession: opts.fromSession } : {}), ...(opts.report ? { report: true as const } : {}), ...(opts.mode ? { mode: opts.mode } : {}), ...(messageId ? { messageId } : {}) }, true)
     // A message from Junior or a teammate is framed for the model; the transcript keeps the raw text and a badge.
     // One sent in Goal mode says so, so Junior goes straight to a goal card.
     const filesNote = attachedFilesNote(this.rt.attachmentsDir, this.row.id, opts.files ?? [])
     // Another chat's message (start_session / message_session) names that chat, so it never reads as the user.
-    const sender = opts.fromSession ? this.rt.rows.get(opts.fromSession) : undefined
-    const modelText = sender && text ? frameSessionMessage(sender, text) : opts.from && text ? frameTeamMessage(opts.from, text) : opts.mode === 'goal' ? `${GOAL_MODE_MARK}${text}` : text
+    // A thread's report to its DM comes framed already (core/junior/thread-wake.ts).
+    const sender = opts.fromSession && !opts.report ? this.rt.rows.get(opts.fromSession) : undefined
+    // The user writing in a thread themselves breaks a DM's auto-answer loop.
+    if (!opts.from && !opts.fromSession && this.row.startedBy) threadUserMessage(this.rt, this.row.id, this.row.startedBy)
+    const modelText = opts.report ? text : sender && text ? frameSessionMessage(sender, text) : opts.from && text ? frameTeamMessage(opts.from, text) : opts.mode === 'goal' ? `${GOAL_MODE_MARK}${text}` : text
     this.setStatus('running')
     this.watchTurn()
     void this.rt.store.sessions.touch(this.row.id)
@@ -661,7 +667,11 @@ export class LiveSession {
     const suggestions = opts.suggestions ?? []
     return new Promise<PermissionResult>((resolve) => {
       this.pendingPermissions.set(id, { input: toolInput, toolName, suggestions, resolve })
-      if (this.pendingPermissions.size === 1) broadcastSessionList(this.rt)
+      if (this.pendingPermissions.size === 1) {
+        broadcastSessionList(this.rt)
+        // A thread started from a DM now waits on the user: the DM hears, once per wait.
+        if (this.row.startedBy) void reportThreadBlocked(this.rt, this.row, toolName, toolInput, opts.title, opts.description).catch(() => {})
+      }
       this.emit(
         {
           kind: 'permission_request',

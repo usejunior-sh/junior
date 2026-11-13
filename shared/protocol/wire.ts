@@ -27,6 +27,8 @@ export type SessionEvent =
       relay?: AgentRelay
       /** sent in Goal mode: Junior proposes a goal for it */
       mode?: 'goal'
+      /** a thread's report waking the DM that started it; the notice line already shows it, so the transcript hides it */
+      report?: true
       /**
        * The id the agent keeps this turn under: rewind_files can put the files
        * back to how they were before it. Claude chats only; absent on older logs.

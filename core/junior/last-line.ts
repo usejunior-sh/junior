@@ -4,6 +4,7 @@
  * text. Pure: the server folds every saved event of a DM through `lineOf`.
  */
 import type { SessionEvent } from '../../shared/protocol.js'
+import { isQuietReply } from './thread-wake.js'
 
 /** Long enough to fill a sidebar row twice over; the row cuts it with an ellipsis. */
 const LINE_MAX = 140
@@ -40,5 +41,7 @@ export function lineOf(event: SessionEvent): string | null {
     .filter((b) => b?.type === 'text' && typeof b.text === 'string')
     .map((b) => b.text as string)
     .join(' ')
+  // A DM's quiet answer to a thread report isn't a line.
+  if (isQuietReply(text)) return null
   return plainLine(text) || null
 }

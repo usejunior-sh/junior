@@ -16,6 +16,7 @@ import { buildShells, type ShellRun } from '../../core/shells/fold.js'
 import { WORKFLOW_TOOL } from '../../core/workflows/fold.js'
 import { WorkflowTurns } from '../../core/workflows/tasks.js'
 import { costStep, type CostMark } from '../../core/usage/turn-cost.js'
+import { isQuietReply } from '../../core/junior/thread-wake.js'
 import {
   ARTIFACT_TOOLS,
   parseArtifactResult,
@@ -243,6 +244,8 @@ export function buildTranscript(
           relays.push({ agentId: ev.relay.agentId, text: ev.text, mark })
           break
         }
+        // A thread's report to this DM: the notice line above it already says so.
+        if (ev.report) break
         if (!scope) items.push({ key: `u${i}`, kind: 'user', text: ev.text, images: ev.images, ...(ev.files?.length ? { files: ev.files } : {}), mentions: ev.mentions, from: ev.from, ...(ev.fromSession ? { fromSession: ev.fromSession } : {}), ...(ev.mode ? { mode: ev.mode } : {}) })
         break
       }
@@ -342,7 +345,7 @@ export function buildTranscript(
           if (m.content?.trim()) items.push({ key: `lc${i}`, kind: 'command', text: m.content })
         } else if (m.type === 'assistant') {
           for (const [j, b] of (m.message?.content ?? []).entries()) {
-            if (isTextBlock(b) && b.text.trim()) {
+            if (isTextBlock(b) && b.text.trim() && !isQuietReply(b.text)) {
               items.push({ key: `a${i}.${j}`, kind: 'assistant', text: b.text })
             } else if (isThinkingBlock(b) && b.thinking) {
               items.push({ key: `t${i}.${j}`, kind: 'thinking', text: truncate(b.thinking, 400) })

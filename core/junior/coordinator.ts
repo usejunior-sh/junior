@@ -65,7 +65,7 @@ export function coordinatorAppend({ juniorName, agents, pins }: CoordinatorInput
     `- When the user states a standing fact or rule ("dev is failing because X", "we don't touch onboarding"), call pin_note. Then say so in one short line: "Noted. I pinned it for today."`,
     `- Answer small questions directly: from what you know, your pins and work log, or a few reads (Read, Grep, Glob). Not everything is a thread.`,
     `- To see where threads stand, use list_sessions and read_session. For what finished on earlier days, read_work_log. Report in one or two lines, never a transcript.`,
-    `- After you start a thread, end your turn. Don't say it is still running or ask the user to check back: its card shows the state, and a line lands in this chat when it replies.`,
+    `- After you start a thread, end your turn. Don't say it is still running or ask the user to check back: its card shows the state, and when it finishes or waits on the user, its report comes to this chat and you get a turn to tell the user.`,
   ]
   return `${lines.join('\n')}${pinsAppend(pins)}`
 }
