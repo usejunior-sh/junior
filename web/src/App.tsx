@@ -73,7 +73,6 @@ import { isWorking } from './sessionModes.js'
 import { useTerminalActions } from './app/useTerminalActions.js'
 import { AgentDmStart } from './components/AgentDmStart.js'
 import { ChatSide } from './components/ChatSide.js'
-import { ToolRail } from './components/ToolRail.js'
 import { useChatSide } from './chatSide.js'
 import { composerDrafts } from './composerDrafts.js'
 import { JUNIOR_DM, findDm } from '../../core/junior/dms.js'
@@ -837,6 +836,7 @@ export function App() {
                   openAgent={openAgent}
                   showAgent={showAgent}
                   mobile={mobile}
+                  browserOpen={browserOpen}
                   onNavigate={navigate}
                 />
                 {railOn && teamRun ? (
@@ -975,7 +975,6 @@ export function App() {
                   files={railOn ? <TeamFiles run={teamRun} checkoutId={teamCheckoutId} onNavigate={navigate} onOpenRun={openTeamRun} /> : undefined}
                 />
               )}
-              {!mobile && !sheetThread && <ToolRail current={current} checkout={currentCheckout} newTerminalIn={newTerminalIn} agents={agents} browserOpen={browserOpen} />}
               </div>
             ) : (
               <div id="empty">Session not found — it may have been deleted.</div>

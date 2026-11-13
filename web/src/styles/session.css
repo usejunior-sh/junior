@@ -47,53 +47,56 @@
 .costPop .ctxRow .ctxBar i.full { background: var(--amber); }
 .costPop .ctxRow .val { font-family: var(--mono); color: var(--body); font-variant-numeric: tabular-nums; }
 
-/* Variant I (artifact 9d492a83). A DM's top is a floating pill over its transcript, which scrolls
-   under it; a chat keeps the slim header. Every tool lives in the right rail. */
+/* The chat's top bar: who you talk to (a DM adds what the agent is for), what it is doing now, how
+   full its context is, then its tools. Each tool opens its tab in the sidebar; the open one is lit. */
 .sessCol { position: relative; }
-.dmPillWrap { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); z-index: 5; max-width: calc(100% - 48px); display: flex; }
-/* The pill (P5, artifact 9d492a83) is a button: it opens the agent's card in the sidebar. On hover it
-   grows and a chevron slides in, which says so. Its edge is its status, one border, never two: a sky light sweeps round it while the agent
-   works, it turns orange when it needs you. The edge is a border-box gradient, so it can move. */
-@property --sweep { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
-.dmPill {
-  --fill: var(--elev); --edge: var(--hair-strong);
-  min-width: 0; display: inline-flex; align-items: center; gap: 12px; padding: 7px 18px 7px 9px; cursor: pointer; text-align: left; font-size: 1.155em;
-  border: 1px solid transparent; border-radius: var(--r-full); color: var(--ink); font-family: inherit; line-height: inherit;
-  background: linear-gradient(var(--fill), var(--fill)) padding-box, linear-gradient(var(--edge), var(--edge)) border-box;
-  transform-origin: 50% 50%; transition: transform 0.16s ease-out, box-shadow 0.2s, padding 0.16s ease-out;
+#chatHeader.chTop { gap: 12px; padding: 0 10px 0 16px; }
+#chatHeader.chTop.dm { height: 56px; }
+.chTop .chWho { min-width: 0; flex: 0 1 auto; display: inline-flex; align-items: center; gap: 10px; padding: 4px 10px 4px 4px; border: 0; border-radius: var(--r); background: none; color: inherit; font: inherit; text-align: left; }
+.chTop button.chWho { cursor: pointer; }
+.chTop button.chWho:hover, .chTop button.chWho.on { background: var(--hair-soft); }
+.chTop button.chWho:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.chTop .chNames { display: flex; flex-direction: column; min-width: 0; line-height: 1.3; }
+.chTop .chName { font-size: 1.0769rem; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chTop .chName b { font-weight: 500; }
+.chTop .chName .jr { color: var(--mute); }
+.chTop .chName .jrSep { color: var(--stone); }
+.chTop .chSub { font-size: 0.8462rem; color: var(--mute); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chTop .chRight { margin-left: auto; flex: 0 1 auto; min-width: 0; display: flex; align-items: center; gap: 10px; }
+.chTop .chIcons { margin-left: 0; }
+/* The divider splits status and context from the tools; with neither showing, it goes too. */
+.chTop .chRight > .chSep:first-child { display: none; }
+/* What it is doing now: sky while it works, orange (and only then) when it needs you, red when it stopped. Hidden while idle. */
+.chTop .chStatus {
+  min-width: 0; flex: 0 1 auto; max-width: 360px; height: 30px; display: inline-flex; align-items: center; gap: 8px; padding: 0 12px 0 11px;
+  border: 1px solid var(--hair-strong); border-radius: var(--r-full); background: var(--elev); color: var(--body); font-size: 0.9231rem;
 }
-.dmPill .chev { flex: none; width: 0; margin-left: -12px; opacity: 0; color: var(--mute); transition: width 0.16s ease-out, margin 0.16s ease-out, opacity 0.12s; }
-.dmPill:hover, .dmPill:focus-visible { --fill: color-mix(in srgb, var(--elev) 92%, var(--ink)); --edge: var(--hair-bright); transform: scale(1.05); padding-right: 8px; }
-.dmPill:hover .chev, .dmPill:focus-visible .chev { width: 14px; margin-left: 0; opacity: 1; }
-.dmPill:active { transform: scale(1.02); }
-.dmPill.on { --edge: var(--hair-bright); }
-.dmPill:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
-.dmPill .tx { display: flex; flex-direction: column; justify-content: center; min-width: 0; line-height: 1.25; }
-.dmPill .nm { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dmPill .nm .jr { color: var(--mute); font-weight: 400; }
-.dmPill .nm .jrSep { color: var(--stone); }
-.dmPill .step { font: 400 0.8077rem var(--mono); color: var(--ash); max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dmPill.working {
-  background: linear-gradient(var(--fill), var(--fill)) padding-box,
-    conic-gradient(from var(--sweep), color-mix(in srgb, var(--blue) 18%, transparent) 0deg 250deg, var(--blue) 320deg, color-mix(in srgb, var(--blue) 40%, var(--ink)) 345deg, color-mix(in srgb, var(--blue) 18%, transparent) 360deg) border-box;
-  box-shadow: 0 0 18px -4px color-mix(in srgb, var(--blue) 40%, transparent);
-  animation: pillSweep 2.2s linear infinite;
+.chTop .chStatus .d { flex: none; width: 7px; height: 7px; border-radius: var(--r-full); background: var(--stone); }
+.chTop .chStatus .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chTop .chStatus .n { flex: none; font: 400 0.7692rem var(--mono); color: var(--ash); font-variant-numeric: tabular-nums; }
+.chTop .chStatus.working .d { background: var(--blue); animation: pulse 1.4s ease-in-out infinite; }
+.chTop .chStatus.needs { border-color: color-mix(in srgb, var(--orange) 60%, transparent); color: var(--orange); }
+.chTop .chStatus.needs .d { background: var(--orange); }
+.chTop .chStatus.error { color: var(--red); }
+.chTop .chStatus.error .d { background: var(--red); }
+/* Context: a short bar and its percentage, neutral until 80%, then amber. The cost and tokens are in its popover. */
+.chTop .ctxHead {
+  flex: none; height: 28px; display: inline-flex; align-items: center; gap: 8px; padding: 0 6px; border: 0; border-radius: var(--r);
+  background: none; color: var(--ash); font: 400 0.8462rem var(--mono); font-variant-numeric: tabular-nums; cursor: default;
 }
-.dmPill.needs { --edge: var(--orange); box-shadow: 0 0 18px -4px color-mix(in srgb, var(--orange) 50%, transparent); }
-.dmPill.needs .step { color: var(--orange); }
-.dmPill.error .step { color: var(--red); }
-@keyframes pillSweep { to { --sweep: 360deg; } }
-@media (prefers-reduced-motion: reduce) {
-  .dmPill, .dmPill .chev { transition: none; }
-  .dmPill:hover, .dmPill:focus-visible, .dmPill:active { transform: none; }
-  .dmPill.working { animation: none; }
-}
-/* The pill is desktop-only (a phone keeps its header row), so are its room and its fade:
-   what scrolls under the pill fades out first, so the pill never sits on top of text. */
-@media (min-width: 768px) {
-  .sessCol.dm #transcript { padding-top: 88px; }
-  .sessCol.dm::before { content: ""; position: absolute; top: 0; left: 0; right: 12px; height: 80px; z-index: 4; pointer-events: none; background: linear-gradient(var(--canvas) 45%, transparent); }
-}
+.chTop .ctxHead:hover, .chTop .ctxHead.on { background: var(--hair-soft); color: var(--ink); }
+.chTop .ctxHead:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.chTop .ctxHeadBar { width: 56px; height: 4px; border-radius: var(--r-full); background: var(--hair-strong); overflow: hidden; }
+.chTop .ctxHeadBar i { display: block; height: 100%; background: var(--ash); }
+.chTop .ctxHead.full .ctxHeadBar i { background: var(--amber); }
+.chTop .ctxHead.full .pct { color: var(--amber); }
+.chTop .chRight > .costSkel { flex: none; width: 56px; height: 4px; }
+/* A thread waiting on you: the one orange mark among the tools. */
+#chatHeader .ibNeeds { width: 6px; height: 6px; border-radius: var(--r-full); background: var(--orange); }
+#chatHeader .trTip { display: inline-flex; }
+/* What opens beside a DM (the sidebar, the browser's tab row) draws its top line level with the DM's taller bar. */
+.sessRow:has(#chatHeader.chTop.dm) :is(.chatSide .csHead, .bpTabsRow) { height: 56px; }
+@media (prefers-reduced-motion: reduce) { .chTop .chStatus.working .d { animation: none; } }
 /* A DM reads like a conversation: no opening inventory unless something broke. */
 .sessCol.dm #transcript details.init:not(.trouble) { display: none; }
 /* A turn ends in a short note tucked under the reply, not a ruled divider across the page. Like a chat's
@@ -103,36 +106,11 @@
 @media (hover: none) { .meta.chat { opacity: 1; } }
 .meta.chat::before, .meta.chat::after { display: none; }
 .meta.chat .soDone::before { content: "✓ "; }
-.toolRail {
-  width: 48px; flex: none; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 0 0 10px;
-  border-left: 1px solid var(--hair); background: var(--deep);
-}
-.toolRail .ib {
-  position: relative; width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; gap: 2px;
-  border: 0; border-radius: var(--r); background: none; color: var(--ash); cursor: pointer;
-}
-.toolRail .ib:hover, .toolRail .ib[data-state="open"], .toolRail .ib.on { background: var(--hair-soft); color: var(--ink); }
-/* The open tab: a short bar on the rail's inner edge (the rail is 48px, a button 32px: 8px either side), by the sidebar it opened. */
-.toolRail .tab.on::before { content: ""; position: absolute; left: -8px; top: 8px; bottom: 8px; width: 2px; border-radius: 2px; background: var(--ink); }
-.toolRail .ibCount { position: absolute; right: 1px; bottom: 1px; font: 400 9px var(--mono); color: var(--ash); }
-.toolRail .ibLive { position: absolute; right: 4px; top: 4px; width: 6px; height: 6px; border-radius: var(--r-full); background: var(--blue); animation: pulse 1.4s ease-in-out infinite; }
-.toolRail .ibProfile { position: absolute; right: 4px; bottom: 4px; display: inline-flex; }
-.toolRail .trHead { align-self: stretch; height: var(--bar-h); flex: none; display: flex; align-items: center; justify-content: center; border-bottom: 1px solid var(--hair); margin-bottom: 6px; }
-.toolRail .trGap { flex: 1; }
-.toolRail .trTip { display: inline-flex; }
-/* The rail's tooltip: the name, its key in mono, and a quiet line of what's there. */
+/* A header tool's tooltip: the name, its key in mono, and a quiet line of what's there. */
 .uiTip.railTip { display: grid; grid-template-columns: auto auto; column-gap: 10px; row-gap: 1px; align-items: baseline; padding: 6px 10px 7px; }
 .uiTip.railTip .rtName { color: var(--ink); font-weight: 500; }
 .uiTip.railTip .rtKeys { justify-self: end; font: 400 0.7692rem var(--mono); color: var(--ash); }
 .uiTip.railTip .rtNote { grid-column: 1 / -1; color: var(--mute); font-size: 0.8462rem; }
-/* The cost ring stacks its figure under it in the rail's width. */
-.toolRail .costRing { width: 40px; height: auto; flex-direction: column; gap: 3px; padding: 5px 0; font-variant-numeric: tabular-nums; }
-.toolRail .costRing .ibCount { position: static; font-size: 9.5px; }
-.toolRail .costRing .ctxRing .track { fill: none; stroke: var(--hair-strong); stroke-width: 2; }
-.toolRail .costRing .ctxRing .fill { fill: none; stroke: var(--blue); stroke-width: 2; stroke-linecap: round; }
-.toolRail .costRing.full .ctxRing .fill { stroke: var(--amber); }
-.toolRail .costSkel { width: 16px; height: 16px; border-radius: var(--r-full); background: var(--hair-strong); }
-@media (prefers-reduced-motion: reduce) { .toolRail .ibLive { animation: none; } }
 
 /* The chat's right sidebar (chatSide.ts): Artifacts or Background agents, a stats bar at the foot.
    The Browser tab is the browser pane, in the same slot. */
@@ -373,8 +351,6 @@
   position: relative; flex: 0 0 54%; min-width: min(360px, 50%); max-width: calc(100% - min(380px, 46%)); min-height: 0; display: flex; flex-direction: column;
   border-left: 1px solid var(--hair); background: var(--canvas);
 }
-/* With the tool rail beside it, the pane's share and its cap leave the rail its 48px. */
-.sessRow:has(> .toolRail) .browserPane { max-width: calc(100% - min(380px, 46%) - 48px); }
 .bpResize {
   position: absolute; top: 0; bottom: 0; left: -4px; width: 7px; z-index: 3;
   cursor: col-resize; touch-action: none; outline: none;
@@ -508,7 +484,7 @@ body.bpResizing, body.bpResizing * { cursor: col-resize !important; user-select:
 
 .bpStage { flex: 1; min-height: 0; position: relative; background: var(--canvas); overflow: auto; }
 /* Two rows, like a browser: the pages it has open with the pane's own tools, then the address row.
-   Both are --bar-h tall, so their lines meet the chat header's and the tool rail's. */
+   Both are --bar-h tall, so their lines meet the chat header's. */
 .bpTabsRow { position: relative; display: flex; align-items: center; gap: 2px; height: var(--bar-h); padding: 0 8px 0 6px; flex: none; border-bottom: 1px solid var(--hair); min-width: 0; }
 .bpTabsRow .sp { flex: 1; }
 .bpTabsRow .bpPages { flex: 0 1 auto; border-bottom: 0; }

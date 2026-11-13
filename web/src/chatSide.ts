@@ -1,8 +1,8 @@
 /**
  * The chat's right sidebar (variant F, artifact 9d492a83): which tab each chat
  * has open, per browser, surviving a reload. One slot per chat: the agent it
- * talks as (a DM's pill opens it), Changes, Artifacts, Background agents or
- * Browser, or nothing. The rail's icons switch it.
+ * talks as (the header's face opens it), Threads, Changes, Artifacts,
+ * Background agents or Browser, or nothing. The header's icons switch it.
  *
  * The browser pane's open state lives here too (browser.ts maps onto it), so a
  * chat never shows the browser and another tab at once. The rules are pure
@@ -10,10 +10,10 @@
  */
 import { useSyncExternalStore } from 'react'
 
-export type SideTab = 'agent' | 'changes' | 'artifacts' | 'agents' | 'browser'
+export type SideTab = 'agent' | 'threads' | 'changes' | 'artifacts' | 'agents' | 'browser'
 export type SideMap = Readonly<Record<string, SideTab>>
 
-export const SIDE_TABS: readonly SideTab[] = ['agent', 'changes', 'artifacts', 'agents', 'browser']
+export const SIDE_TABS: readonly SideTab[] = ['agent', 'threads', 'changes', 'artifacts', 'agents', 'browser']
 const KEY = 'junior.chatSide'
 const LAST_KEY = 'junior.chatSideLast'
 /** The browser pane's old store: read once, so a chat with the browser open keeps it. */

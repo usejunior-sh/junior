@@ -93,7 +93,22 @@ export function useSessionSpend(sessionId: string, status: SessionStatus, workfl
   return { usage, spend: usage?.bySession[sessionId], settled: settled === sessionId, running: status === 'running' || status === 'starting' || workflowRunning }
 }
 
-export function SessionCost({ sessionId, status, workflows = 0, compact = false, kind }: { sessionId: string; status: SessionStatus; workflows?: number; compact?: boolean; kind?: string }) {
+export function SessionCost({
+  sessionId,
+  status,
+  workflows = 0,
+  compact = false,
+  bar = false,
+  kind,
+}: {
+  sessionId: string
+  status: SessionStatus
+  workflows?: number
+  compact?: boolean
+  /** The desktop header's trigger: the context bar and its percentage; the cost waits in the popover. */
+  bar?: boolean
+  kind?: string
+}) {
   const events = useEvents(sessionId)
   // The chat header's ring: how full the main agent's context is, beside what it has cost.
   // A DM is full at its compaction point, as its sidebar row and composer meter say.
@@ -136,7 +151,29 @@ export function SessionCost({ sessionId, status, workflows = 0, compact = false,
   return (
     <Popover.Root open={open} onOpenChange={setOpen}>
       <Popover.Trigger asChild>
-        {compact ? (
+        {bar ? (
+          <button
+            type="button"
+            className={`ctxHead${open ? ' on' : ''}${ctx && ctx.pct >= 80 ? ' full' : ''}`}
+            aria-label={`${ctx ? `${ctx.pct}% of context used, ` : ''}${money(spend.cost)}${spend.priced ? '' : '+'} spent — show breakdown`}
+            {...hoverProps}
+          >
+            {ctx ? (
+              <>
+                <span className="ctxHeadBar" aria-hidden="true">
+                  <i style={{ width: `${ctx.pct}%` }} />
+                </span>
+                <span className="pct">{ctx.pct}%</span>
+              </>
+            ) : (
+              // No turn has reported its context yet: the cost alone.
+              <span className="pct">
+                {money(spend.cost)}
+                {!spend.priced && '+'}
+              </span>
+            )}
+          </button>
+        ) : compact ? (
           <button
             type="button"
             className={`ib costRing${open ? ' on' : ''}${ctx && ctx.pct >= 80 ? ' full' : ''}`}
@@ -166,7 +203,7 @@ export function SessionCost({ sessionId, status, workflows = 0, compact = false,
         <Popover.Content
           className="costPop"
           side="bottom"
-          align="start"
+          align={bar ? 'end' : 'start'}
           sideOffset={6}
           collisionPadding={12}
           onOpenAutoFocus={(e) => e.preventDefault()}

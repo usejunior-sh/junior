@@ -1,7 +1,7 @@
 /**
  * The chat's right sidebar for the tabs that aren't the browser (chatSide.ts):
- * who the chat talks as, its artifacts, or its background agents, with a stats
- * bar at the bottom. The browser tab is the browser pane itself, in this slot.
+ * who the chat talks as, the threads it handed out, its artifacts, or its
+ * background agents, with a stats bar at the bottom. The browser tab is the browser pane itself, in this slot.
  */
 import { ChevronDown, Folder, List, X } from 'lucide-react'
 import { useMemo } from 'react'
@@ -10,7 +10,7 @@ import type { AgentRun } from '../agents.js'
 import { artifactAgo, FormatIcon } from '../artifactFormat.js'
 import { useSessionArtifacts } from '../artifactsClient.js'
 import { chatSide, type SideTab } from '../chatSide.js'
-import { useEvents } from '../hooks.js'
+import { useEvents, useSessions } from '../hooks.js'
 import { contextUse, money, tokens } from '../usageFormat.js'
 import { AgentCard } from './Agents.js'
 import { JuniorFace } from './JuniorFace.js'
@@ -22,8 +22,24 @@ import { useSessionSpend } from './SessionCost.js'
 import { ChangeFileRows, useChangesPoll } from './ChangesPanel.js'
 import { CheckoutMenu } from './CheckoutMenu.js'
 import { changeId, useChanges } from '../changesStore.js'
+import { threadState, type ThreadState } from '../../../core/junior/threads.js'
+import { ThreadCard } from './ThreadCards.js'
 
-const TITLE: Record<Exclude<SideTab, 'browser'>, string> = { agent: 'About', changes: 'Changes', artifacts: 'Artifacts', agents: 'Background agents' }
+const TITLE: Record<Exclude<SideTab, 'browser'>, string> = { agent: 'About', threads: 'Threads', changes: 'Changes', artifacts: 'Artifacts', agents: 'Background agents' }
+
+const THREAD_ORDER: Record<ThreadState, number> = { you: 0, stopped: 1, working: 2, ready: 3 }
+
+/** The threads this chat handed out (`startedBy`): yours first, then stopped, working, done; newest first in each. */
+export function useChatThreads(sessionId: string): SessionSummary[] {
+  const sessions = useSessions()
+  return useMemo(
+    () =>
+      sessions
+        .filter((s) => s.startedBy === sessionId)
+        .sort((a, b) => THREAD_ORDER[threadState(a)] - THREAD_ORDER[threadState(b)] || b.updatedAt - a.updatedAt),
+    [sessions, sessionId],
+  )
+}
 
 type Props = {
   session: SessionSummary
@@ -45,7 +61,8 @@ export function ChatSide({ session, tab, agents, openAgent, showAgent, onNavigat
     [agents],
   )
   const changed = useChatChanges(session.checkoutId)
-  const count = tab === 'artifacts' ? artifacts.length : tab === 'agents' ? agents.length : tab === 'changes' ? (changed?.files.length ?? 0) : 0
+  const threads = useChatThreads(session.id)
+  const count = tab === 'artifacts' ? artifacts.length : tab === 'agents' ? agents.length : tab === 'changes' ? (changed?.files.length ?? 0) : tab === 'threads' ? threads.length : 0
   return (
     <aside className="chatSide" aria-label={TITLE[tab]}>
       <div className="csHead">
@@ -60,6 +77,17 @@ export function ChatSide({ session, tab, agents, openAgent, showAgent, onNavigat
           <SideChanges cc={changed} onNavigate={onNavigate} onPin={onPin} newTerminalIn={newTerminalIn} />
         ) : tab === 'agent' ? (
           <AgentAbout session={session} onNavigate={onNavigate} />
+        ) : tab === 'threads' ? (
+          threads.length === 0 ? (
+            <div className="csEmpty">No threads yet. Work handed off from this chat shows up here.</div>
+          ) : (
+            // Opening one shows it beside the chat, in this sidebar's place.
+            <div className="csThreads" onClickCapture={() => chatSide.set(session.id, null)}>
+              {threads.map((t) => (
+                <ThreadCard key={t.id} id={t.id} />
+              ))}
+            </div>
+          )
         ) : tab === 'artifacts' ? (
           artifacts.length === 0 ? (
             <div className="csEmpty">Nothing published from this chat yet. Files Junior writes as artifacts show up here.</div>
@@ -100,7 +128,7 @@ export function ChatSide({ session, tab, agents, openAgent, showAgent, onNavigat
 /** The sidebar's last line: what this chat has cost, its tokens, and how full its context is. */
 function SideStats({ session }: { session: SessionSummary }) {
   const events = useEvents(session.id)
-  const ctx = useMemo(() => contextUse(events), [events])
+  const ctx = useMemo(() => contextUse(events, session.kind), [events, session.kind])
   const { spend } = useSessionSpend(session.id, session.status, session.workflows)
   if (!spend && !ctx) return null
   return (
