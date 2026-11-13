@@ -5,7 +5,7 @@
  * size for the folder, model, terminal and browser.
  */
 import { Maximize2, X } from 'lucide-react'
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { threadState } from '../../../core/junior/threads.js'
 import type { EffortLevel, ImageAttachment, Mention, PermissionBehavior, QuestionAnswers } from '../../../shared/protocol.js'
 import { SessionAgentScope, useChatAgents } from '../chatAgents.js'
@@ -13,6 +13,8 @@ import { composerDrafts } from '../composerDrafts.js'
 import { useEvents, useSessions } from '../hooks.js'
 import { usePersona } from '../junior.js'
 import { store } from '../store.js'
+import { useIsMobile } from '../useMobile.js'
+import { type SplitOptions, useSplit } from './browser/paneHooks.js'
 import { Composer } from './Composer.js'
 import { JuniorFace } from './JuniorFace.js'
 import { STATE_WORDS } from './ThreadCards.js'
@@ -26,6 +28,9 @@ type Props = {
   onNavigate: (hash: string) => void
 }
 
+/** Dragged from its left edge; the chat beside it keeps 380px, the sheet takes at most 70%. */
+const SHEET_SPLIT: SplitOptions = { key: 'junior.threadSheetWidth', fallback: 0.46, paneMin: 360, chatMin: 380, maxShare: 0.7 }
+
 const clock = (ms: number) => new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
 
 export function ThreadSheet({ sessionId, onClose, onFull, onNavigate }: Props) {
@@ -36,6 +41,9 @@ export function ThreadSheet({ sessionId, onClose, onFull, onNavigate }: Props) {
   const events = useEvents(sessionId)
   // Its history, beside the chat in front; live events reach this client anyway.
   useEffect(() => store.followSession(sessionId), [sessionId])
+  const mobile = useIsMobile()
+  const sheetRef = useRef<HTMLElement>(null)
+  const split = useSplit(sheetRef, SHEET_SPLIT)
 
   const ops = useMemo(
     () => ({
@@ -69,7 +77,23 @@ export function ThreadSheet({ sessionId, onClose, onFull, onNavigate }: Props) {
 
   return (
     <SessionAgentScope agent={s.agent}>
-    <aside className="threadSheet" aria-label={`Thread: ${s.title}`}>
+    <aside
+      ref={sheetRef}
+      className="threadSheet"
+      aria-label={`Thread: ${s.title}`}
+      style={!mobile && split.custom ? { width: `${(split.fraction * 100).toFixed(2)}%` } : undefined}
+    >
+      {!mobile && (
+        <div
+          className="bpResize"
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize the thread (double-click to reset)"
+          title="Drag to resize · double-click to reset"
+          tabIndex={0}
+          {...split.handleProps}
+        />
+      )}
       <header className="tshHead">
         <JuniorFace mood={state === 'you' ? 'needs' : state === 'working' ? 'working' : state === 'stopped' ? 'stuck' : 'hello'} size={36} motion="wander" colour={agent?.colour ?? undefined} decorative />
         <span className="tshT">

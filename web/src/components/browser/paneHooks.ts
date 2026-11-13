@@ -110,39 +110,54 @@ export function useFrozenFrame(tabKey: string, covered: boolean, capturing: Muta
 
 // ── the split: the pane's width, dragged from its left edge ─────────────────
 
-const WIDTH_KEY = 'junior.browserWidth'
-const DEFAULT_FRACTION = 0.54
-const PANE_MIN = 360
-const CHAT_MIN = 380
 const STEP = 24
 
-function readFraction(): number {
+/** Where a split keeps its share, and how far it may go. */
+export type SplitOptions = {
+  /** localStorage key for the share */
+  key: string
+  /** the share of the row before any drag, and after a double-click */
+  fallback: number
+  /** the pane's floor in px */
+  paneMin: number
+  /** the chat column's floor in px */
+  chatMin: number
+  /** the most of the row the pane may take */
+  maxShare?: number
+}
+
+const BROWSER_SPLIT: SplitOptions = { key: 'junior.browserWidth', fallback: 0.54, paneMin: 360, chatMin: 380 }
+
+/** The stored share, or null when there is none (the CSS width holds). */
+function readFraction(o: SplitOptions): number | null {
   try {
-    const n = Number(localStorage.getItem(WIDTH_KEY))
-    return Number.isFinite(n) && n > 0.1 && n < 0.95 ? n : DEFAULT_FRACTION
+    const n = Number(localStorage.getItem(o.key))
+    return Number.isFinite(n) && n > 0.1 && n < 0.95 ? n : null
   } catch {
-    return DEFAULT_FRACTION
+    return null
   }
 }
 
 /**
  * The pane's share of the session row, per browser. A drag measures in pixels
- * (pane ≥ 360, chat ≥ 380) and stores a fraction, so a wider window keeps the
+ * (pane ≥ paneMin, chat ≥ chatMin) and stores a fraction, so a wider window keeps the
  * same split. `dragging` hides the page meanwhile: the pointer would vanish
  * into the native view the moment it crossed it.
  */
-export function useSplit(pane: RefObject<HTMLElement | null>) {
-  const [fraction, setFraction] = useState(readFraction)
+export function useSplit(pane: RefObject<HTMLElement | null>, o: SplitOptions = BROWSER_SPLIT) {
+  const [stored, setFraction] = useState(() => readFraction(o))
+  const fraction = stored ?? o.fallback
   const [dragging, setDragging] = useState(false)
   const start = useRef<{ x: number; w: number; min: number; max: number; row: number } | null>(null)
 
   useEffect(() => {
     try {
-      localStorage.setItem(WIDTH_KEY, String(Math.round(fraction * 1000) / 1000))
+      if (stored === null) localStorage.removeItem(o.key)
+      else localStorage.setItem(o.key, String(Math.round(stored * 1000) / 1000))
     } catch {
       // storage blocked: the split still applies for this page load
     }
-  }, [fraction])
+  }, [stored, o.key])
 
   useEffect(() => {
     document.body.classList.toggle('bpResizing', dragging)
@@ -158,8 +173,9 @@ export function useSplit(pane: RefObject<HTMLElement | null>) {
     const chat = (el.previousElementSibling as HTMLElement | null)?.getBoundingClientRect().width ?? 0
     const rowW = row.getBoundingClientRect().width
     // The floors give way on a narrow row, as the CSS does (session.css).
-    return { w, min: Math.min(PANE_MIN, rowW * 0.5), max: w + Math.max(0, chat - Math.min(CHAT_MIN, rowW * 0.46)), row: rowW }
-  }, [pane])
+    const max = w + Math.max(0, chat - Math.min(o.chatMin, rowW * 0.46))
+    return { w, min: Math.min(o.paneMin, rowW * 0.5), max: o.maxShare ? Math.min(max, rowW * o.maxShare) : max, row: rowW }
+  }, [pane, o.paneMin, o.chatMin, o.maxShare])
 
   const apply = useCallback((px: number, m: { min: number; max: number; row: number }) => {
     const w = Math.max(m.min, Math.min(m.max, px))
@@ -213,6 +229,8 @@ export function useSplit(pane: RefObject<HTMLElement | null>) {
 
   return {
     fraction,
+    /** a drag or a key set the share; until then the CSS width holds */
+    custom: stored !== null,
     dragging,
     handleProps: {
       onPointerDown,
@@ -220,7 +238,7 @@ export function useSplit(pane: RefObject<HTMLElement | null>) {
       onPointerUp,
       onPointerCancel: onPointerUp,
       onKeyDown,
-      onDoubleClick: () => setFraction(DEFAULT_FRACTION),
+      onDoubleClick: () => setFraction(null),
     },
   }
 }
