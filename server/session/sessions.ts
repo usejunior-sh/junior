@@ -11,6 +11,7 @@ import { broadcast, broadcastSessionList } from '../ws/send.js'
 import { expandHome } from '../folders.js'
 import { checkoutById, mainCheckout, syncCheckouts } from './checkouts.js'
 import { LiveSession } from './live-session.js'
+import { lineOf } from '../../core/junior/last-line.js'
 import { chatPermissionMode } from '../../core/actions/policy.js'
 import { extrasFor } from '../brief-run.js'
 
@@ -192,6 +193,10 @@ export async function loadSessions(rt: WorkspaceRuntime) {
     for (const e of events) {
       if (e.event.kind === 'permission_request') unresolved.set(e.event.id, true)
       if (e.event.kind === 'permission_resolved') unresolved.delete(e.event.id)
+      if (row.kind === 'dm') {
+        const line = lineOf(e.event)
+        if (line) rt.lastLine.set(row.id, line)
+      }
     }
     let seq = events.length ? events[events.length - 1].seq : 0
     for (const id of unresolved.keys()) {

@@ -40,6 +40,7 @@ export function summarize(rt: WorkspaceRuntime, row: StoredSession): SessionSumm
     ...(rt.sessionItem.has(row.id) ? { itemId: rt.sessionItem.get(row.id) } : {}),
     ...(teamRunLink(rt, row.id) ? { teamRun: teamRunLink(rt, row.id) } : {}),
     ...(rt.sessionContext.has(row.id) ? { contextFiles: rt.sessionContext.get(row.id) } : {}),
+    ...(rt.lastLine.has(row.id) ? { lastLine: rt.lastLine.get(row.id) } : {}),
     ...(l?.waiting ? { waiting: true, waitingOn: l.waitingOn } : {}),
     live: !!l,
   }

@@ -138,6 +138,8 @@ export class WorkspaceRuntime {
   readonly sessionItem = new Map<string, string>()
   /** session id → the context files its last spawn loaded, and their cost (server/context-files.ts) */
   readonly sessionContext = new Map<string, SessionContextFiles>()
+  /** DM session id → its latest line, plain text (core/junior/last-line.ts): the sidebar's conversation rows */
+  readonly lastLine = new Map<string, string>()
 
   // Teams (server/teams.ts): agents and recipes are files; runs persist in the team-run store (core/store/sqlite-team-runs.ts).
   readonly teamLibrary: TeamLibrary

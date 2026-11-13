@@ -137,6 +137,8 @@ export type SessionSummary = {
   live?: boolean
   /** Last activity, epoch ms. The sidebar sorts and time-buckets on this. */
   updatedAt: number
+  /** A DM's latest line, plain text: what the agent last said, or "You: …". Absent = not a DM, or nothing said yet. */
+  lastLine?: string
   /** the team run this session leads or works on */
   teamRun?: SessionTeamRun
   /** The user's context files loaded into its system prompt at its last spawn. Absent = none, or not spawned since boot. */
