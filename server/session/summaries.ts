@@ -1,15 +1,11 @@
 import type { StoredSession } from '../../core/store/types.js'
 import type { RawBlock, SessionSummary } from '../../shared/protocol.js'
-import type { ContextFill } from '../../core/usage/context.js'
 import { DEFAULT_PROVIDER } from '../providers/registry.js'
 import { renderVerification } from '../browser.js'
 import { log } from '../log.js'
 import { WorkspaceRuntime } from '../workspace/runtime.js'
 import { teamRunLink } from '../team-run/state.js'
 import { errText } from '../errors.js'
-
-/** Both sides known, or nothing: the sidebar draws no bar before the first turn ends. */
-const contextOf = (f?: ContextFill) => (f?.used !== undefined && f.window !== undefined ? { context: { used: f.used, window: f.window } } : {})
 
 // Session registry helpers: all per-workspace.
 export function summarize(rt: WorkspaceRuntime, row: StoredSession): SessionSummary {
@@ -45,7 +41,6 @@ export function summarize(rt: WorkspaceRuntime, row: StoredSession): SessionSumm
     ...(teamRunLink(rt, row.id) ? { teamRun: teamRunLink(rt, row.id) } : {}),
     ...(rt.sessionContext.has(row.id) ? { contextFiles: rt.sessionContext.get(row.id) } : {}),
     ...(rt.lastLine.has(row.id) ? { lastLine: rt.lastLine.get(row.id) } : {}),
-    ...contextOf(rt.contextFill.get(row.id)),
     ...(l?.waiting ? { waiting: true, waitingOn: l.waitingOn } : {}),
     live: !!l,
   }

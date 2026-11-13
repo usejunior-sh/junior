@@ -4,7 +4,6 @@ import path from 'node:path'
 import type { Checkout, Connector, InboxSnapshot, ModelOption, ProviderStatus, SessionContextFiles, SlashCommandInfo } from '../../shared/protocol.js'
 import { dbFileFor, loadRegistry, spawnEnvFor, workspaceDir, type WorkspaceMeta } from '../workspaces.js'
 import type { Store, StoredSession } from '../../core/store/types.js'
-import type { ContextFill } from '../../core/usage/context.js'
 import type { Provider, ProviderId } from '../providers/types.js'
 import { DEFAULT_PERSONA, type Persona } from '../../core/junior/persona.js'
 import { providerFor } from '../providers/registry.js'
@@ -141,8 +140,6 @@ export class WorkspaceRuntime {
   readonly sessionContext = new Map<string, SessionContextFiles>()
   /** DM session id → its latest line, plain text (core/junior/last-line.ts): the sidebar's conversation rows */
   readonly lastLine = new Map<string, string>()
-  /** session id → how full its context is (core/usage/context.ts): the sidebar's context bars */
-  readonly contextFill = new Map<string, ContextFill>()
 
   // Teams (server/teams.ts): agents and recipes are files; runs persist in the team-run store (core/store/sqlite-team-runs.ts).
   readonly teamLibrary: TeamLibrary

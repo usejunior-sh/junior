@@ -40,4 +40,4 @@ export function modelLabel(id: string): string {
 }
 
 /** How full a session's context is (core/usage/context.ts): one rule for the chat and the sidebar. */
-export { contextUse, contextPct, CONTEXT_FULL_PCT } from '../../core/usage/context.js'
+export { contextUse, CONTEXT_FULL_PCT } from '../../core/usage/context.js'

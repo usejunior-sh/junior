@@ -101,14 +101,6 @@
 .tsLabelBtn { width: 22px; height: 22px; display: grid; place-items: center; flex: none; border: 0; border-radius: var(--r-sm); background: transparent; color: var(--ash); }
 .tsLabelBtn:hover { background: var(--elev); color: var(--ink); }
 
-/* how full a conversation's context is: a hairline under its words, neutral, amber near compaction (never orange) */
-.tsConv, .tsThread, .tsWaitRow { position: relative; }
-.ctxLine { position: absolute; left: 40px; right: 8px; bottom: 2px; height: 2px; border-radius: var(--r-full); background: var(--hair); overflow: hidden; pointer-events: none; }
-.ctxLine i { display: block; height: 100%; background: var(--ash); opacity: 0.7; }
-.ctxLine i.full { background: var(--amber); opacity: 1; }
-.tsJunior .ctxLine { left: 57px; bottom: 4px; }
-.tsWaitRow .ctxLine { left: 42px; bottom: 3px; }
-
 /* an open thread: who has it, the title, whose turn it is */
 .tsThread {
   display: flex; align-items: center; gap: 10px; width: calc(100% - 16px); height: 32px; margin: 0 8px; padding: 0 8px;

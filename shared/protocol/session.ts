@@ -139,8 +139,6 @@ export type SessionSummary = {
   updatedAt: number
   /** A DM's latest line, plain text: what the agent last said, or "You: …". Absent = not a DM, or nothing said yet. */
   lastLine?: string
-  /** How full its context is: the main agent's last prompt and the model's window (core/usage/context.ts `contextPct`). Absent until a turn ends. */
-  context?: { used: number; window: number }
   /** the team run this session leads or works on */
   teamRun?: SessionTeamRun
   /** The user's context files loaded into its system prompt at its last spawn. Absent = none, or not spawned since boot. */

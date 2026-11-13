@@ -5,8 +5,7 @@
  * replies don't count. A DM compacts at DM_COMPACT_WINDOW, well before the
  * model's window, so for a DM that is what full means.
  *
- * Pure and browser-safe: the server folds every saved event through
- * `foldContext` for the sidebar's rows; an open chat reads its own events.
+ * Pure and browser-safe: an open chat reads its own events.
  */
 import type { SessionEvent } from '../../shared/protocol.js'
 import { DM_COMPACT_WINDOW } from '../junior/dms.js'
@@ -35,15 +34,6 @@ function windowOf(ev: SessionEvent): number | null {
   if (m.type !== 'result' || !m.modelUsage) return null
   const w = Math.max(0, ...Object.values(m.modelUsage).map((x) => x.contextWindow ?? 0))
   return w > 0 ? w : null
-}
-
-/** One event on: a later reply or result replaces what came before. Unchanged = the same object. */
-export function foldContext(prev: ContextFill, ev: SessionEvent): ContextFill {
-  const used = usedOf(ev)
-  if (used !== null) return { ...prev, used }
-  const window = windowOf(ev)
-  if (window !== null) return { ...prev, window }
-  return prev
 }
 
 /** The window that counts as full: a DM's compaction point, else the model's. */
