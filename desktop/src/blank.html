@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'" />
+<title>Junior</title>
+<!--
+  A window's own page while its tabs show. It must declare an app region:
+  Chromium sends a page's drag regions only when it has some, so a page with
+  none (about:blank) leaves the splash's whole-window drag region in place,
+  and every click in a tab would drag the window instead.
+-->
+<style>
+  html, body { margin: 0; height: 100%; background: #0c0b0a; }
+  body { -webkit-app-region: no-drag; }
+</style>
+</head>
+<body></body>
+</html>

@@ -36,8 +36,8 @@ import type { SavedWindow } from './tabs-model.js'
 const here = path.dirname(fileURLToPath(import.meta.url))
 const SPLASH = path.join(here, 'splash.html')
 const SPLASH_URL = pathToFileURL(SPLASH).href
-/** A window's own page while its tabs show: nothing, and no drag region. */
-const BLANK = 'about:blank'
+/** A window's own page while its tabs show: nothing, and no drag region (blank.html says why it isn't about:blank). */
+const BLANK = pathToFileURL(path.join(here, 'blank.html')).href
 const DEFAULT_SIZE = { width: 1360, height: 880 }
 const MIN_SIZE = { width: 900, height: 600 }
 
