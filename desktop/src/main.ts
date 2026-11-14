@@ -407,7 +407,9 @@ function buildMenu(): Menu {
         { label: 'Open Workspace…', accelerator: 'CmdOrCtrl+T', click: inWindow((w) => tabs!.openMenu(w)) },
         { label: 'Move Tab to New Window', accelerator: 'CmdOrCtrl+Shift+N', click: inWindow((w) => tabs!.moveToNewWindow(tabs!.frontWorkspace(w))) },
         { type: 'separator' },
-        { label: 'Close Tab', accelerator: 'CmdOrCtrl+W', click: inWindow((w) => tabs!.close(w)) },
+        // ⌘W closes a page tab inside the workspace (the page's strip); the workspace tab takes ⌘⇧W.
+        { label: 'Close Page Tab', accelerator: 'CmdOrCtrl+W', click: inWindow((w) => tabs!.command(w, 'close-page-tab')) },
+        { label: 'Close Workspace Tab', accelerator: 'CmdOrCtrl+Shift+W', click: inWindow((w) => tabs!.close(w)) },
       ],
     },
     { role: 'editMenu' },
@@ -438,10 +440,18 @@ function buildMenu(): Menu {
         { label: 'Show Next Tab', accelerator: 'Ctrl+Tab', click: inWindow((w) => tabs!.step(w, 1)) },
         { label: 'Show Previous Tab', accelerator: 'Ctrl+Shift+Tab', click: inWindow((w) => tabs!.step(w, -1)) },
         {
-          label: 'Go to Tab',
+          label: 'Go to Page Tab',
           submenu: Array.from({ length: 9 }, (_, i) => ({
-            label: i === 8 ? 'Last Tab' : `Tab ${i + 1}`,
+            label: i === 8 ? 'Last Page Tab' : `Page Tab ${i + 1}`,
             accelerator: `CmdOrCtrl+${i + 1}`,
+            click: inWindow((w) => tabs!.command(w, `page-tab-${i + 1}`)),
+          })),
+        },
+        {
+          label: 'Go to Workspace',
+          submenu: Array.from({ length: 9 }, (_, i) => ({
+            label: i === 8 ? 'Last Workspace' : `Workspace ${i + 1}`,
+            accelerator: `Ctrl+${i + 1}`,
             click: inWindow((w) => tabs!.nth(w, i + 1)),
           })),
         },

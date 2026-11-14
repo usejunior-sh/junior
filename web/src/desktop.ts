@@ -69,8 +69,8 @@ export type DesktopTabsState = {
   counts: Record<string, number>
 }
 
-/** What the app's menu asks the strip to do (⌘T opens the + menu). */
-export type DesktopTabsCommand = 'open-menu'
+/** What the app's menu asks the page to do: ⌘T opens the + menu, ⌘W closes a page tab, ⌘1–9 picks one. */
+export type DesktopTabsCommand = 'open-menu' | 'close-page-tab' | `page-tab-${number}`
 
 type TabsBridge = {
   state: () => Promise<DesktopTabsState>

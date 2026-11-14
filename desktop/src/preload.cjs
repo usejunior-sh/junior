@@ -81,7 +81,7 @@ else {
       // { tabs: [{ id, lastActive, asleep }], active, elsewhere: [{ id, windowId }], counts }
       state: () => ipcRenderer.invoke('tabs:state'),
       onState: (cb) => on('tabs:state', cb),
-      // 'open-menu' (⌘T)
+      // 'open-menu' (⌘T), 'close-page-tab' (⌘W), 'page-tab-<n>' (⌘1–9)
       onCommand: (cb) => on('tabs:command', cb),
       open: (id, opts) => ipcRenderer.send('tabs:open', { id, newWindow: !!opts?.newWindow }),
       activate: (id) => ipcRenderer.send('tabs:activate', { id }),

@@ -274,7 +274,7 @@ export class WorkspaceTabsHost {
     this.deps.changed()
   }
 
-  /** ⌘W: close the front tab, or this one. The last tab closes the window. */
+  /** ⌘⇧W: close the front workspace tab, or this one. The last tab closes the window. */
   close(win: BrowserWindow, id = this.frontWorkspace(win)) {
     if (!id) return
     const { closeWindow } = this.model.close(win.id, id, Date.now())
@@ -343,7 +343,12 @@ export class WorkspaceTabsHost {
 
   /** ⌘T: the front tab opens its + menu. */
   openMenu(win: BrowserWindow) {
-    this.frontView(win)?.webContents.send('tabs:command', 'open-menu')
+    this.command(win, 'open-menu')
+  }
+
+  /** A shortcut the page in front acts on: ⌘T's menu, ⌘W closing a page tab, ⌘1–9 picking one. */
+  command(win: BrowserWindow, c: string) {
+    this.frontView(win)?.webContents.send('tabs:command', c)
   }
 
   save(): SavedWindow[] {

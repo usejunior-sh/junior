@@ -147,7 +147,7 @@ export class TabsModel {
     return out
   }
 
-  /** The next or previous tab in a window, wrapping (⌃Tab / ⌃⇧Tab), or the nth (⌘1–9; 9 is the last). */
+  /** The next or previous tab in a window, wrapping (⌃Tab / ⌃⇧Tab), or the nth (⌃1–9; 9 is the last). */
   step(winId: number, by: 1 | -1): string | null {
     const w = this.windows.get(winId)
     if (!w || !w.tabs.length) return null
