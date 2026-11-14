@@ -85,6 +85,17 @@ test('step wraps, nth counts every tab and 9 is the last', () => {
   assert.equal(m.nth(1, 5), null)
 })
 
+test('switching swaps a workspace into the tab in its place, unless it is open already', () => {
+  const m = two()
+  m.activate(1, 'pendo', 1)
+  assert.equal(m.swap(1, 'pendo', 'acme', 2), true)
+  assert.deepEqual(m.stateFor(1, {}).tabs.map((t) => t.id), ['lab', 'acme'])
+  assert.equal(m.stateFor(1, {}).active, 'acme')
+  assert.equal(m.swap(1, 'acme', 'rb', 3), false)
+  assert.equal(m.swap(1, 'acme', 'lab', 3), false)
+  assert.deepEqual(m.stateFor(1, {}).tabs.map((t) => t.id), ['lab', 'acme'])
+})
+
 test('a tab whose workspace changed under it is renamed, unless that one is open already', () => {
   const m = two()
   assert.equal(m.rename(1, 'pendo', 'acme'), 'renamed')

@@ -128,6 +128,17 @@ export class TabsModel {
     return 'renamed'
   }
 
+  /**
+   * The front tab's "Switch to": a tab shows another workspace, in its place,
+   * and comes to the front. False when that workspace is open already (go to
+   * it with `open` instead) or there is no such tab.
+   */
+  swap(winId: number, from: string, to: string, now: number): boolean {
+    if (this.rename(winId, from, to) !== 'renamed') return false
+    this.activate(winId, to, now)
+    return true
+  }
+
   /** Background tabs that have been out of sight for `afterMs` and still hold a view. */
   sleepers(now: number, afterMs: number): { winId: number; id: string }[] {
     const out: { winId: number; id: string }[] = []

@@ -89,6 +89,10 @@ export class WorkspaceTabsHost {
       const w = winOf(e)
       if (w && typeof msg?.id === 'string') this.activate(w, msg.id)
     })
+    ipcMain.on('tabs:switch', (e, msg: { id: string }) => {
+      const w = winOf(e)
+      if (w && typeof msg?.id === 'string') this.switchTo(w, msg.id)
+    })
     ipcMain.on('tabs:close', (e, msg: { id: string }) => {
       const w = winOf(e)
       if (w && typeof msg?.id === 'string') this.close(w, msg.id)
@@ -246,6 +250,25 @@ export class WorkspaceTabsHost {
   activate(win: BrowserWindow, id: string) {
     if (!this.model.activate(win.id, id, Date.now())) return
     if (this.ready && !this.views.has(id)) void this.ensureView(win, id)
+    this.show(win)
+    this.pushAll()
+    this.deps.changed()
+  }
+
+  /**
+   * The front tab's "Switch to": this tab shows another workspace in its
+   * place, and the one it showed closes (its jobs keep running). One open
+   * already, here or in another window, is gone to instead.
+   */
+  switchTo(win: BrowserWindow, id: string) {
+    const from = this.frontWorkspace(win)
+    if (!from || from === id) return
+    if (!this.model.swap(win.id, from, id, Date.now())) {
+      this.open(win, id)
+      return
+    }
+    this.drop(from)
+    if (this.ready) void this.ensureView(win, id)
     this.show(win)
     this.pushAll()
     this.deps.changed()

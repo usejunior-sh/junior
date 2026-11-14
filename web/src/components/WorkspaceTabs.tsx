@@ -1,10 +1,10 @@
-import { ChevronDown, Plus, Settings2, SquareArrowOutUpRight, X } from 'lucide-react'
+import { ArrowLeftRight, ChevronDown, ChevronRight, Plus, Settings2, SquareArrowOutUpRight, X } from 'lucide-react'
 import { useEffect, useLayoutEffect, useRef, useState, type DragEvent, type ReactNode } from 'react'
 import type { Workspace } from '../../../shared/protocol.js'
 import { desktopTabs, type DesktopTabsState } from '../desktop.js'
 import { MOD_LABEL } from '../keys.js'
 import { fitTabs } from '../tabStrip.js'
-import { Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from '../ui/Menu.js'
+import { Menu, MenuContent, MenuItem, MenuSeparator, MenuSub, MenuSubContent, MenuSubTrigger, MenuTrigger } from '../ui/Menu.js'
 
 /** What a dragged workspace tab carries: its workspace id. */
 const TAB_MIME = 'application/x-junior-workspace-tab'
@@ -68,6 +68,9 @@ export function WorkspaceTabs({
   const open = new Set([...state.tabs.map((tab) => tab.id), ...state.elsewhere.map((e) => e.id)])
   const closed = workspaces.filter((w) => !open.has(w.id))
   const elsewhere = state.elsewhere.map((e) => byId.get(e.id)).filter((w): w is Workspace => !!w)
+  // "Switch to": every other workspace. A closed one takes this tab's place; an open one is gone to.
+  const switchTo = t.switch
+  const others = workspaces.filter((w) => w.id !== state.active)
   const foldedNeeds = fit.folded.some((id) => count(id) > 0)
   // ⌘-click or a middle click: the workspace in its own window, the switcher's rule.
   const wantsWindow = (e: { metaKey: boolean; ctrlKey: boolean; button: number }) => e.metaKey || e.ctrlKey || e.button === 1
@@ -144,6 +147,20 @@ export function WorkspaceTabs({
                     <Settings2 size={14} aria-hidden="true" />
                     Workspace settings…
                   </MenuItem>
+                  {switchTo && others.length > 0 && (
+                    <MenuSub>
+                      <MenuSubTrigger className="nav">
+                        <ArrowLeftRight size={14} aria-hidden="true" />
+                        <span className="name">Switch to</span>
+                        <ChevronRight size={14} aria-hidden="true" />
+                      </MenuSubTrigger>
+                      <MenuSubContent className="wsMenu">
+                        {others.map((o) => (
+                          <WorkspaceRow key={o.id} w={o} n={count(o.id)} onSelect={() => switchTo(o.id)} />
+                        ))}
+                      </MenuSubContent>
+                    </MenuSub>
+                  )}
                   {tabs.length > 1 && (
                     <MenuItem onSelect={() => t.move(id, 'new')}>
                       <SquareArrowOutUpRight size={14} aria-hidden="true" />

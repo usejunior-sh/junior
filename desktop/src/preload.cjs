@@ -86,6 +86,8 @@ else {
       open: (id, opts) => ipcRenderer.send('tabs:open', { id, newWindow: !!opts?.newWindow }),
       activate: (id) => ipcRenderer.send('tabs:activate', { id }),
       close: (id) => ipcRenderer.send('tabs:close', { id }),
+      // the front tab shows this workspace instead (or goes to it, open already)
+      switch: (id) => ipcRenderer.send('tabs:switch', { id }),
       // to: 'new' | 'here'; at: { x, y } screen point where a dragged tab was let go
       move: (id, to, at) => ipcRenderer.send('tabs:move', { id, to, at }),
       reportCount: (n) => ipcRenderer.send('tabs:count', { n }),
