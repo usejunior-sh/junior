@@ -36,6 +36,8 @@ import type { SavedWindow } from './tabs-model.js'
 const here = path.dirname(fileURLToPath(import.meta.url))
 const SPLASH = path.join(here, 'splash.html')
 const SPLASH_URL = pathToFileURL(SPLASH).href
+/** A window's own page while its tabs show: nothing, and no drag region. */
+const BLANK = 'about:blank'
 const DEFAULT_SIZE = { width: 1360, height: 880 }
 const MIN_SIZE = { width: 900, height: 600 }
 
@@ -194,7 +196,7 @@ function createWindow(bounds?: Partial<Rectangle>): BrowserWindow {
   const wc = w.webContents
   wc.on('did-finish-load', () => wc.send('splash:status', splash))
   wc.on('will-navigate', (e, navUrl) => {
-    if (navUrl === SPLASH_URL) return
+    if (navUrl === SPLASH_URL || navUrl === BLANK) return
     e.preventDefault()
     openExternal(navUrl)
   })
@@ -202,7 +204,7 @@ function createWindow(bounds?: Partial<Rectangle>): BrowserWindow {
     openExternal(openUrl)
     return { action: 'deny' }
   })
-  void w.loadFile(SPLASH)
+  void w.loadURL(onSplash ? SPLASH_URL : BLANK)
   return w
 }
 
@@ -247,6 +249,17 @@ function setSplash(s: SplashStatus) {
 function toSplash() {
   onSplash = true
   tabs?.hideAll()
+  for (const w of allWindows()) if (w.webContents.getURL() !== SPLASH_URL) void w.loadURL(SPLASH_URL).catch(() => {})
+}
+
+/**
+ * The splash leaves once the tabs show. It can't just sit under them: its
+ * whole page is a window-drag region, and macOS lets that win over the views
+ * on top, so every click in a tab would drag the window instead.
+ */
+function offSplash() {
+  onSplash = false
+  for (const w of allWindows()) if (w.webContents.getURL() !== BLANK) void w.loadURL(BLANK).catch(() => {})
 }
 
 /**
@@ -261,7 +274,7 @@ async function connect(how: 'ensure' | 'restart' = 'ensure') {
     toSplash()
     if (how === 'restart') await restartDaemon()
     else await ensureDaemon((text) => setSplash({ state: 'starting', text }))
-    onSplash = false
+    offSplash()
     await tabs?.connected()
   } catch (err) {
     toSplash()
