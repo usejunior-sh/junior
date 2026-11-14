@@ -18,6 +18,8 @@ import { TabsModel, type SavedWindow, type TabsState } from './tabs-model.js'
 const SLEEP_AFTER_MS = 30 * 60_000
 /** How often every workspace's needs-you count is read. */
 const COUNTS_EVERY_MS = 15_000
+/** A view still loading shows anyway after this long, rather than hide behind the loader for good. */
+const LOAD_SHOW_AFTER_MS = 8_000
 
 export type TabsDeps = {
   preload: string
@@ -62,6 +64,11 @@ export class WorkspaceTabsHost {
   /** a view's page → its workspace */
   private readonly wsOf = new Map<number, string>()
   private counts: Record<string, number> = {}
+  /**
+   * Views (by page id) mid-load. They stay hidden until their page has drawn,
+   * so a fresh tab shows the window's own loader (blank.html), not a black view.
+   */
+  private readonly loading = new Set<number>()
   /** the daemon answers: views load. False while the splash is up. */
   private ready = false
   private countsSoon: NodeJS.Timeout | undefined
@@ -332,6 +339,10 @@ export class WorkspaceTabsHost {
       view.setVisible(false)
     }
     const url = this.urls.get(id) ?? new URL(`w/${encodeURIComponent(id)}/`, this.deps.daemonUrl()).href
+    const wc = view.webContents
+    this.loading.add(wc.id)
+    this.show(win)
+    setTimeout(() => this.loaded(wc), LOAD_SHOW_AFTER_MS)
     try {
       await view.webContents.loadURL(url)
       view.webContents.navigationHistory.clear()
@@ -357,6 +368,7 @@ export class WorkspaceTabsHost {
     this.deps.watchUi(wc)
     const wsNow = () => this.wsOf.get(wc.id) ?? id
     const winNow = () => this.windowOfPage(wc)
+    wc.on('did-stop-loading', () => this.loaded(wc))
     wc.on('did-finish-load', () => {
       const w = winNow()
       if (w) this.deps.sendNav(wc, w)
@@ -432,12 +444,20 @@ export class WorkspaceTabsHost {
     this.urls.set(now || was, url)
   }
 
+  /** A view's page has loaded (or given up): it can show. */
+  private loaded(wc: WebContents) {
+    if (!this.loading.delete(wc.id)) return
+    const w = this.windowOfPage(wc)
+    if (w) this.show(w)
+  }
+
   /** A tab's view goes (closed, asleep, or its window closed). */
   private drop(id: string) {
     const view = this.views.get(id)
     this.views.delete(id)
     if (!view) return
     this.wsOf.delete(view.webContents.id)
+    this.loading.delete(view.webContents.id)
     for (const w of this.windows()) if (w.contentView.children.includes(view)) w.contentView.removeChildView(view)
     if (!view.webContents.isDestroyed()) view.webContents.close()
   }
@@ -455,14 +475,14 @@ export class WorkspaceTabsHost {
     }
   }
 
-  /** Only the front tab's view shows, and only once the daemon answers. Browser panes follow. */
+  /** Only the front tab's view shows, once the daemon answers and its page has loaded. Browser panes follow. */
   private show(win: BrowserWindow) {
     const rec = this.model.windows.get(win.id)
     if (!rec || win.isDestroyed()) return
     for (const t of rec.tabs) {
       const v = this.views.get(t.id)
       if (!v) continue
-      v.setVisible(this.ready && t.id === rec.active)
+      v.setVisible(this.ready && t.id === rec.active && !this.loading.has(v.webContents.id))
       this.deps.uiChanged(v.webContents)
     }
     const front = this.views.get(rec.active)
