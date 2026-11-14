@@ -41,3 +41,67 @@ export function useDesktopNav(): DesktopNav {
   }, [])
   return nav
 }
+
+/**
+ * Workspace tabs (.docs/workspace-tabs/topbar-variations.html, B). Junior.app
+ * hosts one view per open workspace; every view draws the strip from the
+ * window's tab list, which the host pushes. Optional on purpose: an older app
+ * build and the demo's stand-in bridge have no `tabs`, and keep the switcher.
+ * Keep in step with desktop/src/tabs-model.ts.
+ */
+export type DesktopTab = {
+  /** workspace id */
+  id: string
+  /** last shown, epoch ms: the least recent fold into "+N" first */
+  lastActive: number
+  /** destroyed after a while in the background; showing it reloads it */
+  asleep: boolean
+}
+
+export type DesktopTabsState = {
+  /** this window's tabs, in strip order */
+  tabs: DesktopTab[]
+  /** the tab in front in this window */
+  active: string
+  /** workspaces open in another window, and which */
+  elsewhere: { id: string; windowId: number }[]
+  /** every workspace's needs-you count (GET /api/workspaces/needs-you) */
+  counts: Record<string, number>
+}
+
+/** What the app's menu asks the strip to do (⌘T opens the + menu). */
+export type DesktopTabsCommand = 'open-menu'
+
+type TabsBridge = {
+  state: () => Promise<DesktopTabsState>
+  onState: (cb: (s: DesktopTabsState) => void) => () => void
+  onCommand: (cb: (c: DesktopTabsCommand) => void) => () => void
+  /** open a workspace as a tab here (or its own window), or go to it where it already is */
+  open: (id: string, opts?: { newWindow?: boolean }) => void
+  activate: (id: string) => void
+  close: (id: string) => void
+  /** move a tab: to a new window, or into this one */
+  move: (id: string, to: 'new' | 'here') => void
+  /** this view's own needs-you count changed: refresh everyone's sooner */
+  reportCount: (n: number) => void
+}
+
+const tabsBridge: TabsBridge | null = (() => {
+  const t = (bridge as { tabs?: Partial<TabsBridge> } | null)?.tabs
+  return t && typeof t.onState === 'function' && typeof t.open === 'function' ? (t as TabsBridge) : null
+})()
+
+/** Junior.app hosts workspace tabs: the bar draws them instead of the switcher. */
+export const hasTabs = tabsBridge !== null
+export const desktopTabs = tabsBridge
+
+/** The window's tab list, live. Null outside the app or until the host answers. */
+export function useDesktopTabs(): DesktopTabsState | null {
+  const [s, setS] = useState<DesktopTabsState | null>(null)
+  useEffect(() => {
+    if (!tabsBridge) return
+    void tabsBridge.state().then(setS)
+    return tabsBridge.onState(setS)
+  }, [])
+  return s
+}

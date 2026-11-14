@@ -25,6 +25,7 @@ import type { BriefJob,
   WorkspacesResponse,
 } from '../../shared/protocol.js'
 import { adoptWorkspace, boundWorkspace, gotoWorkspace } from './workspaceUrl.js'
+import { desktopTabs } from './desktop.js'
 import { DEFAULT_PERSONA } from '../../core/junior/persona.js'
 import { buildChanged, buildKey, isBuild, loadedFrom, parseReloadMark, shouldAutoReload, uiEntryOfSrc } from './reloadOnBuild.js'
 import { reloadBlockers } from './reloadGuard.js'
@@ -399,6 +400,9 @@ export class Store {
    * URL: a plain `localhost:5178` bookmark should reopen the last workspace.
    */
   switchWorkspace(id: string) {
+    // Junior.app with tabs: the workspace opens as a tab (or comes forward
+    // where it is). Tabs never write the cookie, or they would overwrite each other.
+    if (desktopTabs) return desktopTabs.open(id)
     document.cookie = `junior_ws=${encodeURIComponent(id)}; path=/; max-age=31536000; samesite=lax`
     gotoWorkspace(id)
   }

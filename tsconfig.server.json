@@ -35,6 +35,7 @@
     "web/src/typed.ts",
     "web/src/usageFormat.ts",
     "web/src/chatSide.ts",
+    "web/src/tabStrip.ts",
     "web/src/components/browser/steps.ts",
     "vite.config.ts"
   ]

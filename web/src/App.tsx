@@ -29,7 +29,7 @@ import { useDrafts, draftStore, draftTitle } from './drafts.js'
 import { TerminalPage } from './components/TerminalPage.js'
 import { TopBar } from './components/TopBar.js'
 import { UpdateBar } from './components/UpdateBar.js'
-import { isDesktop } from './desktop.js'
+import { desktopTabs, isDesktop } from './desktop.js'
 import { Transcript } from './components/Transcript.js'
 import { AgentHeader, AgentBrief, AgentOutcome, AgentDock, AgentComposer } from './components/Agents.js'
 import { spawnerOf } from './agents.js'
@@ -582,6 +582,8 @@ export function App() {
   const chatSessions = useMemo(() => sessions.filter((s) => s.kind !== 'brief' && s.kind !== 'goal' && s.kind !== 'dm' && s.teamRun?.role !== 'worker'), [sessions])
   const dmsWaiting = sessions.filter((s) => s.kind === 'dm' && s.waiting).length
   const needsYou = needsYouCount(sessions, pendingActions)
+  // Junior.app's other tabs show this workspace's count: tell the host when it moves.
+  useEffect(() => desktopTabs?.reportCount(needsYou), [needsYou])
   const runningCount = chatSessions.filter(isWorking).length
 
   // The Actions page is a list and a detail side by side: it needs the room, so no panel beside it.

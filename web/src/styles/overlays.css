@@ -93,6 +93,13 @@
 .wsMenu .uiMenuItem[data-highlighted] .wsOpenTab { opacity: 1; }
 .wsMenu .wsOpenTab:hover { background: var(--wash-3); }
 .wsMenu .wsOpenTab:hover svg { color: var(--ink); }
+.wsMenu .wsCount { margin-left: 4px; }
+.wsMenu .wsKbd { font: 500 0.7692rem/1 var(--mono); color: var(--ash); background: none; border: 0; }
+.wsMenuHead { margin: 0; padding: 8px 8px 4px; font: 500 0.7692rem/1 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ash); }
+.wsMenuNote { margin: 4px 0 0; padding: 6px 8px 4px; border-top: 1px solid var(--hair); font-size: 0.8462rem; color: var(--ash); max-width: 240px; }
+.wsPlusMenu { min-width: 260px; }
+.wsMenu .wsBring { flex: none; font-size: 0.8462rem; color: var(--ash); padding: 2px 6px; border-radius: var(--r-xs); cursor: pointer; }
+.wsMenu .wsBring:hover { color: var(--ink); background: var(--wash-3); }
 
 /* ---------- dialogs ---------- */
 dialog, .uiDialog {

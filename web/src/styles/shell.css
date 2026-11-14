@@ -223,6 +223,38 @@ kbd { font-family: var(--mono); font-size: 0.8462rem; color: var(--ash); border:
 .wsLabelled .wsName { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .wsLabelled svg { color: var(--ash); flex: none; transition: color 0.1s ease; }
 .wsLabelled:hover svg, .wsLabelled[data-state="open"] svg { color: var(--ink); }
+/* Workspace tabs (.docs/workspace-tabs/topbar-variations.html, B): the switcher
+   as a row of tabs when Junior.app hosts them. The strip fills the zone up to
+   the system icons; its empty part still drags the window. */
+.wsTabs { flex: 1; min-width: 0; display: flex; align-items: center; gap: 2px; height: 100%; margin-left: -4px; }
+.wsTabRow { display: flex; align-items: center; gap: 2px; min-width: 0; }
+.wsTabsFixed { display: flex; align-items: center; gap: 2px; flex: none; }
+.wsTab {
+  display: inline-flex; align-items: center; gap: 8px; height: 28px; padding: 0 10px; max-width: 180px; flex: none;
+  border: 0; border-radius: var(--r); background: transparent; color: var(--ash); font-size: 1rem; font-weight: 500;
+  transition: color 0.1s ease, background 0.1s ease;
+}
+.wsTabRow.short .wsTab { max-width: 92px; padding: 0 8px; }
+.wsTab:hover { color: var(--charcoal); background: var(--wash-2); }
+.wsTab.on, .wsTab.on:hover, .wsTab.on[data-state="open"] { color: var(--ink); background: var(--wash-3); box-shadow: inset 0 0 0 1px var(--hair); }
+.wsTab .wsDot { width: 7px; height: 7px; border-radius: var(--r-full); flex: none; }
+.wsTabName { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wsTabChev { color: var(--ash); flex: none; margin-right: -3px; }
+.wsTab.on[data-state="open"] .wsTabChev { color: var(--ink); }
+/* Another workspace's needs-you count: orange, the only thing it ever says. */
+.wsCount {
+  display: inline-flex; align-items: center; justify-content: center; flex: none; height: 14px; min-width: 14px; padding: 0 4px;
+  border-radius: var(--r-full); background: var(--orange); color: var(--deep); box-shadow: 0 0 0 2px var(--glow-orange);
+  font: 600 0.6923rem/1 var(--mono);
+}
+.wsMore {
+  display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 8px; flex: none;
+  border: 0; border-radius: var(--r); background: transparent; color: var(--mute); font: 500 0.9231rem/1 var(--mono);
+  transition: color 0.1s ease, background 0.1s ease;
+}
+.wsMore:hover, .wsMore[data-state="open"] { color: var(--ink); background: var(--wash-3); }
+.wsMoreDot { width: 6px; height: 6px; border-radius: var(--r-full); background: var(--orange); box-shadow: 0 0 0 2px var(--glow-orange); }
+.wsTabsFixed .buildBadge { margin-left: 6px; }
 /* Panel hidden: nothing in the bar moves. The left zone keeps its width and
    its divider, so the toggle, ← → and the workspace stay where the hand left them. */
 /* Fullscreen hides the traffic lights, so their inset goes too. */

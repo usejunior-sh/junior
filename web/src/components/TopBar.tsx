@@ -1,6 +1,6 @@
 import { Activity, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronsUpDown, CircleHelp, Gauge, PanelLeft, Plus, Settings, Settings2, SquareArrowOutUpRight } from 'lucide-react'
 import { useRef, useState, type ReactNode } from 'react'
-import { goBack, goForward, isDesktop, useDesktopNav } from '../desktop.js'
+import { goBack, goForward, hasTabs, isDesktop, useDesktopNav, useDesktopTabs } from '../desktop.js'
 import { MOD_LABEL } from '../keys.js'
 
 // Junior.app turns a same-origin window.open into its own window, not a tab.
@@ -13,6 +13,7 @@ import { JuniorLogo } from './Logo.js'
 import { PhoneButton } from './PhoneButton.js'
 import { ProvidersButton } from './ProvidersButton.js'
 import { WaitingButton } from './WaitingButton.js'
+import { WorkspaceTabs } from './WorkspaceTabs.js'
 
 type Props = {
   /** Phone layout: a back button and the page title take the logo's place. */
@@ -109,12 +110,19 @@ export function TopBar({
   team,
 }: Props) {
   const current = workspaces.find((w) => w.id === workspaceId)
+  const tabs = useDesktopTabs()
   if (desktop && !mobile) {
+    const badge = <BuildBadge build={build} onOpenSystem={onOpenSystem} />
+    // Junior.app hosting tabs: the strip takes the switcher's place, the badge rides after its +.
+    const strip = hasTabs && tabs && workspaces.length > 0
     return (
       <DesktopBar
         {...desktop}
         team={team}
         switcher={
+          strip ? (
+            <WorkspaceTabs state={tabs} workspaces={workspaces} onNew={onNewWorkspace} onSettings={onWorkspaceSettings} trailing={badge} />
+          ) : (
           <WorkspaceSwitcher
             labelled
             workspaces={workspaces}
@@ -123,8 +131,9 @@ export function TopBar({
             onNew={onNewWorkspace}
             onSettings={onWorkspaceSettings}
           />
+          )
         }
-        badge={<BuildBadge build={build} onOpenSystem={onOpenSystem} />}
+        badge={strip ? null : badge}
         system={<SystemIcons workspace={current} conn={conn} onOpenSystem={onOpenSystem} onOpenSettings={onOpenSettings} settingsOpen={settingsOpen} onHelp={onHelp} noSettings={!!team} />}
       />
     )
