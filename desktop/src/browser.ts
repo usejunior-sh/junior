@@ -94,7 +94,21 @@ export type PaneState = {
 /** The keys a tab hands to its pane instead of the page (or the app menu, where ⌘R would reload Junior). */
 type PaneKey = 'focus-url' | 'find' | 'reload' | 'back' | 'forward'
 
-type Pane = { win: BrowserWindow; sessionId: string | null; rect: Rectangle | null }
+/** A browser pane: the Junior page (`ui`) that reported it, and the window that page sits in. */
+type Pane = { win: BrowserWindow; ui: WebContents; sessionId: string | null; rect: Rectangle | null }
+
+/**
+ * Where Junior's own pages live. A page is a window's own contents, or one of
+ * its workspace tabs (tabs.ts, a view per tab); main.ts says which.
+ */
+export type UiHost = {
+  /** the Junior window a page sits in */
+  windowOf: (ui: WebContents) => BrowserWindow | null
+  /** the page is the tab in front of its window (a window's own page always is) */
+  isFront: (ui: WebContents) => boolean
+  /** every Junior page */
+  pages: () => WebContents[]
+}
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
@@ -464,6 +478,11 @@ export class BrowserHost {
   private readonly panes = new Map<number, Pane>()
   /** Junior's own windows (never the parking window or a sign-in window) */
   private readonly windows = new Set<BrowserWindow>()
+  private ui: UiHost = {
+    windowOf: (wc) => BrowserWindow.fromWebContents(wc),
+    isFront: () => true,
+    pages: () => [...this.windows].filter((w) => !w.isDestroyed()).map((w) => w.webContents),
+  }
   private park: BrowserWindow | null = null
   private ws: WebSocket | null = null
   private retry: NodeJS.Timeout | null = null
@@ -809,9 +828,10 @@ export class BrowserHost {
     await tab.layout(null)
   }
 
-  private async show(pane: Pane, tab: Tab) {
+  /** `raise`: put it back on top, over a workspace tab's view that was just shown. */
+  private async show(pane: Pane, tab: Tab, raise = false) {
     if (this.quitting || !pane.rect || pane.win.isDestroyed()) return
-    if (!pane.win.contentView.children.includes(tab.view)) {
+    if (raise || !pane.win.contentView.children.includes(tab.view)) {
       this.detach(tab)
       pane.win.contentView.addChildView(tab.view)
     }
@@ -833,12 +853,12 @@ export class BrowserHost {
   }
 
   toPanes(channel: string, payload: unknown) {
-    for (const p of this.panes.values()) if (!p.win.isDestroyed()) p.win.webContents.send(channel, payload)
+    for (const p of this.panes.values()) if (!p.ui.isDestroyed()) p.ui.send(channel, payload)
   }
 
   /** The agent opened a page, or a parked tab opened a sign-in window: a pane on that session opens itself. */
   private activity(sessionId: string) {
-    for (const w of this.windows) if (!w.isDestroyed()) w.webContents.send('browser:activity', { sessionId })
+    for (const wc of this.ui.pages()) if (!wc.isDestroyed()) wc.send('browser:activity', { sessionId })
   }
 
   /** The window a tab's sign-in window sits over: its pane's, else the first junior window you can see. */
@@ -904,9 +924,9 @@ export class BrowserHost {
     if (key === 'reload') tab.wc.reload()
     else if (key === 'back' && h.canGoBack()) h.goBack()
     else if (key === 'forward' && h.canGoForward()) h.goForward()
-    const win = this.paneOf(tab)?.win
+    const ui = this.paneOf(tab)?.ui
     // the URL field and the find bar are in Junior's page: it needs the keyboard back
-    if (win && (key === 'focus-url' || key === 'find')) win.webContents.focus()
+    if (ui && !ui.isDestroyed() && (key === 'focus-url' || key === 'find')) ui.focus()
     this.toPanes('browser:key', { tabKey: tab.key, key })
   }
 
@@ -979,57 +999,86 @@ export class BrowserHost {
     done?.(null)
   }
 
-  /** A window closed or hid: its pane's tab goes back to the parking window. */
-  watchWindow(win: BrowserWindow) {
-    this.windows.add(win)
-    const parkShown = () => {
-      const p = this.panes.get(win.webContents.id)
-      const tab = p?.sessionId ? this.tabs.get(p.sessionId) : undefined
-      if (tab) void this.parkTab(tab)
-    }
-    const reshow = () => {
-      const p = this.panes.get(win.webContents.id)
-      const tab = p?.sessionId ? this.tabs.get(p.sessionId) : undefined
-      if (p && tab && p.rect) void this.show(p, tab)
-    }
-    win.on('minimize', parkShown)
-    win.on('hide', parkShown)
-    win.on('restore', reshow)
-    win.on('show', reshow)
-    const id = win.webContents.id
-    win.on('closed', () => {
-      this.windows.delete(win)
-      const p = this.panes.get(id)
-      this.panes.delete(id)
-      const tab = p?.sessionId ? this.tabs.get(p.sessionId) : undefined
-      if (tab) void this.parkTab(tab)
-    })
-    // a reload of the junior UI drops its pane until it reports again
-    win.webContents.on('did-start-navigation', (d) => {
-      if (!d.isMainFrame || d.isSameDocument) return
-      parkShown()
-      const p = this.panes.get(id)
-      if (p) p.rect = null
-    })
+  /** main.ts says where Junior's pages live once it hosts workspace tabs. */
+  setUiHost(host: UiHost) {
+    this.ui = host
   }
 
-  private windowOf(e: IpcMainEvent | IpcMainInvokeEvent): BrowserWindow | null {
-    const w = BrowserWindow.fromWebContents(e.sender)
-    return w && this.windows.has(w) ? w : null
+  private panesIn(win: BrowserWindow): Pane[] {
+    return [...this.panes.values()].filter((p) => p.win === win)
+  }
+
+  /** A pane's tab: shown over its page if that page is in front in a window you can see, else parked. */
+  private placePane(p: Pane, raise: boolean) {
+    const tab = p.sessionId ? this.tabs.get(p.sessionId) : undefined
+    if (!tab) return
+    const visible = p.rect && !p.win.isDestroyed() && p.win.isVisible() && !p.win.isMinimized() && this.ui.isFront(p.ui)
+    if (visible) void this.show(p, tab, raise)
+    else if (!this.paneOf(tab) || this.paneOf(tab) === p) void this.parkTab(tab)
+  }
+
+  /** A window closed or hid: its panes' tabs go back to the parking window. */
+  watchWindow(win: BrowserWindow) {
+    this.windows.add(win)
+    win.on('minimize', () => this.panesIn(win).forEach((p) => this.placePane(p, false)))
+    win.on('hide', () => this.panesIn(win).forEach((p) => this.placePane(p, false)))
+    win.on('restore', () => this.panesIn(win).forEach((p) => this.placePane(p, false)))
+    win.on('show', () => this.panesIn(win).forEach((p) => this.placePane(p, false)))
+    win.on('closed', () => {
+      this.windows.delete(win)
+      for (const p of this.panesIn(win)) this.dropPane(p.ui.id)
+    })
+    this.watchUi(win.webContents)
+  }
+
+  /** A Junior page: a reload drops its pane until it reports again; a closed one drops it for good. */
+  watchUi(ui: WebContents) {
+    const id = ui.id
+    ui.on('did-start-navigation', (d) => {
+      if (!d.isMainFrame || d.isSameDocument) return
+      const p = this.panes.get(id)
+      if (!p) return
+      const tab = p.sessionId ? this.tabs.get(p.sessionId) : undefined
+      if (tab && this.paneOf(tab) === p) void this.parkTab(tab)
+      p.rect = null
+    })
+    ui.once('destroyed', () => this.dropPane(id))
+  }
+
+  private dropPane(id: number) {
+    const p = this.panes.get(id)
+    this.panes.delete(id)
+    const tab = p?.sessionId ? this.tabs.get(p.sessionId) : undefined
+    if (tab && !this.paneOf(tab)) void this.parkTab(tab)
+  }
+
+  /** A workspace tab came to the front, went behind, or moved window: its pane follows. */
+  uiChanged(ui: WebContents) {
+    const p = this.panes.get(ui.id)
+    if (!p) return
+    const win = this.ui.windowOf(ui)
+    if (win) p.win = win
+    this.placePane(p, true)
+  }
+
+  private paneHost(e: IpcMainEvent | IpcMainInvokeEvent): { win: BrowserWindow; ui: WebContents } | null {
+    const w = this.ui.windowOf(e.sender)
+    return w && this.windows.has(w) ? { win: w, ui: e.sender } : null
   }
 
   private registerIpc() {
     // The pane says where it is (CSS px in the window) and which session it shows; null rect = hidden.
     ipcMain.on('browser:pane', (e, msg: { sessionId: string | null; rect: Rectangle | null }) => {
-      const win = this.windowOf(e)
-      if (!win) return
-      const zoom = win.webContents.getZoomFactor() || 1
+      const host = this.paneHost(e)
+      if (!host) return
+      const { win, ui } = host
+      const zoom = ui.getZoomFactor() || 1
       const rect = msg.rect
         ? { x: Math.round(msg.rect.x * zoom), y: Math.round(msg.rect.y * zoom), width: Math.max(1, Math.round(msg.rect.width * zoom)), height: Math.max(1, Math.round(msg.rect.height * zoom)) }
         : null
-      const id = win.webContents.id
+      const id = ui.id
       const prev = this.panes.get(id)
-      const pane: Pane = { win, sessionId: msg.sessionId, rect }
+      const pane: Pane = { win, ui, sessionId: msg.sessionId, rect }
       this.panes.set(id, pane)
       if (prev?.sessionId && prev.sessionId !== msg.sessionId) {
         const old = this.tabs.get(prev.sessionId)
@@ -1037,14 +1086,14 @@ export class BrowserHost {
       }
       const tab = msg.sessionId ? this.tabs.get(msg.sessionId) : undefined
       if (!tab) {
-        if (msg.sessionId) win.webContents.send('browser:state', { sessionId: msg.sessionId, exists: false } as PaneState)
+        if (msg.sessionId) ui.send('browser:state', { sessionId: msg.sessionId, exists: false } as PaneState)
         return
       }
       // the same session shown in another window: this one takes it
       for (const [otherId, p] of this.panes) if (otherId !== id && p.sessionId === tab.key) p.rect = null
-      if (rect && !win.isMinimized() && win.isVisible()) void this.show(pane, tab)
+      if (rect && !win.isMinimized() && win.isVisible() && this.ui.isFront(ui)) void this.show(pane, tab)
       else void this.parkTab(tab)
-      win.webContents.send('browser:state', tab.state())
+      ui.send('browser:state', tab.state())
     })
     ipcMain.on('browser:nav', (_e, msg: { sessionId: string; action: 'back' | 'forward' | 'reload' | 'stop' }) => {
       const tab = this.tabs.get(msg.sessionId)
@@ -1133,7 +1182,7 @@ export class BrowserHost {
     })
     // "Show in Finder" for a download, and only for one: nothing outside ~/Downloads
     ipcMain.on('browser:reveal', (e, msg: { path: string }) => {
-      if (!this.windowOf(e) || typeof msg?.path !== 'string') return
+      if (!this.paneHost(e) || typeof msg?.path !== 'string') return
       const downloads = downloadsDir()
       const p = path.resolve(msg.path)
       if (p.startsWith(downloads + path.sep)) shell.showItemInFolder(p)

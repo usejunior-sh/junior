@@ -1,7 +1,7 @@
 // The renderer's door to the main process. CommonJS because sandboxed
 // preloads can't be ES modules. The splash (file:) gets retry/log/status; the
 // quick-capture window (file:) gets submit/close; the web UI gets only what its
-// desktop chrome needs: ← → and their state, and the browser pane's controls.
+// desktop chrome needs: ← → and their state, the browser pane's controls, and its workspace tabs.
 const { contextBridge, ipcRenderer } = require('electron')
 
 if (location.protocol === 'file:' && location.pathname.endsWith('/capture.html')) {
@@ -74,6 +74,21 @@ else {
       // { tabKey, key: 'focus-url' | 'find' | 'reload' | 'back' | 'forward' }, pressed in the page.
       // reload, back and forward already happened; focus-url and find are the pane's to do.
       onKey: (cb) => on('browser:key', cb),
+    },
+    // Workspace tabs (desktop/src/tabs.ts): this page is one tab's view; the
+    // strip it draws comes from the window's tab list, pushed on every change.
+    tabs: {
+      // { tabs: [{ id, lastActive, asleep }], active, elsewhere: [{ id, windowId }], counts }
+      state: () => ipcRenderer.invoke('tabs:state'),
+      onState: (cb) => on('tabs:state', cb),
+      // 'open-menu' (⌘T)
+      onCommand: (cb) => on('tabs:command', cb),
+      open: (id, opts) => ipcRenderer.send('tabs:open', { id, newWindow: !!opts?.newWindow }),
+      activate: (id) => ipcRenderer.send('tabs:activate', { id }),
+      close: (id) => ipcRenderer.send('tabs:close', { id }),
+      // to: 'new' | 'here'
+      move: (id, to) => ipcRenderer.send('tabs:move', { id, to }),
+      reportCount: (n) => ipcRenderer.send('tabs:count', { n }),
     },
   })
 }

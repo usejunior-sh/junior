@@ -3,9 +3,10 @@
  * a menu, a menu-bar icon. The app attaches, it does not own, quitting it
  * never stops the daemon, so live sessions and jobs carry on.
  *
- * One main window, which only hides on close so the app lives on in the Dock;
- * opening a workspace "in a new tab" (the switcher's ⌘-click / external icon)
- * opens a second window on that workspace's URL (`/w/<id>/`), which closes for real.
+ * Each window holds workspace tabs (tabs.ts): one view per open workspace at
+ * its `/w/<id>/`, the window's own page showing only the splash beneath. The
+ * last window only hides on close, so the app lives on in the Dock with its
+ * tabs; any other closes for real. Jobs and sessions run on the daemon either way.
  * ⌘⇧T from any app opens quick capture (capture.ts).
  */
 import {
@@ -21,6 +22,7 @@ import {
   Tray,
   type MenuItemConstructorOptions,
   type Rectangle,
+  type WebContents,
 } from 'electron'
 import fs from 'node:fs'
 import path from 'node:path'
@@ -28,6 +30,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { BrowserHost } from './browser.js'
 import { CAPTURE_HOTKEY, startCapture, stopCapture, toggleCapture } from './capture.js'
 import { PORT, UI_PORT, daemonUrl, ensureDaemon, logFile, probe, restartDaemon, type DaemonHealth } from './daemon.js'
+import { WorkspaceTabsHost } from './tabs.js'
+import type { SavedWindow } from './tabs-model.js'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const SPLASH = path.join(here, 'splash.html')
@@ -37,11 +41,8 @@ const MIN_SIZE = { width: 900, height: 600 }
 
 type SplashStatus = { state: 'starting' | 'error'; text: string; detail?: string }
 
-let win: BrowserWindow | null = null // the main window
-const extra = new Set<BrowserWindow>() // workspace windows opened from it
-// Where each window goes once the daemon answers, and goes back to after a
-// reconnect, so a workspace window comes back on its own workspace.
-const target = new WeakMap<BrowserWindow, string>()
+// The workspace tabs, and through them every Junior window.
+let tabs: WorkspaceTabsHost | null = null
 let tray: Tray | null = null
 let quitting = false
 // One connect at a time: did-fail-load, the watchdog and Retry all funnel here.
@@ -93,28 +94,69 @@ function start() {
   ipcMain.on('splash:open-log', () => void openLog())
   // The web UI's ← → buttons. Hash routes are history entries, so the
   // window's own navigation history is the app's history.
-  ipcMain.on('nav:back', (e) => goBack(windowOf(e.sender)))
-  ipcMain.on('nav:forward', (e) => goForward(windowOf(e.sender)))
-  ipcMain.handle('nav:state', (e) => navState(windowOf(e.sender)))
+  // Each tab is its own page with its own history.
+  ipcMain.on('nav:back', (e) => goBack(e.sender))
+  ipcMain.on('nav:forward', (e) => goForward(e.sender))
+  ipcMain.handle('nav:state', (e) => navState(e.sender))
   browser = new BrowserHost(app.getVersion())
   browser.start()
-  // Captured items land in the main window's workspace.
-  startCapture(() => (win && !win.isDestroyed() ? workspaceOf(target.get(win) ?? '') : ''))
-  win = createWindow(daemonUrl())
+  tabs = new WorkspaceTabsHost({
+    preload: path.join(here, 'preload.cjs'),
+    version: app.getVersion(),
+    daemonUrl,
+    isDaemonUrl,
+    openExternal,
+    newWindow: (from) => {
+      const b = from?.getNormalBounds()
+      return createWindow(b ? { x: b.x + 28, y: b.y + 28, width: b.width, height: b.height } : undefined)
+    },
+    reconnect,
+    loaded: (wc) => void fitLegacyBar(wc),
+    uiChanged: (wc) => browser?.uiChanged(wc),
+    watchUi: (wc) => browser?.watchUi(wc),
+    sendNav,
+    changed: saveSoon,
+  })
+  tabs.start()
+  const host = tabs
+  browser.setUiHost({ windowOf: (wc) => host.windowOfPage(wc), isFront: (wc) => host.isFront(wc), pages: () => host.pages() })
+  // Captured items land in the workspace in front.
+  startCapture(() => {
+    const w = frontWindow()
+    return w ? host.frontWorkspace(w) : ''
+  })
+  restoreWindows()
   void connect()
   setInterval(watchdog, 5000)
 }
 
+/** Last launch's windows and their tabs, or one window whose tab is the default workspace. */
+function restoreWindows() {
+  const saved = loadWindowState()
+  const list = saved.windows.length ? saved.windows : [{ bounds: saved.bounds, maximized: saved.maximized, tabs: [], active: '' }]
+  for (const s of list) {
+    const w = createWindow(s.bounds)
+    if (s.maximized) w.maximize()
+    tabs!.attach(w, s.tabs, s.active)
+  }
+}
+
+/** The Junior window you were last in (focused, else the first one open). */
+function frontWindow(): BrowserWindow | null {
+  const focused = BrowserWindow.getFocusedWindow()
+  const all = allWindows()
+  return focused && all.includes(focused) ? focused : (all[0] ?? null)
+}
+
 /**
- * A window over the daemon, headed for `url` (the main window: the daemon's
- * root; a workspace window: its `/w/<id>/`). It shows the splash until the
- * daemon answers, then loads its target.
+ * A Junior window. Its own page shows only the splash; its workspace tabs
+ * (tabs.ts) lie over it once the daemon answers. `bounds` places it (a saved
+ * window, or cascaded off another); none = the default size.
  */
-function createWindow(url: string, bounds?: Partial<Rectangle>): BrowserWindow {
-  const main = !bounds
-  const state = main ? loadWindowState() : { bounds: { ...DEFAULT_SIZE, ...bounds }, maximized: false }
+function createWindow(bounds?: Partial<Rectangle>): BrowserWindow {
   const w = new BrowserWindow({
-    ...state.bounds,
+    ...DEFAULT_SIZE,
+    ...clampBounds(bounds),
     minWidth: MIN_SIZE.width,
     minHeight: MIN_SIZE.height,
     title: 'Junior',
@@ -132,111 +174,39 @@ function createWindow(url: string, bounds?: Partial<Rectangle>): BrowserWindow {
       additionalArguments: [`--junior-version=${app.getVersion()}`],
     },
   })
-  target.set(w, url)
   browser?.watchWindow(w)
-  if (state.maximized) w.maximize()
   w.once('ready-to-show', () => w.show())
-
-  if (main) {
-    // Closing hides: the app lives on in the Dock and the menu bar until ⌘Q.
-    w.on('close', (e) => {
-      saveWindowState()
-      if (!quitting) {
-        e.preventDefault()
-        w.hide()
-      }
-    })
-    w.on('closed', () => (win = null))
-    let saveTimer: NodeJS.Timeout | undefined
-    const saveSoon = () => {
-      clearTimeout(saveTimer)
-      saveTimer = setTimeout(saveWindowState, 500)
+  // The last window only hides: the app lives on in the Dock and the menu bar,
+  // tabs and all, until ⌘Q. Any other closes, its tabs with it.
+  w.on('close', (e) => {
+    saveWindowState()
+    if (!quitting && allWindows().filter((o) => o !== w).length === 0) {
+      e.preventDefault()
+      w.hide()
     }
-    w.on('resize', saveSoon)
-    w.on('move', saveSoon)
-    w.on('maximize', saveSoon)
-    w.on('unmaximize', saveSoon)
-  } else {
-    extra.add(w)
-    w.on('closed', () => extra.delete(w))
-  }
-  // Fullscreen hides the traffic lights, so the bar drops their inset.
-  w.on('enter-full-screen', () => sendNav(w))
-  w.on('leave-full-screen', () => sendNav(w))
+  })
+  w.on('closed', saveSoon)
+  w.on('resize', saveSoon)
+  w.on('move', saveSoon)
+  w.on('maximize', saveSoon)
+  w.on('unmaximize', saveSoon)
 
   const wc = w.webContents
-  wc.on('did-finish-load', () => {
-    if (onSplash(w)) wc.send('splash:status', splash)
-    else {
-      sendNav(w)
-      void fitLegacyBar(wc)
-    }
-  })
-  // In-page moves count too: the SPA pins its workspace with replaceState, and a
-  // reconnect should land back on the same route.
-  wc.on('did-navigate-in-page', (_e, navUrl, isMainFrame) => {
-    if (isMainFrame && isDaemonUrl(navUrl)) target.set(w, navUrl)
-    sendNav(w)
-  })
-  // A full navigation inside Junior (switching workspace) moves the window's target with it.
-  wc.on('did-navigate', (_e, navUrl) => {
-    if (isDaemonUrl(navUrl)) target.set(w, navUrl)
-  })
-  // Links out of Junior go to the default browser. A same-origin window.open
-  // (the workspace switcher's "open in a new tab") opens a workspace window.
-  wc.setWindowOpenHandler(({ url: openUrl }) => {
-    if (isDaemonUrl(openUrl)) openWorkspaceWindow(openUrl, w)
-    else openExternal(openUrl)
-    return { action: 'deny' }
-  })
+  wc.on('did-finish-load', () => wc.send('splash:status', splash))
   wc.on('will-navigate', (e, navUrl) => {
-    if (isDaemonUrl(navUrl) || navUrl === SPLASH_URL) return
+    if (navUrl === SPLASH_URL) return
     e.preventDefault()
     openExternal(navUrl)
   })
-  // The daemon went away under a load (restart, crash, `junior stop`).
-  wc.on('did-fail-load', (_e, code, _desc, failUrl, isMainFrame) => {
-    if (!isMainFrame || code === -3 /* ERR_ABORTED: superseded by another load */ || !isDaemonUrl(failUrl)) return
-    reconnect()
+  wc.setWindowOpenHandler(({ url: openUrl }) => {
+    openExternal(openUrl)
+    return { action: 'deny' }
   })
-  wc.on('render-process-gone', (_e, details) => {
-    if (details.reason !== 'clean-exit') reconnect()
-  })
+  void w.loadFile(SPLASH)
   return w
 }
 
-/** `/w/<id>/` of a daemon URL, or '' for a bare one (the cookie decides). */
-function workspaceOf(raw: string): string {
-  try {
-    return /^\/w\/([^/]+)\/?/.exec(new URL(raw).pathname)?.[1] ?? ''
-  } catch {
-    return ''
-  }
-}
-
-/**
- * A workspace in its own window: focus the window already on it, else open one
- * cascaded off the window that asked. A window still on the splash loads it
- * once the daemon answers; otherwise it goes straight there.
- */
-function openWorkspaceWindow(url: string, from: BrowserWindow) {
-  const ws = workspaceOf(url)
-  const existing = ws ? allWindows().find((w) => workspaceOf(target.get(w) ?? '') === ws) : undefined
-  if (existing) {
-    if (existing.isMinimized()) existing.restore()
-    existing.show()
-    existing.focus()
-    return
-  }
-  const b = from.getNormalBounds()
-  const w = createWindow(url, { x: b.x + 28, y: b.y + 28, width: b.width, height: b.height })
-  if (connecting) void w.loadFile(SPLASH)
-  else void loadTarget(w)
-}
-
-const allWindows = (): BrowserWindow[] => [...(win ? [win] : []), ...extra].filter((w) => !w.isDestroyed())
-
-const windowOf = (sender: Electron.WebContents): BrowserWindow | null => BrowserWindow.fromWebContents(sender)
+const allWindows = (): BrowserWindow[] => tabs?.windows() ?? []
 
 /**
  * A daemon older than the desktop title bar (web/src/desktop.ts) serves a UI
@@ -253,29 +223,30 @@ async function fitLegacyBar(wc: Electron.WebContents) {
 }
 
 function showWindow() {
-  if (!app.isReady()) return // a Dock click or second launch racing startup; start() opens the window
-  if (!win) {
-    win = createWindow(daemonUrl())
+  if (!app.isReady() || !tabs) return // a Dock click or second launch racing startup; start() opens the window
+  const w = frontWindow()
+  if (!w) {
+    tabs.attach(createWindow())
     void connect()
     return
   }
-  if (win.isMinimized()) win.restore()
-  win.show()
-  win.focus()
+  if (w.isMinimized()) w.restore()
+  w.show()
+  w.focus()
 }
 
-const onSplash = (w: BrowserWindow): boolean => !w.isDestroyed() && w.webContents.getURL() === SPLASH_URL
+/** The splash is up: the daemon hasn't answered since the last connect. */
+let onSplash = true
 
 function setSplash(s: SplashStatus) {
   splash = s
-  for (const w of allWindows()) if (onSplash(w)) w.webContents.send('splash:status', s)
+  for (const w of allWindows()) w.webContents.send('splash:status', s)
 }
 
-/** The window's own target, with the splash's history cleared so Back can't land on it. */
-async function loadTarget(w: BrowserWindow) {
-  await w.loadURL(target.get(w) ?? daemonUrl())
-  w.webContents.navigationHistory.clear()
-  sendNav(w)
+/** Every window back to its splash: the tab views hide over it. */
+function toSplash() {
+  onSplash = true
+  tabs?.hideAll()
 }
 
 /**
@@ -287,12 +258,13 @@ async function connect(how: 'ensure' | 'restart' = 'ensure') {
   connecting = true
   try {
     setSplash({ state: 'starting', text: how === 'restart' ? 'Restarting Junior…' : 'Looking for Junior…' })
-    await Promise.all(allWindows().map((w) => (onSplash(w) ? undefined : w.loadFile(SPLASH))))
+    toSplash()
     if (how === 'restart') await restartDaemon()
     else await ensureDaemon((text) => setSplash({ state: 'starting', text }))
-    await Promise.all(allWindows().map((w) => loadTarget(w)))
+    onSplash = false
+    await tabs?.connected()
   } catch (err) {
-    await Promise.all(allWindows().map((w) => (onSplash(w) ? undefined : w.loadFile(SPLASH).catch(() => {}))))
+    toSplash()
     // daemon.ts errors are "headline\n\ncli output\n\nlog tail".
     const msg = err instanceof Error ? err.message : String(err)
     const cut = msg.indexOf('\n\n')
@@ -314,9 +286,8 @@ async function connect(how: 'ensure' | 'restart' = 'ensure') {
 function reconnect() {
   if (connecting || allWindows().length === 0) return
   if (Date.now() - lastAutoConnect < 10_000) {
-    void Promise.all(allWindows().map((w) => w.loadFile(SPLASH))).then(() =>
-      setSplash({ state: 'error', text: 'Junior stopped answering', detail: `Nothing at ${daemonUrl()} — Retry to start it again, or check the log.` }),
-    )
+    toSplash()
+    setSplash({ state: 'error', text: 'Junior stopped answering', detail: `Nothing at ${daemonUrl()} — Retry to start it again, or check the log.` })
     return
   }
   lastAutoConnect = Date.now()
@@ -332,7 +303,7 @@ async function watchdog() {
   const windows = allWindows()
   if (connecting || windows.length === 0) return
   const health = await probe()
-  if (windows.some(onSplash)) {
+  if (onSplash) {
     if (splash.state === 'error' && health && health !== 'other') void connect()
     return
   }
@@ -346,7 +317,7 @@ async function watchdog() {
 
 async function confirmRestart(message = 'Restart the Junior server?') {
   if (connecting) return
-  const parent = BrowserWindow.getFocusedWindow() ?? (showWindow(), win)
+  const parent = frontWindow() ?? (showWindow(), frontWindow())
   if (!parent) return
   const health = await probe()
   const live = health && health !== 'other' ? health.liveSessions : 0
@@ -367,22 +338,34 @@ async function confirmRestart(message = 'Restart the Junior server?') {
 
 type NavState = { canGoBack: boolean; canGoForward: boolean; fullscreen: boolean }
 
-function navState(w: BrowserWindow | null): NavState {
-  const h = w && !w.isDestroyed() ? w.webContents.navigationHistory : null
-  return { canGoBack: !!h?.canGoBack(), canGoForward: !!h?.canGoForward(), fullscreen: !!w?.isFullScreen() }
+function navState(wc: WebContents | null, win = wc ? tabs?.windowOfPage(wc) : null): NavState {
+  const h = wc && !wc.isDestroyed() ? wc.navigationHistory : null
+  return { canGoBack: !!h?.canGoBack(), canGoForward: !!h?.canGoForward(), fullscreen: !!win?.isFullScreen() }
 }
 
-function goBack(w: BrowserWindow | null) {
-  if (w && navState(w).canGoBack) w.webContents.navigationHistory.goBack()
+function goBack(wc: WebContents | null | undefined) {
+  if (wc && navState(wc).canGoBack) wc.navigationHistory.goBack()
 }
 
-function goForward(w: BrowserWindow | null) {
-  if (w && navState(w).canGoForward) w.webContents.navigationHistory.goForward()
+function goForward(wc: WebContents | null | undefined) {
+  if (wc && navState(wc).canGoForward) wc.navigationHistory.goForward()
 }
 
-/** Push ← → availability (and fullscreen) to a window's web UI after every move. */
-function sendNav(w: BrowserWindow) {
-  if (!w.isDestroyed() && !onSplash(w)) w.webContents.send('nav:state', navState(w))
+/** Push ← → availability (and fullscreen) to a tab's page after every move. */
+function sendNav(wc: WebContents, win: BrowserWindow) {
+  if (!wc.isDestroyed()) wc.send('nav:state', navState(wc, win))
+}
+
+/** The page in front of the window a menu item was picked in. */
+function frontPage(w: unknown): WebContents | null {
+  const win = w instanceof BrowserWindow ? w : frontWindow()
+  return (win && tabs?.frontView(win)?.webContents) || null
+}
+
+/** Run a menu item against the window it was picked in. */
+const inWindow = (fn: (w: BrowserWindow) => void) => (_i: unknown, w: unknown) => {
+  const win = w instanceof BrowserWindow ? w : frontWindow()
+  if (win && tabs) fn(win)
 }
 
 function buildMenu(): Menu {
@@ -405,25 +388,55 @@ function buildMenu(): Menu {
         { role: 'quit' },
       ],
     },
+    {
+      label: 'File',
+      submenu: [
+        { label: 'Open Workspace…', accelerator: 'CmdOrCtrl+T', click: inWindow((w) => tabs!.openMenu(w)) },
+        { label: 'Move Tab to New Window', accelerator: 'CmdOrCtrl+Shift+N', click: inWindow((w) => tabs!.moveToNewWindow(tabs!.frontWorkspace(w))) },
+        { type: 'separator' },
+        { label: 'Close Tab', accelerator: 'CmdOrCtrl+W', click: inWindow((w) => tabs!.close(w)) },
+      ],
+    },
     { role: 'editMenu' },
     {
       label: 'View',
       submenu: [
-        { role: 'reload' },
-        { role: 'forceReload' },
-        { role: 'toggleDevTools' },
+        // The roles would act on the window's own page (the splash); these act on the tab in front.
+        { label: 'Reload', accelerator: 'CmdOrCtrl+R', click: (_i, w) => frontPage(w)?.reload() },
+        { label: 'Force Reload', accelerator: 'Shift+CmdOrCtrl+R', click: (_i, w) => frontPage(w)?.reloadIgnoringCache() },
+        { label: 'Toggle Developer Tools', accelerator: 'Alt+CmdOrCtrl+I', click: (_i, w) => frontPage(w)?.toggleDevTools() },
         { type: 'separator' },
-        { label: 'Back', accelerator: 'CmdOrCtrl+[', click: (_i, w) => goBack(w instanceof BrowserWindow ? w : null) },
-        { label: 'Forward', accelerator: 'CmdOrCtrl+]', click: (_i, w) => goForward(w instanceof BrowserWindow ? w : null) },
+        { label: 'Back', accelerator: 'CmdOrCtrl+[', click: (_i, w) => goBack(frontPage(w)) },
+        { label: 'Forward', accelerator: 'CmdOrCtrl+]', click: (_i, w) => goForward(frontPage(w)) },
         { type: 'separator' },
-        { role: 'resetZoom' },
-        { role: 'zoomIn' },
-        { role: 'zoomOut' },
+        { label: 'Actual Size', accelerator: 'CmdOrCtrl+0', click: (_i, w) => zoom(frontPage(w), 0) },
+        { label: 'Zoom In', accelerator: 'CmdOrCtrl+Plus', click: (_i, w) => zoom(frontPage(w), 1) },
+        { label: 'Zoom Out', accelerator: 'CmdOrCtrl+-', click: (_i, w) => zoom(frontPage(w), -1) },
         { type: 'separator' },
         { role: 'togglefullscreen' },
       ],
     },
-    { role: 'windowMenu' },
+    {
+      role: 'windowMenu',
+      submenu: [
+        { role: 'minimize' },
+        { role: 'zoom' },
+        { type: 'separator' },
+        { label: 'Show Next Tab', accelerator: 'Ctrl+Tab', click: inWindow((w) => tabs!.step(w, 1)) },
+        { label: 'Show Previous Tab', accelerator: 'Ctrl+Shift+Tab', click: inWindow((w) => tabs!.step(w, -1)) },
+        {
+          label: 'Go to Tab',
+          submenu: Array.from({ length: 9 }, (_, i) => ({
+            label: i === 8 ? 'Last Tab' : `Tab ${i + 1}`,
+            accelerator: `CmdOrCtrl+${i + 1}`,
+            click: inWindow((w) => tabs!.nth(w, i + 1)),
+          })),
+        },
+        { label: 'Merge All Windows', click: inWindow((w) => tabs!.mergeInto(w)) },
+        { type: 'separator' },
+        { role: 'front' },
+      ],
+    },
     {
       role: 'help',
       submenu: [
@@ -499,6 +512,12 @@ function isDaemonUrl(raw: string): boolean {
   }
 }
 
+/** ⌘0 / ⌘+ / ⌘-, half a step at a time, on the page in front. */
+function zoom(wc: WebContents | null, by: -1 | 0 | 1) {
+  if (!wc) return
+  wc.setZoomLevel(by === 0 ? 0 : Math.max(-3, Math.min(3, wc.getZoomLevel() + by * 0.5)))
+}
+
 // Only schemes a browser or mail client should handle, never file: or app handlers.
 function openExternal(url: string) {
   if (/^(https?|mailto):/i.test(url)) void shell.openExternal(url)
@@ -509,37 +528,66 @@ async function openLog() {
   if (err) dialog.showErrorBox('No server log yet', `${logFile()}\n\n${err}`)
 }
 
-type WindowState = { bounds: Partial<Rectangle> & { width: number; height: number }; maximized: boolean }
+type Bounds = Partial<Rectangle> & { width: number; height: number }
+type SavedWin = SavedWindow & { bounds: Bounds; maximized: boolean }
+/** `bounds`/`maximized` are the first window's, as before tabs; `windows` is every window and its tabs. */
+type WindowState = { bounds: Bounds; maximized: boolean; windows: SavedWin[] }
 
 const stateFile = () => path.join(app.getPath('userData'), 'window-state.json')
 
+/** Clamp to the display it was on, or the nearest, if that one is gone. */
+function clampBounds(b: Partial<Rectangle> | undefined): Partial<Rectangle> {
+  if (!b || !b.width || !b.height) return b ?? {}
+  if (![b.x, b.y].every(Number.isFinite)) return { width: b.width, height: b.height }
+  const r = b as Rectangle
+  const area = screen.getDisplayMatching(r).workArea
+  const width = Math.min(Math.max(r.width, MIN_SIZE.width), area.width)
+  const height = Math.min(Math.max(r.height, MIN_SIZE.height), area.height)
+  const x = Math.min(Math.max(r.x, area.x), area.x + area.width - width)
+  const y = Math.min(Math.max(r.y, area.y), area.y + area.height - height)
+  return { x, y, width, height }
+}
+
 function loadWindowState(): WindowState {
   try {
-    const s = JSON.parse(fs.readFileSync(stateFile(), 'utf8')) as { bounds?: Rectangle; maximized?: boolean }
-    const b = s.bounds
-    if (b && [b.x, b.y, b.width, b.height].every(Number.isFinite)) {
-      // Clamp to the display it was on, or the nearest, if that one is gone.
-      const area = screen.getDisplayMatching(b).workArea
-      const width = Math.min(Math.max(b.width, MIN_SIZE.width), area.width)
-      const height = Math.min(Math.max(b.height, MIN_SIZE.height), area.height)
-      const x = Math.min(Math.max(b.x, area.x), area.x + area.width - width)
-      const y = Math.min(Math.max(b.y, area.y), area.y + area.height - height)
-      return { bounds: { x, y, width, height }, maximized: !!s.maximized }
-    }
+    const s = JSON.parse(fs.readFileSync(stateFile(), 'utf8')) as Partial<WindowState>
+    const okBounds = (b: unknown): b is Bounds => !!b && [(b as Rectangle).width, (b as Rectangle).height].every(Number.isFinite)
+    const windows = (Array.isArray(s.windows) ? s.windows : []).filter(
+      (w): w is SavedWin => !!w && okBounds(w.bounds) && Array.isArray(w.tabs) && w.tabs.every((t) => typeof t === 'string'),
+    )
+    if (okBounds(s.bounds)) return { bounds: s.bounds, maximized: !!s.maximized, windows }
   } catch {
     // first launch, or an unreadable file: defaults
   }
-  return { bounds: { ...DEFAULT_SIZE }, maximized: false }
+  return { bounds: { ...DEFAULT_SIZE }, maximized: false, windows: [] }
 }
 
 function saveWindowState() {
-  if (!win || win.isDestroyed() || win.isFullScreen()) return
+  if (!tabs) return
+  const live = allWindows()
+  const saved = tabs.save()
+  const windows: SavedWin[] = []
+  // tabs.save() keeps window order and drops empty windows; pair them back up.
+  let i = 0
+  for (const w of live) {
+    if (!tabs.model.windows.get(w.id)?.tabs.length) continue
+    const t = saved[i++]
+    if (!t || w.isFullScreen()) continue
+    windows.push({ ...t, bounds: w.getNormalBounds(), maximized: w.isMaximized() })
+  }
+  if (!windows.length) return
   try {
     fs.mkdirSync(path.dirname(stateFile()), { recursive: true })
-    fs.writeFileSync(stateFile(), JSON.stringify({ bounds: win.getNormalBounds(), maximized: win.isMaximized() }))
+    fs.writeFileSync(stateFile(), JSON.stringify({ bounds: windows[0].bounds, maximized: windows[0].maximized, windows }))
   } catch {
     // losing the window position is not worth an error dialog
   }
+}
+
+let saveTimer: NodeJS.Timeout | undefined
+function saveSoon() {
+  clearTimeout(saveTimer)
+  saveTimer = setTimeout(saveWindowState, 500)
 }
 
 // The browser's cookies hit the disk once, before the first quit goes ahead
