@@ -41,6 +41,21 @@
   /* With a page title up, the workspace shrinks to its colour dot. */
   .topTitle ~ .wsPill { padding: 0 9px; gap: 5px; }
   .topTitle ~ .wsPill .wsName { display: none; }
+  /* Workspace chips under the bar (.docs/workspace-tabs/topbar-variations.html, B, phone):
+     one row that swipes sideways, never wraps. */
+  .wsChipRow {
+    display: flex; gap: 6px; flex: none; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none;
+    padding: 8px max(12px, env(safe-area-inset-right)) 8px max(12px, env(safe-area-inset-left)); border-bottom: 1px solid var(--hair);
+  }
+  .wsChipRow::-webkit-scrollbar { display: none; }
+  .wsChip {
+    display: inline-flex; align-items: center; gap: 7px; flex: none; height: 30px; padding: 0 12px; max-width: 160px;
+    border: 1px solid var(--hair-strong); border-radius: var(--r-full); background: transparent; color: var(--ash); font-size: 0.9615rem;
+  }
+  .wsChip.on { color: var(--ink); background: var(--wash-3); border-color: var(--hair-bright); }
+  .wsChip.add { padding: 0 9px; }
+  .wsChip .wsDot { width: 7px; height: 7px; border-radius: var(--r-full); flex: none; }
+  .wsChipName { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
   .shell.mobile { flex-direction: column; position: relative; }
   .shell.mobile #main { order: 1; }

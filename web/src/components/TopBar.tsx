@@ -13,6 +13,7 @@ import { JuniorLogo } from './Logo.js'
 import { PhoneButton } from './PhoneButton.js'
 import { ProvidersButton } from './ProvidersButton.js'
 import { WaitingButton } from './WaitingButton.js'
+import { WorkspaceChips } from './WorkspaceChips.js'
 import { WorkspaceTabs } from './WorkspaceTabs.js'
 
 type Props = {
@@ -139,7 +140,12 @@ export function TopBar({
     )
   }
   if (mobile) {
+    // More than one workspace: they ride as chips under the bar on a section's
+    // own page; a deeper page names the workspace in its title instead.
+    const chips = workspaces.length > 1
+    const shownTitle = chips && onBack && title && current ? `${current.name} · ${title}` : title
     return (
+      <>
       <header className="topbar mobile">
         {onBack ? (
           <button type="button" className="topIcon back" aria-label="Back" onClick={onBack}>
@@ -148,15 +154,17 @@ export function TopBar({
         ) : (
           <JuniorLogo />
         )}
-        {onBack && title && <span className="topTitle">{title}</span>}
+        {onBack && shownTitle && <span className="topTitle">{shownTitle}</span>}
         <span className="spacer" />
-        <WorkspaceSwitcher
-          workspaces={workspaces}
-          workspaceId={workspaceId}
-          onSwitch={onSwitchWorkspace}
-          onNew={onNewWorkspace}
-          onSettings={onWorkspaceSettings}
-        />
+        {!chips && (
+          <WorkspaceSwitcher
+            workspaces={workspaces}
+            workspaceId={workspaceId}
+            onSwitch={onSwitchWorkspace}
+            onNew={onNewWorkspace}
+            onSettings={onWorkspaceSettings}
+          />
+        )}
         <BuildBadge build={build} onOpenSystem={onOpenSystem} />
         <button type="button" className="topIcon" aria-label={CONN_TITLE[conn]} onClick={() => onOpenSystem('status')}>
           <Gauge size={17} aria-hidden="true" />
@@ -166,6 +174,8 @@ export function TopBar({
           <Settings size={17} aria-hidden="true" />
         </button>
       </header>
+      {chips && !onBack && <WorkspaceChips workspaces={workspaces} workspaceId={workspaceId} onSwitch={onSwitchWorkspace} onNew={onNewWorkspace} />}
+      </>
     )
   }
   if (team) {
