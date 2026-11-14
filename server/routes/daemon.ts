@@ -1,6 +1,9 @@
 import { codesAllowed, pairPageHtml, sameOrigin } from '../remote.js'
 import { dbFileFor, ensureWorkspaceDirs, saveRegistry, slugify, type WorkspaceMeta, writeApiKey } from '../workspaces.js'
-import type { WorkspaceResponse, WorkspacesResponse, WorkspaceVerifyResponse } from '../../shared/protocol.js'
+import type { WorkspaceResponse, WorkspacesNeedsYouResponse, WorkspacesResponse, WorkspaceVerifyResponse } from '../../shared/protocol.js'
+import { needsYouCount } from '../../core/work/needs-you.js'
+import { needsYouCount as pendingActionsCount } from '../session/actions-record.js'
+import { summaries } from '../session/summaries.js'
 import { DEFAULT_PROVIDER } from '../providers/registry.js'
 import { log } from '../log.js'
 import { MCP_PATH, mcpDispatch, type McpRpc } from '../mcp-http.js'
@@ -120,6 +123,17 @@ export async function workspaceListRoutes({ req, url, json }: RouteCtx): Promise
       onboarded: registry.onboarded,
     }
     json(200, body)
+    return true
+  }
+  // Every workspace's orange count, for Junior.app's workspace tabs.
+  if (url.pathname === '/api/workspaces/needs-you' && req.method === 'GET') {
+    let body: WorkspacesNeedsYouResponse
+    try {
+      body = { ok: true, counts: await workspacesNeedsYou([...runtimes.values()]) }
+    } catch (err) {
+      body = { ok: false, error: errText(err) }
+    }
+    json(body.ok ? 200 : 502, body)
     return true
   }
   if (url.pathname === '/api/workspaces' && req.method === 'POST') {
@@ -256,4 +270,11 @@ export async function workspaceListRoutes({ req, url, json }: RouteCtx): Promise
     return true
   }
   return false
+}
+
+/** Each workspace's needs-you count, by id: the same sum the rail shows in that workspace. */
+export async function workspacesNeedsYou(rts: WorkspaceRuntime[]): Promise<Record<string, number>> {
+  const counts: Record<string, number> = {}
+  for (const rt of rts) counts[rt.meta.id] = needsYouCount(summaries(rt), await pendingActionsCount(rt))
+  return counts
 }

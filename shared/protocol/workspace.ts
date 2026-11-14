@@ -101,6 +101,13 @@ export type WorkspacesResponse =
   | { ok: true; workspaces: Workspace[]; defaultId: string; onboarded: boolean }
   | { ok: false; error: string }
 
+/**
+ * GET /api/workspaces/needs-you: each workspace's needs-you count
+ * (core/work/needs-you.ts), daemon-wide. Counts only, never titles: a
+ * workspace tab shows another workspace's number and nothing else.
+ */
+export type WorkspacesNeedsYouResponse = { ok: true; counts: Record<string, number> } | { ok: false; error: string }
+
 export type WorkspaceResponse = { ok: true; workspace: Workspace } | { ok: false; error: string }
 
 /**

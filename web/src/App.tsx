@@ -83,6 +83,7 @@ import { JuniorNeedsDock } from './components/JuniorNeedsDock.js'
 import { AgentPage } from './components/AgentPage.js'
 import { PullRequestsPage } from './components/PullRequestsPage.js'
 import { toggleSidebar, useLayout, useSidebarCollapsed } from './layout.js'
+import { needsYouCount } from '../../core/work/needs-you.js'
 
 export function App() {
   const conn = useConn()
@@ -580,6 +581,7 @@ export function App() {
   // An agent's DM lives on the Agents page, not in the chat list.
   const chatSessions = useMemo(() => sessions.filter((s) => s.kind !== 'brief' && s.kind !== 'goal' && s.kind !== 'dm' && s.teamRun?.role !== 'worker'), [sessions])
   const dmsWaiting = sessions.filter((s) => s.kind === 'dm' && s.waiting).length
+  const needsYou = needsYouCount(sessions, pendingActions)
   const runningCount = chatSessions.filter(isWorking).length
 
   // The Actions page is a list and a detail side by side: it needs the room, so no panel beside it.
@@ -648,7 +650,7 @@ export function App() {
         {team ? (
           sidebarCollapsed ? (
             <TeamRail
-              needs={dmsWaiting + pendingActions + sessions.filter((s) => s.kind !== 'dm' && s.waiting).length}
+              needs={needsYou}
               active={sheetThread ? { thread: sheetThread } : sidebarPlace}
               taskCount={inbox.items.length}
               prCount={inbox.items.filter((i) => i.reason === 'your-pr' || i.reason === 'review-requested').length}

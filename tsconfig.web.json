@@ -69,6 +69,7 @@
     "core/work/focus.ts",
     "core/work/supervision.ts",
     "core/work/close.ts",
+    "core/work/needs-you.ts",
     "core/job/types.ts",
     "core/job/filing.ts",
     "core/playbooks/item.ts",
