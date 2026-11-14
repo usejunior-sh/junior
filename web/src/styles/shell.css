@@ -255,6 +255,11 @@ kbd { font-family: var(--mono); font-size: 0.8462rem; color: var(--ash); border:
 .wsMore:hover, .wsMore[data-state="open"] { color: var(--ink); background: var(--wash-3); }
 .wsMoreDot { width: 6px; height: 6px; border-radius: var(--r-full); background: var(--orange); box-shadow: 0 0 0 2px var(--glow-orange); }
 .wsTabsFixed .buildBadge { margin-left: 6px; }
+.wsTab.on { position: relative; }
+/* The front tab's menu anchor: Radix measures it, the pointer never meets it. */
+.wsTabAnchor { position: absolute; inset: 0; pointer-events: none; }
+/* Another window's tab held over this strip. */
+.wsTabs.dropping .wsTabRow { box-shadow: inset 0 -2px 0 var(--blue); }
 /* Panel hidden: nothing in the bar moves. The left zone keeps its width and
    its divider, so the toggle, ← → and the workspace stay where the hand left them. */
 /* Fullscreen hides the traffic lights, so their inset goes too. */

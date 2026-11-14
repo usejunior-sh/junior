@@ -80,8 +80,8 @@ type TabsBridge = {
   open: (id: string, opts?: { newWindow?: boolean }) => void
   activate: (id: string) => void
   close: (id: string) => void
-  /** move a tab: to a new window, or into this one */
-  move: (id: string, to: 'new' | 'here') => void
+  /** move a tab: to a new window (placed at a screen point, for a drag), or into this one */
+  move: (id: string, to: 'new' | 'here', at?: { x: number; y: number }) => void
   /** this view's own needs-you count changed: refresh everyone's sooner */
   reportCount: (n: number) => void
 }

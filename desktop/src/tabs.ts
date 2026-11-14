@@ -86,11 +86,12 @@ export class WorkspaceTabsHost {
       const w = winOf(e)
       if (w && typeof msg?.id === 'string') this.close(w, msg.id)
     })
-    ipcMain.on('tabs:move', (e, msg: { id: string; to: 'new' | 'here' }) => {
+    ipcMain.on('tabs:move', (e, msg: { id: string; to: 'new' | 'here'; at?: { x: number; y: number } }) => {
       const w = winOf(e)
       if (!w || typeof msg?.id !== 'string') return
+      const at = msg.at && Number.isFinite(msg.at.x) && Number.isFinite(msg.at.y) ? msg.at : undefined
       if (msg.to === 'here') this.moveTo(msg.id, w)
-      else if (msg.to === 'new') this.moveToNewWindow(msg.id)
+      else if (msg.to === 'new') this.moveToNewWindow(msg.id, at)
     })
     ipcMain.on('tabs:count', () => {
       clearTimeout(this.countsSoon)
@@ -257,13 +258,15 @@ export class WorkspaceTabsHost {
     this.deps.changed()
   }
 
-  /** ⌘⇧N: a tab out into a window of its own. */
-  moveToNewWindow(id: string) {
+  /** ⌘⇧N, or a tab dragged off the bar (`point`: where it was let go): a tab out into a window of its own. */
+  moveToNewWindow(id: string, point?: { x: number; y: number }) {
     const at = this.model.find(id)
     const from = at ? this.wins.get(at.winId) : undefined
     if (!at || !from) return
     if (this.model.windows.get(at.winId)!.tabs.length === 1) return // already on its own
     const w = this.deps.newWindow(from)
+    // the new window's bar under the pointer, about where the tab was held
+    if (point) w.setPosition(Math.round(point.x - 380), Math.round(point.y - 22))
     this.attach(w)
     this.moveTo(id, w)
   }
