@@ -60,7 +60,7 @@ import { useIsMobile } from './useMobile.js'
 import { useOpenTabs, useLastRoutes, projectColor } from './tabs.js'
 import { AppPanel } from './app/AppPanel.js'
 import { ChatHeader } from './app/ChatHeader.js'
-import { MOBILE_SHEETS, PAGE_TABS, SHEET_LABEL, isDocKey, routeOfKey, sectionOf, tabKeyOf } from './app/tabs.js'
+import { JUNIOR_TAB, MOBILE_SHEETS, PLACE_ICON, PLACE_LABEL, SHEET_LABEL, isDocKey, placeOfKey, routeOfKey, sectionOf, tabKeyOf } from './app/tabs.js'
 import { useDispatchers } from './app/useDispatchers.js'
 import { useDocumentTabs } from './app/useDocumentTabs.js'
 import { useGlobalHotkeys } from './app/useGlobalHotkeys.js'
@@ -84,6 +84,15 @@ import { AgentPage } from './components/AgentPage.js'
 import { PullRequestsPage } from './components/PullRequestsPage.js'
 import { toggleSidebar, useLayout, useSidebarCollapsed } from './layout.js'
 import { needsYouCount } from '../../core/work/needs-you.js'
+
+/** A work item that is a pull request: its tab lights PRs in the sidebar, not Tasks. */
+const PR_REASONS = new Set(['your-pr', 'review-requested'])
+
+/** A place's tab: its own name and mark. */
+function placeTab(key: string): OpenTab | null {
+  const place = placeOfKey(key)
+  return place ? { key, kind: 'place', title: PLACE_LABEL[place], icon: PLACE_ICON[place], color: 'var(--stone)', running: false } : null
+}
 
 export function App() {
   const conn = useConn()
@@ -152,11 +161,8 @@ export function App() {
     dropDead: dropDeadTabs,
   } = useOpenTabs(workspaceId)
 
-  /** Every document the band is holding: pinned or peeked. */
-  const docKeys = useMemo(
-    () => [...tabs, ...(preview ? [preview] : [])].filter((k) => isDocKey(k)),
-    [tabs, preview],
-  )
+  /** Every document the band is holding. */
+  const docKeys = useMemo(() => tabs.filter((k) => isDocKey(k)), [tabs])
   const { lastRoutes, record: recordRoute } = useLastRoutes(workspaceId)
   const panelSize = usePanelWidth()
   // On a phone the panel is a sheet over the page, opened from the bottom bar
@@ -274,7 +280,7 @@ export function App() {
     else if (route.page !== 'home') noteReturnHash(location.hash.slice(1) || '/junior')
   }, [route])
 
-  const { docTab, pin, pinCurrent } = useDocumentTabs({ conn, route, docKeys, inbox, artifacts, sessions, titles, openTab, remember, setPreview })
+  const { docTab, pin, pinCurrent } = useDocumentTabs({ conn, route, team, docKeys, inbox, artifacts, sessions, titles, openTab, remember, setPreview })
 
   // Rail memory: remember where you were in each section, so leaving and
   // coming back lands on what you were reading rather than the section root.
@@ -322,11 +328,6 @@ export function App() {
     else openTab(currentId)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentId, conn, openTab])
-
-  // Inbox is a regular tab: opening it pins it, and it can be closed.
-  useEffect(() => {
-    if (route.page === 'inbox') openTab('inbox')
-  }, [route.page, openTab])
 
   const { respond, sendMessage, setPlanning, setUltracode, setModel, setFastMode, interrupt, stopAgent, stopShell, backgroundAgent, messageAgent, renameSession, setPinned, deleteSession, newSession, newSessionIn, discardDraft, syncInbox, openItem } = useSessionActions({ currentId, currentDraftId, navigate, closeTab })
 
@@ -385,7 +386,16 @@ export function App() {
 
   const collapsePanel = useCallback(() => panelSize.setCollapsed(true), [panelSize])
 
-  const activeTabKey = tabKeyOf(route) ?? 'home'
+  const activeTabKey = tabKeyOf(route, team) ?? JUNIOR_TAB
+  /** Where Junior's tab goes: its DM (home in the team layout). */
+  const juniorRoute = routeOfKey(JUNIOR_TAB, team)
+
+  // A place's tab goes back to where you were in it: an inbox view, a settings tab.
+  const placeHashes = useRef(new Map<string, string>())
+  useEffect(() => {
+    if (placeOfKey(activeTabKey)) placeHashes.current.set(activeTabKey, location.hash.slice(1))
+  }, [activeTabKey, route])
+  const routeOfTab = useCallback((key: string) => placeHashes.current.get(key) ?? routeOfKey(key, team), [team])
 
   // Empty the band. Drafts go with their tabs: that is the only place they
   // live, and with nothing left open, Junior's page is where you land.
@@ -394,8 +404,8 @@ export function App() {
       if (key.startsWith('draft:')) draftStore.remove(key.slice(6))
     }
     closeAllTabs()
-    navigate('/junior')
-  }, [tabs, preview, closeAllTabs, navigate])
+    navigate(juniorRoute)
+  }, [tabs, preview, closeAllTabs, navigate, juniorRoute])
 
   useGlobalHotkeys({ route, navigate, newSession, newTerminal, terminalCwd, goTo, currentId, panelSize, setHelpOpen, setPaletteOpen, setFrictionOpen, setComposeSignal })
 
@@ -404,25 +414,29 @@ export function App() {
   // derived shell state
 
   const railActive: RailSection | null = sectionOf(route)
-  // What the team sidebar marks: Junior's chat, an agent, a thread, or a place.
+  // What the team sidebar marks: always the tab in front. Junior's chat, an agent, a thread, or
+  // a place; a thing with no row of its own lights the place it belongs to.
+  const isPr = (id: string) => PR_REASONS.has(inbox.items.find((i) => i.id === id)?.reason ?? '')
   const sidebarPlace: SidebarPlace =
-    juniorHome
+    activeTabKey === JUNIOR_TAB
       ? 'junior'
       : route.page === 'agents'
-        ? (route.name ?? JUNIOR_DM) === JUNIOR_DM ? 'junior' : { agent: route.name! }
+        ? { agent: route.name! }
         : route.page === 'session'
           ? { thread: route.id }
-          : route.page === 'inbox' || route.page === 'item'
-            ? 'tasks'
-            : route.page === 'prs'
-            ? 'prs'
-            : route.page === 'artifacts' || route.page === 'artifact'
-              ? 'artifacts'
-              : route.page === 'jobs' || route.page === 'job' || route.page === 'job-form'
-                ? 'jobs'
-                : route.page === 'settings'
-                  ? 'settings'
-                  : null
+          : route.page === 'item'
+            ? (isPr(route.id) ? 'prs' : 'tasks')
+            : route.page === 'inbox'
+              ? 'tasks'
+              : route.page === 'prs'
+                ? 'prs'
+                : route.page === 'artifacts' || route.page === 'artifact'
+                  ? 'artifacts'
+                  : route.page === 'jobs' || route.page === 'job' || route.page === 'job-form'
+                    ? 'jobs'
+                    : route.page === 'settings'
+                      ? 'settings'
+                      : null
   // ⌘\ hides and shows the team sidebar.
   useEffect(() => {
     if (!team) return
@@ -478,7 +492,8 @@ export function App() {
             ? [{ key, kind: 'terminal', title: t.title, color: projectColor(t.projectId ?? t.cwd), running: t.status === 'running', ...worktreeTag(t.checkoutId) }]
             : []
         }
-        if (key === 'inbox') return [{ key, kind: 'inbox', title: 'Tasks', color: 'var(--stone)', running: false }]
+        const place = placeOfKey(key)
+        if (place) return [placeTab(key)!]
         if (isDocKey(key)) {
           const t = docTab(key)
           return t ? [t] : []
@@ -501,34 +516,63 @@ export function App() {
     [tabs, sessions, terminals, drafts, docTab, worktreeTag],
   )
 
-  // Only the rail *indexes* get a transient page tab now: an artifact, job
-  // or item in front is a document, and gets a real tab of its own.
-  const pageTab =
-    route.page === 'jobs' || route.page === 'terminals' || route.page === 'artifacts' || route.page === 'changes'
-      ? PAGE_TABS[route.page]
-      : null
-
   const previewTab = useMemo<OpenTab | null>(() => {
-    const t = preview ? docTab(preview) : null
+    const t = preview ? placeTab(preview) : null
     return t ? { ...t, preview: true } : null
-  }, [preview, docTab])
+  }, [preview])
+
+  // Junior's DM: named and lit like any DM tab, never closed.
+  const juniorTab = useMemo<OpenTab>(
+    () => docTab(JUNIOR_TAB) ?? { key: JUNIOR_TAB, kind: 'dm', title: persona.name, color: 'var(--stone)', running: false },
+    [docTab, persona.name],
+  )
+  /** Every tab as drawn, Junior's first: ⌘1–9 counts along it. */
+  const shownTabs = useMemo(() => [juniorTab, ...openTabs, ...(previewTab ? [previewTab] : [])], [juniorTab, openTabs, previewTab])
 
   // Closing the tab you are on lands you on its neighbour in the band as
-  // drawn, else Junior's page. Hidden keys (a dead shell) are never a landing.
+  // drawn, else Junior's. Hidden keys (a dead shell) are never a landing.
   // A terminal tab closing does not kill the shell. That is the panel's menu.
   const closeOpenTab = useCallback(
     (key: string) => {
+      if (key === JUNIOR_TAB) return
       if (key === activeTabKey) {
-        const shown = [...openTabs, ...(previewTab ? [previewTab] : [])].map((t) => t.key)
+        const shown = shownTabs.map((t) => t.key)
         const i = shown.indexOf(key)
         const next = i === -1 ? undefined : shown[i + 1] ?? shown[i - 1]
-        navigate(next ? routeOfKey(next) : '/junior')
+        navigate(next ? routeOfTab(next) : juniorRoute)
       }
       // Closing a draft tab discards the draft. There is nowhere else it lives.
       if (key.startsWith('draft:')) draftStore.remove(key.slice(6))
       closeTab(key)
     },
-    [openTabs, previewTab, activeTabKey, navigate, closeTab],
+    [shownTabs, activeTabKey, navigate, closeTab, routeOfTab, juniorRoute],
+  )
+
+  // Starting work in the place in the preview tab keeps it: typing, editing, toggling.
+  const contentRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const el = contentRef.current
+    if (!el || !preview || preview !== activeTabKey) return
+    const keep = () => openTab(preview)
+    const types = ['input', 'change', 'submit'] as const
+    for (const t of types) el.addEventListener(t, keep, true)
+    return () => {
+      for (const t of types) el.removeEventListener(t, keep, true)
+    }
+  }, [preview, activeTabKey, openTab])
+
+  // Junior.app's menu: ⌘W closes the page tab in front, ⌘1–9 picks one (9 is the last).
+  useEffect(
+    () =>
+      desktopTabs?.onCommand((c) => {
+        if (c === 'close-page-tab') closeOpenTab(activeTabKey)
+        else if (c.startsWith('page-tab-')) {
+          const n = Number(c.slice('page-tab-'.length))
+          const t = n === 9 ? shownTabs.at(-1) : shownTabs[n - 1]
+          if (t) navigate(routeOfTab(t.key))
+        }
+      }),
+    [closeOpenTab, activeTabKey, shownTabs, navigate, routeOfTab],
   )
 
   // The phone's top bar: what is in front, and where "back" goes. Back is
@@ -542,7 +586,7 @@ export function App() {
       ? 'Tasks'
       : route.page === 'settings'
         ? 'Settings'
-      : [...openTabs, ...(previewTab ? [previewTab] : [])].find((t) => t.key === activeTabKey)?.title ?? pageTab?.label ?? null
+      : shownTabs.find((t) => t.key === activeTabKey)?.title ?? null
   const mobileUp = useMemo((): (() => void) | null => {
     // An open sheet sits over the page: back closes it.
     if (sheet) return () => setSheet(null)
@@ -653,7 +697,7 @@ export function App() {
           sidebarCollapsed ? (
             <TeamRail
               needs={needsYou}
-              active={sheetThread ? { thread: sheetThread } : sidebarPlace}
+              active={sidebarPlace}
               taskCount={inbox.items.length}
               prCount={inbox.items.filter((i) => i.reason === 'your-pr' || i.reason === 'review-requested').length}
               onJunior={() => navigate('/junior')}
@@ -664,7 +708,7 @@ export function App() {
             <TeamSidebar
               sessions={sessions}
               pendingSends={pendingActions}
-              active={sheetThread ? { thread: sheetThread } : sidebarPlace}
+              active={sidebarPlace}
               taskCount={inbox.items.length}
               prCount={inbox.items.filter((i) => i.reason === 'your-pr' || i.reason === 'review-requested').length}
               onJunior={() => navigate('/junior')}
@@ -697,9 +741,6 @@ export function App() {
         />
         )}
 
-        {route.page === 'settings' && !sheet ? (
-          <SettingsPage workspace={activeWorkspace} tab={route.tab} onOpenSystem={(tab) => setSystem({ open: true, tab })} />
-        ) : (
         <>
         {/* Junior.app's title bar carries the panel toggle, so the panel and tab band drop theirs. */}
         <PanelCollapseContext.Provider value={mobile || isDesktop ? null : collapsePanel}>{panel}</PanelCollapseContext.Provider>
@@ -717,12 +758,12 @@ export function App() {
         <div id="main">
           {!mobile && <TabBand
             activeKey={activeTabKey}
+            junior={juniorTab}
             tabs={openTabs}
             preview={previewTab}
             onPin={pin}
-            pageTab={pageTab}
             onShowPanel={!team && panelCollapsed && !isDesktop ? () => (panelStepsAside ? setKeepPanel(true) : panelSize.setCollapsed(false)) : undefined}
-            onSelect={(key) => navigate(routeOfKey(key))}
+            onSelect={(key) => navigate(routeOfTab(key))}
             onClose={closeOpenTab}
             onCloseAll={closeAllOpenTabs}
             onReorder={moveTab}
@@ -732,8 +773,10 @@ export function App() {
           />}
 
           <ThreadOpenContext.Provider value={team ? openThread : null}>
-          <div className="content">
-            {route.page === 'prs' ? (
+          <div className="content" ref={contentRef}>
+            {route.page === 'settings' ? (
+              <SettingsPage workspace={activeWorkspace} tab={route.tab} onOpenSystem={(tab) => setSystem({ open: true, tab })} />
+            ) : route.page === 'prs' ? (
               <PullRequestsPage onNavigate={navigate} />
             ) : agentPage ? (
               <AgentPage key={agentPage} name={agentPage} onNavigate={navigate} />
@@ -824,7 +867,7 @@ export function App() {
               ) : (
                 <div id="empty">This draft was discarded.</div>
               )
-            ) : route.page === 'home' || route.page === 'settings' || route.page === 'goals' ? null : (route.page === 'agents' || juniorHome) && !current ? (
+            ) : route.page === 'home' || route.page === 'goals' ? null : (route.page === 'agents' || juniorHome) && !current ? (
               <AgentDmStart key={route.page === 'agents' ? (route.name ?? JUNIOR_DM) : JUNIOR_DM} dm={route.page === 'agents' ? (route.name ?? JUNIOR_DM) : JUNIOR_DM} onCreate={create} createError={createError} createStep={createStep} />
             ) : current ? (
               <div className={`sessRow${(teamRun && teamSide) || wf.sideRun ? ' withSide' : ''}${browserOpen ? ' withBrowser' : ''}`}>
@@ -987,7 +1030,6 @@ export function App() {
           </ThreadOpenContext.Provider>
         </div>
         </>
-        )}
       </div>
 
       <CommandPalette

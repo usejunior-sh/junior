@@ -389,6 +389,9 @@ kbd { font-family: var(--mono); font-size: 0.8462rem; color: var(--ash); border:
 .tab:hover { color: var(--ink); background: var(--hair-soft); }
 .tab.active { background: var(--card); color: var(--ink); box-shadow: inset 0 1px 0 var(--hair-strong); }
 .tab.dim { color: var(--ash); }
+/* Junior's DM: pinned first, the face alone, never squeezed or scrolled away. */
+.tab.juniorTab { flex: none; gap: 5px; padding: 0 12px; justify-content: center; }
+.tab.juniorTab .pdot { position: absolute; top: 9px; right: 8px; }
 /* Dragged tab reads as lifted out of the strip; the drop line marks where it
    would land, drawn absolute so it never widens the flex row under the
    cursor. */

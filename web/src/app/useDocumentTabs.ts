@@ -4,7 +4,7 @@ import type { OpenTab } from '../components/TabBand.js'
 import { useConn, type Route } from '../hooks.js'
 import { useInbox } from '../inboxStore.js'
 import { useArtifacts } from '../artifactStore.js'
-import { GENERIC, isDocKey, kindOfKey, sectionOf, tabKeyOf } from './tabs.js'
+import { GENERIC, JUNIOR_TAB, isPlaceKey, kindOfKey, sectionOf, tabKeyOf } from './tabs.js'
 import { JUNIOR_DM, findDm } from '../../../core/junior/dms.js'
 import { useChatAgents } from '../chatAgents.js'
 import { usePersona } from '../junior.js'
@@ -12,9 +12,11 @@ import { needsYouText } from '../inboxTabs.js'
 import { isWorking } from '../sessionModes.js'
 import type { TabsApi } from './types.js'
 
-export function useDocumentTabs({ conn, route, docKeys, inbox, artifacts, sessions, titles, openTab, remember, setPreview }: {
+export function useDocumentTabs({ conn, route, team, docKeys, inbox, artifacts, sessions, titles, openTab, remember, setPreview }: {
   conn: ReturnType<typeof useConn>
   route: Route
+  /** the team layout: `#/junior` is Junior's DM there */
+  team: boolean
   docKeys: string[]
   inbox: ReturnType<typeof useInbox>
   artifacts: ReturnType<typeof useArtifacts>
@@ -73,7 +75,7 @@ export function useDocumentTabs({ conn, route, docKeys, inbox, artifacts, sessio
   const docTab = useCallback(
     (key: string): OpenTab | null => {
       const kind = kindOfKey(key)
-      if (!kind) return null
+      if (!kind || kind === 'place') return null
       const tab: OpenTab = { key, kind, title: (liveTitle(key) ?? titles[key]) || GENERIC[kind], color: 'var(--stone)', running: false }
       if (kind !== 'dm') return tab
       const dm = key.slice(3)
@@ -86,7 +88,7 @@ export function useDocumentTabs({ conn, route, docKeys, inbox, artifacts, sessio
     [liveTitle, titles, sessions, chatAgents],
   )
 
-  /** Commit a peeked document to a real tab, it stops being replaceable. */
+  /** Open a thing's tab, or keep the place in the preview tab so the next place opens beside it. */
   const pin = useCallback(
     (key: string, title?: string) => {
       if (title) remember({ [key]: title })
@@ -95,18 +97,21 @@ export function useDocumentTabs({ conn, route, docKeys, inbox, artifacts, sessio
     [openTab, remember],
   )
 
-  /** Editing what you were only peeking at makes it yours: keep the tab. */
+  /** Starting work in the place in the preview tab makes it yours: keep the tab. */
   const pinCurrent = useCallback(() => {
-    const key = tabKeyOf(route)
-    if (key && isDocKey(key)) openTab(key)
-  }, [route, openTab])
+    const key = tabKeyOf(route, team)
+    if (key && isPlaceKey(key)) openTab(key)
+  }, [route, team, openTab])
 
-  // The peek slot: opening a document parks it in the band so it survives you
-  // looking at a session.
+  // A place goes to the preview tab; any other thing gets a tab of its own.
+  // Sessions are App's to open (a team run swaps members in one tab), and
+  // Junior's DM is always there.
+  const routeKey = tabKeyOf(route, team)
   useEffect(() => {
-    const key = tabKeyOf(route)
-    if (key && isDocKey(key)) setPreview(key)
-  }, [route, setPreview])
+    if (!routeKey || routeKey === JUNIOR_TAB) return
+    if (isPlaceKey(routeKey)) setPreview(routeKey)
+    else if (kindOfKey(routeKey) !== 'session') openTab(routeKey)
+  }, [routeKey, setPreview, openTab])
 
   // Names arrive after the tab does: stores load, things get renamed. Teach
   // the band every name it can currently resolve.

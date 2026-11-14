@@ -56,11 +56,10 @@ import { defaultProjectOf } from './ProjectPicker.js'
 const homely = (p: string) => p.replace(/^\/(?:Users|home)\/[^/]+/, '~')
 
 /**
- * What a tab holds. The first three are *processes*: something is alive and
- * would be lost; the rest are *documents*, which is why only they are ever
- * peeked at rather than pinned.
+ * What a tab holds. Every kind but `place` is a *thing*, with a tab of its
+ * own; a place (Tasks, PRs, Artifacts, Jobs, Settings) shares the preview tab.
  */
-export type TabKind = 'session' | 'terminal' | 'draft' | 'item' | 'artifact' | 'job' | 'job-form' | 'change' | 'run' | 'inbox' | 'dm'
+export type TabKind = 'session' | 'terminal' | 'draft' | 'item' | 'artifact' | 'job' | 'job-form' | 'change' | 'run' | 'place' | 'dm'
 
 const ICON: Record<TabKind, ComponentType<LucideProps>> = {
   session: MessageSquare,
@@ -72,7 +71,7 @@ const ICON: Record<TabKind, ComponentType<LucideProps>> = {
   'job-form': CalendarClock,
   change: FileDiff,
   run: FolderOpen,
-  inbox: ListChecks,
+  place: ListChecks,
   dm: Bot,
 }
 
@@ -90,29 +89,29 @@ export type OpenTab = {
   branch?: string
   /** that worktree has since been removed */
   branchGone?: boolean
-  /** the peek slot: styled as provisional, and replaced by the next document */
+  /** the preview tab: styled as provisional, and replaced by the next place */
   preview?: boolean
   /** an agent's DM: its face's colour, in place of the icon (undefined = the persona's) */
   face?: string
+  /** a place's own mark, in place of the kind's */
+  icon?: ComponentType<LucideProps>
 }
 
-export type PageTab = { key: string; label: string; icon: ComponentType<LucideProps> }
-
 type Props = {
-  /** a tab key, a page tab key, or 'junior' (no tab lit) */
+  /** the tab in front's key */
   activeKey: string
+  /** Junior's DM: always first, icon-only, never closed */
+  junior: OpenTab
   tabs: readonly OpenTab[]
-  /** The one document being peeked at, if any, it outlives navigating away. */
+  /** The one place in the preview tab, if any: it outlives navigating away. */
   preview?: OpenTab | null
-  /** A transient tab for a rail *index* (Jobs, Terminals, Artifacts). */
-  pageTab?: PageTab | null
   /** Set while the panel is hidden: its show button leads the band. */
   onShowPanel?: () => void
   onSelect: (key: string) => void
   onClose: (key: string) => void
-  /** Close every open tab at once, preview included. */
+  /** Close every open tab at once, preview included (Junior's stays). */
   onCloseAll: () => void
-  /** Promote the peeked document to a tab of its own. */
+  /** Keep the place in the preview tab: the next place opens beside it. */
   onPin: (key: string) => void
   /** Drag a pinned tab: move it to sit before `before`'s key, or to the end when `before` is null. */
   onReorder: (key: string, before: string | null) => void
@@ -244,12 +243,12 @@ function useTabDrag(tabs: readonly OpenTab[], onReorder: (key: string, before: s
   return { bag, onStripDragLeave }
 }
 
-/** The tab band: one closable tab per open session or terminal, + for a new session. Junior's page is on the rail. */
+/** The page tabs: Junior's DM first, a closable tab per thing, the preview tab for a place, + for a new chat. */
 export function TabBand({
   activeKey,
+  junior,
   tabs,
   preview,
-  pageTab,
   onShowPanel,
   onSelect,
   onClose,
@@ -261,7 +260,7 @@ export function TabBand({
   terminalCwd,
 }: Props) {
   const strip = useRef<HTMLDivElement>(null)
-  const count = tabs.length + (preview ? 1 : 0) + (pageTab ? 1 : 0)
+  const count = tabs.length + (preview ? 1 : 0)
   const fade = useEdgeFade(strip, count)
   useKeepActiveInView(strip, activeKey, count)
   const { bag: dragBag, onStripDragLeave } = useTabDrag(tabs, onReorder)
@@ -275,6 +274,8 @@ export function TabBand({
           <PanelLeftOpen size={15} aria-hidden="true" />
         </button>
       )}
+
+      <JuniorTab tab={junior} active={activeKey === junior.key} onSelect={onSelect} />
 
       <div className="strip" ref={strip} data-fade={fade} role="presentation" onDragLeave={onStripDragLeave}>
         {tabs.map((t, i) => (
@@ -306,17 +307,35 @@ export function TabBand({
             onPin={onPin}
           />
         )}
-
-        {pageTab && (
-          <button type="button" role="tab" aria-selected className="tab active">
-            <pageTab.icon size={13} aria-hidden="true" />
-            <span className="t">{pageTab.label}</span>
-          </button>
-        )}
       </div>
 
       <NewTabMenu onNew={onNew} onNewTerminal={onNewTerminal} terminalCwd={terminalCwd} />
     </div>
+  )
+}
+
+/**
+ * Junior's DM: the J face alone, outside the scroller so it never scrolls
+ * away, no close. Its dot says Junior is working; orange says it waits on you.
+ */
+function JuniorTab({ tab, active, onSelect }: { tab: OpenTab; active: boolean; onSelect: (key: string) => void }) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={active}
+      aria-label={tab.waiting ? `${tab.title}, waiting on you: ${tab.waiting}` : tab.title}
+      className={`tab juniorTab${active ? ' active' : ''}`}
+      title={tab.waiting ? `${tab.title} — waiting on you: ${tab.waiting}` : tab.title}
+      onClick={() => onSelect(tab.key)}
+    >
+      <JuniorFace size={16} motion="still" decorative />
+      {tab.waiting ? (
+        <span className="pdot needs" aria-hidden="true" />
+      ) : (
+        tab.running && <span className="pdot live" style={{ background: tab.color }} aria-hidden="true" />
+      )}
+    </button>
   )
 }
 
@@ -353,7 +372,7 @@ function useKeepActiveInView(strip: RefObject<HTMLDivElement | null>, activeKey:
 
 /**
  * One tab. A session or shell carries its project dot; a document does not.
- * A peeked document is provisional: double-click keeps it, the way a preview
+ * The preview tab is provisional: double-click keeps it, the way a preview
  * editor works everywhere else.
  */
 function Tab({
@@ -381,7 +400,7 @@ function Tab({
     e.stopPropagation()
     onClose(tab.key)
   }
-  const Icon = ICON[tab.kind]
+  const Icon = tab.icon ?? ICON[tab.kind]
   // A DM's face is its mark; its dot shows only while the agent works.
   const dotted = tab.kind === 'session' || tab.kind === 'terminal' || (tab.kind === 'dm' && tab.running)
   return (
@@ -393,7 +412,7 @@ function Tab({
           aria-selected={active}
           draggable={!!drag}
           className={`tab${active ? ' active' : ''}${tab.preview ? ' preview' : ''}${drag?.dragging ? ' dragging' : ''}`}
-          title={tab.preview ? `${tab.title} — double-click to keep open` : tab.waiting ? `${tab.title} — waiting on you: ${tab.waiting}` : tab.title}
+          title={tab.preview ? `${tab.title} — double-click to keep it open` : tab.waiting ? `${tab.title} — waiting on you: ${tab.waiting}` : tab.title}
           onClick={() => onSelect(tab.key)}
           onDoubleClick={() => tab.preview && onPin(tab.key)}
           onAuxClick={(e) => e.button === 1 && close(e)}
@@ -431,7 +450,7 @@ function Tab({
               <Pin size={14} aria-hidden="true" />
               <span className="text">
                 <span className="name">Keep open</span>
-                <span className="desc">Stop the next document replacing it</span>
+                <span className="desc">Stop the next page replacing it</span>
               </span>
             </CtxMenuItem>
             <CtxMenuSeparator />

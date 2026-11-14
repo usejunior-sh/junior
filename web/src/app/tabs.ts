@@ -1,17 +1,22 @@
-import { Terminal as TerminalIcon, FileText, FileDiff, CalendarClock, Target } from 'lucide-react'
-import { JUNIOR_DM } from '../../../core/junior/dms.js'
-import { changeId } from '../changesStore.js'
+import { Terminal as TerminalIcon, FileText, FileDiff, CalendarClock, ListChecks, GitPullRequest, Settings, Home, type LucideProps } from 'lucide-react'
+import type { ComponentType } from 'react'
 import type { RailSection } from '../components/Rail.js'
-import type { PageTab, TabKind } from '../components/TabBand.js'
-import { runFileHash } from '../components/RunFolderPage.js'
-import { type Route, itemHash } from '../hooks.js'
+import type { TabKind } from '../components/TabBand.js'
+import type { Route } from '../hooks.js'
+import type { Place } from './tabKeys.js'
 
-export const PAGE_TABS: Record<'jobs' | 'terminals' | 'artifacts' | 'changes' | 'goals', PageTab> = {
-  terminals: { key: 'page:terminals', label: 'Terminals', icon: TerminalIcon },
-  artifacts: { key: 'page:artifacts', label: 'Artifacts', icon: FileText },
-  changes: { key: 'page:changes', label: 'Changes', icon: FileDiff },
-  jobs: { key: 'page:jobs', label: 'Jobs', icon: CalendarClock },
-  goals: { key: 'page:goals', label: 'Goals', icon: Target },
+export { JUNIOR_TAB, PLACE_LABEL, isPlaceKey, placeKey, placeOfKey, routeOfKey, tabKeyOf } from './tabKeys.js'
+
+/** A place's mark in its tab. */
+export const PLACE_ICON: Record<Place, ComponentType<LucideProps>> = {
+  inbox: ListChecks,
+  prs: GitPullRequest,
+  artifacts: FileText,
+  jobs: CalendarClock,
+  settings: Settings,
+  terminals: TerminalIcon,
+  changes: FileDiff,
+  junior: Home,
 }
 
 /** The sections whose list is the panel: on a phone, their bottom-bar tab opens it as a sheet. */
@@ -30,101 +35,24 @@ export const SHEET_LABEL: Record<RailSection, string> = {
 }
 
 export const termKey = (id: string) => `term:${id}`
-/** An agent's DM tab: `dm:junior`, `dm:junior:writer`. */
-export const dmTabKey = (dm: string) => `dm:${dm}`
 export const draftKey = (id: string) => `draft:${id}`
 export const draftRoute = (id: string) => `/new/${id}`
 
-/**
- * The tab-band key for a route, or null when the route is not a tab at all
- * (`home` redirects, `settings` is a page of its own, outside the band). Sessions keep the bare id they
- * have always had; everything else is `<kind>:<id>`.
- */
-export function tabKeyOf(route: Route): string | null {
-  switch (route.page) {
-    case 'junior':
-      return 'junior'
-    case 'inbox':
-      return 'inbox'
-    case 'session':
-      return route.id
-    // An agent's DM is a document tab: peeked when you pick the agent, kept when you double-click it.
-    case 'agents':
-      return dmTabKey(route.name ?? JUNIOR_DM)
-    case 'draft':
-      return draftKey(route.id)
-    case 'terminal':
-      return termKey(route.id)
-    case 'item':
-      return `item:${route.id}`
-    case 'artifact':
-      return `artifact:${route.id}`
-    case 'run':
-      return `run:${route.runId}`
-    case 'job':
-      return `job:${route.id}`
-    case 'job-form':
-      return `job-form:${route.id ?? 'new'}`
-    case 'change':
-      return `change:${changeId(route.checkoutId, route.path)}`
-    case 'changes':
-    case 'artifacts':
-    case 'jobs':
-    case 'terminals':
-    case 'goals':
-      return PAGE_TABS[route.page].key
-    case 'home':
-    case 'settings':
-    case 'prs':
-      return null
-  }
-}
-
-/** The route a tab key points back at, the inverse of `tabKeyOf`. */
-export function routeOfKey(key: string): string {
-  const cut = key.indexOf(':')
-  const id = cut === -1 ? '' : key.slice(cut + 1)
-  switch (cut === -1 ? '' : key.slice(0, cut)) {
-    case 'term':
-      return `/terminal/${id}`
-    case 'draft':
-      return draftRoute(id)
-    case 'item':
-      return itemHash(id)
-    case 'artifact':
-      return `/artifact/${id}`
-    case 'run':
-      return runFileHash(id)
-    case 'job':
-      return `/jobs/${encodeURIComponent(id)}`
-    case 'job-form':
-      return id === 'new' ? '/jobs/new' : `/jobs/${encodeURIComponent(id)}/edit`
-    case 'change':
-      return `/change/${id}`
-    case 'dm':
-      return `/agents/${encodeURIComponent(id)}`
-    case 'page':
-      return `/${id}`
-    default:
-      // a bare session id, or the pinned Junior and inbox
-      return key === 'inbox' ? '/inbox' : key === 'junior' ? '/junior' : key
-  }
-}
-
-/** Documents are peeked at; processes are pinned. */
+/** Things whose tab is named from a store (or remembered), not from a live session or shell. */
 const DOC_KINDS: readonly TabKind[] = ['item', 'artifact', 'job', 'job-form', 'change', 'run', 'dm']
 
 export function kindOfKey(key: string): TabKind | null {
   const cut = key.indexOf(':')
-  // A session is the one key with no prefix; Junior's page is not a tab kind.
-  if (cut === -1) return key === 'inbox' ? 'inbox' : key === 'junior' ? null : 'session'
+  // A session is the one key with no prefix.
+  if (cut === -1) return 'session'
   const p = key.slice(0, cut)
   if (p === 'term') return 'terminal'
   if (p === 'draft') return 'draft'
+  if (p === 'page') return 'place'
   return DOC_KINDS.includes(p as TabKind) ? (p as TabKind) : null
 }
 
-/** A document is peeked at by default; a process is pinned from the start. */
+/** A document tab: named by useDocumentTabs from its store. */
 export function isDocKey(key: string): boolean {
   const kind = kindOfKey(key)
   return !!kind && DOC_KINDS.includes(kind)
@@ -141,7 +69,7 @@ export const GENERIC: Record<TabKind, string> = {
   'job-form': 'Job',
   change: 'File',
   run: 'Team run',
-  inbox: 'Tasks',
+  place: 'Page',
   dm: 'Agent',
 }
 

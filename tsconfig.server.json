@@ -36,6 +36,7 @@
     "web/src/usageFormat.ts",
     "web/src/chatSide.ts",
     "web/src/tabStrip.ts",
+    "web/src/app/tabKeys.ts",
     "desktop/src/tabs-model.ts",
     "web/src/components/browser/steps.ts",
     "vite.config.ts"

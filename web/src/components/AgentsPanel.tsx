@@ -20,7 +20,7 @@ type Props = {
   /** the DM key on screen (`junior`, `junior:explainer`) */
   current: string | null
   onOpen: (key: string) => void
-  /** Double-click: keep the agent's DM as a tab of its own, not just the peek. */
+  /** Double-click: open the agent's DM as a tab (a click already does; kept for the gesture). */
   onPin: (key: string) => void
   onSearch: () => void
 }
@@ -72,7 +72,7 @@ function AgentRow({ row, dm, active, onOpen, onPin }: { row: Row; dm: SessionSum
       role="button"
       tabIndex={0}
       aria-current={active ? 'page' : undefined}
-      title={[row.label, row.description, 'Double-click to keep it open as a tab'].filter(Boolean).join('\n')}
+      title={[row.label, row.description].filter(Boolean).join('\n')}
       onClick={onOpen}
       onDoubleClick={onPin}
       onPointerEnter={() => setHover(true)}

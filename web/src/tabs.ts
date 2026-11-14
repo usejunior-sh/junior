@@ -1,18 +1,19 @@
 /**
- * The tab band: every session, shell or document opened in this browser gets
- * a closable tab, Inbox included (closing it is allowed; it comes back when
- * you next open the inbox). Per workspace, per browser, a tab is where *you*
- * are, not a property of the session, so it lives in localStorage, not the
- * server.
+ * The page tabs (app/tabKeys.ts has the rules): every thing you open gets a
+ * closable tab, places share the one preview tab, and Junior's DM is always
+ * first and never closes, so it is drawn by the band and never stored here.
+ * Per workspace, per browser, a tab is where *you* are, not a property of the
+ * session, so it lives in localStorage, not the server.
  */
 import { useCallback, useEffect, useState, type MouseEvent } from 'react'
 import type { RailSection } from './components/Rail.js'
+import { JUNIOR_TAB, isLegacyKey, isPlaceKey } from './app/tabKeys.js'
 
 const key = (workspaceId: string) => `junior.tabs.${workspaceId || 'default'}`
 
 /**
- * What the band holds: tabs you pinned, the one document you are peeking at,
- * and the names of any documents among them. Sessions and shells are always
+ * What the band holds: tabs you opened or kept, the one place in the preview
+ * tab, and the names of any documents among them. Sessions and shells are always
  * in memory so they never need a remembered name; an artifact or work item
  * does, or a cold load would show a band of "Artifact", "Artifact".
  */
@@ -29,12 +30,15 @@ function readTitles(x: unknown): Record<string, string> {
   return out
 }
 
+/** Junior's DM is drawn, never stored; the old `inbox` and `junior` keys are retired. */
+const keep = (k: string) => k !== JUNIOR_TAB && !isLegacyKey(k)
+
 function read(workspaceId: string): Band {
   try {
     const raw = localStorage.getItem(key(workspaceId))
     const parsed: unknown = raw ? JSON.parse(raw) : null
     // v1 was a bare array of tab keys.
-    if (Array.isArray(parsed)) return { ...EMPTY, tabs: strings(parsed) }
+    if (Array.isArray(parsed)) return { ...EMPTY, tabs: strings(parsed).filter(keep) }
     if (!parsed || typeof parsed !== 'object') return EMPTY
     const o = parsed as Record<string, unknown>
     const titles = readTitles(o.titles)
@@ -50,7 +54,8 @@ function read(workspaceId: string): Band {
         if (isStr(pt) && pt && !titles[pk]) titles[pk] = pt
       }
     }
-    return { tabs: strings(o.tabs), preview, titles }
+    // Before places shared the preview, it held a peeked document: that one is let go.
+    return { tabs: strings(o.tabs).filter(keep), preview: preview && isPlaceKey(preview) ? preview : null, titles }
   } catch {
     return EMPTY
   }
@@ -81,8 +86,9 @@ export function useOpenTabs(workspaceId: string) {
     }
   }, [band, workspaceId])
 
-  /** Pin a tab. Whatever was being peeked at has now been committed to. */
+  /** Open a tab, or keep the place in the preview tab. */
   const open = useCallback((id: string) => {
+    if (id === JUNIOR_TAB) return
     setBand((b) => {
       if (b.tabs.includes(id)) return b.preview === id ? { ...b, preview: null } : b
       return { ...b, tabs: [...b.tabs, id], preview: b.preview === id ? null : b.preview }
@@ -110,8 +116,8 @@ export function useOpenTabs(workspaceId: string) {
   }, [])
 
   /**
-   * Peek at a document. One slot: opening another replaces it, so browsing
-   * never leaves tabs behind. Already-pinned keys are left alone.
+   * Show a place in the preview tab. One slot: the next place replaces it, so
+   * browsing never leaves tabs behind. A place you kept is left alone.
    */
   const setPreview = useCallback((id: string) => {
     setBand((b) => (b.preview === id || b.tabs.includes(id) ? b : prune({ ...b, preview: id })))
@@ -162,10 +168,9 @@ export function useOpenTabs(workspaceId: string) {
 }
 
 /**
- * Browser-style open gestures for a list row. A plain click peeks: the tab
- * is provisional and the next document replaces it. ⌘/ctrl-click and
- * middle-click keep it *without* leaving where you are; double-click opens it
- * and keeps it.
+ * Browser-style open gestures for a list row. A plain click opens the thing
+ * in its own tab; ⌘/ctrl-click and middle-click open the tab *without*
+ * leaving where you are; double-click opens it too.
  */
 export function rowOpen(open: () => void, pin: () => void) {
   return {
