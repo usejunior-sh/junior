@@ -1,8 +1,8 @@
 import * as RadioGroup from '@radix-ui/react-radio-group'
-import type { ChatAgent } from '../../../core/junior/agents.js'
+import { agentOpener, type ChatAgent } from '../../../core/junior/agents.js'
 import { AgentPicker } from './AgentPicker.js'
 import { useChatAgent } from '../chatAgents.js'
-import { CalendarCheck, Check, Folder, GitBranch, LoaderCircle, Plus, Repeat, X } from 'lucide-react'
+import { CalendarCheck, Check, CornerDownRight, Folder, GitBranch, LoaderCircle, Plus, Repeat, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import {
   MAX_MENTIONS_PER_MESSAGE,
@@ -153,8 +153,8 @@ export type ComposerTop = {
   onClaude: boolean
   /** the chat agent picked in the box, so the big face wears its colour and tag */
   agent: ChatAgent | null
-  /** back to plain Junior */
-  clearAgent: () => void
+  /** back to plain Junior; absent when the agent is fixed (its DM) */
+  clearAgent?: () => void
 }
 
 const STEPS: { step: CreateStep; label: (branch: string) => string }[] = [
@@ -363,7 +363,7 @@ export function ChatComposer({ draft, onChange, onCreate, error, step, top, plac
 
   return (
     <div id={id} className={`chatComposer${onClaude ? ' junior' : ''}`} style={{ '--junior': agentInfo?.colour ?? persona.colour } as CSSProperties}>
-      {top?.({ mood, look, handoff, job, goal, dispatched: !!draft.label, onClaude, agent: onClaude && !job ? agentInfo : null, clearAgent: () => setAgent(undefined) })}
+      {top?.({ mood, look, handoff, job, goal, dispatched: !!draft.label, onClaude, agent: onClaude && !job ? agentInfo : null, ...(agentLocked ? {} : { clearAgent: () => setAgent(undefined) }) })}
       {draft.itemId && canPick && mainCo && !goal && (
         <div className="runIn">
           <span className="lbl" id={`runin-${draft.id}`}>
@@ -542,16 +542,27 @@ export function ChatComposer({ draft, onChange, onCreate, error, step, top, plac
         // Any session can still become any of these from what you say. Once you type
         // they hide but keep their room, so the page doesn't jump.
         <div className={`nsStarters${hasText || handoff ? ' away' : ''}`} {...(hasText || handoff ? { inert: true, 'aria-hidden': true } : {})}>
-          <button type="button" className={job ? 'on job' : undefined} aria-pressed={job} onClick={() => {
-            setJob(!job)
-            setMode('normal')
-          }}>
-            <Repeat size={12} aria-hidden="true" /> Set up a job
-          </button>
-          <button type="button" onClick={() => onChange({ text: 'Pick up the next item on today’s plan' })}>
-            <CalendarCheck size={12} aria-hidden="true" /> Pick up today’s next item
-          </button>
-          {starters}
+          {agentInfo && !job ? (
+            // An agent offers its own starters (agentOpener), each filling the box.
+            agentOpener(agentInfo).starters.map((t) => (
+              <button key={t} type="button" onClick={() => onChange({ text: t })}>
+                <CornerDownRight size={12} aria-hidden="true" /> {t}
+              </button>
+            ))
+          ) : (
+            <>
+              <button type="button" className={job ? 'on job' : undefined} aria-pressed={job} onClick={() => {
+                setJob(!job)
+                setMode('normal')
+              }}>
+                <Repeat size={12} aria-hidden="true" /> Set up a job
+              </button>
+              <button type="button" onClick={() => onChange({ text: 'Pick up the next item on today’s plan' })}>
+                <CalendarCheck size={12} aria-hidden="true" /> Pick up today’s next item
+              </button>
+              {starters}
+            </>
+          )}
         </div>
       )}
       {pulled.length > 0 && (

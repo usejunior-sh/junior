@@ -3,10 +3,13 @@
  * line, asking what you're working on. The face reacts to the box under it
  * (ChatComposer), the halo spins while a worktree is made, and it nods "On
  * it." when you send.
+ * A chat agent (picked in the box, or fixed in its DM) wears its colour and
+ * asks its own question (agentOpener).
  * A connected agent (Codex) gets a plain heading instead.
  */
 import { AgentEyebrow } from './AgentEyebrow.js'
 import { useEffect, useMemo, useState, type ComponentProps } from 'react'
+import { agentOpener } from '../../../core/junior/agents.js'
 import { sessionAsk } from '../../../core/junior/greeting.js'
 import { usePersona, useYouName } from '../junior.js'
 import { ChatComposer, type ComposerTop } from './ChatComposer.js'
@@ -40,9 +43,9 @@ function useTyped(text: string): string {
   return text.slice(0, n)
 }
 
-type Props = Omit<ComponentProps<typeof ChatComposer>, 'top' | 'placeholder' | 'id'>
+type Props = Omit<ComponentProps<typeof ChatComposer>, 'top' | 'id'>
 
-/** A draft tab: the composer that becomes a session on first send. */
+/** A draft tab, or an agent's DM before its first message: the composer that becomes a session on first send. */
 export function NewSessionComposer(props: Props) {
   return <ChatComposer {...props} id="newSessionHome" top={(s) => <Greeting s={s} />} />
 }
@@ -52,7 +55,7 @@ function Greeting({ s }: { s: ComposerTop }) {
   const you = useYouName()
   // Junior's line in the bubble: a greeting by time of day, then the question; "On it." once you send.
   const { greet, ask } = useMemo(() => sessionAsk(Date.now(), persona.voice, you), [persona.voice, you])
-  const question = s.job ? 'Tell me about the job.' : s.goal ? 'Tell me about the goal.' : s.dispatched ? 'Anything I should know before I start?' : ask
+  const question = s.job ? 'Tell me about the job.' : s.goal ? 'Tell me about the goal.' : s.dispatched ? 'Anything I should know before I start?' : s.agent ? agentOpener(s.agent).ask : ask
   const said = useTyped(s.handoff ? 'On it.' : `${greet} ${question}`)
   // The whole line is always there, the untyped tail hidden, so the heading never grows or re-wraps while it types.
   const [[g, gRest], [q, qRest]] = splitTyped(s.handoff ? ['On it.', ''] : [greet, ` ${question}`], said.length)

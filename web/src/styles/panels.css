@@ -245,10 +245,3 @@
 }
 .usageLegend .key .n { font-family: var(--mono); font-size: 0.8077rem; color: var(--stone); margin-left: 2px; }
 
-
-/* ---------- an agent's DM before its first message ---------- */
-.agentDmStart { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 40px 24px; text-align: center; overflow: auto; }
-.agentDmStart h1 { margin: 6px 0 0; font: 400 2rem/1.1 var(--serif); color: var(--ink); }
-.agentDmStart p { margin: 0; max-width: 52ch; color: var(--mute); }
-.agentDmCompose { width: 100%; max-width: 680px; margin-top: 18px; text-align: left; }
-.agentDmCompose .chatComposer { display: flex; flex-direction: column; gap: 14px; width: 100%; }

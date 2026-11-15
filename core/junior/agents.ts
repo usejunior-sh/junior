@@ -13,6 +13,8 @@
  *   chat: true
  *   skills: book, indian-mode
  *   tools: Read, Grep, Glob
+ *   ask: What do you want to understand?
+ *   starters: Explain how this repo is laid out | Walk me through a request
  *   ---
  *   <the prompt>
  *
@@ -33,6 +35,10 @@ export type ChatAgent = {
   colour: string | null
   /** the model the agent asks for; null = the chat's own pick */
   model: string | null
+  /** its question on a new chat ("What's broken?"); null = its starter's, or the generic one (agentOpener) */
+  ask: string | null
+  /** what its new chat offers to fill the box with, `|`-separated in the file; null = its starter's (agentOpener) */
+  starters: string[] | null
   /** built-in tools it may use; null = every one a chat has */
   tools: string[] | null
   /** the only skills it loads; null = every skill */
@@ -80,6 +86,15 @@ const list = (v: string | undefined): string[] | null => {
   return xs.length ? [...new Set(xs)] : null
 }
 
+const starterList = (v: string | undefined): string[] | null => {
+  const xs = (v ?? '')
+    .split('|')
+    .map((s) => s.trim().slice(0, 80))
+    .filter(Boolean)
+    .slice(0, 3)
+  return xs.length ? xs : null
+}
+
 const isOn = (v: string | undefined) => /^(true|yes|on)$/i.test((v ?? '').trim())
 
 /** "code-reviewer" → "Code reviewer". */
@@ -99,6 +114,8 @@ export function chatAgentFrom(text: string, at: { name: string; slug: string; pa
     label: (f.label ?? '').trim().slice(0, 40) || labelOf(f.name || at.slug),
     description: (f.description ?? '').trim(),
     colour: agentFace(f.color),
+    ask: (f.ask ?? '').trim().slice(0, 80) || null,
+    starters: starterList(f.starters),
     model: model && model !== 'inherit' ? model : null,
     tools: list(f.tools),
     skills: list(f.skills),
@@ -106,6 +123,24 @@ export function chatAgentFrom(text: string, at: { name: string; slug: string; pa
     path: at.path,
     scope: at.scope,
   }
+}
+
+/** What an agent's new chat says and offers: its question under the greeting, and starters that fill the box. */
+export type AgentOpener = { ask: string; starters: string[] }
+
+/** The seeded starters' openers (server/chat-agents.ts), so files written before `ask` and `starters` still get one. */
+const OPENERS: Readonly<Record<string, AgentOpener>> = {
+  babysitter: { ask: 'Which PR needs watching?', starters: ['Check CI on my open PRs', 'Fix the merge conflicts on my branch'] },
+  debugger: { ask: "What's broken?", starters: ['Reproduce the failing test', 'Find out why CI is red on my branch'] },
+  explainer: { ask: 'What do you want to understand?', starters: ['Explain how this repo is laid out', 'Walk me through how a request is handled'] },
+  reviewer: { ask: 'What should I review?', starters: ['Review my uncommitted changes', 'First pass on my latest PR'] },
+  writer: { ask: 'What are we writing?', starters: ['Draft a PR description for my branch', "Write a status update from today's commits"] },
+}
+
+/** The file's `ask` and `starters` win, then its starter's, then a plain question and none. */
+export function agentOpener(a: Pick<ChatAgent, 'slug' | 'ask' | 'starters'>): AgentOpener {
+  const seeded = OPENERS[a.slug]
+  return { ask: a.ask ?? seeded?.ask ?? 'What can I help with?', starters: a.starters ?? seeded?.starters ?? [] }
 }
 
 /** How the agent is named everywhere: Junior first, the role after. */

@@ -10,7 +10,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { agentAppend, agentDisallowed, agentFace, agentTitle, chatAgentFrom } from '../core/junior/agents.js'
+import { agentAppend, agentDisallowed, agentFace, agentOpener, agentTitle, chatAgentFrom } from '../core/junior/agents.js'
 import { seedChatAgents } from '../server/chat-agents.js'
 import { listChatAgents, type LibraryRoot } from '../server/library.js'
 
@@ -80,4 +80,14 @@ test('starters are seeded once: edits kept, a deleted one stays deleted', async 
   } finally {
     await rm(dir, { recursive: true, force: true })
   }
+})
+
+test("a new chat asks the agent's question and offers its starters: the file's, else its starter's, else a plain one", () => {
+  const own = chatAgentFrom('---\nname: debugger\nchat: true\nask: Where does it hurt?\nstarters: Run the tests | Read the log\n---\n', { ...at, slug: 'debugger' })!
+  assert.deepEqual(agentOpener(own), { ask: 'Where does it hurt?', starters: ['Run the tests', 'Read the log'] })
+  const seeded = chatAgentFrom('---\nname: debugger\nchat: true\n---\n', { ...at, slug: 'debugger' })!
+  assert.equal(agentOpener(seeded).ask, "What's broken?")
+  assert.equal(agentOpener(seeded).starters.length, 2)
+  const plain = chatAgentFrom('---\nname: cpo\nchat: true\n---\n', { ...at, slug: 'cpo' })!
+  assert.deepEqual(agentOpener(plain), { ask: 'What can I help with?', starters: [] })
 })
