@@ -230,15 +230,17 @@ kbd { font-family: var(--mono); font-size: 0.8462rem; color: var(--ash); border:
 .wsTabRow { display: flex; align-items: center; gap: 2px; min-width: 0; }
 .wsTabsFixed { display: flex; align-items: center; gap: 2px; flex: none; }
 .wsTab {
-  display: inline-flex; align-items: center; gap: 8px; height: 28px; padding: 0 10px; max-width: 180px; flex: none;
+  display: inline-flex; align-items: center; gap: 8px; height: 28px; padding: 0 10px; width: 148px; flex: none;
   border: 0; border-radius: var(--r); background: transparent; color: var(--ash); font-size: 1rem; font-weight: 500;
   transition: color 0.1s ease, background 0.1s ease;
 }
-.wsTabRow.short .wsTab { max-width: 92px; padding: 0 8px; }
+/* Every tab is one width (fitTabs' TAB_FULL / TAB_SHORT less the gap), so the
+   front tab's chevron or another's count never resizes it or shoves its neighbours. */
+.wsTabRow.short .wsTab { width: 94px; padding: 0 8px; }
 .wsTab:hover { color: var(--charcoal); background: var(--wash-2); }
 .wsTab.on, .wsTab.on:hover, .wsTab.on[data-state="open"] { color: var(--ink); background: var(--wash-3); box-shadow: inset 0 0 0 1px var(--hair); }
 .wsTab .wsDot { width: 7px; height: 7px; border-radius: var(--r-full); flex: none; }
-.wsTabName { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wsTabName { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
 .wsTabChev { color: var(--ash); flex: none; margin-right: -3px; }
 .wsTab.on[data-state="open"] .wsTabChev { color: var(--ink); }
 /* Another workspace's needs-you count: orange, the only thing it ever says. */
