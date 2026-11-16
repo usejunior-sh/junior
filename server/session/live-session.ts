@@ -36,6 +36,7 @@ import { classifyEffect, SESSION_TOOLS, sessionScoped, TEAM_TOOLS, JUNIOR_READ_T
 import { teamRunOf } from '../team-run/state.js'
 import { noteActionEvent } from './actions-record.js'
 import { lineOf } from '../../core/junior/last-line.js'
+import { reportsUp } from '../../core/junior/thread-wake.js'
 import { endedTask, owedProgress, type ProgressPending, snapshotAgentIds, throttleProgress, WorkflowTurns } from './workflow-tasks.js'
 import { costStep, lastResultMark, type CostMark } from '../../core/usage/turn-cost.js'
 import { STALL_TICK_MS, stallNotice, TurnWatch } from '../../core/sessions/stall.js'
@@ -110,6 +111,8 @@ export class LiveSession {
   private readonly workflowAgents = new Map<string, string>()
   /** A result came while runs were going, so the turn was left open for them. */
   private turnHeld = false
+  /** The last message into this turn came from the DM that started this thread: its end and its prompts report up (reportsUp). */
+  private turnReportsUp = false
   /** Spawned with Ultracode on: its system prompt carries the Ultracode note. */
   private readonly spawnedUltracode: boolean
   /** Said once per subprocess (and per switch) when the model has no Workflow tool. */
@@ -343,8 +346,8 @@ export class LiveSession {
           this.rt.files.invalidate(this.row.cwd)
           // A brief run is one turn: its result is the run's end.
           if (this.row.kind === 'brief') void onBriefTurnDone(this.rt, this.row.id)
-          // A thread Junior started: one line in Junior's chat says it replied.
-          if (this.row.startedBy) {
+          // A thread Junior started, on a turn its DM sent: one line in Junior's chat says it replied.
+          if (this.turnReportsUp) {
             const said = (ev.record as { result?: unknown }).result
             void reportThreadTurn(this.rt, this.row, typeof said === 'string' ? said : '').catch(() => {})
           }
@@ -506,6 +509,8 @@ export class LiveSession {
     const sender = opts.fromSession && !opts.report ? this.rt.rows.get(opts.fromSession) : undefined
     // The user writing in a thread themselves breaks a DM's auto-answer loop.
     if (!opts.from && !opts.fromSession && this.row.startedBy) threadUserMessage(this.rt, this.row.id, this.row.startedBy)
+    // The last message in wins: the user typing here keeps this turn out of the DM; the DM's next message reports again.
+    this.turnReportsUp = reportsUp(this.row.startedBy, opts.fromSession)
     const modelText = opts.report ? text : sender && text ? frameSessionMessage(sender, text) : opts.from && text ? frameTeamMessage(opts.from, text) : opts.mode === 'goal' ? `${GOAL_MODE_MARK}${text}` : text
     this.setStatus('running')
     this.watchTurn()
@@ -669,7 +674,7 @@ export class LiveSession {
       if (this.pendingPermissions.size === 1) {
         broadcastSessionList(this.rt)
         // A thread started from a DM now waits on the user: the DM hears, once per wait.
-        if (this.row.startedBy) void reportThreadBlocked(this.rt, this.row, toolName, toolInput, opts.title, opts.description).catch(() => {})
+        if (this.turnReportsUp) void reportThreadBlocked(this.rt, this.row, toolName, toolInput, opts.title, opts.description).catch(() => {})
       }
       this.emit(
         {

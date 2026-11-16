@@ -103,6 +103,15 @@ export function noteUserInThread(guard: WakeGuard, threadId: string): void {
   guard.autoPending.delete(threadId)
 }
 
+/**
+ * Whether a thread's turn reports up to the DM that started it: only when the
+ * last message into the turn came from that DM (start_session or
+ * message_session). A turn the user starts by typing in the thread stays there.
+ */
+export function reportsUp(startedBy: string | null | undefined, fromSession: string | undefined): boolean {
+  return !!startedBy && fromSession === startedBy
+}
+
 /** What a blocked thread waits on, in one line. */
 export function blockedText(toolName: string, input: Record<string, unknown>, title?: string, description?: string): string {
   if (toolName === 'AskUserQuestion') {

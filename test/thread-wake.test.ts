@@ -17,6 +17,7 @@ import {
   noteUserInThread,
   openReportTurn,
   QUIET_REPLY,
+  reportsUp,
   type ThreadReport,
   wakeFrom,
   wakeMessage,
@@ -115,4 +116,15 @@ test('blocked text: a question with its options, or the prompt', () => {
   assert.equal(blockedText('AskUserQuestion', { questions: [{ question: 'Which branch?', options: [{ label: 'main' }, { label: 'dev' }] }] }), 'a question for the user: Which branch? (options: main / dev)')
   assert.equal(blockedText('Bash', {}, 'Run git push', undefined), 'a permission prompt for Bash: Run git push')
   assert.equal(blockedText('Edit', {}), 'a permission prompt for Edit')
+})
+
+test('reports up: only a turn the DM sent, not one the user typed in the thread', () => {
+  assert.ok(reportsUp('dm-1', 'dm-1'), 'start_session / message_session from the DM')
+  assert.ok(!reportsUp('dm-1', undefined), 'the user typing in the thread')
+  assert.ok(!reportsUp('dm-1', 'other-chat'), 'another chat messaging the thread')
+  assert.ok(!reportsUp(undefined, undefined), 'not a thread')
+  // The last message in wins: user, then the DM again, reports; DM, then the user, does not.
+  const turn = (froms: (string | undefined)[]) => froms.reduce<boolean>((_, f) => reportsUp('dm-1', f), false)
+  assert.ok(turn([undefined, 'dm-1']))
+  assert.ok(!turn(['dm-1', undefined]))
 })
