@@ -29,6 +29,8 @@ export type TabsState = {
   active: string
   elsewhere: { id: string; windowId: number }[]
   counts: Record<string, number>
+  /** View ▸ Hide Workspace Names: tabs draw as monogram tiles, every window */
+  hideNames: boolean
 }
 
 /** Saved across launches: each window's tabs, in order, and its front tab. */
@@ -162,11 +164,11 @@ export class TabsModel {
   }
 
   /** What a window's views draw. */
-  stateFor(winId: number, counts: Record<string, number>): TabsState {
+  stateFor(winId: number, counts: Record<string, number>, hideNames = false): TabsState {
     const w = this.windows.get(winId) ?? { tabs: [], active: '' }
     const elsewhere: TabsState['elsewhere'] = []
     for (const [other, o] of this.windows) if (other !== winId) for (const t of o.tabs) elsewhere.push({ id: t.id, windowId: other })
-    return { tabs: w.tabs.map((t) => ({ ...t })), active: w.active, elsewhere, counts }
+    return { tabs: w.tabs.map((t) => ({ ...t })), active: w.active, elsewhere, counts, hideNames }
   }
 
   save(order: number[]): SavedWindow[] {

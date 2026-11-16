@@ -72,6 +72,8 @@ export class WorkspaceTabsHost {
   /** the daemon answers: views load. False while the splash is up. */
   private ready = false
   private countsSoon: NodeJS.Timeout | undefined
+  /** View ▸ Hide Workspace Names: every window's tabs draw as monograms */
+  private hideNames = false
 
   constructor(private readonly deps: TabsDeps) {}
 
@@ -557,7 +559,18 @@ export class WorkspaceTabsHost {
   }
 
   private stateOf(win: BrowserWindow): TabsState {
-    return this.model.stateFor(win.id, this.counts)
+    return this.model.stateFor(win.id, this.counts, this.hideNames)
+  }
+
+  /** Names or monograms, in every window at once. */
+  setHideNames(on: boolean) {
+    if (on === this.hideNames) return
+    this.hideNames = on
+    this.pushAll()
+  }
+
+  get namesHidden(): boolean {
+    return this.hideNames
   }
 
   /** Every view in every window redraws its strip. */

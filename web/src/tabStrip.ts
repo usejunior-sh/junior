@@ -21,19 +21,53 @@ export type StripFit = {
 export const TAB_FULL = 150
 export const TAB_SHORT = 96
 export const MORE_W = 64
+/** A monogram tile's slot (names hidden): the front one's chevron, plus the gap. */
+export const TAB_MONO = 46
 
-export function fitTabs(tabs: readonly StripTab[], active: string, width: number): StripFit {
+/** `mono`: names hidden, every tab a tile of one width; no short step. */
+export function fitTabs(tabs: readonly StripTab[], active: string, width: number, mono = false): StripFit {
   const ids = tabs.map((t) => t.id)
-  if (tabs.length * TAB_FULL <= width) return { shown: ids, folded: [], short: false }
-  if (tabs.length * TAB_SHORT <= width) return { shown: ids, folded: [], short: true }
-  const slots = Math.max(1, Math.floor((width - MORE_W) / TAB_SHORT))
+  if (mono && tabs.length * TAB_MONO <= width) return { shown: ids, folded: [], short: false }
+  if (!mono && tabs.length * TAB_FULL <= width) return { shown: ids, folded: [], short: false }
+  if (!mono && tabs.length * TAB_SHORT <= width) return { shown: ids, folded: [], short: true }
+  const slots = Math.max(1, Math.floor((width - MORE_W) / (mono ? TAB_MONO : TAB_SHORT)))
   const keep = new Set(tabs.filter((t) => t.id === active || t.count > 0).map((t) => t.id))
   const rest = tabs.filter((t) => !keep.has(t.id)).sort((a, b) => b.lastActive - a.lastActive)
   for (const t of rest) {
     if (keep.size >= slots) break
     keep.add(t.id)
   }
-  return { shown: ids.filter((id) => keep.has(id)), folded: ids.filter((id) => !keep.has(id)), short: true }
+  return { shown: ids.filter((id) => keep.has(id)), folded: ids.filter((id) => !keep.has(id)), short: !mono }
+}
+
+/**
+ * Each workspace's monogram, for its tile when names are hidden
+ * (.docs/workspace-tabs/private-tabs.html). Two or more words: their
+ * initials ("Triage Dev" → TD). One word: its first letter and the next
+ * consonant ("Lab" → LB, "Novus" → NV). A clash takes the next consonant,
+ * then the next letter. Nothing to set up. Pure; keyed by workspace id.
+ */
+export function monograms(list: readonly { id: string; name: string }[]): Record<string, string> {
+  const out: Record<string, string> = {}
+  const taken = new Set<string>()
+  for (const { id, name } of list) {
+    const words = name.toUpperCase().match(/[\p{L}\p{N}]+/gu) ?? []
+    const [head = '', ...rest] = words
+    const first = head[0] ?? '?'
+    const tail = rest.map((w) => w[0]).join('') + head.slice(1)
+    // second-letter candidates, best first: the next words' initials, else consonants, then any letter
+    const seconds = rest.length ? [...tail] : [...tail.replace(/[AEIOUY]/g, ''), ...tail]
+    let m = first
+    for (const c of seconds) {
+      if (!taken.has(first + c)) {
+        m = first + c
+        break
+      }
+    }
+    taken.add(m)
+    out[id] = m
+  }
+  return out
 }
 
 /** Step to the next or previous tab, wrapping (⌃Tab / ⌃⇧Tab). */

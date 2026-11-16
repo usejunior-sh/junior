@@ -1,10 +1,11 @@
 import { ArrowLeftRight, ChevronDown, ChevronRight, Plus, Settings2, SquareArrowOutUpRight, X } from 'lucide-react'
-import { useEffect, useLayoutEffect, useRef, useState, type DragEvent, type ReactNode } from 'react'
+import { Fragment, useEffect, useLayoutEffect, useRef, useState, type DragEvent, type ReactNode } from 'react'
 import type { Workspace } from '../../../shared/protocol.js'
 import { desktopTabs, type DesktopTabsState } from '../desktop.js'
 import { MOD_LABEL } from '../keys.js'
-import { fitTabs } from '../tabStrip.js'
+import { fitTabs, monograms } from '../tabStrip.js'
 import { Menu, MenuContent, MenuItem, MenuSeparator, MenuSub, MenuSubContent, MenuSubTrigger, MenuTrigger } from '../ui/Menu.js'
+import { Tooltip } from '../ui/Tooltip.js'
 
 /** What a dragged workspace tab carries: its workspace id. */
 const TAB_MIME = 'application/x-junior-workspace-tab'
@@ -16,6 +17,8 @@ const BAR_H = 44
  * The app hosts one view per tab; this view draws the strip from the window's
  * tab list. A click shows another view, nothing reloads. The tab in front
  * keeps today's chevron menu; another tab shows its orange count, never more.
+ * View ▸ Hide Workspace Names (⌘⇧.) draws every tab as a monogram tile, its
+ * name a hover away (.docs/workspace-tabs/private-tabs.html).
  */
 export function WorkspaceTabs({
   state,
@@ -35,6 +38,8 @@ export function WorkspaceTabs({
   const byId = new Map(workspaces.map((w) => [w.id, w]))
   const tabs = state.tabs.filter((tab) => byId.has(tab.id))
   const count = (id: string) => state.counts[id] ?? 0
+  const hide = !!state.hideNames
+  const mono = monograms(workspaces)
 
   // How much room the strip has: the whole zone up to the system icons, less the + and the badge.
   const wrap = useRef<HTMLDivElement>(null)
@@ -64,6 +69,7 @@ export function WorkspaceTabs({
     })),
     state.active,
     width,
+    hide,
   )
   const open = new Set([...state.tabs.map((tab) => tab.id), ...state.elsewhere.map((e) => e.id)])
   const closed = workspaces.filter((w) => !open.has(w.id))
@@ -91,6 +97,44 @@ export function WorkspaceTabs({
     },
   })
   const ours = (id: string) => state.tabs.some((tab) => tab.id === id)
+  // ⌃1–8 go to that tab, ⌃9 to the last (the Window menu's Go to Workspace).
+  const keyOf = (id: string) => {
+    const i = tabs.findIndex((tab) => tab.id === id)
+    return i === tabs.length - 1 && i >= 8 ? 9 : i < 8 ? i + 1 : 0
+  }
+  // Names hidden: the name lives in the tooltip, never on the bar.
+  const named = (w: Workspace, n: number, tab: ReactNode) =>
+    hide ? (
+      <Tooltip
+        side="bottom"
+        delay={400}
+        className="wsTip"
+        content={
+          <>
+            <span className="wsDot" style={{ background: w.color }} aria-hidden="true" />
+            <span>{w.name}</span>
+            {n > 0 && <span className="wsTipMeta">· {n} need{n === 1 ? 's' : ''} you</span>}
+            {keyOf(w.id) > 0 && <kbd className="wsKbd">⌃{keyOf(w.id)}</kbd>}
+          </>
+        }
+      >
+        {tab}
+      </Tooltip>
+    ) : (
+      tab
+    )
+  // Names hidden: a tile in the workspace's colour, its monogram in place of dot and name.
+  const face = (w: Workspace) =>
+    hide ? (
+      <span className="wsMono" aria-hidden="true">
+        {mono[w.id]}
+      </span>
+    ) : (
+      <>
+        <span className="wsDot" style={{ background: w.color }} aria-hidden="true" />
+        <span className="wsTabName">{w.name}</span>
+      </>
+    )
 
   return (
     <div
@@ -113,7 +157,7 @@ export function WorkspaceTabs({
         if (!ours(id)) t.move(id, 'here')
       }}
     >
-      <div className={`wsTabRow${fit.short ? ' short' : ''}`} role="tablist" aria-label="Workspaces">
+      <div className={`wsTabRow${fit.short ? ' short' : ''}${hide ? ' mono' : ''}`} role="tablist" aria-label="Workspaces">
         {fit.shown.map((id) => {
           const w = byId.get(id)!
           const n = count(id)
@@ -123,25 +167,30 @@ export function WorkspaceTabs({
                 {/* The tab drags, so it can't be Radix's trigger (that opens on
                     pointer-down, before a drag starts). A click opens the menu;
                     the trigger is an anchor laid over the tab, for placement only. */}
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected="true"
-                  aria-haspopup="menu"
-                  aria-expanded={frontOpen}
-                  className="wsTab on"
-                  data-state={frontOpen ? 'open' : 'closed'}
-                  title={`Workspace: ${w.name}`}
-                  onClick={() => setFrontOpen(true)}
-                  {...dragProps(id)}
-                >
-                  <MenuTrigger asChild>
-                    <span className="wsTabAnchor" aria-hidden="true" tabIndex={-1} />
-                  </MenuTrigger>
-                  <span className="wsDot" style={{ background: w.color }} aria-hidden="true" />
-                  <span className="wsTabName">{w.name}</span>
-                  <ChevronDown size={12} className="wsTabChev" aria-hidden="true" />
-                </button>
+                {named(
+                  w,
+                  0,
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected="true"
+                    aria-haspopup="menu"
+                    aria-expanded={frontOpen}
+                    aria-label={hide ? w.name : undefined}
+                    className="wsTab on"
+                    style={hide ? { ['--ws' as string]: w.color } : undefined}
+                    data-state={frontOpen ? 'open' : 'closed'}
+                    title={hide ? undefined : `Workspace: ${w.name}`}
+                    onClick={() => setFrontOpen(true)}
+                    {...dragProps(id)}
+                  >
+                    <MenuTrigger asChild>
+                      <span className="wsTabAnchor" aria-hidden="true" tabIndex={-1} />
+                    </MenuTrigger>
+                    {face(w)}
+                    <ChevronDown size={12} className="wsTabChev" aria-hidden="true" />
+                  </button>,
+                )}
                 <MenuContent align="start" className="wsMenu">
                   <MenuItem onSelect={onSettings}>
                     <Settings2 size={14} aria-hidden="true" />
@@ -178,22 +227,28 @@ export function WorkspaceTabs({
               </Menu>
             )
           return (
-            <button
-              key={id}
-              type="button"
-              role="tab"
-              aria-selected="false"
-              className="wsTab"
-              title={`${w.name}${n ? ` — ${n} need${n === 1 ? 's' : ''} you` : ''}\n${MOD_LABEL}-click: its own window`}
-              onMouseDown={(e) => e.button === 1 && e.preventDefault()}
-              onClick={(e) => (wantsWindow(e) ? t.move(id, 'new') : t.activate(id))}
-              onAuxClick={(e) => e.button === 1 && t.move(id, 'new')}
-              {...dragProps(id)}
-            >
-              <span className="wsDot" style={{ background: w.color }} aria-hidden="true" />
-              <span className="wsTabName">{w.name}</span>
-              {n > 0 && <span className="wsCount">{n}</span>}
-            </button>
+            <Fragment key={id}>
+              {named(
+                w,
+                n,
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected="false"
+                  aria-label={hide ? w.name : undefined}
+                  className="wsTab"
+                  style={hide ? { ['--ws' as string]: w.color } : undefined}
+                  title={hide ? undefined : `${w.name}${n ? ` — ${n} need${n === 1 ? 's' : ''} you` : ''}\n${MOD_LABEL}-click: its own window`}
+                  onMouseDown={(e) => e.button === 1 && e.preventDefault()}
+                  onClick={(e) => (wantsWindow(e) ? t.move(id, 'new') : t.activate(id))}
+                  onAuxClick={(e) => e.button === 1 && t.move(id, 'new')}
+                  {...dragProps(id)}
+                >
+                  {face(w)}
+                  {n > 0 && <span className="wsCount">{n}</span>}
+                </button>,
+              )}
+            </Fragment>
           )
         })}
       </div>

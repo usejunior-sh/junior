@@ -135,6 +135,7 @@ function start() {
 /** Last launch's windows and their tabs, or one window whose tab is the default workspace. */
 function restoreWindows() {
   const saved = loadWindowState()
+  tabs!.setHideNames(saved.hideNames)
   const list = saved.windows.length ? saved.windows : [{ bounds: saved.bounds, maximized: saved.maximized, tabs: [], active: '' }]
   for (const s of list) {
     const w = createWindow(s.bounds)
@@ -428,6 +429,18 @@ function buildMenu(): Menu {
         { label: 'Zoom In', accelerator: 'CmdOrCtrl+Plus', click: (_i, w) => zoom(frontPage(w), 1) },
         { label: 'Zoom Out', accelerator: 'CmdOrCtrl+-', click: (_i, w) => zoom(frontPage(w), -1) },
         { type: 'separator' },
+        // Office mode: every tab a monogram tile, so a passer-by can't read what you work on.
+        {
+          label: 'Hide Workspace Names',
+          type: 'checkbox',
+          checked: loadWindowState().hideNames,
+          accelerator: 'CmdOrCtrl+Shift+.',
+          click: (item) => {
+            tabs?.setHideNames(item.checked)
+            saveSoon()
+          },
+        },
+        { type: 'separator' },
         { role: 'togglefullscreen' },
       ],
     },
@@ -554,7 +567,7 @@ async function openLog() {
 type Bounds = Partial<Rectangle> & { width: number; height: number }
 type SavedWin = SavedWindow & { bounds: Bounds; maximized: boolean }
 /** `bounds`/`maximized` are the first window's, as before tabs; `windows` is every window and its tabs. */
-type WindowState = { bounds: Bounds; maximized: boolean; windows: SavedWin[] }
+type WindowState = { bounds: Bounds; maximized: boolean; windows: SavedWin[]; hideNames: boolean }
 
 const stateFile = () => path.join(app.getPath('userData'), 'window-state.json')
 
@@ -578,11 +591,11 @@ function loadWindowState(): WindowState {
     const windows = (Array.isArray(s.windows) ? s.windows : []).filter(
       (w): w is SavedWin => !!w && okBounds(w.bounds) && Array.isArray(w.tabs) && w.tabs.every((t) => typeof t === 'string'),
     )
-    if (okBounds(s.bounds)) return { bounds: s.bounds, maximized: !!s.maximized, windows }
+    if (okBounds(s.bounds)) return { bounds: s.bounds, maximized: !!s.maximized, windows, hideNames: s.hideNames === true }
   } catch {
     // first launch, or an unreadable file: defaults
   }
-  return { bounds: { ...DEFAULT_SIZE }, maximized: false, windows: [] }
+  return { bounds: { ...DEFAULT_SIZE }, maximized: false, windows: [], hideNames: false }
 }
 
 function saveWindowState() {
@@ -601,7 +614,7 @@ function saveWindowState() {
   if (!windows.length) return
   try {
     fs.mkdirSync(path.dirname(stateFile()), { recursive: true })
-    fs.writeFileSync(stateFile(), JSON.stringify({ bounds: windows[0].bounds, maximized: windows[0].maximized, windows }))
+    fs.writeFileSync(stateFile(), JSON.stringify({ bounds: windows[0].bounds, maximized: windows[0].maximized, windows, hideNames: tabs.namesHidden }))
   } catch {
     // losing the window position is not worth an error dialog
   }
