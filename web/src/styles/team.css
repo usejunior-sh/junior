@@ -47,6 +47,7 @@
 .tsL1 { display: flex; align-items: center; gap: 6px; }
 .tsL1 b { flex: 1; min-width: 0; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tsL1 small { flex: none; font: 400 0.75rem var(--mono); color: var(--stone); }
+.tsL1 .tsJob { flex: none; color: var(--stone); }
 .tsL2 { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 0.9286rem; color: var(--ash); }
 .tsL2 > span:last-child { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tsL2 em { font-style: normal; color: var(--orange); }

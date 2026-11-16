@@ -27,6 +27,7 @@ import { LiveSession, type SessionExtras } from '../session/live-session.js'
 import type { QueuedRun } from '../jobs/queue.js'
 import type { JobPreview } from '../jobs/preview.js'
 import type { TaskRun } from '../tasks/runner.js'
+import type { JobThreadWatch } from '../jobs/thread-run.js'
 import type { OpenTurn } from '../session/changes.js'
 import { errText } from '../errors.js'
 import { broadcast } from '../ws/send.js'
@@ -128,6 +129,8 @@ export class WorkspaceRuntime {
   readonly briefExtras = new Map<string, SessionExtras>()
   /** the sessions the task runner started, one per running task, by session id (server/tasks/runner.ts) */
   readonly taskRuns = new Map<string, TaskRun>()
+  /** a thread job's run, by its thread's session id, while the run waits on the thread's first turn (server/jobs/thread-run.ts) */
+  readonly jobThreads = new Map<string, JobThreadWatch>()
   taskPumping = false
   taskPumpAgain = false
   /** the local day the daily babysit budget ran out on, so it's said once */

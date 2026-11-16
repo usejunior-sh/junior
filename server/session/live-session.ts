@@ -36,7 +36,8 @@ import { classifyEffect, SESSION_TOOLS, sessionScoped, TEAM_TOOLS, JUNIOR_READ_T
 import { teamRunOf } from '../team-run/state.js'
 import { noteActionEvent } from './actions-record.js'
 import { lineOf } from '../../core/junior/last-line.js'
-import { reportsUp } from '../../core/junior/thread-wake.js'
+import { blockedText, reportsUp } from '../../core/junior/thread-wake.js'
+import { frameJobMessage, type JobRunMark } from '../../core/job/thread.js'
 import { endedTask, owedProgress, type ProgressPending, snapshotAgentIds, throttleProgress, WorkflowTurns } from './workflow-tasks.js'
 import { noteBackgroundTask } from '../../core/workflows/tasks.js'
 import type { InstructionStamp } from './instruction-stamp.js'
@@ -380,6 +381,11 @@ export class LiveSession {
           this.costSeen = step.seen
           const delta = step.delta
           if (this.rt.sessionTeam.has(this.row.id)) void noteTeamSpend(this.rt, this.row.id, delta, ev.overBudget)
+          // A thread job's run waits on this turn: it ends the run's slot (server/jobs/thread-run.ts).
+          if (this.rt.jobThreads.has(this.row.id)) {
+            const said = (ev.record as { result?: unknown }).result
+            this.rt.jobThreads.get(this.row.id)!.settle({ kind: 'done', said: typeof said === 'string' ? said : '', costUsd: delta, overBudget: !!ev.overBudget })
+          }
           // A task session is one turn too: it handed in (or didn't), the runner settles it.
           if (this.rt.taskRuns.has(this.row.id)) {
             const said = (ev.record as { result?: unknown }).result
@@ -391,7 +397,10 @@ export class LiveSession {
     } catch (err) {
       this.emit({ kind: 'error', message: String(err) }, true)
       this.setStatus('error')
+      this.rt.jobThreads.get(this.row.id)?.settle({ kind: 'ended', error: String(err) })
     } finally {
+      // A thread job's run still waiting when the subprocess ends: it ended without a reply.
+      this.rt.jobThreads.get(this.row.id)?.settle({ kind: 'ended', error: 'the thread ended without a reply' })
       this.unwatchTurn()
       // The subprocess is gone; any unanswered prompt can never be answered.
       this.expirePendingPermissions()
@@ -503,7 +512,7 @@ export class LiveSession {
   }
 
   /** `opts.files` are already claimed into this session's folder (claimSessionFiles). */
-  async sendUserMessage(text: string, images?: ImageAttachment[], mentions?: Mention[], opts: { from?: string; fromSession?: string; mode?: 'goal'; files?: FileRef[]; report?: true } = {}) {
+  async sendUserMessage(text: string, images?: ImageAttachment[], mentions?: Mention[], opts: { from?: string; fromSession?: string; mode?: 'goal'; files?: FileRef[]; report?: true; job?: JobRunMark } = {}) {
     // Mentions are resolved now, against this session's folder, so the event
     // log records what the model was actually given (and why a file wasn't).
     const attached = mentions?.length ? await resolveMentions(this.rt, this.row.cwd, mentions) : null
@@ -511,18 +520,24 @@ export class LiveSession {
     await this.beginTurn()
     // The key this turn's file checkpoint is kept under, on the log so the transcript can offer a rewind to it.
     const messageId = this.turnId()
-    this.emit({ kind: 'local_user', text, images, ...(opts.files?.length ? { files: opts.files } : {}), mentions: attached?.resolved, ...(opts.from ? { from: opts.from } : {}), ...(opts.fromSession ? { fromSession: opts.fromSession } : {}), ...(opts.report ? { report: true as const } : {}), ...(opts.mode ? { mode: opts.mode } : {}), ...(messageId ? { messageId } : {}) }, true)
+    this.emit({ kind: 'local_user', text, images, ...(opts.files?.length ? { files: opts.files } : {}), mentions: attached?.resolved, ...(opts.from ? { from: opts.from } : {}), ...(opts.fromSession ? { fromSession: opts.fromSession } : {}), ...(opts.report ? { report: true as const } : {}), ...(opts.mode ? { mode: opts.mode } : {}), ...(opts.job ? { job: opts.job } : {}), ...(messageId ? { messageId } : {}) }, true)
     // A message from Junior or a teammate is framed for the model; the transcript keeps the raw text and a badge.
     // One sent in Goal mode says so, so Junior goes straight to a goal card.
     const filesNote = attachedFilesNote(this.rt.attachmentsDir, this.row.id, opts.files ?? [], opts.from)
     // Another chat's message (start_session / message_session) names that chat, so it never reads as the user.
     // A thread's report to its DM comes framed already (core/junior/thread-wake.ts).
     const sender = opts.fromSession && !opts.report ? this.rt.rows.get(opts.fromSession) : undefined
+    // The user writing in a put-away thread brings it back to the open threads.
+    if (this.row.archived && !opts.fromSession && !opts.report) {
+      this.row.archived = false
+      void this.rt.store.sessions.setArchived(this.row.id, false)
+    }
     // The user writing in a thread themselves breaks a DM's auto-answer loop.
     if (!opts.from && !opts.fromSession && this.row.startedBy) threadUserMessage(this.rt, this.row.id, this.row.startedBy)
     // The last message in wins: the user typing here keeps this turn out of the DM; the DM's next message reports again.
     this.turnReportsUp = reportsUp(this.row.startedBy, opts.fromSession)
-    const modelText = opts.report ? text : sender && text ? frameSessionMessage(sender, text) : opts.from && text ? frameTeamMessage(opts.from, text) : opts.mode === 'goal' ? `${GOAL_MODE_MARK}${text}` : text
+    // A job's run is framed as the job's (core/job/thread.ts), never the user's or the DM's.
+    const modelText = opts.report ? text : opts.job ? frameJobMessage(opts.job, text) : sender && text ? frameSessionMessage(sender, text) : opts.from && text ? frameTeamMessage(opts.from, text) : opts.mode === 'goal' ? `${GOAL_MODE_MARK}${text}` : text
     this.setStatus('running')
     this.watchTurn()
     void this.rt.store.sessions.touch(this.row.id)
@@ -691,6 +706,8 @@ export class LiveSession {
         broadcastSessionList(this.rt)
         // A thread started from a DM now waits on the user: the DM hears, once per wait.
         if (this.turnReportsUp) void reportThreadBlocked(this.rt, this.row, toolName, toolInput, opts.title, opts.description).catch(() => {})
+        // A thread job's run ends its slot here: the thread waits on the user now.
+        this.rt.jobThreads.get(this.row.id)?.settle({ kind: 'blocked', what: blockedText(toolName, toolInput, opts.title, opts.description) })
       }
       this.emit(
         {

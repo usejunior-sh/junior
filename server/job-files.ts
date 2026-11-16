@@ -36,7 +36,7 @@ import {
   type ConnectorScope,
   type JobToolGrant,
 } from '../core/job/tools.js'
-import { JOB_NOTIFY, type JobBrief, type JobBrowser, type JobNotify, type JobOutput } from '../core/job/types.js'
+import { JOB_MODES, JOB_NOTIFY, type JobBrief, type JobBrowser, type JobMode, type JobNotify, type JobOutput } from '../core/job/types.js'
 import type { JobSchema } from '../core/job/recipe.js'
 import { FILING_KEYS, filingFrom, filingKeys, type JobFiling } from '../core/job/filing.js'
 import { type BrowserProfile, findProfile } from '../core/browser/profiles.js'
@@ -70,6 +70,10 @@ export type JobFileSpec = {
   skills?: string[]
   /** subagents a run may hand work to, named the same way */
   agents?: string[]
+  /** the chat agent that owns the job and does its runs (`junior:debugger`); omitted = Junior */
+  agent?: string
+  /** thread: each run is a thread from the owner's DM; scan (default): a headless run that files items */
+  mode?: JobMode
   /** how it files: reason, labels, tiers (core/job/filing.ts) */
   filing?: JobFiling
   /** the browser profile its runs use, and the sites they may open (`browser`, `browser_sites`) */
@@ -78,7 +82,7 @@ export type JobFileSpec = {
 }
 
 export const JOB_FILE_KEYS = [
-  'id', 'title', 'schedule', 'project', 'tools', 'skills', 'agents', 'model', 'output', 'catch_up',
+  'id', 'title', 'schedule', 'agent', 'mode', 'project', 'tools', 'skills', 'agents', 'model', 'output', 'catch_up',
   'timeout', 'budget_usd', 'daily_budget_usd', 'notify', 'enabled',
   'brief', 'brief_model', 'brief_template', 'draft', 'browser', 'browser_sites',
   ...FILING_KEYS,
@@ -168,11 +172,22 @@ export function parseJobFile(name: string, text: string): ParsedJobFile {
   if (!schedule) errors.push('schedule is required (a cron line, e.g. "0 9 * * 1-5")')
   else if (!isValidCron(schedule)) errors.push(`schedule "${schedule}" is not a valid cron line`)
 
+  const modeRaw = str(d.mode) || 'scan'
+  if (!JOB_MODES.includes(modeRaw as JobMode)) errors.push(`mode must be one of: ${JOB_MODES.join(', ')}`)
+  const mode: JobMode = modeRaw === 'thread' ? 'thread' : 'scan'
+  const agent = str(d.agent)
+  if (Array.isArray(d.agent)) errors.push('agent must be one chat agent, e.g. agent: junior:debugger — list helpers under agents')
+  else if (agent && !LIBRARY_NAME_RE.test(agent)) errors.push(`agent: "${agent}" is not a name — write it as Claude calls it, e.g. junior:debugger`)
+
   const toolLines = Array.isArray(d.tools) ? d.tools : str(d.tools) ? [str(d.tools)] : []
   const tools = grantsFromLines(toolLines, errors)
   const browser = browserFrom(d.browser, d.browser_sites, errors)
-  // the browser is an integration of its own: a job may need nothing else
-  if (!tools.length && !browser) errors.push('tools must list at least one integration')
+  // the browser is an integration of its own: a job may need nothing else.
+  // A thread job's run is a chat, with the chat's tools and policy: it grants none of its own.
+  if (mode === 'thread') {
+    if (tools.length) errors.push('tools are for mode: scan — a thread job runs as a chat, with the agent’s own tools')
+    if (browser) errors.push('browser is for mode: scan — a thread job’s chat has the browser pane already')
+  } else if (!tools.length && !browser) errors.push('tools must list at least one integration')
 
   const names = (key: 'skills' | 'agents'): string[] => {
     const raw = d[key]
@@ -226,6 +241,12 @@ export function parseJobFile(name: string, text: string): ParsedJobFile {
 
   const filing = filingFrom({ reason: d.reason, labels: d.labels, start_alone: d.start_alone, only_show: d.only_show, ignore: d.ignore, source: d.source }, errors)
   if (filing && output === 'digest') errors.push('reason, labels, tiers and source work with output: items — a digest files no items')
+  if (mode === 'thread') {
+    if (str(d.output)) errors.push('output is for mode: scan — a thread job reports to its DM')
+    if (briefRaw === 'true') errors.push('brief is for mode: scan')
+    if (filing) errors.push('reason, labels, tiers and source are for mode: scan')
+    if (skills.length || agents.length) errors.push('skills and agents are for mode: scan — a thread job’s chat uses its agent’s own')
+  }
 
   const draftRaw = str(d.draft) || 'false'
   if (draftRaw !== 'true' && draftRaw !== 'false') errors.push('draft must be true or false')
@@ -234,6 +255,8 @@ export function parseJobFile(name: string, text: string): ParsedJobFile {
     id: id || randomUUID(),
     title: str(d.title) || titleCase(name),
     schedule: schedule || '0 9 * * *',
+    ...(agent && !Array.isArray(d.agent) && LIBRARY_NAME_RE.test(agent) ? { agent } : {}),
+    ...(mode === 'thread' ? { mode } : {}),
     project: str(d.project),
     tools,
     ...(skills.length ? { skills } : {}),
@@ -305,13 +328,15 @@ export function serializeJobFile(s: JobFileSpec): string {
     id: s.id,
     title: s.title,
     schedule: s.schedule,
-    project: s.project,
-    tools: linesFromGrants(s.tools),
   }
+  if (s.agent) data.agent = s.agent
+  if (s.mode === 'thread') data.mode = 'thread'
+  data.project = s.project
+  if (s.mode !== 'thread' || s.tools.length) data.tools = linesFromGrants(s.tools)
   if (s.skills?.length) data.skills = s.skills
   if (s.agents?.length) data.agents = s.agents
   if (s.model) data.model = s.model
-  data.output = s.output
+  if (s.mode !== 'thread') data.output = s.output
   if (s.catchUp) data.catch_up = s.catchUp
   if (s.timeoutMs != null) data.timeout = fmtTimeout(s.timeoutMs)
   if (s.budgetUsd != null) data.budget_usd = String(s.budgetUsd)
@@ -369,6 +394,16 @@ export function checkGrants(
 export type JobLibrary = {
   skills: Map<string, LibrarySource>
   agents: Map<string, LibrarySource>
+}
+
+/**
+ * Check a spec's `agent:` (its owner) against the chat agents this workspace
+ * offers, by the name a chat stores (`junior:debugger`). Pure.
+ */
+export function checkOwner(agent: string | undefined, owners: readonly string[]): string[] {
+  if (!agent || owners.includes(agent)) return []
+  const hint = owners.includes(`${WORKSPACE_PLUGIN}:${agent}`) ? ` — the workspace library's is called ${WORKSPACE_PLUGIN}:${agent}` : ''
+  return [`agent: no chat agent named "${agent}"${hint}${owners.length ? `. Chat agents: ${owners.join(', ')}` : ''}`]
 }
 
 /**

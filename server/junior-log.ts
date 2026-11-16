@@ -1,6 +1,7 @@
 import { actionLine, jobLine, latestAt, type LogFilter, type LogLine, logPage, taskLine } from '../core/junior/log.js'
 import { WorkspaceRuntime } from './workspace/runtime.js'
 import { overriddenOff } from '../core/actions/sort.js'
+import { isJobRunRow } from '../core/job/thread.js'
 
 // Junior's log (core/junior/log.ts): the feed behind the Junior page's Log tab
 // and the unread dot on the rail. Gathered from records the store keeps.
@@ -16,7 +17,7 @@ async function allLines(rt: WorkspaceRuntime): Promise<LogLine[]> {
   const actions = (await rt.store.actions.list({ limit: READ_CAP })).filter((a) => !overriddenOff(a, rules)).map((a) => actionLine(a, origin(a.sessionId)))
   const tasks = (await rt.store.tasks.inState(['done', 'failed', 'stopped', 'skipped'])).flatMap((t) => taskLine(t) ?? [])
   const jobs = [...rt.rows.values()]
-    .filter((r) => r.kind === 'job-run' && r.runStatus)
+    .filter((r) => isJobRunRow(r) && r.runStatus)
     .map((r) => jobLine({ sessionId: r.id, title: r.title, status: r.runStatus!, error: r.runError ?? null, ...(typeof r.runMatches === 'number' ? { matches: r.runMatches } : {}), at: r.updatedAt }))
   return [...actions, ...tasks, ...jobs]
 }

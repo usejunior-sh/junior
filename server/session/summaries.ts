@@ -34,6 +34,7 @@ export function summarize(rt: WorkspaceRuntime, row: StoredSession): SessionSumm
     ...(l?.workflows ? { workflows: l.workflows } : {}),
     ...(row.provider !== DEFAULT_PROVIDER ? { provider: row.provider } : {}),
     pinned: row.pinned || undefined,
+    ...(row.archived ? { archived: true } : {}),
     ...(row.checkoutId ? { checkoutId: row.checkoutId } : {}),
     ...(row.kind !== 'chat' ? { kind: row.kind } : {}),
     ...(row.jobId ? { jobId: row.jobId } : {}),

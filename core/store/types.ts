@@ -83,6 +83,8 @@ export type StoredSession = {
   provider: ProviderId
   /** Pinned sessions sort above the rest, whatever their last activity. */
   pinned: boolean
+  /** Put away: a job's thread that found nothing new. Kept, but off the open threads. */
+  archived?: boolean
   /** chat (default) or job-run. */
   kind: SessionKind
   /** the job this run belongs to, for job-run sessions. */
@@ -182,6 +184,8 @@ export interface SessionStore {
   setName(id: string, name: string | null): Promise<void>
   /** Pin or unpin a session. */
   setPinned(id: string, pinned: boolean): Promise<void>
+  /** Put a session away (off the open threads) or bring it back. */
+  setArchived(id: string, archived: boolean): Promise<void>
   /** Delete a session and its whole event log. Irreversible. */
   remove(id: string): Promise<void>
   /** Bump updatedAt (a session saw activity). */

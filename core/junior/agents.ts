@@ -154,6 +154,23 @@ export function agentDisallowed(a: Pick<ChatAgent, 'tools'>): string[] {
 }
 
 /**
+ * The owner's part of a scan job's run prompt (mode: scan, `agent:` set): who
+ * the run is, and the agent's own instructions. The run's fence and headless
+ * rule come after it, so they still win; the agent's tools and skills don't
+ * widen the job's grants.
+ */
+export function agentRunAppend(a: ChatAgent, juniorName: string): string {
+  const title = agentTitle(juniorName, a.label)
+  const lines = [
+    `\n\n## You are ${title}`,
+    `This job is ${title}'s: ${juniorName}, working as the user's ${a.label.toLowerCase()}. Same name first, same rules.`,
+    a.description ? `What this agent is for: ${a.description}` : '',
+    a.prompt ? `\n${a.prompt}` : '',
+  ]
+  return lines.filter(Boolean).join('\n')
+}
+
+/**
  * The agent's part of the system prompt. It sits after Junior's identity and
  * before the persona and its rules, so the rules still come last and win.
  */

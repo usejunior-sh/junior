@@ -162,6 +162,8 @@ export type ActivityRun = {
   startedAt: number
   finishedAt: number
   error?: string
+  /** a thread job's run: the session is a thread you can open and continue */
+  thread?: true
 }
 
 export type ActivityResponse =

@@ -229,17 +229,19 @@ export function makeJuniorMcp(rt: WorkspaceRuntime, sessionId?: string) {
       ),
       tool(
         'draft_job',
-        'Draft a job — a scheduled headless run that files matches as work items (or writes a digest). It is saved OFF as a draft: only the user can enable it, from the job page this returns a link to. Use when the user asks to run something on a schedule, monitor it or keep an eye on it.',
+        'Draft a job: a standing assignment one agent does on a schedule. By default (mode thread) each run is a thread from the owning agent\'s DM, sent the instruction as a job run, and it reports back to that DM like any thread. Mode scan is a headless run that only files matches as work items (or writes a digest). It is saved OFF as a draft: only the user can enable it, from the job page this returns a link to. Use when the user asks to run something on a schedule, monitor it or keep an eye on it.',
         {
           title: z.string().describe('a short name, e.g. "Anirudha’s PRs"'),
           schedule: z.string().describe('a 5-field cron line in local time: "0 * * * *" hourly, "0 9 * * 1-5" weekdays at 9'),
-          instruction: z.string().describe('where to look, what counts as a match, what to file — written for the run, which sees only this'),
+          instruction: z.string().describe('what each run does: where to look, what counts, what to do about it and what to report — written for the run, which sees only this'),
+          agent: z.string().optional().describe('the agent that owns the job and does its runs: its label (Debugger), file name or full name, or "Junior"; default = the agent of this chat, else Junior'),
+          mode: z.enum(['thread', 'scan']).optional().describe('thread (default): each run is a thread from the owner\'s DM that reports back. scan: a headless run that only files items or a digest (needs tools)'),
           project: z.string().optional().describe('the project folder runs work in: an id or a name; default = the default project'),
           tools: z
             .array(z.string())
             .optional()
-            .describe('what runs may use, one per entry: built-ins web, github, files-write, or "<server>/<tool>" for an MCP tool; default [web]'),
-          output: z.enum(['items', 'digest']).optional().describe('items (one work item per match, default) or digest (one rolling report)'),
+            .describe('scan only: what runs may use, one per entry: built-ins web, github, files-write, or "<server>/<tool>" for an MCP tool; default [web]'),
+          output: z.enum(['items', 'digest']).optional().describe('scan only: items (one work item per match, default) or digest (one rolling report)'),
           model: z.string().optional().describe('model for the runs; default = Claude Code’s'),
           brief: z.boolean().optional().describe('brief every item it files (items output only)'),
           brief_model: z.string().optional().describe('model for the briefs; default = the workspace’s brief default'),
@@ -251,7 +253,8 @@ export function makeJuniorMcp(rt: WorkspaceRuntime, sessionId?: string) {
         },
         async (args) => {
           try {
-            return okResult(draftJobText(await draftJobOp(rt, args), true))
+            const caller = sessionId ? rt.rows.get(sessionId) : undefined
+            return okResult(draftJobText(await draftJobOp(rt, args, { agent: caller?.agent ?? null }), true))
           } catch (err) {
             return errResult(`not drafted: ${errText(err)}`)
           }
@@ -259,7 +262,7 @@ export function makeJuniorMcp(rt: WorkspaceRuntime, sessionId?: string) {
       ),
       tool(
         'try_job',
-        'Trial-run a job once, as a dry run: the same prompt, tools and fences as a real run, but nothing is filed or sent. Waits for the run (a few minutes at most) and returns what it would have filed. Use after draft_job, when the user agrees to a trial run.',
+        'Trial-run a job once. A thread job (the default): starts one real run now, a thread from its owner\'s DM that reports back there; anything it would send waits on a card. A scan job: a dry run with the same prompt, tools and fences as a real run, nothing filed or sent; it waits (a few minutes at most) and returns what it would have filed. Use after draft_job, when the user agrees to a trial run.',
         { id: z.string().describe('the job id draft_job returned') },
         async (args) => {
           try {

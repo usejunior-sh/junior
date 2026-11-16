@@ -23,6 +23,7 @@ import { systemStatus } from '../jobs/scheduler.js'
 import { claudeProjectRoots, usageByLogin } from '../usage/logins.js'
 import { searchOp } from '../search-ops.js'
 import type { ScopedCtx } from './ctx.js'
+import { isJobRunRow } from '../../core/job/thread.js'
 
 export async function itemRoutes({ req, url, json, rt }: ScopedCtx): Promise<boolean> {
   if (url.pathname === '/api/items/state' && req.method === 'POST') {
@@ -164,7 +165,7 @@ export async function itemRoutes({ req, url, json, rt }: ScopedCtx): Promise<boo
       const jobId = url.searchParams.get('jobId')
       const titles = new Map((await rt.store.jobs.list()).map((w) => [w.id, w.title]))
       const runs = [...rt.rows.values()]
-        .filter((r) => r.kind === 'job-run' && (!jobId || r.jobId === jobId))
+        .filter((r) => isJobRunRow(r) && (!jobId || r.jobId === jobId))
         .sort((a, b) => b.createdAt - a.createdAt)
         .slice(0, 200)
         .map((r) => ({
@@ -180,6 +181,7 @@ export async function itemRoutes({ req, url, json, rt }: ScopedCtx): Promise<boo
           startedAt: r.createdAt,
           finishedAt: r.updatedAt,
           ...(r.runError ? { error: r.runError } : {}),
+          ...(r.kind === 'chat' ? { thread: true as const } : {}),
         }))
       body = { ok: true, runs }
     } catch (err) {

@@ -20,7 +20,7 @@ import { Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from '../ui/M
 import { ConfirmDialog } from '../ui/ConfirmDialog.js'
 import { RecipeFallbackDialog, useJobRecipe } from './JobRecipe.js'
 import { humanSpan, lookbackMs, parseCatchUp } from '../../../core/job/schedule.js'
-import { TRIGGER_LABEL, cronText, grantIcon, grantLabel, runStatusText } from '../jobUi.js'
+import { TRIGGER_LABEL, cronText, grantIcon, grantLabel, runStatusText, useJobOwner } from '../jobUi.js'
 import { ago, nextRunText, runDotClass } from './JobsPage.js'
 import { runRows, type RunRow } from '../../../core/job/run-rows.js'
 
@@ -130,6 +130,7 @@ export function JobPage({ id, onNavigate }: { id: string; onNavigate: (hash: str
   }, [])
 
   const rows = useMemo(() => runRows(ledger, runs), [ledger, runs])
+  const owner = useJobOwner(job ?? {})
   // "Copy as recipe" in the ⋯ menu: prefetched when the menu opens.
   const recipe = useJobRecipe(id, () => void load())
 
@@ -222,7 +223,7 @@ export function JobPage({ id, onNavigate }: { id: string; onNavigate: (hash: str
   const nextDue = job.enabled && !job.configError ? nextScheduled(job.schedule, job.lastRunStartedAt ?? Date.now()) : null
   const catchUp = parseCatchUp(job.catchUpWindow, job.output)
   const catchUpText = catchUp.kind === 'unlimited' ? 'always, once on wake' : catchUp.kind === 'never' ? 'never — on-time slots only' : `within ${humanSpan(catchUp.ms)}`
-  const uses = job.tools.map(grantLabel).join(', ')
+  const uses = job.mode === 'thread' ? '' : job.tools.map(grantLabel).join(', ')
   const shownRows = showAll ? rows : rows.slice(0, SHOW_RUNS)
   const edit = () => onNavigate(`/jobs/${encodeURIComponent(job.id)}/edit`)
 
@@ -242,6 +243,11 @@ export function JobPage({ id, onNavigate }: { id: string; onNavigate: (hash: str
           <div style={{ minWidth: 0 }}>
             <h1 className="display">{job.title}</h1>
             <div className="jobMetaLine">
+              <span title={owner.how}>
+                {owner.label}
+                {job.mode === 'thread' ? ' · threads' : ''}
+              </span>
+              <span className="sep">·</span>
               <span className="uses">
                 {job.tools.map((g) => {
                   const Icon = grantIcon(g)
@@ -499,10 +505,14 @@ export function JobPage({ id, onNavigate }: { id: string; onNavigate: (hash: str
                   <span className="v mono">{job.agents.join(', ')}</span>
                 </>
               ) : null}
+              <span className="k">Owner</span>
+              <span className="v">{owner.label}</span>
+              <span className="k">Each run</span>
+              <span className="v">{owner.how}</span>
               <span className="k">Project</span>
               <span className="v mono">{project ? `${project.name} · ${project.path}` : 'removed'}</span>
               <span className="k">Output</span>
-              <span className="v">{job.output === 'digest' ? 'one rolling digest with a report' : 'work items'}</span>
+              <span className="v">{job.mode === 'thread' ? 'a reply in its DM, and an item for each thing it handled' : job.output === 'digest' ? 'one rolling digest with a report' : 'work items'}</span>
               <span className="k">Model</span>
               <span className="v mono">{job.model ?? 'default'}</span>
               <span className="k">Schedule</span>
@@ -585,11 +595,17 @@ export function JobPage({ id, onNavigate }: { id: string; onNavigate: (hash: str
                               Watch <Eye size={11} aria-hidden="true" />
                             </button>
                           ) : (
-                            run && (
+                            run &&
+                            (run.thread ? (
+                              // A thread job's run is a thread: open it, where you can read it and answer.
+                              <button type="button" className="tlink" onClick={() => onNavigate(run.sessionId)}>
+                                Thread <ExternalLink size={11} aria-hidden="true" />
+                              </button>
+                            ) : (
                               <button type="button" className="tlink" onClick={() => setOpenRun(run)}>
                                 Transcript <ExternalLink size={11} aria-hidden="true" />
                               </button>
-                            )
+                            ))
                           )}
                         </td>
                       </tr>

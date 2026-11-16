@@ -12,6 +12,7 @@
  * with `scope` set to that call, so it only keeps what the agent did.
  */
 import { AGENT_TOOLS, HANDBACK_TOOL, type AgentRun } from './agents.js'
+import type { JobRunMark } from '../../shared/protocol.js'
 import { buildShells, type ShellRun } from '../../core/shells/fold.js'
 import { WORKFLOW_TOOL } from '../../core/workflows/fold.js'
 import { WorkflowTurns } from '../../core/workflows/tasks.js'
@@ -97,6 +98,8 @@ export type TranscriptItem =
       fromSession?: string
       /** sent in Goal mode */
       mode?: 'goal'
+      /** sent by a job's run, not the user */
+      job?: JobRunMark
       /** In an agent's view: this was written to the agent and relayed through main. */
       relayed?: { delivery?: RelayDelivery; sent?: string }
     }
@@ -246,7 +249,7 @@ export function buildTranscript(
         }
         // A thread's report to this DM: the notice line above it already says so.
         if (ev.report) break
-        if (!scope) items.push({ key: `u${i}`, kind: 'user', text: ev.text, images: ev.images, ...(ev.files?.length ? { files: ev.files } : {}), mentions: ev.mentions, from: ev.from, ...(ev.fromSession ? { fromSession: ev.fromSession } : {}), ...(ev.mode ? { mode: ev.mode } : {}) })
+        if (!scope) items.push({ key: `u${i}`, kind: 'user', text: ev.text, images: ev.images, ...(ev.files?.length ? { files: ev.files } : {}), mentions: ev.mentions, from: ev.from, ...(ev.fromSession ? { fromSession: ev.fromSession } : {}), ...(ev.mode ? { mode: ev.mode } : {}), ...(ev.job ? { job: ev.job } : {}) })
         break
       }
       case 'error':

@@ -24,6 +24,10 @@ export type ThreadSession = {
   workflows?: number
   updatedAt: number
   teamRun?: { role: string; state?: string }
+  /** a job's run opened it (mode: thread) */
+  jobId?: string
+  /** put away: a job's run that found nothing new */
+  archived?: boolean
 }
 
 export type Thread = {
@@ -36,6 +40,8 @@ export type Thread = {
   fromJunior: boolean
   /** waiting on a question (not a permission or a send) */
   question: boolean
+  /** a job's run opened it */
+  job: boolean
   updatedAt: number
 }
 
@@ -64,7 +70,7 @@ export function openThreads(sessions: readonly ThreadSession[], now: number): Th
   return sessions
     .filter(isChat)
     .map((s) => ({ s, state: threadState(s), fromJunior: !!s.startedBy && dms.has(s.startedBy) }))
-    .filter(({ s, state, fromJunior }) => state === 'you' || state === 'working' || (fromJunior && (state === 'stopped' || now - s.updatedAt < READY_FOR_MS)))
+    .filter(({ s, state, fromJunior }) => state === 'you' || state === 'working' || (fromJunior && !s.archived && (state === 'stopped' || now - s.updatedAt < READY_FOR_MS)))
     .sort((a, b) => ORDER[a.state] - ORDER[b.state] || b.s.updatedAt - a.s.updatedAt)
     .map(({ s, state, fromJunior }) => ({
       id: s.id,
@@ -73,6 +79,7 @@ export function openThreads(sessions: readonly ThreadSession[], now: number): Th
       state,
       fromJunior,
       question: !!s.waiting && s.waitingOn === 'AskUserQuestion',
+      job: !!s.jobId,
       updatedAt: s.updatedAt,
     }))
 }

@@ -6,6 +6,7 @@ import { removeSessionFiles } from '../attachments.js'
 import type { EffortLevel, PermissionMode, Project, SessionKind } from '../../shared/protocol.js'
 import type { ProviderId } from '../providers/types.js'
 import type { StoredSession } from '../../core/store/types.js'
+import type { JobRunTrigger } from '../../core/job/types.js'
 import { browserHub, WorkspaceRuntime } from '../workspace/runtime.js'
 import { ensureSessionTeamRun, removeTeamRun, saveTeamRun } from '../team-run/state.js'
 import { broadcast, broadcastSessionList } from '../ws/send.js'
@@ -102,7 +103,7 @@ export async function createSession(
   effort: EffortLevel | null,
   fastMode: boolean,
   permissionMode: PermissionMode | null,
-  opts: { kind?: SessionKind; spawn?: boolean; projectId?: string | null; checkoutId?: string | null; provider?: ProviderId; planning?: boolean; ultracode?: boolean; name?: string; startedBy?: string; agent?: string } = {},
+  opts: { kind?: SessionKind; spawn?: boolean; projectId?: string | null; checkoutId?: string | null; provider?: ProviderId; planning?: boolean; ultracode?: boolean; name?: string; startedBy?: string; agent?: string; jobId?: string; runTrigger?: JobRunTrigger } = {},
 ): Promise<StoredSession> {
   const projectId = opts.projectId ?? (await defaultProject(rt))?.id ?? null
   // Every session names its checkout at birth: the one asked for, else its project's main folder.
@@ -125,6 +126,8 @@ export async function createSession(
     ...(opts.agent ? { agent: opts.agent } : {}),
     ...(opts.provider ? { provider: opts.provider } : {}),
     ...(opts.kind ? { kind: opts.kind } : {}),
+    ...(opts.jobId ? { jobId: opts.jobId } : {}),
+    ...(opts.runTrigger ? { runTrigger: opts.runTrigger } : {}),
   })
   rt.rows.set(row.id, row)
   // spawn: false = a row only; the first message starts it (getOrRevive).

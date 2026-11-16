@@ -1,11 +1,13 @@
 import { readFile, rmdir } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { randomUUID } from 'node:crypto'
-import { type Job, JOB_OUTPUTS, type JobBrief, type JobBrowser, type JobOutput } from '../../core/job/types.js'
+import { type Job, JOB_MODES, JOB_OUTPUTS, type JobBrief, type JobBrowser, type JobMode, type JobOutput } from '../../core/job/types.js'
+import { chatAgentsFor } from '../chat-agents.js'
+import { resolveAgent } from '../session/spawn-ops.js'
 import type { JobFiling } from '../../core/job/filing.js'
 import { type JobToolGrant, presetGrant, RESERVED_SERVER } from '../../core/job/tools.js'
 import { log } from '../log.js'
-import { checkBrowserProfile, checkGrants, checkLibrary, grantsFromLines, JOB_SCHEMA, type JobFileSpec, type JobLibrary, parseJobFile, serializeJobFile, withKey } from '../job-files.js'
+import { checkBrowserProfile, checkGrants, checkLibrary, checkOwner, grantsFromLines, JOB_SCHEMA, type JobFileSpec, type JobLibrary, parseJobFile, serializeJobFile, withKey } from '../job-files.js'
 import { fromRecipe, toRecipe, type RecipeExport } from '../../core/job/recipe.js'
 import { recipeInFirstMessage, recipeNote, NEW_JOB_PREFIX } from '../../core/job/recipe-copy.js'
 import { scheduleOf } from '../../core/job/schedule.js'
@@ -18,6 +20,7 @@ import { type ConnectorProbe, registry, WorkspaceRuntime } from '../workspace/ru
 import { jobLibrary } from '../session/changes.js'
 import { defaultProject } from '../session/sessions.js'
 import { type JobPreview, runJobPreview } from './preview.js'
+import { enqueueJob } from './queue.js'
 import { invalidateInbox } from '../ws/send.js'
 import { listProfiles } from '../browser/profiles.js'
 import { curatedTemplateFiles } from './templates.js'
@@ -125,6 +128,8 @@ function jobConfigFrom(spec: JobFileSpec, file: string) {
     draft: !!spec.draft,
     skills: spec.skills ?? null,
     agents: spec.agents ?? null,
+    agent: spec.agent ?? null,
+    mode: spec.mode ?? 'scan',
     filing: spec.filing ?? null,
     browser: spec.browser ?? null,
     file,
@@ -137,6 +142,8 @@ export function jobSpecFrom(w: Job): JobFileSpec {
     id: w.id,
     title: w.title,
     schedule: scheduleOf(w),
+    ...(w.agent ? { agent: w.agent } : {}),
+    ...(w.mode === 'thread' ? { mode: 'thread' as const } : {}),
     project: w.projectId ?? '',
     tools: w.tools,
     ...(w.model ? { model: w.model } : {}),
@@ -159,7 +166,9 @@ export function jobSpecFrom(w: Job): JobFileSpec {
 }
 
 type JobConfig = ReturnType<typeof jobConfigFrom>
-const configKey = (w: Pick<Job, Exclude<keyof JobConfig, 'catchUpWindow' | 'timeoutMs' | 'maxBudgetUsd' | 'dailyBudgetUsd' | 'brief' | 'draft' | 'skills' | 'agents' | 'filing' | 'browser'>> & {
+const configKey = (w: Pick<Job, Exclude<keyof JobConfig, 'catchUpWindow' | 'timeoutMs' | 'maxBudgetUsd' | 'dailyBudgetUsd' | 'brief' | 'draft' | 'skills' | 'agents' | 'agent' | 'mode' | 'filing' | 'browser'>> & {
+  agent?: string | null
+  mode?: JobMode
   catchUpWindow?: string | null
   timeoutMs?: number | null
   maxBudgetUsd?: number | null
@@ -177,6 +186,7 @@ const configKey = (w: Pick<Job, Exclude<keyof JobConfig, 'catchUpWindow' | 'time
     w.brief ? [w.brief.model ?? null, w.brief.template ?? null] : null, !!w.draft,
     w.skills?.length ? w.skills : null, w.agents?.length ? w.agents : null, w.filing ?? null,
     w.browser ? [w.browser.profile, w.browser.sites ?? null] : null,
+    w.agent ?? null, w.mode ?? 'scan',
   ])
 
 /**
@@ -201,10 +211,14 @@ async function syncJobFilesNow(rt: WorkspaceRuntime, { force = false, deferFirst
   // only listed when a job names a skill or an agent. A skill removed later holds that job at the next tick
   const named = files.some((f) => /^(skills|agents)\s*:/m.test(f.text))
   const lib: JobLibrary = named ? await jobLibrary(rt) : { skills: new Map(), agents: new Map() }
+  // the chat agents, only listed when a job names an owner: one removed later holds its jobs at the next tick
+  const owned = files.some((f) => /^agent\s*:/m.test(f.text))
+  const owners = owned ? await ownerNames(rt) : []
   // a profile renamed or removed in Settings → Browser holds the jobs that name it
   const browsing = files.some((f) => /^browser\s*:/m.test(f.text))
   const sig = JSON.stringify([
     named ? [[...lib.skills], [...lib.agents]] : null,
+    owned ? owners : null,
     browsing ? listProfiles().map((p) => [p.id, p.name]) : null,
     rt.provider.id,
     files.map((f) => [f.name, f.mtimeMs]),
@@ -227,7 +241,7 @@ async function syncJobFilesNow(rt: WorkspaceRuntime, { force = false, deferFirst
       await rt.jobFiles.stampId(f.name, spec.id).catch((err) => errors.push(`could not write an id into the file: ${err}`))
     }
     seen.add(spec.id)
-    const checked = checkJobSpec(rt, spec, projects, lib)
+    const checked = checkJobSpec(rt, spec, projects, lib, owners)
     errors.push(...checked.errors)
     const cfg = jobConfigFrom({ ...spec, tools: checked.tools }, f.name)
     const configError = errors.length ? errors.join('; ') : null
@@ -249,6 +263,7 @@ async function syncJobFilesNow(rt: WorkspaceRuntime, { force = false, deferFirst
         brief: cfg.brief ?? undefined,
         skills: cfg.skills ?? undefined,
         agents: cfg.agents ?? undefined,
+        agent: cfg.agent ?? undefined,
         filing: cfg.filing ?? undefined,
         browser: cfg.browser ?? undefined,
         ...(configError ? { configError } : {}),
@@ -285,7 +300,7 @@ async function syncJobFilesNow(rt: WorkspaceRuntime, { force = false, deferFirst
  * missing one, or grant a tool the connector probes don't know. Fills each
  * grant's scope from the probe. The sync and the editor's save share it.
  */
-function checkJobSpec(rt: WorkspaceRuntime, spec: JobFileSpec, projects: Project[], lib: JobLibrary): { tools: JobToolGrant[]; errors: string[] } {
+function checkJobSpec(rt: WorkspaceRuntime, spec: JobFileSpec, projects: Project[], lib: JobLibrary, owners: readonly string[]): { tools: JobToolGrant[]; errors: string[] } {
   const errors: string[] = []
   const project = projects.find((p) => p.id === spec.project) ?? null
   if (!spec.project) errors.push(NEEDS_PROJECT)
@@ -295,7 +310,12 @@ function checkJobSpec(rt: WorkspaceRuntime, spec: JobFileSpec, projects: Project
   const probes = [rt.connectorCache, project ? rt.folderProbes.get(project.path) : undefined].filter((p): p is ConnectorProbe => p != null)
   const checked = checkGrants(spec.tools, probes.length ? probes.flatMap((p) => p.connectors) : null)
   const browser = spec.browser ? checkBrowserProfile(spec.browser, listProfiles()).errors : []
-  return { tools: checked.tools, errors: [...errors, ...checked.errors, ...checkLibrary(spec, lib), ...browser] }
+  return { tools: checked.tools, errors: [...errors, ...checked.errors, ...checkLibrary(spec, lib), ...checkOwner(spec.agent, owners), ...browser] }
+}
+
+/** The names a job's `agent:` may take: the chat agents this workspace offers, as a chat stores them. */
+async function ownerNames(rt: WorkspaceRuntime): Promise<string[]> {
+  return (await chatAgentsFor(rt)).map((a) => a.name)
 }
 
 /** The editor's side list: project ids, every tool line the probes know, the skills and agents a job may name. */
@@ -340,7 +360,7 @@ export async function saveJobText(rt: WorkspaceRuntime, id: string | null, raw: 
   } else if (await rt.store.jobs.get(jobId)) {
     errors.push(`id ${jobId} belongs to another job — delete the id line and one is made for you`)
   }
-  errors.push(...checkJobSpec(rt, parsed.spec, await rt.store.projects.list(), await jobLibrary(rt)).errors)
+  errors.push(...checkJobSpec(rt, parsed.spec, await rt.store.projects.list(), await jobLibrary(rt), await ownerNames(rt)).errors)
   if (errors.length) return { errors }
   const name = existing?.file ?? rt.jobFiles.freeName(parsed.spec.title)
   await rt.jobFiles.writeText(name, text)
@@ -356,7 +376,7 @@ export async function saveJobText(rt: WorkspaceRuntime, id: string | null, raw: 
  * runs by itself. Checked like any job file; anything wrong is refused with
  * the reasons, so the chat can fix them and try again.
  */
-export async function draftJobOp(rt: WorkspaceRuntime, raw: unknown): Promise<DraftedJob> {
+export async function draftJobOp(rt: WorkspaceRuntime, raw: unknown, caller: { agent?: string | null } = {}): Promise<DraftedJob> {
   const r = (raw ?? {}) as Record<string, unknown>
   const text = (k: string) => (typeof r[k] === 'string' ? (r[k] as string).trim() : '')
   const title = text('title')
@@ -374,13 +394,21 @@ export async function draftJobOp(rt: WorkspaceRuntime, raw: unknown): Promise<Dr
   if (!project) throw new Error(want ? `no project "${want}" — pass a project id or name: ${projects.map((p) => p.name).join(', ')}` : 'this workspace has no project yet')
 
   const errors: string[] = []
+  // A job drafted by chatting is a thread job unless the chat asks for a scan.
+  const mode = (text('mode') || 'thread') as JobMode
+  if (!JOB_MODES.includes(mode)) errors.push(`mode must be one of: ${JOB_MODES.join(', ')}`)
+  // Its owner: the agent named, else the agent of the chat drafting it, else Junior.
+  const agents0 = await chatAgentsFor(rt)
+  const wanted = text('agent')
+  const isJunior = (s: string) => ['junior', rt.persona.name.toLowerCase()].includes(s.toLowerCase())
+  const owner = wanted ? (isJunior(wanted) ? null : resolveAgent(agents0, wanted)) : (agents0.find((a) => a.name === caller.agent) ?? null)
   const names = (k: string) => (Array.isArray(r[k]) ? (r[k] as unknown[]).filter((x): x is string => typeof x === 'string' && x.trim() !== '').map((x) => x.trim()) : [])
   // a browser job may need nothing but the browser; parseJobFile checks the sites
   const sites = names('browser_sites')
   const browser = text('browser') ? { profile: text('browser'), ...(sites.length ? { sites } : {}) } : undefined
   if (!browser && sites.length) errors.push('browser_sites needs browser: the profile the runs use')
   const lines = Array.isArray(r.tools) ? r.tools.filter((t): t is string => typeof t === 'string') : []
-  const tools = grantsFromLines(lines.length ? lines : browser ? [] : ['web'], errors)
+  const tools = grantsFromLines(lines.length ? lines : browser || mode === 'thread' ? [] : ['web'], errors)
   const output = text('output') || 'items'
   if (!JOB_OUTPUTS.includes(output as JobOutput)) errors.push(`output must be one of: ${JOB_OUTPUTS.join(', ')}`)
   const skills = names('skills')
@@ -390,6 +418,8 @@ export async function draftJobOp(rt: WorkspaceRuntime, raw: unknown): Promise<Dr
     id: randomUUID(),
     title,
     schedule,
+    ...(owner ? { agent: owner.name } : {}),
+    ...(mode === 'thread' ? { mode } : {}),
     project: project.id,
     tools,
     ...(text('model') ? { model: text('model') } : {}),
@@ -405,7 +435,7 @@ export async function draftJobOp(rt: WorkspaceRuntime, raw: unknown): Promise<Dr
   }
   // The file's own schema is the check: what it would refuse, this refuses.
   errors.push(...parseJobFile('draft', serializeJobFile(spec)).errors)
-  errors.push(...checkJobSpec(rt, spec, projects, await jobLibrary(rt)).errors)
+  errors.push(...checkJobSpec(rt, spec, projects, await jobLibrary(rt), agents0.map((a) => a.name)).errors)
   if (errors.length) throw new Error(errors.join('; '))
   const warnings: string[] = []
   if (brief?.template && !(await listPlaybooks(rt.playbookDir)).some((p) => p.kind === brief.template)) {
@@ -417,10 +447,10 @@ export async function draftJobOp(rt: WorkspaceRuntime, raw: unknown): Promise<Dr
   log('info', 'job', `drafted: ${title} (jobs/${name}.md) — off until reviewed`, { jobId: spec.id, workspace: rt.meta.id })
   const file = `jobs/${name}.md`
   // built from the file as written, so the chat's strip says what it grants
-  return { id: spec.id, title, file, warnings, readback: readbackOf(spec, { file, projectName: project.name }) }
+  return { id: spec.id, title, file, warnings, mode, owner: owner?.label ?? rt.persona.name, readback: readbackOf(spec, { file, projectName: project.name }) }
 }
 
-export type DraftedJob = { id: string; title: string; file: string; warnings: string[]; readback?: Readback }
+export type DraftedJob = { id: string; title: string; file: string; warnings: string[]; mode?: JobMode; owner?: string; readback?: Readback }
 
 /**
  * What draft_job hands back: where the draft is, how to turn it on, and the
@@ -432,7 +462,10 @@ export function draftJobText(d: DraftedJob, canTry = false): string {
     `ok: drafted the job “${d.title}” (${d.file}, id ${d.id}). It is saved OFF and will not run until the user reviews and enables it.`,
     `Review and enable: #/jobs/${d.id}`,
     ...d.warnings.map((w) => `note: ${w}`),
-    canTry
+    ...(d.mode === 'thread' ? [`Each run opens a thread from ${d.owner}'s DM and reports back there, like any thread.`] : []),
+    canTry && d.mode === 'thread'
+      ? `Now send ONE message: what each run does, as a numbered list, then one question with your suggested answer: "Run a trial now? It opens one thread under ${d.owner} now; anything it would send waits for your OK. Suggested: yes." Call try_job only after they say yes. Do not claim it is running.`
+      : canTry
       ? 'Now send ONE message: what each run does, as a numbered list, then one question with your suggested answer: "Run a trial now? It files and sends nothing. Suggested: yes." Call try_job only after they say yes. Do not claim it is running.'
       : 'Tell the user it is drafted and waiting for their review — do not claim it is running.',
     ...(d.readback ? [readbackText(d.readback)] : []),
@@ -452,6 +485,17 @@ export async function tryJobOp(rt: WorkspaceRuntime, raw: unknown): Promise<stri
   if (!job) throw new Error(`no job "${id}" — pass the id draft_job returned`)
   if (job.configError) throw new Error(`the job is held: ${job.configError} — fix its file first`)
   if (!job.projectId) throw new Error('the job has no project — pick one first')
+  // A thread job's trial is one real run now: a thread from its owner's DM. Its sends are held like any chat's.
+  if (job.mode === 'thread') {
+    const owner = job.agent ? ((await chatAgentsFor(rt)).find((a) => a.name === job.agent)?.label ?? job.agent) : rt.persona.name
+    const state = enqueueJob(rt, job.id)
+    return [
+      state === 'running'
+        ? `“${job.title}” is running already; its thread is under ${owner}'s DM.`
+        : `ok: started a trial run of “${job.title}”. It opens a thread from ${owner}'s DM and reports back there when its first turn ends. Anything it would send waits on a card.`,
+      `The job is ${job.enabled ? 'on' : 'still OFF'}: this was one run, not the schedule. If the thread's work looks right, the user turns it on at #/jobs/${job.id}.`,
+    ].join('\n')
+  }
   const pv: JobPreview = { id: randomUUID(), status: 'running', events: [], startedAt: Date.now() }
   rt.previews.set(pv.id, pv)
   await runJobPreview(rt, pv, {
@@ -463,6 +507,7 @@ export async function tryJobOp(rt: WorkspaceRuntime, raw: unknown): Promise<stri
     schedule: scheduleOf(job),
     skills: job.skills,
     agents: job.agents,
+    agent: job.agent,
     filing: job.filing,
     browser: job.browser,
   })

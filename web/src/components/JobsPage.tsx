@@ -14,7 +14,7 @@ import { nextScheduled } from '../../../core/job/cron.js'
 import { relTime } from '../itemUi.js'
 import { Menu, MenuContent, MenuItem, MenuTrigger } from '../ui/Menu.js'
 import { ConfirmDialog } from '../ui/ConfirmDialog.js'
-import { cronText, fmtUntil, grantIcon, grantLabel, runStatusText } from '../jobUi.js'
+import { cronText, fmtUntil, grantIcon, grantLabel, runStatusText, useJobOwner } from '../jobUi.js'
 
 /** "5m ago", "3d ago", or a plain date past two weeks, where "ago" would read wrong. */
 export const ago = (at: number): string => {
@@ -271,6 +271,7 @@ export function JobsPage({
                         </td>
                         <td>
                           <span className="uses">
+                            <OwnerTag job={w} />
                             {w.tools.map((g) => {
                               const Icon = grantIcon(g)
                               return (
@@ -367,5 +368,15 @@ export function JobsPage({
         onClose={() => setDeleting(null)}
       />
     </div>
+  )
+}
+
+/** Who does the job's runs, and how, as one tag in its row. */
+function OwnerTag({ job }: { job: Job }) {
+  const owner = useJobOwner(job)
+  return (
+    <span className="u proj" title={owner.how}>
+      {owner.label}
+    </span>
   )
 }

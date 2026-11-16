@@ -121,6 +121,8 @@ export type SessionSummary = {
   provider?: ProviderId
   /** Pinned to the top of the sidebar. Absent = not pinned. */
   pinned?: boolean
+  /** Put away (a job's thread that found nothing new): off the open threads. */
+  archived?: boolean
   /** The checkout (folder of the project) the session runs in, stored, never derived from `cwd`. Look it up in `checkouts`. */
   checkoutId?: string
   /** chat (default, absent), job-run, or brief (a headless run that writes an item's brief). */

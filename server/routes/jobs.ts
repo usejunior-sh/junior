@@ -70,6 +70,8 @@ export async function jobRoutes({ req, url, json, rt }: ScopedCtx): Promise<bool
         const name = existing.file ?? rt.jobFiles.freeName(patch.title ?? existing.title)
         const merged = { ...existing, ...patch } as Job
         if (patch.schedule) merged.schedule = patch.schedule
+        // A thread job's runs are chats with the agent's own tools: the form's tool picks don't apply.
+        if (merged.mode === 'thread') merged.tools = []
         if (onlyToggle && existing.file) await rt.jobFiles.setEnabled(existing.file, patch.enabled!)
         else await rt.jobFiles.write(name, jobSpecFrom(merged))
         await syncJobFiles(rt, { force: true })

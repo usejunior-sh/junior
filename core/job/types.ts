@@ -20,6 +20,14 @@ export type JobConnector = 'slack' | 'linear' | 'github' | 'web'
 export type JobOutput = 'items' | 'digest'
 export const JOB_OUTPUTS: JobOutput[] = ['items', 'digest']
 
+/**
+ * How a run works. `thread`: a scheduled message to the job's agent, worked
+ * as a thread from that agent's DM, which hears the outcome like any thread's.
+ * `scan`: the headless, fenced run that only files items or writes a digest.
+ */
+export type JobMode = 'thread' | 'scan'
+export const JOB_MODES: JobMode[] = ['thread', 'scan']
+
 /** The outcome of one job run. */
 export type JobRunStatus = 'ok' | 'failed' | 'timeout' | 'skipped' | 'interrupted' | 'slept'
 export const JOB_RUN_STATUSES: JobRunStatus[] = ['ok', 'failed', 'timeout', 'skipped', 'interrupted', 'slept']
@@ -169,6 +177,10 @@ export interface Job {
   skills?: string[]
   /** subagents a run may hand work to, named the same way; omitted = none */
   agents?: string[]
+  /** the chat agent that owns the job and does its runs (`junior:debugger`); omitted = Junior */
+  agent?: string
+  /** thread (a scheduled thread from the owner's DM) or scan (headless, files items); absent = scan */
+  mode?: JobMode
   /** how it files: reason, labels, tiers (filing.ts); omitted = found, any label, no tiers */
   filing?: import('./filing.js').JobFiling
   /** the browser profile and sites its runs use; omitted = no browser */
@@ -194,6 +206,9 @@ export type NewJob = Pick<Job, 'title' | 'instruction' | 'schedule' | 'createsIt
   /** null or [] = none */
   skills?: string[] | null
   agents?: string[] | null
+  /** null = Junior */
+  agent?: string | null
+  mode?: JobMode
   /** null = the default filing */
   filing?: import('./filing.js').JobFiling | null
   /** null = no browser */

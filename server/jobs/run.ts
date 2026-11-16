@@ -18,9 +18,10 @@ import { ownServersOf } from '../../core/actions/own.js'
 import { deliverPendingSendBacks } from '../session/actions-send.js'
 import { syncInbox } from '../inbox/sync.js'
 import { contextForSession } from '../context-files.js'
+import { runJobThread } from './thread-run.js'
 
 /** A macOS notification about a finished run, per the job's notify setting. */
-function notifyRun(rt: WorkspaceRuntime, w: Job, status: JobRunStatus, detail?: string): void {
+export function notifyRun(rt: WorkspaceRuntime, w: Job, status: JobRunStatus, detail?: string): void {
   if (process.platform !== 'darwin' || w.notify === 'never') return
   const failed = status === 'failed' || status === 'timeout'
   if (w.notify === 'on_failure' && !failed) return
@@ -91,6 +92,10 @@ export async function runJob(
     log('warn', 'job', `${job.title}: skipped, ${BROWSER_NEEDS_APP}`, { jobId: job.id, workspace: rt.meta.id })
     return
   }
+  // A thread job: the run is a thread from its owner's DM, not a headless scan.
+  if (job.mode === 'thread') {
+    return runJobThread(rt, job, run, startedMs, runLimits, lateness, projectRow, onStop, (status, detail) => notifyRun(rt, job, status, detail))
+  }
   const session = await rt.store.sessions.create({
     id: randomUUID(),
     title: `Job · ${job.title}`,
@@ -150,7 +155,7 @@ export async function runJob(
     }, runLimits.timeoutMs)
     const runSpec = await jobQuery(
       rt,
-      { instruction: job.instruction, tools: job.tools, project, model: job.model, output: job.output, schedule: scheduleOf(job), scope: job.scope, lateness, skills: job.skills, agents: job.agents, filing: job.filing, browser: job.browser },
+      { instruction: job.instruction, tools: job.tools, project, model: job.model, output: job.output, schedule: scheduleOf(job), scope: job.scope, lateness, skills: job.skills, agents: job.agents, agent: job.agent, filing: job.filing, browser: job.browser },
       scanMcp,
       abort,
       { ...runLimits, tab: session.id, context: await contextForSession(rt, session) },

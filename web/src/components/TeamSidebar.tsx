@@ -5,7 +5,7 @@
  * the open threads, then the agents with their latest line. Quiet agents fold
  * into one row. Settings at the bottom.
  */
-import { CalendarClock, FileText, GitPullRequest, ListChecks, PanelLeft, Plus, Search, Settings } from 'lucide-react'
+import { CalendarClock, Clock, FileText, GitPullRequest, ListChecks, PanelLeft, Plus, Search, Settings } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { JUNIOR_DM, dmKey, findDm } from '../../../core/junior/dms.js'
 import { juniorSays, type SayNeed } from '../../../core/junior/say.js'
@@ -326,7 +326,7 @@ function ThreadRow({ t, agentLabel, colour, active, onOpen }: { t: Thread; agent
       type="button"
       className={`tsWaitRow${active ? ' on' : ''}`}
       aria-current={active ? 'page' : undefined}
-      title={`${t.title} · ${agentLabel}${t.question ? ' asks you a question' : ' waits on you'}`}
+      title={`${t.title} · ${agentLabel}${t.job ? ', from a job' : ''}${t.question ? ' asks you a question' : ' waits on you'}`}
       onClick={onOpen}
       onPointerEnter={() => setHover(true)}
       onPointerLeave={() => setHover(false)}
@@ -334,6 +334,7 @@ function ThreadRow({ t, agentLabel, colour, active, onOpen }: { t: Thread; agent
       <JuniorFace mood={hover ? 'done' : 'needs'} size={24} motion={hover ? 'follow' : 'still'} colour={colour} decorative />
       <span className="tsT">
         <span className="tsL1">
+          {t.job && <Clock size={11} className="tsJob" aria-label="a job's run" />}
           <b>{t.title}</b>
           <small>{ago(t.updatedAt)}</small>
         </span>

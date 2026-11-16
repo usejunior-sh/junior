@@ -8,6 +8,8 @@ import type { JobOutput, JobRunStatus, JobRunTrigger, JobToolGrant } from '../..
 import { grantLabel, type BuiltinToolId } from '../../core/job/tools.js'
 import cronstrue from 'cronstrue'
 import { describeCron, nextScheduled } from '../../core/job/cron.js'
+import { useChatAgents } from './chatAgents.js'
+import { usePersona } from './junior.js'
 
 export const BUILTINS: Array<{ id: BuiltinToolId; label: string; icon: ComponentType<LucideProps>; hint: string }> = [
   { id: 'web', label: 'Web', icon: Globe, hint: 'Search and read web pages' },
@@ -120,4 +122,16 @@ export function fmtSlot(at: number, now = Date.now()): string {
   if (day(at) === day(now + 86_400_000)) return `Tomorrow ${time}`
   if (at - now < 6 * 86_400_000) return `${d.toLocaleDateString(undefined, { weekday: 'short' })} ${time}`
   return `${d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })} ${time}`
+}
+
+/**
+ * Who does a job's runs: its agent's label (Junior when it names none), and
+ * how. A thread job's runs are threads from that agent's DM; a scan runs
+ * headless. An agent removed since shows its file name.
+ */
+export function useJobOwner(job: { agent?: string; mode?: 'thread' | 'scan' }): { label: string; how: string } {
+  const agents = useChatAgents()
+  const persona = usePersona()
+  const label = job.agent ? (agents.find((a) => a.name === job.agent)?.label ?? job.agent) : persona.name
+  return { label, how: job.mode === 'thread' ? `Each run is a thread from ${label}’s DM, and reports back there` : `Runs headless as ${label} and files what it finds` }
 }

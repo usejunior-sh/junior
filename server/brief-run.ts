@@ -1,6 +1,7 @@
 import { createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk'
 import { agentAppend, agentDisallowed } from '../core/junior/agents.js'
 import { chatAgentNamed, chatAgentsFor } from './chat-agents.js'
+import { makeJobThreadMcp } from './jobs/thread-run.js'
 import { COORDINATOR_DISALLOWED, coordinatorAppend, threadAppend } from '../core/junior/coordinator.js'
 import { DM_COMPACT_WINDOW } from '../core/junior/dms.js'
 import { worklogAppend } from '../core/junior/worklog.js'
@@ -145,13 +146,19 @@ export async function extrasFor(rt: WorkspaceRuntime, row: StoredSession): Promi
     // A thread Junior started from its own chat leads each reply with the sentence Junior's chat shows.
     const parent = row.startedBy ? rt.rows.get(row.startedBy) : undefined
     const thread = parent?.kind === 'dm' && !parent.agent ? threadAppend(rt.persona.name) : ''
-    if (!agent) return { systemAppend: `${identity}${thread}${memory}${await juniorAppend(rt)}`, mcp: { browser: browserMcpFor(rt, row) }, ...compact }
+    // A thread job's thread (server/jobs/thread-run.ts): the job's seen list as tools, and the run's spend cap while it runs.
+    const job = row.kind === 'chat' && row.jobId ? await rt.store.jobs.get(row.jobId).catch(() => null) : null
+    const jobMcp: Record<string, ReturnType<typeof makeJobThreadMcp>> = job ? { job: makeJobThreadMcp(rt, job, row.id) } : {}
+    const cap = rt.jobThreads.get(row.id)?.maxBudgetUsd
+    const jobCap = cap != null ? { maxBudgetUsd: cap } : {}
+    if (!agent) return { systemAppend: `${identity}${thread}${memory}${await juniorAppend(rt)}`, mcp: { browser: browserMcpFor(rt, row), ...jobMcp }, ...jobCap, ...compact }
     return {
       systemAppend: `${identity}${thread}${agentAppend(agent, rt.persona.name)}${memory}${await juniorAppend(rt)}`,
-      mcp: { browser: browserMcpFor(rt, row) },
+      mcp: { browser: browserMcpFor(rt, row), ...jobMcp },
       disallowedTools: agentDisallowed(agent),
       ...(agent.skills ? { skills: agent.skills } : {}),
       ...(agent.model ? { model: agent.model } : {}),
+      ...jobCap,
       ...compact,
     }
   }

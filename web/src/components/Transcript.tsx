@@ -1,4 +1,4 @@
-import { KeyRound } from 'lucide-react'
+import { Clock, KeyRound } from 'lucide-react'
 import { useScopedAgent } from '../chatAgents.js'
 import { Fragment, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
@@ -46,7 +46,7 @@ import { RuleCards } from './RuleCard.js'
 import { LearnedLines } from './LearnedLine.js'
 import { ThreadCards } from './ThreadCards.js'
 import { useActions } from '../actions.js'
-import type { ActionView } from '../../../shared/protocol.js'
+import type { ActionView, JobRunMark } from '../../../shared/protocol.js'
 
 type Props = {
   sessionId: string
@@ -553,6 +553,25 @@ function BriefCard({ from, to, text, refs, onRef, onEdit }: { from: string; to: 
   )
 }
 
+const RUN_WHY: Record<JobRunMark['trigger'], string> = { scheduled: 'scheduled', catch_up: 'catch-up', manual: 'run now', redraft: 'redraft' }
+
+/** A job's run opened this thread: who sent it (the job), when, and why it ran. Never a user bubble. */
+function JobRunMessage({ job, text, refs, onRef }: { job: JobRunMark; text: string; refs: RefIndex; onRef: (hash: string) => void }) {
+  const at = new Date(job.runAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  return (
+    <div className="msg teammate jobRun" aria-label={`A run of the job ${job.title}, not a message from you`}>
+      <div className="msgFrom">
+        <Clock size={12} aria-hidden="true" className="msgJobGlyph" /> job ·{' '}
+        <button type="button" className="msgFromLink" title="Open the job" onClick={() => onRef(`/jobs/${encodeURIComponent(job.id)}`)}>
+          {job.title}
+        </button>{' '}
+        · {at} · {RUN_WHY[job.trigger]}
+      </div>
+      <Markdown text={text} refs={refs} onRef={onRef} />
+    </div>
+  )
+}
+
 function mentionOpener(m: ResolvedMention, onRef: (hash: string) => void): (() => void) | undefined {
   const hash = mentionHash(m)
   return hash === null ? undefined : () => onRef(hash)
@@ -647,6 +666,8 @@ const Item = memo(function Item({
             </div>
           </div>
         )
+      // A job's run: the job's card, so a scheduled message never reads as something the user typed.
+      if (item.job) return <JobRunMessage job={item.job} text={item.text} refs={refs} onRef={onRef} />
       // A teammate agent's message: its own card, so it never reads as something the user typed.
       if (item.from)
         return (

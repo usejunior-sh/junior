@@ -22,6 +22,7 @@ type SessionRow = {
   permission_mode: string | null
   provider: string | null
   pinned: number
+  archived?: number | null
   kind: string | null
   job_id: string | null
   run_status: string | null
@@ -71,6 +72,7 @@ const toSession = (r: SessionRow): StoredSession => ({
   permissionMode: toPermissionMode(r.permission_mode),
   provider: toProvider(r.provider),
   pinned: r.pinned === 1,
+  ...(r.archived === 1 ? { archived: true } : {}),
   kind: r.kind === 'job-run' || r.kind === 'brief' || r.kind === 'goal' || r.kind === 'task' || r.kind === 'dm' ? r.kind : 'chat',
   jobId: r.job_id,
   runStatus: toRunStatus(r.run_status),
@@ -215,6 +217,10 @@ export class SqliteSessions implements SessionStore {
 
   async setPinned(id: string, pinned: boolean): Promise<void> {
     this.db.prepare('UPDATE sessions SET pinned = ? WHERE id = ?').run(pinned ? 1 : 0, id)
+  }
+
+  async setArchived(id: string, archived: boolean): Promise<void> {
+    this.db.prepare('UPDATE sessions SET archived = ? WHERE id = ?').run(archived ? 1 : 0, id)
   }
 
   /**

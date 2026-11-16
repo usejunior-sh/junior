@@ -9,6 +9,7 @@ import { MessageSquare } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { openThreads } from '../../../core/junior/threads.js'
 import type { Job } from '../../../core/job/types.js'
+import { describeCron } from '../../../core/job/cron.js'
 import type { JobsResponse } from '../../../shared/protocol.js'
 import { useChatAgents } from '../chatAgents.js'
 import { useSessions } from '../hooks.js'
@@ -71,7 +72,9 @@ export function AgentPage({ name, onNavigate }: { name: string; onNavigate: (has
   const memory = (learnings ?? []).filter((l) => scopes.has(l.scope))
   const kept = memory.filter((l) => l.status === 'kept')
   const proposed = memory.filter((l) => l.status === 'proposed')
-  const myJobs = jobs.filter((j) => j.agents?.some((a) => a === agent.name || a === agent.slug || a.endsWith(`:${agent.slug}`)))
+  // Jobs it owns: their runs are its threads. Jobs that only list it as a helper come after.
+  const myJobs = jobs.filter((j) => j.agent === agent.name)
+  const helps = jobs.filter((j) => j.agent !== agent.name && j.agents?.some((a) => a === agent.name || a === agent.slug || a.endsWith(`:${agent.slug}`)))
 
   return (
     <div className="page agentPage">
@@ -151,23 +154,42 @@ export function AgentPage({ name, onNavigate }: { name: string; onNavigate: (has
 
         <h2 className="agH">Jobs</h2>
         {myJobs.length === 0 ? (
-          <p className="agEmpty">No job hands {agent.label} work yet. Tell {persona.name}: "Have {agent.label} check my PRs every 15 minutes."</p>
+          <p className="agEmpty">
+            {agent.label} has no jobs yet. Message {agent.label} with one: "Every hour, check the logs. If something is wrong, investigate and write the report."
+          </p>
         ) : (
           <ul className="agJobs">
             {myJobs.map((j) => (
-              <li key={j.id}>
-                <button type="button" className="agJob" onClick={() => onNavigate(`/jobs/${encodeURIComponent(j.id)}`)}>
-                  <span className="tcT">
-                    <b>{j.title}</b>
-                    <span>{j.cadence ? String(j.schedule) : 'On demand'}</span>
-                  </span>
-                  <span className={`tcState ${j.enabled ? '' : 'ready'}`}>{j.enabled ? 'On' : 'Off'}</span>
-                </button>
-              </li>
+              <JobLine key={j.id} job={j} onNavigate={onNavigate} />
             ))}
           </ul>
         )}
+        {helps.length > 0 && (
+          <>
+            <p className="agRoute">Helps in</p>
+            <ul className="agJobs">
+              {helps.map((j) => (
+                <JobLine key={j.id} job={j} onNavigate={onNavigate} />
+              ))}
+            </ul>
+          </>
+        )}
       </div>
     </div>
+  )
+}
+
+/** One job on an agent's page: its title, when it runs, on or off. */
+function JobLine({ job, onNavigate }: { job: Job; onNavigate: (hash: string) => void }) {
+  return (
+    <li>
+      <button type="button" className="agJob" onClick={() => onNavigate(`/jobs/${encodeURIComponent(job.id)}`)}>
+        <span className="tcT">
+          <b>{job.title}</b>
+          <span>{describeCron(job.schedule)}</span>
+        </span>
+        <span className={`tcState ${job.enabled ? '' : 'ready'}`}>{job.enabled ? 'On' : 'Off'}</span>
+      </button>
+    </li>
   )
 }

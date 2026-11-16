@@ -46,6 +46,8 @@ type JobRow = {
   draft?: number | null
   skills?: string | null
   agents?: string | null
+  agent?: string | null
+  mode?: string | null
   filing?: string | null
   browser?: string | null
   created_at: number
@@ -170,6 +172,8 @@ const toJob = (r: JobRow): Job => ({
   ...(r.draft ? { draft: true } : {}),
   ...(toNames(r.skills).length ? { skills: toNames(r.skills) } : {}),
   ...(toNames(r.agents).length ? { agents: toNames(r.agents) } : {}),
+  ...(r.agent ? { agent: r.agent } : {}),
+  mode: r.mode === 'thread' ? 'thread' : 'scan',
   ...(filingFromJson(r.filing) ? { filing: filingFromJson(r.filing)! } : {}),
   ...(toJobBrowser(r.browser) ? { browser: toJobBrowser(r.browser)! } : {}),
   createdAt: r.created_at,
@@ -195,8 +199,8 @@ export class SqliteJobs implements JobStore {
         `INSERT INTO jobs (id, source, title, scope, instruction, cadence, window_start, window_day,
            schedule, enabled, creates_items, cursor, last_run_at, last_run_tokens, last_run_matches, template_id,
            tools, project_id, model, output, catch_up_window, timeout_ms, max_budget_usd, daily_budget_usd, file, notify,
-           config_error, last_run_started_at, consecutive_failures, brief, draft, skills, agents, filing, browser, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           config_error, last_run_started_at, consecutive_failures, brief, draft, skills, agents, agent, mode, filing, browser, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         w.id, w.source, w.title, w.scope, w.instruction, w.cadence,
@@ -208,7 +212,7 @@ export class SqliteJobs implements JobStore {
         w.catchUpWindow ?? null, w.timeoutMs ?? null, w.maxBudgetUsd ?? null, w.dailyBudgetUsd ?? null, w.file ?? null, w.notify,
         w.configError ?? null, w.lastRunStartedAt ?? null,
         w.brief ? JSON.stringify(w.brief) : null, w.draft ? 1 : 0,
-        fromNames(w.skills), fromNames(w.agents), w.filing ? JSON.stringify(w.filing) : null, w.browser ? JSON.stringify(w.browser) : null,
+        fromNames(w.skills), fromNames(w.agents), w.agent ?? null, w.mode ?? 'scan', w.filing ? JSON.stringify(w.filing) : null, w.browser ? JSON.stringify(w.browser) : null,
         w.createdAt, w.updatedAt,
       )
   }
@@ -224,7 +228,7 @@ export class SqliteJobs implements JobStore {
         `UPDATE jobs SET title = ?, scope = ?, instruction = ?, cadence = ?, window_start = ?,
            window_day = ?, schedule = ?, enabled = ?, creates_items = ?, tools = ?, project_id = ?, model = ?, output = ?,
            catch_up_window = ?, timeout_ms = ?, max_budget_usd = ?, daily_budget_usd = ?, file = ?, notify = ?,
-           brief = ?, draft = ?, skills = ?, agents = ?, filing = ?, browser = ?, updated_at = ? WHERE id = ?`,
+           brief = ?, draft = ?, skills = ?, agents = ?, agent = ?, mode = ?, filing = ?, browser = ?, updated_at = ? WHERE id = ?`,
       )
       .run(
         next.title, next.scope ?? '', next.instruction, next.cadence,
@@ -234,7 +238,7 @@ export class SqliteJobs implements JobStore {
         JSON.stringify(next.tools), next.projectId || null, next.model ?? null, next.output ?? 'items',
         opt(next.catchUpWindow), opt(next.timeoutMs), opt(next.maxBudgetUsd), opt(next.dailyBudgetUsd), next.file ?? null, next.notify ?? 'on_failure',
         next.brief ? JSON.stringify(next.brief) : null, next.draft ? 1 : 0,
-        fromNames(next.skills), fromNames(next.agents), next.filing ? JSON.stringify(next.filing) : null, next.browser ? JSON.stringify(next.browser) : null,
+        fromNames(next.skills), fromNames(next.agents), next.agent ?? null, next.mode ?? 'scan', next.filing ? JSON.stringify(next.filing) : null, next.browser ? JSON.stringify(next.browser) : null,
         Date.now(), id,
       )
   }

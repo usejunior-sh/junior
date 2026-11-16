@@ -10,6 +10,8 @@
  * entry per thread, so a later chat knows what got done without re-reading it.
  */
 import { blockedText } from '../../core/junior/thread-wake.js'
+import { isNothingNew } from '../../core/job/thread.js'
+import { broadcastSessionList } from '../ws/send.js'
 import { threadReportLine, threadReportSentence } from '../../core/junior/threads.js'
 import type { StoredSession } from '../../core/store/types.js'
 import { chatAgentNamed } from '../chat-agents.js'
@@ -20,11 +22,25 @@ import type { WorkspaceRuntime } from '../workspace/runtime.js'
 import { noteWorkOp } from '../worklog-ops.js'
 import { queueThreadReport } from './thread-wake.js'
 
+/** Who a thread's report names: its agent, and the job when a job's run opened it. */
+async function whoOf(rt: WorkspaceRuntime, row: StoredSession, label: string): Promise<string> {
+  const job = row.jobId ? await rt.store.jobs.get(row.jobId).catch(() => null) : null
+  return job ? `${label}, from the job "${job.title}",` : label
+}
+
 export async function reportThreadTurn(rt: WorkspaceRuntime, row: StoredSession, said: string): Promise<void> {
   const parent = row.startedBy ? rt.rows.get(row.startedBy) : undefined
   if (!parent || parent.kind !== 'dm') return
   const agent = await chatAgentNamed(rt, row.agent)
-  const who = agent?.label ?? rt.persona.name
+  // A job's run that found nothing stays quiet: no line in the DM, no wake, the thread put away.
+  if (row.jobId && isNothingNew(said)) {
+    await putAway(rt, row)
+    if (!parent.agent) {
+      await noteWorkOp(rt, { sessionId: row.id, title: row.title, ...(agent ? { agent: agent.label } : {}), said: 'Nothing new.', at: Date.now() }).catch(() => {})
+    }
+    return
+  }
+  const who = await whoOf(rt, row, agent?.label ?? rt.persona.name)
   await sessionNotice(rt, parent.id, threadReportLine(who, row.title, said))
   queueThreadReport(rt, parent.id, { threadId: row.id, title: row.title, who, state: 'done', text: said, at: Date.now() })
   // Junior's own chat only: an agent's DM starting a thread isn't Junior's work.
@@ -42,7 +58,14 @@ export async function reportThreadTurn(rt: WorkspaceRuntime, row: StoredSession,
 export async function reportThreadBlocked(rt: WorkspaceRuntime, row: StoredSession, toolName: string, input: Record<string, unknown>, title?: string, description?: string): Promise<void> {
   const parent = row.startedBy ? rt.rows.get(row.startedBy) : undefined
   if (!parent || parent.kind !== 'dm') return
-  const who = (await chatAgentNamed(rt, row.agent))?.label ?? rt.persona.name
-  await sessionNotice(rt, parent.id, `${who} is waiting on you in "${row.title}".`)
+  const who = await whoOf(rt, row, (await chatAgentNamed(rt, row.agent))?.label ?? rt.persona.name)
+  await sessionNotice(rt, parent.id, `${who.replace(/,$/, '')} is waiting on you in "${row.title}".`)
   queueThreadReport(rt, parent.id, { threadId: row.id, title: row.title, who, state: 'blocked', text: blockedText(toolName, input, title, description), at: Date.now() })
+}
+
+/** Put a thread away: off the open threads, still in its DM's history and the job's runs. */
+async function putAway(rt: WorkspaceRuntime, row: StoredSession): Promise<void> {
+  await rt.store.sessions.setArchived(row.id, true)
+  row.archived = true
+  broadcastSessionList(rt)
 }

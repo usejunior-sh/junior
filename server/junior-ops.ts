@@ -26,6 +26,7 @@ import { inboxAlerts } from './inbox/flow.js'
 import { getFocusHoursOp, type FocusView } from './settings-ops.js'
 import { nudgeMarksOp } from './tasks/nudge.js'
 import { depBatchOp } from './babysit/dep-batch.js'
+import { isJobRunRow } from '../core/job/thread.js'
 
 // Junior (.docs/junior-goals-teams): the persona, the Junior page's day, and
 // today's plan. The rules are pure and tested in core/junior/; everything
@@ -329,7 +330,7 @@ export async function juniorDayOp(rt: WorkspaceRuntime, q: { since: number; away
 
   // The brief's facts.
   const runs: FactRun[] = rows
-    .filter((r) => r.kind === 'job-run' && r.jobId && r.runStatus)
+    .filter((r) => isJobRunRow(r) && r.jobId && r.runStatus)
     .map((r) => ({ jobId: r.jobId!, ok: r.runStatus === 'ok', endedAt: r.updatedAt, filed: r.runNew ?? r.runMatches ?? 0 }))
   const sent = (await rt.store.actions.list({ since, status: ['succeeded'], limit: 1000 })).length
   const facts = briefFacts({ since, away: q.away, items, runs, jobTitles, sent })

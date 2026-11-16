@@ -111,7 +111,9 @@ test('the job chat asks for numbered steps and one question before the trial run
   assert.ok(steps < JOBS_SECTION.indexOf('Call try_job only after they say yes'))
   assert.ok(JOBS_SECTION.indexOf('After draft_job, send ONE message before any trial run') > JOBS_SECTION.indexOf('Draft it with draft_job'))
   assert.match(JOBS_SECTION, /Each run will:/)
-  assert.match(JOBS_SECTION, /Run a trial now\? It files and sends nothing\. Suggested: yes\./)
+  // a thread job's trial opens one real thread; a scan's is a dry run
+  assert.match(JOBS_SECTION, /Run a trial now\? It opens one thread now;\s+anything\s+it would send waits for your OK\. Suggested: yes\./)
+  assert.match(JOBS_SECTION, /Run a trial now\? It files and sends\s+nothing\. Suggested: yes\./)
   assert.match(JOBS_SECTION, /Don't restate what it may touch or when it runs/)
   assert.doesNotMatch(JOBS_SECTION, /24\/7|walk away/)
   // the section, as written: a change to the instruction is a change to this snapshot
@@ -120,9 +122,11 @@ test('the job chat asks for numbered steps and one question before the trial run
     step45,
     `4. After draft_job, send ONE message before any trial run. Write what each run does as a numbered
    list: 3 to 6 steps, in order, one short sentence each, starting with a verb; the last step says
-   what it files. Open it with "Each run will:". Don't restate what it may touch or when it runs:
-   draft_job shows the user those lines from the file, under the call. End with one question and
-   your suggested answer: "Run a trial now? It files and sends nothing. Suggested: yes."
-5. Call try_job only after they say yes, so they see what it would file before they turn it on.`,
+   what it reports back (or files, for a scan). Open it with "Each run will:".
+   Don't restate what it may touch or when it runs: draft_job shows the user those lines from the file,
+   under the call. End with one question and your suggested answer: for a thread job "Run a trial now? It opens one thread now; anything
+   it would send waits for your OK. Suggested: yes.", for a scan "Run a trial now? It files and sends
+   nothing. Suggested: yes."
+5. Call try_job only after they say yes, so they see one real run before they turn it on.`,
   )
 })

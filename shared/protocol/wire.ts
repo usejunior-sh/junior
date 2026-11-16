@@ -10,6 +10,20 @@ import type { ProviderId, Workspace } from './workspace.js'
 
 // Session events (the replay log, and the live stream)
 
+/** A message a job's run sent (mode: thread), not the user: which job, when, and why it ran. */
+export type JobRunMark = {
+  /** the job's id */
+  id: string
+  title: string
+  /** when the run started, epoch ms */
+  runAt: number
+  trigger: 'scheduled' | 'catch_up' | 'manual' | 'redraft'
+  /** the schedule in words ("every 2 hours"), when known */
+  every?: string
+  /** a catch-up run: how late it is and what it covers */
+  lateness?: string
+}
+
 export type SessionEvent =
   | { kind: 'sdk'; message: SdkMessage }
   | {
@@ -27,6 +41,8 @@ export type SessionEvent =
       relay?: AgentRelay
       /** sent in Goal mode: Junior proposes a goal for it */
       mode?: 'goal'
+      /** sent by a job's run, not the user (mode: thread): the transcript shows it as the job's */
+      job?: JobRunMark
       /** a thread's report waking the DM that started it; the notice line already shows it, so the transcript hides it */
       report?: true
       /**

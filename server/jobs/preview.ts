@@ -12,6 +12,8 @@ import { checkBrowserProfile, checkLibrary } from '../job-files.js'
 import { WORKSPACE_PLUGIN } from '../library.js'
 import { fenceDecision, fenceFor } from '../../core/job/fence.js'
 import { personaAppend } from '../../core/junior/persona.js'
+import { agentRunAppend } from '../../core/junior/agents.js'
+import { chatAgentNamed } from '../chat-agents.js'
 import type { ContextLoad } from '../../shared/juniorContext.js'
 import { contextForTrial } from '../context-files.js'
 import { safeWhen } from '../../core/sources/slack.js'
@@ -60,6 +62,8 @@ type RunSpec = {
   /** the skills and agents the job names, as Claude calls them */
   skills?: string[]
   agents?: string[]
+  /** the chat agent that owns the job; omitted = Junior */
+  agent?: string
   /** how it files: reason, labels, tiers */
   filing?: JobFiling
   /** the browser profile and sites, when the job names one */
@@ -188,6 +192,10 @@ export async function jobQuery(
     if (missing.length) throw new Error(missing.join('; '))
   }
   const context = extra.context ?? (await contextForTrial(rt, spec.project))
+  // The owner speaks for the run: its prompt before the persona and the headless rule, which still come last.
+  const owner = spec.agent ? await chatAgentNamed(rt, spec.agent) : null
+  if (spec.agent && !owner) throw new Error(`the agent "${spec.agent}" is gone or no longer a chat agent — pick another owner for this job`)
+  const model = spec.model ?? owner?.model ?? undefined
   const extraTools = [...(skills.length ? ['Skill'] : []), ...(agents.length ? ['Agent'] : [])]
   const fromLibrary = [...skills, ...agents].some((n) => n.startsWith(`${WORKSPACE_PLUGIN}:`))
   const fence = fenceFor(spec.tools, spec.output, spec.project.path, { skills, agents }, browser ? { browser: true, readRoots: [downloadDirFor(browser.tab)] } : {})
@@ -198,7 +206,7 @@ export async function jobQuery(
     prompt,
     // A job run is Junior's too: its name and voice, and the one rule an unattended run can keep.
     // Then the user's context files, the same ones a chat in this project reads; a trial run reads them too.
-    systemAppend: `${personaAppend(rt.persona, 'job')}${context.append}`,
+    systemAppend: `${owner ? agentRunAppend(owner, rt.persona.name) : ''}${personaAppend(rt.persona, 'job')}${context.append}`,
     cwd: spec.project.path,
     userConfig: true,
     tools: [...runBaseTools(spec.tools), ...extraTools],
@@ -212,7 +220,7 @@ export async function jobQuery(
       if (!d.allow || !gate || !toolName.startsWith(BROWSER_PREFIX)) return d
       return (await gate(toolName, input)) ?? d
     },
-    ...(spec.model ? { model: spec.model } : {}),
+    ...(model ? { model } : {}),
     ...(extra.maxBudgetUsd != null ? { maxBudgetUsd: extra.maxBudgetUsd } : {}),
     ...(extra.includePartialMessages ? { streamDeltas: true } : {}),
     mcpServers: {
