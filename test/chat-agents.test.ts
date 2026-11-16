@@ -47,7 +47,9 @@ test('faces: named colours and hex, but never orange', () => {
 test('tools only narrow: the gated built-ins it leaves out are taken away, nothing is added', () => {
   assert.deepEqual(agentDisallowed({ tools: null }), [])
   const off = agentDisallowed({ tools: ['Read', 'Grep', 'Glob'] })
-  assert.ok(off.includes('Bash') && off.includes('Edit') && off.includes('Write'))
+  assert.ok(off.includes('Edit') && off.includes('Write'))
+  // Bash stays, for sends only (test/agent-lanes.test.ts)
+  assert.ok(!off.includes('Bash'))
   assert.ok(!off.includes('Read'))
   assert.ok(!off.includes('Skill') && !off.includes('AskUserQuestion'))
 })

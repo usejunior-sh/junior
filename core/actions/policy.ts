@@ -125,3 +125,22 @@ export const selfApproval = (command: string): boolean => /\/api\/(approvals\b|a
 
 /** A push or a PR open: the only sends the shell may make free. Anything else needs no branch lookup. */
 export const mayBeFree = (command: string): boolean => /\bgit\b[\s\S]*\bpush\b|\bgh\s+pr\s+create\b/.test(command)
+
+/**
+ * A chat agent whose `tools` line leaves Bash out (core/junior/agents.ts
+ * shellSendOnly) keeps a shell for sends only. True when every part of the
+ * command sorts as a send (a `cd` first aside); the send itself is then judged
+ * like any chat's, free or held. A command only the shell knows is not one.
+ */
+export function sendOnlyShell(command: string, sortPart: (part: string) => SortedAction | null): boolean {
+  const parts = splitCommand(command).filter((p) => p.length > 0)
+  let sends = 0
+  for (const part of parts) {
+    const w = unwrap(part)
+    if (w[0] === 'cd') continue
+    if (unknownCommand(part) || scriptOf(part) !== null) return false
+    if (!sortPart(part.join(' '))) return false
+    sends++
+  }
+  return sends > 0
+}

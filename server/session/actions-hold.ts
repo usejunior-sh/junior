@@ -5,7 +5,9 @@ import type { ToolVeto, VetoDecision } from '../providers/types.js'
 import { log } from '../log.js'
 import { type ActionMove, canonJson, heldEntry, heldRecord, holdable, isArgsObject, move, queuedMessage, sendDelay } from '../../core/actions/queue.js'
 import { destructiveCommand } from '../../core/actions/commands.js'
-import { type BranchScope, chatBashVerdict, mayBeFree, selfApproval } from '../../core/actions/policy.js'
+import { type BranchScope, chatBashVerdict, mayBeFree, selfApproval, sendOnlyShell } from '../../core/actions/policy.js'
+import { shellSendOnly } from '../../core/junior/agents.js'
+import { chatAgentNamed } from '../chat-agents.js'
 import { currentBranch } from '../git.js'
 import { defaultBranch } from '../worktrees.js'
 import { taskRunVerdict } from '../../core/babysit/policy.js'
@@ -101,6 +103,15 @@ export function sessionVeto(rt: WorkspaceRuntime, row: StoredSession, own: Reado
       if (toolName === 'Bash' && chatHoldsSends(row) && isArgsObject(input)) {
         const why = destructiveCommand(String(input.command ?? ''))
         if (why) return { allow: false, ask: true, reason: `This command ${why}, so it needs your OK.` }
+      }
+      // An agent whose tools leave Bash out keeps a shell for the sends the user asks for, nothing else.
+      if (toolName === 'Bash' && chat && row.agent && isArgsObject(input) && shellSendOnly(await chatAgentNamed(rt, row.agent))) {
+        const sort = sortForWorkspace(rt, own)
+        let send = false
+        try {
+          send = sendOnlyShell(String(input.command ?? ''), (part) => sort('Bash', { command: part }))
+        } catch {}
+        if (!send) return { allow: false, reason: 'Your shell here runs sends only (gh, git push): this agent has no shell for other work. Say which agent fits better.' }
       }
       // The browser on a signed-in site: a commit click asks, a password is refused (server/browser/gate.ts).
       const gate = await browserGateFor(row, { mode: 'chat' })(toolName, input)

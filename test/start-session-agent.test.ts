@@ -14,6 +14,7 @@ const agent = (slug: string, label: string): ChatAgent => ({
   model: null,
   tools: null,
   skills: null,
+  sends: null,
   prompt: '',
   path: `/x/${slug}.md`,
   scope: 'Workspace',

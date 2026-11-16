@@ -15,8 +15,16 @@
  *   tools: Read, Grep, Glob
  *   ask: What do you want to understand?
  *   starters: Explain how this repo is laid out | Walk me through a request
+ *   sends: none
  *   ---
  *   <the prompt>
+ *
+ * Sends work in lanes. `sends:` lists the kinds of send in the agent's job
+ * (a Reviewer's review comments, a Babysitter's push): those it may propose
+ * on its own when the job calls for one. Anything else it sends only when the
+ * user asks for it in that chat, never unprompted. Either way the call goes
+ * through the one policy (core/actions/policy.ts) and waits on a card: lanes
+ * decide what an agent may propose, the card decides what leaves.
  *
  * Pure and browser-safe: the server lists and spawns with it, the web draws
  * faces and names with it.
@@ -43,6 +51,8 @@ export type ChatAgent = {
   tools: string[] | null
   /** the only skills it loads; null = every skill */
   skills: string[] | null
+  /** the send kinds in its lane (SEND_KINDS, or any a file names); null = its starter's (agentSends) */
+  sends: string[] | null
   prompt: string
   path: string
   /** Workspace, Personal, a project's name */
@@ -95,6 +105,36 @@ const starterList = (v: string | undefined): string[] | null => {
   return xs.length ? xs : null
 }
 
+/**
+ * The kinds of send a lane can name. A file may name others (a connector's
+ * own, `pagerduty-ack`): they read as written.
+ */
+export const SEND_KINDS = ['push', 'pr', 'merge', 'github-review', 'github-comment', 'github-reply', 'slack-reply', 'slack-post', 'slack-dm', 'ticket', 'email'] as const
+
+const SEND_LABEL: Readonly<Record<string, string>> = {
+  push: 'a push',
+  pr: 'a PR',
+  merge: 'a merge',
+  'github-review': 'a GitHub review',
+  'github-comment': 'a GitHub comment',
+  'github-reply': 'a reply on a GitHub thread',
+  'slack-reply': 'a Slack reply',
+  'slack-post': 'a Slack post',
+  'slack-dm': 'a Slack DM',
+  ticket: 'a ticket change',
+  email: 'an email',
+}
+
+/** `sends: none` (or empty) is an empty lane; no line at all is null. */
+const sendList = (v: string | undefined): string[] | null => {
+  if (v === undefined) return null
+  const xs = v
+    .split(',')
+    .map((s) => s.trim().toLowerCase())
+    .filter((s) => s && s !== 'none')
+  return [...new Set(xs)]
+}
+
 const isOn = (v: string | undefined) => /^(true|yes|on)$/i.test((v ?? '').trim())
 
 /** "code-reviewer" → "Code reviewer". */
@@ -119,6 +159,7 @@ export function chatAgentFrom(text: string, at: { name: string; slug: string; pa
     model: model && model !== 'inherit' ? model : null,
     tools: list(f.tools),
     skills: list(f.skills),
+    sends: sendList(f.sends),
     prompt: bodyOf(text).trim(),
     path: at.path,
     scope: at.scope,
@@ -143,14 +184,59 @@ export function agentOpener(a: Pick<ChatAgent, 'slug' | 'ask' | 'starters'>): Ag
   return { ask: a.ask ?? seeded?.ask ?? 'What can I help with?', starters: a.starters ?? seeded?.starters ?? [] }
 }
 
+/**
+ * The starters' lanes, so files written before `sends` still get one. Merge is
+ * in none: it goes out only when the user asks. Junior itself (no agent) may
+ * propose any kind.
+ */
+const LANES: Readonly<Record<string, readonly string[]>> = {
+  babysitter: ['push', 'github-reply'],
+  debugger: [],
+  explainer: [],
+  reviewer: ['github-review', 'github-comment'],
+  writer: ['slack-reply', 'slack-post', 'github-comment'],
+}
+
+/** The send kinds in an agent's lane: its file's `sends`, then its starter's, then none. */
+export function agentSends(a: Pick<ChatAgent, 'slug' | 'sends'>): string[] {
+  return a.sends ?? [...(LANES[a.slug] ?? [])]
+}
+
 /** How the agent is named everywhere: Junior first, the role after. */
 export const agentTitle = (juniorName: string, label: string | null | undefined): string => (label ? `${juniorName} · ${label}` : juniorName)
 
-/** Tools to take away: the gated built-ins its `tools` line leaves out. Never adds one. */
+/**
+ * Tools to take away: the gated built-ins its `tools` line leaves out. Never
+ * adds one. Bash stays even when left out: it is how a send the user asks for
+ * goes out (`gh`, `git push`), and such an agent's shell runs sends only
+ * (shellSendOnly).
+ */
 export function agentDisallowed(a: Pick<ChatAgent, 'tools'>): string[] {
   if (!a.tools) return []
   const keep = new Set(a.tools)
-  return AGENT_GATED_TOOLS.filter((t) => !keep.has(t))
+  return AGENT_GATED_TOOLS.filter((t) => t !== 'Bash' && !keep.has(t))
+}
+
+/** An agent whose `tools` line leaves Bash out keeps a shell for sends only: every command must be one (core/actions/policy.ts sendOnlyShell). */
+export const shellSendOnly = (a: Pick<ChatAgent, 'tools'> | null | undefined): boolean => !!a?.tools && !a.tools.includes('Bash')
+
+/**
+ * The lane and the ask, as the agent reads them: what it may propose on its
+ * own, and that a send the user asks for is made, not refused, and waits on
+ * a card either way.
+ */
+export function sendsAppend(a: Pick<ChatAgent, 'slug' | 'sends'>, juniorName: string): string {
+  const lane = agentSends(a)
+  const named = lane.map((k) => SEND_LABEL[k] ?? k)
+  return [
+    `\n### Sends`,
+    lane.length
+      ? `In your lane: ${named.join(', ')}. Propose one of these on your own only when your job calls for it.`
+      : `Nothing is in your lane: never propose a send on your own.`,
+    `Outside your lane, make a send only when the user asks for it in this chat. Never unprompted.`,
+    `When the user asks you to send, post, reply, push or merge, make the call yourself: the Slack connector, or gh and git in the shell. Don't refuse it, and don't hand it to another agent or back to ${juniorName}. It waits on a card for the user's OK, word for word.`,
+    `A Slack message you write goes out in the user's voice: short sentences, common words, no preamble.`,
+  ].join('\n')
 }
 
 /**
@@ -181,9 +267,10 @@ export function agentAppend(a: ChatAgent, juniorName: string): string {
     `In this chat you are ${title}: ${juniorName}, working as the user's ${a.label.toLowerCase()}. Same name first, same rules. Sign as ${title} when you name yourself.`,
     a.description ? `What this agent is for: ${a.description}` : '',
     a.skills ? `Your skills here: ${a.skills.join(', ')}.` : '',
-    a.tools ? `Your built-in tools here: ${a.tools.join(', ')}. Others are switched off for this chat.` : '',
-    `If the user wants something outside this agent's job, say which agent fits better, or plain ${juniorName}. Never switch on your own.`,
+    a.tools ? `Your built-in tools here: ${a.tools.join(', ')}. Others are switched off for this chat${shellSendOnly(a) ? ', except a shell that runs sends only' : ''}.` : '',
+    `If the user wants work outside this agent's job, say which agent fits better, or plain ${juniorName}. Never switch on your own. A send the user asks for is not that: make it.`,
     a.prompt ? `\n${a.prompt}` : '',
+    sendsAppend(a, juniorName),
   ]
   return lines.filter(Boolean).join('\n')
 }
