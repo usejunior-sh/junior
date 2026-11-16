@@ -1,3 +1,4 @@
+import os from 'node:os'
 import path from 'node:path'
 import { stat } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
@@ -9,6 +10,11 @@ import { browserHub, WorkspaceRuntime } from '../workspace/runtime.js'
 import { ensureSessionTeamRun, removeTeamRun, saveTeamRun } from '../team-run/state.js'
 import { broadcast, broadcastSessionList } from '../ws/send.js'
 import { expandHome } from '../folders.js'
+import { claudeHome } from '../library.js'
+import { projectContextPath, workspaceContextPath } from '../context-files.js'
+import { workspaceDir } from '../workspaces.js'
+import { changedFiles, claudeMdPlaces, stampOf, type InstructionStamp } from './instruction-stamp.js'
+import type { SessionExtras } from './live-session.js'
 import { checkoutById, mainCheckout, syncCheckouts } from './checkouts.js'
 import { LiveSession } from './live-session.js'
 import { lineOf } from '../../core/junior/last-line.js'
@@ -122,8 +128,57 @@ export async function createSession(
   })
   rt.rows.set(row.id, row)
   // spawn: false = a row only; the first message starts it (getOrRevive).
-  if (opts.spawn !== false) rt.live.set(row.id, new LiveSession(rt, row, 0, null, await extrasFor(rt, row)))
+  if (opts.spawn !== false) rt.live.set(row.id, spawnLive(rt, row, 0, null, await extrasFor(rt, row)))
   return row
+}
+
+/**
+ * The files a session reads once, at spawn, as they are now: Junior's context
+ * files for every session, and the CLAUDE.md chain for a Claude one.
+ */
+async function instructionStamp(rt: WorkspaceRuntime, row: StoredSession): Promise<InstructionStamp> {
+  const project = row.projectId ? (await rt.store.projects.list()).find((p) => p.id === row.projectId) : undefined
+  const junior = [workspaceContextPath(workspaceDir(rt.meta.id)), ...(project ? [projectContextPath(project.path)] : [])]
+  if (row.provider !== 'claude') return stampOf(junior)
+  const { files, ruleDirs } = claudeMdPlaces(row.cwd, claudeHome(rt.envFor('claude')))
+  return stampOf([...junior, ...files], ruleDirs)
+}
+
+/** Only a chat or Junior's DM reloads under the user: a brief, task or goal is one turn, and its end would settle it. */
+const reloads = (rt: WorkspaceRuntime, row: StoredSession): boolean => (row.kind === 'chat' || row.kind === 'dm') && !rt.taskRuns.has(row.id)
+
+/** A new subprocess for the row, with the instruction files stamped as it starts. */
+function spawnLive(rt: WorkspaceRuntime, row: StoredSession, lastSeq: number, resume: string | null, extras: SessionExtras): LiveSession {
+  const stamp = reloads(rt, row) ? instructionStamp(rt, row) : null
+  const live = new LiveSession(rt, row, lastSeq, resume, extras)
+  live.instructions = stamp
+  return live
+}
+
+/** A check already running for this subprocess: a second message waits on it, so only one replacement spawns. */
+const reloading = new WeakMap<LiveSession, Promise<LiveSession | null>>()
+
+/**
+ * Keep the running subprocess, unless a file it read at spawn changed (a
+ * CLAUDE.md, a context file) and nothing is going on in it. Then end it and
+ * resume in a new one that reads the edit: same conversation, new instructions.
+ */
+async function reloadIfChanged(rt: WorkspaceRuntime, live: LiveSession): Promise<LiveSession | null> {
+  if (!live.instructions || !live.quiet) return live
+  const before = await live.instructions.catch(() => null)
+  if (!before) return live
+  const changed = changedFiles(before, await instructionStamp(rt, live.row).catch(() => before))
+  // Something may have started while the files were read.
+  if (!changed.length || !live.quiet || rt.live.get(live.row.id) !== live) return live
+  const revived = await revive(rt, live.row.id, live, false)
+  if (revived && revived !== live) revived.notice(`Re-read after your edit: ${changed.map(shortPath).join(', ')}. The conversation carries on.`)
+  return revived
+}
+
+/** A path as the user would write it: ~ for the home folder. */
+const shortPath = (file: string): string => {
+  const home = os.homedir()
+  return file.startsWith(home + path.sep) ? `~${file.slice(home.length)}` : file
 }
 
 export async function getOrRevive(rt: WorkspaceRuntime, sessionId: string): Promise<LiveSession | null> {
@@ -131,7 +186,20 @@ export async function getOrRevive(rt: WorkspaceRuntime, sessionId: string): Prom
   // of resuming: the transcript page continues, the model's history doesn't.
   const fresh = rt.freshNext.delete(sessionId)
   const existing = rt.live.get(sessionId)
-  if (existing && !fresh) return existing
+  if (existing && !fresh) {
+    let check = reloading.get(existing)
+    if (!check) {
+      check = reloadIfChanged(rt, existing)
+      reloading.set(existing, check)
+      void check.finally(() => reloading.delete(existing)).catch(() => {})
+    }
+    return check
+  }
+  return revive(rt, sessionId, existing, fresh)
+}
+
+/** Start the row in a new subprocess, ending `existing` first if there is one. */
+async function revive(rt: WorkspaceRuntime, sessionId: string, existing: LiveSession | undefined, fresh: boolean): Promise<LiveSession | null> {
   let row = rt.rows.get(sessionId)
   if (!row) return null
   // A worktree removed under a session leaves it no folder to start in. Say so in its
@@ -155,9 +223,10 @@ export async function getOrRevive(rt: WorkspaceRuntime, sessionId: string): Prom
   const lastSeq = await rt.store.events.lastSeq(row.id)
   const extras = await extrasFor(rt, row)
   // Two messages racing to revive the same session: the first one's subprocess wins.
-  const raced = !fresh ? rt.live.get(row.id) : undefined
+  // Not when replacing one: the one being ended still holds the slot until its pump winds down.
+  const raced = !fresh && !existing ? rt.live.get(row.id) : undefined
   if (raced) return raced
-  const revived = new LiveSession(rt, row, lastSeq, fresh ? null : row.sdkSessionId, extras)
+  const revived = spawnLive(rt, row, lastSeq, fresh ? null : row.sdkSessionId, extras)
   rt.live.set(row.id, revived)
   if (fresh && row.sdkSessionId) revived.notice('fresh context — this member starts from the brief, not its earlier history')
   broadcastSessionList(rt)

@@ -38,6 +38,8 @@ import { noteActionEvent } from './actions-record.js'
 import { lineOf } from '../../core/junior/last-line.js'
 import { reportsUp } from '../../core/junior/thread-wake.js'
 import { endedTask, owedProgress, type ProgressPending, snapshotAgentIds, throttleProgress, WorkflowTurns } from './workflow-tasks.js'
+import { noteBackgroundTask } from '../../core/workflows/tasks.js'
+import type { InstructionStamp } from './instruction-stamp.js'
 import { costStep, lastResultMark, type CostMark } from '../../core/usage/turn-cost.js'
 import { STALL_TICK_MS, stallNotice, TurnWatch } from '../../core/sessions/stall.js'
 import { sleepWatch } from '../power.js'
@@ -113,6 +115,13 @@ export class LiveSession {
   private turnHeld = false
   /** The last message into this turn came from the DM that started this thread: its end and its prompts report up (reportsUp). */
   private turnReportsUp = false
+  /** Every background task still going (subagents, shells, workflows): a reload never cuts one off. */
+  private readonly backgroundTasks = new Set<string>()
+  /**
+   * The instruction files as they were when this subprocess spawned (instruction-stamp.ts).
+   * Set by whoever spawns it (sessions.ts); null = not watched.
+   */
+  instructions: Promise<InstructionStamp> | null = null
   /** Spawned with Ultracode on: its system prompt carries the Ultracode note. */
   private readonly spawnedUltracode: boolean
   /** Said once per subprocess (and per switch) when the model has no Workflow tool. */
@@ -325,6 +334,7 @@ export class LiveSession {
         const event: SessionEvent = { kind: 'sdk', message: slimToolImages(ev.record) }
         this.emit(event, ev.kind !== 'stream' && this.logFrame(ev.record, event))
         if (this.workflowTurns.note(ev.record)) broadcastSessionList(this.rt)
+        noteBackgroundTask(this.backgroundTasks, ev.record)
         if (ev.kind === 'result') {
           this.setStatus('idle')
           this.unwatchTurn()
@@ -389,6 +399,7 @@ export class LiveSession {
       for (const mark of this.progressMarks.values()) for (const owed of owedProgress(mark)) this.persist(owed)
       this.progressMarks.clear()
       this.workflowTurns.clear()
+      this.backgroundTasks.clear()
       this.workflowAgents.clear()
       if (this.turnHeld) {
         this.turnHeld = false
@@ -542,6 +553,11 @@ export class LiveSession {
   /** Whether this subprocess keeps file checkpoints (a Claude chat spawned with them). */
   get checkpoints(): boolean {
     return !!this.q.rewindFiles
+  }
+
+  /** Nothing is going on in this subprocess: no turn, no prompt, no background task. Safe to end and resume. */
+  get quiet(): boolean {
+    return this.status === 'idle' && !this.busy && this.backgroundTasks.size === 0
   }
 
   /** A turn is open, a prompt waits on the user, or a Workflow run is still editing: no files move under it. */

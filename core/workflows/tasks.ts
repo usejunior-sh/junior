@@ -14,17 +14,18 @@ export function endedTask(m: SdkMessage): string | undefined {
 }
 
 /**
- * Fold one SDK message into the set of running Workflow task ids. Returns
- * whether the set changed. task_started / task_updated / task_notification
- * are the edges; background_tasks_changed is the CLI's own level signal and
- * replaces the set, so a missed edge can't leave a run "going" forever.
+ * Fold one SDK message into a set of running background task ids, keeping
+ * only the task types `keep` accepts. Returns whether the set changed.
+ * task_started / task_updated / task_notification are the edges;
+ * background_tasks_changed is the CLI's own level signal and replaces the
+ * set, so a missed edge can't leave a task "going" forever.
  */
-export function noteWorkflowTask(running: Set<string>, m: SdkMessage): boolean {
+export function noteTask(running: Set<string>, m: SdkMessage, keep: (taskType: unknown) => boolean): boolean {
   if (m.type !== 'system') return false
   const id = m.task_id
   switch (m.subtype) {
     case 'task_started':
-      if (!id || m.task_type !== 'local_workflow' || running.has(id)) return false
+      if (!id || !keep(m.task_type) || (m as { ambient?: unknown }).ambient === true || running.has(id)) return false
       running.add(id)
       return true
     case 'task_updated':
@@ -37,7 +38,7 @@ export function noteWorkflowTask(running: Set<string>, m: SdkMessage): boolean {
       if (!Array.isArray(tasks)) return false
       const now = new Set<string>()
       for (const t of tasks as { task_id?: unknown; task_type?: unknown; ambient?: unknown }[]) {
-        if (t && typeof t.task_id === 'string' && t.task_type === 'local_workflow' && t.ambient !== true) now.add(t.task_id)
+        if (t && typeof t.task_id === 'string' && keep(t.task_type) && t.ambient !== true) now.add(t.task_id)
       }
       if (now.size === running.size && [...now].every((t) => running.has(t))) return false
       running.clear()
@@ -48,6 +49,12 @@ export function noteWorkflowTask(running: Set<string>, m: SdkMessage): boolean {
       return false
   }
 }
+
+/** Fold one SDK message into the set of running Workflow task ids. Returns whether the set changed. */
+export const noteWorkflowTask = (running: Set<string>, m: SdkMessage): boolean => noteTask(running, m, (t) => t === 'local_workflow')
+
+/** Fold one SDK message into the set of every background task still going: subagents, shells, workflows. */
+export const noteBackgroundTask = (running: Set<string>, m: SdkMessage): boolean => noteTask(running, m, () => true)
 
 /**
  * Whether a result closes the turn, from the runs a subprocess has going. A
