@@ -171,6 +171,9 @@
 .draftStrip .draftLink { margin: 0 0 8px; }
 .draftStrip .draftTag { margin-left: 0; }
 .draftStrip .draftHead { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Once the job is past draft the tag says what it is now; amber is the draft's alone. */
+.draftTag.on { color: var(--green); }
+.draftTag.off, .draftTag.deleted { color: var(--ash); }
 .readback dl { display: grid; grid-template-columns: 72px 1fr; column-gap: 12px; row-gap: 2px; margin: 0; }
 .readback dt { font-family: var(--mono); font-size: 0.8462rem; color: var(--ash); line-height: 1.6; }
 .readback dd { margin: 0; font-family: var(--sans); font-size: 0.9615rem; color: var(--body); line-height: 1.5; overflow-wrap: anywhere; }

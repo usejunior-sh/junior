@@ -23,6 +23,8 @@ import { mentionHash, useRefIndex, type RefIndex } from '../refs.js'
 import { agentLabel, type AgentRun } from '../agents.js'
 import type { ShellRun } from '../../../core/shells/fold.js'
 import { HELD_FOR_YOU, parseReadback, type Readback } from '../../../core/job/readback-text.js'
+import { useLiveJobs } from '../liveJobs.js'
+import { nextRunText } from './JobsPage.js'
 import { WORKFLOW_TOOL } from '../../../core/workflows/fold.js'
 import { buildTranscript, chatStats, eventIndexOf, formatDuration, toolLine, type TranscriptItem } from '../transcript.js'
 import { AgentCard } from './Agents.js'
@@ -470,31 +472,60 @@ function linkifyText(text: string, refs: RefIndex, onRef: (hash: string) => void
  * so the call's result carries a way there, right under it, and what the
  * file lets it do (job-readback-steps): rows the server built from the file,
  * never the model's words. No read-back block (an older server, a parse
- * miss) → the one-row strip alone, never a half ledger.
+ * miss) → the one-row strip alone, never a half ledger. The head follows the
+ * job as it is now (useLiveJobs): on with its next run, off, or deleted;
+ * until the jobs answer, it reads as drafted.
  */
 function DraftJobLinks({ tools, onRef }: { tools: readonly TranscriptItem[]; onRef: (hash: string) => void }) {
   const ids = tools.flatMap((t) => {
     if (t.kind !== 'tool' || !t.name.endsWith('__draft_job') || !t.result || t.result.isError) return []
-    const m = /#(\/jobs\/[\w-]+)/.exec(t.result.text)
+    const m = /#(\/jobs\/([\w-]+))/.exec(t.result.text)
     return m
-      ? [{ key: t.key, hash: m[1]!, title: typeof t.input.title === 'string' ? t.input.title : 'the job', readback: parseReadback(t.result.text) }]
+      ? [{ key: t.key, hash: m[1]!, id: m[2]!, title: typeof t.input.title === 'string' ? t.input.title : 'the job', readback: parseReadback(t.result.text) }]
       : []
   })
+  const jobs = useLiveJobs(ids.length > 0)
   if (!ids.length) return null
   return (
     <>
-      {ids.map((d) => (
-        <div key={d.key} className={d.readback ? 'draftStrip' : undefined}>
-          <div className="draftLink">
-            <span className="draftTag">draft</span>
-            <span className="draftHead" title={d.title}>“{d.title}” is saved off until you enable it.</span>
-            <button type="button" className="btn sm primary" aria-label={`Review and enable “${d.title}”`} onClick={() => onRef(d.hash)}>
-              Review and enable
-            </button>
+      {ids.map((d) => {
+        const job = jobs?.find((j) => j.id === d.id)
+        const state = !jobs ? 'draft' : !job ? 'deleted' : job.enabled ? 'on' : job.draft ? 'draft' : 'off'
+        const next = job && state === 'on' ? nextRunText(job) : ''
+        const head =
+          state === 'draft'
+            ? `“${d.title}” is saved off until you enable it.`
+            : state === 'on'
+              ? `“${d.title}” is on.${next === 'blocked' ? ' Its setup needs a fix.' : next && next !== '—' ? ` Next run ${next === 'now' || next === 'due now' ? 'now' : next}.` : ''}`
+              : state === 'off'
+                ? `“${d.title}” is off.`
+                : `“${d.title}” was deleted.`
+        // the drafted file's words, less "Off until you turn it on." once that no longer holds
+        const readback =
+          d.readback && state !== 'draft'
+            ? { ...d.readback, rows: d.readback.rows.map((r) => (r.label === 'Runs' ? { ...r, value: r.value.replace(/ Off until you turn it on\.$/, '') } : r)) }
+            : d.readback
+        return (
+          <div key={d.key} className={readback ? 'draftStrip' : undefined}>
+            <div className="draftLink">
+              <span className={`draftTag ${state}`}>{state}</span>
+              <span className="draftHead" title={head}>
+                {head}
+              </span>
+              {state === 'draft' ? (
+                <button type="button" className="btn sm primary" aria-label={`Review and enable “${d.title}”`} onClick={() => onRef(d.hash)}>
+                  Review and enable
+                </button>
+              ) : state !== 'deleted' ? (
+                <button type="button" className="btn sm" aria-label={`Open “${d.title}”`} onClick={() => onRef(d.hash)}>
+                  Open job
+                </button>
+              ) : null}
+            </div>
+            {readback && <DraftReadback title={d.title} readback={readback} />}
           </div>
-          {d.readback && <DraftReadback title={d.title} readback={d.readback} />}
-        </div>
-      ))}
+        )
+      })}
     </>
   )
 }
