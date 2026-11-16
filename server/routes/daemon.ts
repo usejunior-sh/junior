@@ -1,6 +1,7 @@
 import { codesAllowed, pairPageHtml, sameOrigin } from '../remote.js'
 import { dbFileFor, ensureWorkspaceDirs, saveRegistry, slugify, type WorkspaceMeta, writeApiKey } from '../workspaces.js'
-import type { WorkspaceResponse, WorkspacesNeedsYouResponse, WorkspacesResponse, WorkspaceVerifyResponse } from '../../shared/protocol.js'
+import type { HideNamesResponse, WorkspaceResponse, WorkspacesNeedsYouResponse, WorkspacesResponse, WorkspaceVerifyResponse } from '../../shared/protocol.js'
+import { broadcast } from '../ws/send.js'
 import { needsYouCount } from '../../core/work/needs-you.js'
 import { needsYouCount as pendingActionsCount } from '../session/actions-record.js'
 import { summaries } from '../session/summaries.js'
@@ -129,7 +130,7 @@ export async function workspaceListRoutes({ req, url, json }: RouteCtx): Promise
   if (url.pathname === '/api/workspaces/needs-you' && req.method === 'GET') {
     let body: WorkspacesNeedsYouResponse
     try {
-      body = { ok: true, counts: await workspacesNeedsYou([...runtimes.values()]) }
+      body = { ok: true, counts: await workspacesNeedsYou([...runtimes.values()]), hideNames: !!registry.hideNames }
     } catch (err) {
       body = { ok: false, error: errText(err) }
     }
@@ -227,6 +228,24 @@ export async function workspaceListRoutes({ req, url, json }: RouteCtx): Promise
       body = { ok: true, workspaces: wireWorkspaces(), defaultId: registry.defaultId, onboarded: registry.onboarded }
     } catch (err) {
       body = { ok: false, error: err instanceof Error ? err.message : String(err) }
+    }
+    json(body.ok ? 200 : 400, body)
+    return true
+  }
+  // Hide Workspace Names: one switch for every window and browser tab, so it lives here, daemon-wide.
+  if (url.pathname === '/api/workspaces/hide-names' && req.method === 'POST') {
+    let body: HideNamesResponse
+    try {
+      const parsed = (await readJsonBody(req)) as { on?: unknown } | null
+      if (typeof parsed?.on !== 'boolean') throw new Error('on must be true or false')
+      if (!!registry.hideNames !== parsed.on) {
+        registry.hideNames = parsed.on
+        saveRegistry(registry)
+        for (const rt of runtimes.values()) broadcast(rt, { type: 'hide_names', on: parsed.on })
+      }
+      body = { ok: true, on: parsed.on }
+    } catch (err) {
+      body = { ok: false, error: errText(err) }
     }
     json(body.ok ? 200 : 400, body)
     return true

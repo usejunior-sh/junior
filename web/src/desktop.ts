@@ -67,8 +67,6 @@ export type DesktopTabsState = {
   elsewhere: { id: string; windowId: number }[]
   /** every workspace's needs-you count (GET /api/workspaces/needs-you) */
   counts: Record<string, number>
-  /** View ▸ Hide Workspace Names (⌘⇧.): monogram tiles. Missing in an older Junior.app. */
-  hideNames?: boolean
 }
 
 /** What the app's menu asks the page to do: ⌘T opens the + menu, ⌘W closes a page tab, ⌘1–9 picks one. */

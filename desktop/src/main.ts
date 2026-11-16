@@ -118,6 +118,10 @@ function start() {
     watchUi: (wc) => browser?.watchUi(wc),
     sendNav,
     changed: saveSoon,
+    hideNames: (on) => {
+      const item = Menu.getApplicationMenu()?.getMenuItemById('hide-names')
+      if (item) item.checked = on
+    },
   })
   tabs.start()
   const host = tabs
@@ -132,10 +136,25 @@ function start() {
   setInterval(watchdog, 5000)
 }
 
+/** View ▸ Hide Workspace Names: the daemon keeps it and tells every page. Unreachable: the tick goes back. */
+async function setHideNames(on: boolean) {
+  try {
+    const r = await fetch(new URL('api/workspaces/hide-names', daemonUrl()), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ on }),
+    })
+    if (r.ok) return
+  } catch {
+    // the daemon is away
+  }
+  const item = Menu.getApplicationMenu()?.getMenuItemById('hide-names')
+  if (item) item.checked = !on
+}
+
 /** Last launch's windows and their tabs, or one window whose tab is the default workspace. */
 function restoreWindows() {
   const saved = loadWindowState()
-  tabs!.setHideNames(saved.hideNames)
   const list = saved.windows.length ? saved.windows : [{ bounds: saved.bounds, maximized: saved.maximized, tabs: [], active: '' }]
   for (const s of list) {
     const w = createWindow(s.bounds)
@@ -429,16 +448,14 @@ function buildMenu(): Menu {
         { label: 'Zoom In', accelerator: 'CmdOrCtrl+Plus', click: (_i, w) => zoom(frontPage(w), 1) },
         { label: 'Zoom Out', accelerator: 'CmdOrCtrl+-', click: (_i, w) => zoom(frontPage(w), -1) },
         { type: 'separator' },
-        // Office mode: every tab a monogram tile, so a passer-by can't read what you work on.
+        // Office mode: every workspace tab a monogram tile, so a passer-by can't read what you work on.
         {
           label: 'Hide Workspace Names',
           type: 'checkbox',
-          checked: loadWindowState().hideNames,
-          accelerator: 'CmdOrCtrl+Shift+.',
-          click: (item) => {
-            tabs?.setHideNames(item.checked)
-            saveSoon()
-          },
+          id: 'hide-names',
+          accelerator: 'CmdOrCtrl+Shift+H',
+          // The daemon keeps it (one switch for every window and browser tab) and tells every page.
+          click: (item) => void setHideNames(item.checked),
         },
         { type: 'separator' },
         { role: 'togglefullscreen' },
@@ -567,7 +584,7 @@ async function openLog() {
 type Bounds = Partial<Rectangle> & { width: number; height: number }
 type SavedWin = SavedWindow & { bounds: Bounds; maximized: boolean }
 /** `bounds`/`maximized` are the first window's, as before tabs; `windows` is every window and its tabs. */
-type WindowState = { bounds: Bounds; maximized: boolean; windows: SavedWin[]; hideNames: boolean }
+type WindowState = { bounds: Bounds; maximized: boolean; windows: SavedWin[] }
 
 const stateFile = () => path.join(app.getPath('userData'), 'window-state.json')
 
@@ -591,11 +608,11 @@ function loadWindowState(): WindowState {
     const windows = (Array.isArray(s.windows) ? s.windows : []).filter(
       (w): w is SavedWin => !!w && okBounds(w.bounds) && Array.isArray(w.tabs) && w.tabs.every((t) => typeof t === 'string'),
     )
-    if (okBounds(s.bounds)) return { bounds: s.bounds, maximized: !!s.maximized, windows, hideNames: s.hideNames === true }
+    if (okBounds(s.bounds)) return { bounds: s.bounds, maximized: !!s.maximized, windows }
   } catch {
     // first launch, or an unreadable file: defaults
   }
-  return { bounds: { ...DEFAULT_SIZE }, maximized: false, windows: [], hideNames: false }
+  return { bounds: { ...DEFAULT_SIZE }, maximized: false, windows: [] }
 }
 
 function saveWindowState() {
@@ -614,7 +631,7 @@ function saveWindowState() {
   if (!windows.length) return
   try {
     fs.mkdirSync(path.dirname(stateFile()), { recursive: true })
-    fs.writeFileSync(stateFile(), JSON.stringify({ bounds: windows[0].bounds, maximized: windows[0].maximized, windows, hideNames: tabs.namesHidden }))
+    fs.writeFileSync(stateFile(), JSON.stringify({ bounds: windows[0].bounds, maximized: windows[0].maximized, windows }))
   } catch {
     // losing the window position is not worth an error dialog
   }

@@ -106,7 +106,17 @@ export type WorkspacesResponse =
  * (core/work/needs-you.ts), daemon-wide. Counts only, never titles: a
  * workspace tab shows another workspace's number and nothing else.
  */
-export type WorkspacesNeedsYouResponse = { ok: true; counts: Record<string, number> } | { ok: false; error: string }
+export type WorkspacesNeedsYouResponse =
+  | {
+      ok: true
+      counts: Record<string, number>
+      /** Hide Workspace Names is on: Junior.app keeps its View menu tick in step from here. Absent from an older daemon. */
+      hideNames?: boolean
+    }
+  | { ok: false; error: string }
+
+/** POST /api/workspaces/hide-names { on }: workspace tabs as names or monogram tiles, every window and browser tab. */
+export type HideNamesResponse = { ok: true; on: boolean } | { ok: false; error: string }
 
 export type WorkspaceResponse = { ok: true; workspace: Workspace } | { ok: false; error: string }
 

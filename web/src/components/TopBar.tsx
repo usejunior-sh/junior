@@ -14,7 +14,7 @@ import { PhoneButton } from './PhoneButton.js'
 import { ProvidersButton } from './ProvidersButton.js'
 import { WaitingButton } from './WaitingButton.js'
 import { WorkspaceChips } from './WorkspaceChips.js'
-import { WorkspaceTabs } from './WorkspaceTabs.js'
+import { appTabsHost, useBrowserTabs, WorkspaceTabs } from './WorkspaceTabs.js'
 
 type Props = {
   /** Phone layout: a back button and the page title take the logo's place. */
@@ -122,7 +122,7 @@ export function TopBar({
         team={team}
         switcher={
           strip ? (
-            <WorkspaceTabs state={tabs} workspaces={workspaces} onNew={onNewWorkspace} onSettings={onWorkspaceSettings} trailing={badge} />
+            <WorkspaceTabs state={tabs} host={appTabsHost!} workspaces={workspaces} onNew={onNewWorkspace} onSettings={onWorkspaceSettings} trailing={badge} />
           ) : (
           <WorkspaceSwitcher
             labelled
@@ -183,18 +183,18 @@ export function TopBar({
       <header className={`topbar teamBar${team.sidebarOpen ? '' : ' sidebarHidden'}`}>
         <div className="tbSide">
           <JuniorLogo />
-          <WorkspaceSwitcher
-            workspaces={workspaces}
-            workspaceId={workspaceId}
-            onSwitch={onSwitchWorkspace}
-            onNew={onNewWorkspace}
-            onSettings={onWorkspaceSettings}
-          />
           <span className="spacer" />
           <SidebarButtons team={team} />
         </div>
-        <BuildBadge build={build} onOpenSystem={onOpenSystem} />
-        <span className="spacer" />
+        {/* The same tab strip as Junior.app's; the build badge rides after its +. */}
+        <BrowserTabs
+          workspaces={workspaces}
+          workspaceId={workspaceId}
+          onSwitch={onSwitchWorkspace}
+          onNew={onNewWorkspace}
+          onSettings={onWorkspaceSettings}
+          trailing={<BuildBadge build={build} onOpenSystem={onOpenSystem} />}
+        />
         <SystemIcons workspace={current} conn={conn} onOpenSystem={onOpenSystem} onOpenSettings={onOpenSettings} settingsOpen={settingsOpen} onHelp={onHelp} noSettings />
       </header>
     )
@@ -202,18 +202,47 @@ export function TopBar({
   return (
     <header className="topbar">
       <JuniorLogo />
-      <WorkspaceSwitcher
+      <BrowserTabs
         workspaces={workspaces}
         workspaceId={workspaceId}
         onSwitch={onSwitchWorkspace}
         onNew={onNewWorkspace}
         onSettings={onWorkspaceSettings}
+        trailing={<BuildBadge build={build} onOpenSystem={onOpenSystem} />}
       />
-      <BuildBadge build={build} onOpenSystem={onOpenSystem} />
-      <span className="spacer" />
       <SystemIcons workspace={current} conn={conn} onOpenSystem={onOpenSystem} onOpenSettings={onOpenSettings} settingsOpen={settingsOpen} onHelp={onHelp} />
     </header>
   )
+}
+
+/**
+ * The browser's workspace tabs: Junior.app's strip, every workspace a tab
+ * (WorkspaceTabs.tsx, useBrowserTabs). Before `hello` there is nothing to draw,
+ * so the strip only holds the bar's space and keeps the badge.
+ */
+function BrowserTabs({
+  workspaces,
+  workspaceId,
+  onSwitch,
+  onNew,
+  onSettings,
+  trailing,
+}: {
+  workspaces: readonly Workspace[]
+  workspaceId: string
+  onSwitch: (id: string) => void
+  onNew: () => void
+  onSettings: () => void
+  trailing: ReactNode
+}) {
+  const { state, host } = useBrowserTabs(workspaces, workspaceId, onSwitch)
+  if (!workspaces.length || !workspaceId)
+    return (
+      <div className="wsTabs">
+        {trailing}
+      </div>
+    )
+  return <WorkspaceTabs state={state} host={host} workspaces={workspaces} onNew={onNew} onSettings={onSettings} trailing={trailing} />
 }
 
 /** Waiting, providers, system status, activity, settings, help, the right end of the bar. */

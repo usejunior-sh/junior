@@ -240,6 +240,8 @@ export type ServerMessage =
       workspaceId: string
       workspaces: Workspace[]
       onboarded: boolean
+      /** Hide Workspace Names: tabs as monogram tiles. Absent from an older daemon. */
+      hideNames?: boolean
       terminals: TerminalSummary[]
       checkouts: Checkout[]
       /** which copy of Junior this socket is talking to, the UI badges it */
@@ -301,6 +303,8 @@ export type ServerMessage =
   | { type: 'library_changed' }
   /** A work item was created, edited or moved (by a chat, a job, another tab), refetch the inbox. */
   | { type: 'inbox_changed' }
+  /** Hide Workspace Names was switched, from any window or browser tab: every page redraws its tabs. */
+  | { type: 'hide_names'; on: boolean }
   /**
    * A folder's `/` command list changed: a session's subprocess discovered
    * skills mid-run, or a probe just finished. Carries the whole list because

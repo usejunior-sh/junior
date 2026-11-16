@@ -47,6 +47,7 @@ export function handleConnection(ws: WebSocket, req: http.IncomingMessage): void
     workspaceId: rt.meta.id,
     workspaces: wireWorkspaces(),
     onboarded: registry.onboarded,
+    hideNames: !!registry.hideNames,
     terminals: rt.terminals.list(),
     checkouts: checkoutList(rt),
     build: BUILD,

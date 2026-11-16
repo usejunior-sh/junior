@@ -97,6 +97,8 @@ export class Store {
   #workspaceId = ''
   #workspaces: readonly Workspace[] = []
   #onboarded = true
+  /** Hide Workspace Names (⌘⇧H): the tabs show monogram tiles. Daemon-wide, so every window and tab agrees. */
+  #hideNames = false
   /** Which copy of Junior this tab is talking to, null until `hello` lands. */
   #build: Build | null = null
   /** The build this page was loaded with: the first `hello`'s, set once (reloadOnBuild.ts). */
@@ -149,6 +151,7 @@ export class Store {
   getWorkspaceId = (): string => this.#workspaceId
   getWorkspaces = (): readonly Workspace[] => this.#workspaces
   getOnboarded = (): boolean => this.#onboarded
+  getHideNames = (): boolean => this.#hideNames
   getBuild = (): Build | null => this.#build
   /** The build waiting for a reload, or null: nothing changed, it reloaded already, or you hid the bar. */
   getUpdatePending = (): Build | null =>
@@ -421,6 +424,19 @@ export class Store {
     }
   }
 
+  /** Names or monogram tiles, everywhere at once. Echoed here, then every page hears `hide_names`. */
+  setHideNames(on: boolean) {
+    this.#hideNames = on
+    this.#notify()
+    void fetch('/api/workspaces/hide-names', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ on }),
+    }).catch(() => {
+      // the daemon is away: the next hello sets it straight
+    })
+  }
+
   /** Local echo for completing/skipping onboarding (the server is told separately). */
   markOnboarded() {
     this.#onboarded = true
@@ -458,6 +474,7 @@ export class Store {
         this.#workspaceId = msg.workspaceId
         this.#workspaces = msg.workspaces
         this.#onboarded = msg.onboarded
+        this.#hideNames = !!msg.hideNames
         this.#terminals = msg.terminals
         this.#checkouts = msg.checkouts
         this.#build = msg.build
@@ -554,6 +571,11 @@ export class Store {
         break
       case 'inbox_changed':
         for (const fn of this.#inboxListeners) fn()
+        break
+      case 'hide_names':
+        if (msg.on === this.#hideNames) break
+        this.#hideNames = msg.on
+        this.#notify()
         break
       case 'library_changed':
         for (const fn of this.#libraryListeners) fn()

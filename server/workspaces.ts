@@ -50,6 +50,8 @@ export type WorkspaceRegistry = {
   defaultId: string
   /** whether the first-run onboarding modal has been completed (or skipped) */
   onboarded: boolean
+  /** Hide Workspace Names (⌘⇧H): workspace tabs draw as monogram tiles, in the app and the browser alike */
+  hideNames?: boolean
   workspaces: WorkspaceMeta[]
 }
 

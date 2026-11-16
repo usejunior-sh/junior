@@ -41,6 +41,8 @@ export type TabsDeps = {
   sendNav: (wc: WebContents, win: BrowserWindow) => void
   /** the window list changed (save it) */
   changed: () => void
+  /** the daemon's Hide Workspace Names, read with the counts: the View menu's tick follows it */
+  hideNames: (on: boolean) => void
 }
 
 /** `/w/<id>/` of a daemon URL, or '' for a bare one. */
@@ -72,8 +74,6 @@ export class WorkspaceTabsHost {
   /** the daemon answers: views load. False while the splash is up. */
   private ready = false
   private countsSoon: NodeJS.Timeout | undefined
-  /** View ▸ Hide Workspace Names: every window's tabs draw as monograms */
-  private hideNames = false
 
   constructor(private readonly deps: TabsDeps) {}
 
@@ -540,8 +540,10 @@ export class WorkspaceTabsHost {
       const r = (await (await fetch(new URL('api/workspaces/needs-you', this.deps.daemonUrl()))).json()) as {
         ok: boolean
         counts?: Record<string, number>
+        hideNames?: boolean
       }
       if (!r.ok || !r.counts) return
+      if (typeof r.hideNames === 'boolean') this.deps.hideNames(r.hideNames)
       const known = r.counts
       const same = JSON.stringify(known) === JSON.stringify(this.counts)
       this.counts = known
@@ -559,18 +561,7 @@ export class WorkspaceTabsHost {
   }
 
   private stateOf(win: BrowserWindow): TabsState {
-    return this.model.stateFor(win.id, this.counts, this.hideNames)
-  }
-
-  /** Names or monograms, in every window at once. */
-  setHideNames(on: boolean) {
-    if (on === this.hideNames) return
-    this.hideNames = on
-    this.pushAll()
-  }
-
-  get namesHidden(): boolean {
-    return this.hideNames
+    return this.model.stateFor(win.id, this.counts)
   }
 
   /** Every view in every window redraws its strip. */

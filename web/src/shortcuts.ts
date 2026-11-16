@@ -18,6 +18,7 @@ export function shortcutsFor(mod: string): ReadonlyArray<[keys: string, what: st
     [`${mod}\\`, 'Hide / show the team sidebar'],
     [mod === '⌘' ? '⌃`' : 'Ctrl+`', 'New scratch terminal'],
     [frictionKeyLabel(mod), 'Note what annoyed you, for later'],
+    [mod === '⌘' ? '⌘⇧H' : `${mod}Shift+H`, 'Hide / show workspace names (monogram tabs)'],
     [`${mod}W`, 'Close the page tab (Junior.app)'],
     [mod === '⌘' ? '⌘⇧W' : `${mod}Shift+W`, 'Close the workspace tab (Junior.app)'],
     [`${mod}1–9`, 'Go to page tab 1–8, or the last (Junior.app)'],
@@ -57,4 +58,9 @@ export function shortcutsFor(mod: string): ReadonlyArray<[keys: string, what: st
  */
 export function isFrictionKey(e: Pick<KeyboardEvent, 'metaKey' | 'ctrlKey' | 'shiftKey' | 'altKey' | 'code'>): boolean {
   return (e.metaKey || e.ctrlKey) && e.shiftKey && !e.altKey && e.code === 'Period'
+}
+
+/** ⌘⇧H (Ctrl+Shift+H off a Mac): Hide Workspace Names. Junior.app's View menu holds it; the browser's page listens. */
+export function isHideNamesKey(e: Pick<KeyboardEvent, 'metaKey' | 'ctrlKey' | 'shiftKey' | 'altKey' | 'code'>): boolean {
+  return (e.metaKey || e.ctrlKey) && e.shiftKey && !e.altKey && e.code === 'KeyH'
 }

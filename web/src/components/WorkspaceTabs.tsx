@@ -1,7 +1,10 @@
-import { ArrowLeftRight, ChevronDown, ChevronRight, Plus, Settings2, SquareArrowOutUpRight, X } from 'lucide-react'
-import { Fragment, useEffect, useLayoutEffect, useRef, useState, type DragEvent, type ReactNode } from 'react'
+import { ArrowLeftRight, ChevronDown, ChevronRight, EyeOff, Eye, Plus, Settings2, SquareArrowOutUpRight, X } from 'lucide-react'
+import { Fragment, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type DragEvent, type ReactNode } from 'react'
 import type { Workspace } from '../../../shared/protocol.js'
-import { desktopTabs, type DesktopTabsState } from '../desktop.js'
+import { desktopTabs, type DesktopTabsCommand, type DesktopTabsState } from '../desktop.js'
+import { isHideNamesKey } from '../shortcuts.js'
+import { store } from '../store.js'
+import { basePath } from '../workspaceUrl.js'
 import { MOD_LABEL } from '../keys.js'
 import { fitTabs, monograms } from '../tabStrip.js'
 import { Menu, MenuContent, MenuItem, MenuSeparator, MenuSub, MenuSubContent, MenuSubTrigger, MenuTrigger } from '../ui/Menu.js'
@@ -17,29 +20,49 @@ const BAR_H = 44
  * The app hosts one view per tab; this view draws the strip from the window's
  * tab list. A click shows another view, nothing reloads. The tab in front
  * keeps today's chevron menu; another tab shows its orange count, never more.
- * View ▸ Hide Workspace Names (⌘⇧.) draws every tab as a monogram tile, its
- * name a hover away (.docs/workspace-tabs/private-tabs.html).
+ * Hide Workspace Names (⌘⇧H) draws every tab as a monogram tile, its name a
+ * hover away (.docs/workspace-tabs/private-tabs.html).
+ *
+ * The browser draws the same strip (useBrowserTabs): every workspace is a tab,
+ * a click switches this page to it (a reload), ⌘-click opens a browser tab.
  */
 export function WorkspaceTabs({
   state,
+  host,
   workspaces,
   onNew,
   onSettings,
   trailing,
 }: {
   state: DesktopTabsState
+  /** Junior.app's tabs (desktopTabs), or the browser's stand-in */
+  host: TabsHost
   workspaces: readonly Workspace[]
   onNew: () => void
   onSettings: () => void
   /** after the + button: the build badge */
   trailing?: ReactNode
 }) {
-  const t = desktopTabs!
+  const t = host
+  const inApp = host.kind === 'app'
   const byId = new Map(workspaces.map((w) => [w.id, w]))
   const tabs = state.tabs.filter((tab) => byId.has(tab.id))
   const count = (id: string) => state.counts[id] ?? 0
-  const hide = !!state.hideNames
+  const hide = useSyncExternalStore(store.subscribeStructural, store.getHideNames)
   const mono = monograms(workspaces)
+  const elsewhereWord = inApp ? 'its own window' : 'a new browser tab'
+
+  // ⌘⇧H: Junior.app's View menu catches it first; the browser has no menu, so the page listens.
+  useEffect(() => {
+    if (inApp) return
+    const onKey = (e: KeyboardEvent) => {
+      if (!isHideNamesKey(e)) return
+      e.preventDefault()
+      store.setHideNames(!store.getHideNames())
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [inApp])
 
   // How much room the strip has: the whole zone up to the system icons, less the + and the badge.
   const wrap = useRef<HTMLDivElement>(null)
@@ -59,7 +82,7 @@ export function WorkspaceTabs({
   const [frontOpen, setFrontOpen] = useState(false)
   // Another window's tab dragged over this strip: it would land here.
   const [dropping, setDropping] = useState(false)
-  useEffect(() => t.onCommand((c) => c === 'open-menu' && setPlusOpen(true)), [t])
+  useEffect(() => t.onCommand?.((c) => c === 'open-menu' && setPlusOpen(true)), [t])
 
   const fit = fitTabs(
     tabs.map((tab) => ({
@@ -84,7 +107,7 @@ export function WorkspaceTabs({
   // Drag a tab off the bar: it becomes a window where it was let go. Drop it on
   // another window's strip: it moves there. The view moves with it; nothing reloads.
   const dragProps = (id: string) => ({
-    draggable: true,
+    draggable: inApp,
     onDragStart: (e: DragEvent<HTMLElement>) => {
       e.dataTransfer.setData(TAB_MIME, id)
       e.dataTransfer.effectAllowed = 'move'
@@ -93,12 +116,13 @@ export function WorkspaceTabs({
     onDragEnd: (e: DragEvent<HTMLElement>) => {
       if (e.dataTransfer.dropEffect !== 'none') return // landed on a strip
       const offBar = e.clientY > BAR_H || e.clientY < 0 || e.clientX < 0 || e.clientX > window.innerWidth
-      if (offBar) t.move(id, 'new', { x: e.screenX, y: e.screenY })
+      if (offBar) t.move?.(id, 'new', { x: e.screenX, y: e.screenY })
     },
   })
   const ours = (id: string) => state.tabs.some((tab) => tab.id === id)
-  // ⌃1–8 go to that tab, ⌃9 to the last (the Window menu's Go to Workspace).
+  // ⌃1–8 go to that tab, ⌃9 to the last (the Window menu's Go to Workspace). The browser has no such keys.
   const keyOf = (id: string) => {
+    if (!inApp) return 0
     const i = tabs.findIndex((tab) => tab.id === id)
     return i === tabs.length - 1 && i >= 8 ? 9 : i < 8 ? i + 1 : 0
   }
@@ -154,7 +178,7 @@ export function WorkspaceTabs({
         const id = e.dataTransfer.getData(TAB_MIME)
         if (!id) return
         e.preventDefault()
-        if (!ours(id)) t.move(id, 'here')
+        if (!ours(id)) t.move?.(id, 'here')
       }}
     >
       <div className={`wsTabRow${fit.short ? ' short' : ''}${hide ? ' mono' : ''}`} role="tablist" aria-label="Workspaces">
@@ -210,19 +234,26 @@ export function WorkspaceTabs({
                       </MenuSubContent>
                     </MenuSub>
                   )}
-                  {tabs.length > 1 && (
-                    <MenuItem onSelect={() => t.move(id, 'new')}>
+                  <MenuItem onSelect={() => store.setHideNames(!hide)}>
+                    {hide ? <Eye size={14} aria-hidden="true" /> : <EyeOff size={14} aria-hidden="true" />}
+                    <span className="wsMenuName">{hide ? 'Show workspace names' : 'Hide workspace names'}</span>
+                    <kbd className="wsKbd">{MOD_LABEL}⇧H</kbd>
+                  </MenuItem>
+                  {inApp && tabs.length > 1 && (
+                    <MenuItem onSelect={() => t.move?.(id, 'new')}>
                       <SquareArrowOutUpRight size={14} aria-hidden="true" />
                       <span className="wsMenuName">Open in new window</span>
                       <kbd className="wsKbd">{MOD_LABEL}⇧N</kbd>
                     </MenuItem>
                   )}
-                  <MenuItem onSelect={() => t.close(id)}>
-                    <X size={14} aria-hidden="true" />
-                    <span className="wsMenuName">{tabs.length > 1 ? 'Close tab' : 'Close window'}</span>
-                    <kbd className="wsKbd">{MOD_LABEL}W</kbd>
-                  </MenuItem>
-                  <p className="wsMenuNote">Closing hides {w.name}. Its jobs keep running.</p>
+                  {t.close && (
+                    <MenuItem onSelect={() => t.close?.(id)}>
+                      <X size={14} aria-hidden="true" />
+                      <span className="wsMenuName">{tabs.length > 1 ? 'Close tab' : 'Close window'}</span>
+                      <kbd className="wsKbd">{MOD_LABEL}W</kbd>
+                    </MenuItem>
+                  )}
+                  {t.close && <p className="wsMenuNote">Closing hides {w.name}. Its jobs keep running.</p>}
                 </MenuContent>
               </Menu>
             )
@@ -238,10 +269,10 @@ export function WorkspaceTabs({
                   aria-label={hide ? w.name : undefined}
                   className="wsTab"
                   style={hide ? { ['--ws' as string]: w.color } : undefined}
-                  title={hide ? undefined : `${w.name}${n ? ` — ${n} need${n === 1 ? 's' : ''} you` : ''}\n${MOD_LABEL}-click: its own window`}
+                  title={hide ? undefined : `${w.name}${n ? ` — ${n} need${n === 1 ? 's' : ''} you` : ''}\n${MOD_LABEL}-click: ${elsewhereWord}`}
                   onMouseDown={(e) => e.button === 1 && e.preventDefault()}
-                  onClick={(e) => (wantsWindow(e) ? t.move(id, 'new') : t.activate(id))}
-                  onAuxClick={(e) => e.button === 1 && t.move(id, 'new')}
+                  onClick={(e) => (wantsWindow(e) && t.move ? t.move(id, 'new') : t.activate(id))}
+                  onAuxClick={(e) => e.button === 1 && t.move?.(id, 'new')}
                   {...dragProps(id)}
                 >
                   {face(w)}
@@ -299,7 +330,7 @@ export function WorkspaceTabs({
                   onPointerUp={(e) => e.stopPropagation()}
                   onClick={(e) => {
                     e.stopPropagation()
-                    t.move(w.id, 'here')
+                    t.move?.(w.id, 'here')
                     setPlusOpen(false)
                   }}
                 >
@@ -318,6 +349,64 @@ export function WorkspaceTabs({
       </div>
     </div>
   )
+}
+
+/**
+ * What the strip asks of whoever hosts the tabs. Junior.app's bridge
+ * (desktopTabs) does all of it; the browser's stand-in switches the page and
+ * opens browser tabs, and has nothing to close, move in or command.
+ */
+export type TabsHost = {
+  kind: 'app' | 'browser'
+  activate: (id: string) => void
+  open: (id: string, opts?: { newWindow?: boolean }) => void
+  close?: (id: string) => void
+  switch?: (id: string) => void
+  /** 'new': its own window (the browser: a new browser tab); 'here': into this window */
+  move?: (id: string, to: 'new' | 'here', at?: { x: number; y: number }) => void
+  onCommand?: (cb: (c: DesktopTabsCommand) => void) => () => void
+}
+
+/** Junior.app's bridge, as a host; null outside the app. */
+export const appTabsHost: TabsHost | null = desktopTabs ? { kind: 'app', ...desktopTabs } : null
+
+/** How often the browser's strip rereads every workspace's needs-you count (the app's host: 15 s too). */
+const COUNTS_EVERY_MS = 15_000
+
+/**
+ * The browser's tabs: every workspace, in the registry's order, the page's own
+ * in front. A click switches this page (switching is a navigation, so it
+ * reloads); ⌘-click or a middle click opens one in a new browser tab.
+ */
+export function useBrowserTabs(workspaces: readonly Workspace[], workspaceId: string, onSwitch: (id: string) => void): { state: DesktopTabsState; host: TabsHost } {
+  const [counts, setCounts] = useState<Record<string, number>>({})
+  useEffect(() => {
+    let live = true
+    const read = async () => {
+      try {
+        const r = (await (await fetch('/api/workspaces/needs-you')).json()) as { ok: boolean; counts?: Record<string, number> }
+        if (live && r.ok && r.counts) setCounts(r.counts)
+      } catch {
+        // the daemon is away: keep the last counts
+      }
+    }
+    void read()
+    const timer = setInterval(() => void read(), COUNTS_EVERY_MS)
+    return () => {
+      live = false
+      clearInterval(timer)
+    }
+  }, [])
+  const away = (id: string) => window.open(basePath(id), '_blank', 'noopener')
+  return {
+    state: { tabs: workspaces.map((w) => ({ id: w.id, lastActive: 0, asleep: false })), active: workspaceId, elsewhere: [], counts },
+    host: {
+      kind: 'browser',
+      activate: onSwitch,
+      open: (id, opts) => (opts?.newWindow ? away(id) : onSwitch(id)),
+      move: (id, to) => to === 'new' && away(id),
+    },
+  }
 }
 
 /** One workspace in a menu: dot, name, its orange count. `newWindow` adds the ↗ and ⌘-click. */
