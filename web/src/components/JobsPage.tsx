@@ -7,14 +7,17 @@
  */
 import * as Switch from '@radix-ui/react-switch'
 import { Ellipsis, Pencil, Play, Plus, X } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import type { ActivityResponse, ActivityRun, Project, ProjectsResponse, SettingsResponse, Job, JobsResponse } from '../../../shared/protocol.js'
 import { rowOpen } from '../tabs.js'
 import { nextScheduled } from '../../../core/job/cron.js'
 import { relTime } from '../itemUi.js'
 import { Menu, MenuContent, MenuItem, MenuTrigger } from '../ui/Menu.js'
 import { ConfirmDialog } from '../ui/ConfirmDialog.js'
-import { cronText, fmtUntil, grantIcon, grantLabel, runStatusText, useJobOwner } from '../jobUi.js'
+import { cronText, fmtUntil, grantIcon, grantLabel, runStatusText } from '../jobUi.js'
+import { useChatAgents } from '../chatAgents.js'
+import { usePersona } from '../junior.js'
+import { JuniorFace } from './JuniorFace.js'
 
 /** "5m ago", "3d ago", or a plain date past two weeks, where "ago" would read wrong. */
 export const ago = (at: number): string => {
@@ -67,6 +70,8 @@ export function JobsPage({
   const [runs, setRuns] = useState<ActivityRun[]>([])
   const [tab, setTab] = useState<Tab>('active')
   const [filter, setFilter] = useState('')
+  const agents = useChatAgents()
+  const persona = usePersona()
   const [running, setRunning] = useState<Set<string>>(new Set())
   // The global switch (Settings → Automations). Off = the scheduler never runs a job.
   const [enabled, setEnabled] = useState<boolean | null>(null)
@@ -163,6 +168,11 @@ export function JobsPage({
     .filter((w) => (tab === 'all' ? true : tab === 'active' ? w.enabled : !w.enabled))
     .filter((w) => !q || w.title.toLowerCase().includes(q) || w.instruction.toLowerCase().includes(q))
 
+  // Grouped by the agent that owns each job: Junior first, then each agent by name.
+  // One owner only (every job Junior's) needs no headers.
+  const groups = ownerGroups(rows, agents, persona.name)
+  const headed = groups.length > 1 || groups.some((g) => g.key !== '')
+
   const edit = (w: Job) => onNavigate(`/jobs/${encodeURIComponent(w.id)}/edit`)
   const open = (w: Job) => onNavigate(`/jobs/${encodeURIComponent(w.id)}`)
 
@@ -240,7 +250,26 @@ export function JobsPage({
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((w) => {
+                  {groups.map((g) => (
+                    <Fragment key={g.key || 'junior'}>
+                      {headed && (
+                        <tr className="wtblGroup">
+                          <td colSpan={9}>
+                            <span className="wgHead">
+                              <JuniorFace size={18} motion="still" colour={g.colour} decorative />
+                              {g.agent ? (
+                                <button type="button" className="wgName" title={`${g.label}'s page`} onClick={() => onNavigate(`/agents/${encodeURIComponent(g.agent!)}/about`)}>
+                                  {g.label}
+                                </button>
+                              ) : (
+                                <span className="wgName">{g.label}</span>
+                              )}
+                              <small>{g.rows.length}</small>
+                            </span>
+                          </td>
+                        </tr>
+                      )}
+                  {g.rows.map((w) => {
                     const h = history.get(w.id)
                     const failed = w.lastRunStatus === 'failed' || w.lastRunStatus === 'timeout' || Boolean(w.configError)
                     const project = projects.find((p) => p.id === w.projectId)
@@ -271,7 +300,6 @@ export function JobsPage({
                         </td>
                         <td>
                           <span className="uses">
-                            <OwnerTag job={w} />
                             {w.tools.map((g) => {
                               const Icon = grantIcon(g)
                               return (
@@ -345,6 +373,8 @@ export function JobsPage({
                       </tr>
                     )
                   })}
+                    </Fragment>
+                  ))}
                 </tbody>
               </table>
             )}
@@ -371,12 +401,20 @@ export function JobsPage({
   )
 }
 
-/** Who does the job's runs, and how, as one tag in its row. */
-function OwnerTag({ job }: { job: Job }) {
-  const owner = useJobOwner(job)
-  return (
-    <span className="u proj" title={owner.how}>
-      {owner.label}
-    </span>
-  )
+type OwnerGroup = { key: string; agent?: string; label: string; colour?: string; rows: Job[] }
+
+/** Jobs by owner: Junior's (no `agent:`) first, then each agent's, by label. An agent removed since keeps its own group, by file name. */
+function ownerGroups(rows: Job[], agents: { name: string; label: string; colour: string | null }[], juniorName: string): OwnerGroup[] {
+  const byKey = new Map<string, OwnerGroup>()
+  for (const w of rows) {
+    const key = w.agent ?? ''
+    let g = byKey.get(key)
+    if (!g) {
+      const a = key ? agents.find((x) => x.name === key) : undefined
+      g = { key, ...(key ? { agent: key } : {}), label: key ? (a?.label ?? key) : juniorName, ...(a?.colour ? { colour: a.colour } : {}), rows: [] }
+      byKey.set(key, g)
+    }
+    g.rows.push(w)
+  }
+  return [...byKey.values()].sort((a, b) => (a.key === '' ? -1 : b.key === '' ? 1 : a.label.localeCompare(b.label)))
 }
