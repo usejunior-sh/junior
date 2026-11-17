@@ -582,7 +582,7 @@ export function JuniorLedger({ tab, items, rows, needs, me, empty, moves, nudges
     return { mark, ui, draft: () => mark && draft(item, mark), set: (u) => setNudgeFor(item.id, u), onNudged: () => onNudged?.() }
   }
 
-  const goNeed = (n: NeedsRow) => onNavigate(n.target.kind === 'session' ? n.target.id : '/junior/log')
+  const goNeed = (n: NeedsRow) => onNavigate(n.target.id)
 
   /**
    * "Keep" on a Close? row: it moves up into the list at once. The cursor and
@@ -628,7 +628,7 @@ export function JuniorLedger({ tab, items, rows, needs, me, empty, moves, nudges
       // a focused button or link answers Space and Enter itself
       if ((e.key === ' ' || e.key === 'Enter') && (e.target as HTMLElement | null)?.closest?.('button, a, [role="menuitem"]')) return
       const openItem = (id: string) => onNavigate(itemHash(id))
-      const goNeed = (n: NeedsRow) => onNavigate(n.target.kind === 'session' ? n.target.id : '/junior/log')
+      const goNeed = (n: NeedsRow) => onNavigate(n.target.id)
       const move = (to: number) => {
         e.preventDefault()
         follow.current = null

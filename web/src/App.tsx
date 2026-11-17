@@ -960,7 +960,7 @@ export function App() {
                   <GoneCheckoutBar checkout={currentCheckout} onContinueInMain={() => continueInMain(current)} />
                 ) : (
                 <>
-                {juniorHome && <JuniorNeedsDock onOpenSession={openThread} onNavigate={navigate} />}
+                {juniorHome && <JuniorNeedsDock onOpenSession={openThread} />}
                 <Composer
                   key={`composer-${current.id}`}
                   dm={current.kind === 'dm'}

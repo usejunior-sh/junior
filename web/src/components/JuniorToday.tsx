@@ -45,7 +45,7 @@ export function JuniorGoals({ day, onNavigate, onDispatch }: Props) {
 /** Blocked on you: what holds Junior until you answer. People waiting on you are in the brief. */
 /** A Needs-you row: a small orange dot, what it is, where from, and the verb. */
 export function NeedsLine({ row, onNavigate }: { row: NeedsRow; onNavigate: (hash: string) => void }) {
-  const go = () => onNavigate(row.target.kind === 'session' ? row.target.id : '/junior/log')
+  const go = () => onNavigate(row.target.id)
   return (
     <button type="button" className="jrRow need" onClick={go}>
       <span className="t">{row.title}</span>

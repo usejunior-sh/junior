@@ -14,7 +14,7 @@ import { useAwayWindow, useJuniorDay } from '../junior.js'
 /** Rows shown before "Show N more". */
 const SHOWN = 3
 
-export function JuniorNeedsDock({ onOpenSession, onNavigate }: { onOpenSession: (id: string) => void; onNavigate: (hash: string) => void }) {
+export function JuniorNeedsDock({ onOpenSession }: { onOpenSession: (id: string) => void }) {
   const workspaceId = useWorkspaceId()
   const win = useAwayWindow(workspaceId)
   const { day } = useJuniorDay(win)
@@ -22,7 +22,7 @@ export function JuniorNeedsDock({ onOpenSession, onNavigate }: { onOpenSession: 
   const [all, setAll] = useState(false)
   const needs = day?.needs ?? []
   if (!needs.length) return null
-  const go = (n: NeedsRow) => (n.target.kind === 'session' ? onOpenSession(n.target.id) : onNavigate('/junior/log'))
+  const go = (n: NeedsRow) => onOpenSession(n.target.id)
   const rows = all ? needs : needs.slice(0, SHOWN)
   return (
     <section className="needsDock" aria-label="Needs you">

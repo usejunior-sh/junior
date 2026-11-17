@@ -10,7 +10,8 @@
  */
 import { MAX_WORDS, wordCount } from '../work/next.js'
 
-export type NeedsTarget = { kind: 'session'; id: string } | { kind: 'actions' }
+/** Every row opens the session that waits: a held chat, a team's lead, the thread that drafted the sends (a job's run too). */
+export type NeedsTarget = { kind: 'session'; id: string }
 
 /** A row's first line: the verb in ink, then reasons in mono. Verb first, 15 words or fewer. */
 export type NeedsMove = { verb: string; reasons: string[] }
@@ -86,6 +87,16 @@ export function sendsSubject(titles: readonly string[]): string {
   if (t.length === 1) return t[0]!
   if (t.length === 2) return `${t[0]} and ${t[1]}`
   return `${t[0]} and ${t.length - 1} more`
+}
+
+/**
+ * The sessions waiting on you, each with its rows: what a list of threads
+ * marks as "needs you". Built from the same rows as the dock and the page.
+ */
+export function waitingSessions(rows: readonly NeedsRow[]): Map<string, NeedsRow[]> {
+  const out = new Map<string, NeedsRow[]>()
+  for (const r of rows) out.set(r.target.id, [...(out.get(r.target.id) ?? []), r])
+  return out
 }
 
 /** Free text as a reason: its first `n` words, with an ellipsis when cut. */
@@ -195,7 +206,7 @@ export function needsRows(s: NeedsSources, now: number): NeedsRow[] {
       go: 'Review',
       move: needsMove(a.titles.length > 1 ? `Approve ${a.titles.length} sends` : 'Approve the send', [clipReason(`from ${a.origin}`)]),
       subject: sendsSubject(a.titles),
-      target: { kind: 'actions' },
+      target: { kind: 'session', id: a.sessionId },
       since: a.at,
     })
   }

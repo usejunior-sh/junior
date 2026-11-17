@@ -10,7 +10,7 @@ import { briefFacts, type FactItem } from '../core/junior/facts.js'
 import { awayWindow, AWAY_GAP_MS, dayPart, headline, sessionAsk, startOfDay, waitedWords } from '../core/junior/greeting.js'
 import { pageMood, railMood } from '../core/junior/mood.js'
 import { morningBrief, overdueCount, type MorningItem } from '../core/junior/morning.js'
-import { needsRows, sendsTitle } from '../core/junior/needs.js'
+import { needsRows, sendsTitle, waitingSessions } from '../core/junior/needs.js'
 import { pickNow, todoProgress } from '../core/junior/now.js'
 import { canDoCards, canDoFill, firstOffers, sentenceOf, type OfferItem } from '../core/junior/offers.js'
 import { DEFAULT_PERSONA, RULES_PROMPT, RULES_PROMPT_HEADLESS, cleanName, personaAppend, personaFrom } from '../core/junior/persona.js'
@@ -527,6 +527,31 @@ test('needs you: held sessions first, then plans and gates, then sends — oldes
   )
   assert.equal(sendsTitle(['a']), 'a waits for your OK')
   assert.equal(sendsTitle(['a', 'b', 'c']), 'a and 2 more wait for your OK')
+})
+
+test('needs you: every row opens the session that waits, sends included', () => {
+  const rows = needsRows(
+    {
+      blocked: [{ id: 's1', title: 'Fix the flake', waitingOn: 'AskUserQuestion', at: NOW - HOUR }],
+      teams: [],
+      sends: [
+        { sessionId: 'thread1', origin: "Lakhan's PR review requests", titles: ['Job seen'], at: NOW - 2 * HOUR },
+        { sessionId: 's1', origin: 'Fix the flake', titles: ['PR #486'], at: NOW - 3 * HOUR },
+      ],
+    },
+    NOW,
+  )
+  assert.deepEqual(
+    rows.map((r) => r.target),
+    [
+      { kind: 'session', id: 's1' },
+      { kind: 'session', id: 's1' },
+      { kind: 'session', id: 'thread1' },
+    ],
+  )
+  const waiting = waitingSessions(rows)
+  assert.deepEqual([...waiting.keys()].sort(), ['s1', 'thread1'])
+  assert.deepEqual(waiting.get('s1')?.map((r) => r.kind), ['session', 'sends'])
 })
 
 test('right now: the todo step in progress, a plan item first', () => {
