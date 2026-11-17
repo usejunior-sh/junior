@@ -10,7 +10,7 @@ import { threadState } from '../../../core/junior/threads.js'
 import type { EffortLevel, ImageAttachment, Mention, PermissionBehavior, QuestionAnswers } from '../../../shared/protocol.js'
 import { SessionAgentScope, useChatAgents } from '../chatAgents.js'
 import { composerDrafts } from '../composerDrafts.js'
-import { useEvents, useSessions } from '../hooks.js'
+import { useEvents, usePaging, useSessions } from '../hooks.js'
 import { usePersona } from '../junior.js'
 import { store } from '../store.js'
 import { useIsMobile } from '../useMobile.js'
@@ -40,6 +40,7 @@ export function ThreadSheet({ sessionId, onClose, onFull, onNavigate }: Props) {
   const persona = usePersona()
   const s = sessions.find((x) => x.id === sessionId) ?? null
   const events = useEvents(sessionId)
+  const paging = usePaging(sessionId)
   // Its history, beside the chat in front; live events reach this client anyway.
   useEffect(() => store.followSession(sessionId), [sessionId])
   const mobile = useIsMobile()
@@ -121,6 +122,11 @@ export function ThreadSheet({ sessionId, onClose, onFull, onNavigate }: Props) {
           onNavigate={onNavigate}
           brief={s.startedBy ? { from: persona.name, to: who, onEdit: () => composerDrafts.set(sessionId, 'A correction to your brief: ') } : undefined}
           speaker={(s.provider ?? 'claude') === 'claude' ? { status: s.status } : undefined}
+          paging={paging}
+          onLoadEarlier={store.loadEarlier}
+          onRetryEarlier={store.retryEarlier}
+          // A subagent's view lives on the full page: open the thread there.
+          onOpenAgent={onFull}
         />
       </div>
       <Composer

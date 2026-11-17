@@ -37,7 +37,7 @@ import { usePersona } from '../junior.js'
 import { MentionChip, MentionIcon } from './MentionPicker.js'
 import { Markdown } from './Markdown.js'
 import { PermissionCard, PlanCard } from './PermissionCard.js'
-import { focusWaitingAsks, focusWaitingIn, subscribeFocusWaiting, wantsFocusWaiting } from '../focusWaiting.js'
+import { focusWaitingAsks, focusWaitingIn, heldCallPath, nextStep, subscribeFocusWaiting, wantsFocusWaiting } from '../focusWaiting.js'
 import { ToolCard } from './ToolCard.js'
 import { ArtifactCard } from './ArtifactCard.js'
 import { BrowserShots } from './BrowserShots.js'
@@ -324,14 +324,23 @@ export function Transcript({
   useLayoutEffect(scrollToBottom, [items, scrollToBottom])
 
   // Opened from a Needs-you row: land on the card that waits, once it renders.
-  // A held send from early in a long thread is in an older page: load until it shows.
-  const heldSends = actions.some((a) => a.status === 'needs_you' && !a.hidden)
+  // A held send a subagent made shows only in that subagent's view: open it,
+  // and that view lands. One from early in a long thread is in an older page:
+  // load until it shows.
+  const heldCalls = useMemo(() => actions.filter((a) => a.status === 'needs_you' && !a.hidden).flatMap((a) => a.calls), [actions])
   const asked = useSyncExternalStore(subscribeFocusWaiting, focusWaitingAsks)
   useLayoutEffect(() => {
-    if (scope || !wantsFocusWaiting(sessionId)) return
+    if (!wantsFocusWaiting(sessionId)) return
     if (focusWaitingIn(sessionId, ref.current)) return letGo()
-    if (heldSends && paging?.hasEarlier && paging.state === 'idle') onLoadEarlier?.(sessionId)
-  }, [asked, items, actions, heldSends, paging, scope, sessionId, onLoadEarlier, letGo])
+    if (!heldCalls.length) return
+    const path = heldCallPath(events, heldCalls)
+    if (path === null) {
+      if (!scope && paging?.hasEarlier && paging.state === 'idle') onLoadEarlier?.(sessionId)
+      return
+    }
+    const step = nextStep(path, scope)
+    if (step && 'open' in step) onOpenAgent?.(step.open)
+  }, [asked, items, events, heldCalls, paging, scope, sessionId, onLoadEarlier, onOpenAgent, letGo])
 
   const live = speaker?.status === 'running' || speaker?.status === 'starting'
   const runningCalls = useMemo(() => new Set(workflows.filter((r) => r.state === 'running').map((r) => r.toolUseId)), [workflows])

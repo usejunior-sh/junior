@@ -22,6 +22,7 @@
     "web/src/diff.ts",
     "web/src/transcript.ts",
     "web/src/paging.ts",
+    "web/src/focusWaiting.ts",
     "web/src/browserUrl.ts",
     "web/src/reloadOnBuild.ts",
     "web/src/reloadGuard.ts",
