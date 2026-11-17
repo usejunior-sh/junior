@@ -8,6 +8,7 @@
 import { ChevronDown, ChevronUp } from 'lucide-react'
 import { useState } from 'react'
 import type { NeedsRow } from '../../../core/junior/needs.js'
+import { askFocusWaiting } from '../focusWaiting.js'
 import { useWorkspaceId } from '../hooks.js'
 import { useAwayWindow, useJuniorDay } from '../junior.js'
 
@@ -22,7 +23,10 @@ export function JuniorNeedsDock({ onOpenSession }: { onOpenSession: (id: string)
   const [all, setAll] = useState(false)
   const needs = day?.needs ?? []
   if (!needs.length) return null
-  const go = (n: NeedsRow) => onOpenSession(n.target.id)
+  const go = (n: NeedsRow) => {
+    askFocusWaiting(n.target.id)
+    onOpenSession(n.target.id)
+  }
   const rows = all ? needs : needs.slice(0, SHOWN)
   return (
     <section className="needsDock" aria-label="Needs you">

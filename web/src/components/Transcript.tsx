@@ -1,6 +1,6 @@
 import { Clock, KeyRound } from 'lucide-react'
 import { useScopedAgent } from '../chatAgents.js'
-import { Fragment, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Fragment, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import {
   mentionToken,
   type PermissionBehavior,
@@ -37,6 +37,7 @@ import { usePersona } from '../junior.js'
 import { MentionChip, MentionIcon } from './MentionPicker.js'
 import { Markdown } from './Markdown.js'
 import { PermissionCard, PlanCard } from './PermissionCard.js'
+import { focusWaitingAsks, focusWaitingIn, subscribeFocusWaiting, wantsFocusWaiting } from '../focusWaiting.js'
 import { ToolCard } from './ToolCard.js'
 import { ArtifactCard } from './ArtifactCard.js'
 import { BrowserShots } from './BrowserShots.js'
@@ -309,7 +310,7 @@ export function Transcript({
     for (const a of actions) for (const c of a.calls) m.set(c, a)
     return m
   }, [actions])
-  const { ref, scrollToBottom } = useStickToBottom(`${sessionId}:${scope ?? ''}`, base, midway)
+  const { ref, scrollToBottom, letGo } = useStickToBottom(`${sessionId}:${scope ?? ''}`, base, midway)
   const refs = useRefIndex()
   // Reference chips resolve against the artifacts index, which isn't otherwise
   // loaded while a chat is in front, pull it once so names appear.
@@ -321,6 +322,16 @@ export function Transcript({
   // Committed events grow the transcript; the streaming line grows it too, but
   // re-renders separately (see LiveLine), so it calls back in here to scroll.
   useLayoutEffect(scrollToBottom, [items, scrollToBottom])
+
+  // Opened from a Needs-you row: land on the card that waits, once it renders.
+  // A held send from early in a long thread is in an older page: load until it shows.
+  const heldSends = actions.some((a) => a.status === 'needs_you' && !a.hidden)
+  const asked = useSyncExternalStore(subscribeFocusWaiting, focusWaitingAsks)
+  useLayoutEffect(() => {
+    if (scope || !wantsFocusWaiting(sessionId)) return
+    if (focusWaitingIn(sessionId, ref.current)) return letGo()
+    if (heldSends && paging?.hasEarlier && paging.state === 'idle') onLoadEarlier?.(sessionId)
+  }, [asked, items, actions, heldSends, paging, scope, sessionId, onLoadEarlier, letGo])
 
   const live = speaker?.status === 'running' || speaker?.status === 'starting'
   const runningCalls = useMemo(() => new Set(workflows.filter((r) => r.state === 'running').map((r) => r.toolUseId)), [workflows])
@@ -1091,7 +1102,14 @@ function useStickToBottom(memo: string, base: number, moreAbove: boolean) {
     record()
   }, [record])
 
-  return { ref, scrollToBottom }
+  /** Stop following the bottom: the reader was put somewhere on purpose. */
+  const letGo = useCallback(() => {
+    stuck.current = false
+    restore.current = null
+    record()
+  }, [record])
+
+  return { ref, scrollToBottom, letGo }
 }
 
 /**

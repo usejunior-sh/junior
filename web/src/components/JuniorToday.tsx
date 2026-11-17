@@ -11,6 +11,7 @@ import type { Mood } from '../../../core/junior/mood.js'
 import { addToday, draftToday, matchToday, removeToday, startJuniorChat, usePersona } from '../junior.js'
 import { itemHash } from '../hooks.js'
 import { JuniorFace } from './JuniorFace.js'
+import { openNeed } from '../focusWaiting.js'
 
 type Props = {
   day: JuniorDay
@@ -45,7 +46,7 @@ export function JuniorGoals({ day, onNavigate, onDispatch }: Props) {
 /** Blocked on you: what holds Junior until you answer. People waiting on you are in the brief. */
 /** A Needs-you row: a small orange dot, what it is, where from, and the verb. */
 export function NeedsLine({ row, onNavigate }: { row: NeedsRow; onNavigate: (hash: string) => void }) {
-  const go = () => onNavigate(row.target.id)
+  const go = () => openNeed(row, onNavigate)
   return (
     <button type="button" className="jrRow need" onClick={go}>
       <span className="t">{row.title}</span>

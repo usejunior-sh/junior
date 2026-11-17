@@ -472,3 +472,11 @@ button.chip:hover:not(:disabled), .chip[data-state="open"] { color: var(--ink); 
 .agManage:hover { color: var(--ink); background: var(--wash-2); }
 .agentTag { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 8px 0 5px; border-radius: var(--r-full); border: 1px solid var(--border); font-size: 12px; color: var(--ink); white-space: nowrap; }
 .prow .rowAgent { flex: none; }
+
+/* Opened from Needs you: the card that waits flashes once (web/src/focusWaiting.ts). */
+.waitFlash { animation: waitFlash 1.6s ease-out; }
+@keyframes waitFlash {
+  0%, 40% { box-shadow: 0 0 0 2px var(--edge-orange-hi); }
+  100% { box-shadow: 0 0 0 2px transparent; }
+}
+@media (prefers-reduced-motion: reduce) { .waitFlash { animation-duration: 0.01s; } }
