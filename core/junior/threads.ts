@@ -28,6 +28,8 @@ export type ThreadSession = {
   jobId?: string
   /** put away: a job's run that found nothing new */
   archived?: boolean
+  /** you pinned it to the sidebar */
+  pinned?: boolean
 }
 
 export type Thread = {
@@ -107,6 +109,29 @@ export function waitingThreads(sessions: readonly ThreadSession[], needing: Read
       updatedAt: s.updatedAt,
     }))
   return [...mine, ...more].sort((a, b) => b.updatedAt - a.updatedAt)
+}
+
+/**
+ * The threads you pinned, from every agent and Junior, newest first. A pin
+ * never lapses: a finished one stays (ready) until you unpin it. One that
+ * needs you (on a prompt, or a row in `needing`) reads 'you', so it keeps its
+ * dot here and is left out of the waiting list.
+ */
+export function pinnedThreads(sessions: readonly ThreadSession[], needing: ReadonlySet<string>): Thread[] {
+  const dms = new Set(sessions.filter((s) => s.kind === 'dm').map((s) => s.id))
+  return sessions
+    .filter((s) => s.pinned && isChat(s))
+    .sort((a, b) => b.updatedAt - a.updatedAt)
+    .map((s) => ({
+      id: s.id,
+      title: s.title,
+      ...(s.agent ? { agent: s.agent } : {}),
+      state: needing.has(s.id) ? 'you' : threadState(s),
+      fromJunior: !!s.startedBy && dms.has(s.startedBy),
+      question: !!s.waiting && s.waitingOn === 'AskUserQuestion',
+      job: !!s.jobId,
+      updatedAt: s.updatedAt,
+    }))
 }
 
 export type AgentStatus = { state: 'you' | 'working' | 'idle'; line: string; threads: number }

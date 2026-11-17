@@ -4,7 +4,7 @@
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { agentStatus, openThreads, READY_FOR_MS, threadReportLine, threadState, waitingThreads, type ThreadSession } from '../core/junior/threads.js'
+import { agentStatus, openThreads, pinnedThreads, READY_FOR_MS, threadReportLine, threadState, waitingThreads, type ThreadSession } from '../core/junior/threads.js'
 
 const NOW = 1_800_000_000_000
 const dm: ThreadSession = { id: 'dm', title: 'Junior', kind: 'dm', status: 'idle', updatedAt: NOW }
@@ -89,4 +89,19 @@ test('waiting threads: every agent, Junior and job runs, held or with sends wait
     ],
   )
   assert.equal(t[2]!.question, true)
+})
+
+test('pinned threads: every agent, finished ones stay, a needs row reads as yours; DMs never', () => {
+  const rows = [
+    { ...dm, pinned: true },
+    s('done', { pinned: true, startedBy: 'dm', agent: 'reviewer', updatedAt: NOW - READY_FOR_MS - 1 }),
+    s('asks', { pinned: true, waiting: true, waitingOn: 'AskUserQuestion' }),
+    s('send', { pinned: true, updatedAt: NOW - 1_000 }),
+    s('loose'),
+    s('worker', { pinned: true, teamRun: { role: 'worker' } }),
+  ]
+  const pinned = pinnedThreads(rows, new Set(['send']))
+  assert.deepEqual(pinned.map((t) => [t.id, t.state]), [['send', 'you'], ['asks', 'you'], ['done', 'ready']])
+  assert.equal(pinned[2].agent, 'reviewer')
+  assert.equal(pinned[1].question, true)
 })

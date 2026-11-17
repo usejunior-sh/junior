@@ -97,6 +97,15 @@
 .tsWaitRow:hover { background: var(--elev); }
 .tsWaitRow.on { background: var(--elev); box-shadow: inset 2px 0 0 var(--orange); }
 .tsWaitRow .tsL2 { color: var(--mute); }
+/* pinned: threads you keep in reach, any agent's, until you unpin them. Quiet, no orange edge: a row that needs you carries the dot. */
+.tsPinned { margin: 10px 8px 0; padding: 0 4px; }
+.tsPinned .tsWaitHead { color: var(--ash); }
+.tsPinRow .tsL2 { color: var(--mute); }
+.tsPinRow .tsL2 .work { color: var(--blue); }
+.tsPinRow .tsL2 .stopped { color: var(--red); }
+.tsPinRow.on { box-shadow: inset 2px 0 0 var(--hair-bright); }
+.tsPinRow.dim .tsL1 b { color: var(--mute); font-weight: 400; }
+.tsPinRow.dim .tsRing { opacity: 0.6; }
 .tsWaitMore { display: block; margin: 2px 0 2px 42px; padding: 4px 0; border: 0; background: transparent; color: var(--ash); font-size: 0.9286rem; }
 .tsWaitMore:hover { color: var(--ink); }
 .tsLabelBtn { width: 22px; height: 22px; display: grid; place-items: center; flex: none; border: 0; border-radius: var(--r-sm); background: transparent; color: var(--ash); }
@@ -160,6 +169,14 @@
   border: 1px solid var(--hair-strong); border-radius: var(--r-lg); background: transparent; color: var(--ink); text-align: left;
 }
 button.threadCard:hover { background: var(--card); }
+/* a live thread: the card is a button and a pin beside it */
+.threadCard:has(> .tcMain) { padding: 0; gap: 0; }
+.threadCard:has(> .tcMain:hover) { background: var(--card); }
+.tcMain { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; padding: 9px 6px 9px 14px; border: 0; border-radius: inherit; background: transparent; color: inherit; font: inherit; text-align: left; }
+.pinThread.on { color: var(--ink); }
+.pinThread.on svg { fill: currentColor; }
+.tcPin { margin-right: 8px; opacity: 0; }
+.threadCard:hover .tcPin, .tcPin:focus-visible, .threadCard.pinned .tcPin { opacity: 1; }
 .threadCard.you { border-color: color-mix(in srgb, var(--orange) 55%, transparent); }
 .threadCard.pending, .threadCard.gone, .threadCard.failed { color: var(--mute); border-style: dashed; }
 .tcT { flex: 1; min-width: 0; display: flex; flex-direction: column; }

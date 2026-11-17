@@ -6,10 +6,10 @@
  * into one row. Settings at the bottom.
  */
 import { CalendarClock, Clock, FileText, GitPullRequest, ListChecks, PanelLeft, Plus, Search, Settings } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ComponentProps, type ReactNode } from 'react'
 import { JUNIOR_DM, dmKey, findDm } from '../../../core/junior/dms.js'
 import { juniorSays, type SayNeed } from '../../../core/junior/say.js'
-import { agentStatus, openThreads, waitingThreads, THREADS_SHOWN, type AgentStatus, type Thread } from '../../../core/junior/threads.js'
+import { agentStatus, openThreads, pinnedThreads, waitingThreads, THREADS_SHOWN, type AgentStatus, type Thread } from '../../../core/junior/threads.js'
 import type { SessionSummary } from '../../../shared/protocol.js'
 import { useChatAgents } from '../chatAgents.js'
 import { useInbox } from '../inboxStore.js'
@@ -18,6 +18,8 @@ import { markThreadSeen, useThreadSeen } from '../threadSeen.js'
 import { isWorking } from '../sessionModes.js'
 import { setSidebarCollapsed } from '../layout.js'
 import { JuniorFace } from './JuniorFace.js'
+import { ThreadPinMenu } from './PinThread.js'
+import { STATE_WORDS } from './ThreadCards.js'
 import { relTime } from '../itemUi.js'
 import { MOD_LABEL } from '../keys.js'
 
@@ -118,6 +120,12 @@ export function TeamSidebar(p: Props) {
   }, [activeThread, threads])
   // Every thread where it is your turn, from any agent, Junior and jobs; the rest show as a working agent in Team, and in Junior's line.
   const waiting = useMemo(() => waitingThreads(p.sessions, needing, now), [p.sessions, needing, now])
+  // Threads you pinned, from any agent: they stay until you unpin them. One that needs you shows here, with its dot, not again below.
+  const pinned = useMemo(() => pinnedThreads(p.sessions, needing), [p.sessions, needing])
+  const waitingRows = useMemo(() => {
+    const ids = new Set(pinned.map((t) => t.id))
+    return waiting.filter((t) => !ids.has(t.id))
+  }, [waiting, pinned])
   const handedOff = useHandedOff(threads, labelOf)
   const firstOpen = useFirstOpenToday()
 
@@ -155,7 +163,7 @@ export function TeamSidebar(p: Props) {
   // Busy, recent and open agents keep their rows, and never fewer than AGENTS_SHOWN: the list is never just the fold.
   const shownAgents = agentRows.filter((r, i) => allAgents || i < AGENTS_SHOWN || r.state !== 'idle' || r.recent || isActive({ agent: r.a.name }))
   const folded = agentRows.filter((r) => !shownAgents.includes(r))
-  const shownThreads = showAll ? waiting : waiting.slice(0, THREADS_SHOWN)
+  const shownThreads = showAll ? waitingRows : waitingRows.slice(0, THREADS_SHOWN)
   const juniorDm = findDm(p.sessions, JUNIOR_DM)
   const juniorBusy = !!juniorDm && isWorking(juniorDm)
 
@@ -204,19 +212,36 @@ export function TeamSidebar(p: Props) {
       </button>
 
       <div className="tsScroll">
+        {/* Threads you pinned: first, in any state, until you unpin them. None pinned: no section. */}
+        {pinned.length > 0 && (
+          <section className="tsPinned" aria-label="Pinned">
+            <div className="tsWaitHead">
+              <span className="tsGrow">Pinned</span>
+              <span>{pinned.length}</span>
+            </div>
+            {pinned.map((t) => (
+              <ThreadPinMenu key={t.id} id={t.id} pinned>
+                <PinnedRow t={t} agentLabel={labelOf(t.agent)} colour={colourOf(t.agent)} active={isActive({ thread: t.id })} onOpen={() => p.onThread(t.id)} />
+              </ThreadPinMenu>
+            ))}
+          </section>
+        )}
+
         {/* What waits on you, as one card under Junior. Nothing waiting: no card, Junior's line already says so. */}
-        {waiting.length > 0 && (
+        {waitingRows.length > 0 && (
           <section className="tsWaiting" aria-label="Waiting on you">
             <div className="tsWaitHead">
               <span className="tsGrow">Waiting on you</span>
-              <span>{waiting.length}</span>
+              <span>{waitingRows.length}</span>
             </div>
             {shownThreads.map((t) => (
-              <ThreadRow key={t.id} t={t} agentLabel={labelOf(t.agent)} colour={colourOf(t.agent)} active={isActive({ thread: t.id })} onOpen={() => p.onThread(t.id)} />
+              <ThreadPinMenu key={t.id} id={t.id} pinned={false}>
+                <ThreadRow t={t} agentLabel={labelOf(t.agent)} colour={colourOf(t.agent)} active={isActive({ thread: t.id })} onOpen={() => p.onThread(t.id)} />
+              </ThreadPinMenu>
             ))}
-            {waiting.length > THREADS_SHOWN && (
+            {waitingRows.length > THREADS_SHOWN && (
               <button type="button" className="tsWaitMore" onClick={() => setShowAll((v) => !v)}>
-                {showAll ? 'Show fewer' : `Show all ${waiting.length}`}
+                {showAll ? 'Show fewer' : `Show all ${waitingRows.length}`}
               </button>
             )}
           </section>
@@ -326,11 +351,14 @@ function AgentRow(r: { label: string; description: string; colour?: string; st: 
   )
 }
 
+type RowProps = { t: Thread; agentLabel: string; colour?: string; active: boolean; onOpen: () => void } & Omit<ComponentProps<'button'>, 'onClick'>
+
 /** A thread waiting on you: the face of whoever has it, the title, how long it has waited, and who asks. */
-function ThreadRow({ t, agentLabel, colour, active, onOpen }: { t: Thread; agentLabel: string; colour?: string; active: boolean; onOpen: () => void }) {
+function ThreadRow({ t, agentLabel, colour, active, onOpen, ...rest }: RowProps) {
   const [hover, setHover] = useState(false)
   return (
     <button
+      {...rest}
       type="button"
       className={`tsWaitRow${active ? ' on' : ''}`}
       aria-current={active ? 'page' : undefined}
@@ -348,6 +376,43 @@ function ThreadRow({ t, agentLabel, colour, active, onOpen }: { t: Thread; agent
         </span>
         <span className="tsL2">
           <span>{t.question ? `${agentLabel} asks` : `${agentLabel} waits for your OK`}</span>
+        </span>
+      </span>
+    </button>
+  )
+}
+
+/**
+ * A pinned thread: whoever has it, the title, and where it stands. Needs you: the orange dot. Working:
+ * the typing dots. Finished: dimmed, and it stays until you unpin it.
+ */
+function PinnedRow({ t, agentLabel, colour, active, onOpen, ...rest }: RowProps) {
+  const [hover, setHover] = useState(false)
+  const mood = hover ? 'done' : t.state === 'you' ? 'needs' : t.state === 'working' ? 'working' : t.state === 'stopped' ? 'stuck' : 'hello'
+  return (
+    <button
+      {...rest}
+      type="button"
+      className={`tsWaitRow tsPinRow${active ? ' on' : ''}${t.state === 'ready' ? ' dim' : ''}`}
+      aria-current={active ? 'page' : undefined}
+      title={`${t.title} · ${agentLabel} · ${STATE_WORDS[t.state]}. Right-click to unpin.`}
+      onClick={onOpen}
+      onPointerEnter={() => setHover(true)}
+      onPointerLeave={() => setHover(false)}
+    >
+      <span className={`tsRing${t.state === 'you' ? ' you' : ''}`}>
+        <JuniorFace mood={mood} size={24} motion={hover ? 'follow' : 'still'} colour={colour} decorative />
+      </span>
+      <span className="tsT">
+        <span className="tsL1">
+          {t.job && <Clock size={11} className="tsJob" aria-label="a job's run" />}
+          <b>{t.title}</b>
+          {t.state === 'working' && <Typing />}
+        </span>
+        <span className="tsL2">
+          <span>
+            {agentLabel} · <span className={t.state === 'working' ? 'work' : t.state === 'stopped' ? 'stopped' : ''}>{STATE_WORDS[t.state]}</span>
+          </span>
         </span>
       </span>
     </button>

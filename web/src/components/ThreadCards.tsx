@@ -12,6 +12,7 @@ import { useSessions } from '../hooks.js'
 import { usePersona } from '../junior.js'
 import type { TranscriptItem } from '../transcript.js'
 import { JuniorFace } from './JuniorFace.js'
+import { PinThreadButton, ThreadPinMenu } from './PinThread.js'
 
 /** Opens a thread: beside Junior's chat at home, full size elsewhere. Unset = go to the session. */
 export const ThreadOpenContext = createContext<((sessionId: string) => void) | null>(null)
@@ -114,18 +115,25 @@ export function ThreadCard({ id, fallbackTitle, attached = 0 }: { id: string; fa
   }
   const agent = s.agent ? agents.find((a) => a.name === s.agent) : undefined
   const state = threadState(s)
+  const pinned = !!s.pinned
+  // The card opens the thread; the pin beside it (on hover, or always once pinned) and right-click pin it to the sidebar.
   return (
-    <button type="button" className={`threadCard ${state}`} onClick={() => open(id)}>
-      <JuniorFace mood={state === 'you' ? 'needs' : state === 'working' ? 'working' : state === 'stopped' ? 'stuck' : 'hello'} size={28} motion="still" colour={agent?.colour ?? undefined} decorative />
-      <span className="tcT">
-        <b>{s.title}</b>
-        <span>
-          {agent?.label ?? persona.name}
-          {attachedWords(attached)}
-        </span>
-      </span>
-      <span className={`tcState ${state}`}>{STATE_WORDS[state]}</span>
-    </button>
+    <ThreadPinMenu id={id} pinned={pinned}>
+      <div className={`threadCard ${state}${pinned ? ' pinned' : ''}`}>
+        <button type="button" className="tcMain" onClick={() => open(id)}>
+          <JuniorFace mood={state === 'you' ? 'needs' : state === 'working' ? 'working' : state === 'stopped' ? 'stuck' : 'hello'} size={28} motion="still" colour={agent?.colour ?? undefined} decorative />
+          <span className="tcT">
+            <b>{s.title}</b>
+            <span>
+              {agent?.label ?? persona.name}
+              {attachedWords(attached)}
+            </span>
+          </span>
+          <span className={`tcState ${state}`}>{STATE_WORDS[state]}</span>
+        </button>
+        <PinThreadButton id={id} pinned={pinned} size={14} className="tcPin" />
+      </div>
+    </ThreadPinMenu>
   )
 }
 

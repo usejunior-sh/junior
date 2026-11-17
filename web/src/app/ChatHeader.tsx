@@ -2,6 +2,7 @@ import { Activity, FileDiff, FileText, Folder, Globe, Info, MessagesSquare } fro
 import { useMemo, type ReactNode, type RefObject } from 'react'
 import { useScopedAgent } from '../chatAgents.js'
 import { JuniorFace } from '../components/JuniorFace.js'
+import { PinThreadButton } from '../components/PinThread.js'
 import type { SessionStatus, SessionSummary } from '../../../shared/protocol.js'
 import { checkoutOf } from '../checkouts.js'
 import { CheckoutMenu } from '../components/CheckoutMenu.js'
@@ -71,6 +72,7 @@ export function ChatHeader(props: HeaderProps) {
       </span>
       <StatusDot status={shown.status} title={shown.title} />
       <span className="chIcons">
+        {current.kind !== 'dm' && <PinThreadButton id={current.id} pinned={!!current.pinned} size={14} className="ib" />}
         <ArtifactsMenu sessionId={current.id} onNavigate={onNavigate} compact />
         {agents.length > 0 && (
           <AgentsMenu agents={agents} current={openAgent?.toolUseId} onOpen={showAgent}>
@@ -161,6 +163,8 @@ function TopBar({ current, chatHeaderRef, currentCheckout, newTerminalIn, agents
           </span>
         )}
         <SessionCost sessionId={current.id} status={current.status} workflows={current.workflows} kind={current.kind} bar />
+        {/* A thread (any chat that is not a DM) pins to the sidebar from here. */}
+        {!dm && <PinThreadButton id={current.id} pinned={!!current.pinned} />}
         <span className="chSep" aria-hidden="true" />
         <ChatTools current={current} checkout={currentCheckout} newTerminalIn={newTerminalIn} agents={agents} browserOpen={browserOpen} onAbout={dm ? undefined : about} />
       </span>

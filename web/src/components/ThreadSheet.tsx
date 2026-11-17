@@ -17,6 +17,7 @@ import { useIsMobile } from '../useMobile.js'
 import { type SplitOptions, useSplit } from './browser/paneHooks.js'
 import { Composer } from './Composer.js'
 import { JuniorFace } from './JuniorFace.js'
+import { PinThreadButton } from './PinThread.js'
 import { STATE_WORDS } from './ThreadCards.js'
 import { Transcript } from './Transcript.js'
 
@@ -103,6 +104,7 @@ export function ThreadSheet({ sessionId, onClose, onFull, onNavigate }: Props) {
             {firstAt ? ` · ${clock(firstAt)}` : ''}
           </span>
         </span>
+        <PinThreadButton id={s.id} pinned={!!s.pinned} />
         <button type="button" className="iconBtn" title="Open full size: folder, model, terminal, browser" aria-label="Open full size" onClick={onFull}>
           <Maximize2 size={15} aria-hidden="true" />
         </button>
