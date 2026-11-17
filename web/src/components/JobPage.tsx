@@ -7,7 +7,7 @@ import * as Dialog from '@radix-ui/react-dialog'
 import * as Switch from '@radix-ui/react-switch'
 import { Ellipsis, ExternalLink, Eye, Globe, Pencil, Play, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import type { ActivityResponse, ActivityRun, ItemListResponse, Project, ProjectsResponse, Job, JobsResponse, JobRunsResponse, JobSlotRun } from '../../../shared/protocol.js'
+import type { ActivityResponse, ActivityRun, ItemListResponse, Project, ProjectsResponse, Job, JobsResponse, JobRunsResponse, JobSlotRun, SettingsResponse } from '../../../shared/protocol.js'
 import type { ScoredItem } from '../../../core/work/types.js'
 import { nextScheduled } from '../../../core/job/cron.js'
 import { itemHash, useEvents } from '../hooks.js'
@@ -87,6 +87,8 @@ export function JobPage({ id, onNavigate }: { id: string; onNavigate: (hash: str
   const [ledger, setLedger] = useState<JobSlotRun[]>([])
   const [items, setItems] = useState<ScoredItem[]>([])
   const [projects, setProjects] = useState<Project[]>([])
+  // The global switch (Settings → Automations). Off = the scheduler never runs a job, this one included.
+  const [schedulerOn, setSchedulerOn] = useState<boolean | null>(null)
   const [tab, setTab] = useState<Tab>('runs')
   const [showAll, setShowAll] = useState(false)
   const [running, setRunning] = useState(false)
@@ -127,6 +129,10 @@ export function JobPage({ id, onNavigate }: { id: string; onNavigate: (hash: str
       .then((r) => r.json() as Promise<ProjectsResponse>)
       .then((b) => setProjects(b.ok ? b.projects : []))
       .catch(() => setProjects([]))
+    void fetch('/api/settings')
+      .then((r) => r.json() as Promise<SettingsResponse>)
+      .then((b) => setSchedulerOn(b.ok ? b.settings.jobsEnabled : null))
+      .catch(() => setSchedulerOn(null))
   }, [])
 
   const rows = useMemo(() => runRows(ledger, runs), [ledger, runs])
@@ -363,6 +369,12 @@ export function JobPage({ id, onNavigate }: { id: string; onNavigate: (hash: str
           onClose={() => setConfirmDelete(false)}
         />
         {error && <div className="msg error">{error}</div>}
+        {job.enabled && schedulerOn === false && (
+          <div className="notice jobsOff">
+            This job is on, but scheduled runs are <b>off</b> for this workspace, so it won’t run on its own. “Run now” still works.{' '}
+            <a href="#/settings/babysit">Turn jobs on in Settings → Automations</a>.
+          </div>
+        )}
         {job.browser && skipsForApp && <div className="msg">This job needs the browser. Keep Junior.app open, or it skips.</div>}
         {job.draft && !job.enabled && (
           <div className="draftBanner" role="status">

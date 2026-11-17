@@ -105,6 +105,12 @@ test('draft_job’s result ends with the read-back, built from the file', () => 
   assert.equal(parseReadback(draftJobText({ id: 'j1', title: 'x', file: ctx.file, warnings: [] })), null)
 })
 
+test('draft_job says so when the workspace’s scheduler is off', () => {
+  const off = draftJobText({ id: 'j1', title: 'x', file: ctx.file, warnings: [], schedulerOff: true }, true)
+  assert.match(off, /Scheduled jobs are OFF in this workspace \(Settings → Automations\)/)
+  assert.doesNotMatch(draftJobText({ id: 'j1', title: 'x', file: ctx.file, warnings: [] }, true), /Scheduled jobs are OFF/)
+})
+
 test('the job chat asks for numbered steps and one question before the trial run', () => {
   const steps = JOBS_SECTION.indexOf('numbered')
   assert.ok(steps > 0)

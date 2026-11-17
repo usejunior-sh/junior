@@ -24,6 +24,7 @@ import { enqueueJob } from './queue.js'
 import { invalidateInbox } from '../ws/send.js'
 import { listProfiles } from '../browser/profiles.js'
 import { curatedTemplateFiles } from './templates.js'
+import { jobsEnabled } from '../settings-ops.js'
 
 /**
  * The Slack job (M4): seeded on, the way Slack work reaches the inbox. One
@@ -447,10 +448,13 @@ export async function draftJobOp(rt: WorkspaceRuntime, raw: unknown, caller: { a
   log('info', 'job', `drafted: ${title} (jobs/${name}.md) — off until reviewed`, { jobId: spec.id, workspace: rt.meta.id })
   const file = `jobs/${name}.md`
   // built from the file as written, so the chat's strip says what it grants
-  return { id: spec.id, title, file, warnings, mode, owner: owner?.label ?? rt.persona.name, readback: readbackOf(spec, { file, projectName: project.name }) }
+  return { id: spec.id, title, file, warnings, mode, owner: owner?.label ?? rt.persona.name, readback: readbackOf(spec, { file, projectName: project.name }), schedulerOff: !(await jobsEnabled(rt)) }
 }
 
-export type DraftedJob = { id: string; title: string; file: string; warnings: string[]; mode?: JobMode; owner?: string; readback?: Readback }
+export type DraftedJob = { id: string; title: string; file: string; warnings: string[]; mode?: JobMode; owner?: string; readback?: Readback; schedulerOff?: boolean }
+
+/** The workspace's switch (Settings → Automations) is off: a job that is on still never runs on its schedule. */
+const SCHEDULER_OFF = 'Scheduled jobs are OFF in this workspace (Settings → Automations), so no job runs on its schedule, this one included, until the user turns them on there. Tell the user.'
 
 /**
  * What draft_job hands back: where the draft is, how to turn it on, and the
@@ -462,6 +466,7 @@ export function draftJobText(d: DraftedJob, canTry = false): string {
     `ok: drafted the job “${d.title}” (${d.file}, id ${d.id}). It is saved OFF and will not run until the user reviews and enables it.`,
     `Review and enable: #/jobs/${d.id}`,
     ...d.warnings.map((w) => `note: ${w}`),
+    ...(d.schedulerOff ? [`note: ${SCHEDULER_OFF}`] : []),
     ...(d.mode === 'thread' ? [`Each run opens a thread from ${d.owner}'s DM and reports back there, like any thread.`] : []),
     canTry && d.mode === 'thread'
       ? `Now send ONE message: what each run does, as a numbered list, then one question with your suggested answer: "Run a trial now? It opens one thread under ${d.owner} now; anything it would send waits for your OK. Suggested: yes." Call try_job only after they say yes. Do not claim it is running.`
@@ -485,6 +490,7 @@ export async function tryJobOp(rt: WorkspaceRuntime, raw: unknown): Promise<stri
   if (!job) throw new Error(`no job "${id}" — pass the id draft_job returned`)
   if (job.configError) throw new Error(`the job is held: ${job.configError} — fix its file first`)
   if (!job.projectId) throw new Error('the job has no project — pick one first')
+  const schedulerOff = !(await jobsEnabled(rt)) ? [SCHEDULER_OFF] : []
   // A thread job's trial is one real run now: a thread from its owner's DM. Its sends are held like any chat's.
   if (job.mode === 'thread') {
     const owner = job.agent ? ((await chatAgentsFor(rt)).find((a) => a.name === job.agent)?.label ?? job.agent) : rt.persona.name
@@ -494,6 +500,7 @@ export async function tryJobOp(rt: WorkspaceRuntime, raw: unknown): Promise<stri
         ? `“${job.title}” is running already; its thread is under ${owner}'s DM.`
         : `ok: started a trial run of “${job.title}”. It opens a thread from ${owner}'s DM and reports back there when its first turn ends. Anything it would send waits on a card.`,
       `The job is ${job.enabled ? 'on' : 'still OFF'}: this was one run, not the schedule. If the thread's work looks right, the user turns it on at #/jobs/${job.id}.`,
+      ...schedulerOff,
     ].join('\n')
   }
   const pv: JobPreview = { id: randomUUID(), status: 'running', events: [], startedAt: Date.now() }
@@ -527,6 +534,7 @@ export async function tryJobOp(rt: WorkspaceRuntime, raw: unknown): Promise<stri
     ...found,
     ...(res.wouldQueue?.length ? ['A real run would hold these for the user’s approval first:', ...res.wouldQueue.map((q) => `- ${q.tool}: ${q.summary}`)] : []),
     `The job is ${job.enabled ? 'on' : 'still OFF'}. Show the user what it found; if it looks right they turn it on at #/jobs/${job.id}, else change the job with them and draft it again.`,
+    ...schedulerOff,
   ].join('\n')
 }
 
