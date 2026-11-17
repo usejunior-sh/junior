@@ -4,7 +4,7 @@
  * background agents, with a stats bar at the bottom. The browser tab is the browser pane itself, in this slot.
  */
 import { ChevronDown, Folder, List, X } from 'lucide-react'
-import { useMemo } from 'react'
+import { useCallback, useMemo } from 'react'
 import type { CheckoutChanges, SessionSummary } from '../../../shared/protocol.js'
 import type { AgentRun } from '../agents.js'
 import { artifactAgo, FormatIcon } from '../artifactFormat.js'
@@ -23,7 +23,7 @@ import { ChangeFileRows, useChangesPoll } from './ChangesPanel.js'
 import { CheckoutMenu } from './CheckoutMenu.js'
 import { changeId, useChanges } from '../changesStore.js'
 import { threadState, type ThreadState } from '../../../core/junior/threads.js'
-import { ThreadCard } from './ThreadCards.js'
+import { ThreadCard, ThreadOpenContext, useOpenThread } from './ThreadCards.js'
 
 const TITLE: Record<Exclude<SideTab, 'browser'>, string> = { agent: 'About', threads: 'Threads', changes: 'Changes', artifacts: 'Artifacts', agents: 'Background agents' }
 
@@ -62,6 +62,16 @@ export function ChatSide({ session, tab, agents, openAgent, showAgent, onNavigat
   )
   const changed = useChatChanges(session.checkoutId)
   const threads = useChatThreads(session.id)
+  // Opening one shows it beside the chat, in this sidebar's place. Closed from the
+  // open itself: a capture-phase close re-renders before the row's click lands.
+  const openThread = useOpenThread()
+  const openInPlace = useCallback(
+    (id: string) => {
+      chatSide.set(session.id, null)
+      openThread(id)
+    },
+    [session.id, openThread],
+  )
   const count = tab === 'artifacts' ? artifacts.length : tab === 'agents' ? agents.length : tab === 'changes' ? (changed?.files.length ?? 0) : tab === 'threads' ? threads.length : 0
   return (
     <aside className="chatSide" aria-label={TITLE[tab]}>
@@ -81,12 +91,13 @@ export function ChatSide({ session, tab, agents, openAgent, showAgent, onNavigat
           threads.length === 0 ? (
             <div className="csEmpty">No threads yet. Work handed off from this chat shows up here.</div>
           ) : (
-            // Opening one shows it beside the chat, in this sidebar's place.
-            <div className="csThreads" onClickCapture={() => chatSide.set(session.id, null)}>
-              {threads.map((t) => (
-                <ThreadCard key={t.id} id={t.id} />
-              ))}
-            </div>
+            <ThreadOpenContext.Provider value={openInPlace}>
+              <div className="csThreads">
+                {threads.map((t) => (
+                  <ThreadCard key={t.id} id={t.id} />
+                ))}
+              </div>
+            </ThreadOpenContext.Provider>
           )
         ) : tab === 'artifacts' ? (
           artifacts.length === 0 ? (
