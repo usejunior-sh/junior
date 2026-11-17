@@ -9,7 +9,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { buildTranscript, eventIndexOf, type TranscriptItem } from '../web/src/transcript.js'
-import { joinNewest, prependOlder, type LoadedRange } from '../web/src/paging.js'
+import { joinNewest, prependOlder, wholeLog, type LoadedRange } from '../web/src/paging.js'
 import type { SdkMessage, SessionEvent } from '../shared/protocol.js'
 
 const sdk = (message: SdkMessage): SessionEvent => ({ kind: 'sdk', message })
@@ -129,6 +129,18 @@ test('joinNewest: the first page stands alone; an empty session has no range', (
   assert.equal(events, page.events)
   assert.deepEqual(range, { firstSeq: 33, hasEarlier: true, dense: 8 })
   assert.deepEqual(joinNewest(session(1), range!, { events: [], hasEarlier: false }), { events: [], range: null })
+})
+
+test('joinNewest: a whole log followed beside the chat survives the thread opening full size', () => {
+  const log = session(6) // seqs 1..48, an unpaged history
+  const whole = wholeLog(log)
+  assert.deepEqual(whole, { firstSeq: 1, hasEarlier: false, dense: 48 })
+  // the full page's paged subscribe: its newest page starts at seq 41
+  const { events, range } = joinNewest(log, whole!, { events: log.slice(40), hasEarlier: true, firstSeq: 41 })
+  assert.equal(events.length, 48)
+  assert.deepEqual(events, log)
+  assert.deepEqual(range, { firstSeq: 1, hasEarlier: false, dense: 48 })
+  assert.equal(wholeLog([]), null)
 })
 
 test('joinNewest: a reconnect keeps the older pages already held', () => {

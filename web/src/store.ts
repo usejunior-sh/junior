@@ -29,7 +29,7 @@ import { desktopTabs } from './desktop.js'
 import { DEFAULT_PERSONA } from '../../core/junior/persona.js'
 import { buildChanged, buildKey, isBuild, loadedFrom, parseReloadMark, shouldAutoReload, uiEntryOfSrc } from './reloadOnBuild.js'
 import { reloadBlockers } from './reloadGuard.js'
-import { joinNewest, prependOlder, type LoadedRange, type SessionPaging } from './paging.js'
+import { joinNewest, prependOlder, wholeLog, type LoadedRange, type SessionPaging } from './paging.js'
 
 /** The bundle this page runs: its own module script's hashed file name, null in dev (Vite serves /src/main.tsx). */
 const PAGE_UI: string | null = (() => {
@@ -725,8 +725,11 @@ export class Store {
     const id = msg.sessionId
     const hasEarlier = msg.hasEarlier
     if (hasEarlier === undefined) {
-      this.#dropPaging(id)
       this.#events.set(id, msg.events)
+      const whole = wholeLog(msg.events)
+      if (!whole) return this.#dropPaging(id)
+      clearTimeout(this.#paging.get(id)?.timer)
+      this.#setPaging(id, { ...whole, inFlight: null, failed: false, timer: undefined })
       return
     }
     const old = this.#paging.get(id)

@@ -53,6 +53,16 @@ export function joinNewest(
   return { events: page.events, range: { firstSeq: page.firstSeq, hasEarlier: page.hasEarlier, dense: page.events.length } }
 }
 
+/**
+ * An unpaged `history` frame is the whole log, from seq 1 (a thread followed
+ * beside Junior's chat). Held as a range, a paged subscribe after it (the
+ * thread opened full size) joins onto it instead of dropping all but its
+ * newest page.
+ */
+export function wholeLog(events: readonly SessionEvent[]): LoadedRange | null {
+  return events.length ? { firstSeq: 1, hasEarlier: false, dense: events.length } : null
+}
+
 /** An older page, `session_events_page`. */
 export type OlderPage = { events: readonly SessionEvent[]; hasEarlier: boolean; firstSeq?: number }
 
