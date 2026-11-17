@@ -121,7 +121,9 @@ export function useAwayWindow(workspaceId: string): SeenState {
 const sessionsKey = (ss: readonly SessionSummary[]) =>
   ss.map((s) => `${s.id}:${s.status}:${s.waiting ? 1 : 0}:${s.teamRun?.state ?? ''}:${s.teamRun?.rev ?? ''}`).join('|')
 
-export function useJuniorDay(win: SeenState): { day: JuniorDay | null; error: string | null; reload: () => void } {
+/** `open: false` reads the day without opening it (no carry-overs, no morning draft): the sidebar's read. */
+export function useJuniorDay(win: SeenState, opts: { open?: boolean } = {}): { day: JuniorDay | null; error: string | null; reload: () => void } {
+  const openDay = opts.open ?? true
   const [day, setDay] = useState<JuniorDay | null>(null)
   const [error, setError] = useState<string | null>(null)
   const opened = useRef(false)
@@ -132,7 +134,7 @@ export function useJuniorDay(win: SeenState): { day: JuniorDay | null; error: st
     const mine = ++seq.current
     try {
       // The first read of the page opens today: carry-overs, and the morning draft.
-      if (!opened.current) {
+      if (openDay && !opened.current) {
         opened.current = true
         await fetch('/api/today/open', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' }).catch(() => {})
       }
@@ -145,7 +147,7 @@ export function useJuniorDay(win: SeenState): { day: JuniorDay | null; error: st
     } catch (err) {
       if (mine === seq.current) setError(String(err))
     }
-  }, [win.since, win.away])
+  }, [win.since, win.away, openDay])
 
   const soon = useCallback(() => {
     clearTimeout(timer.current)

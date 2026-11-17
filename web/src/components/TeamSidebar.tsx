@@ -9,11 +9,11 @@ import { CalendarClock, Clock, FileText, GitPullRequest, ListChecks, PanelLeft, 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { JUNIOR_DM, dmKey, findDm } from '../../../core/junior/dms.js'
 import { juniorSays, type SayNeed } from '../../../core/junior/say.js'
-import { agentStatus, openThreads, THREADS_SHOWN, type AgentStatus, type Thread } from '../../../core/junior/threads.js'
+import { agentStatus, openThreads, waitingThreads, THREADS_SHOWN, type AgentStatus, type Thread } from '../../../core/junior/threads.js'
 import type { SessionSummary } from '../../../shared/protocol.js'
 import { useChatAgents } from '../chatAgents.js'
 import { useInbox } from '../inboxStore.js'
-import { usePersona, useYouName } from '../junior.js'
+import { useJuniorDay, usePersona, useYouName } from '../junior.js'
 import { markThreadSeen, useThreadSeen } from '../threadSeen.js'
 import { isWorking } from '../sessionModes.js'
 import { setSidebarCollapsed } from '../layout.js'
@@ -105,6 +105,10 @@ export function TeamSidebar(p: Props) {
   }, [agents])
 
   const threads = useMemo(() => openThreads(p.sessions, now), [p.sessions, now])
+  // The sessions Needs you points at (core/junior/needs.ts): held ones, and ones with sends or a plan waiting on you.
+  const [dayWin] = useState(() => ({ seenAt: Date.now(), since: new Date().setHours(0, 0, 0, 0), away: false }))
+  const { day } = useJuniorDay(dayWin, { open: false })
+  const needing = useMemo(() => new Set((day?.needs ?? []).map((r) => r.target.id)), [day])
   const wasSeen = useThreadSeen()
   // The thread in front counts as looked at.
   const activeThread = p.active && typeof p.active === 'object' && 'thread' in p.active ? p.active.thread : null
@@ -112,22 +116,28 @@ export function TeamSidebar(p: Props) {
     const t = activeThread ? threads.find((x) => x.id === activeThread) : undefined
     if (t) markThreadSeen(t.id, t.updatedAt)
   }, [activeThread, threads])
+  // Every thread where it is your turn, from any agent, Junior and jobs; the rest show as a working agent in Team, and in Junior's line.
+  const waiting = useMemo(() => waitingThreads(p.sessions, needing, now), [p.sessions, needing, now])
   const handedOff = useHandedOff(threads, labelOf)
   const firstOpen = useFirstOpenToday()
 
   // What Junior says: everything waiting on you, what broke, what runs.
   const say = useMemo(() => {
-    const needs: SayNeed[] = threads.filter((t) => t.state === 'you').map((t) => ({ title: t.title, question: t.question, ...(t.agent ? { from: labelOf(t.agent) } : {}), since: t.updatedAt }))
+    const needs: SayNeed[] = waiting.map((t) => ({ title: t.title, question: t.question, ...(t.agent ? { from: labelOf(t.agent) } : {}), since: t.updatedAt }))
     // A DM waiting on you counts too: it is not a thread, but it is your turn.
     for (const s of p.sessions) if (s.kind === 'dm' && s.waiting) needs.push({ title: `your chat with ${labelOf(s.agent)}`, question: s.waitingOn === 'AskUserQuestion', since: s.updatedAt })
-    for (let i = 0; i < p.pendingSends; i++) needs.push({ title: p.pendingSends === 1 ? 'A send waits for your OK' : 'a send waits for your OK' })
+    if (day) {
+      // Sends from a thread are that thread's row; the rest (a DM's, a job's scan) count on their own.
+      const shown = new Set(waiting.map((t) => t.id))
+      for (const r of day.needs) if (r.kind === 'sends' && !shown.has(r.target.id)) needs.push({ title: r.title })
+    } else for (let i = 0; i < p.pendingSends; i++) needs.push({ title: p.pendingSends === 1 ? 'A send waits for your OK' : 'a send waits for your OK' })
     const broken = threads.find((t) => t.state === 'stopped')
     const alert = inbox.alerts[0]
     const stuck = broken ? { title: `${labelOf(broken.agent)} stopped on ${broken.title}` } : alert ? { title: alert.title } : null
     const working = p.sessions.filter((s) => (s.kind ?? 'chat') !== 'brief' && isWorking(s)).length
     const ready = threads.filter((t) => t.state === 'ready' && t.fromJunior && !wasSeen(t.id, t.updatedAt)).map((t) => ({ title: t.title }))
     return { ...juniorSays({ you, needs, stuck, working, ready, handedOff, firstOpenToday: firstOpen, now }), needs: needs.length }
-  }, [threads, p.sessions, p.pendingSends, inbox.alerts, labelOf, you, handedOff, firstOpen, now, wasSeen])
+  }, [threads, waiting, day, p.sessions, p.pendingSends, inbox.alerts, labelOf, you, handedOff, firstOpen, now, wasSeen])
 
   // Agents as conversations: busy ones first, then the ones you talked to lately, newest first. The rest fold into one row.
   const agentRows = useMemo(() => {
@@ -145,8 +155,6 @@ export function TeamSidebar(p: Props) {
   // Busy, recent and open agents keep their rows, and never fewer than AGENTS_SHOWN: the list is never just the fold.
   const shownAgents = agentRows.filter((r, i) => allAgents || i < AGENTS_SHOWN || r.state !== 'idle' || r.recent || isActive({ agent: r.a.name }))
   const folded = agentRows.filter((r) => !shownAgents.includes(r))
-  // Only the threads where it is your turn; the rest show as a working agent in Team, and in Junior's line.
-  const waiting = useMemo(() => threads.filter((t) => t.state === 'you'), [threads])
   const shownThreads = showAll ? waiting : waiting.slice(0, THREADS_SHOWN)
   const juniorDm = findDm(p.sessions, JUNIOR_DM)
   const juniorBusy = !!juniorDm && isWorking(juniorDm)

@@ -4,7 +4,7 @@
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { agentStatus, openThreads, READY_FOR_MS, threadReportLine, threadState, type ThreadSession } from '../core/junior/threads.js'
+import { agentStatus, openThreads, READY_FOR_MS, threadReportLine, threadState, waitingThreads, type ThreadSession } from '../core/junior/threads.js'
 
 const NOW = 1_800_000_000_000
 const dm: ThreadSession = { id: 'dm', title: 'Junior', kind: 'dm', status: 'idle', updatedAt: NOW }
@@ -68,4 +68,25 @@ test('thread report line: first sentence, plain, cut long', () => {
   assert.equal(threadReportLine('Babysitter', 'Get #482 green', ''), 'Babysitter replied in "Get #482 green".')
   const long = threadReportLine('R', 't', 'x'.repeat(400))
   assert.ok(long.endsWith('…') && long.length < 220)
+})
+
+test('waiting threads: every agent, Junior and job runs, held or with sends waiting; never a DM', () => {
+  const rows = [
+    { ...dm, waiting: true },
+    s('reviewer-dm', { kind: 'dm', agent: 'reviewer' }),
+    s('jr-asks', { startedBy: 'dm', waiting: true, waitingOn: 'AskUserQuestion', updatedAt: NOW - 3_600_000 }),
+    s('job-sends', { startedBy: 'reviewer-dm', agent: 'reviewer', jobId: 'babysit', updatedAt: NOW - 1_000 }),
+    s('junior-sends', { updatedAt: NOW - 2_000 }),
+    s('quiet', { startedBy: 'dm' }),
+  ]
+  const t = waitingThreads(rows, new Set(['job-sends', 'junior-sends', 'jr-asks', 'reviewer-dm', 'gone']), NOW)
+  assert.deepEqual(
+    t.map((x) => [x.id, x.state, x.agent ?? null, x.job, x.fromJunior]),
+    [
+      ['job-sends', 'you', 'reviewer', true, true],
+      ['junior-sends', 'you', null, false, false],
+      ['jr-asks', 'you', null, false, true],
+    ],
+  )
+  assert.equal(t[2]!.question, true)
 })

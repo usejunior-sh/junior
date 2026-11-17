@@ -84,6 +84,31 @@ export function openThreads(sessions: readonly ThreadSession[], now: number): Th
     }))
 }
 
+/**
+ * Every thread that needs you, from every agent and Junior, job runs too: the
+ * open threads on your turn, plus each session the needs rows point at
+ * (`needing`: a send it drafted, a team's plan), even one that is not held on
+ * a prompt. DMs are not threads: their agent's row carries the dot. Newest first.
+ */
+export function waitingThreads(sessions: readonly ThreadSession[], needing: ReadonlySet<string>, now: number): Thread[] {
+  const dms = new Set(sessions.filter((s) => s.kind === 'dm').map((s) => s.id))
+  const mine = openThreads(sessions, now).filter((t) => t.state === 'you')
+  const have = new Set(mine.map((t) => t.id))
+  const more: Thread[] = sessions
+    .filter((s) => needing.has(s.id) && !have.has(s.id) && s.kind !== 'dm')
+    .map((s) => ({
+      id: s.id,
+      title: s.title,
+      ...(s.agent ? { agent: s.agent } : {}),
+      state: 'you' as const,
+      fromJunior: !!s.startedBy && dms.has(s.startedBy),
+      question: !!s.waiting && s.waitingOn === 'AskUserQuestion',
+      job: !!s.jobId,
+      updatedAt: s.updatedAt,
+    }))
+  return [...mine, ...more].sort((a, b) => b.updatedAt - a.updatedAt)
+}
+
 export type AgentStatus = { state: 'you' | 'working' | 'idle'; line: string; threads: number }
 
 /**
