@@ -757,6 +757,15 @@ body.bpResizing, body.bpResizing * { cursor: col-resize !important; user-select:
 .rrWho { flex: none; font-family: var(--mono); font-size: 0.8077rem; color: var(--charcoal); }
 .rrText { min-width: 0; color: var(--body); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .rrState { flex: none; font-family: var(--mono); font-size: 0.7692rem; color: var(--stone); }
+.runLine {
+  display: flex; align-items: center; gap: 10px; min-width: 0; max-width: 100%; padding: 2px 0; background: none; border: 0;
+  font-family: var(--mono); font-size: 0.7692rem; color: var(--ash); text-align: left; cursor: pointer;
+}
+.rlText { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rlOpen { flex: none; color: var(--stone); opacity: 0; transition: opacity 0.15s; }
+.runLine:hover .rlText, .runLine:focus-visible .rlText { color: var(--ink); }
+.runLine:hover .rlOpen, .runLine:focus-visible .rlOpen { opacity: 1; }
+@media (hover: none) { .rlOpen { opacity: 1; } }
 .msgVia { display: flex; align-items: center; gap: 7px; margin-top: 6px; font-family: var(--mono); font-size: 0.7692rem; color: var(--ash); white-space: normal; }
 .agentAsks { display: flex; flex-direction: column; gap: 6px; }
 .aaFrom { align-self: flex-start; padding: 0; background: none; border: 0; font-family: var(--mono); font-size: 0.8077rem; color: var(--yellow); cursor: pointer; }

@@ -127,6 +127,8 @@ export type TranscriptItem =
       /** Workflow agents spent while this turn was open: its cost (cumulative at the result) includes some of theirs. */
       workflowSpend?: boolean
     }
+  /** A job run's line in its owner's DM: what the run came to, opening its thread. */
+  | { key: string; kind: 'runLine'; text: string; thread: string }
   | { key: string; kind: 'init'; model?: string; toolCount: number; servers: McpServerInfo[]; mcpTools: string[] }
   /** What a local command (`/usage`, `/context`) printed, not the model talking. */
   | { key: string; kind: 'command'; text: string }
@@ -256,7 +258,7 @@ export function buildTranscript(
         if (!scope) items.push({ key: `e${i}`, kind: 'error', text: ev.message })
         break
       case 'notice':
-        if (!scope) items.push({ key: `n${i}`, kind: 'meta', text: `— ${ev.text} —` })
+        if (!scope) items.push(ev.thread ? { key: `n${i}`, kind: 'runLine', text: ev.text, thread: ev.thread } : { key: `n${i}`, kind: 'meta', text: `— ${ev.text} —` })
         break
       case 'subprocess':
         resumed = true

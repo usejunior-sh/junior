@@ -10,7 +10,7 @@
  * entry per thread, so a later chat knows what got done without re-reading it.
  */
 import { blockedText } from '../../core/junior/thread-wake.js'
-import { isNothingNew } from '../../core/job/thread.js'
+import { isNothingNew, jobReplyReports } from '../../core/job/thread.js'
 import { broadcastSessionList } from '../ws/send.js'
 import { threadReportLine, threadReportSentence } from '../../core/junior/threads.js'
 import type { StoredSession } from '../../core/store/types.js'
@@ -32,8 +32,10 @@ export async function reportThreadTurn(rt: WorkspaceRuntime, row: StoredSession,
   const parent = row.startedBy ? rt.rows.get(row.startedBy) : undefined
   if (!parent || parent.kind !== 'dm') return
   const agent = await chatAgentNamed(rt, row.agent)
-  // A job's run that found nothing stays quiet: no line in the DM, no wake, the thread put away.
-  if (row.jobId && isNothingNew(said)) {
+  // A job's run with nothing to report wakes nobody: its run writes one quiet
+  // line in the DM (server/jobs/thread-run.ts). Found nothing: the thread is put away.
+  if (row.jobId && !jobReplyReports(said)) {
+    if (!isNothingNew(said)) return
     await putAway(rt, row)
     if (!parent.agent) {
       await noteWorkOp(rt, { sessionId: row.id, title: row.title, ...(agent ? { agent: agent.label } : {}), said: 'Nothing new.', at: Date.now() }).catch(() => {})
@@ -41,7 +43,8 @@ export async function reportThreadTurn(rt: WorkspaceRuntime, row: StoredSession,
     return
   }
   const who = await whoOf(rt, row, agent?.label ?? rt.persona.name)
-  await sessionNotice(rt, parent.id, threadReportLine(who, row.title, said))
+  // A job's run: the line stays in sight and opens its thread, so every run can be found from the DM.
+  await sessionNotice(rt, parent.id, threadReportLine(who, row.title, said), row.jobId ? row.id : undefined)
   queueThreadReport(rt, parent.id, { threadId: row.id, title: row.title, who, state: 'done', text: said, at: Date.now() })
   // Junior's own chat only: an agent's DM starting a thread isn't Junior's work.
   if (parent.agent) return
@@ -59,7 +62,7 @@ export async function reportThreadBlocked(rt: WorkspaceRuntime, row: StoredSessi
   const parent = row.startedBy ? rt.rows.get(row.startedBy) : undefined
   if (!parent || parent.kind !== 'dm') return
   const who = await whoOf(rt, row, (await chatAgentNamed(rt, row.agent))?.label ?? rt.persona.name)
-  await sessionNotice(rt, parent.id, `${who.replace(/,$/, '')} is waiting on you in "${row.title}".`)
+  await sessionNotice(rt, parent.id, `${who.replace(/,$/, '')} is waiting on you in "${row.title}".`, row.jobId ? row.id : undefined)
   queueThreadReport(rt, parent.id, { threadId: row.id, title: row.title, who, state: 'blocked', text: blockedText(toolName, input, title, description), at: Date.now() })
 }
 

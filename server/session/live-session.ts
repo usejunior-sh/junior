@@ -924,8 +924,8 @@ export class LiveSession {
   }
 
   /** Write a line of Junior's own into this transcript (a team paused, a stage began). */
-  notice(text: string) {
-    this.emit({ kind: 'notice', text }, true)
+  notice(text: string, thread?: string) {
+    this.emit({ kind: 'notice', text, ...(thread ? { thread } : {}) }, true)
   }
 
   private emit(event: SessionEvent, persist: boolean) {

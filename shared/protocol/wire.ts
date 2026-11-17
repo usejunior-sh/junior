@@ -53,7 +53,8 @@ export type SessionEvent =
     }
   | { kind: 'error'; message: string }
   /** a line Junior writes into the transcript itself. A team paused, a stage began */
-  | { kind: 'notice'; text: string }
+  /** `thread`: a job run's line in its owner's DM, drawn as a quiet row that opens that thread. */
+  | { kind: 'notice'; text: string; thread?: string }
   /**
    * A new Claude subprocess took over a session that already had history (a
    * revival after the last one ended). Whatever the old one had running,

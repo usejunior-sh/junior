@@ -8,7 +8,8 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { checkOwner, parseJobFile, serializeJobFile, type JobFileSpec } from '../server/job-files.js'
 import { builtinGrant } from '../core/job/tools.js'
-import { frameJobMessage, isJobRunRow, isNothingNew, jobThreadTitle, NOTHING_NEW } from '../core/job/thread.js'
+import { frameJobMessage, isJobRunRow, isNothingNew, jobReplyReports, jobRunLine, jobThreadTitle, NOTHING_NEW } from '../core/job/thread.js'
+import { buildTranscript } from '../web/src/transcript.js'
 import { openThreads, type ThreadSession } from '../core/junior/threads.js'
 import { reportsUp } from '../core/junior/thread-wake.js'
 
@@ -127,4 +128,25 @@ test('a put-away thread leaves the open threads, unless it waits on you', () => 
   const open = openThreads(sessions, now)
   assert.deepEqual(open.map((t) => t.id).sort(), ['asks', 'found'])
   assert.ok(open.every((t) => t.job))
+})
+
+test('only a real reply reports up; nothing new and an empty reply leave a quiet run line instead', () => {
+  assert.ok(jobReplyReports('Reviewed #4425: safe to merge.'))
+  assert.ok(jobReplyReports('No new PR requests from Lakhan in the last 2 hours.'))
+  assert.ok(!jobReplyReports(NOTHING_NEW))
+  assert.ok(!jobReplyReports('**Nothing new.**'))
+  assert.ok(!jobReplyReports(''))
+  assert.ok(!jobReplyReports('  \n'))
+  assert.equal(jobRunLine('Log check · 14:00', 'nothing new'), 'Log check · 14:00 · nothing new')
+})
+
+test('a run line in the DM folds to a row that opens its thread; a plain notice stays a meta line', () => {
+  const items = buildTranscript([
+    { kind: 'notice', text: 'Log check · 14:00 · nothing new', thread: 't-1' },
+    { kind: 'notice', text: 'A team paused' },
+  ])
+  assert.deepEqual(
+    items.map((i) => (i.kind === 'runLine' ? [i.kind, i.text, i.thread] : [i.kind])),
+    [['runLine', 'Log check · 14:00 · nothing new', 't-1'], ['meta']],
+  )
 })

@@ -228,11 +228,11 @@ export function teamRunView(run: TeamRun): TeamRunView {
 export const TEAM_COMPACT_WINDOW = 200_000
 
 /** Write a notice into a session's transcript, live or not. */
-export async function sessionNotice(rt: WorkspaceRuntime, sessionId: string, text: string): Promise<void> {
+export async function sessionNotice(rt: WorkspaceRuntime, sessionId: string, text: string, thread?: string): Promise<void> {
   const live = rt.live.get(sessionId)
-  if (live) return live.notice(text)
+  if (live) return live.notice(text, thread)
   const seq = (await rt.store.events.lastSeq(sessionId)) + 1
-  const event: SessionEvent = { kind: 'notice', text }
+  const event: SessionEvent = { kind: 'notice', text, ...(thread ? { thread } : {}) }
   await rt.store.events.append(sessionId, seq, event)
   broadcast(rt, { type: 'session_event', sessionId, event, at: Date.now() })
 }

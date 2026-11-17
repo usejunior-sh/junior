@@ -46,7 +46,7 @@ import { ToolGroup } from './ToolGroup.js'
 import { ActionNotes } from './ActionCard.js'
 import { RuleCards } from './RuleCard.js'
 import { LearnedLines } from './LearnedLine.js'
-import { ThreadCards } from './ThreadCards.js'
+import { ThreadCards, useOpenThread } from './ThreadCards.js'
 import { useActions } from '../actions.js'
 import type { ActionView, JobRunMark } from '../../../shared/protocol.js'
 
@@ -679,6 +679,8 @@ const Item = memo(function Item({
       return <ArtifactCard item={item} onOpen={onRef} />
     case 'workflow':
       return <WorkflowCard sessionId={sessionId} run={workflow} onOpen={onOpenWorkflow} />
+    case 'runLine':
+      return <RunLine text={item.text} thread={item.thread} />
     case 'relay':
       return (
         <button type="button" className="relayRow" onClick={() => onOpenAgent(item.relay.toolUseId)} title="Open this agent">
@@ -1112,5 +1114,16 @@ function ErrorCard({ text }: { text: string }) {
         </div>
       )}
     </div>
+  )
+}
+
+/** A job run's line in its owner's DM: quiet, always in sight, and a click opens the run's thread. */
+function RunLine({ text, thread }: { text: string; thread: string }) {
+  const open = useOpenThread()
+  return (
+    <button type="button" className="runLine" onClick={() => open(thread)} title="Open this run's thread">
+      <span className="rlText">{text}</span>
+      <span className="rlOpen">Open</span>
+    </button>
   )
 }

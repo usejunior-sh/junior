@@ -18,6 +18,21 @@ export function isNothingNew(said: string): boolean {
   return /^\s*[*_]*nothing new\b/i.test(said)
 }
 
+/**
+ * Does a run's reply report up to its DM the way a thread's reply does (a
+ * notice, then a wake)? Only a real reply: not "Nothing new.", not an empty
+ * one (a turn that was stopped or timed out). Those get one quiet run line
+ * instead (jobRunLine).
+ */
+export function jobReplyReports(said: string): boolean {
+  return !!said.trim() && !isNothingNew(said)
+}
+
+/** A run's quiet line in its owner's DM: the thread's title and the outcome ("Log check · 14:00 · nothing new"). */
+export function jobRunLine(threadTitle: string, outcome: string): string {
+  return `${threadTitle} · ${outcome}`
+}
+
 /** The thread's title: the job's, then the run's local time ("Log check · 14:00"). */
 export function jobThreadTitle(title: string, at: number): string {
   const d = new Date(at)

@@ -23,7 +23,7 @@ import { dmKey, findDm } from '../../core/junior/dms.js'
 import { describeCron } from '../../core/job/cron.js'
 import { scheduleOf } from '../../core/job/schedule.js'
 import { settleRunStatus } from '../../core/job/run-guard.js'
-import { isNothingNew, jobThreadTitle, type JobRunMark } from '../../core/job/thread.js'
+import { isNothingNew, jobReplyReports, jobRunLine, jobThreadTitle, type JobRunMark } from '../../core/job/thread.js'
 import { safeWhen } from '../../core/sources/slack.js'
 import { chatAgentNamed } from '../chat-agents.js'
 import { VERSION } from '../config.js'
@@ -32,6 +32,7 @@ import { errResult, okResult } from '../junior-mcp.js'
 import { log } from '../log.js'
 import { sleepWatch } from '../power.js'
 import { createSession, getOrRevive } from '../session/sessions.js'
+import { sessionNotice } from '../team-run/state.js'
 import { upsertItem } from '../settings-ops.js'
 import type { WorkspaceRuntime } from '../workspace/runtime.js'
 import { broadcastSessionList, invalidateInbox } from '../ws/send.js'
@@ -65,6 +66,22 @@ async function ownerOf(rt: WorkspaceRuntime, job: Job) {
   return agent
 }
 
+/**
+ * One quiet line in the owner's DM for a run whose thread did not report
+ * itself (nothing new, timed out, failed, skipped), so every run can be found
+ * from the DM. It opens the thread; it never wakes the DM. Best effort: a DM
+ * that doesn't exist yet, or an owner gone, gets no line.
+ */
+async function noteRunInDm(rt: WorkspaceRuntime, job: Job, dmId: string | undefined, at: number, outcome: string, threadId: string | undefined): Promise<void> {
+  try {
+    const dm = dmId ?? findDm(rt.rows.values(), dmKey((await ownerOf(rt, job))?.name))?.id
+    if (!dm) return
+    await sessionNotice(rt, dm, jobRunLine(jobThreadTitle(job.title, at), outcome), threadId)
+  } catch (err) {
+    log('warn', 'job', `${job.title}: could not note the run in its DM: ${errText(err)}`, { jobId: job.id, workspace: rt.meta.id })
+  }
+}
+
 /** Is the thread a previous run opened still busy, or waiting on the user? */
 function stillOpen(rt: WorkspaceRuntime, job: Job): boolean {
   const prev = job.lastRunSessionId ? rt.rows.get(job.lastRunSessionId) : undefined
@@ -90,6 +107,7 @@ export async function runJobThread(
     await ledger(rt, rt.store.jobRuns.finish(job.id, run.slot, { status: 'skipped', reason, sessionId: job.lastRunSessionId, endedAt: now }))
     await rt.store.jobs.recordRun(job.id, { lastRunAt: now, lastRunTokens: 0, lastRunMatches: 0, status: 'skipped', trigger: run.trigger, sessionId: job.lastRunSessionId, error: `skipped: ${reason}` })
     log('info', 'job', `${job.title}: skipped, ${reason}`, { jobId: job.id, workspace: rt.meta.id })
+    await noteRunInDm(rt, job, undefined, now, `skipped: ${reason}`, job.lastRunSessionId)
     return
   }
 
@@ -100,6 +118,10 @@ export async function runJobThread(
   let filed = 0
   let fresh = 0
   let threadId: string | undefined
+  let dmId: string | undefined
+  let at = startedMs
+  /** the thread's own report reached the DM (a reply, or a wait on the user) */
+  let reported = false
   let timer: NodeJS.Timeout | undefined
   try {
     const agent = await ownerOf(rt, job)
@@ -112,7 +134,8 @@ export async function runJobThread(
         projectId: project.id,
         ...(agent ? { agent: agent.name } : {}),
       }))
-    const at = Date.now()
+    dmId = dm.id
+    at = Date.now()
     const thread = await createSession(rt, jobThreadTitle(job.title, at), project.path, job.model ?? null, null, false, chatPermissionMode('claude'), {
       spawn: false,
       projectId: project.id,
@@ -169,12 +192,14 @@ export async function runJobThread(
     const end = await ended
     if (end.kind === 'done') {
       costUsd = end.costUsd
+      reported = jobReplyReports(end.said)
       if (end.overBudget) throw new Error(`budget cap reached ($${limits.maxBudgetUsd?.toFixed(2)})`)
       status = 'ok'
-      note = isNothingNew(end.said) ? 'nothing new' : undefined
+      note = isNothingNew(end.said) ? 'nothing new' : end.said.trim() ? undefined : 'ended without a reply'
     } else if (end.kind === 'blocked') {
       status = 'ok'
       note = `waiting on you: ${end.what}`
+      reported = true
     } else {
       status = end.error === 'timed out' ? 'timeout' : end.error.startsWith('stopped') ? 'interrupted' : 'failed'
       error = end.error
@@ -213,6 +238,7 @@ export async function runJobThread(
       `run ${status}: ${job.title}${note ? ` — ${note}` : ''}${filed ? ` — ${fresh} new, ${filed - fresh} already filed` : ''}${costUsd != null ? `, $${costUsd.toFixed(2)}` : ''}${error ? ` — ${error}` : ''}`,
       { jobId: job.id, runId: threadId, status, trigger: run.trigger, durationMs: Date.now() - startedMs, workspace: rt.meta.id, ...(error ? { error } : {}) },
     )
+    if (!reported) await noteRunInDm(rt, job, dmId, at, status === 'ok' ? (note ?? 'replied') : (error ?? status), threadId)
     notify(status, status === 'ok' ? (note ?? 'replied') : error)
     if (filed) invalidateInbox(rt)
     broadcastSessionList(rt)
