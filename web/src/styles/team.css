@@ -223,6 +223,10 @@ button.threadCard:hover { background: var(--card); }
 .agMemory { margin: 0; padding-left: 18px; color: var(--body); }
 .agMemory li { margin-bottom: 6px; }
 .agMemory li.proposed span { font: 400 0.7308rem var(--mono); text-transform: uppercase; color: var(--blue); margin-left: 4px; }
+.agAbout { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
+.agAbout .agFoot { margin: 0; }
+.agAboutL { font: 400 0.7692rem/1 var(--mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--ash); }
+.agDay { margin-right: 8px; font: 400 0.7692rem var(--mono); color: var(--ash); }
 .agJobs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .agJob { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 14px; border: 1px solid var(--hair-strong); border-radius: var(--r-lg); background: transparent; color: var(--ink); text-align: left; }
 .agJob:hover { background: var(--card); }

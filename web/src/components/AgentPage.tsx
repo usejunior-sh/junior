@@ -23,7 +23,7 @@ import { ThreadCard } from './ThreadCards.js'
 /** Older threads shown under the open ones. */
 const PAST_SHOWN = 5
 
-function useJobs(): Job[] {
+export function useJobs(): Job[] {
   const [jobs, setJobs] = useState<Job[]>([])
   useEffect(() => {
     let live = true
@@ -180,7 +180,7 @@ export function AgentPage({ name, onNavigate }: { name: string; onNavigate: (has
 }
 
 /** One job on an agent's page: its title, when it runs, on or off. */
-function JobLine({ job, onNavigate }: { job: Job; onNavigate: (hash: string) => void }) {
+export function JobLine({ job, onNavigate }: { job: Job; onNavigate: (hash: string) => void }) {
   return (
     <li>
       <button type="button" className="agJob" onClick={() => onNavigate(`/jobs/${encodeURIComponent(job.id)}`)}>

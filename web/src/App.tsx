@@ -81,6 +81,7 @@ import { ThreadSheet } from './components/ThreadSheet.js'
 import { ThreadOpenContext } from './components/ThreadCards.js'
 import { JuniorNeedsDock } from './components/JuniorNeedsDock.js'
 import { AgentPage } from './components/AgentPage.js'
+import { JuniorAgentPage } from './components/JuniorAgentPage.js'
 import { PullRequestsPage } from './components/PullRequestsPage.js'
 import { toggleSidebar, useLayout, useSidebarCollapsed } from './layout.js'
 import { needsYouCount } from '../../core/work/needs-you.js'
@@ -116,7 +117,7 @@ export function App() {
   /** Home in the team layout: Junior's one chat, where `#/junior` (no tab) lands. */
   const juniorHome = team && route.page === 'junior' && !route.tab
   /** An agent's page (team layout, `/agents/<name>/about`): who it is, its threads, memory and jobs. */
-  const agentPage = team && route.page === 'agents' && !!route.name && route.name !== JUNIOR_DM && route.about ? route.name : null
+  const agentPage = team && route.page === 'agents' && !!route.name && route.about ? route.name : null
   /** A chat with Junior or one of its agents (team layout): threads open beside it. */
   const dmView = juniorHome || (team && route.page === 'agents' && !agentPage)
   // A thread open beside Junior's chat: only at home; anywhere else it opens full size.
@@ -779,7 +780,11 @@ export function App() {
             ) : route.page === 'prs' ? (
               <PullRequestsPage onNavigate={navigate} />
             ) : agentPage ? (
-              <AgentPage key={agentPage} name={agentPage} onNavigate={navigate} />
+              agentPage === JUNIOR_DM ? (
+                <JuniorAgentPage onNavigate={navigate} />
+              ) : (
+                <AgentPage key={agentPage} name={agentPage} onNavigate={navigate} />
+              )
             ) : route.page === 'junior' && !juniorHome ? (
               <JuniorPage key={route.tab ?? 'home'} initialTab={route.tab} onNavigate={navigate} onDispatch={dispatchById} onCreate={create} createError={createError} createStep={createStep} />
             ) : route.page === 'inbox' ? (
@@ -875,7 +880,7 @@ export function App() {
               <SessionAgentScope agent={current.agent}>
                 <ChatHeader
                   current={current}
-                  onAbout={team && current.kind === 'dm' && current.agent ? () => navigate(`/agents/${encodeURIComponent(current.agent!)}/about`) : undefined}
+                  onAbout={team && current.kind === 'dm' ? () => navigate(`/agents/${encodeURIComponent(current.agent || JUNIOR_DM)}/about`) : undefined}
                   chatHeaderRef={chatHeaderRef}
                   currentCheckout={currentCheckout}
                   newTerminalIn={newTerminalIn}

@@ -11,6 +11,7 @@ import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import type { ActivityResponse, ActivityRun, Project, ProjectsResponse, SettingsResponse, Job, JobsResponse } from '../../../shared/protocol.js'
 import { rowOpen } from '../tabs.js'
 import { nextScheduled } from '../../../core/job/cron.js'
+import { JUNIOR_DM } from '../../../core/junior/dms.js'
 import { relTime } from '../itemUi.js'
 import { Menu, MenuContent, MenuItem, MenuTrigger } from '../ui/Menu.js'
 import { ConfirmDialog } from '../ui/ConfirmDialog.js'
@@ -257,13 +258,9 @@ export function JobsPage({
                           <td colSpan={9}>
                             <span className="wgHead">
                               <JuniorFace size={18} motion="still" colour={g.colour} decorative />
-                              {g.agent ? (
-                                <button type="button" className="wgName" title={`${g.label}'s page`} onClick={() => onNavigate(`/agents/${encodeURIComponent(g.agent!)}/about`)}>
-                                  {g.label}
-                                </button>
-                              ) : (
-                                <span className="wgName">{g.label}</span>
-                              )}
+                              <button type="button" className="wgName" title={`${g.label}'s page`} onClick={() => onNavigate(`/agents/${encodeURIComponent(g.agent ?? JUNIOR_DM)}/about`)}>
+                                {g.label}
+                              </button>
                               <small>{g.rows.length}</small>
                             </span>
                           </td>
